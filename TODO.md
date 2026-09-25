@@ -12,13 +12,13 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 
 | ID | Task | Kategori | Status | Assignee | Catatan |
 |---|---|---|---|---|---|
-| S0-01 | Init repo + struktur folder sesuai Architecture.md §4 | Setup | Not Started | | |
-| S0-02 | Docker Compose (backend, frontend, postgres) | Setup | Not Started | | |
-| S0-03 | Migration awal Postgres (master data tables) | Setup | Not Started | | |
-| S0-04 | Verifikasi akses AWS trial (Bedrock invoke test) | Setup | Not Started | | |
+| S0-01 | Init repo + struktur folder sesuai Architecture.md §4 | Setup | Done | Hermes | Commit 687e8bd |
+| S0-02 | Docker Compose (backend, frontend, postgres) | Setup | Done | Hermes | Commit 687e8bd |
+| S0-03 | Migration awal Postgres (master data tables) | Setup | Done | Hermes | Commit 0176540, needs Docker test |
+| S0-04 | Verifikasi akses AWS trial (Bedrock invoke test) | Setup | In Progress | | Waiting for AWS credentials |
 | S0-05 | Verifikasi akses AgentCore | Setup | Not Started | | |
 | S0-06 | Strands SDK hello-world agent | Setup | Not Started | | |
-| S0-07 | `.env.example` + `.env` lokal | Setup | Not Started | | |
+| S0-07 | `.env.example` + `.env` lokal | Setup | Done | Hermes | Created |
 
 ## Sprint 1 — Business logic inti + data
 
