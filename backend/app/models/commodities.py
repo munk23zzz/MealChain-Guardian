@@ -1,10 +1,8 @@
-"""
-Commodity model - represents food commodities.
-"""
-import uuid
-from datetime import datetime
+"""Model Commodity — komoditas pangan (Schema.md §1)."""
 
-from sqlalchemy import DateTime, String
+import uuid
+
+from sqlalchemy import DateTime, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,11 +10,13 @@ from app.db import Base
 
 
 class Commodity(Base):
-    """Commodity model for food items."""
-    
     __tablename__ = "commodities"
-    
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
     name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
-    unit: Mapped[str] = mapped_column(String, nullable=False, default="kg")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    unit: Mapped[str] = mapped_column(String, nullable=False, server_default="kg")
+    created_at: Mapped[str] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

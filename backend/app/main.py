@@ -1,6 +1,5 @@
-"""
-MealChain Guardian - FastAPI Backend
-"""
+"""MealChain Guardian — FastAPI backend (Sprint 0: health only)."""
+
 from fastapi import FastAPI
 
 app = FastAPI(
@@ -12,5 +11,5 @@ app = FastAPI(
 
 @app.get("/health")
 async def health_check() -> dict:
-    """Health check endpoint."""
-    return {"status": "healthy", "service": "mealchain-guardian"}
+    """Health check endpoint backend."""
+    return {"status": "healthy", "service": "mealchain-backend"}
