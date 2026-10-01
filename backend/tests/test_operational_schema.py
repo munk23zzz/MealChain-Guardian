@@ -54,10 +54,11 @@ EXPECTED_COLUMNS = {
 }
 
 EXPECTED_CHECKS = {
-    "supply_records": "quantity_kg >= 0",
-    "demand_records": "quantity_kg >= 0",
-    "price_signals": "price_per_kg > 0",
-    "batches": "freshness_score between 0 and 1",
+    # Fragment harus cocok render kanonik Postgres (pg_get_constraintdef, lowercase)
+    "supply_records": "quantity_kg >= (0)::numeric",
+    "demand_records": "quantity_kg >= (0)::numeric",
+    "price_signals": "price_per_kg > (0)::numeric",
+    "batches": "(freshness_score >= (0)::numeric) and (freshness_score <= (1)::numeric)",
 }
 
 EXPECTED_INDEXES = {
@@ -114,7 +115,9 @@ def test_check_constraints_present(sync_engine):
                 "FROM pg_constraint WHERE contype = 'c' AND connamespace = 'public'::regnamespace"
             )
         ).all()
-    checks = {table: definition.lower() for table, definition in rows}
+    checks: dict[str, str] = {}
+    for table, definition in rows:
+        checks[table] = f"{checks.get(table, '')};{definition.lower()}"
 
     for table, fragment in EXPECTED_CHECKS.items():
         assert fragment in checks.get(table, ""), (
