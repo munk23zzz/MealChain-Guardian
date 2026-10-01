@@ -8,15 +8,16 @@ carry-over eksplisit.
 
 ## Sprint 0 — Setup (2-3 hari)
 
-- [ ] Repo greenfield diinisiasi sesuai struktur folder di `docs/Architecture.md` §4
-- [ ] Docker Compose jalan: backend (kosong/hello-world), postgres, frontend (kosong/hello-world)
-- [ ] Migration awal Postgres sesuai `docs/Schema.md` (tabel master data dulu)
+- [x] Repo greenfield diinisiasi sesuai struktur folder di `docs/Architecture.md` §4
+- [x] Docker Compose jalan: backend (kosong/hello-world), postgres, frontend (kosong/hello-world)
+- [x] Migration awal Postgres sesuai `docs/Schema.md` (tabel master data dulu)
 - [ ] Verifikasi akses AWS trial: Bedrock model invoke berhasil, akses AgentCore dikonfirmasi
 - [ ] Strands SDK "hello-world" agent berhasil jalan (belum perlu tool apapun)
-- [ ] `.env.example` dibuat, `.env` asli tidak ter-commit
+- [x] `.env.example` dibuat, `.env` asli tidak ter-commit
 
 **Definition of Done Sprint 0:** kalau salah satu di atas belum, JANGAN mulai Sprint 1 —
 fondasi ini kalau salah akan menghambat semua sprint berikutnya.
+
 
 ## Sprint 1 — Business logic inti + data (Minggu 1)
 
@@ -38,11 +39,11 @@ menghasilkan angka yang sudah diverifikasi manual sesuai contoh di `docs/Skill.m
 - [ ] Endpoint `/cost/safe-delivered`
 - [ ] Endpoint `/balance/analyze`, `/balance/recommend`
 - [ ] Endpoint `/evidence/fuse` (consistency check)
-- [ ] Auth: login, JWT, 2 role (sppg_staff, dinas_admin), middleware RBAC per endpoint
+- [ ] Auth: login, JWT, 3 role (sppg_head, sppg_nutritionist, bgn_monitor), middleware RBAC per endpoint
 - [ ] Frontend: Login screen, Dashboard shell (peta 10 lokasi, tanpa data live agent dulu)
 - [ ] `openapi.json` backend ter-generate bersih (siap untuk Gateway di Sprint 3)
 
-**Definition of Done:** login berfungsi untuk 2 role berbeda dengan scope akses yang benar;
+**Definition of Done:** login berfungsi untuk 3 role berbeda dengan scope akses yang benar;
 `/balance/recommend` mengembalikan hasil yang masuk akal untuk skenario Cianjur→Jakarta manual.
 
 ## Sprint 3 — Agent layer (Minggu 3) — INI SPRINT PALING KRITIS

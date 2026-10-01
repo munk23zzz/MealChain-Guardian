@@ -56,10 +56,10 @@ Hard constraints yang harus lolos SEBELUM cost ini dihitung untuk suatu kandidat
 jangan hardcode), `quantity_kg >= required_quantity`, `estimated_delivery_time <=
 delivery_window`.
 
-### Freshness threshold default
-- `freshness_score >= 0.6` → lolos
-- `0.4 <= freshness_score < 0.6` → `needs_verification` (bukan otomatis gagal)
-- `< 0.4` → gagal otomatis
+### Freshness threshold default (final — keputusan Roy 2026-10-01)
+- `freshness_score >= 0.85` → `pass`
+- `0.60 <= freshness_score < 0.85` → `needs_verification` (bukan otomatis gagal)
+- `< 0.60` → `fail` / tidak layak
 
 ## 4. 7 KPI — definisi & cara hitung
 
@@ -81,7 +81,7 @@ Format: `nama_tool(input) → output`. Ini HARUS konsisten dengan endpoint di
 ```
 supply.get(location_id, commodity_id) → { quantity_kg, recorded_at, source }
 demand.get(location_id, commodity_id) → { quantity_kg, needed_by }
-freshness.evaluate(batch_id) → { freshness_score, status }
+freshness.evaluate(batch_id) → { freshness_score, status, usable_until }
 safety.evaluate(batch_id) → { safety_status: PASS|FAIL|NEEDS_VERIFICATION, reasons[] }
 price.deviation(location_id, commodity_id, supplier_price) → { deviation_pct, reference_price, flagged }
 logistics.estimate(source_location_id, target_location_id, quantity_kg)
@@ -142,8 +142,14 @@ Transport (Cianjur→Jakarta, 120 km): Rp150.000
 Handling: Rp50.000
 Expected loss (freshness 0.75 → 5% buffer): Rp625.000
 Freshness risk penalty: Rp0 (di atas threshold 0.6)
-Safety risk penalty: Rp0 (PASS)
+Safety Risk Penalty: Rp0 (PASS)
 ─────────────────────────────────────
 Safe Delivered Cost = Rp13.325.000 (≈ Rp26.650/kg)
 ```
 Gunakan contoh ini sebagai test case pertama di `backend/tests/test_safe_delivered_cost.py`.
+
+> **Catatan threshold (Roy 2026-10-01):** dengan ambang freshness final (pass ≥0.85,
+> verify 0.60–<0.85, fail <0.60), contoh `freshness_score = 0.75` di atas berada di band
+> `needs_verification` — bukan kandidat PASS. Angka biaya tetap valid sebagai contoh
+> aritmetika Safe Delivered Cost untuk Sprint 2; formula §3 tidak berubah.
+

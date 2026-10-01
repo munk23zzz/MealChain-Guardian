@@ -27,7 +27,7 @@
 | Frontend | **Next.js 14 (App Router) + TypeScript + Tailwind CSS + shadcn/ui** | Modern, cepat untuk build, tim tidak ada preferensi kuat jadi pilih yang paling banyak dukungan skill (`frontend-design`, `ui-ux-pro-max` Hermes sudah punya konvensi untuk stack ini) |
 | Charting | **Recharts** | Konsisten dengan chart yang sudah dibuat untuk proposal |
 | Map | **MapLibre GL JS** + tile OSM gratis | Konsisten dengan pemakaian OSM/OSRM di proposal, tidak butuh API key berbayar |
-| Auth | **JWT + bcrypt**, RBAC sederhana (2 role) | Cukup untuk MVP, tidak perlu SSO enterprise |
+| Auth | **JWT + bcrypt**, RBAC sederhana (3 role) | Cukup untuk MVP, tidak perlu SSO enterprise |
 | Dev environment | **Docker Compose** (backend, frontend, postgres, mock-sap) | Lokal, konsisten cross-machine untuk duo team |
 | Hosting | Lokal untuk semua service KECUALI agent layer | AgentCore Runtime/Gateway **wajib** jalan di AWS asli (tidak bisa di-Docker-kan lokal) — lihat §5 |
 
@@ -164,7 +164,7 @@ mealchain-guardian/
                         └────────────────────────────┘
                                     │
                                     ▼
-                        Human approval (SPPG/Dinas) → Action Agent (tool) → SAP mock
+                        Human approval (SPPG Head / SPPG Nutritionist) → Action Agent (tool) → SAP mock
 ```
 
 ### Mapping "9 worker agent" (nama di proposal) → implementasi teknis
@@ -212,7 +212,7 @@ berdampingan, jelas terlihat sebagai satu garis lurus, bukan dua hal yang tidak 
 `Supervisor DETECT` → panggil `/supply` & `/demand` → deteksi surplus Cianjur + shortage
 Jakarta → `VERIFY` → panggil `/freshness/evaluate` & `/safety/evaluate` untuk batch kandidat →
 `OPTIMIZE` → panggil `/cost/safe-delivered` untuk tiap kandidat → `DECIDE` → Verifier
-mengaudit → tampil di Recommendation Feed → SPPG/Dinas approve → `/actions/execute` → tulis
+mengaudit → tampil di Recommendation Feed → SPPG Head/SPPG Nutritionist approve → `/actions/execute` → tulis
 ke SAP mock (purchase order) → `LEARN` (update Memory untuk siklus berikutnya)
 
 ### Event 2: Price anomaly
@@ -229,9 +229,9 @@ koreksi diri)
 
 ## 7. Keamanan (Security Architect view)
 
-- Semua endpoint backend butuh JWT valid; role (`sppg_staff` / `dinas_admin`) di-embed di
+- Semua endpoint backend butuh JWT valid; role (`sppg_head` / `sppg_nutritionist` / `bgn_monitor`) di-embed di
   token, dicek di setiap endpoint sensitif
-- SPPG staff hanya bisa lihat/approve untuk `location_id` miliknya; Dinas admin lintas lokasi
+- SPPG Head/Nutritionist hanya bisa lihat/approve untuk `location_id` miliknya; `bgn_monitor` read-only lintas lokasi
 - Kredensial AWS (Bedrock/AgentCore) disimpan di `.env`, tidak pernah di-commit — `.env.example`
   jadi template
 - Mock SAP tidak punya kredensial nyata — clearly labeled sebagai simulasi di response header

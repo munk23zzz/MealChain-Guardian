@@ -47,7 +47,7 @@ working MVP untuk kompetisi Sokrates x SAP x AWS.
   Logistics, Evidence Fusion + Balancing/Optimization Engine
 - Mock SAP API (meniru struktur OData API_MATERIAL_STOCK, API_MATERIAL_DOCUMENT,
   API_PURCHASEORDER_PROCESS_SRV, API_BUSINESS_PARTNER, API_PRODUCT_SRV)
-- Autentikasi + 2 role (SPPG staff, Dinas admin)
+- Autentikasi + 3 role (sppg_head, sppg_nutritionist, bgn_monitor)
 - Dashboard: peta 10 lokasi, feed rekomendasi, detail keputusan + evidence, Agent Activity
   Log (trace), approval flow, KPI dashboard
 - Evidence ledger (Postgres, append-only, hash chain sederhana)
@@ -74,9 +74,9 @@ working MVP untuk kompetisi Sokrates x SAP x AWS.
    evidence yang mendukung/menolak
 4. **Agent Activity Log** — trace step-by-step (DETECT→VERIFY→TRACE→PREDICT→OPTIMIZE→DECIDE→ACT→LEARN),
    diambil dari AgentCore Observability
-5. **Approval Flow** — SPPG/Dinas approve atau reject aksi berisiko tinggi sebelum eksekusi
+5. **Approval Flow** — approver SPPG (SPPG Head / SPPG Nutritionist) approve atau reject aksi berisiko tinggi sebelum eksekusi; `bgn_monitor` read-only
 6. **KPI Dashboard** — 7 indikator (lihat `Skill.md` untuk definisi)
-7. **Auth & Role-based View** — login, 2 role
+7. **Auth & Role-based View** — login, 3 role (sppg_head, sppg_nutritionist, bgn_monitor)
 
 ## 6. Technical requirements (ringkas — detail di `Architecture.md`)
 

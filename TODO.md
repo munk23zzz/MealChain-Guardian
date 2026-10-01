@@ -24,15 +24,17 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 
 | ID | Task | Kategori | Status | Assignee | Catatan |
 |---|---|---|---|---|---|
-| S1-01 | Seed dataset 10 lokasi x 3 komoditas | Data | Not Started | | |
-| S1-02 | Endpoint `GET /supply/*` | Backend/API | Not Started | | |
-| S1-03 | Endpoint `GET /demand/*` | Backend/API | Not Started | | |
-| S1-04 | Endpoint `POST /freshness/evaluate` | Backend/API | Not Started | | |
-| S1-05 | Endpoint `POST /safety/evaluate` | Backend/API | Not Started | | |
-| S1-06 | Endpoint `GET/POST /price/*` | Backend/API | Not Started | | |
-| S1-07 | Endpoint `POST /logistics/estimate` | Backend/API | Not Started | | |
-| S1-08 | Unit test hard constraints (safety, freshness, capacity, delivery window) | Testing | Not Started | | |
-| S1-09 | Mock SAP: material_stock + purchase_orders terisi seed | Mock SAP | Not Started | | |
+| S1-01 | Seed dataset 10 lokasi x 3 komoditas | Data | In Progress | Hermes | Task 10 plan v2 |
+| S1-02 | Endpoint `GET /supply/*` | Backend/API | In Progress | Hermes | Task 11 plan v2 |
+| S1-03 | Endpoint `GET /demand/*` | Backend/API | In Progress | Hermes | Task 11 plan v2 |
+| S1-04 | Endpoint `POST /freshness/evaluate` | Backend/API | In Progress | Hermes | Task 12 plan v2 |
+| S1-05 | Endpoint `POST /safety/evaluate` | Backend/API | In Progress | Hermes | Task 12 plan v2 |
+| S1-06 | Endpoint `GET/POST /price/*` | Backend/API | In Progress | Hermes | Task 12 plan v2 |
+| S1-07 | Endpoint `POST /logistics/estimate` | Backend/API | In Progress | Hermes | Task 12 plan v2 |
+| S1-08 | Unit test hard constraints (safety, freshness, capacity, delivery window) | Testing | In Progress | Hermes | Task 1-7+13 plan v2 |
+| S1-09 | Mock SAP: material_stock + purchase_orders terisi seed | Mock SAP | In Progress | Hermes | Task 9-10 plan v2 |
+| S1-10 | Endpoint `GET /demand/forecast/*` (forecast statistik fallback) | Backend/API | In Progress | Hermes | Task 11 plan v2 |
+| S1-11 | Freshness `usable_until` pada kontrak evaluate + persistence batch | Backend/API | In Progress | Hermes | Task 2+12 plan v2 |
 
 ## Sprint 2 — Balancing engine + Auth + Frontend shell
 
@@ -41,7 +43,7 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 | S2-01 | Endpoint `POST /cost/safe-delivered` | Backend/API | Not Started | | |
 | S2-02 | Endpoint `POST /balance/analyze`, `/balance/recommend` | Backend/API | Not Started | | |
 | S2-03 | Endpoint `POST /evidence/fuse` | Backend/API | Not Started | | |
-| S2-04 | Auth: JWT login + 2 role | Authentication | Not Started | | |
+| S2-04 | Auth: JWT login + 3 role (sppg_head, sppg_nutritionist, bgn_monitor) | Authentication | Not Started | | |
 | S2-05 | RBAC middleware per endpoint | Authentication | Not Started | | |
 | S2-06 | Frontend: Login screen | Dashboard | Not Started | | |
 | S2-07 | Frontend: Dashboard shell + peta 10 lokasi (data statis dulu) | Dashboard | Not Started | | |
