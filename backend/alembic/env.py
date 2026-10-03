@@ -10,13 +10,16 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 from app.db import Base
-from app.models import commodities, locations, suppliers, users  # noqa: F401
 from app.models import (  # noqa: F401
     batches,
+    commodities,
     demand_records,
+    locations,
     price_signals,
     sap_mock,
+    suppliers,
     supply_records,
+    users,
 )
 
 config = context.config

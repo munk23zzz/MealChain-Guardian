@@ -6,8 +6,8 @@ from app.models.demand_records import DemandRecord
 from app.models.locations import Location
 from app.models.price_signals import PriceSignal
 from app.models.sap_mock import SapMockMaterialStock, SapMockPurchaseOrder
-from app.models.supply_records import SupplyRecord
 from app.models.suppliers import Supplier
+from app.models.supply_records import SupplyRecord
 from app.models.users import User
 
 __all__ = [
