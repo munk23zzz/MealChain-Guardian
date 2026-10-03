@@ -21,6 +21,16 @@ class Settings(BaseSettings):
     demo_mode: bool = False
     app_name: str = "MealChain Guardian"
 
+    # Konfigurasi demo komoditas (plan Sprint 1 — bukan kolom Schema.md):
+    # shelf life dalam hari: telur 28, ayam 5, wortel 21
+    shelf_life_days_telur: float = 28.0
+    shelf_life_days_ayam: float = 5.0
+    shelf_life_days_wortel: float = 21.0
+
+    # Safe range suhu rantai dingin demo (°C)
+    safe_temp_min_c: float = 0.0
+    safe_temp_max_c: float = 8.0
+
     # Integrasi — TANPA default; diisi lewat env saat dibutuhkan (Sprint 3+)
     aws_region: str = "us-west-2"
     supervisor_model_primary: str = ""

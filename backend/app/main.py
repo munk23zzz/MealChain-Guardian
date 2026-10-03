@@ -7,6 +7,10 @@ from fastapi import FastAPI
 from app.api.demand import forecast_router
 from app.api.demand import router as demand_router
 from app.api.dependencies import lifespan
+from app.api.freshness import router as freshness_router
+from app.api.logistics import router as logistics_router
+from app.api.price import router as price_router
+from app.api.safety import router as safety_router
 from app.api.supply import router as supply_router
 
 
@@ -27,6 +31,10 @@ app = FastAPI(
 app.include_router(forecast_router)
 app.include_router(demand_router)
 app.include_router(supply_router)
+app.include_router(freshness_router)
+app.include_router(safety_router)
+app.include_router(price_router)
+app.include_router(logistics_router)
 
 
 @app.get("/health")

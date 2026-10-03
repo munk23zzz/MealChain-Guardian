@@ -150,6 +150,16 @@ def build_seed_rows(reference_time: datetime, seed_path: Path | None = None) -> 
     for b in data["batches"]:
         harvested_at = ref + timedelta(hours=float(b["harvested_at_offset_hours"]))
         score = float(b["freshness_score"])
+        # Konversi temperature_log relatif → timestamp absolut (deterministik)
+        temperature_log = [
+            {
+                "timestamp": (
+                    ref + timedelta(hours=float(e["timestamp_offset_hours"]))
+                ).isoformat(),
+                "temperature_c": e["temperature_c"],
+            }
+            for e in b["temperature_log"]
+        ]
         batches.append(
             {
                 "id": stable_uuid("batch", b["code"]),
@@ -166,7 +176,7 @@ def build_seed_rows(reference_time: datetime, seed_path: Path | None = None) -> 
                 "usable_until": harvested_at + timedelta(
                     days=float(b["shelf_life_days"]) * score
                 ),
-                "temperature_log": b["temperature_log"],
+                "temperature_log": temperature_log,
                 "certification_status": b.get("certification_status", "none"),
             }
         )
@@ -330,6 +340,7 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
                         freshness_score=item["freshness_score"],
                         safety_status=item["safety_status"],
                         usable_until=item["usable_until"],
+                        seed_key=item["code"],
                     )
                 )
             for item in rows["material_stock"]:
