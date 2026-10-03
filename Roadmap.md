@@ -21,15 +21,15 @@ fondasi ini kalau salah akan menghambat semua sprint berikutnya.
 
 ## Sprint 1 — Business logic inti + data (Minggu 1)
 
-- [ ] Seed dataset sintetis: 10 lokasi, 3 komoditas (lihat `data/seed/`)
-- [ ] Endpoint `/supply/*`, `/demand/*` jalan + tertaut ke Postgres
-- [ ] Endpoint `/freshness/evaluate` — implementasi formula sesuai `docs/Skill.md` §3
-- [ ] Endpoint `/safety/evaluate` — implementasi hard constraint check, return
+- [x] Seed dataset sintetis: 10 lokasi, 3 komoditas (lihat `data/seed/`)
+- [x] Endpoint `/supply/*`, `/demand/*` jalan + tertaut ke Postgres
+- [x] Endpoint `/freshness/evaluate` — implementasi formula sesuai `docs/Skill.md` §3
+- [x] Endpoint `/safety/evaluate` — implementasi hard constraint check, return
   PASS/FAIL/NEEDS_VERIFICATION
-- [ ] Endpoint `/price/deviation`
-- [ ] Endpoint `/logistics/estimate` (pakai data jarak antar 10 lokasi, boleh hardcode/precompute)
-- [ ] Unit test untuk semua fungsi di `core/` — minimal 1 test per hard constraint
-- [ ] Mock SAP: `sap_mock_material_stock`, `sap_mock_purchase_orders` terisi seed data
+- [x] Endpoint `/price/deviation`
+- [x] Endpoint `/logistics/estimate` (pakai data jarak antar 10 lokasi, boleh hardcode/precompute)
+- [x] Unit test untuk semua fungsi di `core/` — minimal 1 test per hard constraint
+- [x] Mock SAP: `sap_mock_material_stock`, `sap_mock_purchase_orders` terisi seed data
 
 **Definition of Done:** semua endpoint di atas bisa dipanggil manual (Postman/curl) dan
 menghasilkan angka yang sudah diverifikasi manual sesuai contoh di `docs/Skill.md` §7.

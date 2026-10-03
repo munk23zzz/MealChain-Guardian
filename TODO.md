@@ -24,17 +24,17 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 
 | ID | Task | Kategori | Status | Assignee | Catatan |
 |---|---|---|---|---|---|
-| S1-01 | Seed dataset 10 lokasi x 3 komoditas | Data | In Progress | Hermes | Task 10 plan v2 |
-| S1-02 | Endpoint `GET /supply/*` | Backend/API | In Progress | Hermes | Task 11 plan v2 |
-| S1-03 | Endpoint `GET /demand/*` | Backend/API | In Progress | Hermes | Task 11 plan v2 |
-| S1-04 | Endpoint `POST /freshness/evaluate` | Backend/API | In Progress | Hermes | Task 12 plan v2 |
-| S1-05 | Endpoint `POST /safety/evaluate` | Backend/API | In Progress | Hermes | Task 12 plan v2 |
-| S1-06 | Endpoint `GET/POST /price/*` | Backend/API | In Progress | Hermes | Task 12 plan v2 |
-| S1-07 | Endpoint `POST /logistics/estimate` | Backend/API | In Progress | Hermes | Task 12 plan v2 |
-| S1-08 | Unit test hard constraints (safety, freshness, capacity, delivery window) | Testing | In Progress | Hermes | Task 1-7+13 plan v2 |
-| S1-09 | Mock SAP: material_stock + purchase_orders terisi seed | Mock SAP | In Progress | Hermes | Task 9-10 plan v2 |
-| S1-10 | Endpoint `GET /demand/forecast/*` (forecast statistik fallback) | Backend/API | In Progress | Hermes | Task 11 plan v2 |
-| S1-11 | Freshness `usable_until` pada kontrak evaluate + persistence batch | Backend/API | In Progress | Hermes | Task 2+12 plan v2 |
+| S1-01 | Seed dataset 10 lokasi x 3 komoditas | Data | Done | Hermes | Commit 81714c7; counts 10×3; docs/verification/sprint-1.md |
+| S1-02 | Endpoint `GET /supply/*` | Backend/API | Done | Hermes | Commit 3fcd920; 13 test API |
+| S1-03 | Endpoint `GET /demand/*` | Backend/API | Done | Hermes | Commit 3fcd920 |
+| S1-04 | Endpoint `POST /freshness/evaluate` | Backend/API | Done | Hermes | Commit edbe5a9 |
+| S1-05 | Endpoint `POST /safety/evaluate` | Backend/API | Done | Hermes | Commit edbe5a9 |
+| S1-06 | Endpoint `GET/POST /price/*` | Backend/API | Done | Hermes | Commit edbe5a9 |
+| S1-07 | Endpoint `POST /logistics/estimate` | Backend/API | Done | Hermes | Commit edbe5a9 |
+| S1-08 | Unit test hard constraints (safety, freshness, capacity, delivery window) | Testing | Done | Hermes | 158 test backend; acceptance 12 test |
+| S1-09 | Mock SAP: material_stock + purchase_orders terisi seed | Mock SAP | Done | Hermes | Commit 2e6cbc9 + 81714c7 |
+| S1-10 | Endpoint `GET /demand/forecast/*` (forecast statistik fallback) | Backend/API | Done | Hermes | Commit 3fcd920 |
+| S1-11 | Freshness `usable_until` pada kontrak evaluate + persistence batch | Backend/API | Done | Hermes | Commit edbe5a9 + eb207ff |
 
 ## Sprint 2 — Balancing engine + Auth + Frontend shell
 
