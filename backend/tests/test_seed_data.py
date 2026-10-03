@@ -79,14 +79,17 @@ def test_build_seed_rows_demand_min_seven_observations_for_forecast_pair() -> No
 
 
 def test_build_seed_rows_price_signals_suppliers() -> None:
-    """Revisi Roy 2026-10-03: source unik per supplier (supplier_A/B/C)."""
+    """Revisi kedua Roy: quote = source 'supplier_quote' + field 'supplier'."""
     rows = build_seed_rows(REF_TIME)
-    by_source = {
-        r["source"]: float(r["price_per_kg"])
+    quotes = {
+        r["supplier"]: float(r["price_per_kg"])
         for r in rows["price_signals"]
-        if r["source"].startswith("supplier_")
+        if r["source"] == "supplier_quote"
     }
-    assert by_source == {"supplier_A": 26200.0, "supplier_B": 27000.0, "supplier_C": 32000.0}
+    assert quotes["Supplier A Cianjur"] == 26200.0
+    assert quotes["Supplier B Cianjur"] == 27000.0
+    assert quotes["Supplier C Cianjur"] == 32000.0
+    assert quotes["Supplier D Cianjur"] == 25400.0
     refs_cianjur = [
         r
         for r in rows["price_signals"]

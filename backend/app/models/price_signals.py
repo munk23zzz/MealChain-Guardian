@@ -19,7 +19,12 @@ class PriceSignal(Base):
         ),
         CheckConstraint(
             "source IN ('pihps_reference','supplier_quote')",
-            name="price_signals_source_check",
+            name="price_signals_source_quote_check",
+        ),
+        CheckConstraint(
+            "(source = 'pihps_reference' AND supplier_id IS NULL) OR "
+            "(source = 'supplier_quote' AND supplier_id IS NOT NULL)",
+            name="price_signals_supplier_consistency_check",
         ),
     )
 
@@ -33,6 +38,9 @@ class PriceSignal(Base):
         UUID(as_uuid=True), ForeignKey("commodities.id"), nullable=False
     )
     price_per_kg: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    supplier_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=True
+    )
     recorded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )

@@ -9,7 +9,6 @@ Keputusan Roy:
 
 from datetime import UTC, datetime
 
-import pytest
 from sqlalchemy import create_engine, text
 
 from app.seed.seed_data import build_seed_rows
@@ -95,14 +94,16 @@ def test_regional_price_gap_exists_per_commodity():
 
 
 def test_locked_quotes_have_unique_supplier_sources():
-    """Quote A/B/C dipersist dengan source unik 'supplier_A/B/C' (Cianjur/telur)."""
+    """Revisi kedua Roy: quote = source 'supplier_quote' + field 'supplier'
+    (identitas supplier tidak dienkode di source)."""
     rows = build_seed_rows(REF)["price_signals"]
-    by_source = {
-        r["source"]: float(r["price_per_kg"])
-        for r in rows
-        if r["source"].startswith("supplier_")
+    quotes = [r for r in rows if r["source"] == "supplier_quote"]
+    by_supplier = {
+        r["supplier"]: float(r["price_per_kg"]) for r in quotes
     }
-    assert by_source == {"supplier_A": 26200.0, "supplier_B": 27000.0, "supplier_C": 32000.0}
+    assert by_supplier["Supplier A Cianjur"] == 26200.0
+    assert by_supplier["Supplier B Cianjur"] == 27000.0
+    assert by_supplier["Supplier C Cianjur"] == 32000.0
 
 
 def test_cianjur_reference_still_locked():
@@ -118,49 +119,9 @@ def test_cianjur_reference_still_locked():
     assert float(ref_cianjur[0]["price_per_kg"]) == 26500.0
 
 
-def test_db_constraint_accepts_supplier_sources():
-    """Setelah migration 003, DB harus menerima source supplier_A/B/C.
-    Skip otomatis bila constraint 003 belum ter-aplikasi."""
-    engine = create_engine(DB_URL)
-    try:
-        with engine.connect() as conn:
-            has_003 = conn.execute(
-                text(
-                    "SELECT EXISTS (SELECT 1 FROM pg_constraint "
-                    "WHERE conname='price_signals_source_supplier_check')"
-                )
-            ).scalar()
-        if not has_003:
-            pytest.skip("migration 003 belum ter-aplikasi")
-        inserted = []
-        try:
-            with engine.begin() as conn:
-                loc_id = conn.execute(
-                    text("SELECT id FROM locations WHERE name='Cianjur'")
-                ).scalar_one()
-                com_id = conn.execute(
-                    text("SELECT id FROM commodities WHERE name='telur'")
-                ).scalar_one()
-                for src in ("supplier_A", "supplier_B", "supplier_C"):
-                    result = conn.execute(
-                        text(
-                            "INSERT INTO price_signals (id, location_id, commodity_id, "
-                            "price_per_kg, recorded_at, source) "
-                            "VALUES (gen_random_uuid(), :l, :c, 26200, now(), :s) "
-                            "RETURNING id"
-                        ),
-                        {"l": str(loc_id), "c": str(com_id), "s": src},
-                    )
-                    inserted.append(str(result.scalar_one()))
-        finally:
-            # Self-cleaning: row uji tidak boleh tertinggal di DB bersama
-            with engine.begin() as conn:
-                for pid in inserted:
-                    conn.execute(
-                        text("DELETE FROM price_signals WHERE id = :i"), {"i": pid}
-                    )
-    finally:
-        engine.dispose()
+# Catatan: test lama 'test_db_constraint_accepts_supplier_sources' (desain interim
+# supplier_<ID>) dihapus — kontraknya sudah tidak berlaku. Penerusnya:
+# tests/test_supplier_quote_db.py (kolom supplier_id + constraint 004).
 
 
 def test_no_orphan_price_rows_after_load():

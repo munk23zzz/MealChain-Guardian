@@ -71,8 +71,9 @@ kecuali disebutkan lain. Semua tabel punya `created_at TIMESTAMPTZ DEFAULT now()
 | location_id | UUID | FK → locations.id, NOT NULL |
 | commodity_id | UUID | FK → commodities.id, NOT NULL |
 | price_per_kg | NUMERIC(10,2) | NOT NULL, CHECK > 0 |
+| supplier_id | UUID | FK → suppliers.id, NULLABLE — WAJIB terisi saat source='supplier_quote', WAJIB NULL saat 'pihps_reference' (revisi kedua Roy 2026-10-03) |
 | recorded_at | TIMESTAMPTZ | NOT NULL |
-| source | TEXT | NOT NULL — 'pihps_reference' \| 'supplier_<ID>' (revisi Roy 2026-10-03: quote supplier memakai source unik per supplier, mis. 'supplier_A') |
+| source | TEXT | NOT NULL — 'pihps_reference' \| 'supplier_quote' (dua nilai generik; identitas supplier di kolom supplier_id, BUKAN dienkode ke string source) |
 
 ### `batches`
 Unit inti untuk freshness/safety check.

@@ -125,20 +125,27 @@ def build_seed_rows(reference_time: datetime, seed_path: Path | None = None) -> 
     price_signals = []
     for p in data["prices"]:
         source = p["source"]
+        # Revisi kedua Roy 2026-10-03: source generik dua nilai
+        # ('pihps_reference' | 'supplier_quote'); identitas supplier pada kolom
+        # supplier_id (FK), TIDAK dienkode ke dalam string source.
+        supplier_name = p.get("supplier")
+        if source == "supplier_quote" and not supplier_name:
+            raise ValueError(
+                f"quote {p['location']}/{p['commodity']} wajib punya field 'supplier'"
+            )
         price_signals.append(
             {
-                # Revisi Roy 2026-10-03: source unik per supplier ('supplier_A/B/C')
-                # + referensi regional per lokasi ('pihps_reference').
-                # Natural key tanpa harga — merge akan memperbarui harga bila JSON diubah.
                 "id": stable_uuid(
                     "price",
                     p["location"],
                     p["commodity"],
                     source,
+                    supplier_name or "",
                     ref.isoformat(),
                 ),
                 "location": p["location"],
                 "commodity": p["commodity"],
+                "supplier": supplier_name,
                 "price_per_kg": Decimal(str(p["price_per_kg"])),
                 "recorded_at": ref,
                 "source": source,
@@ -320,6 +327,11 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
                         id=item["id"],
                         location_id=loc_by_name[item["location"]].id,
                         commodity_id=com_by_name[item["commodity"]].id,
+                        supplier_id=(
+                            sup_by_name[item["supplier"]].id
+                            if item.get("supplier")
+                            else None
+                        ),
                         price_per_kg=item["price_per_kg"],
                         recorded_at=item["recorded_at"],
                         source=item["source"],

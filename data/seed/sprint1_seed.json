@@ -19,7 +19,8 @@
   "suppliers": [
     {"name": "Supplier A Cianjur", "location": "Cianjur", "reliability_score": 0.92},
     {"name": "Supplier B Cianjur", "location": "Cianjur", "reliability_score": 0.88},
-    {"name": "Supplier C Cianjur", "location": "Cianjur", "reliability_score": 0.81}
+    {"name": "Supplier C Cianjur", "location": "Cianjur", "reliability_score": 0.81},
+    {"name": "Supplier D Cianjur", "location": "Cianjur", "reliability_score": 0.85}
   ],
   "supply": [
     {"location": "Cianjur", "commodity": "telur", "quantity_kg": 1400, "source": "mock_sap"},
@@ -222,9 +223,10 @@
     {"location": "Medan", "commodity": "telur", "source": "pihps_reference", "price_per_kg": 32600},
     {"location": "Medan", "commodity": "ayam", "source": "pihps_reference", "price_per_kg": 44200},
     {"location": "Medan", "commodity": "wortel", "source": "pihps_reference", "price_per_kg": 27900},
-    {"location": "Cianjur", "commodity": "telur", "source": "supplier_A", "price_per_kg": 26200},
-    {"location": "Cianjur", "commodity": "telur", "source": "supplier_B", "price_per_kg": 27000},
-    {"location": "Cianjur", "commodity": "telur", "source": "supplier_C", "price_per_kg": 32000}
+    {"location": "Cianjur", "commodity": "telur", "source": "supplier_quote", "supplier": "Supplier A Cianjur", "price_per_kg": 26200},
+    {"location": "Cianjur", "commodity": "telur", "source": "supplier_quote", "supplier": "Supplier B Cianjur", "price_per_kg": 27000},
+    {"location": "Cianjur", "commodity": "telur", "source": "supplier_quote", "supplier": "Supplier C Cianjur", "price_per_kg": 32000},
+    {"location": "Cianjur", "commodity": "telur", "source": "supplier_quote", "supplier": "Supplier D Cianjur", "price_per_kg": 25400}
   ],
   "mock_sap": {
     "material_stock": [

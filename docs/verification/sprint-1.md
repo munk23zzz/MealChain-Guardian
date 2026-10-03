@@ -1,24 +1,30 @@
 # Verifikasi Sprint 1 — Business Logic Inti + Data
 
 > **ADDENDUM revisi Roy 2026-10-03 (setelah review Sprint 1):**
-> 1. **price_signals.source** — keputusan final: quote Supplier A/B/C dipersist dengan
->    **source unik per supplier** (`supplier_A`/`supplier_B`/`supplier_C`) — menimpa
->    ruling `supplier_quote × 3`. Diimplementasi via **migration 003**
->    (`003_price_source_supplier`): check constraint dilebarkan menjadi
->    `source = 'pihps_reference' OR source LIKE 'supplier\_%'`, row legacy dibersihkan.
->    Schema.md §price_signals diperbarui sesuai kontrak baru.
+> 1. **Desain quote supplier (revisi kedua — FINAL):** source kembali ke dua nilai
+>    generik `'pihps_reference' | 'supplier_quote'`; identitas supplier ada di
+>    **kolom terpisah `price_signals.supplier_id`** (FK → suppliers.id) — BUKAN
+>    dienkode ke string source (`supplier_A` dll ditiadakan). Tidak terbatas sampai
+>    C: seed mendemokan **Supplier D** (25.400/kg) membuktikan skalabilitas.
+>    Contoh payload: `{"source": "supplier_quote", "supplier": "Supplier A", "price": 12000}`.
+>    Diimplementasi via **migration 004** (`004_supplier_quote_design`, menimpa desain
+>    interim 003 yang dicabut): kolom supplier_id + FK + index, kontrak source dua
+>    nilai, dan consistency check (`pihps_reference` ↔ supplier_id NULL;
+>    `supplier_quote` ↔ supplier_id terisi). Schema.md §price_signals diperbarui.
+>    Migration interim 003 di-downgrade dan dihapus dari repo.
 > 2. **Role** — Schema.md §users diperbarui ke 3 role final
 >    (`sppg_head`/`sppg_nutritionist`/`bgn_monitor`); migration 001 sudah benar sejak
 >    awal; sisa wording role lama di docs dibersihkan.
-> 3. **Harga regional realistis** — seed kini memuat referensi PIHPS-style untuk
+> 3. **Harga regional realistis** — seed memuat referensi PIHPS-style untuk
 >    **10 lokasi × 3 komoditas (30 titik harga)** dalam batas realistis Indonesia 2026
 >    (telur 24–34 rb, ayam 32–46 rb, wortel 14–30 rb per kg), dengan kesenjangan antar
 >    wilayah ≥5% per komoditas (rasio max/min; Medan/Jakarta termahal, Cianjur/Bandung
 >    termurah — sesuai narasi root cause IDEA.md). Angka terkunci demo tetap utuh:
->    Cianjur telur ref 26.500, quote A 26.200 / B 27.000 / C 32.000.
->    Bukti: `tests/test_price_regional_seed.py` (6 test).
->    Hasil verifikasi ulang: **164 passed**, ruff clean, seed idempoten 2×,
->    endpoint smoke OK (lihat bawah).
+>    Cianjur telur ref 26.500, quote A 26.200 / B 27.000 / C 32.000 / D 25.400.
+>    Bukti: `tests/test_price_regional_seed.py`, `tests/test_supplier_quote_design.py`,
+>    `tests/test_supplier_quote_db.py`.
+>    Hasil verifikasi ulang: **169 passed + 1 skipped**, ruff clean, seed idempoten 2×,
+>    roundtrip migration OK, endpoint smoke OK.
 
 Tanggal verifikasi: 2026-10-03 (WIB)
 Branch: `feature/sprint1-domain-core`
