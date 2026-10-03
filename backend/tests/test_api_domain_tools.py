@@ -1,7 +1,6 @@
 """Test API freshness/safety/price/logistics (Task 12, plan Sprint 1)."""
 
 import uuid as uuidlib
-from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient

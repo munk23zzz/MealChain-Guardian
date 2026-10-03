@@ -340,7 +340,6 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
                         freshness_score=item["freshness_score"],
                         safety_status=item["safety_status"],
                         usable_until=item["usable_until"],
-                        seed_key=item["code"],
                     )
                 )
             for item in rows["material_stock"]:
