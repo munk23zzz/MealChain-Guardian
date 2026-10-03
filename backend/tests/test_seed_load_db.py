@@ -78,17 +78,17 @@ def test_locked_values_cianjur_jakarta_bogor(sync_engine):
 
 
 def test_supplier_quotes_persisted_as_price_signals(sync_engine):
-    """Ruling Roy 2026-10-03: source='supplier_quote' × 3 (26200/27000/32000)."""
+    """Revisi Roy 2026-10-03: source unik supplier_A/B/C (26200/27000/32000)."""
     with sync_engine.connect() as conn:
         rows = conn.execute(
             text(
-                "SELECT ps.price_per_kg FROM price_signals ps "
-                "WHERE ps.source = 'supplier_quote' "
-                "ORDER BY ps.price_per_kg"
+                "SELECT ps.source, ps.price_per_kg FROM price_signals ps "
+                "WHERE ps.source LIKE 'supplier\\_%' ESCAPE '\\' "
+                "ORDER BY ps.source"
             )
         ).fetchall()
-        prices = [float(r[0]) for r in rows]
-        assert prices == [26200.0, 27000.0, 32000.0]
+        prices = {r[0]: float(r[1]) for r in rows}
+        assert prices == {"supplier_A": 26200.0, "supplier_B": 27000.0, "supplier_C": 32000.0}
 
 
 def test_seed_batches_bands_and_safety_fail(sync_engine):

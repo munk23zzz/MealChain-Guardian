@@ -127,15 +127,14 @@ def build_seed_rows(reference_time: datetime, seed_path: Path | None = None) -> 
         source = p["source"]
         price_signals.append(
             {
-                # Ruling Roy 2026-10-03: source memakai kontrak Schema.md
-                # ('pihps_reference' | 'supplier_quote'); quote A/B/C dibedakan
-                # oleh nilai harga — masuk natural key agar tetap deterministik unik.
+                # Revisi Roy 2026-10-03: source unik per supplier ('supplier_A/B/C')
+                # + referensi regional per lokasi ('pihps_reference').
+                # Natural key tanpa harga — merge akan memperbarui harga bila JSON diubah.
                 "id": stable_uuid(
                     "price",
                     p["location"],
                     p["commodity"],
                     source,
-                    str(p["price_per_kg"]),
                     ref.isoformat(),
                 ),
                 "location": p["location"],

@@ -79,21 +79,20 @@ def test_build_seed_rows_demand_min_seven_observations_for_forecast_pair() -> No
 
 
 def test_build_seed_rows_price_signals_suppliers() -> None:
-    """Ruling Roy 2026-10-03: source ikut kontrak Schema.md
-    ('pihps_reference'|'supplier_quote'); quote A/B/C dibedakan oleh nilai harga."""
+    """Revisi Roy 2026-10-03: source unik per supplier (supplier_A/B/C)."""
     rows = build_seed_rows(REF_TIME)
-    quotes = sorted(
-        float(r["price_per_kg"])
+    by_source = {
+        r["source"]: float(r["price_per_kg"])
         for r in rows["price_signals"]
-        if r["source"] == "supplier_quote"
-    )
-    refs = [
-        float(r["price_per_kg"])
+        if r["source"].startswith("supplier_")
+    }
+    assert by_source == {"supplier_A": 26200.0, "supplier_B": 27000.0, "supplier_C": 32000.0}
+    refs_cianjur = [
+        r
         for r in rows["price_signals"]
-        if r["source"] == "pihps_reference"
+        if r["location"] == "Cianjur" and r["source"] == "pihps_reference"
     ]
-    assert quotes == [26200.0, 27000.0, 32000.0]
-    assert refs == [26500.0]
+    assert any(float(r["price_per_kg"]) == 26500.0 for r in refs_cianjur)
 
 
 def test_build_seed_rows_batches_cover_three_bands_plus_safety_fail() -> None:

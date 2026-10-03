@@ -12,7 +12,7 @@
    dan label yang tidak bisa disalahartikan sekilas.
 3. **Approval adalah friksi yang disengaja** — tombol approve aksi berisiko tinggi TIDAK
    boleh satu klik tanpa menampilkan ringkasan evidence dulu.
-4. **Role-aware by default** — SPPG staff tidak boleh melihat/merasa kewalahan dengan data
+4. **Role-aware by default** — SPPG Head/Nutritionist tidak boleh melihat/merasa kewalahan dengan data
    lintas-lokasi yang bukan urusannya.
 
 ## 2. User roles & flow utama
@@ -49,7 +49,7 @@ Detail muncul dengan evidence → Approve → status di peta berubah
   merah (shortage/surplus signifikan)
 - Klik marker → popup ringkas (nama lokasi, komoditas, status, link ke detail)
 - Sidebar: filter komoditas (telur/ayam/wortel), filter status
-- Untuk SPPG staff: peta di-zoom ke lokasi sendiri, badge lokasi lain di-mute
+- Untuk SPPG Head/Nutritionist: peta di-zoom ke lokasi sendiri, badge lokasi lain di-mute
 
 ### 3.2 Recommendation Feed
 - List card, sorted by urgency (safety issue > regional imbalance > price anomaly)
