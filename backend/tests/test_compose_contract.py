@@ -43,3 +43,26 @@ def test_backend_uses_asyncpg_url() -> None:
     env = compose["services"]["backend"]["environment"]
     database_url = env["DATABASE_URL"] if isinstance(env, dict) else str(env)
     assert "postgresql+asyncpg://" in database_url
+
+
+def test_backend_mounts_data_seed_readonly() -> None:
+    compose = _load_compose()
+    volumes = compose["services"]["backend"]["volumes"]
+    assert any(
+        v.startswith("./data:") and v.endswith(":ro") for v in volumes
+    ), "backend wajib mount ./data read-only untuk seed"
+
+
+def test_postgres_host_port_not_5432_default() -> None:
+    """Port host 5432 dipakai postgres proyek lain — MealChain wajib 15432."""
+    compose = _load_compose()
+    ports = compose["services"]["postgres"]["ports"]
+    joined = " ".join(str(p) for p in ports)
+    assert "15432:5432" in joined
+
+
+def test_mock_sap_service_exposed_port_8001() -> None:
+    compose = _load_compose()
+    ports = compose["services"]["mock-sap"]["ports"]
+    joined = " ".join(str(p) for p in ports)
+    assert "8001:8001" in joined

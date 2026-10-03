@@ -1,19 +1,18 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
     container_name: mealchain-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-mealchain}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mealchain_secret}
-      POSTGRES_DB: ${POSTGRES_DB:-mealchain_db}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mealchain_local}
+      POSTGRES_DB: ${POSTGRES_DB:-mealchain}
+    # Port host 15432: 5432 di host sudah dipakai postgres proyek lain
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-15432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mealchain} -d ${POSTGRES_DB:-mealchain_db}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mealchain} -d ${POSTGRES_DB:-mealchain}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -30,12 +29,20 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-mealchain}:${POSTGRES_PASSWORD:-mealchain_secret}@postgres:5432/${POSTGRES_DB:-mealchain_db}
-      SAP_MODE: ${SAP_MODE:-mock}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mealchain}:${POSTGRES_PASSWORD:-mealchain_local}@postgres:5432/${POSTGRES_DB:-mealchain}
+      DEMO_MODE: ${DEMO_MODE:-false}
+      DEBUG: ${DEBUG:-false}
+      SAP_MATERIAL_STOCK_MODE: ${SAP_MATERIAL_STOCK_MODE:-mock}
+      SAP_PURCHASE_ORDER_MODE: ${SAP_PURCHASE_ORDER_MODE:-mock}
+      SAP_MATERIAL_DOCUMENT_MODE: ${SAP_MATERIAL_DOCUMENT_MODE:-mock}
+      SAP_BUSINESS_PARTNER_MODE: ${SAP_BUSINESS_PARTNER_MODE:-mock}
+      SAP_PRODUCT_MASTER_MODE: ${SAP_PRODUCT_MASTER_MODE:-mock}
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./backend:/app
+      # Seed sintetis read-only (Task 10) — jangan di-copy ke image
+      - ./data:/data:ro
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     networks:
       - mealchain-network
@@ -48,14 +55,33 @@ services:
     depends_on:
       - backend
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_API_URL: http://localhost:${BACKEND_PORT:-8000}
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules
       - /app/.next
     command: npm run dev
+    networks:
+      - mealchain-network
+
+  mock-sap:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mealchain-mock-sap
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mealchain}:${POSTGRES_PASSWORD:-mealchain_local}@postgres:5432/${POSTGRES_DB:-mealchain}
+      DEMO_MODE: ${DEMO_MODE:-false}
+    ports:
+      - "${MOCK_SAP_PORT:-8001}:8001"
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.sap_integration.mock_service:app --host 0.0.0.0 --port 8001
     networks:
       - mealchain-network
 
