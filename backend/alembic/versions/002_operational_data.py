@@ -166,8 +166,16 @@ def upgrade() -> None:
     )
 
     # Indeks §5 (tabel Sprint 1) + indeks query terbaru-per-pasangan
-    op.create_index("idx_supply_location_commodity", "supply_records", ["location_id", "commodity_id"])
-    op.create_index("idx_demand_location_commodity", "demand_records", ["location_id", "commodity_id"])
+    op.create_index(
+        "idx_supply_location_commodity",
+        "supply_records",
+        ["location_id", "commodity_id"],
+    )
+    op.create_index(
+        "idx_demand_location_commodity",
+        "demand_records",
+        ["location_id", "commodity_id"],
+    )
     op.create_index("idx_batches_safety_status", "batches", ["safety_status"])
     op.create_index(
         "idx_supply_latest",

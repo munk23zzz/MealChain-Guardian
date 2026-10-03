@@ -26,6 +26,17 @@ EXPECTED_TABLES = {"locations", "commodities", "suppliers", "users"}
 def sync_engine():
     engine = create_engine(DB_URL)
     yield engine
+    # Self-cleaning: test ini tidak boleh meninggalkan row sisipan di DB bersama
+    with engine.begin() as conn:
+        conn.execute(
+            text("DELETE FROM users WHERE email LIKE 't-%@x.id'")
+        )
+        conn.execute(
+            text("DELETE FROM suppliers WHERE name = 's'")
+        )
+        conn.execute(
+            text("DELETE FROM locations WHERE name LIKE 'TEST-LOC-%' OR name LIKE 'S-BOUND-%'")
+        )
     engine.dispose()
 
 
