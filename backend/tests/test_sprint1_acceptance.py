@@ -1,0 +1,156 @@
+"""Acceptance test Sprint 1 (Task 13) — bukti hard constraint + endpoint.
+
+Semua assertion dijalankan terhadap PostgreSQL hasil migration + seed dan
+FastAPI app nyata. Ini bukti automated untuk docs/verification/sprint-1.md.
+"""
+
+import uuid as uuidlib
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
+
+from app.core.constraints import check_capacity, check_delivery_window
+from app.core.forecasting_fallback import statistical_forecast
+from app.core.freshness import classify_freshness
+from app.main import app
+
+DB_URL = "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain".replace(
+    "+asyncpg", "+psycopg"
+)
+
+
+@pytest.fixture()
+def client():
+    with TestClient(app) as c:
+        yield c
+
+
+def test_acceptance_1_freshness_boundaries():
+    """Freshness 0.85 PASS; 0.60 NEEDS_VERIFICATION; 0.599999 FAIL."""
+    assert classify_freshness(0.85) == "pass"
+    assert classify_freshness(0.849999) == "needs_verification"
+    assert classify_freshness(0.60) == "needs_verification"
+    assert classify_freshness(0.599999) == "fail"
+
+
+def test_acceptance_2_safety_fail_not_overridable_via_api(client):
+    """Safety FAIL tidak bisa diubah lewat API input lain — batch excursion
+    tetap FAIL setelah evaluasi ulang dengan payload berbeda-beda."""
+    with create_engine(DB_URL).connect() as conn:
+        batch_id = str(
+            conn.execute(
+                text(
+                    "SELECT b.id FROM batches b "
+                    "JOIN locations l ON l.id=b.location_id "
+                    "WHERE l.name='Surabaya' LIMIT 1"
+                )
+            ).scalar_one()
+        )
+    r1 = client.post("/safety/evaluate", json={"batch_id": batch_id})
+    r2 = client.post("/safety/evaluate", json={"batch_id": batch_id, "extra": "junk"})
+    assert r1.json()["safety_status"] == "FAIL"
+    assert r2.status_code in (200, 422)
+    if r2.status_code == 200:
+        assert r2.json()["safety_status"] == "FAIL"
+
+
+def test_acceptance_3a_capacity_constraint():
+    result = check_capacity(available_kg=500, required_kg=500)
+    assert result["sufficient"] is True
+    assert check_capacity(available_kg=400, required_kg=500)["sufficient"] is False
+
+
+def test_acceptance_3b_delivery_window_constraint():
+    assert check_delivery_window(150.0, 150.0) is True
+    assert check_delivery_window(151.0, 150.0) is False
+
+
+def test_acceptance_4_seed_dataset_10x3_and_locked_values(client):
+    """Seed 10×3 dan angka Cianjur/Jakarta tepat."""
+    with create_engine(DB_URL).connect() as conn:
+        n_loc = conn.execute(text("SELECT COUNT(*) FROM locations")).scalar()
+        n_com = conn.execute(text("SELECT COUNT(*) FROM commodities")).scalar()
+        assert n_loc == 10
+        assert n_com == 3
+    assert client.get("/supply/Cianjur/telur").json()["quantity_kg"] == 1400.0
+    assert client.get("/supply/Jakarta/telur").json()["quantity_kg"] == 300.0
+    assert client.get("/supply/Bogor/telur").json()["quantity_kg"] == 800.0
+
+
+def test_acceptance_5_all_sprint1_endpoints_live(client):
+    """Seluruh endpoint Sprint 1 dipanggil terhadap PostgreSQL migration+seed."""
+    paths = [
+        ("GET", "/supply/Cianjur/telur", None),
+        ("GET", "/demand/Jakarta/telur", None),
+        ("GET", "/demand/forecast/Jakarta/telur", None),
+        ("GET", "/price/Cianjur/telur", None),
+    ]
+    for method, path, _ in paths:
+        resp = client.get(path)
+        assert resp.status_code == 200, f"{method} {path} → {resp.status_code}"
+    posts = [
+        ("/freshness/evaluate", {"batch_id": _any_batch_id()}),
+        ("/safety/evaluate", {"batch_id": _any_batch_id()}),
+        (
+            "/price/deviation",
+            {"location": "Cianjur", "commodity": "telur", "supplier_price": 32000},
+        ),
+        (
+            "/logistics/estimate",
+            {"source": "Cianjur", "target": "Jakarta", "quantity_kg": 500,
+             "delivery_window_min": 150},
+        ),
+    ]
+    for path, payload in posts:
+        resp = client.post(path, json=payload)
+        assert resp.status_code == 200, f"POST {path} → {resp.status_code}: {resp.text}"
+
+
+def _any_batch_id() -> str:
+    with create_engine(DB_URL).connect() as conn:
+        return str(
+            conn.execute(text("SELECT id FROM batches ORDER BY created_at LIMIT 1")).scalar_one()
+        )
+
+
+def test_acceptance_6_mock_sap_header(client):
+    resp = client.get("/supply/Cianjur/telur")
+    assert resp.headers.get("X-Data-Source") == "MOCK"
+
+
+def test_acceptance_7_forecast_fallback_label(client):
+    resp = client.get("/demand/forecast/Jakarta/telur")
+    assert resp.json()["method"] == "statistical_fallback"
+
+
+def test_acceptance_missing_batch_404(client):
+    resp = client.post("/freshness/evaluate", json={"batch_id": str(uuidlib.uuid4())})
+    assert resp.status_code == 404
+
+
+def test_acceptance_price_anomaly_supplier_c(client):
+    resp = client.post(
+        "/price/deviation",
+        json={"location": "Cianjur", "commodity": "telur", "supplier_price": 32000},
+    )
+    assert resp.json()["classification"] == "anomalous"
+    assert resp.json()["flagged"] is True
+
+
+def test_acceptance_logistics_boundary(client):
+    resp = client.post(
+        "/logistics/estimate",
+        json={
+            "source": "Cianjur",
+            "target": "Jakarta",
+            "quantity_kg": 500,
+            "delivery_window_min": 150,
+        },
+    )
+    assert resp.json()["feasible"] is True
+
+
+def test_acceptance_forecast_flat_math():
+    result = statistical_forecast([100.0, 100.0, 100.0], horizon_days=7)
+    assert result["forecast_qty_kg"] == pytest.approx(700.0)
