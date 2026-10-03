@@ -1,12 +1,32 @@
-"""MealChain Guardian — FastAPI backend (Sprint 0: health only)."""
+"""MealChain Guardian — FastAPI backend (Sprint 1: domain tools + supply/demand)."""
+
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+
+from app.api.demand import forecast_router
+from app.api.demand import router as demand_router
+from app.api.dependencies import lifespan
+from app.api.supply import router as supply_router
+
+
+@asynccontextmanager
+async def _lifespan_wrapper(app: FastAPI):
+    async with lifespan(app):
+        yield
+
 
 app = FastAPI(
     title="MealChain Guardian",
     description="Agentic AI untuk cross-regional food supply balancing",
-    version="0.1.0",
+    version="0.2.0",
+    lifespan=_lifespan_wrapper,
 )
+
+# Forecast SEBELUM demand generik (path param `/demand/{location}` bisa menelan "forecast")
+app.include_router(forecast_router)
+app.include_router(demand_router)
+app.include_router(supply_router)
 
 
 @app.get("/health")
