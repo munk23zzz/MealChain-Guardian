@@ -150,8 +150,10 @@ def test_forecast_horizon_respected(client):
 
 
 def test_forecast_invalid_horizon_422(client):
-    assert client.get("/demand/forecast/Jakarta/telur", params={"horizon_days": 0}).status_code == 422
-    assert client.get("/demand/forecast/Jakarta/telur", params={"horizon_days": "abc"}).status_code == 422
+    resp = client.get("/demand/forecast/Jakarta/telur", params={"horizon_days": 0})
+    assert resp.status_code == 422
+    resp = client.get("/demand/forecast/Jakarta/telur", params={"horizon_days": "abc"})
+    assert resp.status_code == 422
 
 
 def test_forecast_unknown_404(client):
