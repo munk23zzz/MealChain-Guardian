@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy import create_engine, text
 
-from app.seed.seed_data import canonical_hash, load_seed
+from app.seed.seed_data import build_seed_rows, canonical_hash, load_seed
 
 DB_URL = (
     os.environ.get("DATABASE_URL")
@@ -95,13 +95,16 @@ def test_supplier_quotes_persisted_as_price_signals(sync_engine):
 
 
 def test_seed_batches_bands_and_safety_fail(sync_engine):
+    # Seleksi deterministik via UUID5 natural key (bukan window created_at
+    # yang flaky saat hari bergeser)
+    expected_ids = {str(b["id"]) for b in build_seed_rows(REF)["batches"]}
     with sync_engine.connect() as conn:
         rows = conn.execute(
             text(
                 "SELECT b.freshness_score, b.safety_status FROM batches b "
-                "WHERE b.id IN (SELECT id FROM batches) "
-                "AND b.created_at >= (now() - interval '1 day')"
-            )
+                "WHERE b.id = ANY(:ids)"
+            ),
+            {"ids": list(expected_ids)},
         ).fetchall()
         scores = [float(r[0]) for r in rows if r[0] is not None]
         safety = {r[1] for r in rows}

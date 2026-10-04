@@ -25,6 +25,15 @@
 >    `tests/test_supplier_quote_db.py`.
 >    Hasil verifikasi ulang: **169 passed + 1 skipped**, ruff clean, seed idempoten 2×,
 >    roundtrip migration OK, endpoint smoke OK.
+>
+> **REVISI KETIGA Roy 2026-10-03 — supplier lokal di SEMUA kota:**
+> pihps_reference tetap sebagai acuan pasar per kota (benchmark `/price/deviation`),
+> dan setiap kota kini punya **supplier lokal** dengan quote format
+> `{"source": "supplier_quote", "supplier": "<nama wilayah>", "price_per_kg": ...}` —
+> 14 supplier total, quote `supplier_quote × 14`, semua 10 kota ter-cover
+> (Cianjur 4 quote terkunci; kota lain 1–2 supplier dengan komoditas utamanya).
+> Bukti: `tests/test_supplier_city_coverage.py` (5 test).
+> Hasil verifikasi: **174 passed**, ruff clean, seed idempoten 2×.
 
 Tanggal verifikasi: 2026-10-03 (WIB)
 Branch: `feature/sprint1-domain-core`
