@@ -34,6 +34,22 @@
 > (Cianjur 4 quote terkunci; kota lain 1–2 supplier dengan komoditas utamanya).
 > Bukti: `tests/test_supplier_city_coverage.py` (5 test).
 > Hasil verifikasi: **174 passed**, ruff clean, seed idempoten 2×.
+>
+> **CATATAN DESAIN — disiplin pemakaian dua lapis harga (berlaku Sprint 2+):**
+> Dua lapis ini adalah prasyarat Event 2 PRD ("deviasi harga pemasok vs referensi
+> pasar") dan narasi root cause IDEA.md (kesenjangan antar wilayah). Nilainya hanya
+> bertahan jika dipakai dengan disiplin:
+>
+> | Sinyal | Dipakai untuk | DILARANG untuk |
+> |---|---|---|
+> | `pihps_reference` | benchmark deviasi (`/price/deviation`), konteks gap antar kota, peluang arbitrase lintas wilayah | harga beli / kalkulasi PO |
+> | `supplier_quote` | purchase cost, Safe Delivered Cost (Sprint 2), PO | dianggap "harga pasar kebenaran" |
+>
+> Anti-pattern yang harus dihindari: (1) menghitung biaya pembelian dari harga acuan —
+> aritmetika Skill.md §8 memakai harga supplier (Rp25.000/kg × 500); (2) memvalidasi
+> quote terhadap quote lain — deviasi hanya bermakna terhadap acuan pasar kotanya.
+> Properti demo yang dijaga: semua quote kota lain deviasi ±0,8–2,3% (normal),
+> Supplier C +20,8% satu-satunya anomalous+flagged — ambang 5%/15% tetap bermakna.
 
 Tanggal verifikasi: 2026-10-03 (WIB)
 Branch: `feature/sprint1-domain-core`
