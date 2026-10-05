@@ -36,12 +36,24 @@ menghasilkan angka yang sudah diverifikasi manual sesuai contoh di `docs/Skill.m
 
 ## Sprint 2 — Balancing engine + Auth + Frontend shell (Minggu 2)
 
-- [ ] Endpoint `/cost/safe-delivered`
-- [ ] Endpoint `/balance/analyze`, `/balance/recommend`
-- [ ] Endpoint `/evidence/fuse` (consistency check)
-- [ ] Auth: login, JWT, 3 role (sppg_head, sppg_nutritionist, bgn_monitor), middleware RBAC per endpoint
-- [ ] Frontend: Login screen, Dashboard shell (peta 10 lokasi, tanpa data live agent dulu)
-- [ ] `openapi.json` backend ter-generate bersih (siap untuk Gateway di Sprint 3)
+> **Catatan eksekusi 2026-10-05/06:** Sprint 2 dieksekusi sesuai plan
+> terkunci `.hermes/plans/2026-10-05-sprint2-decision-intelligence.md`
+> (decision intelligence: candidate model, gap, generator, reliability,
+> Candidate Score, SDC, ranking, decision persistence + `expires_at`,
+> API, expiry, supervisor context, frontend test runner, demo 10×).
+> Item Roadmap di luar plan tersebut adalah carry-over eksplisit
+> (bukan kegagalan) — lihat `docs/verification/sprint-2.md`.
+
+- [x] Engine `/cost/safe-delivered` (SDC penuh + breakdown; diekspos via `/balance/recommend`)
+- [x] Endpoint `/balance/recommend` + `/balance/{location}/{commodity}` (gap facts)
+- [x] Decision persistence + `expires_at` (valid/expired deterministik)
+- [x] Supervisor decision context (assembler allowlist, tanpa kalkulasi LLM)
+- [ ] Endpoint `/cost/safe-delivered` standalone (carry-over)
+- [ ] Endpoint `/balance/analyze` penuh (carry-over)
+- [ ] Endpoint `/evidence/fuse` (consistency check) (carry-over)
+- [ ] Auth: login, JWT, 3 role (sppg_head, sppg_nutritionist, bgn_monitor), middleware RBAC per endpoint (carry-over)
+- [ ] Frontend: Login screen, Dashboard shell (peta 10 lokasi, tanpa data live agent dulu) (carry-over)
+- [ ] `openapi.json` backend ter-generate bersih (siap untuk Gateway di Sprint 3) (carry-over)
 
 **Definition of Done:** login berfungsi untuk 3 role berbeda dengan scope akses yang benar;
 `/balance/recommend` mengembalikan hasil yang masuk akal untuk skenario Cianjur→Jakarta manual.

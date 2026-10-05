@@ -40,14 +40,14 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 
 | ID | Task | Kategori | Status | Assignee | Catatan |
 |---|---|---|---|---|---|
-| S2-01 | Endpoint `POST /cost/safe-delivered` | Backend/API | Not Started | | |
-| S2-02 | Endpoint `POST /balance/analyze`, `/balance/recommend` | Backend/API | Not Started | | |
-| S2-03 | Endpoint `POST /evidence/fuse` | Backend/API | Not Started | | |
-| S2-04 | Auth: JWT login + 3 role (sppg_head, sppg_nutritionist, bgn_monitor) | Authentication | Not Started | | |
-| S2-05 | RBAC middleware per endpoint | Authentication | Not Started | | |
-| S2-06 | Frontend: Login screen | Dashboard | Not Started | | |
-| S2-07 | Frontend: Dashboard shell + peta 10 lokasi (data statis dulu) | Dashboard | Not Started | | |
-| S2-08 | `openapi.json` bersih ter-generate | Backend/API | Not Started | | |
+| S2-01 | Endpoint `POST /cost/safe-delivered` | Backend/API | In Progress | Hermes | Engine SDC + perhitungan per kandidat selesai (Task 6/9, commit 9b1e083, a9bd9ae); endpoint standalone = carry-over plan-binding |
+| S2-02 | Endpoint `POST /balance/analyze`, `/balance/recommend` | Backend/API | In Progress | Hermes | `/balance/recommend` + `/balance/{loc}/{com}` selesai (Task 10, commit 353be20); 294 test backend |
+| S2-03 | Endpoint `POST /evidence/fuse` | Backend/API | Not Started | | Evidence dasar + supervisor context tersedia (Task 12, commit ac33d24); endpoint fuse = carry-over |
+| S2-04 | Auth: JWT login + 3 role (sppg_head, sppg_nutritionist, bgn_monitor) | Authentication | Not Started | | Di luar plan Sprint 2 eksekusi (decision intelligence) — carry-over eksplisit |
+| S2-05 | RBAC middleware per endpoint | Authentication | Not Started | | Carry-over eksplisit (lihat atas) |
+| S2-06 | Frontend: Login screen | Dashboard | Not Started | | Di luar plan Sprint 2 eksekusi; vitest runner terpasang (Task 0/13) |
+| S2-07 | Frontend: Dashboard shell + peta 10 lokasi (data statis dulu) | Dashboard | Not Started | | Di luar plan Sprint 2 eksekusi |
+| S2-08 | `openapi.json` bersih ter-generate | Backend/API | Not Started | | Carry-over eksplisit |
 
 ## Sprint 3 — Agent layer (PALING KRITIS)
 
