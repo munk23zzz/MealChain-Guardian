@@ -126,12 +126,51 @@ batches=6     prices=4       stock=6    po=1
 - `npm run test` frontend: script tidak tersedia di Sprint 0 frontend shell.
   Regresi frontend saat ini hanya ter-cover `npm run lint` (bersih).
   Rekomendasi: tambahkan test runner (vitest) di Sprint 2.
+  **[Diselesaikan 2026-10-05, Task 0 Sprint 2 — lihat addendum di bawah.]**
 
 ## Deviasi terhadap plan
 
 - Commit Task 9/10/11/12 dilakukan parent (bukan subagent implementer) karena kegagalan
   infrastruktur delegasi; disiplin TDD RED→GREEN tetap ditegakkan per task.
 - Review spec-compliance Task 1–7 dilakukan parent (reviewer subagent mati 502).
+
+## ADDENDUM Task 0 Sprint 2 (2026-10-05) — rekonsiliasi kontrak + frontend runner
+
+Keputusan Roy 2026-10-05 (disetujui eksplisit, dicatat sebelum eksekusi):
+
+1. **`decisions.expires_at TIMESTAMPTZ NOT NULL`** — ditambahkan ke `docs/Schema.md`
+   sebagai kontrak. Aturan validitas: `now < expires_at` valid; `now >= expires_at`
+   expired; keputusan expired tetap disimpan untuk audit, tidak dihapus, tidak
+   dihidupkan ulang oleh approval. Implementasi kolom menyusul di migration
+   006 (Task 8 Sprint 2).
+2. **`price_signals.seed_key`** — kolom drift yang hanya ada di database live
+   (tidak ada di migration 002/004, ORM, seed loader, API, tests, docs).
+   Dihapus via migration `005_reconcile_sprint1_schema` (idempoten:
+   `DROP COLUMN IF EXISTS`; downgrade sengaja no-op — kolom bukan kontrak).
+   Idempotensi seed tetap UUID5 natural key di loader. Nol baris bisnis terhapus:
+   44 price signals (30 pihps + 14 quote), 14 suppliers, 10 kota quote — terverifikasi
+   test `backend/tests/test_sprint1_contract_reconciliation.py` (RED terbukti:
+   kolom ada → migration → GREEN 3/3).
+
+Perbaikan tambahan saat rekonsiliasi:
+
+3. **Time-bomb test diperbaiki** — `test_freshness_evaluate_pass_band_persists`
+   memakai batch seed dengan `harvested_at` tetap; decay mengikuti jam nyata
+   sehingga skor meluruh 0.85+ → 0.83 per 2026-10-05 (mengikuti pola flaky yang
+   sama dengan ruling 2026-10-03). Kini test membuat batch sendiri
+   (`harvested_at = now() - 30 menit`, quantity 499.99 anti-tabrakan selector),
+   self-cleaning. Suite penuh: **177 passed**.
+4. **Frontend test runner ditambahkan** — blocker di atas selesai: script
+   `test: vitest run`, devDependency `vitest@2.1.9`, `vitest.config.ts`
+   (jsx automatic — tsconfig Next "preserve"), smoke test
+   `frontend/tests/smoke.test.ts` (render shell → judul). RED terbukti
+   (`Missing script: "test"`) sebelum install. `npm run test` 1 passed,
+   `npm run lint` bersih, lockfile ter-generate via `npm install` di container.
+
+Catatan proses: implementer subagent Task 0 mati untuk kelima kalinya
+(HTTP 502 provider + max_iterations) tanpa menulis file; eksekusi dilakukan
+parent dengan TDD ketat sesuai kontrak plan ("delegation failure does not
+block safe parent execution; deviation must be recorded").
 
 ## Status S1-01..S1-11
 

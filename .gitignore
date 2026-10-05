@@ -56,3 +56,6 @@ logs/
 # Build artifacts
 dist/
 *.egg
+
+# SDD scratch workspace (subagent-driven-development)
+.superpowers/

@@ -107,6 +107,7 @@ Unit inti untuk freshness/safety check.
 | quantity_kg | NUMERIC(10,2) | nullable |
 | safe_delivered_cost | NUMERIC(12,2) | nullable |
 | cost_breakdown | JSONB | nullable — `{purchase, transport, handling, expected_loss, freshness_risk, safety_penalty}` |
+| expires_at | TIMESTAMPTZ | NOT NULL — batas validitas keputusan. Aturan: `now < expires_at` valid; `now >= expires_at` expired. Keputusan expired tetap disimpan untuk audit trail, tidak dihapus, dan tidak dapat dihidupkan kembali oleh approval. (Keputusan Roy 2026-10-05, Sprint 2.) |
 
 ### `decision_evidence`
 | Kolom | Tipe | Constraint |

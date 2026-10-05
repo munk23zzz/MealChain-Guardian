@@ -37,24 +37,49 @@ def _batch_id_by_quantity(quantity: float) -> str:
 
 
 def test_freshness_evaluate_pass_band_persists(client):
-    batch_id = _batch_id_by_quantity(500)
-    resp = client.post("/freshness/evaluate", json={"batch_id": batch_id})
-    assert resp.status_code == 200
-    body = resp.json()
-    assert 0.85 <= body["freshness_score"] <= 1.0
-    assert body["status"] == "pass"
-    assert "usable_until" in body
-    # Persistence (Schema.md batches hanya punya freshness_score + usable_until;
-    # status diturunkan ulang deterministik dari score — ruling 2026-10-03)
-    with _db().connect() as conn:
-        stored = conn.execute(
-            text(
-                "SELECT freshness_score, usable_until FROM batches WHERE id = :id"
-            ),
-            {"id": batch_id},
-        ).fetchone()
-    assert float(stored[0]) == pytest.approx(body["freshness_score"], abs=1e-9)
-    assert stored[1].isoformat() == body["usable_until"]
+    """Pass-band memakai batch milik test sendiri dengan harvested_at relatif
+    terhadap now() — time-bomb: batch seed punya harvested_at tetap, decay
+    mengikuti jam nyata sehingga lama-lama turun ke bawah 0.85 (terjadi
+    2026-10-05: 0.83). Pola perbaikan flaky yang sama dengan ruling
+    2026-10-03: seleksi deterministik, bukan bergantung state seed + waktu.
+    """
+    with _db().begin() as conn:
+        batch_id = str(
+            conn.execute(
+                text(
+                    "INSERT INTO batches (commodity_id, location_id, supplier_id, "
+                    "quantity_kg, harvested_at, temperature_log) "
+                    "SELECT c.id, l.id, (SELECT id FROM suppliers LIMIT 1), "
+                    "499.99, now() - interval '30 minutes', '[]'::jsonb "
+                    "FROM commodities c, locations l "
+                    "WHERE c.name = 'telur' AND l.name = 'Bogor' "
+                    "RETURNING id"
+                )
+            ).scalar_one()
+        )
+    try:
+        resp = client.post("/freshness/evaluate", json={"batch_id": batch_id})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert 0.85 <= body["freshness_score"] <= 1.0
+        assert body["status"] == "pass"
+        assert "usable_until" in body
+        # Persistence (Schema.md batches hanya punya freshness_score + usable_until;
+        # status diturunkan ulang deterministik dari score — ruling 2026-10-03)
+        with _db().connect() as conn:
+            stored = conn.execute(
+                text(
+                    "SELECT freshness_score, usable_until FROM batches WHERE id = :id"
+                ),
+                {"id": batch_id},
+            ).fetchone()
+        assert float(stored[0]) == pytest.approx(body["freshness_score"], abs=1e-9)
+        assert stored[1].isoformat() == body["usable_until"]
+    finally:
+        with _db().begin() as conn:
+            conn.execute(
+                text("DELETE FROM batches WHERE id = :id"), {"id": batch_id}
+            )
 
 
 def test_freshness_evaluate_fail_band(client):
