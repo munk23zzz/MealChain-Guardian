@@ -63,6 +63,37 @@ def test_freshness_risk_penalty_below_060():
     assert r.expected_loss == exp.quantize(Decimal("0.01"))
 
 
+def test_locked_600kg_freshness_050_numeric_breakdown():
+    """Contoh Sprint 2 harus menghitung setiap komponen secara eksplisit."""
+    purchase = Decimal("600") * Decimal("26200")
+    r = calculate_safe_delivered_cost(
+        _inputs(
+            purchase_cost=purchase,
+            transport_cost=Decimal("21600"),
+            handling_cost=Decimal("150000"),
+            freshness_score=Decimal("0.50"),
+        )
+    )
+    assert r.purchase_cost == Decimal("15720000.00")
+    assert r.transport_cost == Decimal("21600.00")
+    assert r.handling_cost == Decimal("150000.00")
+    assert r.expected_loss == Decimal("1572000.00")
+    assert r.freshness_risk_penalty == Decimal("7860000.00")
+    assert r.safety_risk_penalty == Decimal("0.00")
+    assert r.total == Decimal("25323600.00")
+    assert r.total == sum(
+        (
+            r.purchase_cost,
+            r.transport_cost,
+            r.handling_cost,
+            r.expected_loss,
+            r.freshness_risk_penalty,
+            r.safety_risk_penalty,
+        ),
+        Decimal("0"),
+    )
+
+
 def test_freshness_boundary_060_no_penalty():
     r = calculate_safe_delivered_cost(_inputs(freshness_score=Decimal("0.60")))
     assert r.freshness_risk_penalty == Decimal("0")

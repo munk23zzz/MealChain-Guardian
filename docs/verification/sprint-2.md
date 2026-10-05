@@ -31,7 +31,7 @@ Roundtrip 004→005→006→downgrade→upgrade terverifikasi di DB terisolasi `
 - **Candidate model** (immutable, validasi ketat) + **gap engine**: surplus = max(s−d,0), shortage = max(d−s,0).
 - **Generator**: quantity = min(surplus, shortage, available_eligible); exclude shortage-source/surplus-dest/logistics infeasible; deterministik (urut lexical).
 - **Candidate Score** = Demand Fit × Supply Availability × Freshness × Safety Eligibility × Supplier Reliability × Logistics Feasibility (bukan formula baru).
-- **Safe Delivered Cost** = Purchase + Transport + Handling + Expected Loss + Freshness Risk + Safety Risk; Expected Loss = 0.2 × (1−freshness) × purchase; freshness <0.60 → factor 0.50; safety penalty 10%; safety FAIL tidak pernah dicost (ditolak sebelum ranking). Verifikasi angka terkunci: 600 kg × 26.200 = 15.720.000 + transport 21.600 + handling 150.000 + expected loss 625.000 + freshness risk 3.125.000 = **16.206.000** (batch freshness 0.50 → band fail → penalty 0.50).
+- **Safe Delivered Cost** = Purchase + Transport + Handling + Expected Loss + Freshness Risk + Safety Risk; Expected Loss = 0.2 × (1−freshness) × purchase; freshness <0.60 → factor 0.50; safety penalty 10%; safety FAIL tidak pernah dicost (ditolak sebelum ranking). Untuk jalur rekomendasi utama (freshness 0.90): 600 kg × 26.200 = 15.720.000 + transport 21.600 + handling 150.000 + expected loss 314.400 + freshness risk 0 + safety risk 0 = **16.206.000**. Untuk contoh audit freshness 0.50: expected loss 1.572.000 + freshness risk 7.860.000, sehingga total **25.323.600**; status freshness 0.50 adalah `fail`, jadi contoh ini hanya verifikasi aritmetika dan tidak boleh menjadi kandidat.
 - **Ranking**: score DESC → SDC ASC → tie lexical; output rank 1..N deterministik.
 
 ## Service, API, expiry, context (Task 9–12)
@@ -43,9 +43,9 @@ Roundtrip 004→005→006→downgrade→upgrade terverifikasi di DB terisolasi `
 
 ## Skenario demo (Task 14) — hasil aktual
 
-1. Cianjur 1400/500 → surplus **900**; Jakarta 300/1000 → shortage **700**; kandidat Cianjur→Jakarta telur **ada** (qty 600 = min dengan batch eligible). ✅
+1. **Contract/synthetic fixture:** Cianjur 1400/500 → surplus **900**; Jakarta 300/1000 → shortage **700**; kandidat Cianjur→Jakarta telur **ada** (qty 600 = min dengan batch eligible). ✅
 2. Ref 26.500 vs Supplier C 32.000 → **anomalous + flagged** (+20,75%). A 26.200 normal (−1,13%), B 27.000 normal (+1,89%), D 25.400 normal (−4,15%). ✅
-3. Temperature excursion (safety FAIL) → **kandidat tereliminasi** (rekomendasi kosong). ✅
+3. **Contract/synthetic fixture:** Cianjur candidate dengan temperature excursion (`safety FAIL`) → **eliminated sebelum cost/ranking**, sementara alternative Bogor telur yang valid (`safety PASS`) tetap eligible dan muncul di recommendation. ✅
 4. Identitas supplier di `supplier_id`, `source` tetap `'supplier_quote'` — terverifikasi di DB seed Cianjur/telur. ✅
 5. Freshness 0.70 → **needs_verification**, bukan PASS. ✅
 6. **10× repetisi**: canonical JSON 10 eksekusi identik bit-per-bit (1 set). ≥9/10 target terpenuhi (10/10). ✅
@@ -53,7 +53,7 @@ Roundtrip 004→005→006→downgrade→upgrade terverifikasi di DB terisolasi `
 ## Deviasi & ruling (tercatat di ledger)
 
 - **Delegation infra gagal ke-5** (subagent Task 0: HTTP 502 provider + max_iterations, tanpa file tertulis) → parent self-execute seluruh task dengan TDD ketat + parent review per task (preseden disetujui Roy di Sprint 1).
-- "Cianjur 1400/500" di kontrak = **supply telur 1400 + supply ayam 500** (seed tidak punya demand Cianjur — kota surplus); endpoint balance dites Jakarta (300/1080 latest-record → shortage 780). Skenario 900/700 memakai input sintetis sesuai brief Task 14.
+- **Pemisahan acceptance:** angka Cianjur 1400/500 dan Jakarta 300/1000 adalah contract/synthetic fixture Task 14 (supply telur + demand yang disiapkan fixture), bukan klaim hasil seeded/live API. Pada database seeded/live saat ini, latest-record Jakarta adalah supply 300 dan demand 1080, sehingga shortage **780**; perbedaan itu bukan defect otomatis dan dilaporkan terpisah dari contract fixture.
 - Task 13 = verifikasi reproducibility (runner sudah di-commit Task 0) — tanpa commit duplikat.
 - Guard Sprint 1 yang usang-by-design (decisions absen; PO tanpa FK) di-retire dengan pointer ke test baru.
 

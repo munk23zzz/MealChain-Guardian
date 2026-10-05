@@ -31,7 +31,7 @@ LOGI = {("Cianjur", "Jakarta"): {
     "distance_km": 120, "estimated_time_min": 150.0, "feasible": True}}
 
 
-def _scenario_facts(safety="pass", freshness=Decimal("0.90")):
+def _scenario_facts(safety="pass", freshness=Decimal("0.90"), alternative=False):
     """Skenario terkunci: Cianjur surplus, Jakarta shortage (Task 9).
 
     freshness_status diturunkan dari score lewat engine yang sama
@@ -55,13 +55,32 @@ def _scenario_facts(safety="pass", freshness=Decimal("0.90")):
         "freshness_status": classify_freshness(float(freshness)),
         "safety_status": safety,
     }]
+    logistics = dict(LOGI)
+    if alternative:
+        supply[("Bogor", "telur")] = Decimal("900")
+        demand[("Bogor", "telur")] = Decimal("300")
+        refs[("Bogor", "telur")] = Decimal("27000")
+        quotes[("Bogor", "telur")] = (Decimal("26800"), SUP_ID)
+        batches.append({
+            "batch_id": "b-safe",
+            "location": "Bogor",
+            "commodity": "telur",
+            "quantity_kg": Decimal("600"),
+            "freshness_score": Decimal("0.90"),
+            "freshness_status": "pass",
+            "safety_status": "pass",
+        })
+        logistics[("Bogor", "Jakarta")] = {
+            "distance_km": 60, "estimated_time_min": 90.0, "feasible": True
+        }
     reliability = {SUP_ID: Decimal("0.80")}
-    return supply, demand, refs, quotes, batches, reliability
+    return supply, demand, refs, quotes, batches, reliability, logistics
 
 
 def _run(facts):
+    *facts, logistics = facts
     return asyncio.run(rs.build_recommendations(
-        lambda: facts, as_of=AS_OF, logistics_by_pair=LOGI
+        lambda: tuple(facts), as_of=AS_OF, logistics_by_pair=logistics
     ))
 
 
@@ -90,11 +109,20 @@ def test_scenario_2_supplier_c_anomalous():
     assert dev["flagged"] is True
 
 
-def test_scenario_3_safety_fail_eliminated():
-    out = _run(_scenario_facts(safety="fail"))
-    assert out["recommendations"] == [], (
-        "safety FAIL wajib tereliminasi sebelum ranking"
-    )
+def test_scenario_3_safety_fail_eliminated_safe_alternative_remains():
+    out = _run(_scenario_facts(safety="fail", alternative=True))
+    unsafe = [
+        r for r in out["recommendations"]
+        if r["candidate"]["source_location"] == "Cianjur"
+    ]
+    safe = [
+        r for r in out["recommendations"]
+        if r["candidate"]["source_location"] == "Bogor"
+    ]
+    assert unsafe == [], "candidate unsafe wajib excluded sebelum cost/ranking"
+    assert safe, "candidate aman harus tetap tersedia"
+    assert all(r["eligible"] is True for r in safe)
+    assert all(r["candidate"]["safety_status"] == "pass" for r in safe)
 
 
 def test_scenario_4_supplier_identity_in_supplier_id():
