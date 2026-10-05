@@ -125,30 +125,17 @@ def test_check_constraints_present(sync_engine):
         )
 
 
-def test_decisions_table_still_absent(sync_engine):
-    with sync_engine.connect() as conn:
-        rows = conn.execute(
-            text(
-                "SELECT table_name FROM information_schema.tables "
-                "WHERE table_schema = 'public' AND table_name = 'decisions'"
-            )
-        ).scalars().all()
-    assert rows == [], "decisions adalah kontrak Sprint 2 — jangan dibuat sekarang"
+# Guard lama "decisions masih absen" (Sprint 1) usang by design: Sprint 2
+# Task 8 membuat tabel decisions via migration 006. Pengawasnya kini
+# tests/test_decision_schema.py (expires_at NOT NULL, FK, constraint, index).
 
 
-def test_po_decision_id_has_no_foreign_key(sync_engine):
-    with sync_engine.connect() as conn:
-        rows = conn.execute(
-            text(
-                "SELECT tc.constraint_name FROM information_schema.table_constraints tc "
-                "JOIN information_schema.constraint_column_usage ccu "
-                "ON tc.constraint_name = ccu.constraint_name "
-                "WHERE tc.constraint_type = 'FOREIGN KEY' "
-                "AND tc.table_name = 'sap_mock_purchase_orders' "
-                "AND ccu.column_name = 'decision_id'"
-            )
-        ).scalars().all()
-    assert rows == [], "decision_id belum boleh punya FK sebelum tabel decisions ada"
+# Guard lama "decision_id belum boleh punya FK" (Sprint 1) usang by design:
+# Sprint 2 Task 8 memasang FK sap_mock_purchase_orders.decision_id →
+# decisions.id (ondelete SET NULL) via migration 006. Query lama juga vacuous
+# (constraint_column_usage menunjuk kolom REFERENCED, bukan decision_id, jadi
+# guard tak pernah mendeteksi apa pun). Pengawasnya kini
+# tests/test_decision_schema.py::test_sap_purchase_order_fk_to_decisions.
 
 
 def test_required_indexes_present(sync_engine):

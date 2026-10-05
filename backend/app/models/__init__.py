@@ -2,6 +2,7 @@
 
 from app.models.batches import Batch
 from app.models.commodities import Commodity
+from app.models.decisions import AgentTrace, Approval, Decision, DecisionEvidence
 from app.models.demand_records import DemandRecord
 from app.models.locations import Location
 from app.models.price_signals import PriceSignal
@@ -21,4 +22,8 @@ __all__ = [
     "Batch",
     "SapMockMaterialStock",
     "SapMockPurchaseOrder",
+    "Decision",
+    "DecisionEvidence",
+    "Approval",
+    "AgentTrace",
 ]
