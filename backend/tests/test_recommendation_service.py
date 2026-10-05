@@ -5,6 +5,7 @@ build_recommendations(fetch_facts, as_of=..., logistics_by_pair=...).
 Emisi: transport 300 Rp/km/ton; handling flat 150.000.
 """
 
+import json
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -27,6 +28,7 @@ QUOTES = {("Cianjur", "telur"): (
     Decimal("26200"), "11111111-1111-1111-1111-111111111111")}
 RELIABILITY = {"11111111-1111-1111-1111-111111111111": Decimal("0.80")}
 BATCHES = [{
+    "batch_id": "b-1",
     "location": "Cianjur",
     "commodity": "telur",
     "quantity_kg": Decimal("600"),
@@ -81,7 +83,47 @@ def test_deterministic_repeat():
     b = _run(rs.build_recommendations(
         _facts, as_of=AS_OF, logistics_by_pair=LOGI
     ))
-    assert a == b
+    assert json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
+
+
+def test_price_anomaly_emitted_reusing_engine():
+    out = _run(rs.build_recommendations(
+        _facts, as_of=AS_OF, logistics_by_pair=LOGI
+    ))
+    top = out["recommendations"][0]
+    # Cianjur quote 26200 vs pihps 26500 → -1.13% → normal (reuse engine
+    # price_deviation Sprint 1, tanpa formula baru).
+    assert top["price_anomaly"]["status"] == "normal"
+    assert Decimal(top["price_anomaly"]["deviation_pct"]) == Decimal("-1.13")
+
+
+def test_no_quote_anomaly_marked():
+    facts = (
+        SUPPLY,
+        DEMAND,
+        REFS,
+        {("Cianjur", "telur"): (None, None)},
+        BATCHES,
+        RELIABILITY,
+    )
+    out = _run(rs.build_recommendations(
+        lambda: facts, as_of=AS_OF, logistics_by_pair=LOGI
+    ))
+    top = out["recommendations"][0]
+    assert top["price_anomaly"]["status"] == "no_supplier_quote"
+    assert top["price_anomaly"]["deviation_pct"] is None
+
+
+def test_evidence_emitted():
+    out = _run(rs.build_recommendations(
+        _facts, as_of=AS_OF, logistics_by_pair=LOGI
+    ))
+    top = out["recommendations"][0]
+    assert top["evidence"]["batch_ids"] == ["b-1"]
+    assert top["evidence"]["price_sources"] == [
+        "pihps_reference",
+        "supplier_quote",
+    ]
 
 
 def test_safety_fail_never_ranked():

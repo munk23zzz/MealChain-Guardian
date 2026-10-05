@@ -25,6 +25,7 @@ from app.core.candidate_generation import generate_candidates
 from app.core.config import settings
 from app.core.freshness import classify_freshness, compute_freshness_score
 from app.core.logistics import estimate_logistics
+from app.core.price import price_deviation
 from app.core.ranking import ScoredCandidate, rank_candidates
 from app.core.safe_delivered_cost import (
     SafeDeliveredCostInputs,
@@ -258,12 +259,54 @@ async def build_recommendations(fetch_facts, as_of=None, logistics_by_pair=None)
     ranked = rank_candidates(scored)
     recommendations = []
     for rc in ranked:
+        cand = rc.candidate
         payload = rc.to_dict()
         payload["rank"] = rc.rank
         payload["cost_breakdown"] = breakdowns[rc.candidate_id]
+        # Anomali harga: reuse engine price_deviation Sprint 1 (5%/15%).
+        if cand.price.supplier_quote is not None:
+            dev = price_deviation(
+                cand.price.supplier_quote, cand.price.reference_price
+            )
+            payload["price_anomaly"] = {
+                "status": dev["status"],
+                "deviation_pct": str(
+                    dev["deviation_pct"].quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_UP
+                    )
+                ),
+                "flagged": dev["flagged"],
+            }
+        else:
+            payload["price_anomaly"] = {
+                "status": "no_supplier_quote",
+                "deviation_pct": None,
+                "flagged": False,
+            }
+        # Evidence: batch sumber yang eligible + sumber harga terpakai.
+        payload["evidence"] = {
+            "batch_ids": sorted(
+                {
+                    str(b["batch_id"])
+                    for b in batches
+                    if b.get("location") == cand.source_location
+                    and b.get("commodity") == cand.commodity
+                    and b.get("batch_id")
+                }
+            ),
+            "price_sources": (
+                ["pihps_reference", "supplier_quote"]
+                if cand.price.supplier_quote is not None
+                else ["pihps_reference"]
+            ),
+        }
         recommendations.append(payload)
 
     return {
         "generated_at": as_of.isoformat(),
+        "facts": {
+            "supply": {f"{k[0]}:{k[1]}": str(v) for k, v in supply.items()},
+            "demand": {f"{k[0]}:{k[1]}": str(v) for k, v in demand.items()},
+        },
         "recommendations": recommendations,
     }
