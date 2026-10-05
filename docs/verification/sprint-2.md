@@ -65,6 +65,20 @@ Roundtrip 004→005→006→downgrade→upgrade terverifikasi di DB terisolasi `
 - `evidence.batch_ids` di API live berasal dari dict batches service (batch id riil); belum ada tabel trace terpisah — cukup untuk demo, bisa diperkuat Sprint 3 bila diagregasi audit.
 - Test supervisor agent bersifat host-only (conftest) — pola lama Sprint 1, tidak diubah.
 
+## Lampiran: Review Terpisah (Task 16)
+
+- Reviewer terpisah (subagent `deleg_586e9481`, sesi terisolasi) menjalankan audit
+  statis + reproduksi roundtrip migration 006 di DB terisolasi sendiri; konfirmasi
+  reviewer: secrets tidak ada di git, DB live utuh (44 prices, 14 suppliers,
+  10 kota quote, FK `sap_po_decision_fk` ada, head 006, 0 baris decisions).
+- **Temuan behavioral defect reviewer**: `evidence.batch_ids = []` pada jalur live
+  (API). Ditindaklanjuti TDD penuh: RED (test live gagal — batch_ids kosong) → fix
+  `batch_id` di fetch facts service → GREEN (295 passed, ruff bersih). Commit
+  `732d532`. Verifikasi temuan + fix diulang dan dikonfirmasi parent (transkrip
+  reviewer terpotong oleh batas iterasi + 502 provider).
+- Keterbatasan proses: reviewer sendiri berhenti karena batas iterasi; laporan
+  final reviewer tidak lengkap — bukti akhir = perbaikan terverifikasi parent.
+
 ## Status dokumen
 
 `TODO.md` + `Roadmap.md`: status Sprint 2 menunggu penilaian Roy sebelum ditandai selesai (konvensi: user yang menandai). **Sprint 3 TIDAK dimulai.**
