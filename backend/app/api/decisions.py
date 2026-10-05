@@ -6,6 +6,7 @@
 """
 
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -42,16 +43,16 @@ def _validity(expires_at: datetime) -> dict:
 def _extract(recommendation: dict):
     """Ambil field terstruktur dari snapshot rekomendasi."""
     cand = recommendation.get("candidate", {})
-    from decimal import Decimal as D
-
     qty = cand.get("quantity_kg")
     sdc = recommendation.get("safe_delivered_cost")
     return {
         "source_location": cand.get("source_location"),
         "target_location": cand.get("destination_location"),
         "commodity": cand.get("commodity"),
-        "quantity_kg": D(str(qty)) if qty is not None else None,
-        "safe_delivered_cost": D(str(sdc)) if sdc is not None else None,
+        "quantity_kg": Decimal(str(qty)) if qty is not None else None,
+        "safe_delivered_cost": (
+            Decimal(str(sdc)) if sdc is not None else None
+        ),
         "cost_breakdown": recommendation.get("cost_breakdown"),
     }
 
@@ -120,7 +121,6 @@ async def get_decision(
     ).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="decision tidak ditemukan")
-    now = datetime.now(timezone.utc)
     validity = _validity(row.expires_at)
     return {
         "decision_id": str(row.id),
@@ -131,7 +131,11 @@ async def get_decision(
         "target_location_id": str(row.target_location_id) if row.target_location_id else None,
         "commodity_id": str(row.commodity_id) if row.commodity_id else None,
         "quantity_kg": float(row.quantity_kg) if row.quantity_kg is not None else None,
-        "safe_delivered_cost": float(row.safe_delivered_cost) if row.safe_delivered_cost is not None else None,
+        "safe_delivered_cost": (
+            float(row.safe_delivered_cost)
+            if row.safe_delivered_cost is not None
+            else None
+        ),
         "cost_breakdown": row.cost_breakdown,
         "expires_at": row.expires_at.isoformat(),
         "created_at": row.created_at.isoformat(),
