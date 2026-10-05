@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.balance import router as balance_router
+from app.api.decisions import router as decisions_router
 from app.api.demand import forecast_router
 from app.api.demand import router as demand_router
 from app.api.dependencies import lifespan
@@ -35,6 +37,8 @@ app.include_router(freshness_router)
 app.include_router(safety_router)
 app.include_router(price_router)
 app.include_router(logistics_router)
+app.include_router(balance_router)
+app.include_router(decisions_router)
 
 
 @app.get("/health")

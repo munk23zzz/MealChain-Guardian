@@ -13,6 +13,7 @@ Ruling Task 9 (ledger progress.md):
 4. purchase_cost = supplier_quote bila ada, else pihps reference.
 """
 
+import inspect
 from dataclasses import replace
 from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
@@ -55,14 +56,12 @@ def _score(value: Decimal) -> Decimal:
     return value.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
 
 
-def _latest_rows(db, model):
+async def _latest_rows(db, model):
     rows = (
-        db.execute(
+        await db.execute(
             select(model).order_by(model.recorded_at.desc(), model.id.desc())
         )
-        .scalars()
-        .all()
-    )
+    ).scalars().all()
     latest = {}
     for row in rows:
         latest.setdefault((row.location_id, row.commodity_id), row)
@@ -77,24 +76,42 @@ def _shelf_life_map():
     }
 
 
-def fetch_operational_facts(db, as_of):
+async def fetch_operational_facts(db, as_of):
     """Baca DB dan kembalikan 6-tuple facts untuk build_recommendations."""
     if as_of is None:
         as_of = datetime.now(timezone.utc)
-    locs = {loc.id: loc.name for loc in db.execute(select(Location)).scalars()}
-    coms = {c.id: c.name for c in db.execute(select(Commodity)).scalars()}
+    locs = {loc.id: loc.name for loc in (await db.execute(select(Location))).scalars()}
+    coms = {c.id: c.name for c in (await db.execute(select(Commodity))).scalars()}
     shelf = _shelf_life_map()
 
     supply = {}
-    for (loc_id, com_id), row in _latest_rows(db, SupplyRecord).items():
+    for (loc_id, com_id), row in (
+        await _latest_rows(db, SupplyRecord)
+    ).items():
         supply[(locs[loc_id], coms[com_id])] = Decimal(str(row.quantity_kg))
 
     demand = {}
-    for (loc_id, com_id), row in _latest_rows(db, DemandRecord).items():
+    for (loc_id, com_id), row in (
+        await _latest_rows(db, DemandRecord)
+    ).items():
         demand[(locs[loc_id], coms[com_id])] = Decimal(str(row.quantity_kg))
 
     refs, quotes = {}, {}
-    for (loc_id, com_id), row in _latest_rows(db, PriceSignal).items():
+    # Harga: latest per (location, commodity, SOURCE) — pihps dan quote
+    # hidup berdampingan untuk pasangan yang sama (disiplin dua lapis).
+    price_rows = (
+        await db.execute(
+            select(PriceSignal).order_by(
+                PriceSignal.recorded_at.desc(), PriceSignal.id.desc()
+            )
+        )
+    ).scalars().all()
+    price_latest: dict = {}
+    for row in price_rows:
+        price_latest.setdefault(
+            (row.location_id, row.commodity_id, row.source), row
+        )
+    for (loc_id, com_id, _source), row in price_latest.items():
         key = (locs[loc_id], coms[com_id])
         if row.source == "pihps_reference":
             refs[key] = Decimal(str(row.price_per_kg))
@@ -102,7 +119,7 @@ def fetch_operational_facts(db, as_of):
             quotes[key] = (Decimal(str(row.price_per_kg)), row.supplier_id)
 
     batches = []
-    for b in db.execute(select(Batch)).scalars():
+    for b in (await db.execute(select(Batch))).scalars():
         name = coms[b.commodity_id]
         score = compute_freshness_score(
             b.harvested_at,
@@ -125,7 +142,7 @@ def fetch_operational_facts(db, as_of):
 
     reliability = {
         str(s.id): Decimal(str(s.reliability_score))
-        for s in db.execute(select(Supplier)).scalars()
+        for s in (await db.execute(select(Supplier))).scalars()
     }
     return supply, demand, refs, quotes, batches, reliability
 
@@ -146,9 +163,16 @@ def _build_prices_map(refs, quotes):
     return prices
 
 
-def build_recommendations(fetch_facts, as_of=None, logistics_by_pair=None):
-    """Pipeline deterministik penuh; hasil terurut rank 1..N."""
-    supply, demand, refs, quotes, batches, reliability = fetch_facts()
+async def build_recommendations(fetch_facts, as_of=None, logistics_by_pair=None):
+    """Pipeline deterministik penuh; hasil terurut rank 1..N.
+
+    fetch_facts boleh sync (kembalikan 6-tuple) atau async (kembalikan
+    coroutine 6-tuple) — pipeline tetap identik.
+    """
+    facts = fetch_facts()
+    if inspect.isawaitable(facts):
+        facts = await facts
+    supply, demand, refs, quotes, batches, reliability = facts
     if as_of is None:
         as_of = datetime.now(timezone.utc)
 
@@ -170,6 +194,7 @@ def build_recommendations(fetch_facts, as_of=None, logistics_by_pair=None):
     )
 
     scored = []
+    breakdowns: dict = {}
     for cand in candidates:
         sid = cand.price.supplier_id
         rel = (
@@ -204,6 +229,14 @@ def build_recommendations(fetch_facts, as_of=None, logistics_by_pair=None):
                 safety_status=cand.safety_status,
             )
         )
+        breakdown = {
+            "purchase": str(sdc.purchase_cost),
+            "transport": str(sdc.transport_cost),
+            "handling": str(sdc.handling_cost),
+            "expected_loss": str(sdc.expected_loss),
+            "freshness_risk": str(sdc.freshness_risk_penalty),
+            "safety_penalty": str(sdc.safety_risk_penalty),
+        }
         scored.append(
             ScoredCandidate(
                 candidate=cand,
@@ -217,12 +250,17 @@ def build_recommendations(fetch_facts, as_of=None, logistics_by_pair=None):
                 safe_delivered_cost=sdc.total,
             )
         )
+        breakdowns[
+            f"{cand.source_location}->{cand.destination_location}:"
+            f"{cand.commodity}"
+        ] = breakdown
 
     ranked = rank_candidates(scored)
     recommendations = []
     for rc in ranked:
         payload = rc.to_dict()
         payload["rank"] = rc.rank
+        payload["cost_breakdown"] = breakdowns[rc.candidate_id]
         recommendations.append(payload)
 
     return {

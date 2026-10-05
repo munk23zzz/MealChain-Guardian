@@ -42,9 +42,16 @@ def _facts():
     return SUPPLY, DEMAND, REFS, QUOTES, BATCHES, RELIABILITY
 
 
+def _run(coro):
+    import asyncio
+
+    return asyncio.run(coro)
+
+
 def test_cianjur_to_jakarta_telur_ranked():
-    out = rs.build_recommendations(_facts, as_of=AS_OF,
-                                   logistics_by_pair=LOGI)
+    out = _run(rs.build_recommendations(
+        _facts, as_of=AS_OF, logistics_by_pair=LOGI
+    ))
     hits = [r for r in out["recommendations"]
             if r["candidate"]["source_location"] == "Cianjur"
             and r["candidate"]["destination_location"] == "Jakarta"]
@@ -55,8 +62,9 @@ def test_cianjur_to_jakarta_telur_ranked():
 
 
 def test_sdc_arithmetic_locked():
-    out = rs.build_recommendations(_facts, as_of=AS_OF,
-                                   logistics_by_pair=LOGI)
+    out = _run(rs.build_recommendations(
+        _facts, as_of=AS_OF, logistics_by_pair=LOGI
+    ))
     top = out["recommendations"][0]
     sdc = Decimal(top["safe_delivered_cost"])
     purchase = Decimal("600") * Decimal("26200")
@@ -67,18 +75,21 @@ def test_sdc_arithmetic_locked():
 
 
 def test_deterministic_repeat():
-    a = rs.build_recommendations(_facts, as_of=AS_OF,
-                                 logistics_by_pair=LOGI)
-    b = rs.build_recommendations(_facts, as_of=AS_OF,
-                                 logistics_by_pair=LOGI)
+    a = _run(rs.build_recommendations(
+        _facts, as_of=AS_OF, logistics_by_pair=LOGI
+    ))
+    b = _run(rs.build_recommendations(
+        _facts, as_of=AS_OF, logistics_by_pair=LOGI
+    ))
     assert a == b
 
 
 def test_safety_fail_never_ranked():
     batches = [dict(BATCHES[0], safety_status="fail")]
     facts = (SUPPLY, DEMAND, REFS, QUOTES, batches, RELIABILITY)
-    out = rs.build_recommendations(lambda: facts, as_of=AS_OF,
-                                   logistics_by_pair=LOGI)
+    out = _run(rs.build_recommendations(
+        lambda: facts, as_of=AS_OF, logistics_by_pair=LOGI
+    ))
     assert out["recommendations"] == []
 
 
@@ -86,6 +97,7 @@ def test_infeasible_logistics_excluded():
     logi = {("Cianjur", "Jakarta"): {"distance_km": 120,
                                      "estimated_time_min": 999.0,
                                      "feasible": False}}
-    out = rs.build_recommendations(_facts, as_of=AS_OF,
-                                   logistics_by_pair=logi)
+    out = _run(rs.build_recommendations(
+        _facts, as_of=AS_OF, logistics_by_pair=logi
+    ))
     assert out["recommendations"] == []
