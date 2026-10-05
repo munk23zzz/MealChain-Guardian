@@ -60,6 +60,12 @@ menghasilkan angka yang sudah diverifikasi manual sesuai contoh di `docs/Skill.m
 
 ## Sprint 3 — Agent layer (Minggu 3) — INI SPRINT PALING KRITIS
 
+> **Status audit 2026-10-06:** Sprint 3 belum dimulai. Plan tersedia di
+> `docs/superpowers/plans/2026-10-06-sprint3-agent-layer.md`. S3-00 wajib PASS
+> terlebih dahulu; audit lintas Sprint 0–2 menemukan OpenAPI artifact,
+> JWT/RBAC/action boundary, dan current AWS/AgentCore/Strands evidence belum
+> tersedia. Lihat `docs/verification/sprint-0-2-cross-sprint-audit.md`.
+
 - [ ] AgentCore Gateway dikonfigurasi, `openapi.json` di-register jadi MCP tools
 - [ ] Supervisor Agent (Strands) berhasil memanggil minimal 1 tool lewat Gateway
 - [ ] Supervisor Agent bisa menjalankan alur DETECT→VERIFY→...→ACT untuk Event 1

@@ -40,8 +40,8 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 
 | ID | Task | Kategori | Status | Assignee | Catatan |
 |---|---|---|---|---|---|
-| S2-01 | Endpoint `POST /cost/safe-delivered` | Backend/API | In Progress | Hermes | Engine SDC + perhitungan per kandidat selesai (Task 6/9, commit 9b1e083, a9bd9ae); endpoint standalone = carry-over plan-binding |
-| S2-02 | Endpoint `POST /balance/analyze`, `/balance/recommend` | Backend/API | In Progress | Hermes | `/balance/recommend` + `/balance/{loc}/{com}` selesai (Task 10, commit 353be20); 294 test backend |
+| S2-01 | Endpoint `POST /cost/safe-delivered` | Backend/API | In Progress | Hermes | Engine SDC + perhitungan per kandidat selesai (Task 6/9, commit 9b1e083, a9bd9ae); endpoint standalone = carry-over plan-binding; Opsi A SDC dikunci 2026-10-06 |
+| S2-02 | Endpoint `POST /balance/analyze`, `/balance/recommend` | Backend/API | In Progress | Hermes | `/balance/recommend` + `/balance/{loc}/{com}` selesai (Task 10, commit 353be20); final correction HEAD 5deb4ef; 296 test backend |
 | S2-03 | Endpoint `POST /evidence/fuse` | Backend/API | Not Started | | Evidence dasar + supervisor context tersedia (Task 12, commit ac33d24); endpoint fuse = carry-over |
 | S2-04 | Auth: JWT login + 3 role (sppg_head, sppg_nutritionist, bgn_monitor) | Authentication | Not Started | | Di luar plan Sprint 2 eksekusi (decision intelligence) — carry-over eksplisit |
 | S2-05 | RBAC middleware per endpoint | Authentication | Not Started | | Carry-over eksplisit (lihat atas) |
@@ -53,7 +53,7 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 
 | ID | Task | Kategori | Status | Assignee | Catatan |
 |---|---|---|---|---|---|
-| S3-01 | AgentCore Gateway config dari openapi.json | Agent | Not Started | | |
+| S3-01 | AgentCore Gateway config dari openapi.json | Agent | Not Started | | Plan siap di `docs/superpowers/plans/2026-10-06-sprint3-agent-layer.md`; preflight blocked: OpenAPI artifact/provider access belum tersedia |
 | S3-02 | Supervisor Agent — panggil 1 tool via Gateway | Agent | Not Started | | |
 | S3-03 | Supervisor Agent — alur penuh Event 1 (DETECT→ACT) | Agent | Not Started | | |
 | S3-04 | Verifier Agent — audit output Event 1 | Agent | Not Started | | |

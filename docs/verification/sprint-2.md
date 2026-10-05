@@ -8,7 +8,7 @@ Metode: subagent-driven-development (plan `.hermes/plans/2026-10-05-sprint2-deci
 | Gate | Perintah (aktual) | Hasil |
 |---|---|---|
 | Migration | `docker compose exec -T backend alembic upgrade head` | exit 0, head `006_decision_persistence` |
-| Backend test | `docker compose exec -T backend pytest -q` | **294 passed**, 1 warning (deprecation asyncio), exit 0 |
+| Backend test | `docker compose exec -T backend pytest -q` | **296 passed**, 1 warning (deprecation anyio), exit 0; fresh final gate from HEAD `5deb4ef` |
 | Lint backend | `docker compose exec -T backend ruff check .` | All checks passed, exit 0 |
 | Frontend test | `docker compose exec -T frontend npm run test` | 1 passed (vitest run), exit 0 |
 | Frontend lint | `docker compose exec -T frontend npm run lint` | No ESLint warnings or errors, exit 0 |
