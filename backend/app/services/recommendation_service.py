@@ -132,6 +132,7 @@ async def fetch_operational_facts(db, as_of):
         )
         batches.append(
             {
+                "batch_id": str(b.id),
                 "location": locs[b.location_id],
                 "commodity": name,
                 "quantity_kg": Decimal(str(b.quantity_kg)),
