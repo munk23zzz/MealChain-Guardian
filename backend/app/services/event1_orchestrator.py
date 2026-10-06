@@ -23,8 +23,9 @@ from app.ai_providers.forecast_client import run_forecast
 from app.ai_providers.verifier_client import run_verifier
 from app.core.config import settings
 from app.db import create_engine, create_session_maker
-from app.models import AgentTrace, Commodity, Decision, DemandRecord, Location
+from app.models import Commodity, Decision, DemandRecord, Location
 from app.services import recommendation_service as rs
+from app.services.trace_persistence import persist_trace_steps
 
 DEFAULT_TTL_MINUTES = 30
 FORECAST_HORIZON_DAYS = 7
@@ -301,14 +302,17 @@ async def _run_event1(
         )
 
         for step in traces:
-            session.add(
-                AgentTrace(
-                    decision_id=decision.id,
-                    step_name=step.step_name,
-                    tool_called=step.tool_called,
-                    input_summary=step.input_summary,
-                    output_summary=step.output_summary,
-                )
+            persist_trace_steps(
+                session,
+                decision_id=str(decision.id),
+                steps=[
+                    {
+                        "step_name": step.step_name,
+                        "tool_called": step.tool_called,
+                        "input_summary": step.input_summary,
+                        "output_summary": step.output_summary,
+                    }
+                ],
             )
 
         await session.commit()
