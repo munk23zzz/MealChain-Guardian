@@ -80,7 +80,11 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 > - **S3-08+09** (plan) Memory isolation + Observability trace (`agent_memory.py`, `agent_observability.py`; AgentCore tanpa konfigurasi = error eksplisit; label `synthetic` anti-promosi bukti palsu): DONE — commit `dacc592`, 379 passed.
 > - **S3-10** (plan) Trace persistence service (`trace_persistence.py`, sanitasi payload + step_name whitelist + step_at monoton): DONE — commit `ffc22b2`, 382 passed.
 > - **S3-11** (plan) Approval+action E2E: **bug nyata ditemukan & diperbaiki** — `/actions/verify` tidak pernah menulis `verifier_note` (jalur API tak pernah bisa CONSISTENT); sekarang verdict tertulis + status `verifier_flagged` + 422 verdict tak dikenal: DONE — commit `5e5525b`, 389 passed.
-> - Berikutnya: S3-12 (frontend), S3-13/14 (E2E live + resilience acceptance), S3-15/16 (review + final gate).
+> - **S3-12** (plan) Frontend Agent Flow (login, feed polling 5s, decision detail, AgentTraceViewer dari DB, ApprovalModal friksi §1.3, role scope §1.4, badge mock): DONE — commit `45cb20e` + backend read endpoints `4999615` (25 test, tsc+lint+build bersih).
+> - **S3-13+14** (plan) E2E acceptance (4/4: jalur penuh supervisor→PO mock MC-, data_source=MOCK; bug seam verifier_note orchestrator ditemukan & diperbaiki) + resilience acceptance (5/5: matriks 4 cabang chain via failure injection deterministik, UNAVAILABLE→dual AND): DONE — commit `c478d5c`, 401 passed.
+> - **S3-15** (plan) Security/contract review: endpoint baca S3-12 diproteksi auth (unauth 401 — ditemukan via live probe), openapi.json regenerated 23 paths 0 missing, core→api boundary 0 pelanggaran, scan secrets bersih: DONE — commit `6744978`, 402 passed.
+> - **S3-16** (plan) Final gate: fresh verification dari HEAD — alembic `006_decision_persistence (head)`, backend 402 passed + ruff bersih, frontend 25 test + lint bersih, compose 4 service Up (postgres healthy), log scan bersih pada state final, `/health` 200, `/decisions` unauth 401, DB readback bersih. Evidence lengkap: `docs/verification/sprint-3.md`. BLOCKED live (jujur): AgentCore Runtime ARN/Gateway/Memory kosong, model env verifier/forecast/supervisor belum lengkap — jalur lokal tersertifikasi penuh.
+> - Selesai: seluruh slice S3-00..S3-16 (402 backend + 25 frontend test). Sinkronisasi tabel Sprint 3 di atas: baris S3-01..S3-11 TODO.md tetap "Not Started" sampai Roy menandai selesai (aturan: sprint In Progress sampai user menandai).
 
 ## Sprint 4 — Event 2 & 3, KPI, polish, rehearsal
 
