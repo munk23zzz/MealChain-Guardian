@@ -33,6 +33,14 @@ from app.models import (
 
 SEED_PATH = Path(os.environ.get("SEED_PATH", "/data/seed/sprint1_seed.json"))
 
+
+def _seed_database_url() -> str:
+    """URL DB untuk seed (sinkron psycopg), default ke contract compose."""
+    return os.environ.get(
+        "SEED_DATABASE_URL",
+        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain",
+    )
+
 # Namespace tetap proyek — jangan pernah diubah (mengubah semua id seed)
 SEED_NAMESPACE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 
@@ -399,14 +407,92 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
     return counts
 
 
+# ---------------------------------------------------------------------------
+# Demo users (S3-01) — 3 role final, idempoten.
+# Password demo statis (bukan secret produksi); dipakai untuk demo juri.
+# ---------------------------------------------------------------------------
+
+DEMO_USERS = [
+    {
+        "email": "sppg.head@demo.local",
+        "name": "SPPG Head Demo",
+        "role": "sppg_head",
+        "location": "Jakarta",
+        "password": "Demo#SPPG2026",
+    },
+    {
+        "email": "sppg.nutritionist@demo.local",
+        "name": "SPPG Nutritionist Demo",
+        "role": "sppg_nutritionist",
+        "location": "Bogor",
+        "password": "Demo#Nut2026",
+    },
+    {
+        "email": "bgn.monitor@demo.local",
+        "name": "BGN Monitor Demo",
+        "role": "bgn_monitor",
+        "location": None,
+        "password": "Demo#BGN2026",
+    },
+]
+
+
+def ensure_demo_users() -> None:
+    """Idempoten: merge 3 user demo (stable uuid dari email)."""
+    asyncio.run(_ensure_demo_users_async())
+
+
+async def _ensure_demo_users_async() -> None:
+    import bcrypt
+
+    from app.models import User
+
+    engine = create_engine(_seed_database_url())
+    try:
+        session_maker = create_session_maker(engine)
+        async with session_maker() as session:
+            locs = {
+                loc.name: loc.id
+                for loc in (await session.execute(select(Location))).scalars()
+            }
+            for u in DEMO_USERS:
+                uid = stable_uuid("user", u["email"])
+                digest = bcrypt.hashpw(
+                    u["password"].encode(), bcrypt.gensalt()
+                ).decode()
+                await session.merge(
+                    User(
+                        id=uid,
+                        name=u["name"],
+                        email=u["email"],
+                        password_hash=digest,
+                        role=u["role"],
+                        location_id=(
+                            locs.get(u["location"]) if u["location"] else None
+                        ),
+                    )
+                )
+            await session.commit()
+    finally:
+        await engine.dispose()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed Sprint 1 deterministik")
     parser.add_argument("--reference-time", required=True, help="ISO 8601 tz-aware")
+    parser.add_argument(
+        "--with-demo-users",
+        action="store_true",
+        help="Juga pastikan 3 akun demo role ada (S3-01)",
+    )
     args = parser.parse_args()
     ref = datetime.fromisoformat(args.reference_time)
     if ref.tzinfo is None:
         raise SystemExit("reference-time wajib timezone-aware, mis. 2026-10-01T12:00:00+00:00")
     counts = asyncio.run(load_seed(ref))
+    if args.with_demo_users:
+        ensure_demo_users()
+        print("Demo users siap (3 role, idempoten).")
     print(f"Seed selesai (idempoten). Row baru: {counts or '{}'}")
 
 

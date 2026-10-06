@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.actions import router as actions_router
+from app.api.auth import router as auth_router
 from app.api.balance import router as balance_router
 from app.api.decisions import router as decisions_router
 from app.api.demand import forecast_router
@@ -39,6 +41,8 @@ app.include_router(price_router)
 app.include_router(logistics_router)
 app.include_router(balance_router)
 app.include_router(decisions_router)
+app.include_router(auth_router)
+app.include_router(actions_router)
 
 
 @app.get("/health")
