@@ -123,3 +123,27 @@ async def post_recommend(db: AsyncSession = Depends(get_db)):
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return out
+
+
+@router.post("/balance/analyze")
+async def post_analyze(db: AsyncSession = Depends(get_db)):
+    """Pipeline penuh + ringkasan hitung (S3-02, carry-over Sprint 2).
+
+    Tipis: rekomendasi dari service yang sama dengan /balance/recommend;
+    summary murni agregasi hitung, tanpa logika baru.
+    """
+    fetcher = _AsyncFetcher(db)
+    try:
+        out = await rs.build_recommendations(fetcher)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    recs = out["recommendations"]
+    out["summary"] = {
+        "candidates_total": len(recs),
+        "eligible": sum(1 for r in recs if r.get("eligible")),
+        "review_required": sum(1 for r in recs if r.get("review_required")),
+        "flagged_price": sum(
+            1 for r in recs if (r.get("price_anomaly") or {}).get("flagged")
+        ),
+    }
+    return out

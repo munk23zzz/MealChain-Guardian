@@ -1,0 +1,107 @@
+{
+  "gatewayConfigVersion": "1.0.0",
+  "targetRuntime": "AWS Bedrock AgentCore Gateway (MCP)",
+  "note": "Placeholder ${BACKEND_BASE_URL} diganti saat provisioning; token via Gateway auth, bukan file ini.",
+  "tools": [
+    {
+      "name": "supply.get",
+      "description": "Stok pasokan terkini per lokasi+komoditas (deterministik).",
+      "method": "GET",
+      "path": "/supply/{location}/{commodity}",
+      "target": {
+        "type": "http",
+        "baseUrl": "${BACKEND_BASE_URL}"
+      }
+    },
+    {
+      "name": "demand.get",
+      "description": "Kebutuhan terkini per lokasi+komoditas (deterministik).",
+      "method": "GET",
+      "path": "/demand/{location}/{commodity}",
+      "target": {
+        "type": "http",
+        "baseUrl": "${BACKEND_BASE_URL}"
+      }
+    },
+    {
+      "name": "freshness.evaluate",
+      "description": "Skor + status kesegaran batch (PASS/NEEDS_VERIFICATION/FAIL).",
+      "method": "POST",
+      "path": "/freshness/evaluate",
+      "target": {
+        "type": "http",
+        "baseUrl": "${BACKEND_BASE_URL}"
+      }
+    },
+    {
+      "name": "safety.evaluate",
+      "description": "Status keamanan pangan batch (FAIL = hard exclusion).",
+      "method": "POST",
+      "path": "/safety/evaluate",
+      "target": {
+        "type": "http",
+        "baseUrl": "${BACKEND_BASE_URL}"
+      }
+    },
+    {
+      "name": "price.deviation",
+      "description": "Deviasi harga supplier vs referensi PIHPS (5%/15%).",
+      "method": "POST",
+      "path": "/price/deviation",
+      "target": {
+        "type": "http",
+        "baseUrl": "${BACKEND_BASE_URL}"
+      }
+    },
+    {
+      "name": "logistics.estimate",
+      "description": "Estimasi jarak/waktu/kelayakan rute (deterministik).",
+      "method": "POST",
+      "path": "/logistics/estimate",
+      "target": {
+        "type": "http",
+        "baseUrl": "${BACKEND_BASE_URL}"
+      }
+    },
+    {
+      "name": "evidence.fuse",
+      "description": "Perakitan evidence audit dari snapshot rekomendasi.",
+      "method": "POST",
+      "path": "/evidence/fuse",
+      "target": {
+        "type": "http",
+        "baseUrl": "${BACKEND_BASE_URL}"
+      }
+    },
+    {
+      "name": "cost.safe_delivered",
+      "description": "Safe Delivered Cost (formula Opsi A terkunci).",
+      "method": "POST",
+      "path": "/cost/safe-delivered",
+      "target": {
+        "type": "http",
+        "baseUrl": "${BACKEND_BASE_URL}"
+      }
+    },
+    {
+      "name": "balance.recommend",
+      "description": "Rekomendasi balancing + ranking deterministik penuh.",
+      "method": "POST",
+      "path": "/balance/recommend",
+      "target": {
+        "type": "http",
+        "baseUrl": "${BACKEND_BASE_URL}"
+      }
+    },
+    {
+      "name": "actions.propose",
+      "description": "Ajukan decision untuk approval manusia (tanpa eksekusi).",
+      "method": "POST",
+      "path": "/actions/propose",
+      "target": {
+        "type": "http",
+        "baseUrl": "${BACKEND_BASE_URL}"
+      }
+    }
+  ]
+}

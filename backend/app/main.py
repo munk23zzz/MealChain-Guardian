@@ -7,10 +7,12 @@ from fastapi import FastAPI
 from app.api.actions import router as actions_router
 from app.api.auth import router as auth_router
 from app.api.balance import router as balance_router
+from app.api.cost import router as cost_router
 from app.api.decisions import router as decisions_router
 from app.api.demand import forecast_router
 from app.api.demand import router as demand_router
 from app.api.dependencies import lifespan
+from app.api.evidence import router as evidence_router
 from app.api.freshness import router as freshness_router
 from app.api.logistics import router as logistics_router
 from app.api.price import router as price_router
@@ -40,6 +42,8 @@ app.include_router(safety_router)
 app.include_router(price_router)
 app.include_router(logistics_router)
 app.include_router(balance_router)
+app.include_router(cost_router)
+app.include_router(evidence_router)
 app.include_router(decisions_router)
 app.include_router(auth_router)
 app.include_router(actions_router)
