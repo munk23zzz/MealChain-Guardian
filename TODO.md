@@ -76,7 +76,11 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 > - **S3-05** (plan) Shared resilience `with_fallback_chain` (primary→fallback 1-3, 429 retryable, timeout, circuit breaker opsional): DONE — commit `a512e5a`, 340 passed.
 > - **S3-06** (plan) Verifier REST client (SAP primary→SAP fallback→Bedrock final via S3-05, guard safety FAIL, UNAVAILABLE→dual approval): DONE — commit `689cf26`, 352 passed. Catatan: system prompt di `app/ai_providers/prompts/` (bukan `agent/prompts/`) karena `agent/` di luar bind-mount container.
 > - **S3-07** (plan) Forecast provider (SAP-RPT-1.6→statistical_fallback 0.5/0.3/0.2 dari core, tanpa fabricate label SAP): DONE — commit `21ee4af`, 358 passed.
-> - Berikutnya: S3-03+04 (Supervisor Strands/Bedrock + Event 1 orchestration), S3-08/09 (Memory/Observability), S3-11 (approval E2E), S3-12 (frontend), S3-13/14 (E2E live), S3-15/16 (review + final gate).
+> - **S3-03+04** (plan) Event 1 orchestrator (`services/event1_orchestrator.py`, DETECT→VERIFY→TRACE→PREDICT→OPTIMIZE→DECIDE, AgentTrace persist, tanpa auto-approve): DONE — commit `0c21a39`, 365 passed. Catatan lokasi: di `app/services/` (bukan `agent/` root) karena `agent/` di luar bind-mount container.
+> - **S3-08+09** (plan) Memory isolation + Observability trace (`agent_memory.py`, `agent_observability.py`; AgentCore tanpa konfigurasi = error eksplisit; label `synthetic` anti-promosi bukti palsu): DONE — commit `dacc592`, 379 passed.
+> - **S3-10** (plan) Trace persistence service (`trace_persistence.py`, sanitasi payload + step_name whitelist + step_at monoton): DONE — commit `ffc22b2`, 382 passed.
+> - **S3-11** (plan) Approval+action E2E: **bug nyata ditemukan & diperbaiki** — `/actions/verify` tidak pernah menulis `verifier_note` (jalur API tak pernah bisa CONSISTENT); sekarang verdict tertulis + status `verifier_flagged` + 422 verdict tak dikenal: DONE — commit `5e5525b`, 389 passed.
+> - Berikutnya: S3-12 (frontend), S3-13/14 (E2E live + resilience acceptance), S3-15/16 (review + final gate).
 
 ## Sprint 4 — Event 2 & 3, KPI, polish, rehearsal
 
