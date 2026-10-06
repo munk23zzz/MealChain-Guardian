@@ -40,6 +40,13 @@ AGENT_PREFIX_ENV = {
     },
 }
 AGENTCORE_ARN_ENV = "AGENTCORE_RUNTIME_ARN"
+# Slot fallback bernomor (permintaan Roy: chain sepanjang model yang ada)
+MAX_FALLBACK_SLOTS = 9
+AGENT_FALLBACK_TEMPLATE = {
+    "supervisor": "SUPERVISOR_MODEL_FALLBACK_{}",
+    "verifier": "VERIFIER_MODEL_FALLBACK_{}",
+    "forecast": "FORECAST_MODEL_FALLBACK_{}",
+}
 
 ModelKind = Literal["bedrock", "inferhub", "agentcore"]
 
@@ -72,37 +79,35 @@ def _agent_env_keys(agent: str) -> dict[str, str]:
 
 
 def get_agent_chain(agent: str) -> list[ModelRef]:
-    """Rantai model agent dari env: maksimal 3 slot, AgentCore menggeser.
+    """Rantai model agent dari env: satu slot per env terisi, tanpa cap 3.
 
-    - slot env kosong → dilewati (rantai bisa < 3; pemanggil yang memutuskan
-      UNAVAILABLE bila kosong)
+    - slot fallback bernomor `*_MODEL_FALLBACK_1..9` dikumpulkan berurutan;
+      gap pertama menghentikan koleksi (slot setelah gap diabaikan)
     - SUPERVISOR_MODEL_FALLBACK (legacy, tanpa angka) dipakai sebagai
-      fallback_1 bila slot bernomor tidak diisi
+      fallback_1 bila tidak ada slot bernomor
     - AGENTCORE_RUNTIME_ARN terisi → jadi primary, slot env bergeser satu
       posisi (kontrak: AgentCore dulu, fallback env tetap dipertahankan)
     """
     keys = _agent_env_keys(agent)
-    slots: list[ModelRef] = []
+    template = AGENT_FALLBACK_TEMPLATE[agent]
 
     primary = parse_model_ref(os.environ.get(keys["primary"]))
-    f1_raw = os.environ.get(keys["fallback_1"])
-    f1 = parse_model_ref(f1_raw) if f1_raw and f1_raw.strip() else None
-    if f1 is None and agent == "supervisor":
+    numbered: list[ModelRef] = []
+    for index in range(1, MAX_FALLBACK_SLOTS + 1):
+        ref = parse_model_ref(os.environ.get(template.format(index)))
+        if ref is None:
+            break
+        numbered.append(ref)
+    if not numbered and agent == "supervisor":
         # kompatibilitas nama legacy SUPERVISOR_MODEL_FALLBACK
         legacy = parse_model_ref(os.environ.get("SUPERVISOR_MODEL_FALLBACK"))
         if legacy is not None and legacy.kind != "agentcore":
-            f1 = legacy
-    f2 = parse_model_ref(os.environ.get(keys["fallback_2"]))
+            numbered.append(legacy)
+
+    env_slots = [primary, *numbered]
+    env_slots = [ref for ref in env_slots if ref is not None]
 
     arn = parse_model_ref(os.environ.get(AGENTCORE_ARN_ENV))
     if arn is not None:
-        slots.append(arn)
-        for ref in (primary, f1, f2):
-            if ref is not None and len(slots) < 3:
-                slots.append(ref)
-    else:
-        for ref in (primary, f1, f2):
-            if ref is not None:
-                slots.append(ref)
-
-    return slots[:3]
+        return [arn, *env_slots]
+    return env_slots

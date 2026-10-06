@@ -53,17 +53,17 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 
 | ID | Task | Kategori | Status | Assignee | Catatan |
 |---|---|---|---|---|---|
-| S3-01 | AgentCore Gateway config dari openapi.json | Agent | Not Started | | Plan siap di `docs/superpowers/plans/2026-10-06-sprint3-agent-layer.md`; preflight blocked: OpenAPI artifact/provider access belum tersedia |
-| S3-02 | Supervisor Agent — panggil 1 tool via Gateway | Agent | Not Started | | |
-| S3-03 | Supervisor Agent — alur penuh Event 1 (DETECT→ACT) | Agent | Not Started | | |
-| S3-04 | Verifier Agent — audit output Event 1 | Agent | Not Started | | |
-| S3-05 | AgentCore Memory terpasang | Agent | Not Started | | |
-| S3-06 | AgentCore Observability aktif + trace bisa ditarik | Agent | Not Started | | |
-| S3-07 | `agent_traces` table terisi dari trace asli | Backend/Data | Not Started | | |
-| S3-08 | Frontend: Recommendation Feed (data asli) | Dashboard | Not Started | | |
-| S3-09 | Frontend: Decision Detail + Evidence view | Dashboard | Not Started | | |
-| S3-10 | Frontend: Agent Activity Log (trace timeline) | Dashboard | Not Started | | |
-| S3-11 | Approval flow — approve → execute → SAP mock PO | Backend/Dashboard | Not Started | | |
+| S3-01 | AgentCore Gateway config dari openapi.json | Agent | Done | Hermes | Commit `93ca711`+`e47e11e`; tool registry + gateway config; `backend/openapi.json` 23 paths |
+| S3-02 | Supervisor Agent — panggil 1 tool via Gateway | Agent | Done | Hermes | Commit `77d3fdc` (auth+matrix) + `0c21a39` (orchestrator tool call) |
+| S3-03 | Supervisor Agent — alur penuh Event 1 (DETECT→ACT) | Agent | Done | Hermes | Commit `0c21a39`; + narasi SUPERVISE pasca-gate `92a95fc` |
+| S3-04 | Verifier Agent — audit output Event 1 | Agent | Done | Hermes | Commit `689cf26`; fix verifier_note `5e5525b` |
+| S3-05 | AgentCore Memory terpasang | Agent | Done | Hermes | Commit `dacc592` (memory isolation; ARN/Memory kosong = honest-unavailable) |
+| S3-06 | AgentCore Observability aktif + trace bisa ditarik | Agent | Done | Hermes | Commit `dacc592` (observability + trace) |
+| S3-07 | `agent_traces` table terisi dari trace asli | Backend/Data | Done | Hermes | Commit `ffc22b2` (persistence + whitelist) |
+| S3-08 | Frontend: Recommendation Feed (data asli) | Dashboard | Done | Hermes | Commit `45cb20e`+`4999615` |
+| S3-09 | Frontend: Decision Detail + Evidence view | Dashboard | Done | Hermes | Commit `45cb20e`+`4999615` |
+| S3-10 | Frontend: Agent Activity Log (trace timeline) | Dashboard | Done | Hermes | Commit `45cb20e`; + ProviderPanel `92a95fc` |
+| S3-11 | Approval flow — approve → execute → SAP mock PO | Backend/Dashboard | Done | Hermes | Commit `5e5525b`; E2E `c478d5c` (PO mock `MC-`, data_source=MOCK) |
 
 ### Catatan status eksekusi Sprint 3 (agent layer — sinkronisasi tabel penuh di S3-16)
 
@@ -84,8 +84,9 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 > - **S3-13+14** (plan) E2E acceptance (4/4: jalur penuh supervisor→PO mock MC-, data_source=MOCK; bug seam verifier_note orchestrator ditemukan & diperbaiki) + resilience acceptance (5/5: matriks 4 cabang chain via failure injection deterministik, UNAVAILABLE→dual AND): DONE — commit `c478d5c`, 401 passed.
 > - **S3-15** (plan) Security/contract review: endpoint baca S3-12 diproteksi auth (unauth 401 — ditemukan via live probe), openapi.json regenerated 23 paths 0 missing, core→api boundary 0 pelanggaran, scan secrets bersih: DONE — commit `6744978`, 402 passed.
 > - **S3-16** (plan) Final gate: fresh verification dari HEAD — alembic `006_decision_persistence (head)`, backend 402 passed + ruff bersih, frontend 25 test + lint bersih, compose 4 service Up (postgres healthy), log scan bersih pada state final, `/health` 200, `/decisions` unauth 401, DB readback bersih. Evidence lengkap: `docs/verification/sprint-3.md`. BLOCKED live (jujur): AgentCore Runtime ARN/Gateway/Memory kosong, model env verifier/forecast/supervisor belum lengkap — jalur lokal tersertifikasi penuh.
-> - Selesai: seluruh slice S3-00..S3-16 (402 backend + 25 frontend test). Sinkronisasi tabel Sprint 3 di atas: baris S3-01..S3-11 TODO.md tetap "Not Started" sampai Roy menandai selesai (aturan: sprint In Progress sampai user menandai).
+> - Selesai: seluruh slice S3-00..S3-16 (402 backend + 25 frontend test saat gate). Tabel fitur S3-01..S3-11 di atas sudah disinkron ke `Done` + referensi commit (ditandai selesai oleh Roy, 2026-10-06).
 > - **Pasca-gate (permintaan Roy): model chain 3 slot per agent LIVE.** Verifier/Forecast/Supervisor kini primary Bedrock + 2 fallback Inferhub (cb/kimi-k3, cbcn/kimi-k3, ali/qwen3.8-max-0902 — semua terbukti live via probe); AgentCore ARN (bila diisi) jadi primary & menggeser slot env. Supervisor dapat langkah narasi SUPERVISE (non-safety-critical) + frontend ProviderPanel identitas model. Bug live ditemukan & fixed: prompt forecast tanpa kontrak output → parser menolak jawaban array harian model. Evidence: `docs/verification/sprint-3.md`. Backend **437 passed**, frontend **31 test**, ruff/tsc/lint/build bersih.
+> - **Revisi 2 (arah Roy): chain PANJANG frontier-first, kimi/qwen di fallback TERAKHIR.** Probe 2 ronde katalog Inferhub → `cb/gpt-6-astra` (GPT-6 Astra), `cc/`, `cc/` LIVE (503 ronde-1 terbukti transien); `gpt-5.6-sol` 404 di katalog. .env dirapikan: 6 slot/agent identik (Bedrock Claude → Astra → Claude-5-5 → Claude-5 → kimi-k3 → qwen3.8-max), entry 503/502 lama dikosongkan. `AGENTCORE_RUNTIME_ARN` kini TERISI (runtime `mealchain-5iQ9raHpis`, dibuat Roy) → slot `primary:agentcore`, chain total 7. Registry slot 1..9 tanpa cap, `with_fallback_chain(fallbacks=[...])`, label dinamis. Backend **445 passed**, ruff bersih; frontend 31 test + tsc/lint bersih.
 
 ## Sprint 4 — Event 2 & 3, KPI, polish, rehearsal
 

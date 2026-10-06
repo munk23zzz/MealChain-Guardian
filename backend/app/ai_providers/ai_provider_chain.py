@@ -57,9 +57,11 @@ def _build_ref_caller(ref: ModelRef) -> Callable[[str], str]:
 
 def build_default_callers(agent: str) -> list[tuple[str, Callable[[str], str], str]]:
     """Rantai callable default agent dari env: [(label, fn, kind), ...]."""
+    chain = get_agent_chain(agent)
     return [
         (f"{slot}:{ref.kind}", _build_ref_caller(ref), ref.kind)
         for slot, ref in zip(
-            ("primary", "fallback_1", "fallback_2"), get_agent_chain(agent)
+            ("primary", *(f"fallback_{i}" for i in range(1, len(chain)))),
+            chain,
         )
     ]

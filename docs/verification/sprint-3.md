@@ -112,48 +112,48 @@ final **402 passed** backend; frontend 25 test.)
 - pytest-asyncio deprecation warning (pre-existing, non-blocking).
 - Frontend tsconfig.tsbuildinfo artifact build (untracked, non-blocking).
 
-## Model chain live per agent (permintaan Roy, 2026-10-06 — pasca gate S3-16)
+## Model chain per agent (revisi 2026-10-06 — chain panjang frontier-first)
 
-Setiap agent (supervisor/verifier/forecast) kini punya rantai TEPAT 3 model:
-primary + fallback_1 + fallback_2 — satu model mati, dua backup siap.
-Backend = sumber konfigurasi (env); frontend menampilkan identitas
-model/provider dari trace DB (display-only, `ProviderPanel`).
+Setiap agent (supervisor/verifier/forecast) kini punya rantai model PANJANG
+(6 model), frontier dulu, open-weight (kimi/qwen) di posisi fallback
+TERAKHIR (arah Roy). Backend = sumber konfigurasi (env); frontend menampilkan
+identitas model/provider dari trace DB (display-only, `ProviderPanel`).
+`AGENTCORE_RUNTIME_ARN` kini TERISI (runtime `mealchain-5iQ9raHpis`,
+us-west-2, dibuat Roy) → jadi slot `primary:agentcore`; 6 slot env bergeser
+menjadi fallback_1..6 (total 7 referensi per agent). Implementasi invoke
+runtime AgentCore = stub eksplisit (honest-unavailable) → chain otomatis
+jatuh ke fallback_1 Bedrock sampai implementasi runtime siap.
 
-| Agent | primary | fallback_1 | fallback_2 |
-|---|---|---|---|
-| Verifier | Bedrock `us.anthropic.…` (LIVE probe 2.2s) | Inferhub `cb/kimi-k3` (LIVE, max_tokens 4000) | Inferhub `ali/qwen3.8-max-0902` (LIVE 2.5s) |
-| Forecast | Bedrock `qwen.qwen3-vl-235b-a22b` (LIVE 0.6s) | Inferhub `cbcn/kimi-k3` (LIVE) | Inferhub `cb/kimi-k3` (LIVE) |
-| Supervisor | Bedrock `us.anthropic.…` (LIVE) | Inferhub `cb/kimi-k3` (LIVE) | Inferhub `ali/qwen3.8-max-0902` (LIVE) |
+| Slot | Model | Status (probe live 2 ronde, 2026-10-06) |
+|---|---|---|
+| primary:agentcore | `AGENTCORE_RUNTIME_ARN` | terkonfigurasi; invoke menyusul |
+| fallback_1 (env primary) | Bedrock `us.anthropic.` (the model 4.6) | LIVE + tersertifikasi E2E |
+| fallback_2 | Inferhub `cb/gpt-6-astra` (GPT-6 Astra, GPQA-D 96.0%) | LIVE 2.3–7.1s (2 ronde) |
+| fallback_3 | Inferhub `cc/` | LIVE 2.5–5.2s (2 ronde) |
+| fallback_4 | Inferhub `cc/` | LIVE 2.9s (503 ronde-1 = transien, pulih) |
+| fallback_5 | Inferhub `cb/kimi-k3` | LIVE 7.9s (max_tokens 4000) |
+| fallback_6 | Inferhub `ali/qwen3.8-max-0902` | LIVE 3.1s |
 
-Catatan konfigurasi:
-- `global.moonshotai.kimi-k3` (Bedrock) dan `us.anthropic.…`#2/#3 INVALID
-  saat probe (ValidationException/AccessDenied) → diganti kandidat Inferhub.
-- ARN AgentCore terisi → jadi primary agent dan menggeser slot env
-  (total tetap 3); implementasi runtime AgentCore = stub eksplisit
-  NotImplementedError (honest-unavailable).
+Kandidat dibuang dari .env (alasan terdokumentasi, bukan truncasi):
+`cc/claude-fable-5-1`/`cc/claude-sonnet-5`/`cc/claude-opus-5`/`cb/claude-opus-5`
+(503/502 down saat 2 ronde probe), `cc/claude-sonnet-5-5` VALID live tapi
+digantikan Astra/Sonnet-5 di slot atas. `gpt-5.6-sol` = 404 di katalog
+Inferhub (cc/ dan cb/) — tidak bisa dipakai dengan nama itu. Entry mati
+ dikosongkan dari .env; kimi-k3 & qwen3.8-max TIDAK dibuang (posisi terakhir).
 
-Evidence live (dalam container, chain env asli):
-- Verifier: verdict FLAGGED, `primary:bedrock`, fallback_used=False,
-  attempts=[{primary, succeeded}] — jujur terhadap seed (bukan CONSISTENT
-  karangan).
-- Forecast: method `provider_forecast`, qty 7230.0, `primary:bedrock`
-  (bug bentuk jawaban ditemukan & fixed: prompt kini memuat kontrak output
-  JSON; parser menerima array harian → mean×horizon deterministik).
-- Supervisor: SUPERVISE narrated, `primary:bedrock` — narasi terakhir,
-  TIDAK safety-critical (tidak mengubah verdict/rekomendasi/angka).
-- Fallback Inferhub live: chain tanpa Bedrock → kimi timeout →
-  `fallback_2:inferhub` (qwen) sukses, fallback_used=True, attempts jujur.
+Arsitektur chain panjang (TDD, backend **445 passed**):
+- `model_registry.py` — slot fallback bernomor 1..9 tanpa cap 3; gap pertama
+  menghentikan koleksi; AgentCore ARN = primary, env chain utuh.
+- `resilience.py` — `with_fallback_chain(..., fallbacks=[...])` untuk chain
+  panjang (kwargs lama tetap kompatibel) + `provider_slot_index()`.
+- `ai_provider_chain.py` — label slot dinamis mengikuti panjang chain.
+- Client verifier/forecast/supervisor — translasi label generik (fallback_N).
+- conftest isolasi env mencakup fallback_3..9; compose passthrough slot
+  baru (supervisor s.d. _11, verifier/forecast s.d. _9).
 
-Arsitektur tambahan (TDD penuh, 435 passed total):
-- `app/ai_providers/model_registry.py` — parsing env per agent
-  (bedrock/inferhub/agentcore), legacy `SUPERVISOR_MODEL_FALLBACK` backfill.
-- `app/ai_providers/bedrock_caller.py` / `inferhub_caller.py` — transport
-  (converse / OpenAI-compatible), error dengan status_code untuk chain.
-- `app/ai_providers/ai_provider_chain.py` — env → callable (SATU pintu).
-- `app/services/supervisor_client.py` + langkah SUPERVISE di orchestrator
-  (whitelist trace + migration `007_supervise_step`).
-- Isolasi test: conftest mengosongkan env model utk unit test; probe live
-  via `pytest -m live` marker (tidak jalan di sesi biasa).
-- Frontend: `ProviderPanel` (status jujur per agent, hijau hanya bila
-  live) + identitas model di AgentTraceViewer; 31 test, tsc/lint/build
-  bersih.
+Evidence live (ronde 3-slot, arsitektur sama — jalur E2E tersertifikasi):
+- Verifier FLAGGED jujur via `primary:bedrock`; forecast
+  `provider_forecast` 7230.0 (bug kontrak output prompt ditemukan & fixed);
+  supervisor SUPERVISE (non-safety-critical); fallback Inferhub live
+  terbukti (kimi timeout → qwen mengambil alih, fallback_used=True).
+

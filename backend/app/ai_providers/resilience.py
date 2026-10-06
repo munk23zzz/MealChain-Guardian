@@ -27,6 +27,7 @@ __all__ = [
     "ProviderResult",
     "ProviderUnavailableError",
     "classify_provider_error",
+    "provider_slot_index",
     "with_fallback_chain",
 ]
 
@@ -72,6 +73,20 @@ def classify_provider_error(exc: BaseException) -> str:
 
 
 _RETRYABLE_CATEGORIES = frozenset({"rate_limited", "timeout", "server"})
+
+# Pemetaan nama pemenang posisional → indeks slot (dipakai client untuk
+# translasi label jujur slot:kind; helper terpusat agar konsisten).
+def provider_slot_index(name: str) -> int:
+    """`primary` → 0, `fallback_N` → N; selain itu → 0 (aman)."""
+    if name == "primary":
+        return 0
+    if name.startswith("fallback_"):
+        try:
+            return int(name.split("_", 1)[1])
+        except ValueError:
+            return 0
+    return 0
+
 
 
 def _attempt_call(
@@ -134,23 +149,34 @@ def with_fallback_chain(
     fallback_1: Callable[[str], str] | None = None,
     fallback_2: Callable[[str], str] | None = None,
     fallback_3: Callable[[str], str] | None = None,
+    fallbacks: list[Callable[[str], str]] | None = None,
     timeout_seconds: float | None = None,
     retry_policy: dict | None = None,
     circuit_breaker: _CircuitBreaker | None = None,
 ) -> ProviderResult:
-    """Jalankan chain fallback terbatas atas callable provider sinkron.
+    """Jalankan chain fallback atas callable provider sinkron.
 
-    retry_policy: {"max_retries": int} — retry tambahan per provider,
-    hanya untuk kategori retryable (rate_limited/timeout/server).
+    `fallbacks` (list) untuk chain panjang — label otomatis
+    fallback_1..N; bila dipakai, kwargs fallback_1..3 diabaikan
+    (kompatibilitas lama tetap hidup tanpa `fallbacks`).
     """
-    chain: list[tuple[str, Callable[[str], str]]] = [("primary", primary)]
-    for label, fn in (
-        ("fallback_1", fallback_1),
-        ("fallback_2", fallback_2),
-        ("fallback_3", fallback_3),
-    ):
-        if fn is not None:
-            chain.append((label, fn))
+    if fallbacks is not None:
+        labeled = [
+            (f"fallback_{index}", fn)
+            for index, fn in enumerate(fallbacks, start=1)
+            if fn is not None
+        ]
+    else:
+        labeled = [
+            (label, fn)
+            for label, fn in (
+                ("fallback_1", fallback_1),
+                ("fallback_2", fallback_2),
+                ("fallback_3", fallback_3),
+            )
+            if fn is not None
+        ]
+    chain: list[tuple[str, Callable[[str], str]]] = [("primary", primary), *labeled]
 
     max_retries = 0
     if retry_policy:

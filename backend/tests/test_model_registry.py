@@ -79,33 +79,28 @@ def test_supervisor_chain_three_models(monkeypatch):
 
 
 def test_supervisor_legacy_fallback_name_backfills_slot1(monkeypatch):
-    # kompatibilitas: SUPERVISOR_MODEL_FALLBACK (tanpa angka) = fallback_1
-    monkeypatch.setenv("SUPERVISOR_MODEL_PRIMARY", "us.anthropic.claude-opus-4-6-v1")
+    # kompatibilitas: SUPERVISOR_MODEL_FALLBACK (tanpa angka) = fallback_1,
+    # dipakai HANYA bila tidak ada slot bernomor (kontrak gap-stop baru)
+    monkeypatch.setenv("SUPERVISOR_MODEL_PRIMARY", "us.anthropic.")
     monkeypatch.setenv("SUPERVISOR_MODEL_FALLBACK", "cb/kimi-k3")
-    monkeypatch.setenv("SUPERVISOR_MODEL_FALLBACK_2", "cbcn/kimi-k3")
     monkeypatch.delenv("SUPERVISOR_MODEL_FALLBACK_1", raising=False)
     chain = get_agent_chain("supervisor")
-    assert [r.model_id for r in chain] == [
-        "us.anthropic.claude-opus-4-6-v1",
-        "cb/kimi-k3",
-        "cbcn/kimi-k3",
-    ]
+    assert [r.model_id for r in chain] == ["us.anthropic.", "cb/kimi-k3"]
 
 
-def test_agentcore_arn_becomes_primary_and_shifts_env_slots(monkeypatch):
-    # AgentCore terkonfigurasi → primary; env bergeser (kontrak plan S3:
-    # AgentCore dulu, fallback env tetap dipertahankan, total tetap 3)
+def test_agentcore_arn_becomes_primary_and_env_chain_kept_full(monkeypatch):
+    # AgentCore terkonfigurasi → primary; slot env TIDAK dipotong (chain panjang)
     monkeypatch.setenv(
         "AGENTCORE_RUNTIME_ARN",
         "arn:aws:bedrock:us-west-2:1:agent-runtime/abc",
     )
-    monkeypatch.setenv("SUPERVISOR_MODEL_PRIMARY", "us.anthropic.claude-opus-4-6-v1")
+    monkeypatch.setenv("SUPERVISOR_MODEL_PRIMARY", "us.anthropic.")
     monkeypatch.setenv("SUPERVISOR_MODEL_FALLBACK_1", "cb/kimi-k3")
     monkeypatch.setenv("SUPERVISOR_MODEL_FALLBACK_2", "cbcn/kimi-k3")
     chain = get_agent_chain("supervisor")
-    assert len(chain) == 3
+    assert len(chain) == 4
     assert chain[0].kind == "agentcore"
-    assert chain[1] == ModelRef(kind="bedrock", model_id="us.anthropic.claude-opus-4-6-v1")
+    assert chain[1] == ModelRef(kind="bedrock", model_id="us.anthropic.")
     assert chain[2].kind == "inferhub"
 
 
