@@ -8,6 +8,8 @@ Di dalam container, modul-modul itu dikoleksi-skip; di host tetap jalan.
 
 from pathlib import Path
 
+import pytest
+
 # Test yang butuh modul host-only (agent/, infra/) atau file root repo
 # (compose, .env.example, .gitignore, struktur) — tidak tersedia di container.
 HOST_ONLY_MODULES = [
@@ -35,3 +37,50 @@ if _host_sources_present:
     collect_ignore = list(DOCKER_ONLY_MODULES)
 else:
     collect_ignore = list(HOST_ONLY_MODULES)
+
+
+# ---------------------------------------------------------------------------
+# Isolasi env model provider untuk unit test (permintaan Roy: model live di
+# .env tidak boleh membuat test unit memanggil jaringan).
+#
+# Kontrak:
+# - default: SEMUA key model/provider dianggap KOSONG selama pytest berjalan
+#   → verifier UNAVAILABLE, forecast statistical fallback, rantai kosong
+# - test yang butuh chain tertentu memakai monkeypatch.setenv eksplisit
+# - test yang MAU memanggil provider nyata ditandai @pytest.mark.live dan
+#   di-skip otomatis (jalankan eksplisit: pytest -m live)
+# ---------------------------------------------------------------------------
+
+MODEL_ENV_KEYS = [
+    "AGENTCORE_RUNTIME_ARN",
+    "AGENTCORE_GATEWAY_URL",
+    "SUPERVISOR_MODEL_PRIMARY",
+    "SUPERVISOR_MODEL_FALLBACK",
+    "SUPERVISOR_MODEL_FALLBACK_1",
+    "SUPERVISOR_MODEL_FALLBACK_2",
+    "VERIFIER_MODEL_PRIMARY",
+    "VERIFIER_MODEL_FALLBACK_1",
+    "VERIFIER_MODEL_FALLBACK_2",
+    "FORECAST_MODEL",
+    "FORECAST_MODEL_FALLBACK_1",
+    "FORECAST_MODEL_FALLBACK_2",
+]
+
+
+@pytest.fixture(autouse=True)
+def _isolate_model_env(monkeypatch, request):
+    if request.node.get_closest_marker("live"):
+        yield  # test live: env asli dipertahankan
+        return
+    for key in MODEL_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+    yield
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip test live di sesi biasa (hanya jalan via `pytest -m live`)."""
+    if config.getoption("-m") and "live" in config.getoption("-m"):
+        return
+    for item in items:
+        if item.get_closest_marker("live"):
+            item.add_marker(pytest.mark.skip(reason="live probe: jalankan dengan -m live"))

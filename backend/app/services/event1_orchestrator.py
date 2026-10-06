@@ -25,6 +25,7 @@ from app.core.config import settings
 from app.db import create_engine, create_session_maker
 from app.models import Commodity, Decision, DemandRecord, Location
 from app.services import recommendation_service as rs
+from app.services.supervisor_client import run_supervisor
 from app.services.trace_persistence import persist_trace_steps
 
 DEFAULT_TTL_MINUTES = 30
@@ -306,6 +307,37 @@ async def _run_event1(
             )
         )
 
+        # SUPERVISE (narasi akhir, bukan safety-critical — tidak mengubah
+        # verdict/rekomendasi/angka apa pun; model mati → jujur dijelaskan,
+        # decision tetap lahir)
+        supervise_out = run_supervisor(
+            {
+                "commodity": commodity,
+                "target_location": target_location,
+                "surplus": detect["surplus"],
+                "shortage": detect["shortage"],
+                "verifier_verdict": verifier_result.verdict,
+                "forecast": predict_out,
+                "chosen": chosen,
+            }
+        )
+        supervisor_payload = {
+            "status": supervise_out.status,
+            "summary": supervise_out.summary,
+            "provider": supervise_out.provider,
+            "fallback_used": supervise_out.fallback_used,
+            "attempts": _attempt_dicts(supervise_out.attempts),
+        }
+        if supervise_out.status == "narrated":
+            traces.append(
+                _TraceStep(
+                    "SUPERVISE",
+                    "supervisor.narration",
+                    {"decision_id": str(decision.id)},
+                    supervisor_payload,
+                )
+            )
+
         for step in traces:
             persist_trace_steps(
                 session,
@@ -340,6 +372,7 @@ async def _run_event1(
         "detect": detect,
         "verifier": verifier_payload,
         "forecast": predict_out,
+        "supervisor": supervisor_payload,
         "recommendations": recommendations,
         "decision_snapshot": {
             "decision_id": str(decision.id),

@@ -12,7 +12,7 @@ from app.services.agent_memory import sanitize_memory_payload
 
 _VALID_STEPS = frozenset(
     {"DETECT", "VERIFY", "TRACE", "PREDICT", "OPTIMIZE", "DECIDE",
-     "ACT", "LEARN"}
+     "SUPERVISE", "ACT", "LEARN"}
 )
 
 

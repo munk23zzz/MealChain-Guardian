@@ -112,11 +112,13 @@ def run_verifier(
     sap_fallback: Callable[[str], str] | None = None,
     bedrock: Callable[[str], str] | None = None,
     timeout_seconds: float | None = 30.0,
+    default_chain: list | None = None,
 ) -> VerifierResult:
     """Jalankan audit verifier lewat chain fallback S3-05.
 
-    Semua callable opsional; tanpa ada yang terpasang → UNAVAILABLE
-    tanpa attempt apa pun (jujur, tanpa global state tersembunyi).
+    `default_chain` dari `build_default_callers("verifier")` bila pemanggil
+    tidak menyuntik provider eksplisit (sap_primary/sap_fallback/bedrock) —
+    kontrak label baru `primary:bedrock` dst. Tanpa env → UNAVAILABLE.
     """
     system_prompt = load_verifier_system_prompt()
     prompt = f"{system_prompt}\n\n### CONTEXT\n{_build_user_prompt(ctx)}"
@@ -133,6 +135,16 @@ def run_verifier(
         chain.append(bedrock)
         labels.append("fallback_2")
 
+    if not chain and default_chain is not None:
+        for slot_label, fn, _kind in default_chain:
+            chain.append(fn)
+            labels.append(slot_label)
+
+    if not chain:
+        env_chain = _default_env_chain()
+        labels = [label for label, _fn, _kind in env_chain]
+        chain = [fn for _label, fn, _kind in env_chain]
+
     if not chain:
         return VerifierResult(verdict="UNAVAILABLE", attempts=[])
 
@@ -144,11 +156,18 @@ def run_verifier(
         timeout_seconds=timeout_seconds,
     )
 
+    # Nama pemenang dari chain bersifat posisional (primary/fallback_N);
+    # translasi ke label jujur memakai list `labels` (urutan penyusunan).
+    slot_to_index = {"primary": 0, "fallback_1": 1, "fallback_2": 2}
+    winner_index = slot_to_index.get(result.provider, 0)
+    winner_label = (
+        labels[winner_index] if winner_index < len(labels) else result.provider
+    )
     provider_label = {
         "primary": "sap_ai_core_primary",
         "fallback_1": "sap_ai_core_fallback",
         "fallback_2": "bedrock_final",
-    }.get(result.provider, result.provider)
+    }.get(winner_label, winner_label)
 
     extracted = _extract_verdict(result.text)
     if extracted is None:
@@ -175,6 +194,13 @@ def run_verifier(
         fallback_used=result.fallback_used,
         attempts=result.attempts,
     )
+
+
+def _default_env_chain() -> list[tuple[str, Callable, str]]:
+    """Chain default verifier dari env (lazy import hindari siklus modul)."""
+    from app.ai_providers.ai_provider_chain import build_default_callers
+
+    return build_default_callers("verifier")
 
 
 def _default_sap_ai_core_callers() -> tuple[Callable | None, Callable | None]:

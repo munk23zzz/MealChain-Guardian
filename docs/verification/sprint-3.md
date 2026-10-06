@@ -111,3 +111,49 @@ final **402 passed** backend; frontend 25 test.)
   menunggu putusan Roy).
 - pytest-asyncio deprecation warning (pre-existing, non-blocking).
 - Frontend tsconfig.tsbuildinfo artifact build (untracked, non-blocking).
+
+## Model chain live per agent (permintaan Roy, 2026-10-06 — pasca gate S3-16)
+
+Setiap agent (supervisor/verifier/forecast) kini punya rantai TEPAT 3 model:
+primary + fallback_1 + fallback_2 — satu model mati, dua backup siap.
+Backend = sumber konfigurasi (env); frontend menampilkan identitas
+model/provider dari trace DB (display-only, `ProviderPanel`).
+
+| Agent | primary | fallback_1 | fallback_2 |
+|---|---|---|---|
+| Verifier | Bedrock `us.anthropic.…` (LIVE probe 2.2s) | Inferhub `cb/kimi-k3` (LIVE, max_tokens 4000) | Inferhub `ali/qwen3.8-max-0902` (LIVE 2.5s) |
+| Forecast | Bedrock `qwen.qwen3-vl-235b-a22b` (LIVE 0.6s) | Inferhub `cbcn/kimi-k3` (LIVE) | Inferhub `cb/kimi-k3` (LIVE) |
+| Supervisor | Bedrock `us.anthropic.…` (LIVE) | Inferhub `cb/kimi-k3` (LIVE) | Inferhub `ali/qwen3.8-max-0902` (LIVE) |
+
+Catatan konfigurasi:
+- `global.moonshotai.kimi-k3` (Bedrock) dan `us.anthropic.…`#2/#3 INVALID
+  saat probe (ValidationException/AccessDenied) → diganti kandidat Inferhub.
+- ARN AgentCore terisi → jadi primary agent dan menggeser slot env
+  (total tetap 3); implementasi runtime AgentCore = stub eksplisit
+  NotImplementedError (honest-unavailable).
+
+Evidence live (dalam container, chain env asli):
+- Verifier: verdict FLAGGED, `primary:bedrock`, fallback_used=False,
+  attempts=[{primary, succeeded}] — jujur terhadap seed (bukan CONSISTENT
+  karangan).
+- Forecast: method `provider_forecast`, qty 7230.0, `primary:bedrock`
+  (bug bentuk jawaban ditemukan & fixed: prompt kini memuat kontrak output
+  JSON; parser menerima array harian → mean×horizon deterministik).
+- Supervisor: SUPERVISE narrated, `primary:bedrock` — narasi terakhir,
+  TIDAK safety-critical (tidak mengubah verdict/rekomendasi/angka).
+- Fallback Inferhub live: chain tanpa Bedrock → kimi timeout →
+  `fallback_2:inferhub` (qwen) sukses, fallback_used=True, attempts jujur.
+
+Arsitektur tambahan (TDD penuh, 435 passed total):
+- `app/ai_providers/model_registry.py` — parsing env per agent
+  (bedrock/inferhub/agentcore), legacy `SUPERVISOR_MODEL_FALLBACK` backfill.
+- `app/ai_providers/bedrock_caller.py` / `inferhub_caller.py` — transport
+  (converse / OpenAI-compatible), error dengan status_code untuk chain.
+- `app/ai_providers/ai_provider_chain.py` — env → callable (SATU pintu).
+- `app/services/supervisor_client.py` + langkah SUPERVISE di orchestrator
+  (whitelist trace + migration `007_supervise_step`).
+- Isolasi test: conftest mengosongkan env model utk unit test; probe live
+  via `pytest -m live` marker (tidak jalan di sesi biasa).
+- Frontend: `ProviderPanel` (status jujur per agent, hijau hanya bila
+  live) + identitas model di AgentTraceViewer; 31 test, tsc/lint/build
+  bersih.

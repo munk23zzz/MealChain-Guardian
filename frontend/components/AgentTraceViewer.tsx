@@ -16,6 +16,12 @@ export default function AgentTraceViewer({ steps }: { steps: any[] }) {
         <li key={i} className={`trace-step step-${s.step_name}`}>
           <div className="trace-step-name">{s.step_name}</div>
           <div className="trace-tool">{s.tool_called ?? "-"}</div>
+          {s.step_name === "SUPERVISE" &&
+            s.output_summary?.provider && (
+              <div className="trace-model">
+                Model: {s.output_summary.provider}
+              </div>
+            )}
           <time>{new Date(s.step_at).toISOString().slice(11, 19)} UTC</time>
           <pre className="trace-output">
             {JSON.stringify(s.output_summary ?? {})}

@@ -148,3 +148,42 @@ body {
   background: var(--navy-900);
   color: #fff;
 }
+
+/* ProviderPanel — status model agent (jujur: hijau hanya bila live) */
+.provider-panel {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 8px;
+}
+.provider-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.provider-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 0.92em;
+}
+.provider-agent {
+  font-weight: 600;
+  min-width: 90px;
+}
+.provider-value {
+  font-family: var(--font-mono, monospace);
+}
+.provider-live .provider-value { color: var(--status-safe, #1a7f37); }
+.provider-fallback .provider-value { color: #8a6d00; }
+.provider-unavailable .provider-value { color: var(--muted-foreground, #666); }
+.provider-attempts {
+  color: var(--muted-foreground, #666);
+  font-size: 0.85em;
+}
+.trace-model {
+  font-size: 0.88em;
+  color: var(--navy-700, #345);
+}

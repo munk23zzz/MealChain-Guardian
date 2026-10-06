@@ -10,3 +10,6 @@ select = ["E", "F", "I", "N", "W"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "live: test/probe yang memanggil model provider NYATA (Bedrock/Inferhub) — jalankan eksplisit: pytest -m live",
+]

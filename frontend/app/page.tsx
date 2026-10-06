@@ -11,6 +11,42 @@ import StatusBadge from "../components/StatusBadge";
 import RecommendationCard from "../components/RecommendationCard";
 import AgentTraceViewer from "../components/AgentTraceViewer";
 import DecisionActions from "../components/DecisionActions";
+import ProviderPanel from "../components/ProviderPanel";
+
+// Panel provider dihitung dari trace aktual (VERIFY/PREDICT/SUPERVISE);
+// tanpa karangan — agen tanpa langkah model tampil UNAVAILABLE.
+function providersFromTraces(steps: any[]): Record<string, any> {
+  const out: Record<string, any> = {};
+  for (const s of steps ?? []) {
+    const outSum = s.output_summary ?? {};
+    if (s.step_name === "VERIFY") {
+      out.verifier = {
+        status: outSum.verdict === "UNAVAILABLE" ? "unavailable" : "ok",
+        provider: outSum.provider ?? null,
+        fallback_used: outSum.fallback_used ?? false,
+        attempts: (outSum.attempts ?? []).length,
+      };
+    }
+    if (s.step_name === "PREDICT") {
+      const stat = outSum.method === "statistical_fallback";
+      out.forecast = {
+        status: stat ? "fallback" : outSum.provider ? "ok" : "unavailable",
+        provider: outSum.provider ?? null,
+        fallback_used: outSum.fallback_used ?? stat,
+        attempts: (outSum.attempts ?? []).length,
+      };
+    }
+    if (s.step_name === "SUPERVISE") {
+      out.supervisor = {
+        status: outSum.status === "narrated" ? "ok" : outSum.status,
+        provider: outSum.provider ?? null,
+        fallback_used: outSum.fallback_used ?? false,
+        attempts: (outSum.attempts ?? []).length,
+      };
+    }
+  }
+  return out;
+}
 
 type Decision = {
   decision_id: string;
@@ -180,6 +216,7 @@ export default function Home() {
             token={token}
           />
           <h3>Agent Activity Log</h3>
+          <ProviderPanel providers={providersFromTraces(traces)} />
           <AgentTraceViewer steps={traces} />
         </section>
       )}

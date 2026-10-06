@@ -1,0 +1,140 @@
+"""SUPERVISE step — narasi supervisor dari chain model env (permintaan Roy).
+
+Kontrak:
+- supervisor naratif = langkah TERAKHIR, SETELAH verifier (angka
+  safety-critical sudah terkunci; narasi tidak pernah mengubah verdict,
+  rekomendasi, cost, atau angka apa pun)
+- label provider jujur (`primary:bedrock`, `fallback_1:inferhub`, ...),
+  fallback_used sesuai attempt aktual
+- model gagal/EOF/kosong env → status dijelaskan apa adanya
+  (`unavailable`/`error`), decision tetap lahir — supervisor tidak kritikal
+- verifier TIDAK tersentuh narasi (attempts verifier milik verifier)
+"""
+
+import pytest
+from sqlalchemy import create_engine, text
+
+from app.ai_providers import ai_provider_chain as chain_mod
+
+DB_URL = (
+    "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+).replace("+asyncpg", "+psycopg")
+
+
+def _cleanup(decision_id: str | None) -> None:
+    if decision_id is None:
+        return
+    engine = create_engine(DB_URL)
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM agent_traces WHERE decision_id = :d"),
+                {"d": decision_id},
+            )
+            conn.execute(
+                text("DELETE FROM decisions WHERE id = :d"), {"d": decision_id}
+            )
+    finally:
+        engine.dispose()
+
+
+def _stub_chain(*responses):
+    """Chain stub: callable → teks, atau Exception untuk slot mati."""
+    callables = []
+    for resp in responses:
+        if isinstance(resp, Exception):
+            def dead(prompt: str, _e=resp):
+                raise _e
+
+            callables.append(dead)
+        else:
+            def ok(prompt: str, _t=resp):
+                return _t
+
+            callables.append(ok)
+    kinds = ["bedrock", "inferhub", "inferhub"][: len(callables)]
+    labels = ["primary", "fallback_1", "fallback_2"][: len(callables)]
+    return [
+        (f"{label}:{kind}", fn, kind)
+        for label, kind, fn in zip(labels, kinds, callables)
+    ]
+
+
+NARRATION_OK = (
+    '{"ringkasan": "Distribusi telur Bogor ke Jakarta layak dieksekusi '
+    'setelah approval ganda.", "confidence": 0.8}'
+)
+
+
+@pytest.fixture()
+def client():
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with TestClient(app) as c:
+        yield c
+
+
+def test_supervise_step_narrates_with_honest_labels(client, monkeypatch):
+    from app.services.event1_orchestrator import run_event1
+
+    monkeypatch.setattr(
+        chain_mod,
+        "build_default_callers",
+        lambda agent: _stub_chain(NARRATION_OK)
+        if agent == "supervisor"
+        else [],
+    )
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+    try:
+        sup = outcome["supervisor"]
+        assert sup["status"] == "narrated"
+        assert sup["provider"] == "primary:bedrock"
+        assert sup["fallback_used"] is False
+        assert "Bogor" in sup["summary"] or "Jakarta" in sup["summary"]
+        # SUPERVISE = langkah terakhir
+        assert outcome["trace_steps"][-1] == "SUPERVISE"
+        # verifier tidak tersentuh narasi
+        assert outcome["verifier"]["attempts"] == []
+    finally:
+        _cleanup(outcome.get("decision_id"))
+
+
+def test_supervise_falls_back_to_second_model(client, monkeypatch):
+    from app.services.event1_orchestrator import run_event1
+
+    monkeypatch.setattr(
+        chain_mod,
+        "build_default_callers",
+        lambda agent: _stub_chain(RuntimeError("primary mati"), NARRATION_OK)
+        if agent == "supervisor"
+        else [],
+    )
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+    try:
+        sup = outcome["supervisor"]
+        assert sup["status"] == "narrated"
+        assert sup["provider"] == "fallback_1:inferhub"
+        assert sup["fallback_used"] is True
+        assert len(sup["attempts"]) == 2
+    finally:
+        _cleanup(outcome.get("decision_id"))
+
+
+def test_supervise_unavailable_recorded_honestly(client):
+    """Tanpa model: SUPERVISE jujur unavailable; decision tetap lahir."""
+    from app.services.event1_orchestrator import run_event1
+
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+    try:
+        sup = outcome["supervisor"]
+        assert sup["status"] == "unavailable"
+        assert sup["attempts"] == []
+        assert "SUPERVISE" not in outcome["trace_steps"]
+        assert outcome["decision_snapshot"]["status"] in {
+            "proposed",
+            "pending_approval",
+        }
+    finally:
+        _cleanup(outcome.get("decision_id"))
