@@ -31,6 +31,11 @@ class ProposeRequest(BaseModel):
     material_number: str = Field(min_length=1, max_length=64)
 
 
+class VerifyRequest(BaseModel):
+    decision_id: uuid.UUID
+    verdict: str  # CONSISTENT | FLAGGED | UNAVAILABLE
+
+
 class ApproveRequest(BaseModel):
     decision_id: uuid.UUID
     approved: bool
@@ -103,19 +108,32 @@ async def propose_action(
 
 @router.post("/actions/verify", status_code=200)
 async def verify_action(
-    payload: ProposeRequest,
+    payload: VerifyRequest,
     user: User = Depends(require_roles(*VERIFIER_ROLES)),
     db: AsyncSession = Depends(get_db),
 ):
-    """Catat hasil verifier (dipanggil oleh supervisor pipeline, bukan LLM)."""
+    """Catat verdict verifier (dipanggil supervisor pipeline, bukan LLM).
+
+    Verdict WAJIB tertulis ke decisions.verifier_note — nilai inilah
+    yang dibaca approval matrix saat approve/execute. Verdict tidak
+    dikenal ditolak 422 SEBELUM mutasi apa pun.
+    """
     decision = await _load_decision(db, payload.decision_id)
+    verdict = payload.verdict.strip().lower()
+    if verdict not in {"consistent", "flagged", "unavailable"}:
+        raise HTTPException(
+            status_code=422,
+            detail="verdict verifier tidak dikenal (CONSISTENT|FLAGGED|UNAVAILABLE)",
+        )
     decision.verified_by = "verifier_agent"
-    # verdict dikirim via material_number? TIDAK — verdict dari verifier_note saja.
+    decision.verifier_note = verdict
+    if verdict == "flagged":
+        decision.status = "verifier_flagged"
     await db.commit()
     req = _requirement_for(decision)
     return {
         "decision_id": str(decision.id),
-        "verdict": payload.material_number,
+        "verdict": payload.verdict.strip().upper(),
         "approval_requirement": req,
     }
 
