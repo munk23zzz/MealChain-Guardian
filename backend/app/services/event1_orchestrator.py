@@ -203,6 +203,11 @@ async def _run_event1(
             decision_type="regional_balance",
             status="proposed",
             proposed_by="supervisor_agent",
+            # Verdict verifier yang baru saja berjalan TERTULIS saat
+            # pembuatan (semantik identik /actions/verify) — tanpa ini
+            # decision hasil Event 1 dianggap belum terverifikasi selamanya.
+            verified_by="verifier_agent",
+            verifier_note=verifier_result.verdict.lower(),
             source_location_id=await _loc_id(
                 chosen["candidate"]["source_location"]
             ),

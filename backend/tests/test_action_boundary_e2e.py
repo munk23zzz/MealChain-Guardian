@@ -114,8 +114,9 @@ def test_actions_verify_rejects_unknown_verdict(client):
             headers=_login(client, head),
         )
         assert resp.status_code == 422
-        # verifier_note tetap kosong
-        assert _verifier_note(decision_id) is None
+        # verifier_note tidak berubah oleh verify yang ditolak — decision
+        # lahir dengan verdict verifier pipeline ('unavailable' tanpa provider)
+        assert _verifier_note(decision_id) == "unavailable"
     finally:
         _cleanup(decision_id, [head["email"]])
 
