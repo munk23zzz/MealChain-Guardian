@@ -65,6 +65,19 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 | S3-10 | Frontend: Agent Activity Log (trace timeline) | Dashboard | Not Started | | |
 | S3-11 | Approval flow — approve → execute → SAP mock PO | Backend/Dashboard | Not Started | | |
 
+### Catatan status eksekusi Sprint 3 (agent layer — sinkronisasi tabel penuh di S3-16)
+
+> Penomoran TODO.md berbeda dari plan `.hermes/plans/2026-10-06-sprint3-agent-layer.md`
+> (TODO.md = pandangan fitur; plan = slice eksekusi). Status per 2026-10-06 mengikuti plan:
+>
+> - **S3-00** Preflight: DONE — AWS LIVE via inference profile (STS+Bedrock ok), CRLF `.env` quirk, compose env wiring diperbaiki.
+> - **S3-01** (plan) Auth JWT/RBAC + approval matrix + actions lifecycle + demo users: DONE — commit `77d3fdc`, 323 passed.
+> - **S3-02** (plan) `/cost/safe-delivered`, `/balance/analyze`, `/evidence/fuse` + tool registry + gateway config: DONE — commit `93ca711`, fix `e47e11e`, 332 passed. `backend/openapi.json` ter-generate (22 paths).
+> - **S3-05** (plan) Shared resilience `with_fallback_chain` (primary→fallback 1-3, 429 retryable, timeout, circuit breaker opsional): DONE — commit `a512e5a`, 340 passed.
+> - **S3-06** (plan) Verifier REST client (SAP primary→SAP fallback→Bedrock final via S3-05, guard safety FAIL, UNAVAILABLE→dual approval): DONE — commit `689cf26`, 352 passed. Catatan: system prompt di `app/ai_providers/prompts/` (bukan `agent/prompts/`) karena `agent/` di luar bind-mount container.
+> - **S3-07** (plan) Forecast provider (SAP-RPT-1.6→statistical_fallback 0.5/0.3/0.2 dari core, tanpa fabricate label SAP): DONE — commit `21ee4af`, 358 passed.
+> - Berikutnya: S3-03+04 (Supervisor Strands/Bedrock + Event 1 orchestration), S3-08/09 (Memory/Observability), S3-11 (approval E2E), S3-12 (frontend), S3-13/14 (E2E live), S3-15/16 (review + final gate).
+
 ## Sprint 4 — Event 2 & 3, KPI, polish, rehearsal
 
 | ID | Task | Kategori | Status | Assignee | Catatan |
