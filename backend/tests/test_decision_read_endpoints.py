@@ -42,6 +42,14 @@ def _mk_decision() -> str:
         return resp.json()["decision_id"]
 
 
+def _authed_headers(client) -> dict:
+    """Login sppg_head (role pembaca feed) — untuk test baca terautentikasi."""
+    from tests.test_actions import _login, _mk_user
+
+    user = _mk_user("sppg_head", "Jakarta")
+    return _login(client, user)
+
+
 def _cleanup(decision_id: str) -> None:
     engine = create_engine(DB_URL)
     try:
@@ -61,7 +69,7 @@ def test_get_decisions_lists_actual_rows_newest_first(client):
     first = _mk_decision()
     second = _mk_decision()
     try:
-        resp = client.get("/decisions")
+        resp = client.get("/decisions", headers=_authed_headers(client))
         assert resp.status_code == 200, resp.text
         items = resp.json()["items"]
         ids = [d["decision_id"] for d in items]
@@ -88,7 +96,9 @@ def test_get_decision_traces_returns_ordered_actual_steps(client):
     outcome = run_event1(commodity="telur", target_location="Jakarta")
     decision_id = outcome["decision_id"]
     try:
-        resp = client.get(f"/decisions/{decision_id}/traces")
+        resp = client.get(
+            f"/decisions/{decision_id}/traces", headers=_authed_headers(client)
+        )
         assert resp.status_code == 200, resp.text
         steps = resp.json()["steps"]
         names = [s["step_name"] for s in steps]
@@ -106,5 +116,24 @@ def test_get_decision_traces_returns_ordered_actual_steps(client):
 
 
 def test_get_decision_traces_404_unknown(client):
-    resp = client.get(f"/decisions/{uuid.uuid4()}/traces")
+    """Unknown id → 404 (auth dicek lebih dulu oleh dependency; keduanya valid,
+    urutan FastAPI menempatkan auth sebelum handler)."""
+    resp = client.get(
+        f"/decisions/{uuid.uuid4()}/traces", headers=_authed_headers(client)
+    )
     assert resp.status_code == 404
+
+
+def test_decision_read_endpoints_require_auth(client):
+    """S3-15: endpoint baca S3-12 diproteksi — unauth = 401."""
+    resp = client.get("/decisions")
+    assert resp.status_code == 401
+    resp = client.get(f"/decisions/{uuid.uuid4()}/traces")
+    assert resp.status_code == 401
+
+
+def _mk_auth_headers(client) -> dict:
+    from tests.test_actions import _login, _mk_user
+
+    user = _mk_user("sppg_head", "Jakarta")
+    return _login(client, user), user

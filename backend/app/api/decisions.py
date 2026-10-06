@@ -14,8 +14,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth import get_current_user
 from app.api.dependencies import get_db
-from app.models import Commodity, Decision, Location
+from app.models import Commodity, Decision, Location, User
 
 router = APIRouter()
 
@@ -114,6 +115,7 @@ async def create_decision(
 @router.get("/decisions")
 async def list_decisions(
     db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
 ):
     """Feed keputusan (S3-12): baris aktual, terbaru dulu, tanpa karangan."""
     rows = (
@@ -155,6 +157,7 @@ async def list_decisions(
 async def get_decision_traces(
     decision_id: UUID,
     db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
 ):
     """Timeline AgentTrace aktual (S3-12): urutan langkah asli dari DB."""
     decision = (

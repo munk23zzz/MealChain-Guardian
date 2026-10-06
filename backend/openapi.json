@@ -542,6 +542,26 @@
       }
     },
     "/decisions": {
+      "get": {
+        "summary": "List Decisions",
+        "description": "Feed keputusan (S3-12): baris aktual, terbaru dulu, tanpa karangan.",
+        "operationId": "list_decisions_decisions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
       "post": {
         "summary": "Create Decision",
         "operationId": "create_decision_decisions_post",
@@ -557,6 +577,50 @@
         },
         "responses": {
           "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/decisions/{decision_id}/traces": {
+      "get": {
+        "summary": "Get Decision Traces",
+        "description": "Timeline AgentTrace aktual (S3-12): urutan langkah asli dari DB.",
+        "operationId": "get_decision_traces_decisions__decision_id__traces_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Decision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -716,13 +780,13 @@
     "/actions/verify": {
       "post": {
         "summary": "Verify Action",
-        "description": "Catat hasil verifier (dipanggil oleh supervisor pipeline, bukan LLM).",
+        "description": "Catat verdict verifier (dipanggil supervisor pipeline, bukan LLM).\n\nVerdict WAJIB tertulis ke decisions.verifier_note — nilai inilah\nyang dibaca approval matrix saat approve/execute. Verdict tidak\ndikenal ditolak 422 SEBELUM mutasi apa pun.",
         "operationId": "verify_action_actions_verify_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ProposeRequest"
+                "$ref": "#/components/schemas/VerifyRequest"
               }
             }
           },
@@ -1246,6 +1310,25 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VerifyRequest": {
+        "properties": {
+          "decision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Decision Id"
+          },
+          "verdict": {
+            "type": "string",
+            "title": "Verdict"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision_id",
+          "verdict"
+        ],
+        "title": "VerifyRequest"
       }
     },
     "securitySchemes": {
