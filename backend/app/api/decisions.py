@@ -111,6 +111,79 @@ async def create_decision(
     }
 
 
+@router.get("/decisions")
+async def list_decisions(
+    db: AsyncSession = Depends(get_db),
+):
+    """Feed keputusan (S3-12): baris aktual, terbaru dulu, tanpa karangan."""
+    rows = (
+        await db.execute(
+            select(Decision).order_by(
+                Decision.created_at.desc(), Decision.id.desc()
+            )
+        )
+    ).scalars().all()
+    items = []
+    for row in rows:
+        validity = _validity(row.expires_at)
+        items.append(
+            {
+                "decision_id": str(row.id),
+                "decision_type": row.decision_type,
+                "status": row.status,
+                "proposed_by": row.proposed_by,
+                "quantity_kg": (
+                    float(row.quantity_kg)
+                    if row.quantity_kg is not None
+                    else None
+                ),
+                "safe_delivered_cost": (
+                    float(row.safe_delivered_cost)
+                    if row.safe_delivered_cost is not None
+                    else None
+                ),
+                "expires_at": row.expires_at.isoformat(),
+                "created_at": row.created_at.isoformat(),
+                "valid": validity["valid"],
+                "seconds_remaining": validity["seconds_remaining"],
+            }
+        )
+    return {"items": items}
+
+
+@router.get("/decisions/{decision_id}/traces")
+async def get_decision_traces(
+    decision_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Timeline AgentTrace aktual (S3-12): urutan langkah asli dari DB."""
+    decision = (
+        await db.execute(select(Decision).where(Decision.id == decision_id))
+    ).scalar_one_or_none()
+    if decision is None:
+        raise HTTPException(status_code=404, detail="decision tidak ditemukan")
+    from app.models import AgentTrace
+
+    rows = (
+        await db.execute(
+            select(AgentTrace)
+            .where(AgentTrace.decision_id == decision_id)
+            .order_by(AgentTrace.step_at.asc(), AgentTrace.id.asc())
+        )
+    ).scalars().all()
+    steps = [
+        {
+            "step_name": row.step_name,
+            "tool_called": row.tool_called,
+            "input_summary": row.input_summary,
+            "output_summary": row.output_summary,
+            "step_at": row.step_at.isoformat(),
+        }
+        for row in rows
+    ]
+    return {"decision_id": str(decision_id), "steps": steps}
+
+
 @router.get("/decisions/{decision_id}")
 async def get_decision(
     decision_id: UUID,
