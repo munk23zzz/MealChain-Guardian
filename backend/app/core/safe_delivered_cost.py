@@ -117,12 +117,12 @@ def calculate_safe_delivered_cost(
     freshness_risk = (
         purchase * _FRESHNESS_RISK_FACTOR
         if inputs.freshness_score < _FRESHNESS_RISK_THRESHOLD
-        else Decimal("0")
+        else Decimal("0.00")
     )
     safety_risk = (
         purchase * _SAFETY_RISK_RATE
         if inputs.safety_status == "needs_verification"
-        else Decimal("0")
+        else Decimal("0.00")
     )
     total = (
         purchase
