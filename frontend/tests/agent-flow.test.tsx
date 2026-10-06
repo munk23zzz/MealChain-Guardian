@@ -1,0 +1,241 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+
+import {
+  login,
+  fetchDecisions,
+  fetchDecisionTraces,
+  approveAction,
+  executeAction,
+} from "../lib/api";
+import { decodeRole, formatIDR } from "../lib/auth";
+import StatusBadge from "../components/StatusBadge";
+import RecommendationCard from "../components/RecommendationCard";
+import AgentTraceViewer from "../components/AgentTraceViewer";
+import ApprovalModal from "../components/ApprovalModal";
+import DecisionActions from "../components/DecisionActions";
+
+beforeEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("api client (kontrak backend aktual)", () => {
+  it("login POST /auth/login dan mengembalikan token", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ access_token: "jwt-abc" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await login("sppg.head@demo.local", "pw");
+    expect(result.access_token).toBe("jwt-abc");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("/auth/login");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({
+      email: "sppg.head@demo.local",
+      password: "pw",
+    });
+  });
+
+  it("fetchDecisions GET /decisions dengan Bearer token", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ items: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchDecisions("jwt-abc");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("/decisions");
+    expect(init.headers.Authorization).toBe("Bearer jwt-abc");
+  });
+
+  it("fetchDecisionTraces GET /decisions/{id}/traces", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ decision_id: "d1", steps: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchDecisionTraces("d1", "jwt-abc");
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      "/decisions/d1/traces"
+    );
+  });
+
+  it("approve/execute POST dengan body dan Bearer", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({}),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await approveAction("d1", true, "jwt-abc");
+    const [approveUrl, approveInit] = fetchMock.mock.calls[0];
+    expect(String(approveUrl)).toContain("/actions/approve");
+    expect(JSON.parse(approveInit.body)).toEqual({
+      decision_id: "d1",
+      approved: true,
+    });
+    expect(approveInit.headers.Authorization).toBe("Bearer jwt-abc");
+
+    await executeAction("d1", "jwt-abc");
+    const [execUrl] = fetchMock.mock.calls[1];
+    expect(String(execUrl)).toContain("/actions/execute");
+  });
+
+  it("HTTP error dilempar dengan status, bukan diam", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ detail: "unauthorized" }),
+      })
+    );
+    await expect(login("x", "y")).rejects.toThrow("401");
+  });
+});
+
+describe("auth helper", () => {
+  it("decodeRole membaca payload JWT (display-only)", () => {
+    const payload = Buffer.from(
+      JSON.stringify({ role: "bgn_monitor" })
+    ).toString("base64url");
+    const token = `h.${payload}.s`;
+    expect(decodeRole(token)).toBe("bgn_monitor");
+  });
+
+  it("token rusak → null (bukan crash)", () => {
+    expect(decodeRole("bukan-jwt")).toBeNull();
+  });
+});
+
+describe("formatIDR", () => {
+  it("menampilkan rupiah gaya Indonesia", () => {
+    expect(formatIDR("16206000.00")).toBe("Rp16.206.000");
+  });
+});
+
+describe("StatusBadge (status tidak boleh ambigu)", () => {
+  it("FAIL merah + label eksplisit", () => {
+    const html = renderToStaticMarkup(<StatusBadge status="FAIL" />);
+    expect(html).toContain("FAIL");
+    expect(html).toContain("status-danger");
+  });
+  it("PASS hijau", () => {
+    const html = renderToStaticMarkup(<StatusBadge status="PASS" />);
+    expect(html).toContain("PASS");
+    expect(html).toContain("status-safe");
+  });
+});
+
+describe("RecommendationCard", () => {
+  const decision = {
+    decision_id: "d1",
+    status: "pending_approval",
+    quantity_kg: 600,
+    safe_delivered_cost: 16206000,
+    expires_at: "2026-10-06T13:00:00+00:00",
+    valid: true,
+  };
+
+  it("menampilkan judul, SDC, status, expiry, dan badge mock", () => {
+    const html = renderToStaticMarkup(
+      <RecommendationCard decision={decision} mockSourced />
+    );
+    expect(html).toContain("Rp16.206.000");
+    expect(html).toContain("PENDING APPROVAL");
+    expect(html).toContain("Data Simulasi");
+    expect(html).toContain("600");
+  });
+
+  it("mock badge hanya bila bersumber mock", () => {
+    const html = renderToStaticMarkup(
+      <RecommendationCard decision={decision} mockSourced={false} />
+    );
+    expect(html).not.toContain("Data Simulasi");
+  });
+});
+
+describe("AgentTraceViewer (activity log aktual)", () => {
+  const steps = [
+    {
+      step_name: "DETECT",
+      tool_called: "supply.get+demand.get",
+      input_summary: { commodity: "telur" },
+      output_summary: { shortage: { location: "Jakarta" } },
+      step_at: "2026-10-06T12:00:00+00:00",
+    },
+    {
+      step_name: "VERIFY",
+      tool_called: "verifier.rest",
+      input_summary: {},
+      output_summary: { verdict: "UNAVAILABLE" },
+      step_at: "2026-10-06T12:00:01+00:00",
+    },
+  ];
+
+  it("render langkah terurut + tool + timestamp", () => {
+    const html = renderToStaticMarkup(<AgentTraceViewer steps={steps} />);
+    expect(html.indexOf("DETECT")).toBeLessThan(html.indexOf("VERIFY"));
+    expect(html).toContain("supply.get+demand.get");
+    expect(html).toContain("verifier.rest");
+    expect(html).toContain("12:00:01");
+  });
+
+  it("kosong → empty state jelas, bukan blank", () => {
+    const html = renderToStaticMarkup(<AgentTraceViewer steps={[]} />);
+    expect(html).toContain("Belum ada langkah agent");
+  });
+});
+
+describe("ApprovalModal (friksi disengaja)", () => {
+  it("menampilkan ringkasan sebelum tombol approve", () => {
+    const html = renderToStaticMarkup(
+      <ApprovalModal
+        summary={{
+          quantity_kg: 600,
+          safe_delivered_cost: 16206000,
+          verdict: "CONSISTENT",
+        }}
+      />
+    );
+    expect(html).toContain("600");
+    expect(html).toContain("Rp16.206.000");
+    expect(html).toContain("CONSISTENT");
+    expect(html).toContain("Konfirmasi Approval");
+  });
+
+  it("tanpa approve-all massal", () => {
+    const html = renderToStaticMarkup(
+      <ApprovalModal summary={null} />
+    );
+    expect(html.toLowerCase()).not.toContain("approve all");
+  });
+});
+
+describe("DecisionActions (role scope)", () => {
+  it("approver melihat tombol approve/reject/execute", () => {
+    const html = renderToStaticMarkup(
+      <DecisionActions decisionId="d1" role="sppg_head" status="pending_approval" token="t" />
+    );
+    expect(html).toContain("Approve");
+    expect(html).toContain("Reject");
+    expect(html).toContain("Execute");
+  });
+
+  it("bgn_monitor read-only: tidak ada tombol approve/execute", () => {
+    const html = renderToStaticMarkup(
+      <DecisionActions decisionId="d1" role="bgn_monitor" status="pending_approval" token="t" />
+    );
+    expect(html).not.toContain("Approve");
+    expect(html).not.toContain("Execute");
+    expect(html).toContain("read-only");
+  });
+});

@@ -4,7 +4,7 @@ import Page from "../app/page";
 
 describe("frontend smoke", () => {
   it("page shell menyapa dengan judul MealChain Guardian", () => {
-    const html = renderToStaticMarkup(Page());
+    const html = renderToStaticMarkup(<Page />);
     expect(html).toContain("MealChain Guardian");
   });
 });
