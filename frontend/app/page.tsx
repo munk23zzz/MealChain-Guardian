@@ -5,12 +5,15 @@ import {
   login,
   fetchDecisions,
   fetchDecisionTraces,
+  fetchDecisionChain,
+  seedDemo,
 } from "../lib/api";
 import { decodeRole } from "../lib/auth";
 import StatusBadge from "../components/StatusBadge";
 import RecommendationCard from "../components/RecommendationCard";
 import AgentTraceViewer from "../components/AgentTraceViewer";
 import DecisionActions from "../components/DecisionActions";
+import DecisionChain from "../components/DecisionChain";
 import ProviderPanel from "../components/ProviderPanel";
 
 // Panel provider dihitung dari trace aktual (VERIFY/PREDICT/SUPERVISE);
@@ -68,6 +71,7 @@ export default function Home() {
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [traces, setTraces] = useState<any[]>([]);
+  const [chain, setChain] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const loadDecisions = useCallback(async (t: string) => {
@@ -98,6 +102,12 @@ export default function Home() {
       } catch {
         /* feed tetap jalan; error trace tidak fatal */
       }
+      try {
+        const data = await fetchDecisionChain(selectedId, token);
+        if (!stopped) setChain(data.chain ?? []);
+      } catch {
+        /* chain opsional; kegagalan tidak fatal */
+      }
     };
     load();
     const iv = setInterval(load, 5000);
@@ -106,6 +116,16 @@ export default function Home() {
       clearInterval(iv);
     };
   }, [token, selectedId]);
+
+  async function onSeedDemo() {
+    if (!token) return;
+    try {
+      await seedDemo(token, true);
+      await loadDecisions(token);
+    } catch (e: any) {
+      setError(String(e.message ?? e));
+    }
+  }
 
   async function onLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -143,33 +163,6 @@ export default function Home() {
             Agentic AI untuk cross-regional food supply balancing — memantau
             kesegaran, stok, dan keputusan distribusi antar SPPG.
           </p>
-          <div className="brand-route" aria-hidden="true">
-            <div className="route-line">
-              <span className="route-node" />
-              <span className="route-cold" />
-              <span className="route-truck">❄</span>
-              <span className="route-cold" />
-              <span className="route-node route-node-end" />
-            </div>
-            <div className="route-labels">
-              <span>Bogor</span>
-              <span> Jakarta</span>
-            </div>
-          </div>
-          <ul className="brand-stats">
-            <li>
-              <strong>50 km</strong>
-              <span>rute demo Bogor → Jakarta</span>
-            </li>
-            <li>
-              <strong>Rp16,2 jt</strong>
-              <span>safe delivered cost</span>
-            </li>
-            <li>
-              <strong>0,90</strong>
-              <span>skor kesegaran minimum</span>
-            </li>
-          </ul>
         </section>
 
         <section className="login-panel">
@@ -241,6 +234,14 @@ export default function Home() {
           <button
             type="button"
             className="button-secondary button"
+            onClick={onSeedDemo}
+            title="Muat ulang 4 kasus demo (idempotent)"
+          >
+            Muat kasus demo
+          </button>
+          <button
+            type="button"
+            className="button-secondary button"
             onClick={() => {
               setToken(null);
               setRole(null);
@@ -287,6 +288,7 @@ export default function Home() {
         <section className="detail-section">
           <h2>Decision Detail</h2>
           <RecommendationCard decision={selected} mockSourced={false} />
+          <DecisionChain chain={selectedId ? chain : []} />
           <DecisionActions
             decisionId={selected.decision_id}
             role={role ?? ""}

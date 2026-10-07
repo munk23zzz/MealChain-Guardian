@@ -78,3 +78,34 @@ export async function verifyAction(
     body: JSON.stringify({ decision_id: decisionId, verdict }),
   });
 }
+
+export async function reproposeAction(decisionId: string, token: string) {
+  return request("/actions/repropose", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ decision_id: decisionId }),
+  });
+}
+
+export async function fetchDecisionChain(
+  decisionId: string,
+  token: string
+) {
+  return request(`/decisions/${decisionId}/chain`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function seedDemo(token: string, force = false) {
+  return request("/demo/seed", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ force }),
+  });
+}

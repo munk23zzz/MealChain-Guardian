@@ -148,9 +148,85 @@ async def list_decisions(
                 "created_at": row.created_at.isoformat(),
                 "valid": validity["valid"],
                 "seconds_remaining": validity["seconds_remaining"],
+                "rejection_reason": row.rejection_reason,
+                "iteration": row.iteration or 1,
+                "supersedes_id": (
+                    str(row.supersedes_id) if row.supersedes_id else None
+                ),
+                "demo_case": row.demo_case,
             }
         )
     return {"items": items}
+
+
+@router.get("/decisions/{decision_id}/chain")
+async def get_decision_chain(
+    decision_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Timeline keluarga iterasi (rejection loop): v1 → v2 → v3...
+
+    Jalur supersedes_id ditelusuri dua arah dari keputusan mana pun
+    dalam keluarga; urutan akhir by iteration lalu created_at.
+    """
+    anchor = (
+        await db.execute(select(Decision).where(Decision.id == decision_id))
+    ).scalar_one_or_none()
+    if anchor is None:
+        raise HTTPException(status_code=404, detail="decision tidak ditemukan")
+
+    async def _parent_of(row: Decision):
+        if not row.supersedes_id:
+            return None
+        return (
+            await db.execute(
+                select(Decision).where(Decision.id == row.supersedes_id)
+            )
+        ).scalar_one_or_none()
+
+    async def _children_of(row: Decision):
+        return (
+            await db.execute(
+                select(Decision)
+                .where(Decision.supersedes_id == row.id)
+                .order_by(Decision.iteration.asc(), Decision.created_at.asc())
+            )
+        ).scalars().all()
+
+    # Naik ke root, lalu turun seluruh cabang utama.
+    root = anchor
+    while True:
+        p = await _parent_of(root)
+        if p is None:
+            break
+        root = p
+    family: list[Decision] = []
+    current = root
+    while current is not None:
+        family.append(current)
+        kids = await _children_of(current)
+        current = kids[0] if kids else None
+    chain = [
+        {
+            "decision_id": str(r.id),
+            "iteration": r.iteration or 1,
+            "status": r.status,
+            "rejection_reason": r.rejection_reason,
+            "quantity_kg": (
+                float(r.quantity_kg) if r.quantity_kg is not None else None
+            ),
+            "safe_delivered_cost": (
+                float(r.safe_delivered_cost)
+                if r.safe_delivered_cost is not None
+                else None
+            ),
+            "created_at": r.created_at.isoformat(),
+            "demo_case": r.demo_case,
+        }
+        for r in family
+    ]
+    return {"anchor_id": str(anchor.id), "chain": chain}
 
 
 @router.get("/decisions/{decision_id}/traces")
@@ -217,4 +293,8 @@ async def get_decision(
         "created_at": row.created_at.isoformat(),
         "valid": validity["valid"],
         "seconds_remaining": validity["seconds_remaining"],
+        "rejection_reason": row.rejection_reason,
+        "iteration": row.iteration or 1,
+        "supersedes_id": str(row.supersedes_id) if row.supersedes_id else None,
+        "demo_case": row.demo_case,
     }

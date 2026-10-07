@@ -18,7 +18,12 @@ export default function RecommendationCard({
   return (
     <div className="card recommendation-card">
       <div className="card-header">
-        <h3>{typeLabel}</h3>
+        <h3>
+          {typeLabel}
+          {decision.iteration && decision.iteration > 1 && (
+            <span className="badge version-badge">v{decision.iteration}</span>
+          )}
+        </h3>
         <StatusBadge status={decision.status} />
       </div>
       <dl>
@@ -33,8 +38,10 @@ export default function RecommendationCard({
             : "EXPIRED"}
         </dd>
       </dl>
+      {decision.rejection_reason && (
+        <p className="chain-reason">Ditolak: {decision.rejection_reason}</p>
+      )}
       {mockSourced && <span className="badge mock-badge">Data Simulasi</span>}
-      <a href={`/decisions/${decision.decision_id}`}>Lihat Detail</a>
     </div>
   );
 }

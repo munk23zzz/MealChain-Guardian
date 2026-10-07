@@ -5,7 +5,7 @@
 // §1.3: approve SELALU lewat ApprovalModal (friksi disengaja).
 
 import { useState } from "react";
-import { approveAction, executeAction } from "../lib/api";
+import { approveAction, executeAction, reproposeAction } from "../lib/api";
 import ApprovalModal from "./ApprovalModal";
 
 const APPROVER_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
@@ -14,13 +14,24 @@ const APPROVER_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
 export function visibleActions(
   role: string,
   status: string
-): { approve: boolean; execute: boolean; readOnly: boolean } {
+): {
+  approve: boolean;
+  execute: boolean;
+  repropose: boolean;
+  readOnly: boolean;
+} {
   if (!APPROVER_ROLES.has(role)) {
-    return { approve: false, execute: false, readOnly: true };
+    return { approve: false, execute: false, repropose: false, readOnly: true };
   }
   const actionable =
     status === "pending_approval" || status === "verifier_flagged";
-  return { approve: actionable, execute: actionable, readOnly: false };
+  return {
+    approve: actionable,
+    execute: actionable,
+    // Rejection loop: keputusan ditolak → agent minta iterasi baru.
+    repropose: status === "rejected",
+    readOnly: false,
+  };
 }
 
 export default function DecisionActions({
@@ -38,6 +49,8 @@ export default function DecisionActions({
 }) {
   const [message, setMessage] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
 
   const actions = visibleActions(role, status);
   if (actions.readOnly) {
@@ -60,13 +73,34 @@ export default function DecisionActions({
 
   async function onRejected() {
     setConfirming(false);
+    if (!reason.trim()) {
+      setMessage("Alasan penolakan wajib diisi — ini bahan learning agent.");
+      return;
+    }
     if (!token) {
       setMessage("Login diperlukan");
       return;
     }
     try {
-      await approveAction(decisionId, false, token);
-      setMessage("Keputusan ditolak");
+      await approveAction(decisionId, false, token, reason.trim());
+      setMessage("Keputusan ditolak — agent bisa re-propose dengan iterasi baru.");
+      setRejecting(false);
+      setReason("");
+    } catch (err: any) {
+      setMessage(String(err.message ?? err));
+    }
+  }
+
+  async function onRepropose() {
+    if (!token) {
+      setMessage("Login diperlukan");
+      return;
+    }
+    try {
+      const result = await reproposeAction(decisionId, token);
+      setMessage(
+        `Iterasi v${result.iteration ?? "?"} dibuat — menunggu verifikasi & approval.`
+      );
     } catch (err: any) {
       setMessage(String(err.message ?? err));
     }
@@ -99,11 +133,32 @@ export default function DecisionActions({
           <button
             type="button"
             className="button-secondary button"
-            onClick={onRejected}
+            onClick={() => setRejecting((v) => !v)}
           >
             Reject
           </button>
         </>
+      )}
+      {actions.repropose && (
+        <button type="button" className="button" onClick={onRepropose}>
+          Minta re-propose (iterasi baru)
+        </button>
+      )}
+      {rejecting && (
+        <div className="reject-reason-box">
+          <label className="field">
+            <span>Alasan penolakan (wajib — jadi bahan learning agent)</span>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={2}
+              placeholder="cth: Kuota SPPG Jakarta penuh minggu ini"
+            />
+          </label>
+          <button type="button" className="button" onClick={onRejected}>
+            Kirim penolakan
+          </button>
+        </div>
       )}
       {actions.execute && (
         <button type="button" className="button" onClick={onExecute}>

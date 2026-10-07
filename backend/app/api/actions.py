@@ -6,7 +6,7 @@ Tidak ada eksekusi otomatis oleh agent.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,7 +18,7 @@ from app.api.auth import require_roles
 from app.api.dependencies import get_db
 from app.core.approval_matrix import approval_requirement, evaluate_approvals
 from app.core.decision_validity import is_decision_valid
-from app.models import Approval, Commodity, Decision, User
+from app.models import AgentTrace, Approval, Commodity, Decision, User
 
 router = APIRouter()
 
@@ -149,6 +149,13 @@ async def approve_action(
         raise HTTPException(
             status_code=409, detail=f"decision status {decision.status} tidak dapat di-approve"
         )
+    # Penolakan WAJIB beralasan — alasan inilah bahan learning agent
+    # (rejection loop, permintaan Roy 2026-10-07). Tanpa alasan = 422.
+    if not payload.approved and not (payload.comment or "").strip():
+        raise HTTPException(
+            status_code=422,
+            detail="penolakan wajib menyertakan alasan (comment)",
+        )
     db.add(
         Approval(
             decision_id=decision.id,
@@ -159,6 +166,7 @@ async def approve_action(
     )
     if not payload.approved:
         decision.status = "rejected"
+        decision.rejection_reason = payload.comment.strip()
     await db.commit()
     rows = (
         await db.execute(select(Approval).where(Approval.decision_id == decision.id))
@@ -278,6 +286,85 @@ async def execute_action(
 
 def _material_number_for(commodity: Commodity) -> str:
     return f"MAT-{commodity.name.upper()}"
+
+
+class ReproposeRequest(BaseModel):
+    decision_id: uuid.UUID
+    ttl_minutes: int = Field(default=30, ge=1, le=1440)
+
+
+@router.post("/actions/repropose", status_code=201)
+async def repropose_action(
+    payload: ReproposeRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Agent merespons penolakan: iterasi baru + langkah LEARN.
+
+    Iterasi mewarisi substansi keputusan (lokasi, komoditas, jumlah,
+    SDC) dan terhubung ke keputusan lama via supersedes_id — alasan
+    penolakan manusia menjadi bahan learning agent (rejection loop,
+    permintaan Roy 2026-10-07). Iterasi baru TETAP butuh approve manusia.
+    """
+    parent = await _load_decision(db, payload.decision_id)
+    if parent.status != "rejected":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"re-propose hanya untuk decision rejected "
+                f"(status kini {parent.status})"
+            ),
+        )
+    if not (parent.rejection_reason or "").strip():
+        raise HTTPException(
+            status_code=409,
+            detail="decision rejected tanpa alasan — tidak ada bahan re-propose",
+        )
+    child = Decision(
+        decision_type=parent.decision_type,
+        status="proposed",
+        proposed_by="supervisor_agent",
+        source_location_id=parent.source_location_id,
+        target_location_id=parent.target_location_id,
+        commodity_id=parent.commodity_id,
+        quantity_kg=parent.quantity_kg,
+        safe_delivered_cost=parent.safe_delivered_cost,
+        cost_breakdown=parent.cost_breakdown,
+        expires_at=datetime.now(timezone.utc)
+        + timedelta(minutes=payload.ttl_minutes),
+        iteration=(parent.iteration or 1) + 1,
+        supersedes_id=parent.id,
+        demo_case=parent.demo_case,
+    )
+    db.add(child)
+    await db.flush()
+    db.add(
+        AgentTrace(
+            decision_id=child.id,
+            step_name="LEARN",
+            tool_called="rejection_loop.repropose",
+            input_summary={
+                "parent_decision_id": str(parent.id),
+                "parent_iteration": parent.iteration or 1,
+                "parent_status": parent.status,
+            },
+            output_summary={
+                "parent_rejection_reason": parent.rejection_reason,
+                "learning_note": (
+                    "Iterasi baru menyertakan penyesuaian atas penolakan: "
+                    + (parent.rejection_reason or "")
+                ),
+            },
+        )
+    )
+    await db.commit()
+    return {
+        "decision_id": str(child.id),
+        "status": child.status,
+        "iteration": child.iteration,
+        "supersedes_id": str(parent.id),
+        "parent_rejection_reason": parent.rejection_reason,
+        "expires_at": child.expires_at.isoformat(),
+    }
 
 
 async def _resolve_supplier_id(

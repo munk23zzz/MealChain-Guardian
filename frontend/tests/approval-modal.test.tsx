@@ -39,6 +39,7 @@ describe("visibleActions (role scope murni, design.md §1.4)", () => {
     expect(visibleActions("bgn_monitor", "pending_approval")).toEqual({
       approve: false,
       execute: false,
+      repropose: false,
       readOnly: true,
     });
   });
@@ -47,6 +48,7 @@ describe("visibleActions (role scope murni, design.md §1.4)", () => {
     expect(visibleActions("sppg_head", "pending_approval")).toEqual({
       approve: true,
       execute: true,
+      repropose: false,
       readOnly: false,
     });
   });

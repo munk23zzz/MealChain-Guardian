@@ -12,6 +12,7 @@ from app.api.cost import router as cost_router
 from app.api.decisions import router as decisions_router
 from app.api.demand import forecast_router
 from app.api.demand import router as demand_router
+from app.api.demo import router as demo_router
 from app.api.dependencies import lifespan
 from app.api.evidence import router as evidence_router
 from app.api.freshness import router as freshness_router
@@ -58,6 +59,7 @@ app.include_router(evidence_router)
 app.include_router(decisions_router)
 app.include_router(auth_router)
 app.include_router(actions_router)
+app.include_router(demo_router)
 
 
 @app.get("/health")

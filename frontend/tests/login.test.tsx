@@ -12,10 +12,10 @@ describe("login polish", () => {
     expect(html).toContain("SPPG");
   });
 
-  it("rute dingin Bogor → Jakarta tampil di panel brand", () => {
-    expect(html).toContain("Bogor");
-    expect(html).toContain("Jakarta");
-    expect(html).toMatch(/→|→/);
+  it("rute dingin & kotak angka DIHAPUS dari panel brand (arah Roy)", () => {
+    expect(html).not.toContain("route-line");
+    expect(html).not.toContain("brand-stats");
+    expect(html).not.toContain("50 km");
   });
 
   it("tiga akun demo tersedia untuk klik-isi cepat", () => {

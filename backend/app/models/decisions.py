@@ -58,6 +58,18 @@ class Decision(Base):
     )
     verified_by: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     verifier_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Rejection loop (permintaan Roy 2026-10-07): alasan wajib saat reject,
+    # iterasi v1→v2→v3 terhubung supersedes_id (bahan learning agent).
+    rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    iteration: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="1"
+    )
+    supersedes_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("decisions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    demo_case: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     source_location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("locations.id"), nullable=True
     )

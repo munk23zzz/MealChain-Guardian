@@ -218,3 +218,32 @@ Evidence live (ronde 3-slot, arsitektur sama — jalur E2E tersertifikasi):
   supervisor SUPERVISE (non-safety-critical); fallback Inferhub live
   terbukti (kimi timeout → qwen mengambil alih, fallback_used=True).
 
+### Rejection loop + 4 kasus demo (2026-10-07 — permintaan Roy)
+
+- **Backend (TDD, 11 test baru → 458 passed)**: penolakan WAJIB alasan
+  (approve `approved=false` tanpa `comment` → 422); alasan tersimpan di
+  `decisions.rejection_reason`. `POST /actions/repropose` membuat iterasi
+  baru (v2, v3, ...) yang mewarisi substansi keputusan, terhubung via
+  `supersedes_id`, dan menulis langkah trace **LEARN** berisi alasan
+  penolakan (bahan learning/memory agent). `GET /decisions/{id}/chain`
+  = timeline keluarga v1→v2→v3. Migration `008_rejection_loop`:
+  kolom `rejection_reason/iteration/supersedes_id/demo_case`.
+- **POST /demo/seed** (idempotent, `force=true` untuk reset): 4 kasus —
+  (1) `rejection-loop-kuota`: v1 ditolak kuota → v2 ditolak harga →
+  **v3 pending_approval FRESH** siap approve/execute live saat demo;
+  (2) `shortage-darurat`: 780 kg Bogor→Jakarta, TTL 15 menit (drama
+  safety window); (3) `supplier-janggal`: harga 40% di bawah referensi
+  → verifier FLAGGED (anti-fraud); (4) `gangguan-logistik`: v1 ditolak
+  (rute banjir) → v2 re-rute Cianjur pending_approval. Trace berjenjang
+  (DETECT/PREDICT/DECIDE/OPTIMIZE/VERIFY/LEARN) + timestamp mundur.
+- **Frontend (45 test)**: `DecisionChain` (timeline iterasi + alasan),
+  badge `v{n}` di kartu, tombol **Reject dengan kotak alasan wajib**,
+  tombol **Minta re-propose** pada status rejected (role approver),
+  link 404 "Lihat Detail" dihapus, tombol "Muat kasus demo" di header
+  (seed force idempotent). Panel brand login dirapikan per arah Roy:
+  rute ❄ + kotak angka dihapus.
+- **Verifikasi live end-to-end**: seed 7 keputusan → reject v3 tanpa
+  alasan 422 → reject dgn alasan 200/rejected → repropose 201 (iter 4,
+  supersedes OK) → chain [1,2,3,4] → LEARN trace berisi alasan →
+  restore seed → v3 fresh `pending_approval valid=True`.
+
