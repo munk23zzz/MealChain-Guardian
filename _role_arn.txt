@@ -1,0 +1,1 @@
+arn:aws:iam::679583588036:role/service-role/AmazonBedrockAgentCoreRuntimeDefaultServiceRole-fipe4

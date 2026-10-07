@@ -1,0 +1,61 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "BedrockAgentCoreSpecificWrite",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:CreateGateway",
+        "bedrock-agentcore:CreateMemory"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "BedrockAgentCoreRuntimeAndReadOperations",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:GetAgentRuntime",
+        "bedrock-agentcore:Get*",
+        "bedrock-agentcore:List*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "BedrockAgentCoreManageExtras",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:DeleteGateway",
+        "bedrock-agentcore:DeleteMemory",
+        "bedrock-agentcore:TagResource",
+        "bedrock-agentcore:ListTagsForResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "BedrockMarketplaceAutoSubscribe",
+      "Effect": "Allow",
+      "Action": [
+        "aws-marketplace:Subscribe",
+        "aws-marketplace:Unsubscribe",
+        "aws-marketplace:ViewSubscriptions"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "BedrockAgreementFlow",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:ListFoundationModelAgreementOffers",
+        "bedrock:CreateFoundationModelAgreement",
+        "bedrock:GetFoundationModelAvailability",
+        "bedrock:DeleteFoundationModelAgreement",
+        "bedrock:PutUseCaseForModelAccess",
+        "bedrock:GetUseCaseForModelAccess",
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream",
+        "bedrock:ListFoundationModels"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
