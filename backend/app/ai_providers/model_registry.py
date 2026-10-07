@@ -1,18 +1,20 @@
 """Registry konfigurasi model per agent (backend = sumber konfigurasi).
 
-Permintaan Roy (S3-16+): tiap agent punya rantai TEPAT 3 model — primary +
-fallback_1 + fallback_2 — sehingga satu model mati masih ada 2 backup.
-Backend adalah satu-satunya tempat env dibaca; frontend hanya menampilkan
-identitas model/provider dari trace (display-only).
+Permintaan Roy (rev2/rev3, 2026-10-06/07): tiap agent punya rantai PANJANG
+sepanjang slot env yang terisi — primary + fallback_1..9 — frontier dulu,
+open-weight (kimi/qwen) di posisi TERAKHIR. AgentCore ARN (bila terisi) jadi
+primary dan menggeser slot env. Backend adalah satu-satunya tempat env
+dibaca; frontend hanya menampilkan identitas model/provider dari trace
+(display-only).
 
 Format ref di env:
-- prefix Inferhub: `cc/`, `cb/`, `cbcn/`, `ali/` (katalog valid, lihat
-  probe 2026-10-06 — model truncated/unknown ditolak API Inferhub)
+- prefix Inferhub: `cc/`, `cb/`, `cbcn/`, `cx/`, `ali/` (katalog valid, lihat
+  probe 2026-10-06/07 — model truncated/unknown ditolak API Inferhub)
 - ARN AgentCore: `arn:aws:bedrock:...:agent-runtime/...` → slot AgentCore
 - selain itu: model Bedrock (inference profile us./global., dsb.)
 
 Prioritas: AgentCore Runtime ARN (bila terisi) jadi primary agent dan
-menggeser slot env — total rantai tetap 3 (kontrak plan Sprint 3).
+menggeser slot env — total rantai = 1 slot AgentCore + slot env terisi.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ import os
 from dataclasses import dataclass
 from typing import Literal
 
-INFERHUB_PREFIXES = ("cc/", "cb/", "cbcn/", "ali/")
+INFERHUB_PREFIXES = ("cc/", "cb/", "cbcn/", "cx/", "ali/")
 AGENT_PREFIX_ENV = {
     "supervisor": {
         "primary": "SUPERVISOR_MODEL_PRIMARY",

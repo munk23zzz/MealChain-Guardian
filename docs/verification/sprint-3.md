@@ -124,19 +124,47 @@ menjadi fallback_1..6 (total 7 referensi per agent). Implementasi invoke
 runtime AgentCore = stub eksplisit (honest-unavailable) → chain otomatis
 jatuh ke fallback_1 Bedrock sampai implementasi runtime siap.
 
-| Slot | Model | Status (probe live 2 ronde, 2026-10-06) |
+| Slot | Model | Status (probe live, 2026-10-06/07) |
 |---|---|---|
 | primary:agentcore | `AGENTCORE_RUNTIME_ARN` | terkonfigurasi; invoke menyusul |
 | fallback_1 (env primary) | Bedrock `us.anthropic.` (the model 4.6) | LIVE + tersertifikasi E2E |
-| fallback_2 | Inferhub `cb/gpt-6-astra` (GPT-6 Astra, GPQA-D 96.0%) | LIVE 2.3–7.1s (2 ronde) |
-| fallback_3 | Inferhub `cc/` | LIVE 2.5–5.2s (2 ronde) |
-| fallback_4 | Inferhub `cc/` | LIVE 2.9s (503 ronde-1 = transien, pulih) |
-| fallback_5 | Inferhub `cb/kimi-k3` | LIVE 7.9s (max_tokens 4000) |
-| fallback_6 | Inferhub `ali/qwen3.8-max-0902` | LIVE 3.1s |
+| fallback_2 | Inferhub `cb/gpt-6-astra` (GPT-6 Astra, GPQA-D 96.0%) | LIVE 2.3–7.1s (3 ronde; ronde-3 2026-10-07 'pong' 2s) |
+| fallback_3 | Inferhub `cx/gpt-6-astra` | LIVE 4s 'pong' (ronde-3, 2026-10-07) |
+| fallback_4 | Inferhub `cb/gpt-6-sol` | LIVE 2s 'pong' (ronde-3, 2026-10-07) |
+| fallback_5 | Inferhub `cx/gpt-6.1-sol` | LIVE 1s 'pong' (ronde-3, 2026-10-07) |
+| fallback_6 | Inferhub `cc/` | LIVE 2.5–5.2s (2 ronde) |
+| fallback_7 | Inferhub `cc/` | LIVE 2.9s (503 ronde-1 = transien, pulih) |
+| fallback_8 | Inferhub `cb/kimi-k3` | LIVE 7.9s / ronde-3 4s (max_tokens 4000) |
+| fallback_9 | Inferhub `cbcn/kimi-k3` | LIVE 11.0s / ronde-3 8s |
+| fallback_10 | Inferhub `ali/qwen3.8-max-0902` | LIVE 3.1s |
+
+Catatan verifikasi 2026-10-07: probe ronde-3 awalnya salah sasaran — skrip
+menambahkan `/chat/completions` pada `INFERHUB_URL` yang sudah endpoint penuh
+→ 404 palsu untuk SEMUA ID termasuk kontrol. Root cause ditemukan (env =
+endpoint penuh, bukan base URL), probe diulang benar → semua kandidat LIVE.
+Pelajaran: label 404 hanya valid setelah kontrol terbukti 200 dengan path yang
+sama. `cx/` kini prefix Inferhub resmi di registry (TDD: test RED→GREEN,
+suite 446 passed).
+
+### Model access frontier Bedrock (2026-10-07 — jalur SDK dari docs resmi)
+
+Alur `model-access.html` (SDK/CLI): `ListFoundationModelAgreementOffers` →
+`CreateFoundationModelAgreement` → poll `GetFoundationModelAvailability`.
+Hasil untuk 5 kandidat frontier (5.5/5/fable-5.1/4.8/4.7): **CREATE_OK 5/5**;
+setelah ~10 menit subscription akun selesai — `agreementAvailability:
+AVAILABLE` + `authorizationStatus: AUTHORIZED` + `entitlementAvailability:
+AVAILABLE`. Invoke masih `AccessDeniedException` → satu langkah tersisa di
+sisi akun: attach policy `MealchainAgentcoreCreate` (file
+`_iam_policy_mealchain.json` — `bedrock:InvokeModel`/`...WithResponseStream`
+Resource `*`, `aws-marketplace:Subscribe/Unsubscribe/ViewSubscriptions`,
+`bedrock-agentcore:CreateGateway/CreateMemory/Get*/List*/Delete*/Tag*`) ke
+IAM user `mealchain`. Setelah attach, script enable diulang → invoke test →
+restrukturisasi blok Bedrock (fallback_1 frontier terbaru → fallback_2
+frontier kedua → fallback_3 opus 4.6).
 
 Kandidat dibuang dari .env (alasan terdokumentasi, bukan truncasi):
-`cc/claude-fable-5-1`/`cc/claude-sonnet-5`/`cc/claude-opus-5`/`cb/claude-opus-5`
-(503/502 down saat 2 ronde probe), `cc/claude-sonnet-5-5` VALID live tapi
+`cc/`/`cc/`/`cc/`/`cb/`
+(503/502 down saat 2 ronde probe), `cc/` VALID live tapi
 digantikan Astra/Sonnet-5 di slot atas. `gpt-5.6-sol` = 404 di katalog
 Inferhub (cc/ dan cb/) — tidak bisa dipakai dengan nama itu. Entry mati
  dikosongkan dari .env; kimi-k3 & qwen3.8-max TIDAK dibuang (posisi terakhir).

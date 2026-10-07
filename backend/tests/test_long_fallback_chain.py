@@ -40,6 +40,17 @@ def test_chain_reads_all_numbered_fallback_slots(monkeypatch):
     ]
 
 
+def test_chain_recognizes_cx_prefix_as_inferhub(monkeypatch):
+    # cx/ adalah prefix Inferhub valid (probe 2026-10-07: cx/gpt-6-astra &
+    # cx/gpt-6.1-sol LIVE 'pong') — sebelumnya salah diklasifikasi bedrock
+    # karena INFERHUB_PREFIXES tidak memuat cx/.
+    monkeypatch.setenv("VERIFIER_MODEL_FALLBACK_1", "cx/gpt-6-astra")
+    monkeypatch.setenv("VERIFIER_MODEL_FALLBACK_2", "cx/gpt-6.1-sol")
+    chain = get_agent_chain("verifier")
+    assert [r.kind for r in chain] == ["inferhub", "inferhub"]
+    assert [r.model_id for r in chain] == ["cx/gpt-6-astra", "cx/gpt-6.1-sol"]
+
+
 def test_chain_gap_in_numbering_stops_collection(monkeypatch):
     # gap (fallback_2 kosong) menghentikan koleksi — slot setelah gap diabaikan
     monkeypatch.setenv("VERIFIER_MODEL_PRIMARY", "us.anthropic.claude-opus-4-6-v1")
