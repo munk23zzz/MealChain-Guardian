@@ -3,6 +3,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.actions import router as actions_router
 from app.api.auth import router as auth_router
@@ -31,6 +32,16 @@ app = FastAPI(
     description="Agentic AI untuk cross-regional food supply balancing",
     version="0.2.0",
     lifespan=_lifespan_wrapper,
+)
+
+# CORS: frontend Next.js (localhost:3000) fetch API lintas origin.
+# Allow-list eksplisit — jangan wildcard (kredensial JWT tetap via header).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Forecast SEBELUM demand generik (path param `/demand/{location}` bisa menelan "forecast")

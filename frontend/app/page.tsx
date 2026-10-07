@@ -64,6 +64,7 @@ export default function Home() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [traces, setTraces] = useState<any[]>([]);
@@ -108,6 +109,7 @@ export default function Home() {
 
   async function onLogin(e: React.FormEvent) {
     e.preventDefault();
+    setSubmitting(true);
     try {
       const data = await login(email, password);
       setToken(data.access_token);
@@ -115,39 +117,115 @@ export default function Home() {
       setRole(decodeRole(data.access_token));
       setLoginError(null);
     } catch (e: any) {
-      setLoginError(String(e.message ?? e));
+      setLoginError(
+        e?.message
+          ? String(e.message)
+          : "Login gagal — periksa koneksi ke server API."
+      );
+    } finally {
+      setSubmitting(false);
     }
   }
 
   if (!token) {
+    const demoAccounts = [
+      { label: "SPPG Head", email: "sppg.head@demo.local", password: "Demo#SPPG2026" },
+      { label: "Nutritionist", email: "sppg.nutritionist@demo.local", password: "Demo#Nut2026" },
+      { label: "BGN Monitor", email: "bgn.monitor@demo.local", password: "Demo#BGN2026" },
+    ];
     return (
-      <main className="login-wrap">
-        <h1>MealChain Guardian</h1>
-        <p>Agentic AI untuk cross-regional food supply balancing</p>
-        <form onSubmit={onLogin} className="card login-form">
-          <label>
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </label>
-          {loginError && <p className="status-danger">{loginError}</p>}
-          <button className="button" type="submit">
-            Masuk
-          </button>
-        </form>
+      <main className="login-shell">
+        {/* Panel brand: dunia subject — rantai dingin SPPG, angka dari data demo asli */}
+        <section className="login-brand" aria-label="Tentang MealChain Guardian">
+          <p className="brand-eyebrow">Badan Gizi Nasional · Program SPPG</p>
+          <h1 className="brand-title">MealChain Guardian</h1>
+          <p className="brand-tagline">
+            Agentic AI untuk cross-regional food supply balancing — memantau
+            kesegaran, stok, dan keputusan distribusi antar SPPG.
+          </p>
+          <div className="brand-route" aria-hidden="true">
+            <div className="route-line">
+              <span className="route-node" />
+              <span className="route-cold" />
+              <span className="route-truck">❄</span>
+              <span className="route-cold" />
+              <span className="route-node route-node-end" />
+            </div>
+            <div className="route-labels">
+              <span>Bogor</span>
+              <span> Jakarta</span>
+            </div>
+          </div>
+          <ul className="brand-stats">
+            <li>
+              <strong>50 km</strong>
+              <span>rute demo Bogor → Jakarta</span>
+            </li>
+            <li>
+              <strong>Rp16,2 jt</strong>
+              <span>safe delivered cost</span>
+            </li>
+            <li>
+              <strong>0,90</strong>
+              <span>skor kesegaran minimum</span>
+            </li>
+          </ul>
+        </section>
+
+        <section className="login-panel">
+          <form onSubmit={onLogin} className="login-form">
+            <h2>Masuk ke konsol</h2>
+            <p className="login-sub">Gunakan akun SPPG atau BGN yang terdaftar.</p>
+            <label className="field">
+              <span>Email</span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="username"
+                required
+              />
+            </label>
+            <label className="field">
+              <span>Password</span>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </label>
+            {loginError && (
+              <p className="status-danger login-error" role="alert">
+                {loginError}
+              </p>
+            )}
+            <button className="button login-submit" type="submit" disabled={submitting}>
+              {submitting ? "Memeriksa…" : "Masuk"}
+            </button>
+            <div className="demo-block">
+              <p className="demo-hint">Akun demo — klik untuk mengisi form:</p>
+              <div className="demo-chips">
+                {demoAccounts.map((acc) => (
+                  <button
+                    key={acc.email}
+                    type="button"
+                    className="demo-chip"
+                    onClick={() => {
+                      setEmail(acc.email);
+                      setPassword(acc.password);
+                      setLoginError(null);
+                    }}
+                  >
+                    <span>{acc.label}</span>
+                    <small>{acc.email}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </form>
+        </section>
       </main>
     );
   }
