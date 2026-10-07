@@ -9,10 +9,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth import get_current_user
 from app.api.dependencies import get_db
 from app.api.supply import _resolve_commodity, _resolve_location
 from app.core.forecasting_fallback import statistical_forecast
-from app.models import DemandRecord
+from app.models import DemandRecord, User
 
 router = APIRouter()
 forecast_router = APIRouter()
@@ -35,6 +36,7 @@ async def get_demand_forecast(
     commodity: str,
     horizon_days: int = Query(default=7, ge=1, le=90),
     db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
 ) -> ForecastResponse:
     loc = await _resolve_location(db, location)
     com = await _resolve_commodity(db, commodity)
@@ -69,6 +71,7 @@ async def get_demand(
     location: str,
     commodity: str,
     db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
 ) -> DemandResponse:
     loc = await _resolve_location(db, location)
     com = await _resolve_commodity(db, commodity)

@@ -99,6 +99,11 @@ def require_roles(*allowed: str):
     return _guard
 
 
+# Role yang boleh melakukan mutasi/komputasi endpoint (bgn_monitor read-only
+# per PRD §77). Dipakai guard endpoint legacy Sprint 1/2 (residual debt).
+MUTATING_ROLES = ("sppg_head", "sppg_nutritionist")
+
+
 @router.post("/auth/login")
 async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
     user = (

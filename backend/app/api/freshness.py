@@ -7,10 +7,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth import MUTATING_ROLES, require_roles
 from app.api.dependencies import get_db
 from app.core.config import settings
 from app.core.freshness import classify_freshness, compute_freshness_score, compute_usable_until
-from app.models import Batch, Commodity
+from app.models import Batch, Commodity, User
 
 router = APIRouter()
 
@@ -28,7 +29,9 @@ class FreshnessRequest(BaseModel):
 
 @router.post("/freshness/evaluate")
 async def evaluate_freshness(
-    payload: FreshnessRequest, db: AsyncSession = Depends(get_db)
+    payload: FreshnessRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_roles(*MUTATING_ROLES)),
 ) -> dict:
     batch = (
         await db.execute(select(Batch).where(Batch.id == payload.batch_id))

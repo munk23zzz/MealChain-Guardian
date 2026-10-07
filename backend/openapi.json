@@ -10,6 +10,11 @@
       "get": {
         "summary": "Get Demand Forecast",
         "operationId": "get_demand_forecast_demand_forecast__location___commodity__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "location",
@@ -70,6 +75,11 @@
       "get": {
         "summary": "Get Demand",
         "operationId": "get_demand_demand__location___commodity__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "location",
@@ -118,6 +128,11 @@
       "get": {
         "summary": "Get Supply",
         "operationId": "get_supply_supply__location___commodity__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "location",
@@ -215,7 +230,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/safety/evaluate": {
@@ -254,13 +274,23 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/price/{location}/{commodity}": {
       "get": {
         "summary": "Get Price",
         "operationId": "get_price_price__location___commodity__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "location",
@@ -342,7 +372,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/logistics/estimate": {
@@ -381,13 +416,23 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/balance/{location}/{commodity}": {
       "get": {
         "summary": "Get Balance",
         "operationId": "get_balance_balance__location___commodity__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "location",
@@ -443,7 +488,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/balance/analyze": {
@@ -460,7 +510,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/cost/safe-delivered": {
@@ -499,7 +554,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/evidence/fuse": {
@@ -538,7 +598,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/decisions": {
@@ -577,6 +642,50 @@
         },
         "responses": {
           "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/decisions/{decision_id}/chain": {
+      "get": {
+        "summary": "Get Decision Chain",
+        "description": "Timeline keluarga iterasi (rejection loop): v1 → v2 → v3...\n\nJalur supersedes_id ditelusuri dua arah dari keputusan mana pun\ndalam keluarga; urutan akhir by iteration lalu created_at.",
+        "operationId": "get_decision_chain_decisions__decision_id__chain_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Decision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -869,6 +978,84 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ExecuteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/actions/repropose": {
+      "post": {
+        "summary": "Repropose Action",
+        "description": "Agent merespons penolakan: iterasi baru + langkah LEARN.\n\nIterasi mewarisi substansi keputusan (lokasi, komoditas, jumlah,\nSDC) dan terhubung ke keputusan lama via supersedes_id — alasan\npenolakan manusia menjadi bahan learning agent (rejection loop,\npermintaan Roy 2026-10-07). Iterasi baru TETAP butuh approve manusia.",
+        "operationId": "repropose_action_actions_repropose_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReproposeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/demo/seed": {
+      "post": {
+        "summary": "Seed Demo",
+        "operationId": "seed_demo_demo_seed_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeedRequest"
               }
             }
           },
@@ -1202,6 +1389,27 @@
         ],
         "title": "ProposeRequest"
       },
+      "ReproposeRequest": {
+        "properties": {
+          "decision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Decision Id"
+          },
+          "ttl_minutes": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 1.0,
+            "title": "Ttl Minutes",
+            "default": 30
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision_id"
+        ],
+        "title": "ReproposeRequest"
+      },
       "SafeDeliveredRequest": {
         "properties": {
           "purchase_cost": {
@@ -1277,6 +1485,17 @@
           "batch_id"
         ],
         "title": "SafetyRequest"
+      },
+      "SeedRequest": {
+        "properties": {
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "SeedRequest"
       },
       "ValidationError": {
         "properties": {

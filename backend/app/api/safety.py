@@ -5,10 +5,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth import MUTATING_ROLES, require_roles
 from app.api.dependencies import get_db
 from app.core.config import settings
 from app.core.safety import evaluate_safety
-from app.models import Batch
+from app.models import Batch, User
 
 router = APIRouter()
 
@@ -19,7 +20,9 @@ class SafetyRequest(BaseModel):
 
 @router.post("/safety/evaluate")
 async def evaluate_safety_endpoint(
-    payload: SafetyRequest, db: AsyncSession = Depends(get_db)
+    payload: SafetyRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_roles(*MUTATING_ROLES)),
 ) -> dict:
     batch = (
         await db.execute(select(Batch).where(Batch.id == payload.batch_id))

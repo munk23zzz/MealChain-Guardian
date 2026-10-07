@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from sqlalchemy import String, case, cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth import get_current_user
 from app.api.dependencies import get_db
-from app.models import Commodity, Location, SupplyRecord
+from app.models import Commodity, Location, SupplyRecord, User
 
 router = APIRouter()
 
@@ -50,6 +51,7 @@ async def get_supply(
     response: Response,
     db: AsyncSession = Depends(get_db),
     x_data_source: str | None = Header(default=None),
+    _user: User = Depends(get_current_user),
 ) -> dict:
     loc = await _resolve_location(db, location)
     com = await _resolve_commodity(db, commodity)

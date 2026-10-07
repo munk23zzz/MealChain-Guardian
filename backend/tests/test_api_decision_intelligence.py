@@ -22,8 +22,9 @@ DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain
 
 
 @pytest.fixture()
-def client():
+def client(auth_headers):
     with TestClient(app) as c:
+        c.headers.update(auth_headers)
         yield c
 
 

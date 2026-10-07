@@ -5,8 +5,11 @@ tanpa kalkulasi baru (anti-LLM, anti-formula-duplikat). Struktur keluaran
 dipakai Supervisor/verifier sebagai bukti audit.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+from app.api.auth import MUTATING_ROLES, require_roles
+from app.models import User
 
 router = APIRouter()
 
@@ -16,7 +19,10 @@ class FuseRequest(BaseModel):
 
 
 @router.post("/evidence/fuse")
-async def fuse_evidence(payload: FuseRequest) -> dict:
+async def fuse_evidence(
+    payload: FuseRequest,
+    _user: User = Depends(require_roles(*MUTATING_ROLES)),
+) -> dict:
     rec = payload.recommendation or {}
     candidate = rec.get("candidate") or {}
     evidence = rec.get("evidence") or {}

@@ -42,12 +42,12 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 |---|---|---|---|---|---|
 | S2-01 | Endpoint `POST /cost/safe-delivered` | Backend/API | In Progress | Hermes | Engine SDC + perhitungan per kandidat selesai (Task 6/9, commit 9b1e083, a9bd9ae); endpoint standalone = carry-over plan-binding; Opsi A SDC dikunci 2026-10-06 |
 | S2-02 | Endpoint `POST /balance/analyze`, `/balance/recommend` | Backend/API | In Progress | Hermes | `/balance/recommend` + `/balance/{loc}/{com}` selesai (Task 10, commit 353be20); final correction HEAD 5deb4ef; 296 test backend |
-| S2-03 | Endpoint `POST /evidence/fuse` | Backend/API | Not Started | | Evidence dasar + supervisor context tersedia (Task 12, commit ac33d24); endpoint fuse = carry-over |
-| S2-04 | Auth: JWT login + 3 role (sppg_head, sppg_nutritionist, bgn_monitor) | Authentication | Not Started | | Di luar plan Sprint 2 eksekusi (decision intelligence) — carry-over eksplisit |
-| S2-05 | RBAC middleware per endpoint | Authentication | Not Started | | Carry-over eksplisit (lihat atas) |
-| S2-06 | Frontend: Login screen | Dashboard | Not Started | | Di luar plan Sprint 2 eksekusi; vitest runner terpasang (Task 0/13) |
-| S2-07 | Frontend: Dashboard shell + peta 10 lokasi (data statis dulu) | Dashboard | Not Started | | Di luar plan Sprint 2 eksekusi |
-| S2-08 | `openapi.json` bersih ter-generate | Backend/API | Not Started | | Carry-over eksplisit |
+| S2-03 | Endpoint `POST /evidence/fuse` | Backend/API | Done | Hermes | Commit `93ca711` (S3-02); RBAC legacy ditutup 2026-10-08 (Revisi 10) |
+| S2-04 | Auth: JWT login + 3 role (sppg_head, sppg_nutritionist, bgn_monitor) | Authentication | Done | Hermes | Commit `77d3fdc` (S3-01) + akun demo; ditandai selesai Roy 2026-10-08 |
+| S2-05 | RBAC middleware per endpoint | Authentication | Done | Hermes | `require_roles`/`get_current_user` di SEMUA endpoint incl. legacy (Revisi 10, TDD + live probe); ditandai selesai Roy 2026-10-08 |
+| S2-06 | Frontend: Login screen | Dashboard | Done | Hermes | S3-12 + polish Revisi 7/8; ditandai selesai Roy 2026-10-08 |
+| S2-07 | Frontend: Dashboard shell + peta 10 lokasi (data statis dulu) | Dashboard | Done | Hermes | S3-12 dashboard shell (feed/detail/trace); peta 10 lokasi digantikan OpsConsole+RoleHero (Revisi 9); ditandai selesai Roy 2026-10-08 |
+| S2-08 | `openapi.json` bersih ter-generate | Backend/API | Done | Hermes | Regenerated 26 paths = set route, security terisi (Revisi 10) |
 
 ## Sprint 3 — Agent layer (PALING KRITIS)
 
@@ -87,6 +87,19 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 > - Selesai: seluruh slice S3-00..S3-16 (402 backend + 25 frontend test saat gate). Tabel fitur S3-01..S3-11 di atas sudah disinkron ke `Done` + referensi commit (ditandai selesai oleh Roy, 2026-10-06).
 > - **Pasca-gate (permintaan Roy): model chain 3 slot per agent LIVE.** Verifier/Forecast/Supervisor kini primary Bedrock + 2 fallback Inferhub (cb/kimi-k3, cbcn/kimi-k3, ali/qwen3.8-max-0902 — semua terbukti live via probe); AgentCore ARN (bila diisi) jadi primary & menggeser slot env. Supervisor dapat langkah narasi SUPERVISE (non-safety-critical) + frontend ProviderPanel identitas model. Bug live ditemukan & fixed: prompt forecast tanpa kontrak output → parser menolak jawaban array harian model. Evidence: `docs/verification/sprint-3.md`. Backend **437 passed**, frontend **31 test**, ruff/tsc/lint/build bersih.
 > - **Revisi 2 (arah Roy): chain PANJANG frontier-first, kimi/qwen di fallback TERAKHIR.** Probe 2 ronde katalog Inferhub → `cb/gpt-6-astra` (GPT-6 Astra), `cc/`, `cc/` LIVE (503 ronde-1 terbukti transien); `gpt-5.6-sol` 404 di katalog. .env dirapikan: 6 slot/agent identik (Bedrock Claude → Astra → Claude-5-5 → Claude-5 → kimi-k3 → qwen3.8-max), entry 503/502 lama dikosongkan. `AGENTCORE_RUNTIME_ARN` kini TERISI (runtime `mealchain-5iQ9raHpis`, dibuat Roy) → slot `primary:agentcore`, chain total 7. Registry slot 1..9 tanpa cap, `with_fallback_chain(fallbacks=[...])`, label dinamis. Backend **445 passed**, ruff bersih; frontend 31 test + tsc/lint bersih.
+> - **Revisi 10 (2026-10-08): residual RBAC endpoint legacy Sprint 1/2 DITUTUP
+>   + final gate Sprint 3 (arah Roy).** Guard JWT/RBAC di 10 router legacy
+>   (13 endpoint; baca = JWT valid, mutasi = sppg_head/nutritionist —
+>   bgn_monitor read-only 403), TANPA ubah architecture/domain logic
+>   (Architecture.md §232, PRD §77). TDD RED→GREEN; 46 fallout test legacy
+>   dibereskan via fixture `auth_headers` (login JWT nyata, assertion tak
+>   diubah). Final gate PASS: backend **463 passed** + ruff; frontend 55 +
+>   tsc + lint + build; Alembic current=heads=`008_rejection_loop`;
+>   Docker 4 service Up + `/health` 200 + log scan bersih; OpenAPI
+>   regenerated 26 paths = set route (0 drift); secrets scan 0 temuan;
+>   live probe auth/RBAC 10/10 (401/403/200); **AgentCore Runtime live
+>   invoke PASS** (HTTP 200, 4.89s, PONG asli — bukan fallback/synthetic).
+>   Evidence: `docs/verification/sprint-3.md`. **Sprint 3: DONE.**
 > - **Revisi 9 (2026-10-07): Ops Console interaktif + polish semua role.**
 >   Demo-day guard TTL (pending/flagged ≥ 60 mnt pasca-seed, di-guard test).
 >   Frontend: OpsConsole (muat kondisi nyata /balance → analisis agent

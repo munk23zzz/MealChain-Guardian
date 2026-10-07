@@ -7,17 +7,21 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth import MUTATING_ROLES, get_current_user, require_roles
 from app.api.dependencies import get_db
 from app.api.supply import _resolve_commodity, _resolve_location
 from app.core.price import price_deviation
-from app.models import PriceSignal
+from app.models import PriceSignal, User
 
 router = APIRouter()
 
 
 @router.get("/price/{location}/{commodity}")
 async def get_price(
-    location: str, commodity: str, db: AsyncSession = Depends(get_db)
+    location: str,
+    commodity: str,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
 ) -> dict:
     loc = await _resolve_location(db, location)
     com = await _resolve_commodity(db, commodity)
@@ -52,7 +56,9 @@ class DeviationRequest(BaseModel):
 
 @router.post("/price/deviation")
 async def post_price_deviation(
-    payload: DeviationRequest, db: AsyncSession = Depends(get_db)
+    payload: DeviationRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_roles(*MUTATING_ROLES)),
 ) -> dict:
     loc = await _resolve_location(db, payload.location)
     com = await _resolve_commodity(db, payload.commodity)

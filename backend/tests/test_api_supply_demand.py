@@ -20,8 +20,9 @@ LATEST = datetime(2026, 10, 1, 12, 0, 0, tzinfo=UTC)
 
 
 @pytest.fixture()
-def client():
+def client(auth_headers):
     with TestClient(app) as c:
+        c.headers.update(auth_headers)
         yield c
 
 

@@ -6,12 +6,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import String, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth import MUTATING_ROLES, get_current_user, require_roles
 from app.api.dependencies import get_db
 from app.models import (
     Commodity,
     DemandRecord,
     Location,
     SupplyRecord,
+    User,
 )
 from app.services import recommendation_service as rs
 
@@ -51,6 +53,7 @@ async def get_balance(
     location: str,
     commodity: str,
     db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
 ):
     loc = await _resolve_location(db, location)
     com = await _resolve_commodity(db, commodity)
@@ -116,7 +119,10 @@ class _AsyncFetcher:
 
 
 @router.post("/balance/recommend")
-async def post_recommend(db: AsyncSession = Depends(get_db)):
+async def post_recommend(
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_roles(*MUTATING_ROLES)),
+):
     fetcher = _AsyncFetcher(db)
     try:
         out = await rs.build_recommendations(fetcher)
@@ -126,7 +132,10 @@ async def post_recommend(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/balance/analyze")
-async def post_analyze(db: AsyncSession = Depends(get_db)):
+async def post_analyze(
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_roles(*MUTATING_ROLES)),
+):
     """Pipeline penuh + ringkasan hitung (S3-02, carry-over Sprint 2).
 
     Tipis: rekomendasi dari service yang sama dengan /balance/recommend;

@@ -105,12 +105,56 @@ final **402 passed** backend; frontend 25 test.)
 - Strands agent live run: butuh AgentCore Runtime; jalur local orchestrator
   sudah tersertifikasi penuh.
 
-## Residual debt
+### RBAC endpoint legacy Sprint 1/2 + final gate Sprint 3 (2026-10-08 — arah Roy)
 
-- RBAC untuk endpoint lama Sprint 2 masih terbuka (carry-over eksplisit —
-  menunggu putusan Roy).
+Residual debt ditutup. Kontrak dipertahankan: Architecture.md §232
+("Semua endpoint backend butuh JWT valid") + PRD §77 (bgn_monitor
+read-only). **Tidak ada perubahan architecture/domain logic** — hanya
+dependency auth (`get_current_user` untuk baca, `require_roles(MUTATING_ROLES)`
+untuk mutasi/komputasi) di 10 router: supply, demand, forecast, freshness,
+safety, price, logistics, balance, cost, evidence (13 endpoint).
+
+- **TDD**: `test_legacy_endpoint_rbac.py` RED (endpoint terbuka 200/404)
+  → GREEN 5/5 (unauth 401 ×13, token garbage 401, bgn_monitor baca 200
+  lintas lokasi / mutasi 403, sppg_head lolos guard).
+- **Fallout test legacy**: 46 test yang memanggil endpoint legacy tanpa
+  token diperbaiki via fixture session-scope `auth_headers` di conftest
+  (user DB asli + login JWT nyata, bukan token palsu) + default header
+  di fixture `client` 5 file test. Tidak ada assertion test yang diubah.
+- **Backend gate**: **463 passed** + ruff bersih (baseline 458 + 5 test RBAC).
+- **Frontend gate**: 55 passed + tsc + lint + build bersih (tanpa perubahan
+  frontend — API client sudah mengirim Bearer di semua panggilan).
+- **Alembic**: current = heads = `008_rejection_loop`. **Docker**: 4 service
+  Up (postgres healthy), `/health` 200, log scan 0 temuan pada state final
+  (2 NameError historis = jendela edit transien WatchFiles, hilang setelah
+  restart ke state final).
+- **OpenAPI**: regenerated — 23 → **26 paths** (drift artifact lama sejak
+  `6744978`: tambahan `/demo/seed`, `/actions/repropose`,
+  `/decisions/{id}/chain` dari Revisi 8); 21 path endpoint terproteksi
+  membawa `security` (publik: `/health`, `/auth/login`); set path = set
+  route aktif (0 missing/stale).
+- **Secrets scan**: 0 temuan pada tracked files (hanya kredensial demo
+  `seed_data.py` dan mock test yang memang by-design; tanpa .env.example).
+- **Live probe auth/RBAC** (API live, 10/10): supply/analyze/decisions
+  unauth = **401**; bgn_monitor: baca supply = **200**, decisions = **200**,
+  mutasi `/logistics/estimate` = **403**; sppg_head: supply = **200**,
+  analyze = **200** (14 kandidat), logistics = **200**; `/auth/me` role
+  benar.
+- **AgentCore Runtime live invoke** (data-plane boto3 `bedrock-agentcore`
+  `invoke_agent_runtime`, host, SigV4 akun 679583588036): HTTP **200**
+  latency 4.89s, runtime `mealchain-5iQ9raHpis`, response asli
+  `{"result":{"role":"assistant","content":[{"text":"PONG"}]}}` — **PASS,
+  bukan fallback/synthetic** (latensi jaringan nyata, struktur response
+  runtime asli, jawaban sesuai instruksi prompt). Catatan: boto3 di
+  container belum kenal service `bedrock-agentcore` — probe valid dari host
+  (boto3 1.42.89).
+
+## Residual debt (terbarui 2026-10-08)
+
+- ~~RBAC untuk endpoint lama Sprint 2~~ **DITUTUP** — lihat blok di atas.
 - pytest-asyncio deprecation warning (pre-existing, non-blocking).
 - Frontend tsconfig.tsbuildinfo artifact build (untracked, non-blocking).
+
 
 ## Model chain per agent (revisi 2026-10-06 — chain panjang frontier-first)
 

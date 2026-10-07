@@ -1,9 +1,11 @@
 """Router logistics (Task 12) — estimasi deterministik via core."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from app.api.auth import MUTATING_ROLES, require_roles
 from app.core.logistics import LOCATIONS, estimate_logistics
+from app.models import User
 
 router = APIRouter()
 
@@ -16,7 +18,10 @@ class LogisticsRequest(BaseModel):
 
 
 @router.post("/logistics/estimate")
-async def post_logistics_estimate(payload: LogisticsRequest) -> dict:
+async def post_logistics_estimate(
+    payload: LogisticsRequest,
+    _user: User = Depends(require_roles(*MUTATING_ROLES)),
+) -> dict:
     if payload.source not in LOCATIONS or payload.target not in LOCATIONS:
         raise HTTPException(status_code=404, detail="lokasi tidak dikenal")
     try:

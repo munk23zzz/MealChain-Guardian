@@ -6,13 +6,15 @@ terkunci). FAIL ditolak sebelum perhitungan (422), tanpa eksepsi bocor.
 
 from decimal import Decimal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from app.api.auth import MUTATING_ROLES, require_roles
 from app.core.safe_delivered_cost import (
     SafeDeliveredCostInputs,
     calculate_safe_delivered_cost,
 )
+from app.models import User
 
 router = APIRouter()
 
@@ -26,7 +28,10 @@ class SafeDeliveredRequest(BaseModel):
 
 
 @router.post("/cost/safe-delivered")
-async def post_safe_delivered(payload: SafeDeliveredRequest) -> dict:
+async def post_safe_delivered(
+    payload: SafeDeliveredRequest,
+    _user: User = Depends(require_roles(*MUTATING_ROLES)),
+) -> dict:
     try:
         result = calculate_safe_delivered_cost(
             SafeDeliveredCostInputs(

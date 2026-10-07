@@ -8,7 +8,9 @@ Di dalam container, modul-modul itu dikoleksi-skip; di host tetap jalan.
 
 from pathlib import Path
 
+import bcrypt
 import pytest
+from sqlalchemy import create_engine, text
 
 # Test yang butuh modul host-only (agent/, infra/) atau file root repo
 # (compose, .env.example, .gitignore, struktur) — tidak tersedia di container.
@@ -73,6 +75,61 @@ def _isolate_model_env(monkeypatch, request):
     for key in MODEL_ENV_KEYS:
         monkeypatch.delenv(key, raising=False)
     yield
+
+
+# ---------------------------------------------------------------------------
+# Helper auth untuk test yang memanggil endpoint terproteksi JWT.
+#
+# RBAC endpoint legacy Sprint 1/2 (residual debt, arah Roy 2026-10-08):
+# semua endpoint butuh JWT valid → test legacy yang selama ini memanggil
+# tanpa token kini memakai fixture ini (user DB asli + login JWT nyata,
+# bukan token palsu). Role sppg_head + location Jakarta (constraint DB:
+# user SPPG wajib punya location).
+# ---------------------------------------------------------------------------
+
+_LEGACY_RBAC_EMAIL = "pytest-legacy-rbac@test.local"
+
+
+@pytest.fixture(scope="session")
+def auth_headers():
+    engine = create_engine(
+        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+    )
+    pw = "TestPass#2026"
+    digest = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+    try:
+        with engine.begin() as conn:
+            # Idempoten: bersihkan sisa run sebelumnya bila ada.
+            conn.execute(
+                text("DELETE FROM users WHERE email = :e"), {"e": _LEGACY_RBAC_EMAIL}
+            )
+            loc_id = conn.execute(
+                text("SELECT id FROM locations WHERE name = 'Jakarta'")
+            ).scalar_one()
+            conn.execute(
+                text(
+                    "INSERT INTO users (id, name, email, password_hash, role, location_id) "
+                    "VALUES (gen_random_uuid(), 'Test Legacy RBAC', :e, :h, 'sppg_head', :l)"
+                ),
+                {"e": _LEGACY_RBAC_EMAIL, "h": digest, "l": str(loc_id)},
+            )
+        from fastapi.testclient import TestClient
+
+        from app.main import app
+
+        with TestClient(app) as c:
+            resp = c.post(
+                "/auth/login", json={"email": _LEGACY_RBAC_EMAIL, "password": pw}
+            )
+            assert resp.status_code == 200, resp.text
+            token = resp.json()["access_token"]
+        yield {"Authorization": f"Bearer {token}"}
+    finally:
+        with engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM users WHERE email = :e"), {"e": _LEGACY_RBAC_EMAIL}
+            )
+        engine.dispose()
 
 
 def pytest_collection_modifyitems(config, items):
