@@ -42,8 +42,9 @@ AGENT_PREFIX_ENV = {
     },
 }
 AGENTCORE_ARN_ENV = "AGENTCORE_RUNTIME_ARN"
-# Slot fallback bernomor (permintaan Roy: chain sepanjang model yang ada)
-MAX_FALLBACK_SLOTS = 9
+# Slot fallback bernomor (permintaan Roy: chain sepanjang model yang ada;
+# rev4: 12 slot agar blok Bedrock muat 3 model frontier + 9 Inferhub)
+MAX_FALLBACK_SLOTS = 12
 AGENT_FALLBACK_TEMPLATE = {
     "supervisor": "SUPERVISOR_MODEL_FALLBACK_{}",
     "verifier": "VERIFIER_MODEL_FALLBACK_{}",

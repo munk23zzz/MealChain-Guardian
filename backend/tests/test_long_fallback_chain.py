@@ -139,11 +139,22 @@ def test_conftest_isolation_covers_fallback_3_to_9(monkeypatch):
         assert not os.environ.get(f"VERIFIER_MODEL_FALLBACK_{i}")
 
 
-def test_conftest_model_env_keys_has_9_slots_per_agent():
+def test_chain_reads_slots_beyond_nine(monkeypatch):
+    # rev4: blok Bedrock 1->3 slot frontier => slot env bertambah 2
+    # (total primary + fallback_1..12) — registry harus tetap membaca semua.
+    monkeypatch.setenv("VERIFIER_MODEL_PRIMARY", "us.anthropic.x")
+    for i in range(1, 13):
+        monkeypatch.setenv(f"VERIFIER_MODEL_FALLBACK_{i}", f"slot{i}")
+    chain = get_agent_chain("verifier")
+    assert len(chain) == 13
+    assert chain[-1].model_id == "slot12"
+
+
+def test_conftest_model_env_keys_has_12_slots_per_agent():
     model_env_keys = _load_conftest_keys()
 
     for agent in ("SUPERVISOR", "VERIFIER", "FORECAST"):
-        for i in range(1, 10):
+        for i in range(1, 13):
             assert f"{agent}_MODEL_FALLBACK_{i}" in model_env_keys
 
 
