@@ -177,14 +177,18 @@ opus 4.6); kapasitas chain sudah disiapkan (12 slot/agent).
   eventExpiry 30 hari). `AGENTCORE_MEMORY_ID` terisi di `.env`; backend
   recreate → `memory_provider_from_env()` = **agentcore** (terverifikasi di
   container). Suite penuh 447 passed.
-- **Gateway: FAILED — root cause `bedrock-agentcore:CreateWorkloadIdentity`**
-  (dari `statusReasons` di `get_gateway`; fitur identitas workload AWS_IAM).
-  `iam:PassRole` sudah di-attach Roy (create lolos authorization), gateway
-  `mealchain-gateway-mm6enn0qdu` dibuat tapi gagal saat provisioning
-  dependencies. Fix: statement WorkloadIdentity
-  (`Create/Get/ListWorkloadIdentities`) ditambahkan ke
-  `_iam_policy_mealchain_1_agentcore.json` → attach → hapus gateway FAILED →
-  rerun create → isi `AGENTCORE_GATEWAY_URL`.
+- **Gateway: SUKES (ronde-2) — status READY, URL masuk `.env`** (len 92,
+  bukti disk via od). Ronde-1 gagal provisioning karena kurang
+  `bedrock-agentcore:CreateWorkloadIdentity` (dari `statusReasons`
+  get_gateway; PassRole sudah attach sebelumnya). Setelah Roy attach policy
+  file 1 yang diperbarui (12 action incl. 3 WorkloadIdentity), create ulang
+  sukses; gateway READY dalam <30s. Terverifikasi di container:
+  `AGENTCORE_GATEWAY_URL` len 92 + `AGENTCORE_MEMORY_ID` len 30 +
+  `memory_provider_from_env()` = **agentcore**. Catatan quirk API:
+  `list_gateways` menampilkan count=0 padahal gateway ada — get_gateway by
+  ID (host subdomain URL) adalah verifikasi yang benar. Gateway FAILED
+  ronde-1 sudah dibersihkan (delete OK); `AGENTCORE_GATEWAY_URL` di-append
+  `.env` dengan newline disiplin (bug penempel tidak keulang).
 - Pelajaran boto3: runtime/gateway/memory = **control plane** (client
   `bedrock-agentcore-control`); client `bedrock-agentcore` = data plane
   (invoke runtime). `get_agent_runtime` ada di control client.
