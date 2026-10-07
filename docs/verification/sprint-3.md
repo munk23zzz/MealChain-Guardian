@@ -146,21 +146,29 @@ Pelajaran: label 404 hanya valid setelah kontrol terbukti 200 dengan path yang
 sama. `cx/` kini prefix Inferhub resmi di registry (TDD: test RED→GREEN,
 suite 446 passed).
 
-### Model access frontier Bedrock (2026-10-07 — jalur SDK dari docs resmi)
+### Model access frontier Bedrock (2026-10-07 — FINAL: sales-gated)
 
 Alur `model-access.html` (SDK/CLI): `ListFoundationModelAgreementOffers` →
-`CreateFoundationModelAgreement` → poll `GetFoundationModelAvailability`.
-Hasil untuk 5 kandidat frontier (5.5/5/fable-5.1/4.8/4.7): **CREATE_OK 5/5**;
-setelah ~10 menit subscription akun selesai — `agreementAvailability:
-AVAILABLE` + `authorizationStatus: AUTHORIZED` + `entitlementAvailability:
-AVAILABLE`. Invoke masih `AccessDeniedException` → satu langkah tersisa di
-sisi akun: attach policy `MealchainAgentcoreCreate` (file
-`_iam_policy_mealchain.json` — `bedrock:InvokeModel`/`...WithResponseStream`
-Resource `*`, `aws-marketplace:Subscribe/Unsubscribe/ViewSubscriptions`,
-`bedrock-agentcore:CreateGateway/CreateMemory/Get*/List*/Delete*/Tag*`) ke
-IAM user `mealchain`. Setelah attach, script enable diulang → invoke test →
-restrukturisasi blok Bedrock (fallback_1 frontier terbaru → fallback_2
-frontier kedua → fallback_3 opus 4.6).
+`PutUseCaseForModelAccess` (Anthropic: base64 JSON form) →
+`CreateFoundationModelAgreement` → `GetFoundationModelAvailability`.
+Untuk 5 kandidat frontier (5.5/5/fable-5.1/4.8/4.7) SEMUA gerbang level-akun
+hijau: **CREATE_OK 5/5** → `agreementAvailability: AVAILABLE` +
+`authorizationStatus: AUTHORIZED` + `entitlementAvailability: AVAILABLE`;
+form use-case ter-submit (dikonfirmasi `GetUseCaseForModelAccess` mengembalikan
+`formData` terisi); policy `InvokeModel` `Resource *` aktif (kontrol opus-4-6
+invoke **OK** via jalur profil `us.` yang sama). Tetap `AccessDeniedException`
+dan pesan penuhnya menyebut jalur resminya:
+
+> "…is not available for this account. You can explore other available models
+> on Amazon Bedrock. **For additional access options, contact AWS Sales**
+> at https://aws.amazon.com/contact-us/sales-support/"
+
+Kesimpulan: kelima model frontier itu **sales-gated** — akses hanya dibuka
+lewat persetujuan AWS Sales, bukan lewat policy IAM/subscription/use-case.
+Kesimpulan sebelumnya ("tinggal langkah Console") salah dan dicabut. Kalau
+suatu saat akses disetujui Sales → re-test invoke → restrukturisasi blok
+Bedrock (fallback_1 frontier terbaru → fallback_2 frontier kedua → fallback_3
+opus 4.6); kapasitas chain sudah disiapkan (12 slot/agent).
 
 ### AgentCore Memory & Gateway (2026-10-07, pasca-attach policy)
 
@@ -169,12 +177,14 @@ frontier kedua → fallback_3 opus 4.6).
   eventExpiry 30 hari). `AGENTCORE_MEMORY_ID` terisi di `.env`; backend
   recreate → `memory_provider_from_env()` = **agentcore** (terverifikasi di
   container). Suite penuh 447 passed.
-- **Gateway: terhalang `iam:PassRole`** — `CreateGateway` sudah lolos
-  authorization AgentCore, tapi butuh `roleArn` runtime
-  (`service-role/AmazonBedrockAgentC…`) yang menuntut `iam:PassRole` pada
-  user `mealchain`. Role ARN runtime tersimpan di `_role_arn.txt`.
-  Tambahkan `iam:PassRole` (Resource: role runtime tersebut) → rerun → isi
-  `AGENTCORE_GATEWAY_URL`.
+- **Gateway: FAILED — root cause `bedrock-agentcore:CreateWorkloadIdentity`**
+  (dari `statusReasons` di `get_gateway`; fitur identitas workload AWS_IAM).
+  `iam:PassRole` sudah di-attach Roy (create lolos authorization), gateway
+  `mealchain-gateway-mm6enn0qdu` dibuat tapi gagal saat provisioning
+  dependencies. Fix: statement WorkloadIdentity
+  (`Create/Get/ListWorkloadIdentities`) ditambahkan ke
+  `_iam_policy_mealchain_1_agentcore.json` → attach → hapus gateway FAILED →
+  rerun create → isi `AGENTCORE_GATEWAY_URL`.
 - Pelajaran boto3: runtime/gateway/memory = **control plane** (client
   `bedrock-agentcore-control`); client `bedrock-agentcore` = data plane
   (invoke runtime). `get_agent_runtime` ada di control client.
