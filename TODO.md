@@ -87,6 +87,13 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 > - Selesai: seluruh slice S3-00..S3-16 (402 backend + 25 frontend test saat gate). Tabel fitur S3-01..S3-11 di atas sudah disinkron ke `Done` + referensi commit (ditandai selesai oleh Roy, 2026-10-06).
 > - **Pasca-gate (permintaan Roy): model chain 3 slot per agent LIVE.** Verifier/Forecast/Supervisor kini primary Bedrock + 2 fallback Inferhub (cb/kimi-k3, cbcn/kimi-k3, ali/qwen3.8-max-0902 — semua terbukti live via probe); AgentCore ARN (bila diisi) jadi primary & menggeser slot env. Supervisor dapat langkah narasi SUPERVISE (non-safety-critical) + frontend ProviderPanel identitas model. Bug live ditemukan & fixed: prompt forecast tanpa kontrak output → parser menolak jawaban array harian model. Evidence: `docs/verification/sprint-3.md`. Backend **437 passed**, frontend **31 test**, ruff/tsc/lint/build bersih.
 > - **Revisi 2 (arah Roy): chain PANJANG frontier-first, kimi/qwen di fallback TERAKHIR.** Probe 2 ronde katalog Inferhub → `cb/gpt-6-astra` (GPT-6 Astra), `cc/`, `cc/` LIVE (503 ronde-1 terbukti transien); `gpt-5.6-sol` 404 di katalog. .env dirapikan: 6 slot/agent identik (Bedrock Claude → Astra → Claude-5-5 → Claude-5 → kimi-k3 → qwen3.8-max), entry 503/502 lama dikosongkan. `AGENTCORE_RUNTIME_ARN` kini TERISI (runtime `mealchain-5iQ9raHpis`, dibuat Roy) → slot `primary:agentcore`, chain total 7. Registry slot 1..9 tanpa cap, `with_fallback_chain(fallbacks=[...])`, label dinamis. Backend **445 passed**, ruff bersih; frontend 31 test + tsc/lint bersih.
+> - **Revisi 9 (2026-10-07): Ops Console interaktif + polish semua role.**
+>   Demo-day guard TTL (pending/flagged ≥ 60 mnt pasca-seed, di-guard test).
+>   Frontend: OpsConsole (muat kondisi nyata /balance → analisis agent
+>   /balance/analyze → Ajukan → feed), RoleHero per role, header navy,
+>   label kasus di kartu, tombol Verifikasi (syarat execute eksplisit).
+>   Alur live: analyze → ajukan → 4-eyes approve → verify → execute →
+>   PO mock SAP terbentuk. Backend 458 + ruff; frontend 55 + tsc + lint.
 > - **Revisi 8 (2026-10-07): Rejection loop + 4 kasus demo (arah Roy).**
 >   Penolakan WAJIB alasan (422 bila kosong; tersimpan `rejection_reason`) →
 >   agent re-propose iterasi baru (`supersedes_id`, trace **LEARN** berisi

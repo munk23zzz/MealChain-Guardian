@@ -263,5 +263,9 @@ def test_list_decisions_memuat_iterasi_dan_alasan(client):
         assert row["iteration"] == 1
         assert row["rejection_reason"] is None
         assert row["supersedes_id"] is None
+        # Field verifikasi (dipakai UI: kartu belum terverifikasi tidak
+        # bisa langsung dieksekusi — butuh langkah Verifikasi dulu).
+        assert row["verified_by"] is None
+        assert row["verifier_note"] is None
     finally:
         _cleanup([did], [])

@@ -154,6 +154,10 @@ async def list_decisions(
                     str(row.supersedes_id) if row.supersedes_id else None
                 ),
                 "demo_case": row.demo_case,
+                # Konteks verifikasi — UI pakai ini untuk menandai kartu
+                # yang butuh langkah Verifikasi sebelum bisa dieksekusi.
+                "verified_by": row.verified_by,
+                "verifier_note": row.verifier_note,
             }
         )
     return {"items": items}

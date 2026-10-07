@@ -87,5 +87,23 @@ def test_seed_idempotent_dan_lengkap():
                     )
                 ).scalar()
             assert learns >= 2
+
+            # Demo-day guard (arah Roy 2026-10-07): kasus yang BUTUH aksi
+            # manusia (pending_approval / verifier_flagged) harus tetap
+            # valid minimal 60 menit pasca-seed — tidak boleh EXPIRED
+            # di tengah demo (TTL pendek = risiko hari-H).
+            with engine.begin() as conn:
+                ttl_rows = conn.execute(
+                    text(
+                        "SELECT demo_case, iteration, "
+                        "EXTRACT(EPOCH FROM (expires_at - now())) "
+                        "FROM decisions "
+                        "WHERE demo_case IS NOT NULL "
+                        "AND status IN ('pending_approval', 'verifier_flagged')"
+                    )
+                ).all()
+            assert len(ttl_rows) == 4, ttl_rows
+            for case, it, secs in ttl_rows:
+                assert secs >= 3600, (case, it, secs)
     finally:
         engine.dispose()

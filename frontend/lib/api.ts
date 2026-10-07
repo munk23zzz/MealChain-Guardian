@@ -90,6 +90,26 @@ export async function reproposeAction(decisionId: string, token: string) {
   });
 }
 
+// /actions/propose — angkat "proposed" → "pending_approval" agar bisa
+// di-approve (material_number = candidate_id, jejak sumber tetap jelas).
+export async function proposeAction(
+  decisionId: string,
+  materialNumber: string,
+  token: string
+) {
+  return request("/actions/propose", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      decision_id: decisionId,
+      material_number: materialNumber,
+    }),
+  });
+}
+
 export async function fetchDecisionChain(
   decisionId: string,
   token: string
@@ -107,5 +127,45 @@ export async function seedDemo(token: string, force = false) {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ force }),
+  });
+}
+
+// --- Ops Console (interaksi sebelum hasil — arah Roy 2026-10-07) ---
+
+export async function fetchBalance(
+  location: string,
+  commodity: string,
+  token: string
+) {
+  return request(`/balance/${location}/${commodity}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function runAnalysis(token: string) {
+  return request("/balance/analyze", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// POST /decisions — snapshot rekomendasi dipersist (status "proposed").
+// TTL default 60 menit (agar usulan tidak mati di tengah demo).
+export async function createDecision(
+  recommendation: any,
+  ttlMinutes: number,
+  token: string
+) {
+  return request("/decisions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      recommendation,
+      ttl_minutes: ttlMinutes,
+      decision_type: "regional_balance",
+    }),
   });
 }

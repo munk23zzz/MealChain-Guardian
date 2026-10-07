@@ -247,3 +247,26 @@ Evidence live (ronde 3-slot, arsitektur sama — jalur E2E tersertifikasi):
   supersedes OK) → chain [1,2,3,4] → LEARN trace berisi alasan →
   restore seed → v3 fresh `pending_approval valid=True`.
 
+### Ops Console interaktif + polish semua role (2026-10-07 — permintaan Roy)
+
+- **Demo-day guard**: kasus berstatus pending_approval/verifier_flagged
+  dijaga TTL ≥ 60 menit pasca-seed (test-guard) — shortage 15 mnt
+  dinaikkan 120 mnt, v3 kuota/janggal 480 mnt, logistik 300 mnt.
+  Drama safety window tetap ada di trace (`safety_window_minutes: 30`).
+- **Ops Console (frontend)**: interaksi SEBELUM hasil — pilih lokasi +
+  komoditas → "Muat kondisi" (GET /balance/{loc}/{com}, angka nyata:
+  Jakarta telur shortage 780 kg) → "Jalankan Analisis Agent"
+  (POST /balance/analyze, 14 kandidat / 7 flagged) → role approver
+  "Ajukan" (POST /decisions + /actions/propose → pending_approval) →
+  kartu masuk feed untuk approve/reject. bgn_monitor read-only penuh.
+- **Alur approval live terverifikasi** (API live): analyze → ajukan →
+  approve sppg_head (menunggu) → approve nutritionist (4-eyes,
+  verdict unavailable karena usulan tanpa verifier) → Verifikasi
+  CONSISTENT → Execute → **PO MC-AFBF221C7AB6** (mock SAP).
+- **UI per role**: RoleHero (judul/misi/langkah per role; BGN =
+  papan pengawasan), header bar navy, feed grid 2 kolom, label kasus
+  demo di kartu, tombol Verifikasi di detail (syarat execute yang
+  tadinya tersembunyi kini eksplisit). Backend +2 field feed
+  (`verified_by`, `verifier_note`).
+- **Gate**: backend 458 passed + ruff; frontend 55 passed + tsc + lint.
+

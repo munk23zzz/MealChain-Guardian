@@ -4,12 +4,17 @@ POST /demo/seed — idempotent (skip bila kasus sudah ada; force=true
 menghapus ulang HANYA baris ber-demo_case). Kasus:
   1. rejection-loop-kuota : v1 ditolak (kuota) → v2 ditolak (harga) →
      v3 pending_approval FRESH → approve/execute live saat demo.
-  2. shortage-darurat     : shortage Jakarta 780 kg, safety window
-     sempit (TTL 15 menit) → drama safety-critical.
+  2. shortage-darurat     : shortage Jakarta 780 kg, drama safety
+     window ada di trace (safety_window 30 mnt) — TTL kartu panjang
+     supaya tidak EXPIRED di tengah demo.
   3. supplier-janggal     : harga supplier 40% di bawah referensi →
      verifier FLAGGED (anti-fraud).
   4. gangguan-logistik    : v1 ditolak (rute Bogor banjir) → v2
      pending_approval dengan sumber alternatif Cianjur.
+
+Demo-day guard (Roy 2026-10-07): SEMUA kasus berstatus
+pending_approval/verifier_flagged dijaga TTL >= 60 menit pasca-seed
+(di-guard test) — tidak ada kasus mati sebelum sempat didemokan.
 
 Semua angka konsisten dengan seed sintetis (telur, SDC Rp16,2 jt,
 freshness 0,90). Tidak ada auto-approve — loop manusia tetap wajib.
@@ -194,7 +199,7 @@ async def seed_demo(
     v3 = _decision(
         "rejection-loop-kuota", 3, "pending_approval",
         loc["Cianjur"], loc["Jakarta"], telur, "600", "16206000.00",
-        ttl_minutes=60,
+        ttl_minutes=480,  # demo-day guard: jangan EXPIRED saat demo (Roy)
         supersedes=v2.id,
         verified_by="verifier_agent",
         verifier_note="consistent",
@@ -213,7 +218,8 @@ async def seed_demo(
     s1 = _decision(
         "shortage-darurat", 1, "pending_approval",
         loc["Bogor"], loc["Jakarta"], telur, "780", "14787096.28",
-        ttl_minutes=15,
+        ttl_minutes=120,  # drama tetap di trace (safety window 30 mnt);
+        # TTL kartu panjang supaya kasus tidak mati saat demo (Roy)
         verified_by="verifier_agent",
         verifier_note="consistent",
     )
@@ -234,7 +240,7 @@ async def seed_demo(
     j1 = _decision(
         "supplier-janggal", 1, "verifier_flagged",
         loc["Cianjur"], loc["Jakarta"], telur, "600", "9200000.00",
-        ttl_minutes=120,
+        ttl_minutes=480,  # demo-day guard (Roy)
         verified_by="verifier_agent",
         verifier_note="flagged",
     )
@@ -270,7 +276,7 @@ async def seed_demo(
     g2 = _decision(
         "gangguan-logistik", 2, "pending_approval",
         loc["Cianjur"], loc["Jakarta"], telur, "600", "16206000.00",
-        ttl_minutes=45,
+        ttl_minutes=300,  # demo-day guard (Roy)
         supersedes=g1.id,
         verified_by="verifier_agent",
         verifier_note="consistent",

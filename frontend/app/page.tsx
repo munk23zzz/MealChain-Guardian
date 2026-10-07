@@ -15,6 +15,8 @@ import AgentTraceViewer from "../components/AgentTraceViewer";
 import DecisionActions from "../components/DecisionActions";
 import DecisionChain from "../components/DecisionChain";
 import ProviderPanel from "../components/ProviderPanel";
+import RoleHero from "../components/RoleHero";
+import OpsConsole from "../components/OpsConsole";
 
 // Panel provider dihitung dari trace aktual (VERIFY/PREDICT/SUPERVISE);
 // tanpa karangan — agen tanpa langkah model tampil UNAVAILABLE.
@@ -253,6 +255,14 @@ export default function Home() {
         </span>
       </div>
 
+      <RoleHero role={role ?? "sppg_head"} />
+
+      <OpsConsole
+        role={role ?? "sppg_head"}
+        token={token}
+        onSubmitted={() => token && loadDecisions(token)}
+      />
+
       <section className="feed-section">
         <h2>Recommendation Feed</h2>
         {error && (
@@ -264,7 +274,10 @@ export default function Home() {
           </p>
         )}
         {decisions.length === 0 && !error && (
-          <p className="empty-state">Belum ada rekomendasi aktif.</p>
+          <p className="empty-state">
+            Belum ada rekomendasi aktif — jalankan analisis di Konsol Operasi
+            atau muat kasus demo di atas.
+          </p>
         )}
         <div className="feed">
           {decisions.map((d) => (
@@ -294,6 +307,7 @@ export default function Home() {
             role={role ?? ""}
             status={selected.status}
             token={token}
+            summary={selected}
           />
           <h3>Agent Activity Log</h3>
           <ProviderPanel providers={providersFromTraces(traces)} />

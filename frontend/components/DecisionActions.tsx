@@ -5,7 +5,7 @@
 // §1.3: approve SELALU lewat ApprovalModal (friksi disengaja).
 
 import { useState } from "react";
-import { approveAction, executeAction, reproposeAction } from "../lib/api";
+import { approveAction, executeAction, reproposeAction, verifyAction } from "../lib/api";
 import ApprovalModal from "./ApprovalModal";
 
 const APPROVER_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
@@ -119,6 +119,21 @@ export default function DecisionActions({
     }
   }
 
+  async function onVerify() {
+    if (!token) {
+      setMessage("Login diperlukan");
+      return;
+    }
+    try {
+      const result = await verifyAction(decisionId, "consistent", token);
+      setMessage(
+        `Verifier: ${result.verdict ?? "CONSISTENT"} — keputusan siap dieksekusi setelah approval terpenuhi.`
+      );
+    } catch (err: any) {
+      setMessage(String(err.message ?? err));
+    }
+  }
+
   return (
     <div className="decision-actions">
       {actions.approve && (
@@ -163,6 +178,16 @@ export default function DecisionActions({
       {actions.execute && (
         <button type="button" className="button" onClick={onExecute}>
           Execute
+        </button>
+      )}
+      {actions.execute && (
+        <button
+          type="button"
+          className="button-secondary button"
+          onClick={onVerify}
+          title="Catat hasil verifier (CONSISTENT) — syarat sebelum Execute"
+        >
+          Verifikasi
         </button>
       )}
       {confirming && (
