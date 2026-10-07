@@ -51,6 +51,13 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 
 ## Sprint 3 — Agent layer (PALING KRITIS)
 
+> **STATUS: DONE** — final gate PASS dari HEAD `a9eba93` (2026-10-08):
+> backend 463 passed + ruff; frontend 55 + tsc + lint + build; Alembic
+> `008_rejection_loop` (current=heads); Docker 4 service Up + health 200;
+> OpenAPI 26 paths = 26 routes (0 drift); secrets scan 0; live probe
+> auth/RBAC 10/10; AgentCore Runtime live invoke PASS (PONG asli).
+> Evidence: `docs/verification/sprint-3.md`.
+
 | ID | Task | Kategori | Status | Assignee | Catatan |
 |---|---|---|---|---|---|
 | S3-01 | AgentCore Gateway config dari openapi.json | Agent | Done | Hermes | Commit `93ca711`+`e47e11e`; tool registry + gateway config; `backend/openapi.json` 23 paths |
