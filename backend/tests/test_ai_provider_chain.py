@@ -55,7 +55,14 @@ def test_verifier_default_chain_labels_and_kinds(monkeypatch):
     assert all(callable(fn) for _, fn, _ in chain)
 
 
-def test_agentcore_slot_builds_explicit_stub(monkeypatch):
+def test_agentcore_slot_builds_real_runtime_caller(monkeypatch):
+    """Kontrak O-AI (S4-00): ARN terpasang → caller runtime NYATA, bukan stub.
+
+    Stub NotImplementedError digantikan invoke_agent_runtime sungguhan;
+    tanpa kredensial/jaringan, pemanggilan gagal eksplisit via error class
+    AgentCoreInvocationError (chain lanjut slot berikutnya) — bukan
+    NotImplementedError "belum diimplementasi".
+    """
     _strip_model_env(monkeypatch)
     monkeypatch.setenv(
         "AGENTCORE_RUNTIME_ARN",
@@ -64,8 +71,16 @@ def test_agentcore_slot_builds_explicit_stub(monkeypatch):
     monkeypatch.setenv("SUPERVISOR_MODEL_PRIMARY", "us.anthropic.")
     chain = build_default_callers("supervisor")
     assert chain[0][0] == "primary:agentcore"
-    with pytest.raises(NotImplementedError):
-        chain[0][1]("prompt apa pun")
+    from app.ai_providers.agentcore_caller import (
+        AgentCoreInvocationError,
+        is_agentcore_caller,
+    )
+
+    caller = chain[0][1]
+    assert is_agentcore_caller(caller)
+    with pytest.raises(AgentCoreInvocationError) as excinfo:
+        caller("prompt apa pun")  # tanpa kredensial AWS di env test
+    assert "NotImplementedError" not in str(excinfo.value)
 
 
 def test_unknown_agent_raises(monkeypatch):

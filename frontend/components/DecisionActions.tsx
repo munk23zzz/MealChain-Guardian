@@ -125,9 +125,11 @@ export default function DecisionActions({
       return;
     }
     try {
-      const result = await verifyAction(decisionId, "consistent", token);
+      // O-SEC-3: server menurunkan verdict independen; UI hanya memicu
+      // verifikasi dan menampilkan hasil server apa adanya.
+      const result = await verifyAction(decisionId, token);
       setMessage(
-        `Verifier: ${result.verdict ?? "CONSISTENT"} — keputusan siap dieksekusi setelah approval terpenuhi.`
+        `Verifier (${result.provider ?? "tanpa provider"}): ${result.verdict ?? "UNAVAILABLE"} — keputusan siap dieksekusi setelah approval terpenuhi.`
       );
     } catch (err: any) {
       setMessage(String(err.message ?? err));

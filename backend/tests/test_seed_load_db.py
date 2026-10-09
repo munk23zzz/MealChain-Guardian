@@ -19,7 +19,10 @@ DB_URL = (
     or "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
 ).replace("+asyncpg", "+psycopg")
 
-REF = datetime(2026, 10, 1, 12, 0, 0, tzinfo=UTC)
+# Ruling REF seed canonical (Roy 2026-10-09): dataset demo ter-anchor ke
+# REF 2026-10-08 12:00 UTC — konsisten dengan final gate sprint 3 (551 passed).
+# load_seed dengan REF lain menduplikasi baris (id stabil bergantung REF).
+REF = datetime(2026, 10, 8, 12, 0, 0, tzinfo=UTC)
 
 
 @pytest.fixture(scope="module")

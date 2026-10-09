@@ -27,7 +27,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import get_current_user
+from app.api.auth import require_roles
 from app.api.dependencies import get_db
 from app.models import AgentTrace, Commodity, Decision, Location, User
 
@@ -126,7 +126,7 @@ def _decision(
 async def seed_demo(
     payload: SeedRequest,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    _user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
 ):
     existing = (
         await db.execute(

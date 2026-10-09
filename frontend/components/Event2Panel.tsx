@@ -1,0 +1,214 @@
+"use client";
+
+// Event 2 Panel (S4-01) — price anomaly review, TANPA auto-PO.
+// Semua angka dari backend (GET /price/quotes + POST /events/price-anomaly).
+// Wording review-required (plan §11/§16), bukan tuduhan fraud.
+import { useState } from "react";
+import StatusBadge from "./StatusBadge";
+import { formatIDR } from "../lib/auth";
+import { fetchPriceQuotes, triggerPriceAnomaly } from "../lib/api";
+
+const LOCATIONS = ["Jakarta", "Bogor", "Cianjur", "Bandung", "Surabaya"];
+const COMMODITIES = ["telur", "ayam", "wortel"];
+
+export default function Event2Panel({
+  role,
+  token,
+  onDecisionCreated,
+  initialQuotes = null,
+  initialResult = null,
+}: {
+  role: string;
+  token: string | null;
+  onDecisionCreated?: () => void;
+  initialQuotes?: any;
+  initialResult?: any;
+}) {
+  const [location, setLocation] = useState("Jakarta");
+  const [commodity, setCommodity] = useState("telur");
+  const [data, setData] = useState<any>(initialQuotes);
+  const [selected, setSelected] = useState<string>(
+    initialQuotes?.quotes?.[0]?.id ?? ""
+  );
+  const [opKey, setOpKey] = useState<string>(
+    initialQuotes
+      ? "00000000-0000-4000-8000-000000000000"
+      : ""
+  );
+  const [result, setResult] = useState<any>(initialResult);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const canRun =
+    token !== null && (role === "sppg_head" || role === "sppg_nutritionist");
+
+  async function loadQuotes() {
+    if (!token) return setMsg("Login diperlukan");
+    setBusy(true);
+    setMsg(null);
+    setResult(null);
+    try {
+      const d = await fetchPriceQuotes(location, commodity, token);
+      setData(d);
+      setSelected(d.quotes?.[0]?.id ?? "");
+      // operation_key baru per sesi pemilihan (idempotensi per aksi —
+      // retry aksi yang sama memakai key yang sama → replay aman).
+      setOpKey(
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-0000-4000-8000-${Date.now().toString().padStart(12, "0")}`
+      );
+    } catch (e: any) {
+      setMsg(String(e.message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function run() {
+    if (!token || !selected) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await triggerPriceAnomaly(
+        selected,
+        data.location_id,
+        opKey,
+        token
+      );
+      setResult(r);
+      if (r.decision_id) onDecisionCreated?.();
+    } catch (e: any) {
+      setMsg(String(e.message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="event2-panel card" aria-label="Event 2 — anomali harga">
+      <div className="card-header">
+        <h4>Event 2 — Deteksi Anomali Harga</h4>
+        <StatusBadge status={result ? result.status : "proposed"} />
+      </div>
+      <p className="event2-note">
+        Bandingkan penawaran supplier dengan referensi PIHPS. Deviasi dihitung
+        deterministik oleh backend; hasilnya adalah deteksi untuk ditelaah
+        manusia.
+      </p>
+      <div className="ops-controls">
+        <label className="field">
+          <span>Lokasi</span>
+          <select
+            className="event2-location"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            disabled={!canRun || busy}
+          >
+            {LOCATIONS.map((l) => (
+              <option key={l}>{l}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Komoditas</span>
+          <select
+            className="event2-commodity"
+            value={commodity}
+            onChange={(e) => setCommodity(e.target.value)}
+            disabled={!canRun || busy}
+          >
+            {COMMODITIES.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        </label>
+        {canRun && (
+          <button
+            type="button"
+            className="button"
+            disabled={busy}
+            onClick={loadQuotes}
+          >
+            {busy ? "Memuat…" : "Muat penawaran"}
+          </button>
+        )}
+      </div>
+
+      {canRun && data && (
+        <>
+          <div className="event2-reference">
+            Referensi PIHPS{" "}
+            {data.reference ? (
+              <>
+                {formatIDR(data.reference.price_per_kg)}/kg
+                <span className="event2-ref-at">
+                  {" "}
+                  (
+                  {new Date(data.reference.recorded_at).toLocaleString(
+                    "id-ID"
+                  )}
+                  )
+                </span>
+              </>
+            ) : (
+              " tidak tersedia"
+            )}
+          </div>
+          <ul className="event2-quotes">
+            {data.quotes.map((q: any) => (
+              <li key={q.id}>
+                <label>
+                  <input
+                    type="radio"
+                    name="event2-quote"
+                    value={q.id}
+                    checked={selected === q.id}
+                    onChange={() => setSelected(q.id)}
+                  />
+                  <span className="event2-supplier">{q.supplier_name}</span>
+                  <span className="event2-price">
+                    {formatIDR(q.price_per_kg)}/kg
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            className="button button-primary event2-run"
+            disabled={busy || !selected}
+            onClick={run}
+          >
+            {busy ? "Agent menganalisis…" : "Jalankan Event 2"}
+          </button>
+        </>
+      )}
+
+      {result && (
+        <div className={`event2-result event2-${result.status}`}>
+          <p className="event2-message">{result.message}</p>
+          <dl className="ops-facts">
+            <dt>Deviasi</dt>
+            <dd>{String(result.deviation_pct).replace(".", ",")}%</dd>
+            <dt>Klasifikasi</dt>
+            <dd>{result.classification}</dd>
+            {result.decision_id ? (
+              <>
+                <dt>Status</dt>
+                <dd>Masuk review queue</dd>
+              </>
+            ) : null}
+          </dl>
+        </div>
+      )}
+
+      {msg && <p className="action-message">{msg}</p>}
+      {!canRun && (
+        <p className="event2-readonly">
+          Mode baca — Event 2 dijalankan oleh approver.
+        </p>
+      )}
+    </section>
+  );
+}

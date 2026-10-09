@@ -77,8 +77,17 @@ def client():
         yield c
 
 
-def _mk_decision(client) -> str:
-    resp = client.post("/decisions", json={"recommendation": RECOMMENDATION})
+def _mk_decision(client, user=None) -> str:
+    """Buat decision target Jakarta via API — kontrak baru: butuh JWT
+    sppg_head/sppg_nutritionist, target lokasi = lokasi user (S4-00)."""
+    if user is None:
+        user = _mk_user("sppg_head", "Jakarta")
+    elif user.get("role") == "bgn_monitor":
+        user = {**user, "role": "sppg_head"}
+    headers = _login(client, user)
+    resp = client.post(
+        "/decisions", json={"recommendation": RECOMMENDATION}, headers=headers
+    )
     assert resp.status_code == 201, resp.text
     return resp.json()["decision_id"]
 
@@ -148,7 +157,9 @@ def test_reject_dengan_alasan_tersimpan(client):
         )
         assert resp.status_code == 200, resp.text
         assert resp.json()["decision_status"] == "rejected"
-        detail = client.get(f"/decisions/{did}").json()
+        detail = client.get(
+            f"/decisions/{did}", headers=_login(client, user)
+        ).json()
         assert detail["rejection_reason"] == "Kuota SPPG Jakarta penuh minggu ini"
     finally:
         _cleanup([did], [user["email"]])
@@ -172,6 +183,7 @@ def test_repropose_rejected_membuat_iterasi_baru(client):
         resp = client.post(
             "/actions/repropose",
             json={"decision_id": v1},
+            headers=_login(client, user),
         )
         assert resp.status_code == 201, resp.text
         body = resp.json()
@@ -185,12 +197,17 @@ def test_repropose_rejected_membuat_iterasi_baru(client):
 
 
 def test_repropose_non_rejected_ditolak_409(client):
-    did = _mk_decision(client)
+    user = _mk_user("sppg_head", "Jakarta")
+    did = _mk_decision(client, user)
     try:
-        resp = client.post("/actions/repropose", json={"decision_id": did})
+        resp = client.post(
+            "/actions/repropose",
+            json={"decision_id": did},
+            headers=_login(client, user),
+        )
         assert resp.status_code == 409
     finally:
-        _cleanup([did], [])
+        _cleanup([did], [user["email"]])
 
 
 def test_chain_endpoint_urut_iterasi(client):
@@ -207,7 +224,11 @@ def test_chain_endpoint_urut_iterasi(client):
             },
             headers=_login(client, user),
         )
-        v2 = client.post("/actions/repropose", json={"decision_id": v1}).json()[
+        v2 = client.post(
+            "/actions/repropose",
+            json={"decision_id": v1},
+            headers=_login(client, user),
+        ).json()[
             "decision_id"
         ]
         chain = client.get(
@@ -236,7 +257,11 @@ def test_repropose_menulis_trace_learn(client):
             },
             headers=_login(client, user),
         )
-        v2 = client.post("/actions/repropose", json={"decision_id": v1}).json()[
+        v2 = client.post(
+            "/actions/repropose",
+            json={"decision_id": v1},
+            headers=_login(client, user),
+        ).json()[
             "decision_id"
         ]
         traces = client.get(

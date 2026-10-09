@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"primary-fixed-dim":"#80d5cb","tertiary-container":"#cf1b1e","surface-bright":"#f8f9ff","outline-variant":"#bdc9c6","on-error-container":"#93000a","primary-fixed":"#9cf2e8","status-danger-text":"#991B1B","surface-tint":"#006a63","status-danger-bg":"#FEF2F2","primary-container":"#0f766e","tertiary":"#a7000f","on-tertiary-fixed":"#410002","on-primary-container":"#a3faef","status-success-bg":"#ECFDF5","surface-variant":"#d3e4fe","status-success-border":"#A7F3D0","on-surface-variant":"#3e4947","border-strong":"#CBD5E1","surface-canvas":"#F8FAFC","error-container":"#ffdad6","on-primary-fixed-variant":"#00504a","on-tertiary":"#ffffff","border-subtle":"#E2E8F0","surface-container-high":"#dce9ff","on-primary-fixed":"#00201d","inverse-surface":"#213145","tertiary-fixed-dim":"#ffb4ab","surface-container":"#e5eeff","secondary-fixed-dim":"#ffb77d","outline":"#6e7977","secondary":"#904d00","status-danger-border":"#FECACA","on-secondary-fixed":"#2f1500","status-warning-bg":"#FFFBEB","inverse-on-surface":"#eaf1ff","surface-container-low":"#eff4ff","tertiary-fixed":"#ffdad6","primary":"#005c55","on-secondary":"#ffffff","surface":"#f8f9ff","on-error":"#ffffff","error":"#ba1a1a","on-primary":"#ffffff","surface-panel-dark":"#0F172A","surface-container-lowest":"#ffffff","surface-terminal-border":"#1E293B","on-tertiary-fixed-variant":"#93000b","background":"#f8f9ff","status-warning-border":"#FDE68A","on-background":"#0b1c30","on-tertiary-container":"#ffe4e1","terminal-text":"#E2E8F0","surface-card":"#FFFFFF","terminal-accent":"#2DD4BF","inverse-primary":"#80d5cb","surface-dim":"#cbdbf5","status-warning-text":"#92400E","surface-container-highest":"#d3e4fe","secondary-container":"#fe932c","on-secondary-container":"#663500","status-success-text":"#065F46","on-secondary-fixed-variant":"#6e3900","secondary-fixed":"#ffdcc3","on-surface":"#0b1c30"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"space-lg":"1rem","space-xl":"1.5rem","space-sm":"0.5rem","gutter":"1rem","space-md":"0.75rem","margin":"1.5rem","margin-mobile":"1rem","space-2xl":"2rem","space-xs":"0.25rem","gutter-compact":"0.5rem"},"fontFamily":{"code-lg":["JetBrains Mono"],"code-sm":["JetBrains Mono"],"body-md":["Inter"],"display":["Inter"],"headline-lg":["Inter"],"label-sm":["Inter"],"label-lg":["Inter"],"code-md":["JetBrains Mono"],"headline-sm":["Inter"],"headline-md":["Inter"],"label-md":["Inter"],"body-sm":["Inter"],"body-lg":["Inter"]},"fontSize":{"code-lg":["14px",{"lineHeight":"20px","letterSpacing":"0em","fontWeight":"500"}],"code-sm":["11px",{"lineHeight":"16px","letterSpacing":"0em","fontWeight":"400"}],"body-md":["14px",{"lineHeight":"20px","letterSpacing":"0em","fontWeight":"400"}],"display":["32px",{"lineHeight":"40px","letterSpacing":"-0.02em","fontWeight":"700"}],"headline-lg":["24px",{"lineHeight":"32px","letterSpacing":"-0.015em","fontWeight":"600"}],"label-sm":["11px",{"lineHeight":"14px","letterSpacing":"0.03em","fontWeight":"500"}],"label-lg":["14px",{"lineHeight":"20px","letterSpacing":"0.01em","fontWeight":"500"}],"code-md":["12px",{"lineHeight":"18px","letterSpacing":"0em","fontWeight":"400"}],"headline-sm":["16px",{"lineHeight":"24px","letterSpacing":"0em","fontWeight":"600"}],"headline-md":["20px",{"lineHeight":"28px","letterSpacing":"-0.01em","fontWeight":"600"}],"label-md":["12px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"body-sm":["12px",{"lineHeight":"16px","letterSpacing":"0.01em","fontWeight":"400"}],"body-lg":["16px",{"lineHeight":"24px","letterSpacing":"0em","fontWeight":"400"}]}}}};</script></head><body class="bg-surface font-body-md text-on-surface antialiased"><aside class="fixed left-0 top-0 h-full w-64 bg-surface-panel-dark text-terminal-text z-50 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex flex-col flex-1 overflow-y-auto"><div class="h-16 px-space-lg flex items-center gap-space-sm bg-surface-panel-dark"><div class="w-2.5 h-2.5 rounded-full bg-terminal-accent animate-pulse"></div><div class="flex flex-col"><span class="font-label-lg text-label-lg font-bold text-surface-card tracking-wide uppercase">Guardian Core</span><span class="font-code-sm text-code-sm text-terminal-accent">Telemetry Engine v2.4</span></div></div><div class="px-space-md py-space-sm"><div class="font-code-sm text-code-sm text-outline uppercase tracking-wider px-space-sm mb-space-xs">Operations Console</div><nav class="space-y-space-xs" data-active-classes="bg-primary-container text-on-primary font-semibold"><a aria-current="page" class="flex items-center justify-between px-space-sm py-space-sm rounded-lg transition-all bg-primary-container text-on-primary font-semibold" data-path="overview" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">map</span><span class="font-label-md text-label-md">Overview Map &amp; Supply</span></div></a><a class="flex items-center justify-between px-space-sm py-space-sm rounded-lg text-terminal-text hover:bg-surface-terminal-border hover:text-terminal-accent transition-all" data-path="recommendations" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">notifications_active</span><span class="font-label-md text-label-md">Recommendation Feed</span></div><span class="px-space-xs py-0.5 rounded-lg bg-status-danger-bg text-status-danger-text font-code-sm text-code-sm font-bold">2 Urgent</span></a><a class="flex items-center justify-between px-space-sm py-space-sm rounded-lg text-terminal-text hover:bg-surface-terminal-border hover:text-terminal-accent transition-all" data-path="decisions" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">gavel</span><span class="font-label-md text-label-md">Decision &amp; Evidence</span></div></a><a class="flex items-center justify-between px-space-sm py-space-sm rounded-lg text-terminal-text hover:bg-surface-terminal-border hover:text-terminal-accent transition-all" data-path="agent-log" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">smart_toy</span><span class="font-label-md text-label-md">Agent Activity &amp; Traces</span></div><span class="px-space-xs py-0.5 rounded-lg bg-status-success-bg text-status-success-text font-code-sm text-code-sm">AI Online</span></a><a class="flex items-center justify-between px-space-sm py-space-sm rounded-lg text-terminal-text hover:bg-surface-terminal-border hover:text-terminal-accent transition-all" data-path="kpi" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">insights</span><span class="font-label-md text-label-md">KPI &amp; Analytics</span></div></a><a class="flex items-center justify-between px-space-sm py-space-sm rounded-lg text-terminal-text hover:bg-surface-terminal-border hover:text-terminal-accent transition-all" data-path="demo-control" href="#"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-[18px]">tune</span><span class="font-label-md text-label-md">Demo Control Panel</span></div></a></nav></div></div><div class="p-space-md bg-surface-terminal-border/50 text-terminal-text"><div class="space-y-space-xs font-code-sm text-code-sm"><div class="flex items-center justify-between"><span class="text-outline">AWS Bedrock:</span><span class="text-terminal-accent flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-terminal-accent"></span>Connected</span></div><div class="flex items-center justify-between"><span class="text-outline">IPFS / Ledger:</span><span class="text-surface-card">100% Synced</span></div><div class="flex items-center justify-between pt-space-xs text-outline"><span class="text-code-sm">Build Runtime</span><span class="text-surface-card">v2.4-prod</span></div></div></div></aside><div class="pl-64"><header class="fixed top-0 left-64 right-0 h-16 bg-surface/90 backdrop-blur-xl z-40 shadow-[0_1px_8px_rgba(0,0,0,0.04)] px-space-lg flex items-center justify-between gap-space-md"><div class="flex items-center gap-space-lg"><div class="flex items-center gap-space-md"><img alt="MealChain Guardian Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1UXXHFIF_YzqGOrmnbyLdGqYoLree70NfsviUxdL1QzM4r1VxfrPCXuWGesCHzagSiCPIiAOLpMK4jUv8Wa05wkHCKBLemM3a4A1INSdK9rgERCaquS1UxPKjn_utaI3wfg-LndlMHlxZ93k1GFyw-Yu3IMYYZ6hez1CZRhVK1zHrL3FhGCRxMPowiZj2h0CupjdvRuzDd_AalSkzQ8C-7YIpwZ9xhzn5cGr4A7AnZya6EJYdTrHg_qMhk"/><div class="flex flex-col"><span class="font-headline-sm text-headline-sm font-bold text-on-surface leading-tight">MealChain Guardian</span><span class="font-label-sm text-label-sm text-on-surface-variant hidden xl:inline-block">Cold-Chain Integrity &amp; Food Supply Intelligence</span></div></div><div class="relative"><select class="h-9 px-space-md pr-space-xl font-label-md text-label-md bg-surface-card text-on-surface rounded-lg cursor-pointer focus:outline-none shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><option value="all">All SPPG Locations (West Java &amp; DKI Jakarta)</option><option value="cianjur">SPPG Cianjur</option><option value="jakarta-utara">SPPG Jakarta Utara</option><option value="bandung-barat">SPPG Bandung Barat</option><option value="bogor">SPPG Bogor</option></select></div><div class="hidden 2xl:flex items-center gap-space-xs px-space-sm py-1 bg-status-success-bg text-status-success-text rounded-lg"><span class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span><span class="font-code-sm text-code-sm font-medium">Cold Chain Mesh: Normal (48 Active Sensors)</span></div></div><div class="flex items-center gap-space-md"><div class="hidden lg:flex items-center gap-space-xs px-space-sm py-1 bg-surface-card text-on-surface rounded-lg shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><span class="material-symbols-outlined text-primary text-[16px]">shield_person</span><span class="font-label-sm text-label-sm font-medium">Role: SPPG Head (Cianjur)</span><span class="font-code-sm text-code-sm text-outline px-1">[BGN Monitor | Nutritionist | SPPG Head]</span></div><button aria-label="Notifications" class="relative p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"><span class="material-symbols-outlined text-[20px]">notifications</span><span class="absolute top-1 right-1 w-4 h-4 rounded-full bg-status-danger-bg text-status-danger-text font-code-sm text-code-sm font-bold flex items-center justify-center text-[10px]">3</span></button><div class="flex items-center gap-space-sm pl-space-xs"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div><div class="hidden md:flex flex-col text-left"><span class="font-label-md text-label-md font-semibold text-on-surface leading-tight">R. Pratama</span><span class="font-label-sm text-label-sm text-on-surface-variant leading-tight">Ops Lead</span></div><button class="p-1.5 rounded-lg text-on-surface-variant hover:text-status-danger-text hover:bg-status-danger-bg transition-colors ml-space-xs" title="Logout"><span class="material-symbols-outlined text-[20px]">logout</span></button></div></div></header><main class="w-full pt-16 bg-surface-canvas min-h-screen"><div class="flex flex-col w-full">
+<!-- Subheader & Quick Filter Bar -->
+<div class="px-space-xl py-space-md bg-surface-card shadow-sm flex flex-col gap-space-md">
+<div class="flex flex-wrap items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-md">
+<div class="p-2 bg-primary/10 rounded-lg text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[24px]">hub</span>
+</div>
+<div>
+<div class="flex items-center gap-space-sm">
+<h1 class="font-headline-md text-headline-md font-bold text-on-surface">Overview Map &amp; Supply Status</h1>
+<span class="inline-flex items-center gap-1.5 px-space-xs py-0.5 rounded-lg bg-status-success-bg text-status-success-text font-code-sm text-code-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse"></span>
+              Live Sync (30s)
+            </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">West Java &amp; DKI Jakarta Regional Redistribution Corridor Telemetry</p>
+</div>
+</div>
+<!-- Action Cluster -->
+<div class="flex items-center gap-space-sm">
+<button class="inline-flex items-center gap-1.5 px-space-md py-1.5 rounded-lg bg-surface-card text-on-surface hover:bg-surface-container-high transition-colors font-label-md text-label-md shadow-sm" id="simBtn" onclick="toggleSimulationModal()">
+<span class="material-symbols-outlined text-primary text-[18px]">alt_route</span>
+<span>Simulate Rebalance</span>
+</button>
+<button class="inline-flex items-center gap-1.5 px-space-md py-1.5 rounded-lg bg-primary text-on-primary hover:bg-primary-container transition-colors font-label-md text-label-md shadow-sm">
+<span class="material-symbols-outlined text-[18px]">download_for_offline</span>
+<span>Export Dossier (PDF/CSV)</span>
+</button>
+</div>
+</div>
+<!-- Filter Pills Row -->
+<div class="flex flex-wrap items-center justify-between gap-space-sm pt-space-xs">
+<!-- Commodity Multi-selectors -->
+<div class="flex flex-wrap items-center gap-space-xs">
+<span class="font-code-sm text-code-sm text-outline uppercase tracking-wider mr-1">Commodity:</span>
+<button class="filter-pill active-pill px-space-md py-1 rounded-full bg-primary text-on-primary font-label-sm text-label-sm transition-all shadow-sm flex items-center gap-1.5" data-commodity="all">
+<span>All Items</span>
+<span class="bg-primary-container/40 px-1.5 py-0.2 rounded font-code-sm text-code-sm">142.8t</span>
+</button>
+<button class="filter-pill px-space-md py-1 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface font-label-sm text-label-sm transition-all flex items-center gap-1.5" data-commodity="telur">
+<span>Telur (Eggs)</span>
+<span class="bg-surface-card px-1.5 py-0.2 rounded font-code-sm text-code-sm text-outline">48.2t</span>
+</button>
+<button class="filter-pill px-space-md py-1 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface font-label-sm text-label-sm transition-all flex items-center gap-1.5" data-commodity="ayam">
+<span>Ayam (Poultry)</span>
+<span class="bg-surface-card px-1.5 py-0.2 rounded font-code-sm text-code-sm text-outline">61.4t</span>
+</button>
+<button class="filter-pill px-space-md py-1 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface font-label-sm text-label-sm transition-all flex items-center gap-1.5" data-commodity="wortel">
+<span>Wortel (Carrots)</span>
+<span class="bg-surface-card px-1.5 py-0.2 rounded font-code-sm text-code-sm text-outline">33.2t</span>
+</button>
+</div>
+<!-- Status Filter -->
+<div class="flex flex-wrap items-center gap-space-xs">
+<span class="font-code-sm text-code-sm text-outline uppercase tracking-wider mr-1">Node Status:</span>
+<button class="px-space-sm py-1 rounded-lg bg-surface-card text-on-surface font-label-sm text-label-sm hover:bg-surface-container-high transition-colors shadow-sm">
+          All (10)
+        </button>
+<button class="px-space-sm py-1 rounded-lg bg-status-success-bg text-status-success-text font-label-sm text-label-sm hover:bg-status-success-bg/80 transition-colors">
+          Surplus (4)
+        </button>
+<button class="px-space-sm py-1 rounded-lg bg-status-warning-bg text-status-warning-text font-label-sm text-label-sm hover:bg-status-warning-bg/80 transition-colors">
+          Tight (3)
+        </button>
+<button class="px-space-sm py-1 rounded-lg bg-status-danger-bg text-status-danger-text font-label-sm text-label-sm hover:bg-status-danger-bg/80 transition-colors">
+          Imbalance/Alert (3)
+        </button>
+</div>
+</div>
+</div>
+<!-- KPI Metrics Strip -->
+<div class="px-space-xl py-space-lg grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-space-md">
+<!-- KPI 1 -->
+<div class="p-space-lg bg-surface-card rounded-xl shadow-sm flex flex-col justify-between">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant font-medium">Total Commodity Volume</span>
+<span class="material-symbols-outlined text-primary text-[20px]">inventory_2</span>
+</div>
+<div class="my-space-sm flex items-baseline gap-space-xs">
+<span class="font-display text-display font-bold text-on-surface tracking-tight">142,850</span>
+<span class="font-code-md text-code-md text-outline">kg active</span>
+</div>
+<div class="space-y-space-xs">
+<div class="w-full bg-surface-container h-1.5 rounded-full overflow-hidden flex">
+<div class="bg-primary h-full" style="width: 34%"></div>
+<div class="bg-secondary-container h-full" style="width: 43%"></div>
+<div class="bg-primary-fixed-dim h-full" style="width: 23%"></div>
+</div>
+<div class="flex items-center justify-between font-code-sm text-code-sm text-on-surface-variant pt-1">
+<span>Telur: 48.2t</span>
+<span>Ayam: 61.4t</span>
+<span>Wortel: 33.2t</span>
+</div>
+</div>
+<div class="mt-space-md pt-space-xs flex items-center justify-between text-status-success-text font-label-sm text-label-sm">
+<span class="inline-flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">trending_up</span>
+          +4.2% vs 7d target
+        </span>
+<span class="text-on-surface-variant font-code-sm text-code-sm">112% Buffer</span>
+</div>
+</div>
+<!-- KPI 2 -->
+<div class="p-space-lg bg-surface-card rounded-xl shadow-sm flex flex-col justify-between relative overflow-hidden">
+<div class="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-tertiary/5 pointer-events-none"></div>
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant font-medium">Active Telemetry &amp; Alerts</span>
+<span class="material-symbols-outlined text-tertiary text-[20px]">warning</span>
+</div>
+<div class="my-space-sm flex items-baseline gap-space-xs">
+<span class="font-display text-display font-bold text-tertiary tracking-tight">3 Alerts</span>
+<span class="font-code-md text-code-md text-on-surface-variant">in network</span>
+</div>
+<div class="space-y-1 text-body-sm font-body-sm">
+<div class="flex items-center gap-1.5 text-status-danger-text">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+<span class="font-code-sm text-code-sm font-semibold truncate">SPPG Bekasi #2 @ 7.8°C Excursion</span>
+</div>
+<div class="flex items-center gap-1.5 text-status-warning-text">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary-container"></span>
+<span class="font-code-sm text-code-sm truncate">2 Deficit imbalances awaiting sync</span>
+</div>
+</div>
+<div class="mt-space-md pt-space-xs flex items-center justify-between">
+<span class="px-space-xs py-0.5 rounded-lg bg-status-danger-bg text-status-danger-text font-code-sm text-code-sm font-bold animate-pulse">
+          Action Required
+        </span>
+<a class="font-label-sm text-label-sm text-primary hover:underline flex items-center" href="#">
+          Triage <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+</a>
+</div>
+</div>
+<!-- KPI 3 -->
+<div class="p-space-lg bg-surface-card rounded-xl shadow-sm flex flex-col justify-between">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant font-medium">Meal Continuity Rate</span>
+<span class="material-symbols-outlined text-primary text-[20px]">verified</span>
+</div>
+<div class="my-space-sm flex items-baseline gap-space-xs">
+<span class="font-display text-display font-bold text-primary tracking-tight">99.14%</span>
+<span class="font-code-md text-code-md text-outline">Target: ≥99.0%</span>
+</div>
+<!-- Inline Sparkline SVG -->
+<div class="h-6 w-full flex items-end">
+<svg class="w-full h-6 text-primary overflow-visible" preserveaspectratio="none" viewbox="0 0 100 24">
+<path d="M0,18 L15,16 L30,17 L45,14 L60,15 L75,9 L90,11 L100,6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path>
+<circle cx="100" cy="6" fill="currentColor" r="3"></circle>
+</svg>
+</div>
+<div class="mt-space-md pt-space-xs flex items-center justify-between font-code-sm text-code-sm text-on-surface-variant">
+<span>10 / 10 SPPG Validated</span>
+<span class="text-status-success-text font-medium">24,500 daily portions</span>
+</div>
+</div>
+<!-- KPI 4 -->
+<div class="p-space-lg bg-surface-card rounded-xl shadow-sm flex flex-col justify-between">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant font-medium">Safe Delivered Cost Avg</span>
+<span class="material-symbols-outlined text-primary text-[20px]">payments</span>
+</div>
+<div class="my-space-sm flex items-baseline gap-space-xs">
+<span class="font-display text-display font-bold text-on-surface tracking-tight">Rp 24,850</span>
+<span class="font-code-md text-code-md text-outline">/ kg</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="px-space-xs py-0.5 rounded-lg bg-status-success-bg text-status-success-text font-code-sm text-code-sm font-semibold">
+          -3.8% Ceiling Tariff
+        </span>
+<span class="font-code-sm text-code-sm text-on-surface-variant truncate">BGN Benchmark</span>
+</div>
+<div class="mt-space-md pt-space-xs flex items-center justify-between font-code-sm text-code-sm">
+<span class="text-on-surface-variant">Spoilage Avoidance:</span>
+<span class="text-primary font-bold">+Rp 18.4M saved</span>
+</div>
+</div>
+</div>
+<!-- Central Split: Radar Map Corridor & Hub Telemetry Panel -->
+<div class="px-space-xl pb-space-lg grid grid-cols-1 xl:grid-cols-12 gap-space-md">
+<!-- Map Container (Col 8) -->
+<div class="xl:col-span-8 bg-surface-panel-dark rounded-xl shadow-md overflow-hidden relative min-h-[580px] flex flex-col justify-between">
+<!-- Floating Map Header Overlay -->
+<div class="p-space-md flex flex-wrap items-center justify-between gap-space-md z-10 bg-gradient-to-b from-surface-panel-dark/95 to-transparent">
+<div class="flex items-center gap-space-sm">
+<span class="flex h-2.5 w-2.5 relative">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-terminal-accent opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-terminal-accent"></span>
+</span>
+<span class="font-code-md text-code-md text-terminal-text uppercase tracking-wider font-semibold">Active Supply Corridor: West Java &amp; DKI Jakarta</span>
+<span class="px-1.5 py-0.5 rounded bg-surface-terminal-border text-terminal-accent font-code-sm text-code-sm">48 Nodes Active</span>
+</div>
+<!-- Layer Selector & View Toggles -->
+<div class="flex items-center gap-space-xs bg-surface-terminal-border/80 backdrop-blur-md p-1 rounded-lg">
+<button class="px-space-sm py-1 rounded bg-primary text-on-primary font-label-sm text-label-sm shadow-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">thermostat</span>
+<span>Cold-Chain Mesh</span>
+</button>
+<button class="px-space-sm py-1 rounded text-terminal-text hover:bg-surface-panel-dark font-label-sm text-label-sm transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">local_shipping</span>
+<span>Transit Fleets</span>
+</button>
+<button class="px-space-sm py-1 rounded text-terminal-text hover:bg-surface-panel-dark font-label-sm text-label-sm transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">layers</span>
+<span>Surplus Heatmap</span>
+</button>
+</div>
+</div>
+<!-- Stylized Vector Map Graphics Canvas -->
+<div class="relative flex-1 w-full flex items-center justify-center p-space-md select-none">
+<svg class="w-full h-full max-h-[500px]" fill="none" viewbox="0 0 920 480" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<radialgradient cx="50%" cy="50%" id="hubGlow" r="50%">
+<stop offset="0%" stop-color="#2DD4BF" stop-opacity="0.3"></stop>
+<stop offset="100%" stop-color="#2DD4BF" stop-opacity="0"></stop>
+</radialgradient>
+<radialgradient cx="50%" cy="50%" id="alertGlow" r="50%">
+<stop offset="0%" stop-color="#CF1B1E" stop-opacity="0.4"></stop>
+<stop offset="100%" stop-color="#CF1B1E" stop-opacity="0"></stop>
+</radialgradient>
+<lineargradient id="routeGrad" x1="0%" x2="100%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#2DD4BF"></stop>
+<stop offset="100%" stop-color="#0F766E"></stop>
+</lineargradient>
+<pattern height="30" id="grid" patternunits="userSpaceOnUse" width="30">
+<path d="M 30 0 L 0 0 0 30" fill="none" stroke="#1E293B" stroke-width="0.7"></path>
+</pattern>
+</defs>
+<!-- Topographical Grid & Coastlines -->
+<rect fill="url(#grid)" height="480" width="920"></rect>
+<!-- Coastline/Regional Boundary Outline (Stylized DKI + West Java) -->
+<path d="M 80,180 C 140,170 200,165 260,170 C 310,160 360,170 410,165 C 470,160 520,180 580,190 C 650,205 740,210 840,240 L 850,440 L 70,440 Z" fill="#0B132B" opacity="0.4"></path>
+<path d="M 80,180 C 140,170 200,165 260,170 C 310,160 360,170 410,165 C 470,160 520,180 580,190 C 650,205 740,210 840,240" stroke="#1E293B" stroke-dasharray="3 3" stroke-width="1.8"></path>
+<!-- Logistics Transfer Vector: Cianjur (410, 340) -> Jakarta Utara (360, 190) -->
+<path class="animate-pulse" d="M 410,340 Q 370,270 360,195" stroke="url(#routeGrad)" stroke-dasharray="6 4" stroke-width="2.5"></path>
+<!-- Vector Arrow Marker -->
+<circle class="animate-ping" cx="378" cy="250" fill="#2DD4BF" r="3.5"></circle>
+<!-- Logistics Transfer Vector: Bogor (320, 290) -> Bekasi (450, 210) -->
+<path d="M 320,290 Q 390,260 445,215" opacity="0.7" stroke="#D97706" stroke-dasharray="4 4" stroke-width="2"></path>
+<!-- Inter-node Network Mesh Lines -->
+<g opacity="0.6" stroke="#1E293B" stroke-width="1">
+<line x1="160" x2="260" y1="210" y2="240"></line>
+<line x1="260" x2="320" y1="240" y2="290"></line>
+<line x1="320" x2="410" y1="290" y2="340"></line>
+<line x1="410" x2="350" y1="340" y2="390"></line>
+<line x1="410" x2="550" y1="340" y2="350"></line>
+<line x1="450" x2="560" y1="210" y2="240"></line>
+<line x1="360" x2="450" y1="190" y2="210"></line>
+<line x1="360" x2="340" y1="190" y2="240"></line>
+</g>
+<!-- Node 1: Serang (160, 210) - GREEN -->
+<g class="cursor-pointer" onclick="selectNode('SPPG Serang Hub', '2.3°C', '86%', '11 Batches', 'Surplus +210kg Wortel', 'Normal')">
+<circle cx="160" cy="210" fill="#065F46" opacity="0.25" r="14"></circle>
+<circle cx="160" cy="210" fill="#2DD4BF" r="5"></circle>
+<text fill="#E2E8F0" font-family="JetBrains Mono" font-size="10" text-anchor="middle" x="160" y="190">SPPG Serang</text>
+<text fill="#2DD4BF" font-family="JetBrains Mono" font-size="9" text-anchor="middle" x="160" y="228">2.3°C</text>
+</g>
+<!-- Node 2: Tangerang Selatan (260, 240) - GREEN -->
+<g class="cursor-pointer" onclick="selectNode('SPPG Tangerang Selatan', '2.2°C', '84%', '18 Batches', 'Balanced (Buffer 104%)', 'Optimal')">
+<circle cx="260" cy="240" fill="#065F46" opacity="0.25" r="14"></circle>
+<circle cx="260" cy="240" fill="#2DD4BF" r="5"></circle>
+<text fill="#E2E8F0" font-family="JetBrains Mono" font-size="10" text-anchor="middle" x="260" y="224">Tangerang Sel.</text>
+</g>
+<!-- Node 3: Jakarta Utara (360, 190) - RED SHORTAGE -->
+<g class="cursor-pointer" onclick="selectNode('SPPG Jakarta Utara', '3.1°C', '89%', '24 Batches', 'Deficit -520kg Telur', 'Critical Imbalance')">
+<circle cx="360" cy="190" fill="url(#alertGlow)" r="22"></circle>
+<circle cx="360" cy="190" fill="#CF1B1E" r="7"></circle>
+<circle class="animate-spin" cx="360" cy="190" r="12" stroke="#CF1B1E" stroke-dasharray="2 2" stroke-width="1.5"></circle>
+<rect fill="#1E293B" height="24" rx="4" stroke="#CF1B1E" stroke-width="1" width="120" x="300" y="148"></rect>
+<text fill="#FECACA" font-family="JetBrains Mono" font-size="10" font-weight="bold" text-anchor="middle" x="360" y="164">JKT UTARA: -520kg</text>
+</g>
+<!-- Node 4: Depok (340, 240) - YELLOW TIGHT -->
+<g class="cursor-pointer" onclick="selectNode('SPPG Depok Sub-hub', '2.7°C', '87%', '14 Batches', 'Tight Supply (-85kg Ayam)', 'Warning')">
+<circle cx="340" cy="240" fill="#D97706" r="5"></circle>
+<text fill="#FDE68A" font-family="JetBrains Mono" font-size="9" text-anchor="middle" x="340" y="258">Depok [Tight]</text>
+</g>
+<!-- Node 5: Bogor (320, 290) - GREEN SURPLUS -->
+<g class="cursor-pointer" onclick="selectNode('SPPG Bogor Raya', '1.9°C', '91%', '22 Batches', 'Surplus +420kg Ayam', 'Optimal')">
+<circle cx="320" cy="290" fill="#065F46" opacity="0.25" r="14"></circle>
+<circle cx="320" cy="290" fill="#2DD4BF" r="5.5"></circle>
+<text fill="#E2E8F0" font-family="JetBrains Mono" font-size="10" text-anchor="middle" x="320" y="312">Bogor (+420kg)</text>
+</g>
+<!-- Node 6: Cianjur (410, 340) - SURPLUS CORRIDOR HUB (Active Anchor) -->
+<g class="cursor-pointer" onclick="selectNode('SPPG Cianjur Central', '2.8°C', '88%', '14 Batches', 'Surplus +850kg Telur', 'Optimal Source Hub')">
+<circle cx="410" cy="340" fill="url(#hubGlow)" r="28"></circle>
+<circle cx="410" cy="340" fill="#2DD4BF" r="8"></circle>
+<circle cx="410" cy="340" r="16" stroke="#2DD4BF" stroke-dasharray="3 3" stroke-width="1.5"></circle>
+<rect fill="#0F766E" height="24" rx="4" stroke="#2DD4BF" stroke-width="1" width="120" x="350" y="362"></rect>
+<text fill="#FFFFFF" font-family="JetBrains Mono" font-size="10" font-weight="bold" text-anchor="middle" x="410" y="378">CIANJUR: +850kg</text>
+</g>
+<!-- Node 7: Sukabumi (350, 390) - GREEN -->
+<g class="cursor-pointer" onclick="selectNode('SPPG Sukabumi Agro', '2.4°C', '85%', '9 Batches', 'Surplus +300kg Wortel', 'Optimal')">
+<circle cx="350" cy="390" fill="#2DD4BF" r="5"></circle>
+<text fill="#E2E8F0" font-family="JetBrains Mono" font-size="10" text-anchor="middle" x="350" y="410">Sukabumi</text>
+</g>
+<!-- Node 8: Bekasi (450, 210) - RED SENSOR EXCURSION -->
+<g class="cursor-pointer" onclick="selectNode('SPPG Bekasi Timur #2', '7.8°C', '92%', '16 Batches', 'Critical Temp Excursion', 'Excursion Alert')">
+<circle cx="450" cy="210" fill="url(#alertGlow)" r="24"></circle>
+<circle cx="450" cy="210" fill="#CF1B1E" r="7"></circle>
+<circle class="animate-ping" cx="450" cy="210" r="14" stroke="#CF1B1E" stroke-width="2"></circle>
+<rect fill="#410002" height="24" rx="4" stroke="#CF1B1E" stroke-width="1" width="130" x="420" y="165"></rect>
+<text fill="#FFDAD6" font-family="JetBrains Mono" font-size="10" font-weight="bold" text-anchor="middle" x="485" y="181">BEKASI: 7.8°C ALERT</text>
+</g>
+<!-- Node 9: Karawang (560, 240) - GREEN -->
+<g class="cursor-pointer" onclick="selectNode('SPPG Karawang Hub', '2.0°C', '83%', '20 Batches', 'Balanced (Buffer 108%)', 'Optimal')">
+<circle cx="560" cy="240" fill="#2DD4BF" r="5"></circle>
+<text fill="#E2E8F0" font-family="JetBrains Mono" font-size="10" text-anchor="middle" x="560" y="258">Karawang</text>
+</g>
+<!-- Node 10: Bandung Barat (550, 350) - YELLOW TIGHT -->
+<g class="cursor-pointer" onclick="selectNode('SPPG Bandung Barat', '3.4°C', '89%', '15 Batches', 'Tight Supply (-120kg Wortel)', 'Warning')">
+<circle cx="550" cy="350" fill="#D97706" r="6"></circle>
+<rect fill="#1E293B" height="20" rx="3" width="130" x="520" y="370"></rect>
+<text fill="#FDE68A" font-family="JetBrains Mono" font-size="9" text-anchor="middle" x="585" y="384">Bdg Barat: -120kg</text>
+</g>
+</svg>
+<!-- Floating Tactical Legend -->
+<div class="absolute bottom-4 left-4 p-space-sm bg-surface-panel-dark/90 backdrop-blur-md rounded-lg shadow-lg flex flex-col gap-1 z-10 text-terminal-text">
+<span class="font-code-sm text-code-sm text-outline uppercase font-semibold mb-0.5">Telemetry Status</span>
+<div class="flex items-center gap-2 font-code-sm text-code-sm">
+<span class="w-2.5 h-2.5 rounded-full bg-terminal-accent"></span>
+<span>Surplus / Safe (1-4°C)</span>
+</div>
+<div class="flex items-center gap-2 font-code-sm text-code-sm">
+<span class="w-2.5 h-2.5 rounded-full bg-secondary-container"></span>
+<span>Tight Supply / Low Buffer</span>
+</div>
+<div class="flex items-center gap-2 font-code-sm text-code-sm">
+<span class="w-2.5 h-2.5 rounded-full bg-tertiary animate-pulse"></span>
+<span>Shortage / Thermal Excursion</span>
+</div>
+<div class="flex items-center gap-2 font-code-sm text-code-sm pt-1">
+<span class="w-4 h-0.5 bg-terminal-accent inline-block"></span>
+<span class="text-outline">Autonomous Transfer Path</span>
+</div>
+</div>
+<!-- Floating Map Nav / Zoom Controls -->
+<div class="absolute bottom-4 right-4 flex flex-col gap-1 z-10">
+<button class="w-8 h-8 rounded bg-surface-terminal-border text-terminal-text hover:bg-surface-panel-dark flex items-center justify-center font-bold text-lg shadow-sm">
+            +
+          </button>
+<button class="w-8 h-8 rounded bg-surface-terminal-border text-terminal-text hover:bg-surface-panel-dark flex items-center justify-center font-bold text-lg shadow-sm">
+            −
+          </button>
+<button class="w-8 h-8 rounded bg-surface-terminal-border text-terminal-text hover:bg-surface-panel-dark flex items-center justify-center shadow-sm" title="Reset View">
+<span class="material-symbols-outlined text-[16px]">center_focus_strong</span>
+</button>
+</div>
+</div>
+<!-- Map Corridor Footer Bar -->
+<div class="p-space-sm bg-surface-terminal-border/90 backdrop-blur-md flex flex-wrap items-center justify-between text-terminal-text font-code-sm text-code-sm z-10">
+<div class="flex items-center gap-space-md">
+<span class="text-outline">Active Dispatch Suggestion:</span>
+<span class="text-terminal-accent font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">local_shipping</span>
+            Event #REC-104: Cianjur ➔ Jakarta Utara (500 kg Eggs via Chilled Reefer-04)
+          </span>
+</div>
+<div class="flex items-center gap-space-sm">
+<span class="text-outline">Transit ETA: 2h 45m</span>
+<span class="px-1.5 py-0.5 rounded bg-primary-container text-on-primary font-bold">Optimal Window</span>
+</div>
+</div>
+</div>
+<!-- Node Quick Telemetry Ledger Card (Col 4) -->
+<div class="xl:col-span-4 flex flex-col gap-space-md">
+<!-- Active Hub Telemetry Dossier -->
+<div class="bg-surface-card rounded-xl p-space-lg shadow-sm flex flex-col justify-between flex-1">
+<div>
+<!-- Header -->
+<div class="flex items-center justify-between pb-space-sm">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-[20px]">warehouse</span>
+<span class="font-label-lg text-label-lg font-bold text-on-surface" id="selectedNodeTitle">SPPG Cianjur Central</span>
+</div>
+<span class="px-space-xs py-0.5 rounded-lg bg-status-success-bg text-status-success-text font-code-sm text-code-sm font-semibold" id="selectedNodeBadge">
+              Optimal Source
+            </span>
+</div>
+<div class="font-code-sm text-code-sm text-on-surface-variant mb-space-md">
+            Node ID: <span class="text-on-surface font-semibold" id="selectedNodeCode">#SPPG-CJR-01</span> • Scope: West Java Sector 2
+          </div>
+<!-- Micro Telemetry Gauges -->
+<div class="grid grid-cols-2 gap-space-sm mb-space-md">
+<div class="p-space-sm bg-surface-container-low rounded-lg">
+<div class="font-label-sm text-label-sm text-on-surface-variant flex items-center justify-between">
+<span>Chamber Temp</span>
+<span class="material-symbols-outlined text-primary text-[14px]">thermostat</span>
+</div>
+<div class="mt-1 flex items-baseline gap-1">
+<span class="font-headline-sm text-headline-sm font-bold text-on-surface" id="nodeTemp">2.8°C</span>
+<span class="font-code-sm text-code-sm text-outline">(1.0-4.0°C Safe)</span>
+</div>
+<div class="w-full bg-surface-container h-1 rounded-full mt-2 overflow-hidden">
+<div class="bg-primary h-full" style="width: 65%"></div>
+</div>
+</div>
+<div class="p-space-sm bg-surface-container-low rounded-lg">
+<div class="font-label-sm text-label-sm text-on-surface-variant flex items-center justify-between">
+<span>Relative Humidity</span>
+<span class="material-symbols-outlined text-primary text-[14px]">humidity_mid</span>
+</div>
+<div class="mt-1 flex items-baseline gap-1">
+<span class="font-headline-sm text-headline-sm font-bold text-on-surface" id="nodeHumidity">88%</span>
+<span class="font-code-sm text-code-sm text-outline">(85-92% RH)</span>
+</div>
+<div class="w-full bg-surface-container h-1 rounded-full mt-2 overflow-hidden">
+<div class="bg-primary-fixed-dim h-full" style="width: 88%"></div>
+</div>
+</div>
+</div>
+<!-- Commodity Allocation breakdown -->
+<div class="space-y-space-sm mb-space-md">
+<div class="font-label-sm text-label-sm font-bold text-on-surface uppercase tracking-wider">
+              Local Inventory Balance
+            </div>
+<!-- Item 1: Telur -->
+<div class="p-space-sm bg-surface-container-low rounded-lg flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-2 h-8 rounded-full bg-primary"></div>
+<div>
+<div class="font-label-md text-label-md font-semibold text-on-surface">Telur Ayam Ras</div>
+<div class="font-code-sm text-code-sm text-on-surface-variant">Demand: 1,800 kg / 7d</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-code-md text-code-md font-bold text-on-surface">2,650 kg</div>
+<div class="font-code-sm text-code-sm text-status-success-text font-semibold">+850 kg (Surplus)</div>
+</div>
+</div>
+<!-- Item 2: Ayam Potong -->
+<div class="p-space-sm bg-surface-container-low rounded-lg flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-2 h-8 rounded-full bg-secondary-container"></div>
+<div>
+<div class="font-label-md text-label-md font-semibold text-on-surface">Ayam Broiler Dingin</div>
+<div class="font-code-sm text-code-sm text-on-surface-variant">Demand: 2,400 kg / 7d</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-code-md text-code-md font-bold text-on-surface">2,510 kg</div>
+<div class="font-code-sm text-code-sm text-on-surface-variant">+110 kg (Optimal)</div>
+</div>
+</div>
+<!-- Item 3: Wortel -->
+<div class="p-space-sm bg-surface-container-low rounded-lg flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-2 h-8 rounded-full bg-primary-fixed-dim"></div>
+<div>
+<div class="font-label-md text-label-md font-semibold text-on-surface">Wortel Curah Segar</div>
+<div class="font-code-sm text-code-sm text-on-surface-variant">Demand: 950 kg / 7d</div>
+</div>
+</div>
+<div class="text-right">
+<div class="font-code-md text-code-md font-bold text-on-surface">1,020 kg</div>
+<div class="font-code-sm text-code-sm text-on-surface-variant">+70 kg (Optimal)</div>
+</div>
+</div>
+</div>
+<!-- Sensor Provenance & Cryptographic Sign-off -->
+<div class="p-space-sm bg-surface-panel-dark text-terminal-text rounded-lg space-y-1">
+<div class="flex items-center justify-between font-code-sm text-code-sm">
+<span class="text-outline">IoT Gateway Hash:</span>
+<span class="font-mono text-terminal-accent">0x8F4c...18dA</span>
+</div>
+<div class="flex items-center justify-between font-code-sm text-code-sm">
+<span class="text-outline">RFID Crates Verified:</span>
+<span class="text-surface-card" id="nodeBatches">14 Validated Batches</span>
+</div>
+<div class="flex items-center justify-between font-code-sm text-code-sm">
+<span class="text-outline">Telemetry Sync:</span>
+<span class="text-terminal-accent">90s ago (Block #41209)</span>
+</div>
+</div>
+</div>
+<!-- Card Bottom Action -->
+<div class="mt-space-md pt-space-sm flex items-center gap-space-sm">
+<a class="flex-1 py-2 px-space-md rounded-lg bg-primary hover:bg-primary-container text-on-primary font-label-md text-label-md text-center transition-colors shadow-sm" href="#">
+            Launch Decision Dossier
+          </a>
+<button class="p-2 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface transition-colors" title="Download Telemetry Dump">
+<span class="material-symbols-outlined text-[18px]">share</span>
+</button>
+</div>
+</div>
+<!-- Live Corridor Disruption Notice Banner -->
+<div class="bg-status-danger-bg rounded-xl p-space-md shadow-sm flex items-start gap-space-sm">
+<span class="material-symbols-outlined text-tertiary text-[22px] flex-shrink-0 mt-0.5">crisis_alert</span>
+<div class="space-y-1">
+<div class="font-label-md text-label-md font-bold text-status-danger-text">
+            Active Excursion in SPPG Bekasi Timur Unit #2
+          </div>
+<p class="font-body-sm text-body-sm text-status-danger-text/90">
+            Temperature spiked to 7.8°C over 22 mins. AI Agent recommends rerouting incoming poultry batch #PO-8821 to SPPG Bogor cold hub to prevent spoilage.
+          </p>
+<div class="pt-1 flex items-center gap-space-md">
+<a class="font-label-sm text-label-sm font-bold text-tertiary underline" href="#">
+              View Reroute Recommendation ➔
+            </a>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Detailed Location & Commodity Inventory Table Section -->
+<div class="px-space-xl pb-space-2xl">
+<div class="bg-surface-card rounded-xl shadow-sm overflow-hidden flex flex-col">
+<!-- Table Header & Controls Bar -->
+<div class="p-space-lg flex flex-wrap items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-md flex-1 min-w-[280px] max-w-lg">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-3 top-2.5 text-[18px] text-outline">search</span>
+<input class="w-full pl-9 pr-4 py-1.5 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary shadow-sm" id="searchInput" onkeyup="filterTable()" placeholder="Search SPPG node, location, batch ID, or PIC..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-space-sm">
+<!-- Density Toggle -->
+<div class="flex items-center bg-surface-container-low rounded-lg p-0.5">
+<button class="px-2 py-1 rounded bg-surface-card text-on-surface font-label-sm text-label-sm shadow-sm" title="Dense View">Dense</button>
+<button class="px-2 py-1 rounded text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm" title="Standard View">Comfortable</button>
+</div>
+<!-- Column Filter Dropdown -->
+<button class="inline-flex items-center gap-1.5 px-space-md py-1.5 rounded-lg bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors font-label-md text-label-md">
+<span class="material-symbols-outlined text-[18px]">filter_list</span>
+<span>Filter Columns</span>
+</button>
+</div>
+</div>
+<!-- Responsive Table Container -->
+<div class="overflow-x-auto w-full">
+<table class="w-full text-left" id="inventoryTable">
+<thead>
+<tr class="bg-surface-container-low text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider">
+<th class="py-2.5 px-space-lg">SPPG Location Node</th>
+<th class="py-2.5 px-space-md">Active Commodities</th>
+<th class="py-2.5 px-space-md text-right">Current Stock</th>
+<th class="py-2.5 px-space-md text-right">7-Day Demand</th>
+<th class="py-2.5 px-space-md text-center">Balance Status</th>
+<th class="py-2.5 px-space-md text-center">Cold-Chain Temp</th>
+<th class="py-2.5 px-space-md text-center">Freshness Index</th>
+<th class="py-2.5 px-space-lg text-right">Autonomous Action</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-container font-body-md text-body-md">
+<!-- Row 1: Cianjur -->
+<tr class="hover:bg-surface-container-low/60 transition-colors cursor-pointer" onclick="selectNode('SPPG Cianjur Central', '2.8°C', '88%', '14 Batches', 'Surplus +850kg Telur', 'Optimal Source')">
+<td class="py-3 px-space-lg">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-primary text-[20px]">location_on</span>
+<div>
+<div class="font-label-md text-label-md font-bold text-on-surface">SPPG Cianjur Central</div>
+<div class="font-code-sm text-code-sm text-on-surface-variant">#SPPG-CJR-01 • PIC: S. Hartono</div>
+</div>
+</div>
+</td>
+<td class="py-3 px-space-md">
+<div class="flex items-center gap-1">
+<span class="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-code-sm text-code-sm font-medium">Telur</span>
+<span class="px-1.5 py-0.5 rounded bg-secondary-container/20 text-on-secondary-container font-code-sm text-code-sm font-medium">Ayam</span>
+<span class="px-1.5 py-0.5 rounded bg-primary-fixed-dim/30 text-primary-container font-code-sm text-code-sm font-medium">Wortel</span>
+</div>
+</td>
+<td class="py-3 px-space-md text-right font-code-md text-code-md font-semibold text-on-surface">
+                6,180 kg <span class="text-outline font-normal">(184 crates)</span>
+</td>
+<td class="py-3 px-space-md text-right font-code-md text-code-md text-on-surface-variant">
+                5,150 kg
+              </td>
+<td class="py-3 px-space-md text-center">
+<span class="inline-flex items-center gap-1 px-space-sm py-0.5 rounded-full bg-status-success-bg text-status-success-text font-code-sm text-code-sm font-bold">
+                  +850 kg Surplus
+                </span>
+</td>
+<td class="py-3 px-space-md text-center">
+<div class="inline-flex items-center gap-1 font-code-md text-code-md text-primary font-semibold">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+                  2.8°C [Norm]
+                </div>
+</td>
+<td class="py-3 px-space-md text-center">
+<div class="inline-flex items-center gap-1.5">
+<div class="w-12 bg-surface-container h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full" style="width: 96%"></div>
+</div>
+<span class="font-code-sm text-code-sm font-bold text-on-surface">96%</span>
+</div>
+</td>
+<td class="py-3 px-space-lg text-right">
+<a class="inline-flex items-center gap-1 px-space-sm py-1 rounded-lg bg-primary-fixed text-on-primary-fixed hover:bg-primary-fixed-dim font-label-sm text-label-sm font-semibold transition-colors" href="#">
+                  Transfer ➔ #REC-104
+                </a>
+</td>
+</tr>
+<!-- Row 2: Jakarta Utara -->
+<tr class="hover:bg-surface-container-low/60 transition-colors bg-status-danger-bg/20 cursor-pointer" onclick="selectNode('SPPG Jakarta Utara', '3.1°C', '89%', '24 Batches', 'Deficit -520kg Telur', 'Critical Imbalance')">
+<td class="py-3 px-space-lg">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-tertiary text-[20px]">warning</span>
+<div>
+<div class="font-label-md text-label-md font-bold text-on-surface">SPPG Jakarta Utara Hub</div>
+<div class="font-code-sm text-code-sm text-on-surface-variant">#SPPG-JKT-04 • PIC: M. Fadli</div>
+</div>
+</div>
+</td>
+<td class="py-3 px-space-md">
+<div class="flex items-center gap-1">
+<span class="px-1.5 py-0.5 rounded bg-tertiary-fixed text-tertiary font-code-sm text-code-sm font-bold">Telur (Low)</span>
+<span class="px-1.5 py-0.5 rounded bg-secondary-container/20 text-on-secondary-container font-code-sm text-code-sm">Ayam</span>
+</div>
+</td>
+<td class="py-3 px-space-md text-right font-code-md text-code-md font-semibold text-tertiary">
+                4,280 kg <span class="text-outline font-normal">(112 crates)</span>
+</td>
+<td class="py-3 px-space-md text-right font-code-md text-code-md text-on-surface-variant">
+                4,800 kg
+              </td>
+<td class="py-3 px-space-md text-center">
+<span class="inline-flex items-center gap-1 px-space-sm py-0.5 rounded-full bg-status-danger-bg text-status-danger-text font-code-sm text-code-sm font-bold animate-pulse">
+                  -520 kg Deficit
+                </span>
+</td>
+<td class="py-3 px-space-md text-center">
+<div class="inline-flex items-center gap-1 font-code-md text-code-md text-on-surface font-semibold">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+                  3.1°C [Norm]
+                </div>
+</td>
+<td class="py-3 px-space-md text-center">
+<div class="inline-flex items-center gap-1.5">
+<div class="w-12 bg-surface-container h-1.5 rounded-full overflow-hidden">
+<div class="bg-secondary-container h-full" style="width: 74%"></div>
+</div>
+<span class="font-code-sm text-code-sm font-bold text-on-surface">74%</span>
+</div>
+</td>
+<td class="py-3 px-space-lg text-right">
+<button class="inline-flex items-center gap-1 px-space-sm py-1 rounded-lg bg-tertiary text-on-tertiary hover:bg-tertiary-container font-label-sm text-label-sm font-semibold transition-colors">
+                  Urgent Inbound
+                </button>
+</td>
+</tr>
+<!-- Row 3: Bekasi -->
+<tr class="hover:bg-surface-container-low/60 transition-colors bg-status-danger-bg/30 cursor-pointer" onclick="selectNode('SPPG Bekasi Timur #2', '7.8°C', '92%', '16 Batches', 'Critical Temp Excursion', 'Excursion Alert')">
+<td class="py-3 px-space-lg">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-tertiary text-[20px] animate-pulse">device_thermostat</span>
+<div>
+<div class="font-label-md text-label-md font-bold text-tertiary">SPPG Bekasi Timur Unit #2</div>
+<div class="font-code-sm text-code-sm text-on-surface-variant">#SPPG-BKS-02 • PIC: H. Wahyudi</div>
+</div>
+</div>
+</td>
+<td class="py-3 px-space-md">
+<div class="flex items-center gap-1">
+<span class="px-1.5 py-0.5 rounded bg-tertiary-fixed text-tertiary font-code-sm text-code-sm font-bold">Ayam Broiler</span>
+<span class="px-1.5 py-0.5 rounded bg-primary-fixed-dim/30 text-primary-container font-code-sm text-code-sm">Wortel</span>
+</div>
+</td>
+<td class="py-3 px-space-md text-right font-code-md text-code-md font-semibold text-on-surface">
+                5,400 kg <span class="text-outline font-normal">(140 crates)</span>
+</td>
+<td class="py-3 px-space-md text-right font-code-md text-code-md text-on-surface-variant">
+                5,200 kg
+              </td>
+<td class="py-3 px-space-md text-center">
+<span class="inline-flex items-center gap-1 px-space-sm py-0.5 rounded-full bg-status-warning-bg text-status-warning-text font-code-sm text-code-sm font-bold">
+                  +200 kg Hold
+                </span>
+</td>
+<td class="py-3 px-space-md text-center">
+<div class="inline-flex items-center gap-1 font-code-md text-code-md text-tertiary font-bold animate-pulse">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span>
+                  7.8°C [EXCURSION]
+                </div>
+</td>
+<td class="py-3 px-space-md text-center">
+<div class="inline-flex items-center gap-1.5">
+<div class="w-12 bg-surface-container h-1.5 rounded-full overflow-hidden">
+<div class="bg-tertiary h-full" style="width: 58%"></div>
+</div>
+<span class="font-code-sm text-code-sm font-bold text-tertiary">58%</span>
+</div>
+</td>
+<td class="py-3 px-space-lg text-right">
+<button class="inline-flex items-center gap-1 px-space-sm py-1 rounded-lg bg-tertiary-container text-on-tertiary-container hover:bg-tertiary font-label-sm text-label-sm font-semibold transition-colors">
+                  Reroute Trigger
+                </button>
+</td>
+</tr>
+<!-- Row 4: Bandung Barat -->
+<tr class="hover:bg-surface-container-low/60 transition-colors cursor-pointer" onclick="selectNode('SPPG Bandung Barat', '3.4°C', '89%', '15 Batches', 'Tight Supply (-120kg Wortel)', 'Warning')">
+<td class="py-3 px-space-lg">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-secondary-container text-[20px]">location_on</span>
+<div>
+<div class="font-label-md text-label-md font-bold text-on-surface">SPPG Bandung Barat</div>
+<div class="font-code-sm text-code-sm text-on-surface-variant">#SPPG-BBD-03 • PIC: D. Anisa</div>
+</div>
+</div>
+</td>
+<td class="py-3 px-space-md">
+<div class="flex items-center gap-1">
+<span class="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-code-sm text-code-sm">Telur</span>
+<span class="px-1.5 py-0.5 rounded bg-status-warning-bg text-status-warning-text font-code-sm text-code-sm font-semibold">Wortel (Tight)</span>
+</div>
+</td>
+<td class="py-3 px-space-md text-right font-code-md text-code-md font-semibold text-on-surface">
+                3,880 kg <span class="text-outline font-normal">(98 crates)</span>
+</td>
+<td class="py-3 px-space-md text-right font-code-md text-code-md text-on-surface-variant">
+                4,000 kg
+              </td>
+<td class="py-3 px-space-md text-center">
+<span class="inline-flex items-center gap-1 px-space-sm py-0.5 rounded-full bg-status-warning-bg text-status-warning-text font-code-sm text-code-sm font-bold">
+                  -120 kg Tight
+                </span>
+</td>
+<td class="py-3 px-space-md text-center">
+<div class="inline-flex items-center gap-1 font-code-md text-code-md text-on-surface font-semibold">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+                  3.4°C [Norm]
+                </div>
+</td>
+<td class="py-3 px-space-md text-center">
+<div class="inline-flex items-center gap-1.5">
+<div class="w-12 bg-surface-container h-1.5 rounded-full overflow-hidden">
+<div class="bg-secondary-container h-full" style="width: 82%"></div>
+</div>
+<span class="font-code-sm text-code-sm font-bold text-on-surface">82%</span>
+</div>
+</td>
+<td class="py-3 px-space-lg text-right">
+<span class="font-code-sm text-code-sm text-on-surface-variant">Monitoring (Buffer 97%)</span>
+</td>
+</tr>
+<!-- Row 5: Bogor -->
+<tr class="hover:bg-surface-container-low/60 transition-colors cursor-pointer" onclick="selectNode('SPPG Bogor Raya', '1.9°C', '91%', '22 Batches', 'Surplus +420kg Ayam', 'Optimal')">
+<td class="py-3 px-space-lg">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-primary text-[20px]">location_on</span>
+<div>
+<div class="font-label-md text-label-md font-bold text-on-surface">SPPG Bogor Raya</div>
+<div class="font-code-sm text-code-sm text-on-surface-variant">#SPPG-BGR-01 • PIC: T. Gunawan</div>
+</div>
+</div>
+</td>
+<td class="py-3 px-space-md">
+<div class="flex items-center gap-1">
+<span class="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-code-sm text-code-sm">Telur</span>
+<span class="px-1.5 py-0.5 rounded bg-secondary-container/20 text-on-secondary-container font-code-sm text-code-sm font-semibold">Ayam (Surplus)</span>
+</div>
+</td>
+<td class="py-3 px-space-md text-right font-code-md text-code-md font-semibold text-on-surface">
+                5,820 kg <span class="text-outline font-normal">(160 crates)</span>
+</td>
+<td class="py-3 px-space-md text-right font-code-md text-code-md text-on-surface-variant">
+                5,400 kg
+              </td>
+<td class="py-3 px-space-md text-center">
+<span class="inline-flex items-center gap-1 px-space-sm py-0.5 rounded-full bg-status-success-bg text-status-success-text font-code-sm text-code-sm font-bold">
+                  +420 kg Surplus
+                </span>
+</td>
+<td class="py-3 px-space-md text-center">
+<div class="inline-flex items-center gap-1 font-code-md text-code-md text-primary font-semibold">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+                  1.9°C [Norm]
+                </div>
+</td>
+<td class="py-3 px-space-md text-center">
+<div class="inline-flex items-center gap-1.5">
+<div class="w-12 bg-surface-container h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full" style="width: 94%"></div>
+</div>
+<span class="font-code-sm text-code-sm font-bold text-on-surface">94%</span>
+</div>
+</td>
+<td class="py-3 px-space-lg text-right">
+<span class="font-code-sm text-code-sm text-status-success-text font-semibold">Backup Standby</span>
+</td>
+</tr>
+<!-- Row 6: Sukabumi -->
+<tr class="hover:bg-surface-container-low/60 transition-colors cursor-pointer" onclick="selectNode('SPPG Sukabumi Agro', '2.4°C', '85%', '9 Batches', 'Surplus +300kg Wortel', 'Optimal')">
+<td class="py-3 px-space-lg">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-primary text-[20px]">location_on</span>
+<div>
+<div class="font-label-md text-label-md font-bold text-on-surface">SPPG Sukabumi Agro</div>
+<div class="font-code-sm text-code-sm text-on-surface-variant">#SPPG-SKB-02 • PIC: I. Kurniawan</div>
+</div>
+</div>
+</td>
+<td class="py-3 px-space-md">
+<div class="flex items-center gap-1">
+<span class="px-1.5 py-0.5 rounded bg-primary-fixed-dim/30 text-primary-container font-code-sm text-code-sm font-semibold">Wortel Curah</span>
+<span class="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-code-sm text-code-sm">Telur</span>
+</div>
+</td>
+<td class="py-3 px-space-md text-right font-code-md text-code-md font-semibold text-on-surface">
+                3,400 kg <span class="text-outline font-normal">(85 crates)</span>
+</td>
+<td class="py-3 px-space-md text-right font-code-md text-code-md text-on-surface-variant">
+                3,100 kg
+              </td>
+<td class="py-3 px-space-md text-center">
+<span class="inline-flex items-center gap-1 px-space-sm py-0.5 rounded-full bg-status-success-bg text-status-success-text font-code-sm text-code-sm font-bold">
+                  +300 kg Surplus
+                </span>
+</td>
+<td class="py-3 px-space-md text-center">
+<div class="inline-flex items-center gap-1 font-code-md text-code-md text-primary font-semibold">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+                  2.4°C [Norm]
+                </div>
+</td>
+<td class="py-3 px-space-md text-center">
+<div class="inline-flex items-center gap-1.5">
+<div class="w-12 bg-surface-container h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full" style="width: 98%"></div>
+</div>
+<span class="font-code-sm text-code-sm font-bold text-on-surface">98%</span>
+</div>
+</td>
+<td class="py-3 px-space-lg text-right">
+<span class="font-code-sm text-code-sm text-primary font-semibold">Supply Optimal</span>
+</td>
+</tr>
+<!-- Row 7: Karawang -->
+<tr class="hover:bg-surface-container-low/60 transition-colors cursor-pointer" onclick="selectNode('SPPG Karawang Hub', '2.0°C', '83%', '20 Batches', 'Balanced (Buffer 108%)', 'Optimal')">
+<td class="py-3 px-space-lg">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-primary text-[20px]">location_on</span>
+<div>
+<div class="font-label-md text-label-md font-bold text-on-surface">SPPG Karawang Hub</div>
+<div class="font-code-sm text-code-sm text-on-surface-variant">#SPPG-KRW-01 • PIC: Y. Supriyanto</div>
+</div>
+</div>
+</td>
+<td class="py-3 px-space-md">
+<div class="flex items-center gap-1">
+<span class="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-code-sm text-code-sm">Telur</span>
+<span class="px-1.5 py-0.5 rounded bg-secondary-container/20 text-on-secondary-container font-code-sm text-code-sm">Ayam</span>
+<span class="px-1.5 py-0.5 rounded bg-primary-fixed-dim/30 text-primary-container font-code-sm text-code-sm">Wortel</span>
+</div>
+</td>
+<td class="py-3 px-space-md text-right font-code-md text-code-md font-semibold text-on-surface">
+                4,950 kg <span class="text-outline font-normal">(130 crates)</span>
+</td>
+<td class="py-3 px-space-md text-right font-code-md text-code-md text-on-surface-variant">
+                4,600 kg
+              </td>
+<td class="py-3 px-space-md text-center">
+<span class="inline-flex items-center gap-1 px-space-sm py-0.5 rounded-full bg-status-success-bg text-status-success-text font-code-sm text-code-sm font-semibold">
+                  +350 kg (Safe)
+                </span>
+</td>
+<td class="py-3 px-space-md text-center">
+<div class="inline-flex items-center gap-1 font-code-md text-code-md text-primary font-semibold">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+                  2.0°C [Norm]
+                </div>
+</td>
+<td class="py-3 px-space-md text-center">
+<div class="inline-flex items-center gap-1.5">
+<div class="w-12 bg-surface-container h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full" style="width: 91%"></div>
+</div>
+<span class="font-code-sm text-code-sm font-bold text-on-surface">91%</span>
+</div>
+</td>
+<td class="py-3 px-space-lg text-right">
+<span class="font-code-sm text-code-sm text-on-surface-variant">Buffer 108% Steady</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Table Pagination and Audit Summary -->
+<div class="p-space-md bg-surface-container-low/40 flex flex-wrap items-center justify-between gap-space-sm text-on-surface-variant font-code-sm text-code-sm">
+<div class="flex items-center gap-space-md">
+<span class="font-medium text-on-surface">Showing 7 of 10 Regional Kitchen Nodes</span>
+<span class="text-outline">•</span>
+<span>Total Tracked Assets: 3,420 Crates</span>
+<span class="text-outline">•</span>
+<span class="text-status-success-text font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">shield</span>
+            100% Cryptographic Traceability Active
+          </span>
+</div>
+<div class="flex items-center gap-space-xs">
+<button class="px-space-sm py-1 rounded bg-surface-card text-on-surface font-label-sm text-label-sm shadow-sm disabled:opacity-50" disabled="">Previous</button>
+<span class="px-space-xs font-bold text-on-surface">1</span>
+<button class="px-space-sm py-1 rounded bg-surface-card text-on-surface font-label-sm text-label-sm shadow-sm">Next</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Rebalance Simulation Modal (Interactive Vanilla JS trigger) -->
+<div class="hidden fixed inset-0 z-50 bg-surface-panel-dark/60 backdrop-blur-sm flex items-center justify-center p-space-lg" id="simModal">
+<div class="bg-surface-card rounded-xl max-w-xl w-full p-space-xl shadow-xl space-y-space-md">
+<div class="flex items-center justify-between pb-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">alt_route</span>
+</div>
+<div>
+<h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">Autonomous Rebalance Simulator</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">AWS Bedrock Optimization Agent • Event #REC-104</p>
+</div>
+</div>
+<button class="text-on-surface-variant hover:text-on-surface" onclick="toggleSimulationModal()">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<div class="p-space-md bg-surface-container-low rounded-lg space-y-space-sm font-code-sm text-code-sm">
+<div class="flex items-center justify-between">
+<span class="text-on-surface-variant">Source Node:</span>
+<span class="font-bold text-on-surface">SPPG Cianjur (+850kg Telur available)</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-on-surface-variant">Target Node:</span>
+<span class="font-bold text-tertiary">SPPG Jakarta Utara (-520kg Telur deficit)</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-on-surface-variant">Recommended Transfer:</span>
+<span class="font-bold text-primary">500 kg (20 Crates @ 2.8°C Reefer)</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-on-surface-variant">Estimated Delivery Cost:</span>
+<span class="font-bold text-on-surface">Rp 23,200 / kg (-Rp 1,650 vs spot tariff)</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-on-surface-variant">Continuity Impact:</span>
+<span class="font-bold text-status-success-text">+3,200 school beneficiary meals protected</span>
+</div>
+</div>
+<div class="flex items-center justify-end gap-space-sm pt-space-xs">
+<button class="px-space-md py-2 rounded-lg bg-surface-container text-on-surface font-label-md text-label-md hover:bg-surface-container-high transition-colors" onclick="toggleSimulationModal()">
+          Dismiss
+        </button>
+<button class="px-space-md py-2 rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:bg-primary-container transition-colors shadow-sm flex items-center gap-1.5" onclick="alert('Simulation dispatched to Autonomous Decision Feed (Event #REC-104)'); toggleSimulationModal();">
+<span class="material-symbols-outlined text-[18px]">verified</span>
+          Confirm &amp; Queue Action
+        </button>
+</div>
+</div>
+</div>
+</div>
+<script>
+  function selectNode(name, temp, humidity, batches, statusText, badge) {
+    const titleEl = document.getElementById('selectedNodeTitle');
+    const badgeEl = document.getElementById('selectedNodeBadge');
+    const tempEl = document.getElementById('nodeTemp');
+    const humEl = document.getElementById('nodeHumidity');
+    const batchesEl = document.getElementById('nodeBatches');
+
+    if (titleEl) titleEl.innerText = name;
+    if (badgeEl) badgeEl.innerText = badge;
+    if (tempEl) tempEl.innerText = temp;
+    if (humEl) humEl.innerText = humidity;
+    if (batchesEl) batchesEl.innerText = batches;
+  }
+
+  function toggleSimulationModal() {
+    const modal = document.getElementById('simModal');
+    if (modal) {
+      modal.classList.toggle('hidden');
+    }
+  }
+
+  function filterTable() {
+    const input = document.getElementById('searchInput');
+    const filter = input.value.toLowerCase();
+    const table = document.getElementById('inventoryTable');
+    const tr = table.getElementsByTagName('tr');
+
+    for (let i = 1; i < tr.length; i++) {
+      const text = tr[i].innerText.toLowerCase();
+      if (text.indexOf(filter) > -1) {
+        tr[i].style.display = '';
+      } else {
+        tr[i].style.display = 'none';
+      }
+    }
+  }
+
+  // Commodity selector toggle interactions
+  document.querySelectorAll('.filter-pill').forEach(pill => {
+    pill.addEventListener('click', function() {
+      document.querySelectorAll('.filter-pill').forEach(p => {
+        p.classList.remove('bg-primary', 'text-on-primary', 'shadow-sm');
+        p.classList.add('bg-surface-container-low', 'text-on-surface');
+      });
+      this.classList.remove('bg-surface-container-low', 'text-on-surface');
+      this.classList.add('bg-primary', 'text-on-primary', 'shadow-sm');
+    });
+  });
+</script></main></div></body></html>

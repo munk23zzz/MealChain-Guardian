@@ -8,7 +8,14 @@ async function request(path: string, init: RequestInit): Promise<any> {
   if (!resp.ok) {
     throw new Error(`HTTP ${resp.status}: ${path}`);
   }
-  return resp.json();
+  // Backend kadang membalas HTML (proxy/error page) — pesan parse mentah
+  // ("Unexpected token '<'...") jangan sampai tampil di UI.
+  const text = await resp.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`Respons bukan JSON dari ${path} (HTTP ${resp.status})`);
+  }
 }
 
 export async function login(email: string, password: string) {
@@ -64,18 +71,16 @@ export async function executeAction(decisionId: string, token: string) {
   });
 }
 
-export async function verifyAction(
-  decisionId: string,
-  verdict: string,
-  token: string
-) {
+export async function verifyAction(decisionId: string, token: string) {
+  // O-SEC-3: verdict TIDAK dikirim dari browser — server menjalankan
+  // verifier independen dari data kanonik (plan Sprint 4 §10).
   return request("/actions/verify", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ decision_id: decisionId, verdict }),
+    body: JSON.stringify({ decision_id: decisionId }),
   });
 }
 
@@ -119,6 +124,17 @@ export async function fetchDecisionChain(
   });
 }
 
+// S4-04: read model kanonik approval — modal TIDAK menghitung requirement;
+// semua field (verifier, matrix, expiry, readiness) dari server.
+export async function fetchApprovalSummary(
+  decisionId: string,
+  token: string
+) {
+  return request(`/decisions/${decisionId}/approval-summary`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export async function seedDemo(token: string, force = false) {
   return request("/demo/seed", {
     method: "POST",
@@ -142,10 +158,16 @@ export async function fetchBalance(
   });
 }
 
-export async function runAnalysis(token: string) {
+export async function runAnalysis(token: string, commodity?: string) {
   return request("/balance/analyze", {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    // Ruling S4-05 p10: kirim komoditas panel agar pipeline difilter
+    // (proposal mengikuti komoditas yang dianalisis, bukan rank-1 global).
+    body: JSON.stringify({ commodity: commodity ?? null }),
   });
 }
 
@@ -169,3 +191,86 @@ export async function createDecision(
     }),
   });
 }
+
+// --- Event 2 (Sprint 4) — price anomaly review-only ---
+
+// GET /price/quotes/{loc}/{com} — daftar quote + referensi PIHPS terkini
+// (read-only, semua role; data untuk pemilihan di panel Event 2).
+export async function fetchPriceQuotes(
+  location: string,
+  commodity: string,
+  token: string
+) {
+  return request(`/price/quotes/${location}/${commodity}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// POST /events/price-anomaly — 201 decision price_anomaly / 200 no-anomaly
+// (tanpa write) / 409 operation_key dipakai untuk payload berbeda.
+// operation_key dibuat client SAAT quote dipilih (idempotensi per aksi);
+// angka deviasi tetap dihitung backend — browser tidak menghitung apa pun.
+export async function triggerPriceAnomaly(
+  quoteId: string,
+  targetLocationId: string,
+  operationKey: string,
+  token: string
+) {
+  return request("/events/price-anomaly", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      quote_id: quoteId,
+      target_location_id: targetLocationId,
+      operation_key: operationKey,
+    }),
+  });
+}
+
+// S4-03: KPI tujuh metrik — envelope {period, scope, computed_at,
+// data_source, metrics[]}. Nilai null/state unavailable dirender apa
+// adanya (TANPA fake 0); scope SPPG = own location, monitor = global.
+export async function fetchKpis(
+  start: string,
+  end: string,
+  token: string,
+  locationId?: string
+) {
+  const params = new URLSearchParams({ start, end });
+  if (locationId) params.set("location_id", locationId);
+  return request(`/kpi?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// S4-06 polish (arah Roy 2026-10-08): kondisi SEMUA lokasi untuk peta +
+// grafik stok — satu panggilan GET /balance/map (read-only, data REAL,
+// formula gap = panel snapshot, koordinat dari DB).
+export async function fetchBalanceMap(commodity: string, token: string) {
+  return request(`/balance/map?commodity=${encodeURIComponent(commodity)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// --- P1 Merkle ledger (paket 1-6, keputusan Roy 2026-10-09) ---
+
+// GET /ledger/verify — verifikasi rantai hash dari genesis (read-only).
+// {valid, blocks, head?, broken_at?, reason?}
+export async function verifyLedger(token: string) {
+  return request("/ledger/verify", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// --- P2/P3 dossier konten-addressed + ECDSA ---
+
+// GET /decisions/{id}/dossier — bukti keputusan + alamat konten + ttd.
+export async function fetchDossier(decisionId: string, token: string) {
+  return request(`/decisions/${decisionId}/dossier`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+

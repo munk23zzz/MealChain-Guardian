@@ -18,10 +18,12 @@ describe("login polish", () => {
     expect(html).not.toContain("50 km");
   });
 
-  it("tiga akun demo tersedia untuk klik-isi cepat", () => {
-    expect(html).toContain("sppg.head@demo.local");
-    expect(html).toContain("sppg.nutritionist@demo.local");
-    expect(html).toContain("bgn.monitor@demo.local");
+  it("tiga akun demo tersedia untuk klik-isi cepat (label saja, email tak tampil — arah Roy 2026-10-10)", () => {
+    expect(html).toContain("SPPG Head");
+    expect(html).toContain("Nutritionist");
+    expect(html).toContain("BGN Monitor");
+    // Email demo tidak dipajang di login (visual lebih bersih).
+    expect(html).not.toContain("demo.local");
   });
 
   it("form punya label Email, Password, dan tombol Masuk", () => {

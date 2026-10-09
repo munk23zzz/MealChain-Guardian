@@ -24,7 +24,7 @@ describe("api client (kontrak backend aktual)", () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ access_token: "jwt-abc" }),
+      json: () => Promise.resolve({ access_token: "jwt-abc" }), text: () => Promise.resolve(JSON.stringify({ access_token: "jwt-abc" })),
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -43,7 +43,7 @@ describe("api client (kontrak backend aktual)", () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ items: [] }),
+      json: () => Promise.resolve({ items: [] }), text: () => Promise.resolve(JSON.stringify({ items: [] })),
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -57,7 +57,7 @@ describe("api client (kontrak backend aktual)", () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ decision_id: "d1", steps: [] }),
+      json: () => Promise.resolve({ decision_id: "d1", steps: [] }), text: () => Promise.resolve(JSON.stringify({ decision_id: "d1", steps: [] })),
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -71,7 +71,7 @@ describe("api client (kontrak backend aktual)", () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({}),
+      json: () => Promise.resolve({}), text: () => Promise.resolve(JSON.stringify({})),
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -95,7 +95,7 @@ describe("api client (kontrak backend aktual)", () => {
       vi.fn().mockResolvedValue({
         ok: false,
         status: 401,
-        json: () => Promise.resolve({ detail: "unauthorized" }),
+        json: () => Promise.resolve({ detail: "unauthorized" }), text: () => Promise.resolve(JSON.stringify({ detail: "unauthorized" })),
       })
     );
     await expect(login("x", "y")).rejects.toThrow("401");
@@ -197,18 +197,20 @@ describe("AgentTraceViewer (activity log aktual)", () => {
 
 describe("ApprovalModal (friksi disengaja)", () => {
   it("menampilkan ringkasan sebelum tombol approve", () => {
+    // S4-04: fixture memakai shape kanonik — verdict verifier hidup di
+    // `verifier.verdict` (read model server), bukan field top-level feed.
     const html = renderToStaticMarkup(
       <ApprovalModal
         summary={{
           quantity_kg: 600,
           safe_delivered_cost: 16206000,
-          verdict: "CONSISTENT",
+          verifier: { verdict: "consistent", verified_by: "verifier_agent" },
         }}
       />
     );
     expect(html).toContain("600");
     expect(html).toContain("Rp16.206.000");
-    expect(html).toContain("CONSISTENT");
+    expect(html).toContain("consistent");
     expect(html).toContain("Konfirmasi Approval");
   });
 

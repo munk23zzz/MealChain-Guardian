@@ -11,6 +11,7 @@
 
 import { useState } from "react";
 import StatusBadge from "./StatusBadge";
+import Event2Panel from "./Event2Panel";
 import { formatIDR } from "../lib/auth";
 import { fetchBalance, runAnalysis, createDecision, proposeAction } from "../lib/api";
 
@@ -24,12 +25,16 @@ export default function OpsConsole({
   onSubmitted,
   snapshot: initialSnapshot = null,
   analysis: initialAnalysis = null,
+  priceQuotes: initialPriceQuotes = null,
+  event2: initialEvent2 = null,
 }: {
   role: string;
   token: string | null;
   onSubmitted?: () => void;
   snapshot?: any;
   analysis?: any;
+  priceQuotes?: any;
+  event2?: any;
 }) {
   const [location, setLocation] = useState("Jakarta");
   const [commodity, setCommodity] = useState("telur");
@@ -61,7 +66,9 @@ export default function OpsConsole({
     setBusy("analysis");
     setMsg(null);
     try {
-      const data = await runAnalysis(token);
+      // Ruling S4-05 p10: pipeline difilter ke komoditas panel —
+      // proposal mengikuti komoditas yang dianalisis (bukan rank-1 global).
+      const data = await runAnalysis(token, commodity);
       setAnalysis(data);
     } catch (e: any) {
       setMsg(String(e.message ?? e));
@@ -215,6 +222,13 @@ export default function OpsConsole({
       )}
 
       {msg && <p className="action-message">{msg}</p>}
+      <Event2Panel
+        role={role}
+        token={token}
+        onDecisionCreated={onSubmitted}
+        initialQuotes={initialPriceQuotes}
+        initialResult={initialEvent2}
+      />
     </section>
   );
 }

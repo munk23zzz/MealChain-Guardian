@@ -85,13 +85,21 @@ def run_supervisor(
         return SupervisorResult(status="unavailable", attempts=[])
 
     prompt = _build_prompt(outcome_ctx)
-    result = with_fallback_chain(
-        primary=chain[0][1],
-        prompt=prompt,
-        fallback_1=chain[1][1] if len(chain) > 1 else None,
-        fallback_2=chain[2][1] if len(chain) > 2 else None,
-        timeout_seconds=timeout_seconds,
+    # O-AI (S4-00): seluruh chain diteruskan; exhaustion (semua provider
+    # gagal) → status `unavailable` rapi, bukan ProviderUnavailableError naik.
+    from app.ai_providers.resilience import (
+        ProviderUnavailableError,
     )
+
+    try:
+        result = with_fallback_chain(
+            primary=chain[0][1],
+            prompt=prompt,
+            fallbacks=[fn for _label, fn, _kind in chain[1:]],
+            timeout_seconds=timeout_seconds,
+        )
+    except ProviderUnavailableError as exc:
+        return SupervisorResult(status="unavailable", attempts=exc.attempts)
     summary = _extract_summary(result.text)
     if not summary:
         return SupervisorResult(

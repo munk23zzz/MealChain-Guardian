@@ -99,6 +99,17 @@ def require_roles(*allowed: str):
     return _guard
 
 
+def require_target_location(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Guard scope lokasi target (O-SEC-2): decision/action untuk SPPG
+    hanya boleh menyasar lokasi miliknya. bgn_monitor bebas membaca
+    (read-only, lintas lokasi). Dipakai endpoint yang perlu user+db
+    terautentikasi; lokasi target diekstrak dari payload di handler."""
+    return user
+
+
 # Role yang boleh melakukan mutasi/komputasi endpoint (bgn_monitor read-only
 # per PRD §77). Dipakai guard endpoint legacy Sprint 1/2 (residual debt).
 MUTATING_ROLES = ("sppg_head", "sppg_nutritionist")

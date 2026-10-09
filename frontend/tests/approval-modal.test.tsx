@@ -14,23 +14,59 @@ import DecisionActions from "../components/DecisionActions";
 
 describe("ApprovalModal (friksi disengaja)", () => {
   it("menampilkan ringkasan: jumlah, biaya, verdict", () => {
+    // S4-04: shape kanonik — verdict dari read model (verifier.verdict).
     const html = renderToStaticMarkup(
       <ApprovalModal
         summary={{
           quantity_kg: 600,
           safe_delivered_cost: "16206000.00",
-          verdict: "CONSISTENT",
+          verifier: { verdict: "consistent", verified_by: "verifier_agent" },
         }}
       />
     );
     expect(html).toContain("600 kg");
     expect(html).toContain("Rp16.206.000");
-    expect(html).toContain("CONSISTENT");
+    expect(html).toContain("consistent");
   });
 
   it("tanpa ringkasan → menolak approval (tidak ada approve-all)", () => {
     const html = renderToStaticMarkup(<ApprovalModal summary={null} />);
     expect(html).toContain("Tidak ada ringkasan");
+  });
+
+  it("S4-05 regression: Setuju di-gate can_approve, BUKAN can_execute", () => {
+    // Bug rehearsal 2026-10-08: tombol Setuju terkunci pada can_execute
+    // (syarat pasca-approval terpenuhi) — pada 0 approval can_execute
+    // selalu false → approval tak pernah bisa dikirim (deadlock).
+    // Kontrak: can_approve independen dari satisfaction (p8); can_execute
+    // hanya untuk tombol eksekusi setelah approval terpenuhi.
+    const summary = {
+      decision_id: "d1",
+      status: "pending_approval",
+      can_approve: true,
+      can_execute: false, // approval belum terpenuhi — masih boleh approve
+      blocking_reasons: ["approval belum memenuhi requirement (missing/rejected)"],
+      verifier: { verdict: null, verified_by: null },
+    };
+    const html = renderToStaticMarkup(<ApprovalModal summary={summary} />);
+    expect(html).toContain("Setuju");
+    expect(html).not.toContain("disabled"); // tombol approve aktif
+  });
+
+  it("Setuju nonaktif saat can_approve false (fail-closed)", () => {
+    const html = renderToStaticMarkup(
+      <ApprovalModal
+        summary={{
+          decision_id: "d1",
+          status: "pending_approval",
+          can_approve: false,
+          can_execute: false,
+          blocking_reasons: ["decision expired"],
+          verifier: { verdict: null, verified_by: null },
+        }}
+      />
+    );
+    expect(html).toContain("disabled");
   });
 });
 

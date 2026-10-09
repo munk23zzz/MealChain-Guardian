@@ -8,17 +8,21 @@ Tidak ada eksekusi otomatis oleh agent.
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from typing import Callable
 
+import pydantic
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai_providers.verifier_client import run_verifier
 from app.api.auth import require_roles
 from app.api.dependencies import get_db
 from app.core.approval_matrix import approval_requirement, evaluate_approvals
 from app.core.decision_validity import is_decision_valid
-from app.models import AgentTrace, Approval, Commodity, Decision, User
+from app.models import AgentTrace, Approval, Batch, Commodity, Decision, User
+from app.services.ledger_service import append_block
 
 router = APIRouter()
 
@@ -33,7 +37,8 @@ class ProposeRequest(BaseModel):
 
 class VerifyRequest(BaseModel):
     decision_id: uuid.UUID
-    verdict: str  # CONSISTENT | FLAGGED | UNAVAILABLE
+
+    model_config = pydantic.ConfigDict(extra="forbid")
 
 
 class ApproveRequest(BaseModel):
@@ -64,6 +69,31 @@ def _requirement_for(row: Decision) -> dict:
 
 def _verifier_unverified(row: Decision) -> bool:
     return not row.verified_by
+
+
+async def _source_batches_still_safe(db: AsyncSession, decision: Decision) -> bool:
+    """O-EVENT-2 (plan §22): revalidasi safety saat eksekusi.
+
+    Batch sumber = batch di lokasi sumber decision dengan komoditas yang
+    sama. Bila SEMUA batch sumber kini FAIL → decision tidak boleh
+    dieksekusi walau approval matrix sudah satisfied (safety hard stop;
+    tanpa FK baru, tanpa migration). Decision tanpa lokasi/komoditas
+    sumber (mis. price_anomaly) tidak direvalidasi → True.
+    """
+    if decision.source_location_id is None or decision.commodity_id is None:
+        return True
+    batches = (
+        await db.execute(
+            select(Batch).where(
+                Batch.location_id == decision.source_location_id,
+                Batch.commodity_id == decision.commodity_id,
+            )
+        )
+    ).scalars().all()
+    if not batches:
+        return True
+    # Cukup satu batch aman → eksekusi tetap mungkin; semua FAIL → blokir.
+    return any((b.safety_status or "pending") != "fail" for b in batches)
 
 
 def _now_utc() -> datetime:
@@ -106,34 +136,108 @@ async def propose_action(
     }
 
 
+def _event_verifier_ctx(decision: Decision, commodity: Commodity | None) -> dict:
+    """Susun ctx verifier kanonik DARI DB — sumber kebenaran server-side.
+
+    Browser tidak menyuplai angka; dimensi audit diambil dari snapshot
+    decision + commodity. Tanpa provider aktif, `run_verifier`
+    mengembalikan UNAVAILABLE (konservatif).
+    """
+    sdc = (
+        str(decision.safe_delivered_cost)
+        if decision.safe_delivered_cost is not None
+        else None
+    )
+    return {
+        "decision_id": str(decision.id),
+        "commodity": commodity.name if commodity else None,
+        "quantity_kg": (
+            float(decision.quantity_kg) if decision.quantity_kg is not None else None
+        ),
+        "safety_status": None,
+        "freshness_score": None,
+        "candidates": [],
+        "evidence": {
+            "safe_delivered_cost": sdc,
+            "cost_breakdown": decision.cost_breakdown,
+        },
+        "logistics": None,
+        "cost": {"safe_delivered_cost": sdc, "breakdown": decision.cost_breakdown},
+        "rationale": (
+            f"Audit independen decision {decision.decision_type} "
+            f"iterasi {decision.iteration}"
+        ),
+    }
+
+
+def get_verifier_chain() -> list[tuple[str, Callable, str]]:
+    """Dependency chain verifier — overridable oleh test.
+
+    Default: chain dari env (SAP AI Core → Bedrock sesuai konfigurasi).
+    Provider tidak dikonfigurasi → chain kosong → run_verifier UNAVAILABLE.
+    """
+    from app.ai_providers.verifier_client import _default_env_chain
+
+    return _default_env_chain()
+
+
 @router.post("/actions/verify", status_code=200)
 async def verify_action(
     payload: VerifyRequest,
     user: User = Depends(require_roles(*VERIFIER_ROLES)),
     db: AsyncSession = Depends(get_db),
+    chain: list = Depends(get_verifier_chain),
 ):
-    """Catat verdict verifier (dipanggil supervisor pipeline, bukan LLM).
+    """Verifikasi independen SERVER-SIDE (O-SEC-3, plan §10).
 
-    Verdict WAJIB tertulis ke decisions.verifier_note — nilai inilah
-    yang dibaca approval matrix saat approve/execute. Verdict tidak
-    dikenal ditolak 422 SEBELUM mutasi apa pun.
+    Browser TIDAK mengirim verdict — request hanya decision_id. Server
+    menyusun ctx kanonik dari DB lalu menjalankan verifier via chain
+    provider; tanpa provider → UNAVAILABLE (fail-closed, konservatif).
+    Verify di luar fase pra-approval ditolak 409 (integritas matrix §22).
     """
     decision = await _load_decision(db, payload.decision_id)
-    verdict = payload.verdict.strip().lower()
-    if verdict not in {"consistent", "flagged", "unavailable"}:
+    if decision.status not in {"proposed", "verifier_flagged", "pending_approval"}:
         raise HTTPException(
-            status_code=422,
-            detail="verdict verifier tidak dikenal (CONSISTENT|FLAGGED|UNAVAILABLE)",
+            status_code=409,
+            detail=(
+                "verify hanya untuk decision pra-approval "
+                f"(status kini {decision.status})"
+            ),
         )
+    existing_approvals = (
+        await db.execute(
+            select(Approval).where(Approval.decision_id == decision.id)
+        )
+    ).scalars().all()
+    if existing_approvals:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "verify tidak dapat diulang setelah ada approval tercatat "
+                "(integritas audit trail)"
+            ),
+        )
+    commodity = (
+        await db.execute(
+            select(Commodity).where(Commodity.id == decision.commodity_id)
+        )
+    ).scalar_one_or_none()
+    ctx = _event_verifier_ctx(decision, commodity)
+    result = run_verifier(ctx, default_chain=chain)
+    verdict = result.verdict  # CONSISTENT | FLAGGED | UNAVAILABLE (server)
     decision.verified_by = "verifier_agent"
-    decision.verifier_note = verdict
-    if verdict == "flagged":
+    decision.verifier_note = verdict.lower()
+    if verdict == "FLAGGED":
         decision.status = "verifier_flagged"
     await db.commit()
     req = _requirement_for(decision)
     return {
         "decision_id": str(decision.id),
-        "verdict": payload.verdict.strip().upper(),
+        "verdict": verdict,
+        "reason": result.reason,
+        "verifier_note": verdict.lower(),
+        "provider": result.provider,
+        "fallback_used": result.fallback_used,
         "approval_requirement": req,
     }
 
@@ -167,6 +271,19 @@ async def approve_action(
     if not payload.approved:
         decision.status = "rejected"
         decision.rejection_reason = payload.comment.strip()
+    # P1 Merkle ledger: setiap approve/reject = block append-only.
+    await append_block(
+        db,
+        action="approve" if payload.approved else "reject",
+        entity_id=decision.id,
+        actor_id=user.id,
+        payload={
+            "decision_id": str(decision.id),
+            "approved": payload.approved,
+            "comment": payload.comment,
+            "status": decision.status,
+        },
+    )
     await db.commit()
     rows = (
         await db.execute(select(Approval).where(Approval.decision_id == decision.id))
@@ -234,6 +351,17 @@ async def execute_action(
             detail="approval belum memenuhi requirement (missing/rejected)",
         )
 
+    # O-EVENT-2 revalidation: safety batch sumber dicek ULANG saat eksekusi
+    # — rekomendasi lama tidak aman selamanya (plan §22).
+    if not await _source_batches_still_safe(db, decision):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "safety revalidation gagal: batch sumber kini FAIL "
+                "(temperature excursion) — decision tidak dapat dieksekusi"
+            ),
+        )
+
     # Snapshot utk PO
     commodity = (
         await db.execute(
@@ -273,6 +401,19 @@ async def execute_action(
         },
     )
     decision.status = "executed"
+    # P1 Merkle ledger: eksekusi = block append-only (bukti PO terbit).
+    await append_block(
+        db,
+        action="execute",
+        entity_id=decision.id,
+        actor_id=user.id,
+        payload={
+            "decision_id": str(decision.id),
+            "po_number": po_number,
+            "quantity_kg": str(qty),
+            "status": decision.status,
+        },
+    )
     await db.commit()
     return {
         "decision_id": str(decision.id),
@@ -297,6 +438,7 @@ class ReproposeRequest(BaseModel):
 async def repropose_action(
     payload: ReproposeRequest,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles(*VERIFIER_ROLES)),
 ):
     """Agent merespons penolakan: iterasi baru + langkah LEARN.
 

@@ -86,8 +86,22 @@ def _login(client, user) -> dict:
     return {"Authorization": f"Bearer {resp.json()['access_token']}"}
 
 
-def _mk_decision(client) -> str:
-    resp = client.post("/decisions", json={"recommendation": RECOMMENDATION})
+def _mk_decision(client, user=None) -> str:
+    """Buat decision target Jakarta via API (auth kontrak baru S4-00).
+
+    POST /decisions kini butuh JWT sppg_head/sppg_nutritionist dan target
+    lokasi = lokasi user. RECOMMENDATION bawaan target Jakarta; user tanpa
+    lokasi (mis. monitor) dipinjamkan lokasi Jakarta agar tidak memecah
+    test baca/monitor.
+    """
+    if user is None:
+        user = _mk_user("sppg_head", "Jakarta")
+    elif user["role"] == "bgn_monitor":
+        user = {**user, "role": "sppg_head"}
+    headers = _login(client, user)
+    resp = client.post(
+        "/decisions", json={"recommendation": RECOMMENDATION}, headers=headers
+    )
     assert resp.status_code == 201, resp.text
     return resp.json()["decision_id"]
 

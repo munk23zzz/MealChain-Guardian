@@ -165,16 +165,48 @@ def _build_prices_map(refs, quotes):
     return prices
 
 
-async def build_recommendations(fetch_facts, as_of=None, logistics_by_pair=None):
+def _filter_commodity(
+    supply: dict,
+    demand: dict,
+    refs: dict,
+    quotes: dict,
+    batches: list,
+    commodity: str | None,
+) -> tuple:
+    """Ruling Owner 2026-10-08 (S4-05 p10): filter facts ke 1 komoditas.
+
+    Dipakai /balance/analyze agar proposal mengikuti komoditas panel
+    (bukan selalu rank-1 global). None = tanpa filter (perilaku lama —
+    dipakai /balance/recommend dan orchestrator Event 1/3).
+    """
+    if not commodity:
+        return supply, demand, refs, quotes, batches
+    return (
+        {k: v for k, v in supply.items() if k[1] == commodity},
+        {k: v for k, v in demand.items() if k[1] == commodity},
+        {k: v for k, v in refs.items() if k[1] == commodity},
+        {k: v for k, v in quotes.items() if k[1] == commodity},
+        [b for b in batches if b.get("commodity") == commodity],
+    )
+
+
+async def build_recommendations(
+    fetch_facts, as_of=None, logistics_by_pair=None, commodity: str | None = None
+):
     """Pipeline deterministik penuh; hasil terurut rank 1..N.
 
     fetch_facts boleh sync (kembalikan 6-tuple) atau async (kembalikan
     coroutine 6-tuple) — pipeline tetap identik.
+    `commodity` (opsional, ruling S4-05): filter facts ke 1 komoditas;
+    None = global (perilaku lama).
     """
     facts = fetch_facts()
     if inspect.isawaitable(facts):
         facts = await facts
     supply, demand, refs, quotes, batches, reliability = facts
+    supply, demand, refs, quotes, batches = _filter_commodity(
+        supply, demand, refs, quotes, batches, commodity
+    )
     if as_of is None:
         as_of = datetime.now(timezone.utc)
 

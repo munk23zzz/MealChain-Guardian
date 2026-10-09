@@ -17,6 +17,13 @@
 
 ## 2. User roles & flow utama
 
+> **PRD 2.4 alignment (arah Roy 2026-10-09):** persona memakai judul resmi
+> PRD §2 — `sppg_head` = **SPPG Operations Lead**, `sppg_nutritionist` =
+> **Food Safety Officer**, `bgn_monitor` = **National Inspector**.
+> Navigasi konsol = **5 tab** sesuai 7 screen PRD: login terpisah,
+> decision detail digabung ke Recommendations, tab = Overview / KPI /
+> Recommendations / Agent Log / Demo Control (approver-only).
+
 ### Flow: SPPG Staff
 Login → Dashboard (lokasi sendiri) → lihat status supply/demand → notifikasi ada rekomendasi
 baru → buka Decision Detail → review evidence → Approve/Reject → lihat status di feed berubah
@@ -33,23 +40,40 @@ Detail muncul dengan evidence → Approve → status di peta berubah
 
 ## 3. Screen inventory
 
-| # | Screen | Prioritas |
-|---|---|---|
-| 1 | Login | Wajib |
-| 2 | Dashboard / Peta 10 Lokasi | Wajib |
-| 3 | Recommendation Feed | Wajib |
-| 4 | Decision Detail & Evidence | Wajib |
-| 5 | Agent Activity Log (trace timeline) | Wajib — ini yang dipertunjukkan ke juri |
-| 6 | Approval Modal/Flow | Wajib |
-| 7 | KPI Dashboard | Wajib |
-| 8 | Settings/Admin (manage users, lokasi) | Nice-to-have |
+| # | Screen (PRD 2.4) | Realita konsol | Prioritas |
+|---|---|---|---|
+| 1 | Login (`/login`) | Login + quick-access akun demo ✓ | Wajib |
+| 2 | Overview Map (`/overview`) | Tab **Overview** — MapLibre + chart stok + tabel node ✓ | Wajib |
+| 3 | Recommendation Feed (`/recommendations`) | Tab **Recommendations** + Decision Detail digabung ✓ | Wajib |
+| 4 | Decision Detail & Evidence | Di dalam tab Recommendations (klik kartu) ✓ | Wajib |
+| 5 | Agent Activity Log (`/agent-log`) | Tab **Agent Log** — trace console + provider panel, pilih decision via dropdown ✓ | Wajib |
+| 6 | Approval Modal/Flow | Di dalam Decision Detail ✓ | Wajib |
+| 7 | KPI Dashboard (`/kpi`) | Tab **KPI** — 7 KPI live jujur + strip **Target KPI Demo Day** (PRD §5, berlabel "TARGET DEMO · bukan angka live") ✓ | Wajib |
+| 8 | Demo Control Panel (`/demo-control`) | Tab **Demo Control** (approver-only) — skenario via API resmi: seed kasus + konsol analisis Event 1/2/3 ✓ | Wajib (demo) |
+| 9 | Settings/Admin | Nice-to-have |
+
+> Penyesuaian dari PRD 2.4 (keputusan Roy): **arsitektur & backend tetap
+> mengikuti keputusan terakhir.** Komponen kripto PRD kini diimplementasi
+> versi lokal (paket 1–6 disetujui Roy 2026-10-09/10): **P1** Merkle ledger
+> append-only di PostgreSQL (tabel `ledger_blocks`, `GET /ledger/verify`)
+> menggantikan on-chain; **P2** dossier konten-addressed (`mc1-` SHA-256)
+> menggantikan IPFS; **P3** ECDSA secp256k1 signing per approval (kunci di
+> `.env`); **P4** chaos sliders memicu Event 3 via API resmi (safety tetap
+> dihitung server); **P5** telemetry banner jujur di login (tanpa klaim
+> sertifikasi); **P6** tabel facts menu_plans/delivery_events/
+> disposal_events → KPI Meal Continuity & Avoidable Food Loss LIVE.
+> Polygon Amoy anchoring asli = bonus opsional (butuh internet stabil).
+> Angka KPI PRD tampil hanya sebagai target berlabel eksplisit, KPI live
+> tetap jujur dari DB (ruling O-KPI).
 
 ### 3.1 Dashboard / Peta 10 Lokasi
-- Peta (MapLibre) dengan 10 marker, warna sesuai status: hijau (normal), kuning (tight),
-  merah (shortage/surplus signifikan)
-- Klik marker → popup ringkas (nama lokasi, komoditas, status, link ke detail)
-- Sidebar: filter komoditas (telur/ayam/wortel), filter status
-- Untuk SPPG Head/Nutritionist: peta di-zoom ke lokasi sendiri, badge lokasi lain di-mute
+- Peta **MapLibre GL** (tile raster OpenStreetMap, tanpa API key) dengan 10
+  marker, warna sesuai status: merah (shortage), hijau (surplus),
+  abu (seimbang); klik marker → popup pasokan/permintaan/gap
+- Angka detail per lokasi (pasokan / permintaan / gap) tetap tampil sebagai
+  daftar di samping peta — peta bukan satu-satunya sumber angka
+- Sidebar: filter komoditas (telur/ayam/beras/wortel), filter status feed
+- Untuk SPPG Head/Nutritionist: peta fit ke bounds lokasi-lokasi dari data
 
 ### 3.2 Recommendation Feed
 - List card, sorted by urgency (safety issue > regional imbalance > price anomaly)
@@ -87,16 +111,18 @@ Detail muncul dengan evidence → Approve → status di peta berubah
 
 ## 4. Design system
 
-### Warna (konsisten dengan proposal — jangan ganti tanpa alasan kuat)
+### Warna (design token — sinkron dengan `frontend/app/globals.css`, overhaul 2026-10-09)
+Latar halaman abu halus, kartu putih ber-shadow (depth) — token live di
+`globals.css` `:root` (sumber kebenaran teknis). Warna status tetap:
 ```
---navy-900: #1F3B4D      /* header, teks penting */
---navy-700: #2E5266      /* aksen utama, tombol primer */
---navy-100: #DCE6E9      /* background card netral */
---grey-500: #555555      /* teks sekunder, caption */
---status-safe: #2E7D32    /* PASS / normal */
+--status-safe: #2E7D32    /* PASS / surplus */
 --status-warning: #F9A825 /* tight / needs verification */
---status-danger: #C62828  /* FAIL / shortage kritis */
+--status-danger: #C62828  /* FAIL / shortage */
 ```
+> Catatan sinkronisasi: token navy/grey di versi lama bagian ini sudah tidak
+> dipakai sejak overhaul visual (arah Roy 2026-10-09, "masih sangat jelek" →
+> latar abu halus, kartu ber-depth, badge dot-status, angka tabular).
+> `globals.css` = sumber kebenaran token; bagian ini merangkum maksudnya.
 
 ### Tipografi
 - Font: Inter (fallback: system-ui) — jelas terbaca di data-dense dashboard
@@ -124,7 +150,10 @@ Detail muncul dengan evidence → Approve → status di peta berubah
 
 - **State management**: React Query untuk server state (polling Agent Activity Log tiap
   beberapa detik saat demo), tidak perlu Redux untuk skala MVP ini
-- **Map**: MapLibre GL JS + tile OSM gratis (konsisten dengan OSRM yang dipakai di proposal)
+- **Map**: MapLibre GL JS **TERPAKAI di frontend** (`frontend/components/SupplyMap.tsx`,
+  sejak 2026-10-09) — tile raster OSM gratis tanpa API key, marker berwarna per
+  status, popup detail per lokasi, fitBounds otomatis dari koordinat database.
+  Versi sementara SVG skematik sudah diganti.
 - **Chart**: Recharts (konsisten dengan chart proposal)
 - **Component library**: shadcn/ui di atas Tailwind — cepat untuk build, mudah di-custom
   warnanya sesuai design token di atas

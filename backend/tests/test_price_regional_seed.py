@@ -17,7 +17,10 @@ DB_URL = "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain
     "+asyncpg", "+psycopg"
 )
 
-REF = datetime(2026, 10, 1, 12, 0, 0, tzinfo=UTC)
+# Ruling REF seed canonical (Roy 2026-10-09): dataset demo ter-anchor ke
+# REF 2026-10-08 12:00 UTC — konsisten dengan final gate sprint 3 (551 passed)
+# dan dataset final-gate di DB (price_signals match 44/44 pada REF 10-08).
+REF = datetime(2026, 10, 8, 12, 0, 0, tzinfo=UTC)
 
 TEN_LOCATIONS = {
     "Jakarta",

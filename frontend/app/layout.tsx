@@ -1,5 +1,13 @@
 import type { Metadata } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+
+/* Tipografi DESIGN.md mockupui: Inter (naratif) + JetBrains Mono (telemetri/ledger) */
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains",
+});
 
 export const metadata: Metadata = {
   title: "MealChain Guardian",
@@ -12,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="id">
+    <html lang="id" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body>{children}</body>
     </html>
   );

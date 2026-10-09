@@ -1,22 +1,40 @@
 "use client";
 
+// S4-06 polish (arah Roy 2026-10-08): layout sidebar per role — teks ramai
+// dipindah/dipangkas, tab nav per role, peta Indonesia + grafik stok.
+// SEMUA fitur lama tetap ada (wiring test mem-pin): KPI, OpsConsole,
+// Event2Panel, feed, detail, trace, provider panel, approval modal.
+// Konsol operasi & analisis HANYA untuk role approver (bgn_monitor
+// read-only: tab analisis tidak ditampilkan).
+
 import { useCallback, useEffect, useState } from "react";
 import {
   login,
   fetchDecisions,
   fetchDecisionTraces,
   fetchDecisionChain,
+  fetchApprovalSummary,
+  fetchKpis,
+  fetchBalanceMap,
   seedDemo,
 } from "../lib/api";
 import { decodeRole } from "../lib/auth";
 import StatusBadge from "../components/StatusBadge";
 import RecommendationCard from "../components/RecommendationCard";
 import AgentTraceViewer from "../components/AgentTraceViewer";
+import IntegrityPanel from "../components/IntegrityPanel";
+import ChaosPanel from "../components/ChaosPanel";
 import DecisionActions from "../components/DecisionActions";
 import DecisionChain from "../components/DecisionChain";
 import ProviderPanel from "../components/ProviderPanel";
 import RoleHero from "../components/RoleHero";
+import KPIDashboard from "../components/KPIDashboard";
+import KpiTargets from "../components/KpiTargets";
 import OpsConsole from "../components/OpsConsole";
+import SupplyMap from "../components/SupplyMap";
+import StockChart from "../components/StockChart";
+
+const APPROVER_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
 
 // Panel provider dihitung dari trace aktual (VERIFY/PREDICT/SUPERVISE);
 // tanpa karangan — agen tanpa langkah model tampil UNAVAILABLE.
@@ -63,6 +81,15 @@ type Decision = {
   valid: boolean;
 };
 
+// Persona label sesuai PRD 2.4 §2 (Judul resmi, Indonesia pada sub-label).
+const ROLE_LABEL: Record<string, string> = {
+  sppg_head: "SPPG Operations Lead",
+  sppg_nutritionist: "Food Safety Officer",
+  bgn_monitor: "National Inspector",
+};
+
+const COMMODITIES = ["telur", "ayam", "beras", "wortel"];
+
 export default function Home() {
   const [token, setToken] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
@@ -70,11 +97,30 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // PRD 2.4 (arah Roy 2026-10-09): navigasi = 5 tab sesuai 7 screen PRD
+  // (login terpisah; decision detail gabung di recommendations).
+  const [tab, setTab] = useState<
+    "overview" | "kpi" | "recommendations" | "agent-log" | "demo-control"
+  >("overview");
+  const [mapCommodity, setMapCommodity] = useState("telur");
+  const [mapData, setMapData] = useState<any>(null);
+  const [mapError, setMapError] = useState<string | null>(null);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [traces, setTraces] = useState<any[]>([]);
   const [chain, setChain] = useState<any[]>([]);
+  // S4-04: read model kanonik dari /approval-summary — sumber tunggal modal.
+  const [approvalSummary, setApprovalSummary] = useState<any>(null);
+  // S4-03: envelope GET /kpi — loading/error state eksplisit, tanpa fake 0.
+  const [kpi, setKpi] = useState<any>(null);
+  const [kpiLoading, setKpiLoading] = useState(false);
+  const [kpiError, setKpiError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Feed traceable (arah Roy 2026-10-09): filter status = visual only;
+  // EXPIRED TIDAK disembunyikan. Hook di level atas (rules-of-hooks).
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+
+  const isApprover = APPROVER_ROLES.has(role ?? "");
 
   const loadDecisions = useCallback(async (t: string) => {
     try {
@@ -94,6 +140,50 @@ export default function Home() {
     return () => clearInterval(iv);
   }, [token, loadDecisions]);
 
+  // S4-03: muat KPI sekali per login (periode 24 jam berakhir sekarang;
+  // scope ditentukan backend — SPPG own, monitor global) + retry manual.
+  const loadKpi = useCallback(async (t: string) => {
+    setKpiLoading(true);
+    setKpiError(null);
+    try {
+      const end = new Date();
+      const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+      const data = await fetchKpis(start.toISOString(), end.toISOString(), t);
+      setKpi(data);
+    } catch (e: any) {
+      setKpiError(String(e.message ?? e));
+      setKpi(null);
+    } finally {
+      setKpiLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    loadKpi(token);
+  }, [token, loadKpi]);
+
+  // S4-06 polish: data peta (semua lokasi) — ikuti komoditas terpilih.
+  const loadMap = useCallback(
+    async (commodity: string, t: string | null) => {
+      if (!t) return;
+      try {
+        const data = await fetchBalanceMap(commodity, t);
+        setMapData(data);
+        setMapError(null);
+      } catch (e: any) {
+        setMapError(String(e.message ?? e));
+        setMapData(null);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!token || tab !== "overview") return;
+    loadMap(mapCommodity, token);
+  }, [token, tab, mapCommodity, loadMap]);
+
   useEffect(() => {
     if (!token || !selectedId) return;
     let stopped = false;
@@ -109,6 +199,15 @@ export default function Home() {
         if (!stopped) setChain(data.chain ?? []);
       } catch {
         /* chain opsional; kegagalan tidak fatal */
+      }
+      try {
+        // S4-04: summary kanonik mengikuti decision terpilih (poll ikut
+        // menyegarkan approval_state/expiry saat pihak lain approve).
+        const data = await fetchApprovalSummary(selectedId, token);
+        if (!stopped) setApprovalSummary(data);
+      } catch {
+        /* summary opsional untuk feed; modal tetap menolak tanpa data */
+        if (!stopped) setApprovalSummary(null);
       }
     };
     load();
@@ -200,24 +299,27 @@ export default function Home() {
               {submitting ? "Memeriksa…" : "Masuk"}
             </button>
             <div className="demo-block">
-              <p className="demo-hint">Akun demo — klik untuk mengisi form:</p>
-              <div className="demo-chips">
-                {demoAccounts.map((acc) => (
-                  <button
-                    key={acc.email}
-                    type="button"
-                    className="demo-chip"
-                    onClick={() => {
-                      setEmail(acc.email);
-                      setPassword(acc.password);
-                      setLoginError(null);
-                    }}
-                  >
-                    <span>{acc.label}</span>
-                    <small>{acc.email}</small>
-                  </button>
+              {/* Demo accounts jadi inline text-link — bukan chip/kartu
+                  (arah Roy 2026-10-10: login jangan penuh "item"). */}
+              <p className="demo-hint">Demo:</p>
+              <p className="demo-links">
+                {demoAccounts.map((acc, i) => (
+                  <span key={acc.email}>
+                    {i > 0 && " · "}
+                    <button
+                      type="button"
+                      className="demo-link"
+                      onClick={() => {
+                        setEmail(acc.email);
+                        setPassword(acc.password);
+                        setLoginError(null);
+                      }}
+                    >
+                      {acc.label}
+                    </button>
+                  </span>
                 ))}
-              </div>
+              </p>
             </div>
           </form>
         </section>
@@ -226,21 +328,69 @@ export default function Home() {
   }
 
   const selected = decisions.find((d) => d.decision_id === selectedId) ?? null;
+  const roleLabel = ROLE_LABEL[role ?? ""] ?? (role ?? "user");
+
+  // Feed traceable (arah Roy 2026-10-09): EXPIRED TIDAK disembunyikan.
+  // Filter status hanya menyaring TAMPILAN; count = data live penuh.
+  const statusCounts = decisions.reduce<Record<string, number>>((acc, d) => {
+    const s = (d.status ?? "").toUpperCase();
+    acc[s] = (acc[s] ?? 0) + 1;
+    return acc;
+  }, {});
+  const visibleDecisions = statusFilter
+    ? decisions.filter((d) => (d.status ?? "").toUpperCase() === statusFilter)
+    : decisions;
+
+  // PRD 2.4: nav 5 tab; demo-control approver-only; agent-log semua role
+  // (monitor read-only justru butuh observability).
+  const navItems: {
+    id: "overview" | "kpi" | "recommendations" | "agent-log" | "demo-control";
+    label: string;
+  }[] = [
+    { id: "overview", label: "Overview" },
+    { id: "kpi", label: "KPI" },
+    {
+      id: "recommendations",
+      label: `Recommendations${decisions.length ? ` (${decisions.length})` : ""}`,
+    },
+    { id: "agent-log", label: "Agent Log" },
+    ...(isApprover
+      ? [{ id: "demo-control" as const, label: "Demo Control" }]
+      : []),
+  ];
 
   return (
-    <main>
-      <div className="header-bar">
-        <strong>MealChain Guardian</strong>
-        <span>
-          {role ?? "user"} ·{" "}
-          <button
-            type="button"
-            className="button-secondary button"
-            onClick={onSeedDemo}
-            title="Muat ulang 4 kasus demo (idempotent)"
-          >
-            Muat kasus demo
-          </button>
+    <main className="app-shell">
+      {/* Sidebar: identitas role + nav tipis — teks panjang tidak lagi
+          menumpuk di atas konten (arah Roy: kurangi keramaian). */}
+      <aside className="side-nav" aria-label="Navigasi konsol">
+        <div className="side-brand">
+          <strong>MealChain Guardian</strong>
+          <span className="side-role">{roleLabel}</span>
+        </div>
+        <nav className="side-tabs" aria-label="Bagian konsol">
+          {navItems.map((n) => (
+            <button
+              key={n.id}
+              type="button"
+              className={`side-tab${tab === n.id ? " side-tab-active" : ""}`}
+              onClick={() => setTab(n.id)}
+            >
+              {n.label}
+            </button>
+          ))}
+        </nav>
+        <div className="side-actions">
+          {isApprover && (
+            <button
+              type="button"
+              className="button-secondary button"
+              onClick={onSeedDemo}
+              title="Muat ulang 4 kasus demo (idempotent)"
+            >
+              Muat kasus demo
+            </button>
+          )}
           <button
             type="button"
             className="button-secondary button"
@@ -248,72 +398,385 @@ export default function Home() {
               setToken(null);
               setRole(null);
               setSelectedId(null);
+              setTab("overview");
             }}
           >
             Keluar
           </button>
-        </span>
-      </div>
-
-      <RoleHero role={role ?? "sppg_head"} />
-
-      <OpsConsole
-        role={role ?? "sppg_head"}
-        token={token}
-        onSubmitted={() => token && loadDecisions(token)}
-      />
-
-      <section className="feed-section">
-        <h2>Recommendation Feed</h2>
-        {error && (
-          <p className="status-danger">
-            Gagal memuat data: {error}{" "}
-            <button type="button" onClick={() => token && loadDecisions(token)}>
-              Coba lagi
-            </button>
-          </p>
-        )}
-        {decisions.length === 0 && !error && (
-          <p className="empty-state">
-            Belum ada rekomendasi aktif — jalankan analisis di Konsol Operasi
-            atau muat kasus demo di atas.
-          </p>
-        )}
-        <div className="feed">
-          {decisions.map((d) => (
-            <div key={d.decision_id}>
-              <button
-                type="button"
-                className="link-button"
-                onClick={() => setSelectedId(d.decision_id)}
-              >
-                <RecommendationCard
-                  decision={d}
-                  mockSourced={d.status === "executed"}
-                />
-              </button>
-            </div>
-          ))}
         </div>
-      </section>
+      </aside>
 
-      {selected && (
-        <section className="detail-section">
-          <h2>Decision Detail</h2>
-          <RecommendationCard decision={selected} mockSourced={false} />
-          <DecisionChain chain={selectedId ? chain : []} />
-          <DecisionActions
-            decisionId={selected.decision_id}
-            role={role ?? ""}
-            status={selected.status}
-            token={token}
-            summary={selected}
-          />
-          <h3>Agent Activity Log</h3>
-          <ProviderPanel providers={providersFromTraces(traces)} />
-          <AgentTraceViewer steps={traces} />
-        </section>
-      )}
+      <div className="app-content">
+        {tab === "overview" && (
+          <div className="overview-page">
+            {/* Layout mengikuti mockup Stitch overview_map_supply_status:
+                strip KPI → filter pill komoditas → split peta (gelap) +
+                panel samping (grafik + breakdown). Angka dihitung dari
+                data peta real (mapData), tanpa karangan. */}
+            <RoleHero role={role ?? "sppg_head"} />
+
+            {/* Subheader ala mockup: judul + status live sync (polling 5s) */}
+            <section
+              className="overview-header"
+              aria-label="Ringkasan peta pasokan"
+            >
+              <div className="overview-header-main">
+                <span className="overview-header-icon" aria-hidden="true">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <circle cx="12" cy="12" r="3" />
+                    <circle cx="5" cy="7" r="2.2" />
+                    <circle cx="19" cy="7" r="2.2" />
+                    <circle cx="6" cy="17.5" r="2.2" />
+                    <circle cx="18" cy="17.5" r="2.2" />
+                    <path d="M6.8 8.3 9.8 10.5M17.2 8.3 14.2 10.5M7 15.8 9.9 13.9M17 15.8 14.1 13.9" />
+                  </svg>
+                </span>
+                <div>
+                  <div className="overview-header-title">
+                    <h1>Overview Map &amp; Supply Status</h1>
+                    <span className="overview-live-pill">
+                      <span className="overview-live-dot" aria-hidden="true" />
+                      Live Sync (5s)
+                    </span>
+                  </div>
+                  <p className="overview-header-sub">
+                    Telemetri koridor redistribusi SPPG — surplus, shortage,
+                    dan kondisi stok per lokasi.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* Strip KPI: dihitung dari data peta real (tanpa fake 0) */}
+            <section className="overview-kpis" aria-label="KPI ringkas">
+              <div className="kpi-card">
+                <span className="kpi-card-label">Volume Komoditas Aktif</span>
+                <span className="kpi-card-value">
+                  {mapData
+                    ? `${new Intl.NumberFormat("id-ID").format(
+                        (mapData.locations ?? []).reduce(
+                          (a: number, l: any) => a + (Number(l.supply_kg) || 0),
+                          0
+                        )
+                      )} kg`
+                    : "—"}
+                </span>
+                <span className="kpi-card-foot">total pasokan lokasi terpetakan</span>
+              </div>
+              <div className="kpi-card">
+                <span className="kpi-card-label">Lokasi Surplus</span>
+                <span className="kpi-card-value kpi-card-safe">
+                  {mapData
+                    ? (mapData.locations ?? []).filter(
+                        (l: any) => l.status === "surplus"
+                      ).length
+                    : "—"}
+                </span>
+                <span className="kpi-card-foot">siap jadi sumber distribusi</span>
+              </div>
+              <div className="kpi-card">
+                <span className="kpi-card-label">Lokasi Shortage</span>
+                <span className="kpi-card-value kpi-card-danger">
+                  {mapData
+                    ? (mapData.locations ?? []).filter(
+                        (l: any) => l.status === "shortage"
+                      ).length
+                    : "—"}
+                </span>
+                <span className="kpi-card-foot">butuh penyeimbangan</span>
+              </div>
+            </section>
+
+            {/* Filter pill komoditas (menggantikan select — perilaku sama) */}
+            <div
+              className="commodity-filters"
+              role="group"
+              aria-label="Komoditas peta"
+            >
+              <span className="commodity-filters-label">Komoditas:</span>
+              {COMMODITIES.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={`commodity-pill${mapCommodity === c ? " commodity-pill-active" : ""}`}
+                  aria-pressed={mapCommodity === c}
+                  onClick={() => setMapCommodity(c)}
+                >
+                  {c}
+                </button>
+              ))}
+              {mapError && (
+                <p className="status-danger map-error" role="alert">
+                  {mapError}{" "}
+                  <button
+                    type="button"
+                    onClick={() => token && loadMap(mapCommodity, token)}
+                  >
+                    Coba lagi
+                  </button>
+                </p>
+              )}
+            </div>
+
+            {/* Split 60/40 ala mockup: peta gelap kiri, telemetri kanan */}
+            <section
+              className="overview-split"
+              aria-label="Peta dan grafik stok"
+            >
+              <div className="map-panel-dark">
+                <div className="map-panel-dark-head">
+                  <span className="map-panel-dark-dot" aria-hidden="true" />
+                  <span className="map-panel-dark-title">
+                    Koridor Pasokan Aktif: Jawa Barat &amp; DKI Jakarta
+                  </span>
+                  <span className="map-panel-dark-count">
+                    {(mapData?.locations ?? []).length} Lokasi
+                  </span>
+                </div>
+                <div className="map-panel-dark-body">
+                  <SupplyMap
+                    locations={mapData?.locations ?? []}
+                    commodity={mapData?.commodity}
+                  />
+                </div>
+              </div>
+              <div className="overview-side">
+                <div className="map-panel">
+                  <h3>Surplus &amp; Shortage per Lokasi</h3>
+                  <StockChart locations={mapData?.locations ?? []} />
+                </div>
+                {/* Breakdown tabel lokasi — angka dari data real mapData */}
+                <div className="map-panel">
+                  <h3>Breakdown Lokasi</h3>
+                  <table className="location-table">
+                    <thead>
+                      <tr>
+                        <th>Lokasi</th>
+                        <th>Status</th>
+                        <th className="num">Pasokan</th>
+                        <th className="num">Permintaan</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(mapData?.locations ?? []).map((l: any) => (
+                        <tr key={l.location}>
+                          <td>{l.location}</td>
+                          <td>
+                            <span
+                              className={`location-status location-status-${l.status}`}
+                            >
+                              {l.status}
+                            </span>
+                          </td>
+                          <td className="num">
+                            {new Intl.NumberFormat("id-ID").format(
+                              Number(l.supply_kg) || 0
+                            )}
+                          </td>
+                          <td className="num">
+                            {new Intl.NumberFormat("id-ID").format(
+                              Number(l.demand_kg) || 0
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {!mapData?.locations?.length && (
+                        <tr>
+                          <td colSpan={4} className="location-table-empty">
+                            Memuat data peta…
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {tab === "kpi" && (
+          <>
+            <KPIDashboard
+              kpi={kpi}
+              loading={kpiLoading}
+              error={kpiError}
+              onRetry={() => token && loadKpi(token)}
+            />
+            {/* PRD 2.4 §5: strip target demo — berlabel eksplisit,
+                BUKAN angka live (KPI live tetap jujur di atas). */}
+            <KpiTargets />
+          </>
+        )}
+
+        {tab === "demo-control" && isApprover && (
+          /* PRD 2.4 Screen 7: harness demo — konsol analisis (Event 1/2/3)
+             + seed kasus. Aksi tetap via API resmi; tidak ada chaos
+             injection di luar kontrak backend (arsitektur tidak diubah). */
+          <section className="demo-control-section">
+            <h2>Demo Control Panel</h2>
+            <p className="section-sub">
+              Skenario deterministik untuk demo day — jalankan lewat API resmi
+              (tanpa mock): muat kasus, picu Event 2 (price anomaly) &amp;
+              Event 3 (thermal excursion) dari konsol, lalu lihat hasilnya di
+              tab Recommendations &amp; Agent Log.
+            </p>
+            <button
+              type="button"
+              className="button"
+              onClick={onSeedDemo}
+              title="Muat ulang 4 kasus demo (idempotent)"
+            >
+              Scenario 00 — Muat kasus demo
+            </button>
+            <OpsConsole
+              role={role ?? "sppg_head"}
+              token={token}
+              onSubmitted={() => {
+                if (token) loadDecisions(token);
+                setTab("recommendations");
+              }}
+            />
+            <ChaosPanel
+              role={role ?? "sppg_head"}
+              token={token}
+              onDecisionCreated={() => {
+                if (token) loadDecisions(token);
+              }}
+            />
+          </section>
+        )}
+
+        {tab === "recommendations" && (
+          <>
+            <section className="feed-section">
+              <h2>Recommendation Feed</h2>
+              {error && (
+                <p className="status-danger">
+                  Gagal memuat data: {error}{" "}
+                  <button
+                    type="button"
+                    onClick={() => token && loadDecisions(token)}
+                  >
+                    Coba lagi
+                  </button>
+                </p>
+              )}
+              {decisions.length === 0 && !error && (
+                <p className="empty-state">
+                  Belum ada rekomendasi aktif — jalankan analisis di tab
+                  Analisis
+                  {isApprover
+                    ? " atau muat kasus demo di sidebar."
+                    : " oleh approver SPPG."}
+                </p>
+              )}
+
+              {/* Filter status: semua status punya chip + count (traceable;
+                  EXPIRED tetap ada, tidak pernah disembunyikan by default). */}
+              {decisions.length > 0 && (
+                <div className="feed-filters" aria-label="Filter status">
+                  <button
+                    type="button"
+                    className={`filter-chip${statusFilter === null ? " filter-chip-active" : ""}`}
+                    onClick={() => setStatusFilter(null)}
+                  >
+                    Semua
+                    <span className="legend-count">{decisions.length}</span>
+                  </button>
+                  {Object.entries(statusCounts)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([s, n]) => (
+                      <button
+                        key={s}
+                        type="button"
+                        className={`filter-chip${statusFilter === s ? " filter-chip-active" : ""}`}
+                        onClick={() =>
+                          setStatusFilter(statusFilter === s ? null : s)
+                        }
+                      >
+                        {s}
+                        <span className="legend-count">{n}</span>
+                      </button>
+                    ))}
+                </div>
+              )}
+
+              <div className="feed">
+                {visibleDecisions.map((d) => (
+                  <div key={d.decision_id}>
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => setSelectedId(d.decision_id)}
+                    >
+                      <RecommendationCard
+                        decision={d}
+                        mockSourced={d.status === "executed"}
+                      />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {selected && (
+              <section className="detail-section">
+                <h2>Decision Detail</h2>
+                <RecommendationCard decision={selected} mockSourced={false} />
+                <DecisionChain chain={selectedId ? chain : []} />
+                <DecisionActions
+                  decisionId={selected.decision_id}
+                  role={role ?? ""}
+                  status={selected.status}
+                  token={token}
+                  summary={approvalSummary}
+                />
+              </section>
+            )}
+          </>
+        )}
+
+        {/* PRD 2.4 Screen 5: Agent Activity Log & Traces Console — tab
+            tersendiri (terpisah dari decision detail). Semua role bisa
+            melihat observability; pilih decision di dropdown bila belum
+            ada yang terpilih. */}
+        {tab === "agent-log" && (
+          <section className="agent-log-section">
+            <h2>Agent Activity Log</h2>
+            {!selected && (
+              <p className="section-sub">
+                Pilih keputusan untuk melihat trace reasoning agent-nya:
+                <select
+                  aria-label="Pilih keputusan"
+                  value=""
+                  onChange={(e) => setSelectedId(e.target.value)}
+                >
+                  <option value="">— pilih —</option>
+                  {decisions.map((d) => (
+                    <option key={d.decision_id} value={d.decision_id}>
+                      {(d.decision_type ?? "keputusan")} · {d.status} ·{" "}
+                      {d.decision_id.slice(0, 8)}
+                    </option>
+                  ))}
+                </select>
+              </p>
+            )}
+            {selected && (
+              <p className="section-sub">
+                Trace untuk{" "}
+                <strong>{selected.decision_type ?? "keputusan"}</strong>{" "}
+                ({selected.decision_id.slice(0, 8)}) — status {selected.status}.
+              </p>
+            )}
+            <ProviderPanel providers={providersFromTraces(traces)} />
+            <AgentTraceViewer steps={traces} />
+            {selected && (
+              <IntegrityPanel token={token ?? ""} decisionId={selected.decision_id} />
+            )}
+          </section>
+        )}
+      </div>
     </main>
   );
 }

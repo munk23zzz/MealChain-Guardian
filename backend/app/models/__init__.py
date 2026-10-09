@@ -4,6 +4,7 @@ from app.models.batches import Batch
 from app.models.commodities import Commodity
 from app.models.decisions import AgentTrace, Approval, Decision, DecisionEvidence
 from app.models.demand_records import DemandRecord
+from app.models.kpi_facts import DeliveryEvent, DisposalEvent, MenuPlan
 from app.models.locations import Location
 from app.models.price_signals import PriceSignal
 from app.models.sap_mock import SapMockMaterialStock, SapMockPurchaseOrder
@@ -26,4 +27,7 @@ __all__ = [
     "DecisionEvidence",
     "Approval",
     "AgentTrace",
+    "MenuPlan",
+    "DeliveryEvent",
+    "DisposalEvent",
 ]

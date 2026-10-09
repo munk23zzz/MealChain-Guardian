@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "surface-variant": "#d3e4fe", "on-primary": "#ffffff", "surface-panel-dark": "#0F172A", "inverse-surface": "#213145", "tertiary-container": "#cf1b1e", "surface-container-high": "#dce9ff", "on-tertiary": "#ffffff", "terminal-accent": "#2DD4BF", "background": "#f8f9ff", "error-container": "#ffdad6", "surface-container": "#e5eeff", "on-background": "#0b1c30", "border-subtle": "#E2E8F0", "error": "#ba1a1a", "status-danger-border": "#FECACA", "surface-terminal-border": "#1E293B", "surface": "#f8f9ff", "surface-tint": "#006a63", "surface-canvas": "#F8FAFC", "surface-card": "#FFFFFF", "secondary-container": "#fe932c", "on-surface-variant": "#3e4947", "primary": "#005c55", "border-strong": "#CBD5E1", "surface-container-lowest": "#ffffff", "terminal-text": "#E2E8F0", "status-success-bg": "#ECFDF5", "primary-fixed-dim": "#80d5cb", "on-error-container": "#93000a", "tertiary-fixed": "#ffdad6", "on-primary-fixed": "#00201d", "primary-container": "#0f766e", "secondary-fixed-dim": "#ffb77d", "surface-bright": "#f8f9ff", "on-secondary-container": "#663500", "on-tertiary-container": "#ffe4e1", "status-danger-text": "#991B1B", "outline": "#6e7977", "tertiary-fixed-dim": "#ffb4ab", "on-tertiary-fixed": "#410002", "secondary": "#904d00", "inverse-primary": "#80d5cb", "status-success-text": "#065F46", "on-tertiary-fixed-variant": "#93000b", "on-secondary-fixed-variant": "#6e3900", "on-primary-fixed-variant": "#00504a", "surface-container-low": "#eff4ff", "status-success-border": "#A7F3D0", "secondary-fixed": "#ffdcc3", "on-secondary-fixed": "#2f1500", "status-warning-text": "#92400E", "surface-dim": "#cbdbf5", "on-error": "#ffffff", "status-danger-bg": "#FEF2F2", "primary-fixed": "#9cf2e8", "status-warning-bg": "#FFFBEB", "on-surface": "#0b1c30", "surface-container-highest": "#d3e4fe", "inverse-on-surface": "#eaf1ff", "on-secondary": "#ffffff", "tertiary": "#a7000f", "status-warning-border": "#FDE68A", "outline-variant": "#bdc9c6", "on-primary-container": "#a3faef" }, "borderRadius": { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" }, "spacing": { "space-xl": "1.5rem", "space-lg": "1rem", "space-2xl": "2rem", "space-sm": "0.5rem", "space-xs": "0.25rem", "margin": "1.5rem", "gutter-compact": "0.5rem", "gutter": "1rem", "margin-mobile": "1rem", "space-md": "0.75rem" }, "fontFamily": { "headline-lg": ["Inter"], "code-lg": ["JetBrains Mono"], "body-md": ["Inter"], "body-sm": ["Inter"], "label-sm": ["Inter"], "headline-md": ["Inter"], "headline-sm": ["Inter"], "code-sm": ["JetBrains Mono"], "code-md": ["JetBrains Mono"], "label-md": ["Inter"], "label-lg": ["Inter"], "body-lg": ["Inter"], "display": ["Inter"] }, "fontSize": { "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.015em", "fontWeight": "600"}], "code-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0em", "fontWeight": "500"}], "body-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0em", "fontWeight": "400"}], "body-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "400"}], "label-sm": ["11px", {"lineHeight": "14px", "letterSpacing": "0.03em", "fontWeight": "500"}], "headline-md": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}], "headline-sm": ["16px", {"lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "600"}], "code-sm": ["11px", {"lineHeight": "16px", "letterSpacing": "0em", "fontWeight": "400"}], "code-md": ["12px", {"lineHeight": "18px", "letterSpacing": "0em", "fontWeight": "400"}], "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}], "label-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "500"}], "body-lg": ["16px", {"lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "400"}], "display": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}] } } } };</script></head><body class="bg-surface font-body-md text-on-surface min-h-screen flex flex-col"><header class="fixed top-0 w-full z-50 bg-surface/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="w-full px-margin h-16 flex items-center justify-between"><div class="flex items-center gap-space-lg"><div class="flex items-center gap-space-sm"><div class="w-8 h-8 rounded bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[20px]">verified_user</span></div><div class="flex flex-col"><span class="font-headline-sm text-headline-sm text-on-surface tracking-tight leading-none">MealChain Guardian</span><span class="font-code-sm text-code-sm text-primary font-medium tracking-wide leading-tight">BGN ENCLAVE • GOVCLOUD</span></div></div><div class="hidden xl:flex items-center gap-space-md pl-space-md border-l border-border-subtle"><div class="flex items-center gap-space-xs px-space-sm py-0.5 rounded bg-status-success-bg border border-status-success-border"><span class="w-1.5 h-1.5 rounded-full bg-status-success-text animate-pulse"></span><span class="font-code-sm text-code-sm text-status-success-text">FEDRAMP HIGH SECURE</span></div><div class="flex items-center gap-space-xs px-space-sm py-0.5 rounded bg-surface-container-low border border-border-subtle"><span class="material-symbols-outlined text-primary text-[14px]">token</span><span class="font-code-sm text-code-sm text-on-surface-variant">POLYGON AMOY V4.2</span></div><div class="flex items-center gap-space-xs px-space-sm py-0.5 rounded bg-surface-container-low border border-border-subtle"><span class="material-symbols-outlined text-secondary text-[14px]">lock</span><span class="font-code-sm text-code-sm text-on-surface-variant">FIPS 140-3 HSM</span></div></div></div><div class="flex items-center gap-space-lg"><nav class="hidden md:flex items-center gap-space-sm" data-active-classes="bg-primary-container text-on-primary-container font-medium rounded-lg"><a aria-current="page" class="px-space-md py-1.5 transition-colors bg-primary-container text-on-primary-container font-medium rounded-lg" data-path="role-gateway" href="#">Role Gateway</a><a class="font-label-md text-label-md px-space-md py-1.5 text-on-surface-variant hover:text-on-surface transition-colors" data-path="enterprise-login" href="#">BGN SSO Login</a><a class="font-label-md text-label-md px-space-md py-1.5 text-on-surface-variant hover:text-on-surface transition-colors" data-path="passkey-verification" href="#">Hardware Key</a><a class="font-label-md text-label-md px-space-md py-1.5 text-on-surface-variant hover:text-on-surface transition-colors" data-path="jury-switch" href="#">Jury Simulator</a><a class="font-label-md text-label-md px-space-md py-1.5 text-on-surface-variant hover:text-on-surface transition-colors" data-path="security-telemetry" href="#">Audit Telemetry</a></nav><div class="flex items-center gap-space-md"><div class="hidden sm:flex flex-col text-right"><span class="font-label-sm text-label-sm text-on-surface font-semibold">National Agency Gateway</span><span class="font-code-sm text-code-sm text-on-surface-variant">id-bgn-auth-01</span></div><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></div></header><main class="w-full pt-16 bg-surface flex-1"><div class="flex flex-col w-full">
+<div class="relative w-full overflow-hidden py-space-xl px-margin">
+<div class="absolute inset-0 pointer-events-none opacity-40">
+<div class="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-primary/10 blur-3xl"></div>
+<div class="absolute top-1/2 -right-24 w-80 h-80 rounded-full bg-secondary-container/10 blur-3xl"></div>
+<div class="absolute bottom-0 left-1/3 w-72 h-72 rounded-full bg-primary-container/10 blur-2xl"></div>
+</div>
+<div class="relative max-w-7xl mx-auto flex flex-col gap-space-xl">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-space-md pb-space-sm">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-sm">
+<span class="px-space-sm py-0.5 rounded bg-surface-container-high text-primary font-code-sm text-code-sm font-semibold tracking-wider uppercase">
+              BGN-SEC-GW // V4.19
+            </span>
+<span class="font-code-sm text-code-sm text-on-surface-variant flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-status-success-text"></span>
+              Enclave Operational
+            </span>
+</div>
+<h1 class="font-display text-display text-on-surface tracking-tight">
+            MealChain Guardian
+          </h1>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-2xl">
+            Sistem Terpadu Pengawasan Rantai Pasok Makanan Bergizi Gratis (MBG) • Badan Gizi Nasional Republik Indonesia
+          </p>
+</div>
+<div class="flex items-center gap-space-sm bg-surface-container-lowest p-space-sm rounded-xl shadow-sm">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[24px]">policy</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-medium">Compliance Standard</span>
+<span class="font-code-sm text-code-sm text-on-surface font-semibold">Perpres MBG No. 83 / 2024</span>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-xl items-start">
+<div class="lg:col-span-6 flex flex-col gap-space-lg">
+<div class="bg-surface-card rounded-xl p-space-xl shadow-md flex flex-col gap-space-lg">
+<div class="flex items-center justify-between pb-space-md bg-surface-container-low -mx-space-xl -mt-space-xl p-space-lg rounded-t-xl">
+<div class="flex items-center gap-space-md">
+<div class="w-9 h-9 rounded bg-primary-container text-on-primary-container flex items-center justify-center font-bold">
+<span class="material-symbols-outlined text-[20px]">encrypted</span>
+</div>
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Gov SSO Authentication</h2>
+<p class="font-code-sm text-code-sm text-on-surface-variant">FIPS 140-3 Hardware Enclave Level</p>
+</div>
+</div>
+<span class="px-space-sm py-1 rounded bg-status-success-bg text-status-success-text font-code-sm text-code-sm">
+                TLS 1.3 Strict
+              </span>
+</div>
+<div class="flex bg-surface-container rounded p-0.5" id="authTabs">
+<button class="flex-1 py-1.5 px-space-md rounded text-center font-label-md text-label-md transition-all bg-surface-card text-on-surface shadow-sm font-semibold" id="tabSso" onclick="switchAuthTab('sso')" type="button">
+                Gov SSO &amp; Password
+              </button>
+<button class="flex-1 py-1.5 px-space-md rounded text-center font-label-md text-label-md transition-all text-on-surface-variant hover:text-on-surface" id="tabFido" onclick="switchAuthTab('fido')" type="button">
+                FIDO2 / Security Key (ECDSA)
+              </button>
+</div>
+<form class="flex flex-col gap-space-md" id="loginForm" onsubmit="handleDirectLogin(event)">
+<div class="flex flex-col gap-space-md" id="ssoFormFields">
+<div class="flex flex-col gap-space-xs">
+<div class="flex justify-between items-center">
+<label class="font-label-md text-label-md text-on-surface font-medium" for="workId">Work ID / NIP / SSO Identity</label>
+<span class="font-code-sm text-code-sm text-primary font-medium">*.bgn.go.id domain</span>
+</div>
+<div class="relative flex items-center">
+<span class="absolute left-3 text-on-surface-variant material-symbols-outlined text-[18px]">badge</span>
+<input class="w-full bg-surface-container-lowest text-on-surface font-code-md text-code-md pl-10 pr-24 py-2 rounded focus:outline-none focus:bg-surface-container-high transition-colors" id="workId" placeholder="nama.nip@bgn.go.id" required="" type="text" value="r.pratama@bgn.go.id"/>
+<span class="absolute right-2 px-space-xs py-0.5 bg-surface-container text-on-surface-variant font-code-sm text-code-sm rounded">
+                      GOV-ID
+                    </span>
+</div>
+</div>
+<div class="flex flex-col gap-space-xs">
+<div class="flex justify-between items-center">
+<label class="font-label-md text-label-md text-on-surface font-medium" for="passwordField">Credential Security Key / PIN</label>
+<a class="font-label-sm text-label-sm text-primary hover:underline" href="javascript:void(0)">Forgot credentials?</a>
+</div>
+<div class="relative flex items-center">
+<span class="absolute left-3 text-on-surface-variant material-symbols-outlined text-[18px]">lock</span>
+<input class="w-full bg-surface-container-lowest text-on-surface font-code-md text-code-md pl-10 pr-10 py-2 rounded focus:outline-none focus:bg-surface-container-high transition-colors" id="passwordField" required="" type="password" value="••••••••••••••••"/>
+<button class="absolute right-3 text-on-surface-variant hover:text-on-surface flex items-center" onclick="togglePasswordVisibility()" type="button">
+<span class="material-symbols-outlined text-[18px]" id="pwdEyeIcon">visibility</span>
+</button>
+</div>
+<div class="grid grid-cols-3 gap-space-xs pt-1">
+<div class="flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-status-success-text"></span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">Min 14 char</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-status-success-text"></span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">ECDSA ready</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-status-success-text"></span>
+<span class="font-code-sm text-code-sm text-on-surface-variant">MFA bound</span>
+</div>
+</div>
+</div>
+</div>
+<div class="hidden flex-col gap-space-md p-space-md bg-surface-container-low rounded-lg" id="fidoFormFields">
+<div class="flex items-center gap-space-md">
+<div class="w-12 h-12 rounded-lg bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[28px]">key</span>
+</div>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">WebAuthn / YubiKey Enclave</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Insert physical USB-C FIPS dongle or use biometric passkey.</p>
+</div>
+</div>
+<div class="p-space-sm bg-surface-card rounded flex items-center justify-between">
+<div class="flex items-center gap-space-sm font-code-sm text-code-sm">
+<span class="w-2 h-2 rounded-full bg-terminal-accent animate-ping"></span>
+<span class="text-on-surface">Listening for ECDSA tap (0x93bb...c827d0)</span>
+</div>
+<span class="text-primary font-code-sm text-code-sm font-semibold">USB Ready</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-space-xs">
+<label class="flex items-center gap-space-sm cursor-pointer">
+<input checked="" class="w-4 h-4 rounded text-primary focus:ring-0 cursor-pointer" type="checkbox"/>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Remember workstation for 12h (Secured Node)</span>
+</label>
+<span class="font-code-sm text-code-sm text-on-surface-variant bg-surface-container px-space-xs py-0.5 rounded">IP: 103.14.88.12</span>
+</div>
+<button class="w-full mt-space-sm py-2.5 px-space-lg rounded bg-primary-container text-on-primary font-label-lg text-label-lg flex items-center justify-center gap-space-sm shadow-sm hover:opacity-90 active:scale-[0.99] transition-all" id="submitBtn" type="submit">
+<span>Sign In to Operations Console</span>
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+<div class="hidden p-space-sm rounded bg-status-success-bg text-status-success-text font-code-sm text-code-sm flex items-center gap-space-sm" id="statusNotification">
+<span class="material-symbols-outlined text-[18px]">check_circle</span>
+<span id="statusText">Session authenticated via Secp256k1 enclave. Redirecting to workspace...</span>
+</div>
+</form>
+<div class="flex flex-col sm:flex-row items-center justify-between gap-space-sm pt-space-md bg-surface-container-lowest -mx-space-xl -mb-space-xl p-space-md rounded-b-xl font-label-sm text-label-sm text-on-surface-variant">
+<a class="hover:text-primary flex items-center gap-1" href="javascript:void(0)">
+<span class="material-symbols-outlined text-[14px]">support_agent</span>
+                Request SPPG Node Access
+              </a>
+<span class="hidden sm:inline">•</span>
+<a class="hover:text-primary flex items-center gap-1" href="javascript:void(0)">
+<span class="material-symbols-outlined text-[14px]">verified</span>
+                Verify Node SSL/TLS 1.3 Fingerprint
+              </a>
+<span class="hidden sm:inline">•</span>
+<span class="font-code-sm text-code-sm text-outline">BGN HSM v2.4</span>
+</div>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
+<div class="bg-surface-card rounded-lg p-space-md shadow-sm flex items-start gap-space-md">
+<div class="w-9 h-9 rounded bg-surface-container flex items-center justify-center text-primary shrink-0">
+<span class="material-symbols-outlined text-[20px]">ac_unit</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface">32 Nodes Active</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">SPPG Central Kitchens streaming IoT telemetry</span>
+</div>
+</div>
+<div class="bg-surface-card rounded-lg p-space-md shadow-sm flex items-start gap-space-md">
+<div class="w-9 h-9 rounded bg-surface-container flex items-center justify-center text-secondary shrink-0">
+<span class="material-symbols-outlined text-[20px]">hub</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface">412,890 Portions</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Tracked today under BGN Quality Ceiling</span>
+</div>
+</div>
+</div>
+</div>
+<div class="lg:col-span-6 flex flex-col gap-space-md">
+<div class="bg-primary-container text-on-primary-container rounded-xl p-space-md shadow-sm flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-full bg-on-primary-container/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">gavel</span>
+</div>
+<div>
+<h2 class="font-label-lg text-label-lg font-bold text-on-primary-container tracking-wide">
+                  Jury &amp; Presenter Quick-Access Gateway
+                </h2>
+<p class="font-code-sm text-code-sm text-on-primary-container/80">
+                  Deterministic credentials preloaded for live system evaluation
+                </p>
+</div>
+</div>
+<span class="px-space-sm py-0.5 rounded bg-surface-card text-primary font-code-sm text-code-sm font-bold shadow-xs">
+              DEMO FAST-TRACK
+            </span>
+</div>
+<div class="flex flex-col gap-space-md">
+<div class="group cursor-pointer bg-surface-card rounded-xl p-space-lg shadow-sm hover:shadow-md transition-all flex flex-col gap-space-sm bg-gradient-to-r hover:from-surface-card hover:to-surface-container-low" onclick="selectFastTrack('sppg_head')">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-space-md">
+<div class="w-12 h-12 rounded-lg bg-status-success-bg text-status-success-text flex items-center justify-center">
+<span class="material-symbols-outlined text-[28px]">warehouse</span>
+</div>
+<div>
+<div class="flex items-center gap-space-sm">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">R. Pratama, S.T.</h3>
+<span class="px-space-xs py-0.5 rounded bg-status-success-bg text-status-success-text font-code-sm text-code-sm font-semibold">
+                        Role: SPPG Head
+                      </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Chief Operations Lead • SPPG Cianjur Central</p>
+</div>
+</div>
+<span class="font-code-sm text-code-sm text-primary font-bold bg-surface-container px-space-sm py-1 rounded">
+                  #SPPG-CJR-01
+                </span>
+</div>
+<div class="bg-surface-container-lowest p-space-sm rounded font-code-sm text-code-sm flex flex-col gap-1">
+<div class="flex justify-between text-on-surface-variant">
+<span>Scope: Operational Kitchen Node</span>
+<span class="text-on-surface font-medium">Full Dispatch &amp; Physical Sign-off</span>
+</div>
+<div class="flex justify-between text-on-surface-variant">
+<span>ECDSA Keyring:</span>
+<span class="text-primary font-mono font-medium">0x93bb44...c827d0 (Active)</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Click to load profile &amp; enter Operations Console</span>
+<button class="py-1.5 px-space-md rounded bg-primary text-on-primary font-label-md text-label-md flex items-center gap-space-xs group-hover:bg-primary-container transition-colors shadow-xs" type="button">
+<span>Login as SPPG Head — Cianjur</span>
+<span class="material-symbols-outlined text-[16px]">bolt</span>
+</button>
+</div>
+</div>
+<div class="group cursor-pointer bg-surface-card rounded-xl p-space-lg shadow-sm hover:shadow-md transition-all flex flex-col gap-space-sm bg-gradient-to-r hover:from-surface-card hover:to-surface-container-low" onclick="selectFastTrack('sppg_nutritionist')">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-space-md">
+<div class="w-12 h-12 rounded-lg bg-surface-variant text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[28px]">chips</span>
+</div>
+<div>
+<div class="flex items-center gap-space-sm">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">dr. Siti Rahma, Sp.GK</h3>
+<span class="px-space-xs py-0.5 rounded bg-surface-container text-primary font-code-sm text-code-sm font-semibold">
+                        Role: Quality &amp; Nutritionist
+                      </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Lead Clinical Nutritionist • SPPG Jakarta Utara</p>
+</div>
+</div>
+<span class="font-code-sm text-code-sm text-primary font-bold bg-surface-container px-space-sm py-1 rounded">
+                  #SPPG-JKT-04
+                </span>
+</div>
+<div class="bg-surface-container-lowest p-space-sm rounded font-code-sm text-code-sm flex flex-col gap-1">
+<div class="flex justify-between text-on-surface-variant">
+<span>Scope: Food Safety &amp; Sensory Threshold</span>
+<span class="text-on-surface font-medium">Excursion &amp; Shelf-Life Override</span>
+</div>
+<div class="flex justify-between text-on-surface-variant">
+<span>Sign-off Authority:</span>
+<span class="text-secondary font-mono font-medium">BGN NutriCheck Protocol v3.1</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Click to load profile &amp; enter Sensory Lab</span>
+<button class="py-1.5 px-space-md rounded bg-primary text-on-primary font-label-md text-label-md flex items-center gap-space-xs group-hover:bg-primary-container transition-colors shadow-xs" type="button">
+<span>Login as Nutritionist — Jakarta</span>
+<span class="material-symbols-outlined text-[16px]">bolt</span>
+</button>
+</div>
+</div>
+<div class="group cursor-pointer bg-surface-card rounded-xl p-space-lg shadow-sm hover:shadow-md transition-all flex flex-col gap-space-sm bg-gradient-to-r hover:from-surface-card hover:to-surface-container-low" onclick="selectFastTrack('bgn_monitor')">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-space-md">
+<div class="w-12 h-12 rounded-lg bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center">
+<span class="material-symbols-outlined text-[28px]">account_balance</span>
+</div>
+<div>
+<div class="flex items-center gap-space-sm">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Dr. Hendra Wijaya</h3>
+<span class="px-space-xs py-0.5 rounded bg-status-warning-bg text-status-warning-text font-code-sm text-code-sm font-semibold">
+                        Role: National Inspector
+                      </span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Directorate of Compliance &amp; Audit • BGN Pusat</p>
+</div>
+</div>
+<span class="font-code-sm text-code-sm text-secondary font-bold bg-surface-container px-space-sm py-1 rounded">
+                  #BGN-HQ-NAT
+                </span>
+</div>
+<div class="bg-surface-container-lowest p-space-sm rounded font-code-sm text-code-sm flex flex-col gap-1">
+<div class="flex justify-between text-on-surface-variant">
+<span>Scope: Multi-Echelon National (All Hubs)</span>
+<span class="text-on-surface font-medium">Read-Only Immutable Surveillance</span>
+</div>
+<div class="flex justify-between text-on-surface-variant">
+<span>Ledger Verification:</span>
+<span class="text-on-surface-variant font-mono font-medium">Polygon Amoy Block Anchor #41,215</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Click to load profile &amp; enter National Ledger</span>
+<button class="py-1.5 px-space-md rounded bg-primary text-on-primary font-label-md text-label-md flex items-center gap-space-xs group-hover:bg-primary-container transition-colors shadow-xs" type="button">
+<span>Login as BGN Monitor — National</span>
+<span class="material-symbols-outlined text-[16px]">bolt</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-surface-panel-dark text-terminal-text rounded-xl p-space-lg shadow-xl flex flex-col gap-space-md">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-space-md pb-space-sm border-b border-surface-terminal-border/40">
+<div class="flex items-center gap-space-sm">
+<span class="w-2.5 h-2.5 rounded-full bg-terminal-accent animate-pulse"></span>
+<span class="font-code-sm text-code-sm text-terminal-accent font-semibold tracking-wider uppercase">
+              LIVE CRYPTOGRAPHIC TELEMETRY • PROVENANCE STREAM
+            </span>
+</div>
+<div class="flex items-center gap-space-md font-code-sm text-code-sm text-on-surface-variant">
+<span>Latency: <strong class="text-terminal-text">14ms</strong></span>
+<span>•</span>
+<span>Enclave: <strong class="text-terminal-text">SECP256K1-FIPS</strong></span>
+<span>•</span>
+<span>Epoch: <strong class="text-terminal-text">#1082-2025</strong></span>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-md font-code-sm text-code-sm">
+<div class="p-space-sm rounded bg-surface-terminal-border/40 flex flex-col gap-1">
+<span class="text-outline-variant font-medium">Hardware Crypto Protocol</span>
+<div class="flex items-center gap-space-xs text-terminal-text">
+<span class="material-symbols-outlined text-terminal-accent text-[16px]">memory</span>
+<span>secp256k1 ECDSA + FIDO2 Enclave</span>
+</div>
+<span class="text-outline text-[10px]">ECDSA-SHA256 Sig verified</span>
+</div>
+<div class="p-space-sm rounded bg-surface-terminal-border/40 flex flex-col gap-1">
+<span class="text-outline-variant font-medium">Cloud Infrastructure Sovereign</span>
+<div class="flex items-center gap-space-xs text-terminal-text">
+<span class="material-symbols-outlined text-primary-fixed-dim text-[16px]">cloud_sync</span>
+<span>AWS Bedrock GovCloud (Jakarta ap-southeast-3)</span>
+</div>
+<span class="text-outline text-[10px]">Data residency: RI Sovereign Enclave</span>
+</div>
+<div class="p-space-sm rounded bg-surface-terminal-border/40 flex flex-col gap-1">
+<span class="text-outline-variant font-medium">Immutable Polygon Anchor</span>
+<div class="flex items-center gap-space-xs text-terminal-text">
+<span class="material-symbols-outlined text-secondary-fixed-dim text-[16px]">layers</span>
+<span>Polygon Amoy (Block #41,215 • 100% Sync)</span>
+</div>
+<span class="text-outline text-[10px]">Root Hash: 0xa9f4...28b1</span>
+</div>
+</div>
+<div class="pt-space-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-space-sm text-outline font-body-sm text-body-sm">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-[16px] text-terminal-accent">verified_user</span>
+<span>Sistem Terenkripsi Sesuai Perpres MBG No. 83 / 2024 &amp; Standar Keamanan Siber BSSN Tingkat III.</span>
+</div>
+<span class="font-code-sm text-code-sm text-outline-variant">Hash Checksum: 88f2.cb01.e349.0a11</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+  function switchAuthTab(type) {
+    const tabSso = document.getElementById('tabSso');
+    const tabFido = document.getElementById('tabFido');
+    const ssoFields = document.getElementById('ssoFormFields');
+    const fidoFields = document.getElementById('fidoFormFields');
+
+    if (type === 'sso') {
+      tabSso.className = 'flex-1 py-1.5 px-space-md rounded text-center font-label-md text-label-md transition-all bg-surface-card text-on-surface shadow-sm font-semibold';
+      tabFido.className = 'flex-1 py-1.5 px-space-md rounded text-center font-label-md text-label-md transition-all text-on-surface-variant hover:text-on-surface';
+      ssoFields.classList.remove('hidden');
+      fidoFields.classList.add('hidden');
+      fidoFields.classList.remove('flex');
+    } else {
+      tabFido.className = 'flex-1 py-1.5 px-space-md rounded text-center font-label-md text-label-md transition-all bg-surface-card text-on-surface shadow-sm font-semibold';
+      tabSso.className = 'flex-1 py-1.5 px-space-md rounded text-center font-label-md text-label-md transition-all text-on-surface-variant hover:text-on-surface';
+      ssoFields.classList.add('hidden');
+      fidoFields.classList.remove('hidden');
+      fidoFields.classList.add('flex');
+    }
+  }
+
+  function togglePasswordVisibility() {
+    const pwdInput = document.getElementById('passwordField');
+    const eyeIcon = document.getElementById('pwdEyeIcon');
+    if (pwdInput.type === 'password') {
+      pwdInput.type = 'text';
+      eyeIcon.textContent = 'visibility_off';
+    } else {
+      pwdInput.type = 'password';
+      eyeIcon.textContent = 'visibility';
+    }
+  }
+
+  function selectFastTrack(roleKey) {
+    const workIdInput = document.getElementById('workId');
+    const statusNote = document.getElementById('statusNotification');
+    const statusText = document.getElementById('statusText');
+    const submitBtn = document.getElementById('submitBtn');
+
+    switchAuthTab('sso');
+
+    if (roleKey === 'sppg_head') {
+      workIdInput.value = 'r.pratama@bgn.go.id';
+      statusText.innerHTML = '<strong>SPPG Head — Cianjur (#SPPG-CJR-01)</strong> credentials injected. Dispatch &amp; physical sign-off verified.';
+    } else if (roleKey === 'sppg_nutritionist') {
+      workIdInput.value = 'dr.siti.rahma@bgn.go.id';
+      statusText.innerHTML = '<strong>SPPG Nutritionist — Jakarta (#SPPG-JKT-04)</strong> credentials injected. Food safety inspection clearance loaded.';
+    } else if (roleKey === 'bgn_monitor') {
+      workIdInput.value = 'h.wijaya.audit@bgn.go.id';
+      statusText.innerHTML = '<strong>BGN National Inspector (#BGN-HQ-NAT)</strong> credentials injected. Multi-Hub governance ledger access granted.';
+    }
+
+    statusNote.classList.remove('hidden');
+    submitBtn.classList.add('opacity-90', 'scale-[0.99]');
+
+    setTimeout(() => {
+      submitBtn.classList.remove('opacity-90', 'scale-[0.99]');
+    }, 400);
+  }
+
+  function handleDirectLogin(e) {
+    e.preventDefault();
+    const statusNote = document.getElementById('statusNotification');
+    const statusText = document.getElementById('statusText');
+    const submitBtn = document.getElementById('submitBtn');
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">refresh</span><span>Verifying Cryptographic Enclave...</span>';
+
+    setTimeout(() => {
+      statusNote.classList.remove('hidden');
+      statusText.textContent = 'Authentication successful! Session granted for workstation id-bgn-auth-01.';
+      submitBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">done</span><span>Authenticated &bull; Entering Enclave</span>';
+    }, 800);
+  }
+</script></main><footer class="w-full bg-surface-container-low border-t border-border-subtle py-space-lg"><div class="w-full px-margin flex flex-col md:flex-row items-center justify-between gap-space-md"><div class="flex items-center gap-space-md"><span class="font-label-sm text-label-sm text-on-surface-variant">© 2025 Badan Gizi Nasional (BGN) RI • Republic of Indonesia</span><span class="font-code-sm text-code-sm text-outline">•</span><span class="font-code-sm text-code-sm text-on-surface-variant">MealChain Guardian Cryptographic Protocol v4.19.8</span></div><div class="flex items-center gap-space-lg"><div class="flex items-center gap-space-xs"><span class="material-symbols-outlined text-primary text-[16px]">shield</span><span class="font-code-sm text-code-sm text-on-surface-variant">AWS Bedrock GovCloud Encrypted</span></div><span class="font-code-sm text-code-sm text-outline">•</span><div class="flex items-center gap-space-xs"><span class="material-symbols-outlined text-primary text-[16px]">link</span><span class="font-code-sm text-code-sm text-on-surface-variant">Polygon Amoy Ledger Anchor: Valid</span></div></div></div></footer></body></html>

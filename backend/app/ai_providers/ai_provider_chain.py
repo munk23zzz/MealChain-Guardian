@@ -21,16 +21,6 @@ from app.ai_providers.model_registry import (
 )
 
 
-def _agentcore_stub(arn: str) -> Callable[[str], str]:
-    def _call(prompt: str) -> str:
-        raise NotImplementedError(
-            "AgentCore Runtime belum tersedia (ARN terpasang, implementasi "
-            "runtime menyusul); provider dilaporkan unavailable"
-        )
-
-    return _call
-
-
 def _build_ref_caller(ref: ModelRef) -> Callable[[str], str]:
     if ref.kind == "bedrock":
         from app.ai_providers.bedrock_caller import build_model_caller
@@ -51,7 +41,10 @@ def _build_ref_caller(ref: ModelRef) -> Callable[[str], str]:
 
             return _dead_slot
     if ref.kind == "agentcore":
-        return _agentcore_stub(ref.agentcore_arn)
+        # O-AI (S4-00): caller invoke runtime NYATA — bukan stub lagi.
+        from app.ai_providers.agentcore_caller import build_runtime_caller
+
+        return build_runtime_caller(ref.agentcore_arn)
     raise ValueError(f"kind model tidak dikenal: {ref.kind}")
 
 

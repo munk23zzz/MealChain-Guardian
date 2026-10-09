@@ -16,7 +16,8 @@ DB_URL = (
     "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
 ).replace("+asyncpg", "+psycopg")
 
-LATEST = datetime(2026, 10, 1, 12, 0, 0, tzinfo=UTC)
+# Ruling REF seed canonical (Roy 2026-10-09): REF 2026-10-08 12:00 UTC.
+LATEST = datetime(2026, 10, 8, 12, 0, 0, tzinfo=UTC)
 
 
 @pytest.fixture()
@@ -50,7 +51,7 @@ def test_supply_latest_record_not_sum(client):
                     "INSERT INTO supply_records (id, location_id, commodity_id, "
                     "quantity_kg, recorded_at, source) "
                     "SELECT gen_random_uuid(), l.id, c.id, 777, "
-                    "'2026-10-05T00:00:00+00'::timestamptz, 'manual' "
+                    "'2026-10-15T00:00:00+00'::timestamptz, 'manual' "
                     "FROM locations l, commodities c "
                     "WHERE l.name='Cianjur' AND c.name='telur'"
                 )

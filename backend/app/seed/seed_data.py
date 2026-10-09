@@ -220,6 +220,42 @@ def build_seed_rows(reference_time: datetime, seed_path: Path | None = None) -> 
         for po in data["mock_sap"]["purchase_orders"]
     ]
 
+    # ---- P6 (keputusan Roy 2026-10-09): facts KPI Meal Continuity & Food
+    # Loss. Deterministik & idempoten (stable_uuid): 7 hari terakhir berisi
+    # plan porsi per lokasi, delivery, dan disposal event. Rasio continuity
+    # ~97-99% (1 hari shortfall kecil di Bogor) — angka live nyata dari DB,
+    # bukan angka PRD.
+    menu_plans = []
+    delivery_events = []
+    disposal_events = []
+    for loc in data["locations"]:
+        base = 1200 if loc["region"] != "Sumatera" else 900
+        for day in range(1, 8):
+            plan_date = (ref - timedelta(days=day)).date()
+            menu_plans.append({
+                "id": stable_uuid("menu_plan", loc["name"], plan_date.isoformat()),
+                "location": loc["name"],
+                "plan_date": plan_date,
+                "planned_portions": base,
+            })
+            delivered = base - (24 if (loc["name"] == "Bogor" and day == 3) else 0)
+            delivery_events.append({
+                "id": stable_uuid("delivery", loc["name"], plan_date.isoformat()),
+                "menu_plan": stable_uuid("menu_plan", loc["name"], plan_date.isoformat()),
+                "delivered_portions": delivered,
+                "status": "delivered",
+                "delivered_at": ref - timedelta(days=day, hours=-2),
+            })
+            if day in (2, 5):
+                disposal_events.append({
+                    "id": stable_uuid("disposal", loc["name"], str(day)),
+                    "location": loc["name"],
+                    "commodity": "telur",
+                    "quantity_kg": Decimal("6") if day == 2 else Decimal("4"),
+                    "reason": "expired_transport" if day == 2 else "spoilage_cold_chain",
+                    "disposed_at": ref - timedelta(days=day),
+                })
+
     return {
         "locations": locations,
         "commodities": commodities,
@@ -230,6 +266,9 @@ def build_seed_rows(reference_time: datetime, seed_path: Path | None = None) -> 
         "batches": batches,
         "material_stock": material_stock,
         "purchase_orders": purchase_orders,
+        "menu_plans": menu_plans,
+        "delivery_events": delivery_events,
+        "disposal_events": disposal_events,
     }
 
 
@@ -401,10 +440,63 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
                             status=item["status"],
                         )
                     )
+            await _load_p6_facts(session, rows, loc_by_name, com_by_name, counts)
             await session.commit()
     finally:
         await engine.dispose()
     return counts
+
+
+async def _load_p6_facts(session, rows: dict, loc_by_name, com_by_name,
+                         counts: dict) -> None:
+    """P6: muat facts KPI (menu plan / delivery / disposal) — idempoten merge."""
+    from sqlalchemy import select as _select
+
+    from app.models import DeliveryEvent, DisposalEvent, MenuPlan
+
+    plan_by_key = {
+        (r.location_id, r.plan_date): r
+        for r in (await session.execute(_select(MenuPlan))).scalars()
+    }
+    delivery_ids = {
+        r.id for r in (await session.execute(_select(DeliveryEvent))).scalars()
+    }
+    disposal_ids = {
+        r.id for r in (await session.execute(_select(DisposalEvent))).scalars()
+    }
+    for item in rows["menu_plans"]:
+        loc_id = loc_by_name[item["location"]].id
+        key = (loc_id, item["plan_date"])
+        await session.merge(MenuPlan(
+            id=item["id"], location_id=loc_id,
+            plan_date=item["plan_date"],
+            planned_portions=item["planned_portions"],
+        ))
+        plan_by_key.setdefault(key, None)
+    await session.flush()  # pastikan menu_plan tersimpan sebelum delivery FK
+    for item in rows["delivery_events"]:
+        if item["id"] in delivery_ids:
+            continue
+        session.add(DeliveryEvent(
+            id=item["id"],
+            menu_plan_id=item["menu_plan"],
+            delivered_portions=item["delivered_portions"],
+            status=item["status"],
+            delivered_at=item["delivered_at"],
+        ))
+        counts["delivery_events"] = counts.get("delivery_events", 0) + 1
+    for item in rows["disposal_events"]:
+        if item["id"] in disposal_ids:
+            continue
+        session.add(DisposalEvent(
+            id=item["id"],
+            location_id=loc_by_name[item["location"]].id,
+            commodity_id=com_by_name[item["commodity"]].id,
+            quantity_kg=item["quantity_kg"],
+            reason=item["reason"],
+            disposed_at=item["disposed_at"],
+        ))
+        counts["disposal_events"] = counts.get("disposal_events", 0) + 1
 
 
 # ---------------------------------------------------------------------------
@@ -488,7 +580,11 @@ def main() -> None:
     args = parser.parse_args()
     ref = datetime.fromisoformat(args.reference_time)
     if ref.tzinfo is None:
-        raise SystemExit("reference-time wajib timezone-aware, mis. 2026-10-01T12:00:00+00:00")
+        raise SystemExit(
+            "reference-time wajib timezone-aware. Ruling REF seed canonical "
+            "(Roy 2026-10-09): 2026-10-08T12:00:00+00:00 — REF lain "
+            "menduplikasi baris (id stable_uuid bergantung REF)."
+        )
     counts = asyncio.run(load_seed(ref))
     if args.with_demo_users:
         ensure_demo_users()

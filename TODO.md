@@ -141,16 +141,94 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 
 ## Sprint 4 — Event 2 & 3, KPI, polish, rehearsal
 
+> **STATUS: IN PROGRESS** (Jangan tandai selesai — Roy yang menandai) —
+> per 2026-10-09 (revisi 3): **final gate Sprint 4 LOLOS** — backend full
+> **551 passed EXIT=0** (390s, pasca-polish; baseline 463→551), frontend
+> **92/92** + tsc 0 + lint 0 + build PASS, Ruff 0, Alembic single head
+> `008_rejection_loop`, OpenAPI live 32 paths + unauth 401 probe bersih,
+> secrets scan 0 secret produksi, DEMO_MODE=False. Live browser: peta
+> skematik Indonesia 10 lokasi (data DB real, Jakarta telur kurang 780 kg)
+> + grafik surplus/shortage + sidebar per role; bgn_monitor read-only
+> (tanpa tab Analisis/tombol mutasi). **Polish UI/UX per role done** (arah
+> Roy): teks ramai dipindah ke sidebar, tab nav per role, `GET /balance/map`
+> (TDD 5/5) + `SupplyMap` + `StockChart`. Laporan gate:
+> `docs/verification/sprint-4-final-gate.md`. Video fallback = waived
+> Owner. Residual: O-KPI 2 metrik menunggu kontrak data; Memory AgentCore
+> IAM (aksi Roy). Sprint tetap IN PROGRESS — Roy yang menandai DONE.
+> **Overhaul visual (arah Roy 2026-10-09, "masih sangat jelek")**: latar
+> abu halus + kartu ber-depth, badge dot-status (EXPIRED tetap tampil —
+> traceable, tidak disembunyikan), **filter chip status + count live**
+> (Semua 63 / PROPOSED 49 / PENDING_APPROVAL 8 / REJECTED 5 / FLAGGED 1 —
+> terverifikasi browser), peta & chart dibingkai panel, angka tabular.
+> FE 93/93 + tsc 0 + lint 0 + build EXIT=0 (served fresh).
+> **MapLibre GL (keputusan Roy 2026-10-09, lanjutan overhaul):** peta
+> skematik SVG diganti MapLibre GL sungguhan (tile OSM raster, tanpa API
+> key) — FE 95/95, build EXIT=0, terverifikasi live 10 marker;
+> `docs/design.md` §3.1/§4/§5 diselaraskan.
+> **PRD 2.4 alignment (keputusan Roy 2026-10-09):** navigasi konsol
+> direstrukturisasi mengikuti 7 screen PRD → 5 tab: **Overview / KPI /
+> Recommendations / Agent Log / Demo Control** (approver-only). Persona
+> label = judul resmi PRD §2 (Operations Lead / Food Safety Officer /
+> National Inspector). Tab KPI menampilkan **strip Target KPI Demo Day**
+> (angka PRD §5 berlabel eksplisit "TARGET DEMO · bukan angka live";
+> KPI live tetap jujur dari DB). Komponen kripto PRD (Polygon/IPFS/
+> Merkle/FIDO2) & chaos sliders TIDAK dibuat — arsitektur & backend
+> tetap keputusan terakhir. FE 101/101 + tsc 0 + lint 0 + build EXIT=0;
+> live: sppg_head 5 tab + monitor tanpa Demo Control.
+> **Paket 1–6 integrity & KPI (setuju Roy via clarify 2026-10-09/10):**
+> P1 Merkle ledger append-only (migration `010_ledger_blocks` +
+> `ledger_service` sha256 rantai + `GET /ledger/verify` + hook
+> approve/execute); P2 dossier konten-addressed (`mc1-` SHA-256 bundle
+> bukti, `GET /decisions/{id}/dossier`); P3 ECDSA secp256k1 signing per
+> approval (kunci `SIGNING_KEY_HEX` di `.env`, tanpa kunci = `unsigned`
+> jujur); P4 chaos sliders (`ChaosPanel` → `POST /events/safety-disruption`
+> via API resmi + `GET /batches` read-only); P5 telemetry banner jujur di
+> login (tanpa klaim sertifikasi); P6 tabel facts menu_plans/
+> delivery_events/disposal_events (migration `009_kpi_facts_tables`) →
+> **KPI Meal Continuity (100.00%) & Avoidable Food Loss (1.52%) LIVE**
+> deterministik dari DB. FE **107/107** + tsc 0 + lint 0 + build EXIT=0;
+> IntegrityPanel di tab agent-log, ChaosPanel approver-only di demo-control.
+> **Ruling REF seed canonical (Roy 2026-10-09): REF 2026-10-08 12:00 UTC**
+> — dataset demo ter-anchor di situ (id stable_uuid bergantung REF; REF lain
+> menduplikasi baris). Test stale diselaraskan (`test_price_regional_seed`,
+> `test_seed_load_db`, `test_api_supply_demand` LATEST + timestamp insert
+> 10-15) → **backend full 567 passed EXIT=0** (253s, rerun pasca-paket 1–6).
+> Sprint tetap IN PROGRESS — Roy yang menandai DONE.
+> ---
+> Riwayat revisi 2 (2026-10-08): S4-01..S4-04 Done; **S4-05 rehearsal 3 putaran
+> selesai + 2 ruling Owner dieksekusi TDD + putaran 4 bersih LOLOS** —
+> (1) approval-summary/detail lintas lokasi dibuka untuk VERIFIER_ROLES
+> (selaras write path; monitor tetap 403) — terbukti live: nutritionist
+> Bogor membaca summary + approve decision Jakarta via UI (2 approvals
+> DB); (2) pipeline rekomendasi difilter per komoditas panel (`POST
+> /balance/analyze` body opsional `commodity`) — terbukti live: panel ayam
+> → 0 kandidat, panel telur → usulan telur (bug "panel ayam → usul telur"
+> hilang). **Temuan higienitas test fixed**: test_event2 seed tanpa cleanup
+> (polusi lintas-test) → fixture FK-safe + residu historis dibersihkan →
+> full backend **546 passed**. **S4-06 done TANPA video** (arah Roy):
+> evidence `docs/verification/sprint-4.md` + redaksi (`.env.example`
+> dihapus sesuai aturan secrets; scan tracked files 0 secret produksi).
+> DEMO_MODE kembali `False` (recreate terverifikasi). Sisa: polish UI/UX
+> per role (arah Roy: kurangi teks ramai, grafik, map Indonesia, sidebar
+> per role) + final gate.
+
 | ID | Task | Kategori | Status | Assignee | Catatan |
 |---|---|---|---|---|---|
-| S4-01 | Event 2 (price anomaly) end-to-end interaktif | Demo Scenario | Not Started | | |
-| S4-02 | Event 3 (safety disruption → reroute Bogor) end-to-end interaktif | Demo Scenario | Not Started | | |
-| S4-03 | KPI Dashboard — 7 KPI dari data real | Dashboard | Not Started | | |
-| S4-04 | Approval Modal — ringkasan lengkap | Dashboard | Not Started | | |
-| S4-05 | Rehearsal checklist (workflows.md §6) — 3x lolos berturut-turut | QA/Demo | Not Started | | |
-| S4-06 | Rekam video fallback | QA/Demo | Not Started | | |
+| S4-01 | Event 2 (price anomaly) end-to-end interaktif | Demo Scenario | Done | Hermes | p2–p4 backend `event2_service` + `Event2Panel`; live: telur Jakarta −0,98% normal, ayam Bogor +0,79% normal (review-only, tanpa decision row) |
+| S4-02 | Event 3 (safety disruption → reroute Bogor) end-to-end interaktif | Demo Scenario | Done | Hermes | p4 `event3_service` + `POST /events/safety-disruption`; live: batch Surabaya 90 mnt → FAIL → `revised` 201; batch ayam aman → `no_disruption` 200; UI trigger menunggu boundary ruling (rehearsal via API resmi) |
+| S4-03 | KPI Dashboard — 7 KPI dari data real | Dashboard | Done | Hermes | p9: kpi core+service+API (20 test) + `KPIDashboard` FE (7/7) + wiring; live probe 7 metrik jujur (2 unavailable + 4 no_data, tanpa fake 0) |
+| S4-04 | Approval Modal — ringkasan lengkap | Dashboard | Done | Hermes | p8: approval-summary read model kanonik + modal; p10: fix gate Setuju `can_execute`→`can_approve` (bug rehearsal, TDD RED→GREEN, 80/80) |
+| S4-05 | Rehearsal checklist (workflows.md §6) — 4x lolos berturut-turut | QA/Demo | Done | Hermes | r1 telur E1-3 ✓+bug approval fixed; r2 ayam E2/E3 ✓; r3 per-role ✓; r4 bersih ruling ✓ (panel ayam 0 kandidat; telur → usulan telur; approve ganda lintas lokasi via UI, 2 rows DB) |
+| S4-06 | Evidence docs + redaksi secrets (TANPA video — arah Roy) | QA/Demo | Done | Hermes | `docs/verification/sprint-4.md`; `.env.example` dihapus + gitignore (aturan secrets); scan tracked 0 secret produksi; DEMO_MODE kembali False |
+| S4-06b | Polish UI/UX per role (arah Roy: kurangi teks ramai, grafik, map Indonesia, sidebar) | Dashboard | Done | Hermes | TDD: `GET /balance/map` (5/5) + FE test baru (RED→GREEN, 80→92); sidebar per role + tab nav (bgn_monitor tanpa tab Analisis), `SupplyMap` peta skematik 10 lokasi data DB real, `StockChart` recharts; tsc 0 + lint 0 |
+| S4-06c | Final Sprint 4 Acceptance Gate (plan §17) | QA/Demo | Done | Hermes | Laporan `docs/verification/sprint-4-final-gate.md`: backend 551 EXIT=0, FE 92/92+build, Ruff 0, Alembic head tunggal, OpenAPI 32 paths + unauth probe, secrets scan bersih, live browser 2 role; video fallback waived Owner; sprint tetap IN PROGRESS — Roy yang menandai DONE |
+| S4-09 | Adaptasi desain Stitch → design system (arah Roy 2026-10-10) | Dashboard | Done | Hermes | Kode Stitch (7 layar) diadaptasi VISUAL-ONLY via token CSS `globals.css` — palet teal Stitch (primary #005c55, container #0f766e, terminal #0F172A, accent #2DD4BF), status tint Stitch, sidebar ala Guardian Core, trace/hash panel terminal gelap, focus-visible ring, transisi 180ms. Struktur komponen, kontrak API (`../lib/api`), gating role (isApprover, monitor read-only) TIDAK diubah. Verifikasi fresh: FE 107/107 + tsc 0 + lint 0 + build EXIT=0; frontend 3000=200, backend health OK |
+| S4-09b | Sinkronisasi UI ke mockupui/ (SSoT DESIGN.md) + audit fungsional penuh (arah Roy 2026-10-10) | Dashboard | Done | Hermes | SSoT = `mockupui/cold_chain_integrity_console/DESIGN.md`: token `:root` disamakan (canvas #F8FAFC, line #E2E8F0/#CBD5E1, ink #0B1C30, slate #64748B, elevasi L1/L2/L3 DESIGN.md, radius 8px); alias legacy navy/grey dipetakan; font Inter + JetBrains Mono via next/font (`layout.tsx`); semua hardcode #f6f8f9 dll. dinormalkan. Audit wiring: 0 tombol tanpa handler (scan otomatis seluruh components+page). Verifikasi live browser: login 3 akun demo OK (chip isi form, submit jalan), RBAC live — monitor read-only tanpa tab Demo Control & approve 403 via API, approver punya Demo Control + Event 2/3 terpicu sukses, Merkle verify valid 123 block, KPI honest no_data (window 24h di luar REF), peta 10 marker + grafik dari DB. Gate: FE 107/107 + tsc 0 + lint 0 + build EXIT=0; BE 567/567 + ruff clean; responsif dipertahankan (breakpoint 720/820/860px) |
+| S4-09c | Sinkronisasi SELURUH layar ke mockupui (ekspansi S4-09b, arah Roy 2026-10-10) | Dashboard | Done | Hermes | 3 subagent paralel restyle per tab, hasil digabung & diverifikasi ulang parent: KPI (header konsol + bento 7 kartu + filter pill + chip trend SVG), Overview (subheader + strip KPI 3 kartu dari mapData real tanpa fake 0 + filter pill komoditas + split 60/40 peta di panel terminal gelap + tabel breakdown), Recommendations/AgentLog/DemoControl (kartu rekomendasi ala mockup, trace terminal gelap, panel demo). Data/logika/API/RBAC tidak diubah; token :root tidak disentuh; test mock fetch diperbarui utk kontrak resp.text (agent-flow, integrity-panel). Bonus: fix kelas pesan error non-JSON di lib/api.ts (tidak lagi bocor "Unexpected token '<'"). Verifikasi live 5 tab (Overview/KPI/Rekomendasi+approve modal jalan/AgentLog Merkle 152 block valid/DemoControl Event 2+3). Gate: FE 107/107 + tsc 0 + lint 0 + build EXIT=0; frontend 200, backend healthy |
 | S4-07 | (Stretch) AgentCore Identity | Stretch | Not Started | | |
 | S4-08 | (Stretch) Deploy ke AWS App Runner | Stretch | Not Started | | |
+| S4-10 | Hidupkan SAP AI Core: RPT-1.6 (forecast primary) + Verifier primary (general 40+) — paket akses SAP (RPT 1.6, Joule Orchestrator chat UI, AI Core general 40+, AI Launchpad) | SAP Integration | Not Started | | Data tetap mock; label `SAP-RPT-1.6` hanya utk response asli (aturan anti-fabricate); langkah: isi `SAP_AI_CORE_*` dari service key → deployment RPT-1.6 via AI Launchpad → HTTP client `forecast_client`+`verifier_client` (stub sudah ada) → probe + contract test; Joule = talking point saja, bukan integrasi |
+| S4-11 | Settings/Admin screen (manage users, lokasi) — dipindah dari Backlog BL-01 (arah Roy 2026-10-10) | Dashboard | Not Started | | Desain bisa memakai mockup Stitch; nice-to-have, potong dulu kalau waktu mepet |
 
 ## Sprint 5 — Real SAP via AWS for SAP MCP Server (ON-DEMAND — cek Roadmap.md sebelum mulai)
 
@@ -167,7 +245,7 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 
 | ID | Task | Kategori | Status | Catatan |
 |---|---|---|---|---|
-| BL-01 | Settings/Admin screen (manage users, lokasi) | Dashboard | Not Started | Nice-to-have, potong dulu kalau waktu mepet |
+| BL-01 | ~~Settings/Admin screen (manage users, lokasi)~~ → **dipindah ke Sprint 4 sebagai S4-11** (arah Roy 2026-10-10) | Dashboard | Moved | Eksekusi di S4-11 |
 | BL-02 | Integrasi SAP nyata | Future | Not Started | Pasca-kompetisi |
 | BL-03 | Hyperledger Fabric evidence ledger | Future | Not Started | Pasca-kompetisi |
 

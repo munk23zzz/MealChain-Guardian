@@ -36,10 +36,30 @@ def client():
 
 
 def _mk_decision() -> str:
+    """Buat decision target Jakarta via API — kontrak baru S4-00: butuh
+    JWT sppg_head; target lokasi = lokasi user pembuat (Jakarta)."""
+    from tests.test_actions import _login, _mk_user
+
     with TestClient(app) as c:
-        resp = c.post("/decisions", json={"recommendation": RECOMMENDATION})
+        user = _mk_user("sppg_head", "Jakarta")
+        resp = c.post(
+            "/decisions",
+            json={"recommendation": RECOMMENDATION},
+            headers=_login(c, user),
+        )
         assert resp.status_code == 201, resp.text
-        return resp.json()["decision_id"]
+        decision_id = resp.json()["decision_id"]
+    _drop_user_quiet(user["email"])
+    return decision_id
+
+
+def _drop_user_quiet(email: str) -> None:
+    from tests.test_actions import _drop_user
+
+    try:
+        _drop_user(email)
+    except Exception:
+        pass
 
 
 def _authed_headers(client) -> dict:

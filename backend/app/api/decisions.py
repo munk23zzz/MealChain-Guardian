@@ -14,13 +14,18 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.actions import VERIFIER_ROLES
 from app.api.auth import get_current_user
 from app.api.dependencies import get_db
 from app.models import Commodity, Decision, Location, User
+from app.services.approval_summary import build_approval_summary
 
 router = APIRouter()
 
 DEFAULT_TTL_MINUTES = 30
+
+# bgn_monitor read-only (PRD §77): tidak boleh membuat/mengubah keputusan.
+DECISION_MUTATING_ROLES = ("sppg_head", "sppg_nutritionist")
 
 
 class DecisionCreate(BaseModel):
@@ -29,6 +34,59 @@ class DecisionCreate(BaseModel):
         default=DEFAULT_TTL_MINUTES, ge=1, le=1440
     )
     decision_type: str = "regional_balance"
+
+
+async def _assert_target_location_allowed(
+    db: AsyncSession, user: User, target_location_id
+) -> None:
+    """O-SEC-2: SPPG hanya boleh menyasar lokasi miliknya.
+
+    bgn_monitor read-only sehingga tak pernah sampai sini via create.
+    Source lokasi bebas (regional balancing lintas daerah).
+    """
+    if user.role == "bgn_monitor":
+        raise HTTPException(status_code=403, detail="role tidak diizinkan")
+    if user.location_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="user belum terikat lokasi — tidak bisa membuat decision",
+        )
+    if target_location_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail="lokasi tujuan decision tidak dikenal",
+        )
+    if user.location_id != target_location_id:
+        raise HTTPException(
+            status_code=403,
+            detail="decision hanya boleh menyasar lokasi milik SPPG Anda",
+        )
+
+
+async def _assert_decision_readable(
+    db: AsyncSession, user: User, row: Decision
+) -> None:
+    """O-SEC-2: SPPG hanya membaca decision target lokasinya;
+    bgn_monitor membaca semua (read-only role).
+
+    Ruling Owner 2026-10-08 (S4-05 p10): VERIFIER_ROLES
+    (sppg_head/sppg_nutritionist) adalah approver lintas lokasi pada
+    matriks AND — write path (POST /actions/approve) tidak membatasi
+    lokasi, jadi read path summary juga tidak: approver ke-2 wajib bisa
+    MELIHAT ringkasan keputusan yang sah ia setujui. Role lain tetap
+    O-SEC-2 (scope lokasi).
+    """
+    if user.role == "bgn_monitor":
+        return
+    if user.role in VERIFIER_ROLES:
+        return
+    if row.target_location_id is None:
+        return
+    if user.location_id != row.target_location_id:
+        raise HTTPException(
+            status_code=403,
+            detail="decision di luar scope lokasi Anda",
+        )
 
 
 def _validity(expires_at: datetime) -> dict:
@@ -62,7 +120,10 @@ def _extract(recommendation: dict):
 async def create_decision(
     payload: DecisionCreate,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
+    if user.role not in DECISION_MUTATING_ROLES:
+        raise HTTPException(status_code=403, detail="role tidak diizinkan")
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(minutes=payload.ttl_minutes)
     fields = _extract(payload.recommendation)
@@ -99,6 +160,10 @@ async def create_decision(
         safe_delivered_cost=fields["safe_delivered_cost"],
         cost_breakdown=fields["cost_breakdown"],
         expires_at=expires_at,
+    )
+    # O-SEC-2: scope server-side SEBELUM persist.
+    await _assert_target_location_allowed(
+        db, user, decision.target_location_id
     )
     db.add(decision)
     await db.commit()
@@ -267,16 +332,38 @@ async def get_decision_traces(
     return {"decision_id": str(decision_id), "steps": steps}
 
 
+@router.get("/decisions/{decision_id}/approval-summary")
+async def get_approval_summary(
+    decision_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """S4-04: read model kanonik approval — modal UI tidak menghitung apa pun.
+
+    Scope: SPPG hanya target lokasinya (O-SEC-2); bgn_monitor read-only
+    boleh membaca semua. Tanpa mutation, tanpa call provider.
+    """
+    row = (
+        await db.execute(select(Decision).where(Decision.id == decision_id))
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="decision tidak ditemukan")
+    await _assert_decision_readable(db, user, row)
+    return await build_approval_summary(db, row)
+
+
 @router.get("/decisions/{decision_id}")
 async def get_decision(
     decision_id: UUID,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     row = (
         await db.execute(select(Decision).where(Decision.id == decision_id))
     ).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="decision tidak ditemukan")
+    await _assert_decision_readable(db, user, row)
     validity = _validity(row.expires_at)
     return {
         "decision_id": str(row.id),

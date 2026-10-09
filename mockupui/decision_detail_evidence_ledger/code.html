@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"primary-fixed-dim":"#80d5cb","tertiary-container":"#cf1b1e","surface-bright":"#f8f9ff","outline-variant":"#bdc9c6","on-error-container":"#93000a","primary-fixed":"#9cf2e8","status-danger-text":"#991B1B","surface-tint":"#006a63","status-danger-bg":"#FEF2F2","primary-container":"#0f766e","tertiary":"#a7000f","on-tertiary-fixed":"#410002","on-primary-container":"#a3faef","status-success-bg":"#ECFDF5","surface-variant":"#d3e4fe","status-success-border":"#A7F3D0","on-surface-variant":"#3e4947","border-strong":"#CBD5E1","surface-canvas":"#F8FAFC","error-container":"#ffdad6","on-primary-fixed-variant":"#00504a","on-tertiary":"#ffffff","border-subtle":"#E2E8F0","surface-container-high":"#dce9ff","on-primary-fixed":"#00201d","inverse-surface":"#213145","tertiary-fixed-dim":"#ffb4ab","surface-container":"#e5eeff","secondary-fixed-dim":"#ffb77d","outline":"#6e7977","secondary":"#904d00","status-danger-border":"#FECACA","on-secondary-fixed":"#2f1500","status-warning-bg":"#FFFBEB","inverse-on-surface":"#eaf1ff","surface-container-low":"#eff4ff","tertiary-fixed":"#ffdad6","primary":"#005c55","on-secondary":"#ffffff","surface":"#f8f9ff","on-error":"#ffffff","error":"#ba1a1a","on-primary":"#ffffff","surface-panel-dark":"#0F172A","surface-container-lowest":"#ffffff","surface-terminal-border":"#1E293B","on-tertiary-fixed-variant":"#93000b","background":"#f8f9ff","status-warning-border":"#FDE68A","on-background":"#0b1c30","on-tertiary-container":"#ffe4e1","terminal-text":"#E2E8F0","surface-card":"#FFFFFF","terminal-accent":"#2DD4BF","inverse-primary":"#80d5cb","surface-dim":"#cbdbf5","status-warning-text":"#92400E","surface-container-highest":"#d3e4fe","secondary-container":"#fe932c","on-secondary-container":"#663500","status-success-text":"#065F46","on-secondary-fixed-variant":"#6e3900","secondary-fixed":"#ffdcc3","on-surface":"#0b1c30"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"space-lg":"1rem","space-xl":"1.5rem","space-sm":"0.5rem","gutter":"1rem","space-md":"0.75rem","margin":"1.5rem","margin-mobile":"1rem","space-2xl":"2rem","space-xs":"0.25rem","gutter-compact":"0.5rem"},"fontFamily":{"code-lg":["JetBrains Mono"],"code-sm":["JetBrains Mono"],"body-md":["Inter"],"display":["Inter"],"headline-lg":["Inter"],"label-sm":["Inter"],"label-lg":["Inter"],"code-md":["JetBrains Mono"],"headline-sm":["Inter"],"headline-md":["Inter"],"label-md":["Inter"],"body-sm":["Inter"],"body-lg":["Inter"]},"fontSize":{"code-lg":["14px",{"lineHeight":"20px","letterSpacing":"0em","fontWeight":"500"}],"code-sm":["11px",{"lineHeight":"16px","letterSpacing":"0em","fontWeight":"400"}],"body-md":["14px",{"lineHeight":"20px","letterSpacing":"0em","fontWeight":"400"}],"display":["32px",{"lineHeight":"40px","letterSpacing":"-0.02em","fontWeight":"700"}],"headline-lg":["24px",{"lineHeight":"32px","letterSpacing":"-0.015em","fontWeight":"600"}],"label-sm":["11px",{"lineHeight":"14px","letterSpacing":"0.03em","fontWeight":"500"}],"label-lg":["14px",{"lineHeight":"20px","letterSpacing":"0.01em","fontWeight":"500"}],"code-md":["12px",{"lineHeight":"18px","letterSpacing":"0em","fontWeight":"400"}],"headline-sm":["16px",{"lineHeight":"24px","letterSpacing":"0em","fontWeight":"600"}],"headline-md":["20px",{"lineHeight":"28px","letterSpacing":"-0.01em","fontWeight":"600"}],"label-md":["12px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"body-sm":["12px",{"lineHeight":"16px","letterSpacing":"0.01em","fontWeight":"400"}],"body-lg":["16px",{"lineHeight":"24px","letterSpacing":"0em","fontWeight":"400"}]}}}};</script></head><body class="bg-surface font-body-md text-on-surface antialiased"><aside class="fixed left-0 top-0 h-full w-64 bg-surface-panel-dark text-terminal-text z-50 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex flex-col flex-1 overflow-y-auto"><div class="h-16 px-space-lg flex items-center gap-space-sm bg-surface-panel-dark"><div class="w-2.5 h-2.5 rounded-full bg-terminal-accent animate-pulse"></div><div class="flex flex-col"><span class="font-label-lg text-label-lg font-bold text-surface-card tracking-wide uppercase">Guardian Core</span><span class="font-code-sm text-code-sm text-terminal-accent">Telemetry Engine v2.4</span></div></div><div class="px-space-md py-space-sm"><div class="font-code-sm text-code-sm text-outline uppercase tracking-wider px-space-sm mb-space-xs">Operations Console</div><nav class="space-y-space-xs" data-active-classes="bg-primary-container text-on-primary font-semibold"><a class="flex items-center justify-between px-space-sm py-space-sm rounded-lg text-terminal-text hover:bg-surface-terminal-border hover:text-terminal-accent transition-all" data-path="overview" href="#"><span class="font-label-md text-label-md">Overview Map &amp; Supply</span></a><a class="flex items-center justify-between px-space-sm py-space-sm rounded-lg text-terminal-text hover:bg-surface-terminal-border hover:text-terminal-accent transition-all" data-path="recommendations" href="#"><span class="font-label-md text-label-md">Recommendation Feed</span><span class="px-space-xs py-0.5 rounded-lg bg-status-danger-bg text-status-danger-text font-code-sm text-code-sm font-bold">2 Urgent</span></a><a aria-current="page" class="flex items-center justify-between px-space-sm py-space-sm rounded-lg transition-all bg-primary-container text-on-primary font-semibold" data-path="decisions" href="#"><span class="font-label-md text-label-md">Decision &amp; Evidence</span></a><a class="flex items-center justify-between px-space-sm py-space-sm rounded-lg text-terminal-text hover:bg-surface-terminal-border hover:text-terminal-accent transition-all" data-path="agent-log" href="#"><span class="font-label-md text-label-md">Agent Activity &amp; Traces</span><span class="px-space-xs py-0.5 rounded-lg bg-status-success-bg text-status-success-text font-code-sm text-code-sm">AI Online</span></a><a class="flex items-center justify-between px-space-sm py-space-sm rounded-lg text-terminal-text hover:bg-surface-terminal-border hover:text-terminal-accent transition-all" data-path="kpi" href="#"><span class="font-label-md text-label-md">KPI &amp; Analytics</span></a><a class="flex items-center justify-between px-space-sm py-space-sm rounded-lg text-terminal-text hover:bg-surface-terminal-border hover:text-terminal-accent transition-all" data-path="demo-control" href="#"><span class="font-label-md text-label-md">Demo Control Panel</span></a></nav></div></div><div class="p-space-md bg-surface-terminal-border/50 text-terminal-text"><div class="space-y-space-xs font-code-sm text-code-sm"><div class="flex items-center justify-between"><span class="text-outline">AWS Bedrock:</span><span class="text-terminal-accent flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-terminal-accent"></span>Connected</span></div><div class="flex items-center justify-between"><span class="text-outline">IPFS / Ledger:</span><span class="text-surface-card">100% Synced</span></div><div class="flex items-center justify-between pt-space-xs text-outline"><span class="text-code-sm">Build Runtime</span><span class="text-surface-card">v2.4-prod</span></div></div></div></aside><div class="pl-64"><header class="fixed top-0 left-64 right-0 h-16 bg-surface/90 backdrop-blur-xl z-40 shadow-[0_1px_8px_rgba(0,0,0,0.04)] px-space-lg flex items-center justify-between gap-space-md"><div class="flex items-center gap-space-lg"><div class="flex items-center gap-space-md"><img alt="MealChain Guardian Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1UXXHFIF_YzqGOrmnbyLdGqYoLree70NfsviUxdL1QzM4r1VxfrPCXuWGesCHzagSiCPIiAOLpMK4jUv8Wa05wkHCKBLemM3a4A1INSdK9rgERCaquS1UxPKjn_utaI3wfg-LndlMHlxZ93k1GFyw-Yu3IMYYZ6hez1CZRhVK1zHrL3FhGCRxMPowiZj2h0CupjdvRuzDd_AalSkzQ8C-7YIpwZ9xhzn5cGr4A7AnZya6EJYdTrHg_qMhk"/><div class="flex flex-col"><span class="font-headline-sm text-headline-sm font-bold text-on-surface leading-tight">MealChain Guardian</span><span class="font-label-sm text-label-sm text-on-surface-variant hidden xl:inline-block">Cold-Chain Integrity &amp; Food Supply Intelligence</span></div></div><div class="relative"><select class="h-9 px-space-md pr-space-xl font-label-md text-label-md bg-surface-card text-on-surface rounded-lg cursor-pointer focus:outline-none shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><option value="all">All SPPG Locations (West Java &amp; DKI Jakarta)</option><option value="cianjur">SPPG Cianjur</option><option value="jakarta-utara">SPPG Jakarta Utara</option><option value="bandung-barat">SPPG Bandung Barat</option><option value="bogor">SPPG Bogor</option></select></div><div class="hidden 2xl:flex items-center gap-space-xs px-space-sm py-1 bg-status-success-bg text-status-success-text rounded-lg"><span class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span><span class="font-code-sm text-code-sm font-medium">Cold Chain Mesh: Normal (48 Active Sensors)</span></div></div><div class="flex items-center gap-space-md"><div class="hidden lg:flex items-center gap-space-xs px-space-sm py-1 bg-surface-card text-on-surface rounded-lg shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><span class="material-symbols-outlined text-primary text-[16px]">shield_person</span><span class="font-label-sm text-label-sm font-medium">Role: SPPG Head (Cianjur)</span><span class="font-code-sm text-code-sm text-outline px-1">[BGN Monitor | Nutritionist | SPPG Head]</span></div><button aria-label="Notifications" class="relative p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"><span class="material-symbols-outlined text-[20px]">notifications</span><span class="absolute top-1 right-1 w-4 h-4 rounded-full bg-status-danger-bg text-status-danger-text font-code-sm text-code-sm font-bold flex items-center justify-center text-[10px]">3</span></button><div class="flex items-center gap-space-sm pl-space-xs"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div><div class="hidden md:flex flex-col text-left"><span class="font-label-md text-label-md font-semibold text-on-surface leading-tight">R. Pratama</span><span class="font-label-sm text-label-sm text-on-surface-variant leading-tight">Ops Lead</span></div><button class="p-1.5 rounded-lg text-on-surface-variant hover:text-status-danger-text hover:bg-status-danger-bg transition-colors ml-space-xs" title="Logout"><span class="material-symbols-outlined text-[20px]">logout</span></button></div></div></header><main class="w-full pt-16 bg-surface-canvas min-h-screen"><div class="flex flex-col w-full">
+<!-- Subbar & Decision Context Breadcrumb Bar -->
+<div class="w-full bg-surface-card shadow-sm px-space-xl py-space-md">
+<div class="max-w-[1720px] mx-auto flex flex-col xl:flex-row xl:items-center justify-between gap-space-md">
+<div class="flex flex-col gap-space-xs">
+<!-- Breadcrumbs -->
+<div class="flex items-center gap-space-xs font-code-sm text-code-sm text-outline flex-wrap">
+<span class="hover:text-on-surface transition-colors">AUTONOMOUS CORE</span>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+<span class="hover:text-on-surface transition-colors">Operations Engine</span>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+<a class="hover:text-primary transition-colors" href="#">Decision &amp; Evidence</a>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+<span class="font-semibold text-on-surface bg-surface-container px-space-xs py-0.5 rounded">DEC-2024-0891 (Transfer Cianjur → Jakarta Utara)</span>
+</div>
+<!-- Decision Title & Tags -->
+<div class="flex items-center gap-space-md flex-wrap pt-space-xs">
+<h1 class="font-headline-md text-headline-md font-bold text-on-surface tracking-tight">
+            Decision Audit &amp; Evidence Ledger: Transfer 500 kg Telur Ayam (SPPG Cianjur → SPPG Jakarta Utara)
+          </h1>
+</div>
+<div class="flex items-center gap-space-sm flex-wrap pt-1 text-on-surface-variant font-label-sm text-label-sm">
+<div class="flex items-center gap-1.5 px-space-sm py-0.5 rounded bg-status-success-bg text-status-success-text font-semibold">
+<span class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span>
+<span>APPROVED &amp; DISPATCHED</span>
+</div>
+<span class="px-space-sm py-0.5 rounded bg-surface-container-high text-on-surface font-medium">Surplus Rebalance &amp; Deficit Mitigation</span>
+<span class="px-space-sm py-0.5 rounded bg-surface-canvas text-outline font-code-sm text-code-sm">08:44:12 WIB • Block #41,209</span>
+<div class="flex items-center gap-1 px-space-sm py-0.5 rounded bg-surface-container-low text-on-surface font-code-sm text-code-sm">
+<span class="material-symbols-outlined text-[14px] text-primary">verified_user</span>
+<span>Signer: R. Pratama (SPPG Head Cianjur)</span>
+<span class="text-outline">·</span>
+<span class="font-medium text-primary">0x93bb...c827d0</span>
+</div>
+</div>
+</div>
+<!-- Action Control Buttons -->
+<div class="flex items-center gap-space-sm self-start xl:self-center shrink-0 flex-wrap">
+<button class="h-9 px-space-md rounded bg-surface-card hover:bg-surface-canvas text-on-surface font-label-md text-label-md font-medium shadow-sm transition-all flex items-center gap-1.5" id="verify-hash-btn">
+<span class="material-symbols-outlined text-primary text-[18px]">lock_reset</span>
+<span>Verify On-Chain Hash</span>
+</button>
+<button class="h-9 px-space-md rounded bg-surface-container-high hover:bg-surface-container highest text-on-surface font-label-md text-label-md font-medium transition-all flex items-center gap-1.5" id="trace-btn">
+<span class="material-symbols-outlined text-outline text-[18px]">data_object</span>
+<span>Inspect Raw Agent Trace</span>
+</button>
+<button class="h-9 px-space-md rounded bg-primary-container hover:bg-primary text-on-primary font-label-md text-label-md font-semibold shadow-sm transition-all flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[18px]">download</span>
+<span>Download Cryptographic Dossier (PDF/JSON)</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Verification Flash Notice (Hidden by default, triggered by JS) -->
+<div class="w-full bg-status-success-bg px-space-xl py-space-xs hidden transition-all" id="hash-verify-toast">
+<div class="max-w-[1720px] mx-auto flex items-center justify-between font-code-sm text-code-sm text-status-success-text">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-[16px]">verified</span>
+<span>ECDSA Signature 0x93bb...c827 matches IPFS root CID bafybeihdwdce5...7y6q (Polygon Anchor #41209 validated at block height 41,209 with zero latency delta).</span>
+</div>
+<button class="hover:opacity-75" onclick="document.getElementById('hash-verify-toast').classList.add('hidden')">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+</div>
+</div>
+<!-- Main Canvas Container -->
+<div class="w-full px-space-xl py-space-xl space-y-space-xl max-w-[1720px] mx-auto">
+<!-- Section 1: Executive Summary & Safe Delivered Cost Breakdown -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">
+<!-- Card 1: Safe Delivered Cost Formula & Arbitrage breakdown -->
+<div class="lg:col-span-7 bg-surface-card rounded-xl p-space-lg shadow-sm flex flex-col justify-between">
+<div>
+<div class="flex items-start justify-between gap-space-md pb-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[20px]">account_balance_wallet</span>
+</div>
+<div>
+<h2 class="font-headline-sm text-headline-sm font-bold text-on-surface leading-tight">Safe Delivered Cost Calculation &amp; Arbitrage</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Validated mathematical solver model vs Regional Ceiling Policy (BGN Wilayah II)</p>
+</div>
+</div>
+<div class="flex flex-col items-end shrink-0">
+<span class="font-code-sm text-code-sm text-outline uppercase tracking-wider">Formula Index</span>
+<span class="font-code-md text-code-md text-primary font-semibold">SAFE_COST_V2.1</span>
+</div>
+</div>
+<!-- Highlight Metric Strip -->
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-space-md my-space-md p-space-md bg-surface-canvas rounded-lg">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Total Safe Landed Cost</span>
+<div class="flex items-baseline gap-1 pt-1">
+<span class="font-display text-display font-bold text-primary">Rp 23,200</span>
+<span class="font-code-sm text-code-sm text-outline">/ kg</span>
+</div>
+<span class="font-code-sm text-code-sm text-on-surface-variant pt-0.5">Aggregate: Rp 11,600,000</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Regional Ceiling Tariff (BGN)</span>
+<div class="flex items-baseline gap-1 pt-1">
+<span class="font-headline-lg text-headline-lg font-semibold text-outline">Rp 25,000</span>
+<span class="font-code-sm text-code-sm text-outline">/ kg</span>
+</div>
+<span class="font-code-sm text-code-sm text-outline pt-0.5">Ceiling Limit: Rp 12,500,000</span>
+</div>
+<div class="flex flex-col justify-center sm:items-end">
+<div class="px-space-md py-1.5 rounded-lg bg-status-success-bg text-status-success-text text-right inline-block">
+<span class="font-label-sm text-label-sm font-bold tracking-wide uppercase block">Total Net Savings</span>
+<div class="flex items-center gap-1 font-headline-sm text-headline-sm font-bold">
+<span class="material-symbols-outlined text-[18px]">trending_down</span>
+<span>-7.2% (Rp 900,000)</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Itemized Calculation Line Items -->
+<div class="space-y-space-sm pt-space-xs">
+<div class="flex items-center justify-between text-on-surface p-space-sm rounded bg-surface-card hover:bg-surface-canvas transition-colors">
+<div class="flex items-center gap-space-sm">
+<span class="w-6 h-6 rounded bg-surface-container text-primary font-code-sm text-code-sm flex items-center justify-center font-bold">1</span>
+<div>
+<div class="font-label-md text-label-md font-semibold text-on-surface">Commodity Base Price (Farmgate Farm #CJR-AGR-03)</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant">Grade-A Fresh Telur Ayam • 500 kg batch allocation</div>
+</div>
+</div>
+<div class="text-right">
+<span class="font-code-md text-code-md font-semibold text-on-surface">Rp 20,500 / kg</span>
+<div class="font-code-sm text-code-sm text-outline">Subtotal: Rp 10,250,000</div>
+</div>
+</div>
+<div class="flex items-center justify-between text-on-surface p-space-sm rounded bg-surface-card hover:bg-surface-canvas transition-colors">
+<div class="flex items-center gap-space-sm">
+<span class="w-6 h-6 rounded bg-surface-container text-primary font-code-sm text-code-sm flex items-center justify-center font-bold">2</span>
+<div>
+<div class="font-label-md text-label-md font-semibold text-on-surface">Dedicated Logistics &amp; Tol Jagorawi Express Transit</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant">Reefer-04 (B-9241-PDX) • 108.4 km waypoint corridor</div>
+</div>
+</div>
+<div class="text-right">
+<span class="font-code-md text-code-md font-semibold text-on-surface">Rp 1,900 / kg</span>
+<div class="font-code-sm text-code-sm text-outline">Subtotal: Rp 950,000</div>
+</div>
+</div>
+<div class="flex items-center justify-between text-on-surface p-space-sm rounded bg-surface-card hover:bg-surface-canvas transition-colors">
+<div class="flex items-center gap-space-sm">
+<span class="w-6 h-6 rounded bg-surface-container text-primary font-code-sm text-code-sm flex items-center justify-center font-bold">3</span>
+<div>
+<div class="font-label-md text-label-md font-semibold text-on-surface">Cold-Chain Telematics &amp; Active Chilling Energy Buffer</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant">Thermo King Pre-cooling to 2.4°C + Carrier Transicold mesh</div>
+</div>
+</div>
+<div class="text-right">
+<span class="font-code-md text-code-md font-semibold text-on-surface">Rp 800 / kg</span>
+<div class="font-code-sm text-code-sm text-outline">Subtotal: Rp 400,000</div>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-space-md pt-space-sm flex items-center justify-between bg-surface-container-low p-space-sm rounded">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[18px]">verified</span>
+<span class="font-code-sm text-code-sm text-on-surface font-medium">BGN Arbitrage Verification Hash: SHA256-d7a8e2...40f1a</span>
+</div>
+<span class="font-label-sm text-label-sm text-status-success-text font-bold uppercase tracking-wider">Audit Pass</span>
+</div>
+</div>
+<!-- Card 2: Impact & Nutritional Protection Metrics -->
+<div class="lg:col-span-5 bg-surface-card rounded-xl p-space-lg shadow-sm flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between pb-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[20px]">nutrition</span>
+</div>
+<div>
+<h2 class="font-headline-sm text-headline-sm font-bold text-on-surface leading-tight">Nutritional Impact &amp; SLA Guard</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Protective yield guaranteed for Program Makan Bergizi Gratis</p>
+</div>
+</div>
+<span class="px-space-xs py-0.5 rounded bg-status-success-bg text-status-success-text font-code-sm text-code-sm font-bold">Grade A</span>
+</div>
+<div class="grid grid-cols-2 gap-space-md pt-space-md">
+<!-- Metric 1 -->
+<div class="p-space-md rounded-lg bg-surface-canvas flex flex-col justify-between">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-medium">Loss Mitigated</span>
+<span class="material-symbols-outlined text-primary text-[18px]">format_image_left</span>
+</div>
+<div class="my-space-xs">
+<div class="font-headline-lg text-headline-lg font-bold text-on-surface">500 kg</div>
+<div class="font-body-sm text-body-sm text-status-success-text font-medium pt-0.5">Rp 11.6M preserved</div>
+</div>
+<div class="w-full bg-surface-container rounded-full h-1.5 overflow-hidden">
+<div class="bg-primary-container h-full w-[100%]"></div>
+</div>
+</div>
+<!-- Metric 2 -->
+<div class="p-space-md rounded-lg bg-surface-canvas flex flex-col justify-between">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-medium">Portions Secured</span>
+<span class="material-symbols-outlined text-primary text-[18px]">restaurant</span>
+</div>
+<div class="my-space-xs">
+<div class="font-headline-lg text-headline-lg font-bold text-on-surface">4,000 Pax</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant pt-0.5">Gizi Sehat Siswa (DKI-04)</div>
+</div>
+<div class="w-full bg-surface-container rounded-full h-1.5 overflow-hidden">
+<div class="bg-primary-container h-full w-[100%]"></div>
+</div>
+</div>
+<!-- Metric 3 -->
+<div class="p-space-md rounded-lg bg-surface-canvas flex flex-col justify-between">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-medium">Transit ETA</span>
+<span class="material-symbols-outlined text-outline text-[18px]">timer</span>
+</div>
+<div class="my-space-xs">
+<div class="font-headline-lg text-headline-lg font-bold text-on-surface">2h 45m</div>
+<div class="font-body-sm text-body-sm text-status-success-text font-medium pt-0.5">Limit BGN: &lt;4.0 hrs</div>
+</div>
+<span class="font-code-sm text-code-sm text-outline">Arrive: 11:29 WIB today</span>
+</div>
+<!-- Metric 4 -->
+<div class="p-space-md rounded-lg bg-surface-canvas flex flex-col justify-between">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-medium">Excursion Probability</span>
+<span class="material-symbols-outlined text-primary text-[18px]">model_training</span>
+</div>
+<div class="my-space-xs">
+<div class="font-headline-lg text-headline-lg font-bold text-primary">&lt;0.2%</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant pt-0.5">AWS Bedrock Supervised</div>
+</div>
+<span class="font-code-sm text-code-sm text-status-success-text font-medium">Monte Carlo n=10,000</span>
+</div>
+</div>
+</div>
+<div class="mt-space-md pt-space-sm bg-surface-container-high/40 p-space-sm rounded flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-primary text-[18px]">verified_user</span>
+<span class="font-label-sm text-label-sm text-on-surface">Target Kitchen: SPPG Kitchen Cluster Pademangan</span>
+</div>
+<span class="font-code-sm text-code-sm text-outline">Delivery SLA: 100% OK</span>
+</div>
+</div>
+</div>
+<!-- Section 2: Hard-Constraint Verification & Policy Compliance Checklist -->
+<div class="bg-surface-card rounded-xl p-space-lg shadow-sm">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-space-sm pb-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[20px]">gavel</span>
+</div>
+<div>
+<h2 class="font-headline-sm text-headline-sm font-bold text-on-surface">Hard-Constraint Verification &amp; National Policy Compliance Gates</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Deterministic rule checks executed prior to consensus sign-off (Zero-Fault Safe Fallback)</p>
+</div>
+</div>
+<div class="flex items-center gap-space-sm self-start md:self-auto">
+<span class="font-code-sm text-code-sm px-space-sm py-1 rounded bg-status-success-bg text-status-success-text font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">check_circle</span>
+            5 of 5 Gates Passed
+          </span>
+<span class="font-code-sm text-code-sm text-outline">Engine: Bedrock PolicyGuard v4.2</span>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left font-body-md text-body-md">
+<thead>
+<tr class="bg-surface-canvas text-outline font-label-sm text-label-sm uppercase tracking-wider">
+<th class="py-space-sm px-space-md">Policy Gate &amp; National Standard</th>
+<th class="py-space-sm px-space-md">Threshold Rule Condition</th>
+<th class="py-space-sm px-space-md">Actual Telemetric Proof</th>
+<th class="py-space-sm px-space-md">Sensor Source &amp; Ledger ID</th>
+<th class="py-space-sm px-space-md text-right">Verification Status</th>
+</tr>
+</thead>
+<tbody class="divide-y-0 text-on-surface font-body-sm text-body-sm">
+<!-- Gate 1 -->
+<tr class="hover:bg-surface-canvas transition-colors">
+<td class="py-space-md px-space-md">
+<div class="flex items-center gap-2">
+<span class="font-code-md text-code-md font-bold text-primary">GATE-01</span>
+<div>
+<div class="font-label-md text-label-md font-semibold text-on-surface">Peraturan BGN No. 4/2024</div>
+<div class="text-on-surface-variant text-[11px]">Egg &amp; Dairy Active Cold Chain Compliance</div>
+</div>
+</div>
+</td>
+<td class="py-space-md px-space-md font-code-md text-code-md">
+                Chamber Temp &lt; 4.0°C (Continuous)
+              </td>
+<td class="py-space-md px-space-md">
+<div class="flex items-center gap-2">
+<span class="font-code-md text-code-md font-bold text-status-success-text">2.4°C</span>
+<span class="font-label-sm text-label-sm text-outline">(1.6°C safe buffer below limit)</span>
+</div>
+</td>
+<td class="py-space-md px-space-md font-code-sm text-code-sm text-outline">
+                IoT Sensor Probe #TEMP-CJR-09 (NIST-traceable)
+              </td>
+<td class="py-space-md px-space-md text-right">
+<span class="inline-flex items-center gap-1 px-space-sm py-0.5 rounded bg-status-success-bg text-status-success-text font-code-sm text-code-sm font-bold">
+<span class="material-symbols-outlined text-[14px]">check</span> PASSED
+                </span>
+</td>
+</tr>
+<!-- Gate 2 -->
+<tr class="hover:bg-surface-canvas transition-colors">
+<td class="py-space-md px-space-md">
+<div class="flex items-center gap-2">
+<span class="font-code-md text-code-md font-bold text-primary">GATE-02</span>
+<div>
+<div class="font-label-md text-label-md font-semibold text-on-surface">Perpres MBG No. 83 / Transit SLA</div>
+<div class="text-on-surface-variant text-[11px]">Max Highway Reefer Staging Duration</div>
+</div>
+</div>
+</td>
+<td class="py-space-md px-space-md font-code-md text-code-md">
+                Max &lt; 4h (unref) / &lt; 6h (active chiller)
+              </td>
+<td class="py-space-md px-space-md">
+<div class="flex items-center gap-2">
+<span class="font-code-md text-code-md font-bold text-on-surface">2h 45m</span>
+<span class="font-label-sm text-label-sm text-outline">(Tol Jagorawi Express corridor)</span>
+</div>
+</td>
+<td class="py-space-md px-space-md font-code-sm text-code-sm text-outline">
+                Jasa Marga Telematics API + GPS-B-9241-PDX
+              </td>
+<td class="py-space-md px-space-md text-right">
+<span class="inline-flex items-center gap-1 px-space-sm py-0.5 rounded bg-status-success-bg text-status-success-text font-code-sm text-code-sm font-bold">
+<span class="material-symbols-outlined text-[14px]">check</span> PASSED
+                </span>
+</td>
+</tr>
+<!-- Gate 3 -->
+<tr class="hover:bg-surface-canvas transition-colors">
+<td class="py-space-md px-space-md">
+<div class="flex items-center gap-2">
+<span class="font-code-md text-code-md font-bold text-primary">GATE-03</span>
+<div>
+<div class="font-label-md text-label-md font-semibold text-on-surface">Minimum Usable Shelf-Life (SL-MIN)</div>
+<div class="text-on-surface-variant text-[11px]">School Kitchen Safety Buffer</div>
+</div>
+</div>
+</td>
+<td class="py-space-md px-space-md font-code-md text-code-md">
+                Remaining Shelf-Life &gt; 3.0 Days
+              </td>
+<td class="py-space-md px-space-md">
+<div class="flex items-center gap-2">
+<span class="font-code-md text-code-md font-bold text-status-success-text">9.2 Days</span>
+<span class="font-label-sm text-label-sm text-outline">(Fresh lay date: Yesterday 06:00)</span>
+</div>
+</td>
+<td class="py-space-md px-space-md font-code-sm text-code-sm text-outline">
+                Lot Batch #LOT-TLR-2804 (Farmgate QR Verified)
+              </td>
+<td class="py-space-md px-space-md text-right">
+<span class="inline-flex items-center gap-1 px-space-sm py-0.5 rounded bg-status-success-bg text-status-success-text font-code-sm text-code-sm font-bold">
+<span class="material-symbols-outlined text-[14px]">check</span> PASSED
+                </span>
+</td>
+</tr>
+<!-- Gate 4 -->
+<tr class="hover:bg-surface-canvas transition-colors">
+<td class="py-space-md px-space-md">
+<div class="flex items-center gap-2">
+<span class="font-code-md text-code-md font-bold text-primary">GATE-04</span>
+<div>
+<div class="font-label-md text-label-md font-semibold text-on-surface">Tariff Ceiling Arbitrage (BGN DKI-01)</div>
+<div class="text-on-surface-variant text-[11px]">State Procurement Price Guardrail</div>
+</div>
+</div>
+</td>
+<td class="py-space-md px-space-md font-code-md text-code-md">
+                Landed Safe Cost ≤ Rp 25,000 / kg
+              </td>
+<td class="py-space-md px-space-md">
+<div class="flex items-center gap-2">
+<span class="font-code-md text-code-md font-bold text-status-success-text">Rp 23,200 / kg</span>
+<span class="font-label-sm text-label-sm text-status-success-text font-semibold">(-7.2% surplus benefit)</span>
+</div>
+</td>
+<td class="py-space-md px-space-md font-code-sm text-code-sm text-outline">
+                BGN Price Index Engine (Ref #BGN-JKT-APR24)
+              </td>
+<td class="py-space-md px-space-md text-right">
+<span class="inline-flex items-center gap-1 px-space-sm py-0.5 rounded bg-status-success-bg text-status-success-text font-code-sm text-code-sm font-bold">
+<span class="material-symbols-outlined text-[14px]">check</span> PASSED
+                </span>
+</td>
+</tr>
+<!-- Gate 5 -->
+<tr class="hover:bg-surface-canvas transition-colors">
+<td class="py-space-md px-space-md">
+<div class="flex items-center gap-2">
+<span class="font-code-md text-code-md font-bold text-primary">GATE-05</span>
+<div>
+<div class="font-label-md text-label-md font-semibold text-on-surface">Nutritional Hygiene &amp; Microbial Clearance</div>
+<div class="text-on-surface-variant text-[11px]">Badan Pangan Nasional Biological Threshold</div>
+</div>
+</div>
+</td>
+<td class="py-space-md px-space-md font-code-md text-code-md">
+                Salmonella spp. = 0 / 25g, Grade A Visual
+              </td>
+<td class="py-space-md px-space-md">
+<div class="flex items-center gap-2">
+<span class="font-code-md text-code-md font-bold text-on-surface">Zero Detect</span>
+<span class="font-label-sm text-label-sm text-outline">(Lab Cert ID #LAB-CJR-99128)</span>
+</div>
+</td>
+<td class="py-space-md px-space-md font-code-sm text-code-sm text-outline">
+                Dinas Ketahanan Pangan Lab Signature #0x82f1...
+              </td>
+<td class="py-space-md px-space-md text-right">
+<span class="inline-flex items-center gap-1 px-space-sm py-0.5 rounded bg-status-success-bg text-status-success-text font-code-sm text-code-sm font-bold">
+<span class="material-symbols-outlined text-[14px]">check</span> PASSED
+                </span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Section 3: Evidence Fusion Ledger (Append-Only Cryptographic Audit Trail) -->
+<div class="bg-surface-panel-dark rounded-xl p-space-lg text-terminal-text shadow-md">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-space-sm pb-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded bg-surface-terminal-border flex items-center justify-center">
+<span class="material-symbols-outlined text-terminal-accent text-[20px]">dataset</span>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<h2 class="font-headline-sm text-headline-sm font-bold text-surface-card">Evidence Fusion Ledger</h2>
+<span class="px-space-xs py-0.5 rounded bg-surface-terminal-border text-terminal-accent font-code-sm text-code-sm">IMMUTABLE LOG</span>
+</div>
+<p class="font-code-sm text-code-sm text-outline">Append-only cryptographic audit trail validated against Polygon state contract #0xMealChainLedger</p>
+</div>
+</div>
+<div class="flex items-center gap-space-md text-outline font-code-sm text-code-sm">
+<span>Merkle Root: <strong class="text-terminal-accent">0x37c8...901e</strong></span>
+<span class="hidden sm:inline">|</span>
+<span class="hidden sm:inline">Sync Latency: <strong class="text-surface-card">12ms</strong></span>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left font-code-sm text-code-sm">
+<thead>
+<tr class="bg-surface-terminal-border/60 text-outline uppercase tracking-wider text-[10px]">
+<th class="py-space-sm px-space-md"># Event / Action Step</th>
+<th class="py-space-sm px-space-md">Sensor Source &amp; Node Identity</th>
+<th class="py-space-sm px-space-md">Telemetry Payload &amp; Evidence Payload</th>
+<th class="py-space-sm px-space-md">WIB Timestamp</th>
+<th class="py-space-sm px-space-md">Merkle Hash Block</th>
+<th class="py-space-sm px-space-md text-right">Verification</th>
+</tr>
+</thead>
+<tbody class="divide-y-0 text-terminal-text">
+<!-- Step 1 -->
+<tr class="hover:bg-surface-terminal-border/40 transition-colors">
+<td class="py-space-md px-space-md">
+<div class="flex items-center gap-2 font-semibold text-terminal-accent">
+<span>1.</span>
+<span>DEFICIT_TRIGGERED</span>
+</div>
+</td>
+<td class="py-space-md px-space-md text-surface-card">
+                Stock Monitor SPPG Jakarta Utara
+              </td>
+<td class="py-space-md px-space-md text-outline">
+<span class="text-surface-card">Inventory: 1.8 days remaining</span> (Threshold &lt;2.0d), -520kg shortfall predicted for 07:00 distribution
+              </td>
+<td class="py-space-md px-space-md text-outline whitespace-nowrap">
+                08:44:02 WIB
+              </td>
+<td class="py-space-md px-space-md">
+<code class="text-terminal-accent bg-surface-terminal-border px-1.5 py-0.5 rounded">0x7a8e...391a</code>
+</td>
+<td class="py-space-md px-space-md text-right">
+<span class="inline-flex items-center gap-1 text-terminal-accent font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-terminal-accent"></span> Validated
+                </span>
+</td>
+</tr>
+<!-- Step 2 -->
+<tr class="hover:bg-surface-terminal-border/40 transition-colors">
+<td class="py-space-md px-space-md">
+<div class="flex items-center gap-2 font-semibold text-terminal-accent">
+<span>2.</span>
+<span>SOLVER_SURPLUS_SCAN</span>
+</div>
+</td>
+<td class="py-space-md px-space-md text-surface-card">
+                AgentCore Bedrock Engine
+              </td>
+<td class="py-space-md px-space-md text-outline">
+                Cianjur identified (<span class="text-surface-card">+850kg excess, 96% freshness</span>, lowest transit delta: 108km, route rating 0.98)
+              </td>
+<td class="py-space-md px-space-md text-outline whitespace-nowrap">
+                08:44:05 WIB
+              </td>
+<td class="py-space-md px-space-md">
+<code class="text-terminal-accent bg-surface-terminal-border px-1.5 py-0.5 rounded">0x4d1b...92ce</code>
+</td>
+<td class="py-space-md px-space-md text-right">
+<span class="inline-flex items-center gap-1 text-terminal-accent font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-terminal-accent"></span> Validated
+                </span>
+</td>
+</tr>
+<!-- Step 3 -->
+<tr class="hover:bg-surface-terminal-border/40 transition-colors">
+<td class="py-space-md px-space-md">
+<div class="flex items-center gap-2 font-semibold text-terminal-accent">
+<span>3.</span>
+<span>THERMAL_IOT_PRE_CHECK</span>
+</div>
+</td>
+<td class="py-space-md px-space-md text-surface-card">
+                Reefer-04 Chamber Probe #CH-04
+              </td>
+<td class="py-space-md px-space-md text-outline">
+                Chamber pre-chilled to <span class="text-terminal-accent">2.4°C</span>, Relative Humidity 88%, Door Seal Telematics Armed
+              </td>
+<td class="py-space-md px-space-md text-outline whitespace-nowrap">
+                08:44:08 WIB
+              </td>
+<td class="py-space-md px-space-md">
+<code class="text-terminal-accent bg-surface-terminal-border px-1.5 py-0.5 rounded">0xb29c...fa10</code>
+</td>
+<td class="py-space-md px-space-md text-right">
+<span class="inline-flex items-center gap-1 text-terminal-accent font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-terminal-accent"></span> Validated
+                </span>
+</td>
+</tr>
+<!-- Step 4 -->
+<tr class="hover:bg-surface-terminal-border/40 transition-colors">
+<td class="py-space-md px-space-md">
+<div class="flex items-center gap-2 font-semibold text-terminal-accent">
+<span>4.</span>
+<span>REGULATORY_GUARDRAIL_EVAL</span>
+</div>
+</td>
+<td class="py-space-md px-space-md text-surface-card">
+                Policy Engine v4.2
+              </td>
+<td class="py-space-md px-space-md text-outline">
+                5/5 Hard Constraints satisfied, BGN ceiling rule clear (Rp 23,200 &lt; Rp 25,000 threshold)
+              </td>
+<td class="py-space-md px-space-md text-outline whitespace-nowrap">
+                08:44:11 WIB
+              </td>
+<td class="py-space-md px-space-md">
+<code class="text-terminal-accent bg-surface-terminal-border px-1.5 py-0.5 rounded">0x8f4c...18da</code>
+</td>
+<td class="py-space-md px-space-md text-right">
+<span class="inline-flex items-center gap-1 text-terminal-accent font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-terminal-accent"></span> Validated
+                </span>
+</td>
+</tr>
+<!-- Step 5 -->
+<tr class="hover:bg-surface-terminal-border/40 transition-colors">
+<td class="py-space-md px-space-md">
+<div class="flex items-center gap-2 font-semibold text-terminal-accent">
+<span>5.</span>
+<span>HUMAN_IN_THE_LOOP_APPROVAL</span>
+</div>
+</td>
+<td class="py-space-md px-space-md text-surface-card">
+                SPPG Head R. Pratama (ECDSA secp256k1)
+              </td>
+<td class="py-space-md px-space-md text-outline">
+                Signature verified on-chain, Automated Dispatch Order dispatched to Reefer Truck B-9241-PDX
+              </td>
+<td class="py-space-md px-space-md text-outline whitespace-nowrap">
+                08:44:12 WIB
+              </td>
+<td class="py-space-md px-space-md">
+<code class="text-terminal-accent bg-surface-terminal-border px-1.5 py-0.5 rounded">0x93bb...c827</code>
+</td>
+<td class="py-space-md px-space-md text-right">
+<span class="inline-flex items-center gap-1 text-terminal-accent font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-terminal-accent"></span> Validated
+                </span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Section 4: Live Telemetry & Chain-of-Custody Sensor Inspector (Split Container) -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">
+<!-- Left: Interactive Chamber Temperature & Route Log graph -->
+<div class="lg:col-span-7 bg-surface-card rounded-xl p-space-lg shadow-sm flex flex-col justify-between">
+<div>
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-xs pb-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[20px]">thermostat</span>
+</div>
+<div>
+<h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">Thermal Staging &amp; Active Chilling Curve</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Real-time Chamber Probe #TEMP-CJR-09 readings during staging and highway run</p>
+</div>
+</div>
+<div class="flex items-center gap-2 self-start sm:self-auto">
+<span class="w-2.5 h-2.5 rounded-full bg-primary-container animate-ping"></span>
+<span class="font-code-sm text-code-sm font-semibold text-primary">Live: 2.4°C</span>
+</div>
+</div>
+<!-- Clean Minimalist Inline SVG Temperature Sparkline Chart -->
+<div class="w-full bg-surface-canvas rounded-lg p-space-md mt-space-md">
+<div class="flex items-center justify-between text-outline font-code-sm text-code-sm mb-2">
+<div class="flex items-center gap-4">
+<span class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 rounded bg-primary-container"></span>
+<span class="text-on-surface">Reefer Chamber Temperature</span>
+</span>
+<span class="flex items-center gap-1.5">
+<span class="w-2.5 h-0.5 bg-status-danger-text"></span>
+<span>Safety Ceiling (4.0°C)</span>
+</span>
+</div>
+<span>Target: 2.0°C - 3.5°C</span>
+</div>
+<!-- SVG Graph Container -->
+<div class="relative w-full h-48">
+<svg class="w-full h-full text-primary-container" preserveaspectratio="none" viewbox="0 0 700 180">
+<!-- Grid guide lines -->
+<line stroke="currentColor" stroke-opacity="0.08" stroke-width="1" x1="0" x2="700" y1="35" y2="35"></line>
+<line stroke="currentColor" stroke-opacity="0.08" stroke-width="1" x1="0" x2="700" y1="80" y2="80"></line>
+<line stroke="currentColor" stroke-opacity="0.08" stroke-width="1" x1="0" x2="700" y1="130" y2="130"></line>
+<!-- Critical safety limit line at 4.0°C (Y=35) -->
+<line opacity="0.7" stroke="#991B1B" stroke-dasharray="4 4" stroke-width="1.5" x1="0" x2="700" y1="35" y2="35"></line>
+<text fill="#991B1B" font-family="JetBrains Mono" font-size="10" opacity="0.8" text-anchor="end" x="690" y="30">4.0°C LIMIT</text>
+<!-- Gradient fill under curve -->
+<defs>
+<lineargradient id="tempGradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#0f766e" stop-opacity="0.22"></stop>
+<stop offset="100%" stop-color="#0f766e" stop-opacity="0.0"></stop>
+</lineargradient>
+</defs>
+<!-- Shaded Area -->
+<path d="M 0 140 Q 60 120, 120 115 T 240 105 T 360 110 T 480 98 T 600 102 T 700 95 L 700 180 L 0 180 Z" fill="url(#tempGradient)"></path>
+<!-- Sensor Line -->
+<path d="M 0 140 Q 60 120, 120 115 T 240 105 T 360 110 T 480 98 T 600 102 T 700 95" fill="none" stroke="currentColor" stroke-width="2.5"></path>
+<!-- Sensor Event Markers -->
+<circle cx="120" cy="115" fill="#0f766e" r="4"></circle>
+<circle cx="360" cy="110" fill="#0f766e" r="4"></circle>
+<circle cx="600" cy="102" fill="#0f766e" r="4"></circle>
+<circle class="animate-pulse" cx="700" cy="95" fill="#2DD4BF" r="5"></circle>
+</svg>
+</div>
+<!-- X-axis Labels -->
+<div class="flex justify-between items-center text-outline font-code-sm text-code-sm pt-2">
+<span>08:15 (Pre-chill)</span>
+<span>08:30 (Loading)</span>
+<span>08:44 (Dispatched)</span>
+<span>09:30 (Tol Ciawi)</span>
+<span>10:45 (Cawang)</span>
+<span class="text-primary font-bold">11:29 (Est. Arrival)</span>
+</div>
+</div>
+<!-- Quick Telemetry Footnote Badges -->
+<div class="grid grid-cols-3 gap-space-sm mt-space-md text-center">
+<div class="bg-surface-canvas p-space-sm rounded">
+<span class="font-code-sm text-code-sm text-outline block">Pre-chill Time</span>
+<span class="font-label-md text-label-md font-bold text-on-surface">18 mins (Pass)</span>
+</div>
+<div class="bg-surface-canvas p-space-sm rounded">
+<span class="font-code-sm text-code-sm text-outline block">Chamber RH</span>
+<span class="font-label-md text-label-md font-bold text-on-surface">88% Stable</span>
+</div>
+<div class="bg-surface-canvas p-space-sm rounded">
+<span class="font-code-sm text-code-sm text-outline block">Compressor Duty</span>
+<span class="font-label-md text-label-md font-bold text-status-success-text">64% (Nominal)</span>
+</div>
+</div>
+</div>
+<div class="mt-space-md pt-space-sm flex items-center justify-between text-outline font-code-sm text-code-sm">
+<span>Continuous Heartbeat: Every 15 seconds over LTE-M</span>
+<span class="text-status-success-text font-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">cell_tower</span> 100% Packets Received
+          </span>
+</div>
+</div>
+<!-- Right: Digital Certificate & Hash Manifest -->
+<div class="lg:col-span-5 bg-surface-card rounded-xl p-space-lg shadow-sm flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between pb-space-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[20px]">badge</span>
+</div>
+<div>
+<h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">Digital Certificate &amp; Manifest</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Cryptographic chain-of-custody identity ledger</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-primary text-[22px]">verified</span>
+</div>
+<div class="space-y-space-sm mt-space-md">
+<!-- IPFS CID Block -->
+<div class="p-space-sm rounded-lg bg-surface-canvas">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span>IPFS Content Identifier (CIDv1)</span>
+<button class="font-code-sm text-code-sm text-primary hover:underline" onclick="navigator.clipboard.writeText('bafybeihdwdce5w7y6q891a27e4492bfd901844a'); this.innerText='COPIED!';">COPY</button>
+</div>
+<div class="font-code-sm text-code-sm text-on-surface font-semibold pt-1 truncate">
+                bafybeihdwdce5w7y6q891a27e4492bfd901844a
+              </div>
+</div>
+<!-- Smart Contract Anchor -->
+<div class="p-space-sm rounded-lg bg-surface-canvas">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span>Ethereum/Polygon State Anchor</span>
+<span class="font-code-sm text-code-sm text-outline">Height: 41,209</span>
+</div>
+<div class="font-code-sm text-code-sm text-on-surface font-semibold pt-1 truncate">
+                0x3e71d490bb67cf0182b84efcd39a0021e7841c09
+              </div>
+</div>
+<!-- IoT Gateway -->
+<div class="p-space-sm rounded-lg bg-surface-canvas">
+<div class="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
+<span>IoT Telematics Edge Gateway</span>
+<span class="px-space-xs py-0.5 rounded bg-status-success-bg text-status-success-text font-code-sm text-code-sm font-bold">ONLINE</span>
+</div>
+<div class="font-label-md text-label-md text-on-surface font-semibold pt-1">
+                Carrier Transicold IoT v2.1 (#GW-CJR-8821)
+              </div>
+<div class="font-code-sm text-code-sm text-outline pt-0.5">Firmware SHA: 0x9bf41a • Enclave Verified</div>
+</div>
+<!-- Reefer Unit Info & Visual Driver Badge -->
+<div class="p-space-sm rounded-lg bg-surface-canvas flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center font-bold text-primary font-headline-sm">
+                  S
+                </div>
+<div>
+<div class="font-label-md text-label-md font-semibold text-on-surface">Supriyadi (Certified Cold Hauler)</div>
+<div class="font-code-sm text-code-sm text-outline">Reefer Truck B-9241-PDX • Fleet #04</div>
+</div>
+</div>
+<span class="px-space-sm py-1 rounded bg-surface-container-high text-on-surface font-code-sm text-code-sm font-semibold">Active Run</span>
+</div>
+</div>
+</div>
+<div class="mt-space-md pt-space-sm flex items-center justify-between">
+<a class="font-label-sm text-label-sm font-semibold text-primary hover:underline flex items-center gap-1" href="#">
+<span class="material-symbols-outlined text-[16px]">open_in_new</span>
+<span>View Block on Polygonscan</span>
+</a>
+<span class="font-code-sm text-code-sm text-outline">Signature Type: secp256k1</span>
+</div>
+</div>
+</div>
+<!-- Section 5: Modal Drawer for Raw Agent Trace (Hidden initially, triggered via JS) -->
+<div class="fixed inset-0 z-50 bg-surface-panel-dark/60 backdrop-blur-sm hidden flex items-center justify-center p-space-md" id="trace-modal">
+<div class="w-full max-w-4xl bg-surface-panel-dark rounded-xl shadow-2xl p-space-lg text-terminal-text flex flex-col max-h-[870px]">
+<div class="flex items-center justify-between pb-space-md">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-terminal-accent text-[22px]">terminal</span>
+<div>
+<h3 class="font-headline-sm text-headline-sm font-bold text-surface-card">AWS Bedrock AgentCore — Raw Execution Trace</h3>
+<p class="font-code-sm text-code-sm text-outline">Session ID: bedrock-sess-cjr-jkt-99104 • Latency: 214ms</p>
+</div>
+</div>
+<button class="p-1 rounded text-outline hover:text-surface-card hover:bg-surface-terminal-border transition-colors" id="close-trace-btn">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<div class="overflow-y-auto font-code-sm text-code-sm bg-surface-terminal-border/30 p-space-md rounded-lg space-y-3">
+<pre class="text-terminal-accent leading-relaxed whitespace-pre-wrap">{
+  "traceId": "tr-20240891-bgn-bedrock",
+  "agent": "MealChain.SupplyRebalancer.v2",
+  "inputs": {
+    "targetFacility": "SPPG_JAKARTA_UTARA",
+    "deficitCommodity": "TELUR_AYAM",
+    "requiredQuantityKg": 500,
+    "maxAcceptableDeliveryTime": "2024-10-24T12:00:00+07:00",
+    "maxDeliveredCostPerKg": 25000
+  },
+  "candidateEvaluations": [
+    {
+      "source": "SPPG_CIANJUR",
+      "surplusAvailableKg": 850,
+      "freshnessScore": 0.96,
+      "transitKm": 108.4,
+      "transitDurationHours": 2.75,
+      "estimatedSafeDeliveredCost": 23200,
+      "hardConstraintsPassed": true,
+      "verdict": "OPTIMAL_CANDIDATE"
+    },
+    {
+      "source": "SPPG_BANDUNG_BARAT",
+      "surplusAvailableKg": 300,
+      "freshnessScore": 0.89,
+      "transitKm": 154.0,
+      "transitDurationHours": 3.8,
+      "estimatedSafeDeliveredCost": 26100,
+      "hardConstraintsPassed": false,
+      "verdict": "COST_CEILING_EXCEEDED"
+    }
+  ],
+  "reasoningSummary": "SPPG Cianjur identified as optimal origin node due to lower farmgate tariff, positive remaining shelf-life (+9.2 days), direct Tol Jagorawi access, and verified 2.4°C pre-chilled capacity in Reefer-04.",
+  "status": "AWAITING_HUMAN_CONFIRMATION",
+  "signerResolution": {
+    "approver": "R. Pratama",
+    "role": "SPPG_HEAD_CIANJUR",
+    "signature": "0x93bb2810a9c827d04e1201994bcaec981f21",
+    "dispatchedAt": "2024-10-24T08:44:12+07:00"
+  }
+}
+</pre>
+</div>
+<div class="pt-space-md flex items-center justify-between">
+<span class="font-code-sm text-code-sm text-outline">Model: Anthropic Claude 3.5 Sonnet on AWS Bedrock</span>
+<button class="px-space-md py-1.5 rounded bg-surface-terminal-border text-surface-card hover:bg-surface-terminal-border/80 font-label-md text-label-md font-medium transition-colors" onclick="document.getElementById('trace-modal').classList.add('hidden')">
+            Close Trace
+          </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+  // Simple micro-interactions
+  const verifyBtn = document.getElementById('verify-hash-btn');
+  const toast = document.getElementById('hash-verify-toast');
+  const traceBtn = document.getElementById('trace-btn');
+  const traceModal = document.getElementById('trace-modal');
+  const closeTraceBtn = document.getElementById('close-trace-btn');
+
+  if (verifyBtn && toast) {
+    verifyBtn.addEventListener('click', () => {
+      toast.classList.remove('hidden');
+      setTimeout(() => {
+        toast.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+    });
+  }
+
+  if (traceBtn && traceModal) {
+    traceBtn.addEventListener('click', () => {
+      traceModal.classList.remove('hidden');
+    });
+  }
+
+  if (closeTraceBtn && traceModal) {
+    closeTraceBtn.addEventListener('click', () => {
+      traceModal.classList.add('hidden');
+    });
+  }
+</script></main></div></body></html>

@@ -21,8 +21,6 @@ from dataclasses import dataclass, field
 from importlib import resources
 from typing import Callable
 
-from app.ai_providers.resilience import with_fallback_chain
-
 VALID_VERDICTS = ("CONSISTENT", "FLAGGED", "UNAVAILABLE")
 
 
@@ -148,17 +146,20 @@ def run_verifier(
     if not chain:
         return VerifierResult(verdict="UNAVAILABLE", attempts=[])
 
-    result = with_fallback_chain(
+    # O-AI (S4-00): seluruh chain diteruskan — slot 4+ tidak lagi terpotong;
+    # exhaustion (semua provider gagal) → UNAVAILABLE, bukan exception naik.
+    from app.ai_providers.resilience import with_fallback_chain as _wfc
+
+    result = _wfc(
         primary=chain[0],
         prompt=prompt,
-        fallback_1=chain[1] if len(chain) > 1 else None,
-        fallback_2=chain[2] if len(chain) > 2 else None,
+        fallbacks=[fn for fn in chain[1:]],
         timeout_seconds=timeout_seconds,
     )
 
     # Nama pemenang dari chain bersifat posisional (primary/fallback_N);
     # translasi ke label jujur memakai list `labels` (urutan penyusunan).
-    slot_to_index = {"primary": 0, "fallback_1": 1, "fallback_2": 2}
+    slot_to_index = {"primary": 0, **{f"fallback_{i}": i for i in range(1, 25)}}
     winner_index = slot_to_index.get(result.provider, 0)
     winner_label = (
         labels[winner_index] if winner_index < len(labels) else result.provider
