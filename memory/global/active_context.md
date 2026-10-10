@@ -9,6 +9,10 @@
 - S4-09d execution complete for A/B/C/D1/D2: Overview location breakdown and SAP adapter contract; supplier exclusion migration/eligibility/approval/restoration guards; evidence read-only panel and authorized JSON/CSV export. Final verification evidence is recorded below.
 
 ## Next step (urutan eksekusi)
+
+➡️ **Onboarding dev2 (Nabil): mulai dari `ONBOARDING.md` di root repo** — panduan lengkap
+clone → restore dump → verifikasi → akun demo → aturan → task → alur git.
+
 1. **S4-10** — Hidupkan SAP AI Core:
    - Isi `SAP_AI_CORE_AUTH_URL/API_URL/CLIENT_ID/SECRET` dari service key paket.
    - Cek plan AI Core = **extended** (syarat RPT-1.6, varian rilis 7 Sep 2026).
