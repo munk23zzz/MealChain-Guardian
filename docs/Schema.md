@@ -92,6 +92,25 @@ Unit inti untuk freshness/safety check.
 
 ## 3. Keputusan & audit trail
 
+### `supplier_exclusions`
+Status administratif historis, lokal pada `scope_location_id` (SPPG penerima), terpisah dari `batches.safety_status`. `proposed`/`rejected` tidak mengubah eligibility; `active` berlaku tanpa expiry sampai keputusan restoration baru, evidence baru, dan approval matrix existing dieksekusi; `revoked` tetap tersimpan. Partial unique index menjaga satu active per supplier+scope. Administrative decisions selalu null quantity/cost.
+
+| Kolom | Tipe | Constraint |
+|---|---|---|
+| id | UUID | PK |
+| supplier_id | UUID | FK suppliers, NOT NULL |
+| scope_location_id | UUID | FK locations, NOT NULL; receiving SPPG |
+| status | TEXT | proposed\|active\|rejected\|revoked |
+| reason | TEXT | NOT NULL |
+| evidence_refs | JSONB | NOT NULL; IDs persisten, supplier-associated |
+| source_decision_id | UUID | FK decisions, NOT NULL |
+| restoration_decision_id | UUID | FK decisions, nullable |
+| proposed_by | UUID | FK users, NOT NULL |
+| approved_at/activated_at/revoked_at | TIMESTAMPTZ | nullable |
+| revocation_reason | TEXT | nullable |
+
+`batches.supplier_id` adalah binding kandidat; lokasi tidak boleh menggantikan identitas supplier. Execute mengunci baris supplier stabil sebelum membaca exclusion (race-safe walau belum ada exclusion row), mengulang safety dan binding check, lalu menulis ledger/PO paling banyak sekali.
+
 ### `decisions`
 | Kolom | Tipe | Constraint |
 |---|---|---|

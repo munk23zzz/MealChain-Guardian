@@ -1,0 +1,22 @@
+.panel { display: grid; gap: 12px; padding: 20px; border: 1px solid #dbe5e3; border-radius: 12px; background: #fff; color: #0f172a; overflow-wrap: anywhere; }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.header h3, .panel p { margin: 0; }
+.badge { border-radius: 6px; padding: 4px 8px; background: #e6f4f1; color: #005c55; font-size: 12px; font-weight: 700; }
+.record { display: grid; gap: 8px; padding: 14px; border: 1px solid #dbe5e3; border-radius: 8px; min-width: 0; }
+.link { justify-self: start; padding: 0; border: 0; background: transparent; color: #005c55; text-decoration: underline; font: inherit; cursor: pointer; text-align: left; }
+.form, .fields { display: grid; gap: 12px; min-width: 0; }
+.form { margin-top: 6px; }
+.fields { margin: 0; padding: 0; border: 0; }
+.field { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
+.field textarea, .field select, .field input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #94a3b8; border-radius: 6px; background: #fff; color: inherit; font: inherit; }
+.field textarea { min-height: 86px; resize: vertical; }
+.evidence { display: grid; gap: 8px; border: 1px solid #dbe5e3; border-radius: 6px; margin: 0; min-width: 0; }
+.choice { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; }
+.choice input { flex: none; margin-top: 3px; }
+.safety { padding: 10px; border-left: 3px solid #b45309; background: #fffbeb; font-size: 13px; }
+.error, .notice { padding: 12px; border-radius: 6px; }
+.error { background: #fef2f2; color: #991b1b; }
+.notice { background: #ecfdf5; color: #065f46; }
+.panel :focus-visible { outline: 3px solid #0f766e; outline-offset: 3px; }
+.panel button:disabled { cursor: not-allowed; opacity: .55; }
+@media (max-width: 640px) { .panel { padding: 12px; } .record { padding: 10px; } }

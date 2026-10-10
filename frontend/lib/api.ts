@@ -3,7 +3,7 @@
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-async function request(path: string, init: RequestInit): Promise<any> {
+export async function request(path: string, init: RequestInit): Promise<any> {
   const resp = await fetch(`${API_URL}${path}`, init);
   if (!resp.ok) {
     throw new Error(`HTTP ${resp.status}: ${path}`);
@@ -23,6 +23,12 @@ export async function login(email: string, password: string) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
+  });
+}
+
+export function fetchComplianceDossier(decisionId: string, token: string): Promise<any> {
+  return request(`/decisions/${encodeURIComponent(decisionId)}/compliance`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
 }
 

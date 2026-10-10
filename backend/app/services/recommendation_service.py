@@ -39,6 +39,7 @@ from app.models import (
     Location,
     PriceSignal,
     Supplier,
+    SupplierExclusion,
     SupplyRecord,
 )
 
@@ -59,10 +60,10 @@ def _score(value: Decimal) -> Decimal:
 
 async def _latest_rows(db, model):
     rows = (
-        await db.execute(
-            select(model).order_by(model.recorded_at.desc(), model.id.desc())
-        )
-    ).scalars().all()
+        (await db.execute(select(model).order_by(model.recorded_at.desc(), model.id.desc())))
+        .scalars()
+        .all()
+    )
     latest = {}
     for row in rows:
         latest.setdefault((row.location_id, row.commodity_id), row)
@@ -86,32 +87,28 @@ async def fetch_operational_facts(db, as_of):
     shelf = _shelf_life_map()
 
     supply = {}
-    for (loc_id, com_id), row in (
-        await _latest_rows(db, SupplyRecord)
-    ).items():
+    for (loc_id, com_id), row in (await _latest_rows(db, SupplyRecord)).items():
         supply[(locs[loc_id], coms[com_id])] = Decimal(str(row.quantity_kg))
 
     demand = {}
-    for (loc_id, com_id), row in (
-        await _latest_rows(db, DemandRecord)
-    ).items():
+    for (loc_id, com_id), row in (await _latest_rows(db, DemandRecord)).items():
         demand[(locs[loc_id], coms[com_id])] = Decimal(str(row.quantity_kg))
 
     refs, quotes = {}, {}
     # Harga: latest per (location, commodity, SOURCE) — pihps dan quote
     # hidup berdampingan untuk pasangan yang sama (disiplin dua lapis).
     price_rows = (
-        await db.execute(
-            select(PriceSignal).order_by(
-                PriceSignal.recorded_at.desc(), PriceSignal.id.desc()
+        (
+            await db.execute(
+                select(PriceSignal).order_by(PriceSignal.recorded_at.desc(), PriceSignal.id.desc())
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     price_latest: dict = {}
     for row in price_rows:
-        price_latest.setdefault(
-            (row.location_id, row.commodity_id, row.source), row
-        )
+        price_latest.setdefault((row.location_id, row.commodity_id, row.source), row)
     for (loc_id, com_id, _source), row in price_latest.items():
         key = (locs[loc_id], coms[com_id])
         if row.source == "pihps_reference":
@@ -119,8 +116,17 @@ async def fetch_operational_facts(db, as_of):
         else:
             quotes[key] = (Decimal(str(row.price_per_kg)), row.supplier_id)
 
+    active_exclusions = (
+        (await db.execute(select(SupplierExclusion).where(SupplierExclusion.status == "active")))
+        .scalars()
+        .all()
+    )
     batches = []
-    for b in (await db.execute(select(Batch))).scalars():
+    # A later read can see harvests newer than the captured evaluation time.
+    # Exclude them at the query boundary, including for explicit historical as_of;
+    # never advance the clock or award freshness to a future harvest.
+    batch_query = select(Batch).where(Batch.harvested_at <= as_of)
+    for b in (await db.execute(batch_query)).scalars():
         name = coms[b.commodity_id]
         score = compute_freshness_score(
             b.harvested_at,
@@ -133,6 +139,12 @@ async def fetch_operational_facts(db, as_of):
         batches.append(
             {
                 "batch_id": str(b.id),
+                "supplier_id": str(b.supplier_id) if b.supplier_id else None,
+                "excluded_destinations": [
+                    locs[e.scope_location_id]
+                    for e in active_exclusions
+                    if e.supplier_id == b.supplier_id
+                ],
                 "location": locs[b.location_id],
                 "commodity": name,
                 "quantity_kg": Decimal(str(b.quantity_kg)),
@@ -230,12 +242,8 @@ async def build_recommendations(
     scored = []
     breakdowns: dict = {}
     for cand in candidates:
-        sid = cand.price.supplier_id
-        rel = (
-            reliability.get(sid, DEFAULT_RELIABILITY)
-            if sid
-            else DEFAULT_RELIABILITY
-        )
+        sid = cand.supplier_id or cand.price.supplier_id
+        rel = reliability.get(sid, DEFAULT_RELIABILITY) if sid else DEFAULT_RELIABILITY
         if rel != cand.supplier_reliability:
             cand = replace(cand, supplier_reliability=rel)
         result = calculate_candidate_score(
@@ -253,10 +261,7 @@ async def build_recommendations(
             SafeDeliveredCostInputs(
                 purchase_cost=_money(cand.quantity_kg * unit),
                 transport_cost=_money(
-                    TRANSPORT_RATE
-                    * cand.logistics_distance_km
-                    * cand.quantity_kg
-                    / 1000
+                    TRANSPORT_RATE * cand.logistics_distance_km * cand.quantity_kg / 1000
                 ),
                 handling_cost=HANDLING_FLAT,
                 freshness_score=cand.freshness_score,
@@ -276,7 +281,7 @@ async def build_recommendations(
                 candidate=cand,
                 candidate_id=(
                     f"{cand.source_location}->{cand.destination_location}:"
-                    f"{cand.commodity}"
+                    f"{cand.commodity}" + (f":{cand.supplier_id}" if cand.supplier_id else "")
                 ),
                 score=_score(result.score),
                 eligible=result.eligible,
@@ -286,7 +291,7 @@ async def build_recommendations(
         )
         breakdowns[
             f"{cand.source_location}->{cand.destination_location}:"
-            f"{cand.commodity}"
+            f"{cand.commodity}" + (f":{cand.supplier_id}" if cand.supplier_id else "")
         ] = breakdown
 
     ranked = rank_candidates(scored)
@@ -298,15 +303,11 @@ async def build_recommendations(
         payload["cost_breakdown"] = breakdowns[rc.candidate_id]
         # Anomali harga: reuse engine price_deviation Sprint 1 (5%/15%).
         if cand.price.supplier_quote is not None:
-            dev = price_deviation(
-                cand.price.supplier_quote, cand.price.reference_price
-            )
+            dev = price_deviation(cand.price.supplier_quote, cand.price.reference_price)
             payload["price_anomaly"] = {
                 "status": dev["status"],
                 "deviation_pct": str(
-                    dev["deviation_pct"].quantize(
-                        Decimal("0.01"), rounding=ROUND_HALF_UP
-                    )
+                    dev["deviation_pct"].quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                 ),
                 "flagged": dev["flagged"],
             }
@@ -318,7 +319,9 @@ async def build_recommendations(
             }
         # Evidence: batch sumber yang eligible + sumber harga terpakai.
         payload["evidence"] = {
-            "batch_ids": sorted(
+            "batch_ids": list(cand.batch_ids)
+            if cand.batch_ids
+            else sorted(
                 {
                     str(b["batch_id"])
                     for b in batches

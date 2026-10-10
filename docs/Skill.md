@@ -91,6 +91,13 @@ cost.safe_delivered(candidate) → { total, breakdown }
 balance.recommend(location_id, commodity_id) → { candidates[], recommended_candidate }
 actions.propose(decision_id) → { status: 'pending_approval' }
 actions.execute(decision_id) → { status: 'executed', sap_po_number }
+supplier_exclusions.propose(supplier_id, scope_location_id, reason, evidence_refs)
+    → { id, source_decision_id, status: 'proposed', evidence_refs[] }
+supplier_exclusions.restore(exclusion_id, reason, evidence_refs)
+    → { id, restoration_decision_id, status: 'active' }  # fresh approval required
+supplier_exclusions.list(filters) → { items[], count }
+supplier_exclusions.context(decision_id)
+    → { suppliers[], scope_location_id, can_propose, reason_unavailable, exclusions[] }
 ```
 
 ## 6. Mock SAP — field reference (supaya mirip real SAP kalau nanti diganti)

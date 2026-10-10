@@ -1,6 +1,14 @@
 """MockSAPProvider (Task 9) — field kontrak Skill.md §6, DataSource=MOCK, tanpa kredensial."""
 
-from app.sap_integration.provider_interface import SAPDataProvider
+from app.sap_integration.provider_interface import (
+    BusinessPartnerRecord,
+    MaterialStockRecord,
+    ProductMasterRecord,
+    PurchaseOrderRecord,
+    PurchaseOrderResult,
+    SAPCapability,
+    SAPDataProvider,
+)
 
 _STOCK = {
     "1000": [
@@ -91,21 +99,31 @@ _PRODUCT_MASTER = {
 
 
 class MockSAPProvider(SAPDataProvider):
-    def get_material_stock(self, plant: str) -> list[dict]:
+    capabilities = frozenset(
+        {
+            SAPCapability.MATERIAL_STOCK,
+            SAPCapability.PURCHASE_ORDERS,
+            SAPCapability.CREATE_PURCHASE_ORDER,
+            SAPCapability.BUSINESS_PARTNERS,
+            SAPCapability.PRODUCT_MASTER,
+        }
+    )
+
+    def get_material_stock(self, plant: str) -> list[MaterialStockRecord]:
         """Unknown plant → list kosong (bukan crash)."""
         return [dict(row) for row in _STOCK.get(plant, [])]
 
-    def get_purchase_orders(self, plant: str) -> list[dict]:
+    def get_purchase_orders(self, plant: str) -> list[PurchaseOrderRecord]:
         return [dict(row) for row in _POS.get(plant, [])]
 
-    def create_purchase_order(self, payload: dict) -> dict:
+    def create_purchase_order(self, payload: dict) -> PurchaseOrderResult:
         raise PermissionError(
             "create_purchase_order tidak boleh dieksekusi otomatis "
             "(Rules.md: butuh approval manusia)"
         )
 
-    def get_business_partner(self, partner_id: str) -> dict:
+    def get_business_partner(self, partner_id: str) -> BusinessPartnerRecord:
         return dict(_BP.get(partner_id, {}))
 
-    def get_product_master(self, product_id: str) -> dict:
+    def get_product_master(self, product_id: str) -> ProductMasterRecord:
         return dict(_PRODUCT_MASTER.get(product_id, {}))

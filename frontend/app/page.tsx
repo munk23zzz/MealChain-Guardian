@@ -8,6 +8,7 @@
 // read-only: tab analisis tidak ditampilkan).
 
 import { useCallback, useEffect, useState } from "react";
+
 import {
   login,
   fetchDecisions,
@@ -16,6 +17,7 @@ import {
   fetchApprovalSummary,
   fetchKpis,
   fetchBalanceMap,
+  fetchComplianceDossier,
   seedDemo,
 } from "../lib/api";
 import { decodeRole } from "../lib/auth";
@@ -33,6 +35,13 @@ import KpiTargets from "../components/KpiTargets";
 import OpsConsole from "../components/OpsConsole";
 import SupplyMap from "../components/SupplyMap";
 import StockChart from "../components/StockChart";
+import OverviewLocationBreakdown from "../components/OverviewLocationBreakdown";
+import { formatKg, sumFiniteKg } from "../lib/overview-format";
+import { SupplierExclusionView } from "../components/SupplierExclusionPanel";
+import { fetchSupplierContext, type SupplierContext } from "../lib/supplier-exclusions";
+import ComplianceEvidencePanel from "../components/ComplianceEvidencePanel";
+import { dossierToCsv, dossierToJson, downloadText } from "../lib/export";
+import type { ComplianceDossier } from "../lib/evidence";
 
 const APPROVER_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
 
@@ -105,12 +114,36 @@ export default function Home() {
   const [mapCommodity, setMapCommodity] = useState("telur");
   const [mapData, setMapData] = useState<any>(null);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [mapRefresh, setMapRefresh] = useState(0);
+  useEffect(() => {
+    if (!token || tab !== "overview") return;
+    let stopped = false;
+    const loadMap = async () => {
+      try {
+        const data = await fetchBalanceMap(mapCommodity, token);
+        if (!stopped) {
+          setMapData(data);
+          setMapError(null);
+        }
+      } catch (error) {
+        if (!stopped) setMapError(error instanceof Error ? error.message : "Peta tidak tersedia.");
+      }
+    };
+    loadMap();
+    const interval = setInterval(loadMap, 5000);
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+    };
+  }, [mapCommodity, mapRefresh, tab, token]);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [traces, setTraces] = useState<any[]>([]);
   const [chain, setChain] = useState<any[]>([]);
   // S4-04: read model kanonik dari /approval-summary — sumber tunggal modal.
   const [approvalSummary, setApprovalSummary] = useState<any>(null);
+  const [supplierContext, setSupplierContext] = useState<SupplierContext | null>(null);
+  const [complianceDossier, setComplianceDossier] = useState<ComplianceDossier | null>(null);
   // S4-03: envelope GET /kpi — loading/error state eksplisit, tanpa fake 0.
   const [kpi, setKpi] = useState<any>(null);
   const [kpiLoading, setKpiLoading] = useState(false);
@@ -163,26 +196,6 @@ export default function Home() {
     loadKpi(token);
   }, [token, loadKpi]);
 
-  // S4-06 polish: data peta (semua lokasi) — ikuti komoditas terpilih.
-  const loadMap = useCallback(
-    async (commodity: string, t: string | null) => {
-      if (!t) return;
-      try {
-        const data = await fetchBalanceMap(commodity, t);
-        setMapData(data);
-        setMapError(null);
-      } catch (e: any) {
-        setMapError(String(e.message ?? e));
-        setMapData(null);
-      }
-    },
-    []
-  );
-
-  useEffect(() => {
-    if (!token || tab !== "overview") return;
-    loadMap(mapCommodity, token);
-  }, [token, tab, mapCommodity, loadMap]);
 
   useEffect(() => {
     if (!token || !selectedId) return;
@@ -209,12 +222,26 @@ export default function Home() {
         /* summary opsional untuk feed; modal tetap menolak tanpa data */
         if (!stopped) setApprovalSummary(null);
       }
+      try {
+        const data = await fetchSupplierContext(selectedId, token);
+        if (!stopped) setSupplierContext(data);
+      } catch {
+        if (!stopped) setSupplierContext(null);
+      }
+      try {
+        const data = await fetchComplianceDossier(selectedId, token);
+        if (!stopped) setComplianceDossier(data);
+      } catch {
+        if (!stopped) setComplianceDossier(null);
+      }
     };
     load();
     const iv = setInterval(load, 5000);
     return () => {
       stopped = true;
       clearInterval(iv);
+      setSupplierContext(null);
+      setComplianceDossier(null);
     };
   }, [token, selectedId]);
 
@@ -452,14 +479,7 @@ export default function Home() {
               <div className="kpi-card">
                 <span className="kpi-card-label">Volume Komoditas Aktif</span>
                 <span className="kpi-card-value">
-                  {mapData
-                    ? `${new Intl.NumberFormat("id-ID").format(
-                        (mapData.locations ?? []).reduce(
-                          (a: number, l: any) => a + (Number(l.supply_kg) || 0),
-                          0
-                        )
-                      )} kg`
-                    : "—"}
+                  {formatKg(sumFiniteKg(mapData?.locations ?? []))}
                 </span>
                 <span className="kpi-card-foot">total pasokan lokasi terpetakan</span>
               </div>
@@ -510,7 +530,7 @@ export default function Home() {
                   {mapError}{" "}
                   <button
                     type="button"
-                    onClick={() => token && loadMap(mapCommodity, token)}
+                    onClick={() => setMapRefresh((value) => value + 1)}
                   >
                     Coba lagi
                   </button>
@@ -542,53 +562,12 @@ export default function Home() {
               </div>
               <div className="overview-side">
                 <div className="map-panel">
-                  <h3>Surplus &amp; Shortage per Lokasi</h3>
                   <StockChart locations={mapData?.locations ?? []} />
                 </div>
                 {/* Breakdown tabel lokasi — angka dari data real mapData */}
                 <div className="map-panel">
                   <h3>Breakdown Lokasi</h3>
-                  <table className="location-table">
-                    <thead>
-                      <tr>
-                        <th>Lokasi</th>
-                        <th>Status</th>
-                        <th className="num">Pasokan</th>
-                        <th className="num">Permintaan</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(mapData?.locations ?? []).map((l: any) => (
-                        <tr key={l.location}>
-                          <td>{l.location}</td>
-                          <td>
-                            <span
-                              className={`location-status location-status-${l.status}`}
-                            >
-                              {l.status}
-                            </span>
-                          </td>
-                          <td className="num">
-                            {new Intl.NumberFormat("id-ID").format(
-                              Number(l.supply_kg) || 0
-                            )}
-                          </td>
-                          <td className="num">
-                            {new Intl.NumberFormat("id-ID").format(
-                              Number(l.demand_kg) || 0
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                      {!mapData?.locations?.length && (
-                        <tr>
-                          <td colSpan={4} className="location-table-empty">
-                            Memuat data peta…
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                  <OverviewLocationBreakdown locations={mapData?.locations ?? []} loading={!mapData && !mapError} />
                 </div>
               </div>
             </section>
@@ -732,6 +711,27 @@ export default function Home() {
                   token={token}
                   summary={approvalSummary}
                 />
+                {supplierContext && (
+                  <SupplierExclusionView
+                    key={selected.decision_id}
+                    context={supplierContext}
+                    role={role ?? ""}
+                    token={token}
+                    onCreated={(decisionId) => {
+                      void loadDecisions(token);
+                      setSelectedId(decisionId);
+                    }}
+                  />
+                )}
+                {complianceDossier && (
+                  <>
+                    <ComplianceEvidencePanel dossier={complianceDossier} />
+                    <div className="decision-export-actions">
+                      <button type="button" className="button-secondary button" onClick={() => downloadText(`decision-${selected.decision_id}.json`, dossierToJson(complianceDossier), "application/json")}>Export JSON</button>
+                      <button type="button" className="button-secondary button" onClick={() => downloadText(`decision-${selected.decision_id}.csv`, dossierToCsv(complianceDossier), "text/csv;charset=utf-8")}>Export CSV</button>
+                    </div>
+                  </>
+                )}
               </section>
             )}
           </>

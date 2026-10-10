@@ -1,0 +1,8 @@
+{
+  "alwaysUpdateLinks": true,
+  "attachmentFolderPath": "attachments",
+  "newFileFolderPath": "global",
+  "promptIfNewFileUntitled": false,
+  "showUnsupportedFiles": true,
+  "strictLineBreaks": false
+}

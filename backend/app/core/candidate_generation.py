@@ -74,9 +74,7 @@ def _aggregate_batches(batches) -> dict:
         freshness_statuses.add(b["freshness_status"])
         safety_statuses.add(b["safety_status"])
     freshness_status = (
-        "needs_verification"
-        if "needs_verification" in freshness_statuses
-        else "pass"
+        "needs_verification" if "needs_verification" in freshness_statuses else "pass"
     )
     safety_status = _worst_safety(safety_statuses)
     return {
@@ -106,97 +104,113 @@ def generate_candidates(
     for b in batches:
         if b["safety_status"] == "fail" or b["freshness_status"] == "fail":
             continue
-        key = (b["location"], b["commodity"])
+        if "supplier_id" in b and not b["supplier_id"]:
+            continue  # supplier_unknown: explicit identity cannot be inferred
+        key = (b["location"], b["commodity"], b.get("supplier_id"))
         if commodity is not None and b["commodity"] != commodity:
             continue
         eligible.setdefault(key, []).append(b)
 
     # Destinasi kandidat: punya shortage > 0, terurut deterministik.
     destination_keys = sorted(
-        key
-        for key in destination_records
-        if commodity is None or key[1] == commodity
+        key for key in destination_records if commodity is None or key[1] == commodity
     )
 
     candidates: list[BalancingCandidate] = []
     for d_loc, d_com in destination_keys:
-        demand = _to_decimal(
-            destination_records[(d_loc, d_com)], "demand_kg"
-        )
-        supply_d = _to_decimal(
-            source_records.get((d_loc, d_com), 0), "supply_kg"
-        )
+        demand = _to_decimal(destination_records[(d_loc, d_com)], "demand_kg")
+        supply_d = _to_decimal(source_records.get((d_loc, d_com), 0), "supply_kg")
         if demand <= supply_d:
             continue  # destinasi surplus/balanced → tidak ada shortage
         shortage = demand - supply_d
 
         source_keys = sorted(
-            (s_loc, s_com)
-            for (s_loc, s_com) in source_records
-            if s_com == d_com and s_loc != d_loc
+            (s_loc, s_com) for (s_loc, s_com) in source_records if s_com == d_com and s_loc != d_loc
         )
         for s_loc, s_com in source_keys:
-            supply_s = _to_decimal(
-                source_records[(s_loc, s_com)], "supply_kg"
-            )
-            demand_s = _to_decimal(
-                destination_records.get((s_loc, s_com), 0), "demand_kg"
-            )
+            supply_s = _to_decimal(source_records[(s_loc, s_com)], "supply_kg")
+            demand_s = _to_decimal(destination_records.get((s_loc, s_com), 0), "demand_kg")
             if supply_s <= demand_s:
                 continue  # sumber tanpa surplus
             surplus_s = supply_s - demand_s
 
-            group = eligible.get((s_loc, d_com))
-            if not group:
-                continue  # tidak ada batch eligible di sumber
-            agg = _aggregate_batches(group)
-            quantity = min(surplus_s, shortage, agg["available_kg"])
-            if quantity <= 0:
-                continue
-
-            pair = (s_loc, d_loc)
-            if pair not in logistics_by_pair:
-                raise ValueError(
-                    f"pasangan logistik tidak ditemukan: {pair} — "
-                    "logistics_by_pair wajib memuat semua pasangan kandidat"
+            groups = [
+                (sid, [b for b in group if d_loc not in b.get("excluded_destinations", [])])
+                for (loc, com, sid), group in eligible.items()
+                if loc == s_loc and com == d_com
+            ]
+            for supplier_id, group in groups:
+                if not group:
+                    continue
+                candidates.extend(
+                    _candidates_for_group(
+                        group,
+                        supplier_id,
+                        surplus_s,
+                        shortage,
+                        s_loc,
+                        d_loc,
+                        d_com,
+                        logistics_by_pair,
+                        prices,
+                    )
                 )
-            logistics = logistics_by_pair[pair]
-            if not logistics["feasible"]:
-                continue  # delivery window terlampaui → exclude
+    return candidates
 
-            price_key = (s_loc, d_loc, d_com)
-            if price_key not in prices:
-                raise ValueError(
-                    f"harga tidak ditemukan untuk {price_key} — prices "
-                    "wajib memuat semua pasangan kandidat"
-                )
-            price = prices[price_key]
-            if not isinstance(price, PriceInfo):
-                price = PriceInfo(**price)
 
-            time_min = Decimal(str(logistics["estimated_time_min"]))
-            time_min_int = int(
-                time_min.to_integral_value(rounding=ROUND_CEILING)
-            )
+def _candidates_for_group(
+    group, supplier_id, surplus_s, shortage, s_loc, d_loc, d_com, logistics_by_pair, prices
+):
+    candidates = []
+    agg = _aggregate_batches(group)
+    quantity = min(surplus_s, shortage, agg["available_kg"])
+    if quantity <= 0:
+        return []
 
-            candidates.append(
-                BalancingCandidate(
-                    source_location=s_loc,
-                    destination_location=d_loc,
-                    commodity=d_com,
-                    quantity_kg=quantity,
-                    demand_fit=quantity / shortage,
-                    supply_availability=quantity / surplus_s,
-                    freshness_score=agg["freshness_score"],
-                    freshness_status=agg["freshness_status"],
-                    safety_status=agg["safety_status"],
-                    supplier_reliability=Decimal("0.80"),
-                    logistics_feasible=True,
-                    logistics_distance_km=Decimal(
-                        str(logistics["distance_km"])
-                    ),
-                    logistics_time_min=time_min_int,
-                    price=price,
-                )
-            )
+    pair = (s_loc, d_loc)
+    if pair not in logistics_by_pair:
+        raise ValueError(
+            f"pasangan logistik tidak ditemukan: {pair} — "
+            "logistics_by_pair wajib memuat semua pasangan kandidat"
+        )
+    logistics = logistics_by_pair[pair]
+    if not logistics["feasible"]:
+        return []  # delivery window terlampaui → exclude
+
+    price_key = (s_loc, d_loc, d_com)
+    if price_key not in prices:
+        raise ValueError(
+            f"harga tidak ditemukan untuk {price_key} — prices "
+            "wajib memuat semua pasangan kandidat"
+        )
+    price = prices[price_key]
+    if not isinstance(price, PriceInfo):
+        price = PriceInfo(**price)
+
+    if supplier_id is not None and price.supplier_id != str(supplier_id):
+        price = PriceInfo(reference_price=price.reference_price)
+
+    time_min = Decimal(str(logistics["estimated_time_min"]))
+    time_min_int = int(time_min.to_integral_value(rounding=ROUND_CEILING))
+
+    candidates.append(
+        BalancingCandidate(
+            source_location=s_loc,
+            destination_location=d_loc,
+            commodity=d_com,
+            quantity_kg=quantity,
+            demand_fit=quantity / shortage,
+            supply_availability=quantity / surplus_s,
+            freshness_score=agg["freshness_score"],
+            freshness_status=agg["freshness_status"],
+            safety_status=agg["safety_status"],
+            supplier_reliability=Decimal("0.80"),
+            logistics_feasible=True,
+            logistics_distance_km=Decimal(str(logistics["distance_km"])),
+            logistics_time_min=time_min_int,
+            price=price,
+            supplier_id=str(supplier_id) if supplier_id else None,
+            batch_ids=tuple(sorted(str(b["batch_id"]) for b in group if b.get("batch_id"))),
+        )
+    )
     return candidates

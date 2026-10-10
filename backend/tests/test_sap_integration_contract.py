@@ -4,7 +4,11 @@ import pytest
 
 from app.sap_integration.factory import ProviderKind, get_provider
 from app.sap_integration.mock_provider import MockSAPProvider
-from app.sap_integration.provider_interface import SAPDataProvider
+from app.sap_integration.provider_interface import (
+    SAPCapability,
+    SAPDataProvider,
+    UnsupportedCapabilityError,
+)
 
 
 def test_factory_default_returns_mock():
@@ -84,3 +88,41 @@ def test_product_master_lookup():
     product = p.get_product_master("TELUR")
     assert product.get("Product") == "TELUR"
     assert product.get("DataSource") == "MOCK"
+
+
+def test_all_mock_records_are_provenance_labeled():
+    p = MockSAPProvider()
+    records = [
+        *p.get_material_stock("1000"),
+        *p.get_purchase_orders("1000"),
+        p.get_business_partner("SUP001"),
+        p.get_product_master("TELUR"),
+    ]
+    assert all(record["DataSource"] == "MOCK" for record in records)
+
+
+def test_explicit_aws_selection_fails_closed():
+    with pytest.raises(NotImplementedError, match="aws_mcp"):
+        get_provider(ProviderKind.AWS_MCP)
+
+
+def test_mock_write_requires_human_approval():
+    provider = get_provider()
+    with pytest.raises(PermissionError, match="approval"):
+        provider.create_purchase_order({"PurchaseOrder": "new"})
+
+
+def test_capability_selection_accepts_supported_material_stock():
+    provider = get_provider(capability=SAPCapability.MATERIAL_STOCK)
+    assert isinstance(provider, MockSAPProvider)
+
+
+def test_material_documents_capability_fails_closed():
+    with pytest.raises(UnsupportedCapabilityError, match="material_documents"):
+        get_provider(capability=SAPCapability.MATERIAL_DOCUMENTS)
+
+
+def test_mock_provider_exposes_supported_capabilities():
+    provider = MockSAPProvider()
+    assert SAPCapability.MATERIAL_STOCK in provider.capabilities
+    assert SAPCapability.MATERIAL_DOCUMENTS not in provider.capabilities

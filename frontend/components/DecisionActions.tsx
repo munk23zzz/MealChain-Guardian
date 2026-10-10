@@ -53,6 +53,7 @@ export default function DecisionActions({
   const [reason, setReason] = useState("");
 
   const actions = visibleActions(role, status);
+  const administrative = ["supplier_exclusion", "supplier_exclusion_restoration"].includes(summary?.decision_type);
   if (actions.readOnly) {
     return <p className="read-only-note">Peran {role} bersifat read-only.</p>;
   }
@@ -113,7 +114,9 @@ export default function DecisionActions({
     }
     try {
       const result = await executeAction(decisionId, token);
-      setMessage(`PO ${result.po_number ?? ""} dibuat (mock)`);
+      setMessage(administrative
+        ? `Status administratif supplier tercatat: ${result.status ?? "executed"}. Safety batch tidak diubah.`
+        : `PO ${result.po_number ?? ""} dibuat (mock)`);
     } catch (err: any) {
       setMessage(String(err.message ?? err));
     }
@@ -156,7 +159,8 @@ export default function DecisionActions({
           </button>
         </>
       )}
-      {actions.repropose && (
+      {actions.repropose && administrative && <p>Ajukan ulang melalui panel supplier dengan bukti baru.</p>}
+      {actions.repropose && !administrative && (
         <button type="button" className="button" onClick={onRepropose}>
           Minta re-propose (iterasi baru)
         </button>

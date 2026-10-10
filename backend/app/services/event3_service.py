@@ -31,8 +31,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.safety import evaluate_safety
 from app.models import (
     Batch,
+    Commodity,
     Decision,
     DecisionEvidence,
+    Location,
 )
 from app.services.recommendation_service import build_recommendations
 from app.services.trace_persistence import persist_trace_steps
@@ -59,9 +61,7 @@ async def _evaluate_batch_safety(batch: Batch) -> dict:
     )
 
 
-async def _find_replay(
-    db: AsyncSession, operation_key: str
-) -> tuple[Decision, dict] | None:
+async def _find_replay(db: AsyncSession, operation_key: str) -> tuple[Decision, dict] | None:
     """Cari event sebelumnya dengan operation_key sama (trace DETECT)."""
     row = (
         await db.execute(
@@ -129,25 +129,19 @@ async def run_safety_disruption_event(
     op_key = str(operation_key)
 
     # ---- Kunci serialisasi lintas request (pola Event 2, footnote §11).
-    await db.execute(
-        text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": op_key}
-    )
+    await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": op_key})
 
     # ---- Replay: key sama → batch sama; batch beda → 409.
     replay = await _find_replay(db, op_key)
     if replay is not None:
         _decision, outcome = replay
         if outcome.get("batch_id") != str(batch_id):
-            raise Event3ConflictError(
-                "operation_key sudah dipakai untuk batch berbeda"
-            )
+            raise Event3ConflictError("operation_key sudah dipakai untuk batch berbeda")
         await db.rollback()
         return outcome
 
     # ---- Load batch + lokasi komoditas (untuk evidence & revalidation).
-    batch = (
-        await db.execute(select(Batch).where(Batch.id == batch_id))
-    ).scalar_one_or_none()
+    batch = (await db.execute(select(Batch).where(Batch.id == batch_id))).scalar_one_or_none()
     if batch is None:
         raise LookupError("batch tidak ditemukan")
 
@@ -176,9 +170,7 @@ async def run_safety_disruption_event(
             },
             "excursion_minutes": float(temp_result["excursion_minutes"]),
             "excluded_batch_ids": [],
-            "previous_decision_id": (
-                str(previous_decision_id) if previous_decision_id else None
-            ),
+            "previous_decision_id": (str(previous_decision_id) if previous_decision_id else None),
             "message": "Tidak ada gangguan keamanan pangan (batch aman)",
         }
         await db.rollback()
@@ -202,7 +194,15 @@ async def run_safety_disruption_event(
     result = await build_recommendations(fetch_facts)
     recommendations = result.get("recommendations", [])
 
-    eligible = [r for r in recommendations if r.get("eligible")]
+    target = await db.get(Location, target_location_id)
+    commodity = await db.get(Commodity, batch.commodity_id)
+    eligible = [
+        r
+        for r in recommendations
+        if r.get("eligible")
+        and r["candidate"]["destination_location"] == target.name
+        and r["candidate"]["commodity"] == commodity.name
+    ]
     if not eligible:
         # FAIL sudah terpersist (commit #1); tanpa decision write.
         raise Event3NoAlternativeError(
@@ -219,17 +219,22 @@ async def run_safety_disruption_event(
         f"{top['candidate']['destination_location']}."
     )
 
+    source = (
+        await db.execute(
+            select(Location).where(Location.name == top["candidate"]["source_location"])
+        )
+    ).scalar_one()
     # ---- Commit #2: Decision + evidence + trace.
     decision = Decision(
         decision_type="safety_disruption",
         status="proposed",
         proposed_by=actor_id or "event3_pipeline",
         target_location_id=target_location_id,
-        source_location_id=batch.location_id,
+        source_location_id=source.id,
         commodity_id=batch.commodity_id,
-        quantity_kg=Decimal(str(batch.quantity_kg)),
-        expires_at=datetime.now(timezone.utc)
-        + timedelta(minutes=_DEFAULT_TTL_MINUTES),
+        quantity_kg=Decimal(str(top["candidate"]["quantity_kg"])),
+        safe_delivered_cost=Decimal(str(top["safe_delivered_cost"])),
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=_DEFAULT_TTL_MINUTES),
         cost_breakdown={
             "candidate_score": str(top.get("score")),
             "safe_delivered_cost": str(top.get("safe_delivered_cost")),
@@ -238,6 +243,10 @@ async def run_safety_disruption_event(
     )
     db.add(decision)
     await db.flush()
+
+    from app.services.supplier_eligibility import persist_binding
+
+    await persist_binding(db, decision, top["candidate"])
 
     prev_id = str(previous_decision_id) if previous_decision_id else None
     db.add(
@@ -284,12 +293,8 @@ async def run_safety_disruption_event(
                 },
                 "output_summary": {
                     "recommended_candidate": {
-                        "source_location": top["candidate"][
-                            "source_location"
-                        ],
-                        "destination_location": top["candidate"][
-                            "destination_location"
-                        ],
+                        "source_location": top["candidate"]["source_location"],
+                        "destination_location": top["candidate"]["destination_location"],
                         "commodity": top["candidate"]["commodity"],
                         "score": str(top.get("score")),
                     },

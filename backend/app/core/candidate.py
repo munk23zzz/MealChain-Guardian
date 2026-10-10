@@ -29,9 +29,7 @@ _FRACTION_FACTORS = (
     "freshness_score",
     "supplier_reliability",
 )
-_SAFETY_STATUSES = frozenset(
-    {"pending", "pass", "fail", "needs_verification"}
-)
+_SAFETY_STATUSES = frozenset({"pending", "pass", "fail", "needs_verification"})
 _FRESHNESS_STATUSES = frozenset({"pass", "needs_verification", "fail"})
 
 
@@ -43,16 +41,12 @@ def _to_decimal(value, name: str) -> Decimal:
     try:
         return Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError) as exc:
-        raise CandidateValidationError(
-            f"{name} bukan angka valid: {value!r}"
-        ) from exc
+        raise CandidateValidationError(f"{name} bukan angka valid: {value!r}") from exc
 
 
 def _require_fraction(d: Decimal, name: str) -> None:
     if d < 0 or d > 1:
-        raise CandidateValidationError(
-            f"{name} wajib dalam [0,1], dapat {d}"
-        )
+        raise CandidateValidationError(f"{name} wajib dalam [0,1], dapat {d}")
 
 
 def _require_nonnegative(d: Decimal, name: str) -> None:
@@ -83,9 +77,7 @@ class PriceInfo:
                     "supplier_quote wajib punya supplier_id — identitas "
                     "supplier ada di kolom terpisah, bukan di source"
                 )
-        if self.supplier_id is not None and not isinstance(
-            self.supplier_id, str
-        ):
+        if self.supplier_id is not None and not isinstance(self.supplier_id, str):
             object.__setattr__(self, "supplier_id", str(self.supplier_id))
 
 
@@ -109,14 +101,14 @@ class BalancingCandidate:
     price: PriceInfo
     transport_cost: Decimal = Decimal("0")
     handling_cost: Decimal = Decimal("0")
+    supplier_id: Optional[str] = None
+    batch_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for name in ("source_location", "destination_location", "commodity"):
             value = getattr(self, name)
             if not isinstance(value, str) or not value.strip():
-                raise CandidateValidationError(
-                    f"{name} wajib string non-kosong"
-                )
+                raise CandidateValidationError(f"{name} wajib string non-kosong")
             object.__setattr__(self, name, value.strip())
         if self.source_location == self.destination_location:
             raise CandidateValidationError(
@@ -144,21 +136,15 @@ class BalancingCandidate:
             )
         if not isinstance(self.logistics_feasible, bool):
             raise CandidateValidationError("logistics_feasible wajib boolean")
-        distance = _to_decimal(
-            self.logistics_distance_km, "logistics_distance_km"
-        )
+        distance = _to_decimal(self.logistics_distance_km, "logistics_distance_km")
         _require_nonnegative(distance, "logistics_distance_km")
         object.__setattr__(self, "logistics_distance_km", distance)
         if isinstance(self.logistics_time_min, bool) or not isinstance(
             self.logistics_time_min, int
         ):
-            raise CandidateValidationError(
-                "logistics_time_min wajib integer menit"
-            )
+            raise CandidateValidationError("logistics_time_min wajib integer menit")
         if self.logistics_time_min < 0:
-            raise CandidateValidationError(
-                "logistics_time_min tidak boleh negatif"
-            )
+            raise CandidateValidationError("logistics_time_min tidak boleh negatif")
         if not isinstance(self.price, PriceInfo):
             raise CandidateValidationError("price wajib PriceInfo")
         transport = _to_decimal(self.transport_cost, "transport_cost")
@@ -167,6 +153,10 @@ class BalancingCandidate:
         handling = _to_decimal(self.handling_cost, "handling_cost")
         _require_nonnegative(handling, "handling_cost")
         object.__setattr__(self, "handling_cost", handling)
+        if self.supplier_id is not None:
+            object.__setattr__(self, "supplier_id", str(self.supplier_id))
+        if not isinstance(self.batch_ids, tuple):
+            object.__setattr__(self, "batch_ids", tuple(self.batch_ids))
 
     def to_dict(self) -> dict:
         """Serialisasi deterministik: semua Decimal jadi string eksak."""
@@ -195,4 +185,6 @@ class BalancingCandidate:
             },
             "transport_cost": str(self.transport_cost),
             "handling_cost": str(self.handling_cost),
+            "supplier_id": self.supplier_id,
+            "batch_ids": list(self.batch_ids),
         }

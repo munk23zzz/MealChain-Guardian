@@ -13,6 +13,13 @@ kompetisi Sokrates x SAP x AWS. Baca `IDEA.md` untuk konteks lengkap sebelum mel
 6. `docs/PRD.md`, `docs/Architecture.md`, `docs/design.md`, `docs/Schema.md`, `docs/Skill.md` —
    sesuai kebutuhan task
 
+## Memory vault Obsidian (wajib dibaca)
+`memory/` adalah vault Obsidian project ini (memory build lintas sesi). Mulai dari
+`memory/global/MOC.md` → `active_context.md` → `project_memory.md` → `architecture.md` →
+`decisions.md`. Keputusan baru WAJIB di-append ke `memory/global/decisions.md`;
+kondisi kerja diperbarui di `memory/global/active_context.md`. `TODO.md` tetap
+sumber kebenaran status task.
+
 ## Perintah penting
 
 ```bash

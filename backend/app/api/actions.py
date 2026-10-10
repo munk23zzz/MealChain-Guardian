@@ -22,6 +22,7 @@ from app.api.dependencies import get_db
 from app.core.approval_matrix import approval_requirement, evaluate_approvals
 from app.core.decision_validity import is_decision_valid
 from app.models import AgentTrace, Approval, Batch, Commodity, Decision, User
+from app.services import supplier_exclusion_service as exclusions
 from app.services.ledger_service import append_block
 
 router = APIRouter()
@@ -53,7 +54,7 @@ class ExecuteRequest(BaseModel):
 
 async def _load_decision(db: AsyncSession, decision_id: uuid.UUID) -> Decision:
     row = (
-        await db.execute(select(Decision).where(Decision.id == decision_id))
+        await db.execute(select(Decision).where(Decision.id == decision_id).with_for_update())
     ).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="decision tidak ditemukan")
@@ -83,13 +84,17 @@ async def _source_batches_still_safe(db: AsyncSession, decision: Decision) -> bo
     if decision.source_location_id is None or decision.commodity_id is None:
         return True
     batches = (
-        await db.execute(
-            select(Batch).where(
-                Batch.location_id == decision.source_location_id,
-                Batch.commodity_id == decision.commodity_id,
+        (
+            await db.execute(
+                select(Batch).where(
+                    Batch.location_id == decision.source_location_id,
+                    Batch.commodity_id == decision.commodity_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if not batches:
         return True
     # Cukup satu batch aman → eksekusi tetap mungkin; semua FAIL → blokir.
@@ -112,11 +117,11 @@ async def propose_action(
             status_code=409,
             detail=f"decision status {decision.status} tidak dapat dipropose ulang",
         )
+    if decision.decision_type in exclusions.ADMIN_TYPES:
+        raise HTTPException(409, "gunakan endpoint proposal supplier-exclusions")
     # Kunci nilai snapshot utk PO: commodity/supplier/lokasi.
     commodity = (
-        await db.execute(
-            select(Commodity).where(Commodity.id == decision.commodity_id)
-        )
+        await db.execute(select(Commodity).where(Commodity.id == decision.commodity_id))
     ).scalar_one_or_none()
     if commodity is None:
         raise HTTPException(status_code=422, detail="commodity decision tidak valid")
@@ -143,17 +148,11 @@ def _event_verifier_ctx(decision: Decision, commodity: Commodity | None) -> dict
     decision + commodity. Tanpa provider aktif, `run_verifier`
     mengembalikan UNAVAILABLE (konservatif).
     """
-    sdc = (
-        str(decision.safe_delivered_cost)
-        if decision.safe_delivered_cost is not None
-        else None
-    )
+    sdc = str(decision.safe_delivered_cost) if decision.safe_delivered_cost is not None else None
     return {
         "decision_id": str(decision.id),
         "commodity": commodity.name if commodity else None,
-        "quantity_kg": (
-            float(decision.quantity_kg) if decision.quantity_kg is not None else None
-        ),
+        "quantity_kg": (float(decision.quantity_kg) if decision.quantity_kg is not None else None),
         "safety_status": None,
         "freshness_score": None,
         "candidates": [],
@@ -164,8 +163,7 @@ def _event_verifier_ctx(decision: Decision, commodity: Commodity | None) -> dict
         "logistics": None,
         "cost": {"safe_delivered_cost": sdc, "breakdown": decision.cost_breakdown},
         "rationale": (
-            f"Audit independen decision {decision.decision_type} "
-            f"iterasi {decision.iteration}"
+            f"Audit independen decision {decision.decision_type} " f"iterasi {decision.iteration}"
         ),
     }
 
@@ -199,16 +197,15 @@ async def verify_action(
     if decision.status not in {"proposed", "verifier_flagged", "pending_approval"}:
         raise HTTPException(
             status_code=409,
-            detail=(
-                "verify hanya untuk decision pra-approval "
-                f"(status kini {decision.status})"
-            ),
+            detail=("verify hanya untuk decision pra-approval " f"(status kini {decision.status})"),
         )
+    if decision.decision_type in exclusions.ADMIN_TYPES:
+        exclusions.require_scope(user, decision.target_location_id)
     existing_approvals = (
-        await db.execute(
-            select(Approval).where(Approval.decision_id == decision.id)
-        )
-    ).scalars().all()
+        (await db.execute(select(Approval).where(Approval.decision_id == decision.id)))
+        .scalars()
+        .all()
+    )
     if existing_approvals:
         raise HTTPException(
             status_code=409,
@@ -218,11 +215,22 @@ async def verify_action(
             ),
         )
     commodity = (
-        await db.execute(
-            select(Commodity).where(Commodity.id == decision.commodity_id)
-        )
+        await db.execute(select(Commodity).where(Commodity.id == decision.commodity_id))
     ).scalar_one_or_none()
     ctx = _event_verifier_ctx(decision, commodity)
+    if decision.decision_type in exclusions.ADMIN_TYPES:
+        from app.models import DecisionEvidence
+
+        evidence = (
+            (
+                await db.execute(
+                    select(DecisionEvidence).where(DecisionEvidence.decision_id == decision.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        ctx["evidence"] = {"administrative_evidence": [e.payload for e in evidence]}
     result = run_verifier(ctx, default_chain=chain)
     verdict = result.verdict  # CONSISTENT | FLAGGED | UNAVAILABLE (server)
     decision.verified_by = "verifier_agent"
@@ -253,6 +261,19 @@ async def approve_action(
         raise HTTPException(
             status_code=409, detail=f"decision status {decision.status} tidak dapat di-approve"
         )
+    if decision.decision_type in exclusions.ADMIN_TYPES:
+        exclusions.require_scope(user, decision.target_location_id)
+        if not is_decision_valid(_now_utc(), decision.expires_at):
+            raise HTTPException(409, "decision expired")
+        existing = (
+            await db.execute(
+                select(Approval.id).where(
+                    Approval.decision_id == decision.id, Approval.approved_by == user.id
+                )
+            )
+        ).first()
+        if existing:
+            raise HTTPException(409, "approval sudah tercatat")
     # Penolakan WAJIB beralasan — alasan inilah bahan learning agent
     # (rejection loop, permintaan Roy 2026-10-07). Tanpa alasan = 422.
     if not payload.approved and not (payload.comment or "").strip():
@@ -271,6 +292,9 @@ async def approve_action(
     if not payload.approved:
         decision.status = "rejected"
         decision.rejection_reason = payload.comment.strip()
+        if decision.decision_type == "supplier_exclusion":
+            exclusion = await exclusions.for_decision(db, decision)
+            exclusion.status = "rejected"
     # P1 Merkle ledger: setiap approve/reject = block append-only.
     await append_block(
         db,
@@ -286,8 +310,10 @@ async def approve_action(
     )
     await db.commit()
     rows = (
-        await db.execute(select(Approval).where(Approval.decision_id == decision.id))
-    ).scalars().all()
+        (await db.execute(select(Approval).where(Approval.decision_id == decision.id)))
+        .scalars()
+        .all()
+    )
     evaluation = evaluate_approvals(
         _requirement_for(decision),
         [
@@ -307,9 +333,7 @@ async def _approval_users(db: AsyncSession, approvals):
     ids = [a.approved_by for a in approvals]
     if not ids:
         return []
-    users = (
-        await db.execute(select(User).where(User.id.in_(ids)))
-    ).scalars().all()
+    users = (await db.execute(select(User).where(User.id.in_(ids)))).scalars().all()
     by_id = {u.id: u for u in users}
     return [by_id[a.approved_by] for a in approvals]
 
@@ -322,6 +346,14 @@ async def execute_action(
 ):
     decision = await _load_decision(db, payload.decision_id)
     if decision.status == "executed":
+        if decision.decision_type in exclusions.ADMIN_TYPES:
+            exclusions.require_scope(user, decision.target_location_id)
+            return {
+                "decision_id": str(decision.id),
+                "status": "executed",
+                "data_source": "LOCAL",
+                "exclusion": exclusions.serialize(await exclusions.for_decision(db, decision)),
+            }
         raise HTTPException(status_code=409, detail="decision sudah dieksekusi")
     if _verifier_unverified(decision):
         raise HTTPException(status_code=409, detail="decision belum terverifikasi")
@@ -336,8 +368,10 @@ async def execute_action(
         )
 
     rows = (
-        await db.execute(select(Approval).where(Approval.decision_id == decision.id))
-    ).scalars().all()
+        (await db.execute(select(Approval).where(Approval.decision_id == decision.id)))
+        .scalars()
+        .all()
+    )
     evaluation = evaluate_approvals(
         _requirement_for(decision),
         [
@@ -350,6 +384,45 @@ async def execute_action(
             status_code=409,
             detail="approval belum memenuhi requirement (missing/rejected)",
         )
+
+    if decision.decision_type in exclusions.ADMIN_TYPES:
+        exclusions.require_scope(user, decision.target_location_id)
+        approvers = await _approval_users(db, rows)
+        scoped = evaluate_approvals(
+            _requirement_for(decision),
+            [
+                {"role": u.role, "approved": a.approved}
+                for a, u in zip(rows, approvers)
+                if u.location_id == decision.target_location_id
+            ],
+        )
+        if not scoped["satisfied"]:
+            raise HTTPException(409, "approval scope tidak memenuhi requirement")
+        exclusion = await exclusions.execute(db, decision, user)
+        decision.status = "executed"
+        await append_block(
+            db,
+            action="execute",
+            entity_id=decision.id,
+            actor_id=user.id,
+            payload={
+                "decision_id": str(decision.id),
+                "exclusion_id": str(exclusion.id),
+                "administrative_action": decision.decision_type,
+                "status": exclusion.status,
+            },
+        )
+        await db.commit()
+        return {
+            "decision_id": str(decision.id),
+            "status": "executed",
+            "data_source": "LOCAL",
+            "exclusion": exclusions.serialize(exclusion),
+        }
+
+    from app.services.supplier_eligibility import revalidate_transfer
+
+    supplier_id = await revalidate_transfer(db, decision)
 
     # O-EVENT-2 revalidation: safety batch sumber dicek ULANG saat eksekusi
     # — rekomendasi lama tidak aman selamanya (plan §22).
@@ -364,9 +437,7 @@ async def execute_action(
 
     # Snapshot utk PO
     commodity = (
-        await db.execute(
-            select(Commodity).where(Commodity.id == decision.commodity_id)
-        )
+        await db.execute(select(Commodity).where(Commodity.id == decision.commodity_id))
     ).scalar_one_or_none()
     if commodity is None:
         raise HTTPException(status_code=422, detail="commodity decision tidak valid")
@@ -379,11 +450,8 @@ async def execute_action(
         raise HTTPException(status_code=422, detail="unit price decision tidak valid")
 
     po_number = f"MC-{decision.id.hex[:12].upper()}"
-    supplier_id = await _resolve_supplier_id(db, decision.target_location_id, commodity)
     if supplier_id is None:
-        raise HTTPException(
-            status_code=422, detail="supplier untuk lokasi target tidak ditemukan"
-        )
+        raise HTTPException(status_code=422, detail="supplier untuk lokasi target tidak ditemukan")
     await db.execute(
         text(
             "INSERT INTO sap_mock_purchase_orders "
@@ -448,13 +516,15 @@ async def repropose_action(
     permintaan Roy 2026-10-07). Iterasi baru TETAP butuh approve manusia.
     """
     parent = await _load_decision(db, payload.decision_id)
+    if parent.decision_type in exclusions.ADMIN_TYPES:
+        exclusions.require_scope(user, parent.target_location_id)
+        raise HTTPException(
+            409, "ajukan evidence baru melalui supplier-exclusions/proposals atau restore"
+        )
     if parent.status != "rejected":
         raise HTTPException(
             status_code=409,
-            detail=(
-                f"re-propose hanya untuk decision rejected "
-                f"(status kini {parent.status})"
-            ),
+            detail=(f"re-propose hanya untuk decision rejected " f"(status kini {parent.status})"),
         )
     if not (parent.rejection_reason or "").strip():
         raise HTTPException(
@@ -471,8 +541,7 @@ async def repropose_action(
         quantity_kg=parent.quantity_kg,
         safe_delivered_cost=parent.safe_delivered_cost,
         cost_breakdown=parent.cost_breakdown,
-        expires_at=datetime.now(timezone.utc)
-        + timedelta(minutes=payload.ttl_minutes),
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=payload.ttl_minutes),
         iteration=(parent.iteration or 1) + 1,
         supersedes_id=parent.id,
         demo_case=parent.demo_case,
@@ -509,9 +578,7 @@ async def repropose_action(
     }
 
 
-async def _resolve_supplier_id(
-    db: AsyncSession, target_location_id, commodity: Commodity
-):
+async def _resolve_supplier_id(db: AsyncSession, target_location_id, commodity: Commodity):
     """Supplier lokal utk lokasi target (suppliers.location_id)."""
     if target_location_id is None:
         return None

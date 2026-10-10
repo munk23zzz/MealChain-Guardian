@@ -29,7 +29,8 @@ class Decision(Base):
     __table_args__ = (
         CheckConstraint(
             "decision_type IN ('regional_balance','price_anomaly',"
-            "'safety_disruption')",
+            "'safety_disruption','supplier_exclusion',"
+            "'supplier_exclusion_restoration')",
             name="decisions_decision_type_check",
         ),
         CheckConstraint(

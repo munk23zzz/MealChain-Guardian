@@ -17,6 +17,10 @@
 
 ## 2. Tech stack
 
+### Supplier governance boundary
+
+Supplier exclusion adalah workflow administratif lokal SPPG: dedicated proposal/restore API membuat `Decision` bertipe `supplier_exclusion` atau `supplier_exclusion_restoration`, lalu reuse verifier, expiry, `approvals`, matrix, dan ledger pada `/actions/*`. Tidak ada quantity/cost transfer palsu. Candidate payload wajib membawa `batch_id(s)` dan `supplier_id`; keputusan lama tanpa binding yang unik ditolak. Safety FAIL tetap alasan independen. Execute mengunci `suppliers` row, bukan row exclusion yang mungkin belum ada, sebelum revalidasi.
+
 | Layer | Pilihan | Kenapa |
 |---|---|---|
 | Backend API | **Python 3.12 + FastAPI** | Async native, OpenAPI spec otomatis (dibutuhkan AgentCore Gateway untuk auto-convert endpoint jadi MCP tools), tim sudah familiar Python |

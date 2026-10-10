@@ -9,35 +9,39 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import {
+  formatBalanceGap,
+  formatBalanceStatus,
+  formatKg,
+  type BalanceMapLocation,
+} from "../lib/overview-format";
 
 // Kontrak warna design.md §4: danger merah, safe hijau, netral abu.
 export function markerColor(status: string): string {
   if (status === "shortage") return "#C62828";
   if (status === "surplus") return "#2E7D32";
-  return "#555555";
+  if (status === "balanced") return "#555555";
+  return "#92400E";
 }
 
-function fmtKg(v: number): string {
-  return `${Number(v).toLocaleString("id-ID")} kg`;
-}
-
-// Batas kasar Indonesia dari titik-titik lokasi (dengan padding) —
-// fit all markers tanpa hardcode bounding box.
-function fitBoundsFor(locations: any[]): [[number, number], [number, number]] {
-  const lats = locations.map((l) => Number(l.latitude));
-  const lons = locations.map((l) => Number(l.longitude));
+function fitBoundsFor(locations: readonly BalanceMapLocation[]): [[number, number], [number, number]] {
+  const points = locations.flatMap((location) => {
+    const latitude = Number(location.latitude);
+    const longitude = Number(location.longitude);
+    return Number.isFinite(latitude) && Number.isFinite(longitude) ? [[latitude, longitude] as const] : [];
+  });
+  if (!points.length) return [[105, -8], [109, -5]];
+  const lats = points.map(([latitude]) => latitude);
+  const lons = points.map(([, longitude]) => longitude);
   const pad = 1.6;
-  return [
-    [Math.min(...lons) - pad, Math.min(...lats) - pad],
-    [Math.max(...lons) + pad, Math.max(...lats) + pad],
-  ];
+  return [[Math.min(...lons) - pad, Math.min(...lats) - pad], [Math.max(...lons) + pad, Math.max(...lats) + pad]];
 }
 
 export default function SupplyMap({
   locations,
   commodity,
 }: {
-  locations: any[];
+  locations: readonly BalanceMapLocation[];
   commodity?: string;
 }) {
   const mapContainer = useRef<HTMLDivElement | null>(null);
@@ -67,20 +71,15 @@ export default function SupplyMap({
 
     locations.forEach((l) => {
       if (l.latitude == null || l.longitude == null) return;
-      const label =
-        l.status === "shortage"
-          ? `kurang ${fmtKg(l.shortage_kg)}`
-          : l.status === "surplus"
-            ? `lebih ${fmtKg(l.surplus_kg)}`
-            : "seimbang";
+      const label = formatBalanceGap(l);
       const el = document.createElement("div");
       el.className = `map-marker map-marker-${l.status}`;
-      el.title = `${l.location} — pasokan ${fmtKg(l.supply_kg)}, permintaan ${fmtKg(l.demand_kg)}, ${label}`;
+      el.title = `${l.location} — pasokan ${formatKg(l.supply_kg)}, permintaan ${formatKg(l.demand_kg)}, ${label}`;
       new maplibregl.Marker({ color: markerColor(l.status), element: el })
         .setLngLat([Number(l.longitude), Number(l.latitude)])
         .setPopup(
           new maplibregl.Popup({ offset: 12 }).setHTML(
-            `<strong>${l.location}</strong><br/>pasokan ${fmtKg(l.supply_kg)} · permintaan ${fmtKg(l.demand_kg)}<br/><em>${label}</em>`
+            `<strong>${l.location}</strong><br/>pasokan ${formatKg(l.supply_kg)} · permintaan ${formatKg(l.demand_kg)}<br/><em>${label}</em>`
           )
         )
         .addTo(map);
@@ -94,7 +93,7 @@ export default function SupplyMap({
 
   if (!locations?.length) {
     return (
-      <section className="map-card card" aria-busy="true">
+      <section className="map-card card" aria-label="Peta kondisi komoditas">
         <h3>Peta Kondisi</h3>
         <p className="map-empty">
           Belum ada data peta — pilih komoditas untuk memuat kondisi semua
@@ -115,6 +114,11 @@ export default function SupplyMap({
         <div ref={mapContainer} className="map-gl" />
         <div className="map-side">
           <div className="map-legend" aria-label="Legenda status">
+            <span className="map-column-label">Lokasi</span>
+            <span className="map-column-label">Status</span>
+            <span className="map-column-label">Pasokan</span>
+            <span className="map-column-label">Kebutuhan</span>
+            <span className="map-column-label">Selisih</span>
             <span className="map-legend-item">
               <i className="map-dot map-dot-shortage" /> Shortage
             </span>
@@ -130,16 +134,12 @@ export default function SupplyMap({
               <li key={l.location} className={`map-row map-row-${l.status}`}>
                 <i className={`map-dot map-dot-${l.status}`} aria-hidden="true" />
                 <span className="map-row-name">{l.location}</span>
-                <span className="map-row-numbers">
-                  {fmtKg(l.supply_kg)} / {fmtKg(l.demand_kg)}
+                <span className="map-row-status">
+                  {formatBalanceStatus(l.status)}
                 </span>
-                <span className="map-row-gap">
-                  {l.status === "shortage"
-                    ? `kurang ${fmtKg(l.shortage_kg)}`
-                    : l.status === "surplus"
-                      ? `lebih ${fmtKg(l.surplus_kg)}`
-                      : "seimbang"}
-                </span>
+                <span className="map-row-supply">Pasokan: {formatKg(l.supply_kg)}</span>
+                <span className="map-row-demand">Kebutuhan: {formatKg(l.demand_kg)}</span>
+                <span className="map-row-gap">Selisih: {formatBalanceGap(l)}</span>
               </li>
             ))}
           </ul>

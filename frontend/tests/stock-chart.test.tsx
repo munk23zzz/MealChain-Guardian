@@ -44,4 +44,12 @@ describe("StockChart", () => {
   it("tanpa data → null (bukan grafik kosong karangan)", () => {
     expect(renderToStaticMarkup(<StockChart locations={[]} />)).toBe("");
   });
+
+  it("tidak mengarang shortage atau surplus saat field backend hilang", () => {
+    const html = renderToStaticMarkup(
+      <StockChart locations={[{ ...LOCATIONS[0], shortage_kg: undefined }]} />
+    );
+    expect(html).toContain("stock-chart");
+    expect(html).not.toContain('dataKey="Shortage"');
+  });
 });

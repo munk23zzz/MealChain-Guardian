@@ -170,6 +170,21 @@ def _mk_decision(
     return did
 
 
+def _bind_decision(decision_id: str, batch: dict) -> None:
+    _db_exec(
+        "INSERT INTO decision_evidence (decision_id, evidence_type, payload) "
+        "VALUES (:d, 'human_inspection', CAST(:p AS jsonb))",
+        {
+            "d": decision_id,
+            "p": __import__("json").dumps({
+                "allocation_binding": True,
+                "supplier_id": batch["supplier_id"],
+                "batch_ids": [batch["batch_id"]],
+            }),
+        },
+    )
+
+
 def _cleanup_decision(decision_id: str) -> None:
     _db_exec(
         "DELETE FROM sap_mock_purchase_orders WHERE decision_id = :d",
@@ -265,12 +280,11 @@ def test_approval_summary_canonical_fields(client):
         assert body["quantity_kg"] == 488.88
         assert body["safe_delivered_cost"] is not None
         assert body["cost_breakdown"] is not None
-        # Target eksekusi MOCK + supplier dari DB (seed punya supplier Jakarta).
+        # Legacy decision has no batch binding: never guess a supplier.
         assert body["execution_target"] == "MOCK"
         assert body["material_number"] == "MAT-TELUR"
-        assert body["supplier"] is not None
-        assert body["supplier"]["name"]
-        assert "reliability_score" in body["supplier"]
+        assert body["supplier"] is None
+        assert any("supplier_unknown" in r for r in body["blocking_reasons"])
         # Verifier hasil server (bukan karangan UI).
         assert body["verifier"]["verdict"] in {
             "consistent",
@@ -293,11 +307,14 @@ def test_approval_summary_canonical_fields(client):
         _cleanup_decision(did)
 
 
-def test_approval_summary_or_complete_then_execute_parity(client):
-    """Verdict CONSISTENT + 1 approval → can_execute true; PO execute
-    men-parity-kan summary (supplier/material/quantity) — O-PO."""
-    did = _mk_decision(_jakarta_id(), _jakarta_id())
+@pytest.mark.parametrize("binding", ["explicit", "missing"])
+def test_approval_summary_or_complete_then_execute_parity(client, binding):
+    """Only a bound transfer promises a supplier and can execute."""
+    batch = _mk_batch(_bogor_id(), fail=False) if binding == "explicit" else None
+    did = _mk_decision(_bogor_id() if batch else _jakarta_id(), _jakarta_id())
     try:
+        if batch:
+            _bind_decision(did, batch)
         # Verifikasi + verdict konsisten (fixture DB level, server verdict).
         client.post(
             "/actions/verify", headers=_head_user(client), json={"decision_id": did}
@@ -318,6 +335,20 @@ def test_approval_summary_or_complete_then_execute_parity(client):
             f"/decisions/{did}/approval-summary", headers=_head_user(client)
         ).json()
         assert summary["approval_state"]["satisfied"] is True
+        if binding == "missing":
+            rx = client.post(
+                "/actions/execute", headers=_head_user(client), json={"decision_id": did}
+            )
+            assert rx.status_code == 409, rx.text
+            assert "supplier_unknown" in rx.json()["detail"]
+            assert summary["can_execute"] is False
+            assert summary["supplier"] is None
+            assert rx.json()["detail"] in summary["blocking_reasons"]
+            assert not _db_all(
+                "SELECT id FROM sap_mock_purchase_orders WHERE decision_id=:d", {"d": did}
+            )
+            return
+        assert summary["supplier"]["id"] == batch["supplier_id"]
         assert summary["can_execute"] is True
         assert summary["can_approve"] is True
         assert summary["approvals"], "approval tercatat harus tampil"
@@ -342,6 +373,8 @@ def test_approval_summary_or_complete_then_execute_parity(client):
         assert po[0][3] == "submitted"
     finally:
         _cleanup_decision(did)
+        if batch:
+            _cleanup_batch(batch)
 
 
 def test_approval_summary_dual_missing_role(client):
@@ -483,6 +516,7 @@ def test_approval_summary_missing_facts_null_not_fake(client):
         assert summary["material_number"] is None
         assert summary["safety"]["blocked"] is False
         assert summary["safety"]["worst_status"] is None
-        assert summary["can_execute"] is True
+        assert summary["can_execute"] is False
+        assert any("supplier_unknown" in r for r in summary["blocking_reasons"])
     finally:
         _cleanup_decision(did)

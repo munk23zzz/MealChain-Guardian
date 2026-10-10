@@ -87,6 +87,7 @@ describe("SupplyMap (MapLibre GL)", () => {
     );
     expect(html).toContain("map-empty");
     expect(html).not.toContain("map-gl");
+    expect(html).not.toContain("aria-busy");
   });
 
   it("menyediakan legenda status", () => {
@@ -94,5 +95,28 @@ describe("SupplyMap (MapLibre GL)", () => {
     expect(html).toContain("Shortage");
     expect(html).toContain("Surplus");
     expect(html).toContain("Seimbang");
+  });
+
+  it("memisahkan header kolom dan label angka untuk daftar lokasi", () => {
+    const html = renderToStaticMarkup(<SupplyMap locations={LOCATIONS} />);
+    expect(html).toContain("Lokasi");
+    expect(html).toContain("Status");
+    expect(html).toContain("Pasokan");
+    expect(html).toContain("Kebutuhan");
+    expect(html).toContain("Selisih");
+    expect(html).toContain("Pasokan: 300 kg");
+    expect(html).toContain("Kebutuhan: 1.080 kg");
+    expect(html).toContain("Selisih: kurang 780 kg");
+    expect(html).toContain("Shortage");
+    expect(html).toContain("Surplus");
+    expect(html).toContain("Seimbang");
+  });
+
+  it("tidak mengubah field angka yang hilang menjadi nol", () => {
+    const html = renderToStaticMarkup(
+      <SupplyMap locations={[{ ...LOCATIONS[0], demand_kg: undefined }]} />
+    );
+    expect(html).toContain("Kebutuhan: —");
+    expect(html).not.toContain("Kebutuhan: 0 kg");
   });
 });

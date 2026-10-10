@@ -222,6 +222,9 @@ async def _run_event1(
         session.add(decision)
         await session.flush()
 
+        from app.services.supplier_eligibility import persist_binding
+        await persist_binding(session, decision, chosen["candidate"])
+
         # TRACE (rekaman langkah; step itu sendiri sudah berjalan di atas)
         traces.append(
             _TraceStep(

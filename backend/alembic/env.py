@@ -17,6 +17,7 @@ from app.models import (  # noqa: F401
     locations,
     price_signals,
     sap_mock,
+    supplier_exclusions,
     suppliers,
     supply_records,
     users,
@@ -24,7 +25,9 @@ from app.models import (  # noqa: F401
 
 config = context.config
 
-DB_URL = os.environ.get("DATABASE_URL", "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain")
+DB_URL = os.environ.get(
+    "DATABASE_URL", "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+)
 config.set_main_option("sqlalchemy.url", DB_URL)
 
 if config.config_file_name is not None:

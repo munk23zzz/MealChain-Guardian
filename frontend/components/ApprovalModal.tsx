@@ -49,6 +49,8 @@ export default function ApprovalModal({
   // selalu false sebelum approval terpenuhi → deadlock approval.
   const canApprove = summary.can_approve === true;
   const canExecute = summary.can_execute === true;
+  const administrative = ["supplier_exclusion", "supplier_exclusion_restoration"].includes(summary.decision_type);
+  const governance = summary.supplier_governance;
   return (
     <div className="approval-modal" role="dialog" aria-label="Konfirmasi approval">
       <h3>Konfirmasi Approval</h3>
@@ -57,6 +59,14 @@ export default function ApprovalModal({
           Keputusan #{summary.decision_id} (v{summary.iteration ?? 1}) — status{" "}
           <Show value={summary.status} />
         </li>
+        {administrative ? <>
+          <li>{summary.decision_type === "supplier_exclusion_restoration" ? "Pemulihan supplier" : "Exclusion supplier"}</li>
+          <li>Supplier: <Show value={summary.supplier?.name} /></li>
+          <li>Scope SPPG: <Show value={summary.target_location} /></li>
+          <li>Alasan: <Show value={governance?.reason} /></li>
+          <li>Bukti: {(governance?.evidence_refs ?? []).map((ref: { type: string; id: string }) => `${ref.type}: ${ref.id}`).join(", ") || "unavailable"}</li>
+          <li>Aktif sampai pemulihan berbukti dengan approval baru. Batch FAIL tetap diblokir.</li>
+        </> : <>
         <li>
           Alokasi: <Show value={summary.source_location} /> →{" "}
           <Show value={summary.target_location} /> ({summary.decision_type})
@@ -70,6 +80,7 @@ export default function ApprovalModal({
           <Show value={summary.material_number} />
         </li>
         <li>Total biaya: {formatIDR(summary.safe_delivered_cost)}</li>
+        </>}
         <li>
           Safety batch sumber:{" "}
           <Show value={safety.worst_status ?? null} />
@@ -89,8 +100,8 @@ export default function ApprovalModal({
             : "expired"}
         </li>
         <li>
-          Target eksekusi: <Show value={summary.execution_target} /> (PO mock,
-          berlabel Data Simulasi)
+          Target eksekusi: <Show value={summary.execution_target} />
+          {administrative ? " (administrasi lokal, tanpa PO)" : " (PO mock, berlabel Data Simulasi)"}
         </li>
       </ul>
       {blocking.length > 0 && (
@@ -105,7 +116,7 @@ export default function ApprovalModal({
           type="button"
           className="button"
           onClick={onConfirm}
-          disabled={!canApprove}
+          disabled={!canApprove || (administrative && !governance)}
           title={
             canApprove
               ? undefined

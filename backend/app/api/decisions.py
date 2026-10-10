@@ -7,6 +7,7 @@
 
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -30,15 +31,13 @@ DECISION_MUTATING_ROLES = ("sppg_head", "sppg_nutritionist")
 
 class DecisionCreate(BaseModel):
     recommendation: dict
-    ttl_minutes: int = Field(
-        default=DEFAULT_TTL_MINUTES, ge=1, le=1440
+    ttl_minutes: int = Field(default=DEFAULT_TTL_MINUTES, ge=1, le=1440)
+    decision_type: Literal["regional_balance", "price_anomaly", "safety_disruption"] = (
+        "regional_balance"
     )
-    decision_type: str = "regional_balance"
 
 
-async def _assert_target_location_allowed(
-    db: AsyncSession, user: User, target_location_id
-) -> None:
+async def _assert_target_location_allowed(db: AsyncSession, user: User, target_location_id) -> None:
     """O-SEC-2: SPPG hanya boleh menyasar lokasi miliknya.
 
     bgn_monitor read-only sehingga tak pernah sampai sini via create.
@@ -63,9 +62,7 @@ async def _assert_target_location_allowed(
         )
 
 
-async def _assert_decision_readable(
-    db: AsyncSession, user: User, row: Decision
-) -> None:
+async def _assert_decision_readable(db: AsyncSession, user: User, row: Decision) -> None:
     """O-SEC-2: SPPG hanya membaca decision target lokasinya;
     bgn_monitor membaca semua (read-only role).
 
@@ -93,9 +90,7 @@ def _validity(expires_at: datetime) -> dict:
     now = datetime.now(timezone.utc)
     return {
         "valid": now < expires_at,
-        "seconds_remaining": max(
-            0, int((expires_at - now).total_seconds())
-        ),
+        "seconds_remaining": max(0, int((expires_at - now).total_seconds())),
     }
 
 
@@ -109,9 +104,7 @@ def _extract(recommendation: dict):
         "target_location": cand.get("destination_location"),
         "commodity": cand.get("commodity"),
         "quantity_kg": Decimal(str(qty)) if qty is not None else None,
-        "safe_delivered_cost": (
-            Decimal(str(sdc)) if sdc is not None else None
-        ),
+        "safe_delivered_cost": (Decimal(str(sdc)) if sdc is not None else None),
         "cost_breakdown": recommendation.get("cost_breakdown"),
     }
 
@@ -131,20 +124,14 @@ async def create_decision(
     async def _loc_id(name):
         if not name:
             return None
-        row = (
-            await db.execute(
-                select(Location).where(Location.name == name)
-            )
-        ).scalar_one_or_none()
+        row = (await db.execute(select(Location).where(Location.name == name))).scalar_one_or_none()
         return row.id if row else None
 
     async def _com_id(name):
         if not name:
             return None
         row = (
-            await db.execute(
-                select(Commodity).where(Commodity.name == name)
-            )
+            await db.execute(select(Commodity).where(Commodity.name == name))
         ).scalar_one_or_none()
         return row.id if row else None
 
@@ -162,10 +149,12 @@ async def create_decision(
         expires_at=expires_at,
     )
     # O-SEC-2: scope server-side SEBELUM persist.
-    await _assert_target_location_allowed(
-        db, user, decision.target_location_id
-    )
+    await _assert_target_location_allowed(db, user, decision.target_location_id)
     db.add(decision)
+    await db.flush()
+    from app.services.supplier_eligibility import persist_binding
+
+    await persist_binding(db, decision, payload.recommendation.get("candidate", {}))
     await db.commit()
     return {
         "decision_id": str(decision.id),
@@ -184,12 +173,14 @@ async def list_decisions(
 ):
     """Feed keputusan (S3-12): baris aktual, terbaru dulu, tanpa karangan."""
     rows = (
-        await db.execute(
-            select(Decision).order_by(
-                Decision.created_at.desc(), Decision.id.desc()
+        (
+            await db.execute(
+                select(Decision).order_by(Decision.created_at.desc(), Decision.id.desc())
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     items = []
     for row in rows:
         validity = _validity(row.expires_at)
@@ -199,15 +190,9 @@ async def list_decisions(
                 "decision_type": row.decision_type,
                 "status": row.status,
                 "proposed_by": row.proposed_by,
-                "quantity_kg": (
-                    float(row.quantity_kg)
-                    if row.quantity_kg is not None
-                    else None
-                ),
+                "quantity_kg": (float(row.quantity_kg) if row.quantity_kg is not None else None),
                 "safe_delivered_cost": (
-                    float(row.safe_delivered_cost)
-                    if row.safe_delivered_cost is not None
-                    else None
+                    float(row.safe_delivered_cost) if row.safe_delivered_cost is not None else None
                 ),
                 "expires_at": row.expires_at.isoformat(),
                 "created_at": row.created_at.isoformat(),
@@ -215,9 +200,7 @@ async def list_decisions(
                 "seconds_remaining": validity["seconds_remaining"],
                 "rejection_reason": row.rejection_reason,
                 "iteration": row.iteration or 1,
-                "supersedes_id": (
-                    str(row.supersedes_id) if row.supersedes_id else None
-                ),
+                "supersedes_id": (str(row.supersedes_id) if row.supersedes_id else None),
                 "demo_case": row.demo_case,
                 # Konteks verifikasi — UI pakai ini untuk menandai kartu
                 # yang butuh langkah Verifikasi sebelum bisa dieksekusi.
@@ -249,19 +232,21 @@ async def get_decision_chain(
         if not row.supersedes_id:
             return None
         return (
-            await db.execute(
-                select(Decision).where(Decision.id == row.supersedes_id)
-            )
+            await db.execute(select(Decision).where(Decision.id == row.supersedes_id))
         ).scalar_one_or_none()
 
     async def _children_of(row: Decision):
         return (
-            await db.execute(
-                select(Decision)
-                .where(Decision.supersedes_id == row.id)
-                .order_by(Decision.iteration.asc(), Decision.created_at.asc())
+            (
+                await db.execute(
+                    select(Decision)
+                    .where(Decision.supersedes_id == row.id)
+                    .order_by(Decision.iteration.asc(), Decision.created_at.asc())
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
     # Naik ke root, lalu turun seluruh cabang utama.
     root = anchor
@@ -282,13 +267,9 @@ async def get_decision_chain(
             "iteration": r.iteration or 1,
             "status": r.status,
             "rejection_reason": r.rejection_reason,
-            "quantity_kg": (
-                float(r.quantity_kg) if r.quantity_kg is not None else None
-            ),
+            "quantity_kg": (float(r.quantity_kg) if r.quantity_kg is not None else None),
             "safe_delivered_cost": (
-                float(r.safe_delivered_cost)
-                if r.safe_delivered_cost is not None
-                else None
+                float(r.safe_delivered_cost) if r.safe_delivered_cost is not None else None
             ),
             "created_at": r.created_at.isoformat(),
             "demo_case": r.demo_case,
@@ -313,12 +294,16 @@ async def get_decision_traces(
     from app.models import AgentTrace
 
     rows = (
-        await db.execute(
-            select(AgentTrace)
-            .where(AgentTrace.decision_id == decision_id)
-            .order_by(AgentTrace.step_at.asc(), AgentTrace.id.asc())
+        (
+            await db.execute(
+                select(AgentTrace)
+                .where(AgentTrace.decision_id == decision_id)
+                .order_by(AgentTrace.step_at.asc(), AgentTrace.id.asc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     steps = [
         {
             "step_name": row.step_name,
@@ -375,9 +360,7 @@ async def get_decision(
         "commodity_id": str(row.commodity_id) if row.commodity_id else None,
         "quantity_kg": float(row.quantity_kg) if row.quantity_kg is not None else None,
         "safe_delivered_cost": (
-            float(row.safe_delivered_cost)
-            if row.safe_delivered_cost is not None
-            else None
+            float(row.safe_delivered_cost) if row.safe_delivered_cost is not None else None
         ),
         "cost_breakdown": row.cost_breakdown,
         "expires_at": row.expires_at.isoformat(),

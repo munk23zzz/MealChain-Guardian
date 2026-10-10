@@ -9,6 +9,7 @@ from app.api.actions import router as actions_router
 from app.api.auth import router as auth_router
 from app.api.balance import router as balance_router
 from app.api.batches import router as batches_router
+from app.api.compliance import router as compliance_router
 from app.api.cost import router as cost_router
 from app.api.decisions import router as decisions_router
 from app.api.demand import forecast_router
@@ -24,6 +25,8 @@ from app.api.ledger import router as ledger_router
 from app.api.logistics import router as logistics_router
 from app.api.price import router as price_router
 from app.api.safety import router as safety_router
+from app.api.supplier_exclusion_context import router as supplier_exclusion_context_router
+from app.api.supplier_exclusions import router as supplier_exclusions_router
 from app.api.supply import router as supply_router
 
 
@@ -70,6 +73,10 @@ app.include_router(demo_router)
 app.include_router(kpi_router)
 app.include_router(ledger_router)
 app.include_router(dossier_router)
+app.include_router(compliance_router)
+
+app.include_router(supplier_exclusions_router)
+app.include_router(supplier_exclusion_context_router)
 
 
 @app.get("/health")

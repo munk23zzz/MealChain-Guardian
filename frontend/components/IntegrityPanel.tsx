@@ -13,6 +13,9 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { fetchDossier, verifyLedger } from "../lib/api";
+import ComplianceEvidencePanel from "./ComplianceEvidencePanel";
+import { dossierToCsv, dossierToJson, downloadText } from "../lib/export";
+import type { ComplianceDossier } from "../lib/evidence";
 
 type LedgerResult = {
   valid: boolean;
@@ -22,7 +25,7 @@ type LedgerResult = {
   reason?: string | null;
 };
 
-type DossierResult = {
+type DossierResult = ComplianceDossier & {
   decision_id: string;
   content_address: string;
   signature: { state: string; algorithm?: string; reason?: string };
@@ -104,20 +107,27 @@ export default function IntegrityPanel({
         {!decisionId && <p>pilih keputusan untuk melihat dossier</p>}
         {decisionId && dossier === null && <p>memuat dossier…</p>}
         {dossier !== null && (
-          <dl>
-            <dt>Alamat konten</dt>
-            <dd data-testid="dossier-address">
-              {dossier.content_address.slice(0, 24)}…
-            </dd>
-            <dt>Tanda tangan</dt>
-            <dd data-testid="dossier-signature">
-              {dossier.signature.state === "signed"
-                ? `✅ ${dossier.signature.algorithm} · verifikasi ${
-                    dossier.verify ? "BERHASIL" : "GAGAL"
-                  }`
-                : `⚠️ unsigned — ${dossier.signature.reason ?? "kunci tidak diset"}`}
-            </dd>
-          </dl>
+          <>
+            <dl>
+              <dt>Alamat konten</dt>
+              <dd data-testid="dossier-address">
+                {dossier.content_address.slice(0, 24)}…
+              </dd>
+              <dt>Tanda tangan</dt>
+              <dd data-testid="dossier-signature">
+                {dossier.signature.state === "signed"
+                  ? `✅ ${dossier.signature.algorithm} · verifikasi ${
+                      dossier.verify ? "BERHASIL" : "GAGAL"
+                    }`
+                  : `⚠️ unsigned — ${dossier.signature.reason ?? "kunci tidak diset"}`}
+              </dd>
+            </dl>
+            <ComplianceEvidencePanel dossier={dossier} />
+            <div className="integrity-export-actions" data-testid="dossier-export-actions">
+              <button type="button" onClick={() => downloadText(`dossier-${dossier.decision_id}.json`, dossierToJson(dossier), "application/json;charset=utf-8")}>Export JSON dossier</button>
+              <button type="button" onClick={() => downloadText(`evidence-${dossier.decision_id}.csv`, dossierToCsv(dossier), "text/csv;charset=utf-8")}>Export CSV bukti</button>
+            </div>
+          </>
         )}
       </div>
 

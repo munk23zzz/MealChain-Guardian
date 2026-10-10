@@ -8,6 +8,7 @@ from app.models.kpi_facts import DeliveryEvent, DisposalEvent, MenuPlan
 from app.models.locations import Location
 from app.models.price_signals import PriceSignal
 from app.models.sap_mock import SapMockMaterialStock, SapMockPurchaseOrder
+from app.models.supplier_exclusions import SupplierExclusion
 from app.models.suppliers import Supplier
 from app.models.supply_records import SupplyRecord
 from app.models.users import User
@@ -17,6 +18,7 @@ __all__ = [
     "Commodity",
     "User",
     "Supplier",
+    "SupplierExclusion",
     "SupplyRecord",
     "DemandRecord",
     "PriceSignal",
