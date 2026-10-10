@@ -132,11 +132,20 @@ dl dd,
   gap: 12px;
 }
 
-.card h3 {
+.card h3,
+.card h2 {
+  /* Judul kartu seragam apa pun tingkat heading-nya: kartu memakai h3, tetapi
+     kepala kartu yang berdiri di tingkat halaman boleh memakai h2 — ukurannya
+     tidak boleh ikut membesar seperti heading halaman. */
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0;
   color: var(--navy-900);
+}
+
+.card-header h2,
+.card-header h3 {
+  margin: 0;
 }
 
 /* Kartu feed: padatkan — baris meta inline, bukan dl gemuk */
