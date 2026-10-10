@@ -11,6 +11,8 @@
 // breadcrumb, bento grid 7 kartu (4 atas + 3 bawah), ikon inline SVG.
 // Kontrak markup untuk test TIDAK berubah (class kpi-* dipin).
 
+import PageHeader from "./PageHeader";
+
 const UNIT_FMT: Record<string, (v: string) => string> = {
   IDR: (v) =>
     "Rp" + Number(v).toLocaleString("id-ID", { maximumFractionDigits: 0 }),
@@ -23,6 +25,25 @@ function fmtValue(unit: string, value: string | null): string | null {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+/** Tanggal periode dalam bahasa manusia (acuan: "24 Sep 2026 22:08 WIB").
+ *  Envelope membawa ISO lengkap — menampilkannya mentah itu tidak terbaca. */
+function fmtPeriodDate(iso?: string | null): string {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/** UUID panjang dipotong supaya pill tetap ringkas tapi masih bisa dilacak. */
+function shortId(id?: string | null): string {
+  if (!id) return "global";
+  return id.length > 10 ? `${id.slice(0, 8)}…` : id;
 }
 
 const STATE_LABEL: Record<string, string> = {
@@ -96,17 +117,11 @@ export default function KPIDashboard({
 }) {
   if (loading) {
     return (
-      <section className="kpi-dashboard card" aria-busy="true">
-        <div className="kpi-console-header">
-          <div>
-            <div className="kpi-breadcrumb" aria-hidden="true">
-              <span>Guardian Core</span>
-              <span className="kpi-breadcrumb-sep">/</span>
-              <span>KPI &amp; Analytics</span>
-            </div>
-            <h3>KPI</h3>
-          </div>
-        </div>
+      <section className="kpi-dashboard" aria-busy="true">
+        <PageHeader
+          title="KPI"
+          description="Tujuh indikator kontinuitas pangan institusional dari /kpi."
+        />
         {/* Kelas kpi-loading tetap ada (dipin tes) tetapi hanya untuk pembaca
             layar: tampilannya kini skeleton, bukan teks "Memuat…" berkedip. */}
         <p className="kpi-loading sr-only" aria-live="polite">
@@ -124,17 +139,11 @@ export default function KPIDashboard({
 
   if (error) {
     return (
-      <section className="kpi-dashboard card">
-        <div className="kpi-console-header">
-          <div>
-            <div className="kpi-breadcrumb" aria-hidden="true">
-              <span>Guardian Core</span>
-              <span className="kpi-breadcrumb-sep">/</span>
-              <span>KPI &amp; Analytics</span>
-            </div>
-            <h3>KPI</h3>
-          </div>
-        </div>
+      <section className="kpi-dashboard">
+        <PageHeader
+          title="KPI"
+          description="Tujuh indikator kontinuitas pangan institusional dari /kpi."
+        />
         <p className="kpi-error status-danger" role="alert">
           {error}
         </p>
@@ -152,48 +161,30 @@ export default function KPIDashboard({
   }
 
   return (
-    <section className="kpi-dashboard card">
-      {/* Header konsol ala mockup Stitch: breadcrumb + judul + pill scope */}
-      <div className="kpi-console-header">
-        <div>
-          <div className="kpi-breadcrumb" aria-hidden="true">
-            <span>Guardian Core</span>
-            <span className="kpi-breadcrumb-sep">/</span>
-            <span>KPI &amp; Analytics Dashboard</span>
-          </div>
-          <h3>KPI</h3>
-          {/* Pill filter periode + scope — data murni dari envelope live */}
-          <div className="kpi-scope" data-testid="kpi-scope">
-            <span className="kpi-scope-pill kpi-scope-period">
-              <svg
-                viewBox="0 0 24 24"
-                width="12"
-                height="12"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                aria-hidden="true"
-              >
-                <path d="M4 6h16v14H4zM8 3v5M16 3v5M4 11h16" />
-              </svg>
-              Periode {kpi.period?.start ?? "-"} s.d. {kpi.period?.end ?? "-"}
+    <section className="kpi-dashboard">
+      <PageHeader
+        title="KPI"
+        description="Tujuh indikator kontinuitas pangan institusional dari /kpi. Nilai null tidak pernah diganti 0 — keadaan dan alasannya selalu terlihat."
+        meta={
+          <span className="page-header-pills" data-testid="kpi-scope">
+            <span className="commodity-pill">
+              Periode {fmtPeriodDate(kpi.period?.start)} – {fmtPeriodDate(kpi.period?.end)}
             </span>
-            <span className="kpi-scope-pill kpi-scope-loc">
-              scope {kpi.scope?.location_id ?? "global"} ({kpi.scope?.role ?? "-"})
+            <span className="commodity-pill">
+              scope {shortId(kpi.scope?.location_id)} ({kpi.scope?.role ?? "-"})
             </span>
-          </div>
-        </div>
-      </div>
-      {/* Bento grid ala Stitch: 4 kartu pertama sel lebar, 3 sisanya rapat */}
+          </span>
+        }
+      />
+      {/* Grid kartu metrik tiga kolom (pola halaman KPI acuan). */}
       <div className="kpi-grid">
         {kpi.metrics.map((m: any) => {
           const shown = fmtValue(m.unit, m.value);
           const trend = trendClass(m.trend);
           return (
-            <div key={m.name} className={`kpi-card kpi-${m.state}`}>
-              <div className="card-header">
-                <h4>{m.name}</h4>
+            <article key={m.name} className={`kpi-card card kpi-${m.state}`}>
+              <div className="kpi-card-top">
+                <p className="kpi-card-name">{m.name}</p>
                 <MetricIcon name={m.name} />
               </div>
               {shown !== null ? (
@@ -204,9 +195,16 @@ export default function KPIDashboard({
               ) : (
                 <p className="kpi-value kpi-value-none">—</p>
               )}
-              <span className={`kpi-state kpi-state-${m.state}`}>
-                {STATE_LABEL[m.state] ?? m.state}
-              </span>
+              <p className="kpi-card-flags">
+                <span className={`kpi-state kpi-state-${m.state}`}>
+                  {STATE_LABEL[m.state] ?? m.state}
+                </span>
+                {trend && (
+                  <span className={`kpi-trend ${trend}`}>
+                    {m.trend === "up" ? "▲ naik" : m.trend === "down" ? "▼ turun" : "■ datar"}
+                  </span>
+                )}
+              </p>
               {m.reason && <p className="kpi-reason">{m.reason}</p>}
               <p className="kpi-meta">
                 sampel {m.sample_count ?? 0}
@@ -214,62 +212,7 @@ export default function KPIDashboard({
                   ? ` · coverage ${Number(m.coverage).toLocaleString("id-ID")}`
                   : ""}
               </p>
-              {trend && (
-                <p className={`kpi-trend ${trend}`}>
-                  {m.trend === "up" ? (
-                    <>
-                      <svg
-                        viewBox="0 0 24 24"
-                        width="11"
-                        height="11"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="M12 19V5m0 0-6 6m6-6 6 6" />
-                      </svg>{" "}
-                      naik
-                    </>
-                  ) : m.trend === "down" ? (
-                    <>
-                      <svg
-                        viewBox="0 0 24 24"
-                        width="11"
-                        height="11"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="M12 5v14m0 0-6-6m6 6 6-6" />
-                      </svg>{" "}
-                      turun
-                    </>
-                  ) : (
-                    <>
-                      <svg
-                        viewBox="0 0 24 24"
-                        width="11"
-                        height="11"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        aria-hidden="true"
-                      >
-                        <path d="M4 12h16" />
-                      </svg>{" "}
-                      datar
-                    </>
-                  )}
-                </p>
-              )}
-            </div>
+            </article>
           );
         })}
       </div>

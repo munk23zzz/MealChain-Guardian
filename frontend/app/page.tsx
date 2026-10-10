@@ -37,6 +37,7 @@ import DecisionActions from "../components/DecisionActions";
 import DecisionChain from "../components/DecisionChain";
 import ProviderPanel from "../components/ProviderPanel";
 import RoleHero from "../components/RoleHero";
+import PageHeader from "../components/PageHeader";
 import KPIDashboard from "../components/KPIDashboard";
 import KpiTargets from "../components/KpiTargets";
 import OpsConsole from "../components/OpsConsole";
@@ -164,6 +165,9 @@ export default function Home() {
   // Feed traceable (arah Roy 2026-10-09): filter status = visual only;
   // EXPIRED TIDAK disembunyikan. Hook di level atas (rules-of-hooks).
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  // Feed berisi puluhan keputusan; tampilkan bertahap supaya halaman tidak
+  // menjadi gulungan panjang. Jumlah tersisa selalu dinyatakan terang-terangan.
+  const [feedLimit, setFeedLimit] = useState(24);
 
   const isApprover = APPROVER_ROLES.has(role ?? "");
 
@@ -383,6 +387,12 @@ export default function Home() {
   const visibleDecisions = statusFilter
     ? decisions.filter((d) => (d.status ?? "").toUpperCase() === statusFilter)
     : decisions;
+  // Status yang menunggu tindakan manusia — dipakai sebagai meta kepala feed
+  // (acuan: "2 menunggu keputusan · 2 ber-flag Verifier · 1 dieksekusi").
+  const perluKeputusan = ["PENDING_APPROVAL", "NEEDS_VERIFICATION", "VERIFIER_FLAGGED"].reduce(
+    (total, s) => total + (statusCounts[s] ?? 0),
+    0,
+  );
 
   // PRD 2.4: nav 5 tab; demo-control approver-only; agent-log semua role
   // (monitor read-only justru butuh observability).
@@ -721,13 +731,10 @@ export default function Home() {
              + seed kasus. Aksi tetap via API resmi; tidak ada chaos
              injection di luar kontrak backend (arsitektur tidak diubah). */
           <section className="demo-control-section">
-            <h2>Demo Control Panel</h2>
-            <p className="section-sub">
-              Skenario deterministik untuk demo day — jalankan lewat API resmi
-              (tanpa mock): muat kasus, picu Event 2 (price anomaly) &amp;
-              Event 3 (thermal excursion) dari konsol, lalu lihat hasilnya di
-              tab Recommendations &amp; Agent Log.
-            </p>
+            <PageHeader
+              title="Demo Control Panel"
+              description="Skenario deterministik untuk demo day — dijalankan lewat API resmi (tanpa mock): muat kasus, picu Event 2 (price anomaly) &amp; Event 3 (thermal excursion) dari konsol, lalu lihat hasilnya di tab Recommendations &amp; Agent Log."
+            />
             <button
               type="button"
               className="button"
@@ -757,7 +764,20 @@ export default function Home() {
         {tab === "recommendations" && (
           <>
             <section className="feed-section">
-              <h2>Recommendation Feed</h2>
+              <PageHeader
+                title="Recommendation Feed"
+                description="Urutan berdasarkan urgensi: isu keamanan lebih dulu, lalu ketidakseimbangan regional, terakhir anomali harga."
+                meta={
+                  <>
+                    <span className="commodity-pill">
+                      {decisions.length} rekomendasi
+                    </span>
+                    <span className="commodity-pill">
+                      {perluKeputusan} menunggu keputusan
+                    </span>
+                  </>
+                }
+              />
               {error && (
                 <p className="status-danger">
                   Gagal memuat data: {error}{" "}
@@ -786,7 +806,10 @@ export default function Home() {
                   <button
                     type="button"
                     className={`filter-chip${statusFilter === null ? " filter-chip-active" : ""}`}
-                    onClick={() => setStatusFilter(null)}
+                    onClick={() => {
+                      setStatusFilter(null);
+                      setFeedLimit(24);
+                    }}
                   >
                     Semua
                     <span className="legend-count">{decisions.length}</span>
@@ -798,9 +821,10 @@ export default function Home() {
                         key={s}
                         type="button"
                         className={`filter-chip${statusFilter === s ? " filter-chip-active" : ""}`}
-                        onClick={() =>
-                          setStatusFilter(statusFilter === s ? null : s)
-                        }
+                        onClick={() => {
+                          setStatusFilter(statusFilter === s ? null : s);
+                          setFeedLimit(24);
+                        }}
                       >
                         {s}
                         <span className="legend-count">{n}</span>
@@ -810,7 +834,7 @@ export default function Home() {
               )}
 
               <div className="feed">
-                {visibleDecisions.map((d) => (
+                {visibleDecisions.slice(0, feedLimit).map((d) => (
                   <div key={d.decision_id}>
                     <button
                       type="button"
@@ -825,6 +849,23 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+              {visibleDecisions.length > feedLimit && (
+                <div className="feed-more">
+                  <p>
+                    Menampilkan {feedLimit} dari {visibleDecisions.length}{" "}
+                    rekomendasi
+                    {statusFilter ? ` berstatus ${statusFilter}` : ""}.
+                  </p>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={() => setFeedLimit(feedLimit + 24)}
+                  >
+                    Tampilkan{" "}
+                    {Math.min(24, visibleDecisions.length - feedLimit)} lagi
+                  </button>
+                </div>
+              )}
             </section>
 
             {selected && (
@@ -871,16 +912,17 @@ export default function Home() {
             ada yang terpilih. */}
         {tab === "agent-log" && (
           <section className="agent-log-section">
-            <h2>Agent Activity Log</h2>
-            {!selected && (
-              <p className="section-sub">
-                Pilih keputusan untuk melihat trace reasoning agent-nya:
+            <PageHeader
+              title="Agent Activity Log"
+              description="Jejak reasoning tiap langkah agen untuk satu keputusan — model, durasi, dan pesan apa adanya dari trace; tidak ada baris yang dikarang."
+              meta={
                 <select
+                  className="page-header-select"
                   aria-label="Pilih keputusan"
-                  value=""
+                  value={selectedId ?? ""}
                   onChange={(e) => setSelectedId(e.target.value)}
                 >
-                  <option value="">— pilih —</option>
+                  <option value="">— pilih keputusan —</option>
                   {decisions.map((d) => (
                     <option key={d.decision_id} value={d.decision_id}>
                       {(d.decision_type ?? "keputusan")} · {d.status} ·{" "}
@@ -888,8 +930,8 @@ export default function Home() {
                     </option>
                   ))}
                 </select>
-              </p>
-            )}
+              }
+            />
             {selected && (
               <p className="section-sub">
                 Trace untuk{" "}
