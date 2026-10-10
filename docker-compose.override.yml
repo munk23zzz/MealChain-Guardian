@@ -1,0 +1,17 @@
+# Override compose untuk lingkungan yang tidak punya localhost:8000 sendiri —
+# terutama GitHub Codespaces, juga aman untuk pemakaian lokal biasa.
+#
+# Kenapa: docker-compose.yml mengunci NEXT_PUBLIC_API_URL ke http://localhost:8000.
+# Kalau UI dibuka dari URL publik (mis. https://<codespace>-3000.app.github.dev),
+# browser akan mencari localhost:8000 di perangkat pengunjung dan gagal.
+# Dengan nilai kosong, UI memakai path relatif (/auth/login, /decisions, ...)
+# dan frontend/next.config.js meneruskannya ke kontainer `backend`. Satu origin,
+# jadi tidak ada CORS dan port 8000 tidak perlu dibuka ke publik.
+#
+# Kalau kamu menjalankan frontend di luar Docker (npm run dev di host),
+# set BACKEND_INTERNAL_URL=http://localhost:8000 karena nama host `backend`
+# hanya bisa di-resolve di dalam jaringan compose.
+services:
+  frontend:
+    environment:
+      NEXT_PUBLIC_API_URL: ""
