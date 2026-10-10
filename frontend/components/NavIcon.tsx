@@ -72,3 +72,61 @@ export default function NavIcon({ id, size = 16 }: { id: NavId; size?: number })
     </svg>
   );
 }
+
+// --- Ikon kerangka sidebar (bentuk mengikuti ikon acuan) ---
+
+function Glyph({ children, size = 16, strokeWidth = 1.8 }: { children: ReactNode; size?: number; strokeWidth?: number }) {
+  return (
+    <svg
+      aria-hidden="true"
+      focusable="false"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {children}
+    </svg>
+  );
+}
+
+export function LogoMark({ size = 26 }: { size?: number }) {
+  return (
+    <Glyph size={size} strokeWidth={1.7}>
+      <path d="M12 3 4.5 6v5.5c0 4.4 3.1 8.4 7.5 9.5 4.4-1.1 7.5-5.1 7.5-9.5V6z" />
+      <path d="m8.8 12 2.2 2.2 4.4-4.4" />
+    </Glyph>
+  );
+}
+
+export function ChevronIcon({ collapsed = false }: { collapsed?: boolean }) {
+  return (
+    <Glyph strokeWidth={2}>
+      {collapsed ? <path d="m9 18 6-6-6-6" /> : <path d="m15 18-6-6 6-6" />}
+    </Glyph>
+  );
+}
+
+export function LogoutIcon() {
+  return (
+    <Glyph>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="m16 17 5-5-5-5" />
+      <path d="M21 12H9" />
+    </Glyph>
+  );
+}
+
+export function SeedIcon() {
+  return (
+    <Glyph>
+      <ellipse cx="12" cy="5" rx="8" ry="3" />
+      <path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
+      <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
+    </Glyph>
+  );
+}

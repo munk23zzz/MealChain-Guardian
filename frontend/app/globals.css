@@ -921,7 +921,8 @@ a:focus-visible {
 /* ============ S4-06 polish: sidebar shell + map + chart ============ */
 .app-shell {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  /* 256px = lebar rail acuan (w-64); menyusut saat dilipat. */
+  grid-template-columns: var(--side-w, 256px) minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -930,15 +931,17 @@ a:focus-visible {
   min-width: 0;
 }
 
-/* Sidebar mengikuti acuan: rail putih, item navy, item aktif pill navy-700 */
+/* Sidebar mengikuti acuan: rail BIRU BRAND (#0969DA) dengan teks putih, item
+   aktif lebih gelap (#0550AE), ikon 16px, identitas pemakai di kaki rail,
+   dan tombol lipat di baris brand. */
 .side-nav {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 18px 14px;
-  background: var(--surface);
-  color: var(--ink);
-  border-right: 1px solid var(--line);
+  gap: 6px;
+  padding: 12px 8px 10px;
+  background: var(--accent-strong);
+  color: #fff;
+  border-right: 0;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -946,40 +949,75 @@ a:focus-visible {
 
 .side-brand {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 4px 10px;
+}
+
+.side-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  color: #fff;
 }
 
 .side-brand strong {
-  font-size: 15px;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--navy-900);
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.side-role {
-  font-size: 12px;
-  font-family: var(--font-data);
-  color: var(--ink-muted);
+.side-collapse {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.side-collapse:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
 }
 
 .side-tabs {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .side-tab {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  min-height: 44px;
   text-align: left;
   padding: 8px 12px;
   border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--ink);
+  color: rgba(255, 255, 255, 0.7);
   font-size: 14px;
   cursor: pointer;
   transition: background 0.18s ease, color 0.18s ease;
@@ -989,37 +1027,156 @@ a:focus-visible {
   flex: none;
 }
 
+.side-tab-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .side-tab:hover {
-  background: rgba(9, 105, 218, 0.08);
-  color: var(--accent-strong);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 .side-tab-active,
 .side-tab-active:hover {
-  background: var(--navy-700);
+  background: var(--accent);
   color: #fff;
-  border-color: var(--navy-700);
+  border-color: transparent;
   font-weight: 500;
 }
 
-.side-actions {
+.side-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-top: auto;
+  padding: 12px 4px 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.side-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.side-user-meta {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.side-user-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.side-user-sub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.side-logout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.side-logout:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+/* Cincin fokus putih: outline gelap tidak terbaca di atas rail biru. */
+.side-nav :focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 2px;
+}
+
+.side-actions {
+  margin-top: 8px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
 .side-actions .button {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  color: var(--ink);
-  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  font-size: 13px;
+}
+
+.side-actions .button svg {
+  flex: none;
 }
 
 .side-actions .button:hover {
-  background: rgba(9, 105, 218, 0.08);
-  color: var(--accent-strong);
-  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Rail ringkas (68px): label disembunyikan, ikon tetap. Hanya layar lebar —
+   di bawah 860px nav sudah jadi baris horizontal (lihat media query di bawah). */
+@media (min-width: 861px) {
+  .app-shell:has(.side-nav-collapsed) {
+    --side-w: 68px;
+  }
+
+  .side-nav-collapsed .side-brand,
+  .side-nav-collapsed .side-user,
+  .side-nav-collapsed .side-tab {
+    justify-content: center;
+  }
+
+  .side-nav-collapsed .side-brand strong,
+  .side-nav-collapsed .side-tab-label,
+  .side-nav-collapsed .side-user-meta,
+  .side-nav-collapsed .side-logout,
+  .side-nav-collapsed .side-action-label {
+    display: none;
+  }
+
+  .side-nav-collapsed .side-collapse {
+    margin-left: 0;
+  }
+
+  .side-nav-collapsed .side-tab {
+    padding: 8px;
+  }
 }
 
 /* Peta + grafik — panel tersendiri di atas latar abu */

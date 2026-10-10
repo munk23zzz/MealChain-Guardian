@@ -22,7 +22,12 @@ import {
 } from "../lib/api";
 import { decodeRole } from "../lib/auth";
 import StatusBadge from "../components/StatusBadge";
-import NavIcon from "../components/NavIcon";
+import NavIcon, {
+  ChevronIcon,
+  LogoMark,
+  LogoutIcon,
+  SeedIcon,
+} from "../components/NavIcon";
 import RecommendationCard from "../components/RecommendationCard";
 import AgentTraceViewer from "../components/AgentTraceViewer";
 import IntegrityPanel from "../components/IntegrityPanel";
@@ -116,6 +121,8 @@ export default function Home() {
   const [mapData, setMapData] = useState<any>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapRefresh, setMapRefresh] = useState(0);
+  // Kerangka acuan: rail bisa dilipat (lebar 68px, label disembunyikan).
+  const [sideCollapsed, setSideCollapsed] = useState(false);
   useEffect(() => {
     if (!token || tab !== "overview") return;
     let stopped = false;
@@ -387,14 +394,46 @@ export default function Home() {
       : []),
   ];
 
+  // Inisial avatar di kaki rail (acuan: inisial nama; app ini tidak menyimpan
+  // nama pemakai, jadi dipakai email login dengan fallback label peran).
+  const initials = (email || roleLabel)
+    .split(/[\s@._-]+/)
+    .filter(Boolean)
+    .map((word) => word[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  const onLogout = () => {
+    setToken(null);
+    setRole(null);
+    setSelectedId(null);
+    setTab("overview");
+  };
+
   return (
     <main className="app-shell">
-      {/* Sidebar: identitas role + nav tipis — teks panjang tidak lagi
-          menumpuk di atas konten (arah Roy: kurangi keramaian). */}
-      <aside className="side-nav" aria-label="Navigasi konsol">
+      {/* Sidebar mengikuti acuan: rail biru brand, ikon per tujuan, identitas
+          pemakai di kaki rail, tombol lipat di baris brand. */}
+      <aside
+        className={`side-nav${sideCollapsed ? " side-nav-collapsed" : ""}`}
+        aria-label="Navigasi konsol"
+      >
         <div className="side-brand">
+          <span className="side-logo">
+            <LogoMark />
+          </span>
           <strong>MealChain Guardian</strong>
-          <span className="side-role">{roleLabel}</span>
+          <button
+            type="button"
+            className="side-collapse"
+            onClick={() => setSideCollapsed((v) => !v)}
+            aria-label={sideCollapsed ? "Buka sidebar" : "Tutup sidebar"}
+            aria-expanded={!sideCollapsed}
+            title={sideCollapsed ? "Buka sidebar" : "Tutup sidebar"}
+          >
+            <ChevronIcon collapsed={sideCollapsed} />
+          </button>
         </div>
         <nav className="side-tabs" aria-label="Bagian konsol">
           {navItems.map((n) => (
@@ -403,12 +442,31 @@ export default function Home() {
               type="button"
               className={`side-tab${tab === n.id ? " side-tab-active" : ""}`}
               onClick={() => setTab(n.id)}
+              title={sideCollapsed ? n.label : undefined}
             >
               <NavIcon id={n.id} />
-              {n.label}
+              <span className="side-tab-label">{n.label}</span>
             </button>
           ))}
         </nav>
+        <div className="side-user">
+          <span className="side-avatar" aria-hidden="true">
+            {initials}
+          </span>
+          <span className="side-user-meta">
+            <span className="side-user-name">{roleLabel}</span>
+            <span className="side-user-sub">{email || "Sesi demo"}</span>
+          </span>
+          <button
+            type="button"
+            className="side-logout"
+            onClick={onLogout}
+            aria-label="Keluar"
+            title="Keluar"
+          >
+            <LogoutIcon />
+          </button>
+        </div>
         <div className="side-actions">
           {isApprover && (
             <button
@@ -417,21 +475,10 @@ export default function Home() {
               onClick={onSeedDemo}
               title="Muat ulang 4 kasus demo (idempotent)"
             >
-              Muat kasus demo
+              <SeedIcon />
+              <span className="side-action-label">Muat kasus demo</span>
             </button>
           )}
-          <button
-            type="button"
-            className="button-secondary button"
-            onClick={() => {
-              setToken(null);
-              setRole(null);
-              setSelectedId(null);
-              setTab("overview");
-            }}
-          >
-            Keluar
-          </button>
         </div>
       </aside>
 
