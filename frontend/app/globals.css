@@ -2040,7 +2040,9 @@ a:focus-visible {
   align-items: start;
 }
 
-@media (max-width: 1024px) {
+/* Di bawah 1280px kolom kanan tinggal ~300px: sumbu label lokasi sendiri
+   menghabiskan hampir separuhnya, jadi grafiknya jadi sepetak. Tumpuk saja. */
+@media (max-width: 1280px) {
   .overview-split {
     grid-template-columns: 1fr;
   }

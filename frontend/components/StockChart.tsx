@@ -44,18 +44,19 @@ export default function StockChart({ locations }: { locations: readonly BalanceM
         (b.Surplus ?? 0) - (a.Surplus ?? 0),
     );
 
+  // Judul bagian ini ditulis pembungkus halaman ("Pasokan per Lokasi"); h3 di
+  // dalam komponen dulu membuat dua judul bertumpuk dalam satu kartu.
   if (!mounted) {
     return (
-      <section className="stock-chart card" aria-label="Grafik stok">
-        <h3>Surplus &amp; Shortage per Lokasi</h3>
+      <section className="stock-chart" aria-label="Grafik stok">
+        <p className="sr-only">Grafik batang: Surplus dan Shortage per lokasi.</p>
         <div className="stock-chart-placeholder" aria-hidden="true" />
       </section>
     );
   }
 
   return (
-    <section className="stock-chart card" aria-label="Grafik stok">
-      <h3>Surplus &amp; Shortage per Lokasi</h3>
+    <section className="stock-chart" aria-label="Grafik stok">
       <div
         className="stock-chart-holder"
         role="img"
@@ -87,7 +88,7 @@ export default function StockChart({ locations }: { locations: readonly BalanceM
             <YAxis
               type="category"
               dataKey="lokasi"
-              width={84}
+              width={76}
               interval={0}
               tick={{ fontSize: 12, fill: "#555" }}
             />

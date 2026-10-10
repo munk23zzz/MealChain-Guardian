@@ -143,9 +143,19 @@ export default function SupplyMap({
           )
         )
         .addTo(map);
+      // MapLibre menandai tiap penanda "Map marker"; sepuluh penanda yang bisa
+      // difokus tanpa keterangan tidak berguna bagi pembaca layar.
+      el.setAttribute("aria-label", el.title);
     });
 
+    // Kontainer berubah ukuran (jendela, sidebar dilipat, breakpoint tata
+    // letak) tanpa MapLibre mengetahuinya — tanpa ini peta tertinggal di
+    // ukuran saat dibuat.
+    const observer = new ResizeObserver(() => map.resize());
+    observer.observe(mapContainer.current);
+
     return () => {
+      observer.disconnect();
       map.remove();
       mapRef.current = null;
     };
@@ -154,7 +164,7 @@ export default function SupplyMap({
   if (!locations?.length) {
     return (
       <section
-        className="map-card card"
+        className={showHeader ? "map-card card" : "map-card"}
         aria-label="Peta kondisi komoditas"
         aria-busy={loading || undefined}
       >
@@ -177,7 +187,10 @@ export default function SupplyMap({
   }
 
   return (
-    <section className="map-card card" aria-label="Peta kondisi komoditas">
+    <section
+      className={showHeader ? "map-card card" : "map-card"}
+      aria-label="Peta kondisi komoditas"
+    >
       {showHeader && (
         <div className="card-header">
           <h3>Peta Kondisi{commodity ? ` — ${commodity}` : ""}</h3>
