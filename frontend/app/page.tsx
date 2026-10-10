@@ -22,6 +22,7 @@ import {
 } from "../lib/api";
 import { decodeRole } from "../lib/auth";
 import StatusBadge from "../components/StatusBadge";
+import NavIcon from "../components/NavIcon";
 import RecommendationCard from "../components/RecommendationCard";
 import AgentTraceViewer from "../components/AgentTraceViewer";
 import IntegrityPanel from "../components/IntegrityPanel";
@@ -403,6 +404,7 @@ export default function Home() {
               className={`side-tab${tab === n.id ? " side-tab-active" : ""}`}
               onClick={() => setTab(n.id)}
             >
+              <NavIcon id={n.id} />
               {n.label}
             </button>
           ))}

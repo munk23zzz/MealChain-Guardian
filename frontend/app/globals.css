@@ -1,39 +1,39 @@
-/* MealChain Guardian — SINGLE SOURCE OF TRUTH: mockupui/cold_chain_integrity_console/DESIGN.md
-   (Stitch "Cold-Chain Integrity Console", sinkronisasi arah Roy 2026-10-10).
-   Corporate/Data-Dense Console: canvas #F8FAFC, kartu putih hairline #E2E8F0,
-   primary teal #0F766E, panel terminal #0F172A + accent #2DD4BF.
-   Status badge & tipografi (Inter + JetBrains Mono) mengikuti DESIGN.md.
+/* MealChain Guardian — SINGLE SOURCE OF TRUTH: palet acuan MealchainGuardian
+   (E:\hackathon\HackathonBil\MealchainGuardian, docs/design.md §4 versi biru).
+   Hybrid: navy #1F3B4D untuk teks/heading, brand biru #0969DA untuk aksi/navigasi,
+   canvas #F5F6FA + kartu putih ber-border #DCE6E9 tanpa bayangan, status
+   #2E7D32 / #F9A825 / #C62828 sebagai tint badge. Tipografi Inter + monospace sistem.
    Kontrak class & struktur komponen TIDAK berubah (test mem-pin markup). */
 :root {
-  /* Palet lama (alias kompatibilitas → token DESIGN.md) */
-  --navy-900: #0F172A;          /* surface-panel-dark */
-  --navy-700: #0F766E;          /* primary-container */
-  --navy-100: #A3FAEF;          /* on-primary-container — teks di atas panel gelap */
-  --grey-500: #64748B;          /* slate neutral (metadata, header tabel) */
-  --status-safe: #065F46;
-  --status-warning: #92400E;
-  --status-danger: #991B1B;
-  /* Token inti — persis DESIGN.md */
-  --bg-page: #F8FAFC;           /* surface-canvas */
-  --surface: #FFFFFF;           /* surface-card */
-  --surface-sunken: #F1F5F9;    /* hover baris / container ringan */
-  --line: #E2E8F0;              /* border-subtle */
-  --line-strong: #CBD5E1;       /* border-strong */
-  --ink: #0B1C30;               /* on-surface */
-  --ink-muted: #64748B;         /* slate neutral */
-  --accent: #115E59;            /* hover primary action (DESIGN.md Buttons) */
-  --accent-strong: #0F766E;     /* primary action */
-  --terminal: #0F172A;          /* surface-panel-dark */
-  --terminal-border: #1E293B;   /* surface-terminal-border */
-  --terminal-ink: #E2E8F0;      /* terminal-text */
-  --terminal-accent: #2DD4BF;   /* terminal-accent */
+  /* Palet acuan MealchainGuardian (docs/design.md §4 versi biru) */
+  --navy-900: #1F3B4D;          /* teks utama & heading */
+  --navy-700: #2E5266;          /* aksen sekunder */
+  --navy-100: #DCE6E9;          /* border & permukaan netral */
+  --grey-500: #555555;          /* teks sekunder, caption */
+  --status-safe: #2E7D32;       /* PASS / normal */
+  --status-warning: #F9A825;    /* tight / needs verification */
+  --status-danger: #C62828;     /* FAIL / shortage kritis */
+  /* Token inti */
+  --bg-page: #F5F6FA;           /* latar halaman */
+  --surface: #FFFFFF;           /* kartu */
+  --surface-sunken: #F5F6FA;    /* hover baris / container ringan */
+  --line: #DCE6E9;              /* border */
+  --line-strong: #C9D6DB;       /* border lebih tegas */
+  --ink: #1F3B4D;               /* teks utama */
+  --ink-muted: #555555;         /* teks sekunder */
+  --accent: #0550AE;            /* hover aksi primer (brand-active) */
+  --accent-strong: #0969DA;     /* aksi primer (brand) */
+  /* Acuan tidak punya panel gelap: "terminal" kini permukaan terang */
+  --terminal: #FFFFFF;
+  --terminal-border: #DCE6E9;
+  --terminal-ink: #1F3B4D;
+  --terminal-accent: #0969DA;
   --radius: 8px;                /* wrapper besar; kontrol kecil 4px */
-  /* Elevasi DESIGN.md: L1 kartu, L2 hover, L3 modal */
-  --shadow-1: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
+  /* Elevasi: kartu acuan rata (border saja); L2 hover, L3 modal tetap */
+  --shadow-1: none;
   --shadow-2: 0 4px 6px -1px rgba(15, 23, 42, 0.07), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
   --shadow-3: 0 10px 15px -3px rgba(15, 23, 42, 0.1), 0 4px 6px -4px rgba(15, 23, 42, 0.06);
-  --font-data: var(--font-jetbrains, "JetBrains Mono"), ui-monospace, "SF Mono",
-    "Cascadia Mono", Menlo, monospace;
+  --font-data: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   /* Alias token yang dipakai blok bawah */
   --border: var(--line);
   --card: var(--surface);
@@ -49,7 +49,7 @@
 body {
   margin: 0;
   font-family: var(--font-inter, Inter), system-ui, sans-serif;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--ink);
   background: var(--bg-page);
   -webkit-font-smoothing: antialiased;
@@ -66,65 +66,63 @@ dl dd,
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 2px 10px 2px 8px;
+  gap: 4px;
+  padding: 2px 8px;
   border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 650;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
   background: var(--surface);
+  color: var(--ink-muted);
 }
 
 /* Dot status sebelum teks — bentuk + warna ganda supaya status terbaca
    sekilas tanpa membaca label (eksisting status-* dipertahankan utk test). */
+/* Titik dihapus: badge acuan memakai label + tint warna, bukan dot */
 .badge::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-  flex: none;
+  content: none;
 }
 
 /* Status ala Stitch: success/danger/warning tint + dot (uppercase tetap) */
 .status-safe {
-  background: #ECFDF5;
-  color: #065F46;
-  border: 1px solid #A7F3D0;
+  background: rgba(46, 125, 50, 0.1);
+  color: var(--status-safe);
+  border: 1px solid rgba(46, 125, 50, 0.4);
 }
 
 .status-danger {
-  background: #FEF2F2;
-  color: #991B1B;
-  border: 1px solid #FECACA;
+  background: rgba(198, 40, 40, 0.1);
+  color: var(--status-danger);
+  border: 1px solid rgba(198, 40, 40, 0.4);
 }
 
+/* Teks badge warning memakai navy: #F9A825 di latar terang tidak terbaca */
 .status-warning {
-  background: #FFFBEB;
-  color: #92400E;
-  border: 1px solid #FDE68A;
+  background: rgba(249, 168, 37, 0.2);
+  color: var(--navy-900);
+  border: 1px solid rgba(249, 168, 37, 0.5);
 }
 
 .status-neutral {
+  background: rgba(85, 85, 85, 0.08);
+  color: var(--ink-muted);
+  border: 1px solid rgba(85, 85, 85, 0.3);
+}
+
+/* EXPIRED: netral gelap — bukan bahaya, cuma usang */
+.badge[data-status="EXPIRED"] {
   background: var(--surface-sunken);
   color: var(--ink-muted);
   border: 1px solid var(--line-strong);
 }
 
-/* EXPIRED: netral gelap — bukan bahaya, cuma usang */
-.badge[data-status="EXPIRED"] {
-  background: #E8ECEF;
-  color: #56636D;
-  border: 1px solid #C4CDD3;
-}
-
 .card {
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 14px 16px;
+  padding: 16px;
   background: var(--surface);
-  box-shadow: var(--shadow-1);
 }
 
 .card-header {
@@ -135,9 +133,10 @@ dl dd,
 }
 
 .card h3 {
-  font-size: 14.5px;
-  font-weight: 650;
-  letter-spacing: -0.1px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--navy-900);
 }
 
 /* Kartu feed: padatkan — baris meta inline, bukan dl gemuk */
@@ -149,7 +148,7 @@ dl dd,
 }
 
 .recommendation-card dt {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.4px;
   text-transform: uppercase;
@@ -232,7 +231,7 @@ dl dd,
 }
 
 .filter-chip .legend-count {
-  font-size: 11px;
+  font-size: 12px;
   opacity: 0.75;
   margin-left: 4px;
 }
@@ -266,7 +265,7 @@ dl dd,
 .trace-output {
   background: var(--terminal);
   color: var(--terminal-ink);
-  border: 1px solid #1E293B;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px 10px;
   font-family: var(--font-data);
@@ -277,8 +276,8 @@ dl dd,
 }
 
 .mock-badge {
-  background: #fff8e1;
-  color: #8a6d00;
+  background: rgba(249, 168, 37, 0.15);
+  color: var(--navy-900);
   border: 1px dashed var(--status-warning);
 }
 
@@ -298,10 +297,11 @@ dl dd,
 .button {
   background: var(--accent-strong);
   color: #fff;
-  border: 0;
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   padding: 8px 16px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: background 0.18s ease;
 }
@@ -313,14 +313,14 @@ dl dd,
 .button:focus-visible,
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid var(--terminal-accent);
+  outline: 2px solid var(--accent-strong);
   outline-offset: 2px;
 }
 
 .button-secondary {
-  background: #fff;
-  color: var(--navy-700);
-  border: 1px solid var(--navy-700);
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
 }
 
 .header-bar {
@@ -328,8 +328,9 @@ a:focus-visible {
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  background: var(--navy-900);
-  color: #fff;
+  background: var(--surface);
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
 }
 
 /* ProviderPanel — status model agent (jujur: hijau hanya bila live) */
@@ -359,15 +360,15 @@ a:focus-visible {
 .provider-value {
   font-family: var(--font-mono, monospace);
 }
-.provider-live .provider-value { color: var(--status-safe, #1a7f37); }
-.provider-fallback .provider-value { color: #8a6d00; }
+.provider-live .provider-value { color: var(--status-safe, var(--status-safe)); }
+.provider-fallback .provider-value { color: var(--navy-900); }
 .provider-unavailable .provider-value { color: var(--muted-foreground, #666); }
 .provider-attempts {
   color: var(--muted-foreground, #666);
-  font-size: 0.85em;
+  font-size: 12px;
 }
 .trace-model {
-  font-size: 0.88em;
+  font-size: 12px;
   color: var(--navy-700, #345);
 }
 
@@ -385,8 +386,8 @@ a:focus-visible {
 }
 
 .login-brand {
-  /* Level 0 canvas → panel brand pakai primary-container DESIGN.md */
-  background: linear-gradient(160deg, #0F766E 0%, #115E59 100%);
+  /* Panel brand acuan: selubung navy → aksi biru brand */
+  background: linear-gradient(160deg, #1F3B4D 0%, #0969DA 100%);
   color: #fff;
   padding: clamp(28px, 6vw, 64px);
   display: flex;
@@ -409,8 +410,7 @@ a:focus-visible {
   font-weight: 600;
   letter-spacing: 1.6px;
   text-transform: uppercase;
-  color: var(--navy-100);
-  opacity: 0.85;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .brand-title {
@@ -426,7 +426,7 @@ a:focus-visible {
   max-width: 46ch;
   font-size: 15px;
   line-height: 1.6;
-  color: var(--navy-100);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 /* Signature: rute rantai dingin Bogor → Jakarta */
@@ -445,7 +445,7 @@ a:focus-visible {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--navy-100);
+  background: rgba(255, 255, 255, 0.9);
   flex: none;
 }
 
@@ -478,7 +478,7 @@ a:focus-visible {
   font-size: 12px;
   letter-spacing: 0.6px;
   text-transform: uppercase;
-  color: var(--navy-100);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .brand-stats {
@@ -512,7 +512,7 @@ a:focus-visible {
   align-items: center;
   justify-content: center;
   padding: 32px 24px;
-  background: #F8FAFC;
+  background: var(--surface-sunken);
 }
 
 .login-form {
@@ -589,7 +589,7 @@ a:focus-visible {
 
 .demo-hint {
   margin: 0 0 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.8px;
   text-transform: uppercase;
@@ -631,7 +631,7 @@ a:focus-visible {
 .chain-reason {
   margin: 8px 0 0;
   padding: 6px 10px;
-  background: #ffebee;
+  background: rgba(198, 40, 40, 0.1);
   border-left: 3px solid var(--status-danger);
   border-radius: 4px;
   font-size: 13px;
@@ -668,7 +668,7 @@ a:focus-visible {
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #F8FAFC;
+  background: var(--surface-sunken);
 }
 
 .chain-item.chain-rejected {
@@ -710,7 +710,7 @@ a:focus-visible {
   padding: 12px;
   border: 1px dashed var(--line-strong);
   border-radius: 8px;
-  background: #F8FAFC;
+  background: var(--surface-sunken);
 }
 
 .reject-reason-box textarea {
@@ -738,29 +738,32 @@ a:focus-visible {
   justify-content: space-between;
   margin: 18px 0 14px;
   padding: 18px 20px;
-  border-radius: 12px;
-  background: linear-gradient(120deg, var(--navy-900), var(--navy-700));
-  color: #fff;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .role-hero h2 {
   margin: 0 0 4px;
   font-size: 20px;
+  font-weight: 600;
+  color: var(--navy-900);
 }
 
 .role-hero p {
   margin: 0;
   max-width: 46ch;
-  font-size: 13.5px;
-  opacity: 0.88;
+  font-size: 14px;
+  color: var(--ink-muted);
 }
 
 .role-steps {
   margin: 0;
   padding-left: 20px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.7;
-  opacity: 0.95;
+  color: var(--ink);
 }
 
 /* Konsol operasi — interaksi sebelum hasil */
@@ -769,7 +772,7 @@ a:focus-visible {
   padding: 16px 18px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #F8FAFC;
+  background: var(--surface-sunken);
 }
 
 .ops-console h3 {
@@ -803,13 +806,13 @@ a:focus-visible {
 }
 
 .button-primary {
-  background: var(--navy-700);
+  background: var(--accent-strong);
   color: #fff;
-  border-color: var(--navy-700);
+  border-color: var(--accent-strong);
 }
 
 .button-primary:hover:not(:disabled) {
-  background: var(--navy-900);
+  background: var(--accent);
 }
 
 .ops-snapshot {
@@ -855,7 +858,7 @@ a:focus-visible {
 
 .ops-flagged {
   border-color: var(--status-warning);
-  background: #fffaf0;
+  background: rgba(249, 168, 37, 0.15);
 }
 
 .case-label {
@@ -889,19 +892,20 @@ a:focus-visible {
   justify-content: space-between;
   margin: 0 0 6px;
   padding: 12px 16px;
-  border-radius: 12px;
-  background: var(--navy-900);
-  color: #fff;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .header-bar .button {
-  background: transparent;
-  border-color: rgba(255, 255, 255, 0.35);
-  color: #fff;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
 }
 
 .header-bar .button:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(9, 105, 218, 0.08);
 }
 
 @media (max-width: 720px) {
@@ -926,14 +930,15 @@ a:focus-visible {
   min-width: 0;
 }
 
-/* Sidebar ala panel "Guardian Core" Stitch: terminal gelap + accent teal */
+/* Sidebar mengikuti acuan: rail putih, item navy, item aktif pill navy-700 */
 .side-nav {
   display: flex;
   flex-direction: column;
   gap: 18px;
   padding: 18px 14px;
-  background: var(--terminal);
-  color: var(--terminal-ink);
+  background: var(--surface);
+  color: var(--ink);
+  border-right: 1px solid var(--line);
   position: sticky;
   top: 0;
   height: 100vh;
@@ -946,46 +951,55 @@ a:focus-visible {
 }
 
 .side-brand strong {
-  font-size: 14px;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--navy-900);
 }
 
 .side-role {
   font-size: 12px;
   font-family: var(--font-data);
-  color: var(--terminal-accent);
+  color: var(--ink-muted);
 }
 
 .side-tabs {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .side-tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   text-align: left;
-  padding: 9px 12px;
-  border-radius: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--terminal-ink);
-  font-size: 13.5px;
+  color: var(--ink);
+  font-size: 14px;
   cursor: pointer;
   transition: background 0.18s ease, color 0.18s ease;
 }
 
+.side-tab svg {
+  flex: none;
+}
+
 .side-tab:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--terminal-accent);
+  background: rgba(9, 105, 218, 0.08);
+  color: var(--accent-strong);
 }
 
 .side-tab-active,
 .side-tab-active:hover {
-  background: var(--accent-strong);
+  background: var(--navy-700);
   color: #fff;
-  border-color: var(--accent-strong);
-  font-weight: 600;
+  border-color: var(--navy-700);
+  font-weight: 500;
 }
 
 .side-actions {
@@ -996,15 +1010,16 @@ a:focus-visible {
 }
 
 .side-actions .button {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  color: var(--terminal-ink);
-  font-size: 13px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 14px;
 }
 
 .side-actions .button:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--terminal-accent);
+  background: rgba(9, 105, 218, 0.08);
+  color: var(--accent-strong);
+  border-color: var(--line-strong);
 }
 
 /* Peta + grafik — panel tersendiri di atas latar abu */
@@ -1029,8 +1044,8 @@ a:focus-visible {
   border: 2px solid #fff;
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
 }
-.map-marker-shortage { background: #c62828; }
-.map-marker-surplus { background: #2e7d32; }
+.map-marker-shortage { background: var(--status-danger); }
+.map-marker-surplus { background: var(--status-safe); }
 .map-marker-balanced { background: #555555; }
 
 .map-card .map-side { margin-top: 16px; container-type: inline-size; }
@@ -1045,8 +1060,8 @@ a:focus-visible {
 .map-card .map-row { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 8px 10px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); }
 .map-card .map-row-name { font-weight: 650; overflow-wrap: anywhere; }
 .map-card .map-row-status { font-size: 12px; padding: 3px 8px; border-radius: 4px; background: var(--bg-page); }
-.map-card .map-row-shortage .map-row-status { color: #991b1b; background: #fef2f2; }
-.map-card .map-row-surplus .map-row-status { color: #065f46; background: #ecfdf5; }
+.map-card .map-row-shortage .map-row-status { color: var(--status-danger); background: rgba(198, 40, 40, 0.1); }
+.map-card .map-row-surplus .map-row-status { color: var(--status-safe); background: rgba(46, 125, 50, 0.1); }
 .map-card .map-row-supply, .map-card .map-row-demand, .map-card .map-row-gap { grid-column: 2 / -1; font-variant-numeric: tabular-nums; font-size: 13px; overflow-wrap: anywhere; }
 .map-card .map-row-gap { font-weight: 600; }
 @container (min-width: 680px) {
@@ -1057,12 +1072,12 @@ a:focus-visible {
 /* PRD 2.4: strip target KPI demo day (berlabel eksplisit, bukan live) */
 .kpi-targets { margin-top: 18px; }
 .kpi-target-badge {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
-  color: #92400e;
-  background: #fef3c7;
-  border: 1px solid #fcd34d;
+  color: var(--navy-900);
+  background: rgba(249, 168, 37, 0.3);
+  border: 1px solid rgba(249, 168, 37, 0.5);
   border-radius: 999px;
   padding: 3px 10px;
 }
@@ -1075,7 +1090,7 @@ a:focus-visible {
   gap: 2px 12px;
   align-items: baseline;
   padding: 9px 0;
-  border-bottom: 1px solid var(--line, #e5e7eb);
+  border-bottom: 1px solid var(--line, var(--line));
 }
 .kpi-target-row:last-child { border-bottom: none; }
 .kpi-target-name { grid-area: name; font-weight: 600; font-size: 13.5px; }
@@ -1086,7 +1101,7 @@ a:focus-visible {
   display: block;
   height: 5px;
   border-radius: 999px;
-  background: var(--line, #e5e7eb);
+  background: var(--line, var(--line));
   overflow: hidden;
 }
 .kpi-target-bar i { display: block; height: 100%; background: var(--accent, #2E5266); }
@@ -1163,10 +1178,10 @@ a:focus-visible {
   border-radius: 8px;
   background: repeating-linear-gradient(
     45deg,
-    #F1F5F9,
-    #F1F5F9 12px,
-    #E2E8F0 12px,
-    #E2E8F0 24px
+    var(--surface-sunken),
+    var(--surface-sunken) 12px,
+    var(--line) 12px,
+    var(--line) 24px
   );
 }
 
@@ -1201,7 +1216,7 @@ a:focus-visible {
 .integrity-ledger, .integrity-dossier { margin-bottom: 10px; }
 .integrity-ledger strong, .integrity-dossier strong { font-size: 12px; display: block; margin-bottom: 4px; }
 .integrity-panel dl { margin: 4px 0; }
-.integrity-panel dt { font-size: 11px; color: var(--muted-foreground); }
+.integrity-panel dt { font-size: 12px; color: var(--muted-foreground); }
 /* Hash/dossier ala terminal gelap Stitch — mono di atas #0F172A */
 .integrity-panel dd {
   margin: 0 0 6px;
@@ -1209,7 +1224,7 @@ a:focus-visible {
   font-size: 12px;
   color: var(--terminal-accent);
   background: var(--terminal);
-  border: 1px solid #1E293B;
+  border: 1px solid var(--line);
   border-radius: 6px;
   padding: 4px 8px;
   display: inline-block;
@@ -1237,8 +1252,8 @@ a:focus-visible {
   padding: 1px 6px;
 }
 .event2-result { border-left: 3px solid var(--accent-strong); }
-.event2-result.event2-anomaly { border-left-color: var(--status-warning); background: #FFFBEB; }
-.event2-result.event2-no_anomaly { border-left-color: var(--status-safe); background: #ECFDF5; }
+.event2-result.event2-anomaly { border-left-color: var(--status-warning); background: rgba(249, 168, 37, 0.2); }
+.event2-result.event2-no_anomaly { border-left-color: var(--status-safe); background: rgba(46, 125, 50, 0.1); }
 .event2-reference {
   margin: 12px 0 8px;
   padding: 8px 12px;
@@ -1283,8 +1298,8 @@ a:focus-visible {
   width: 4px;
   background: var(--accent-strong);
 }
-.rec-edge.edge-warning::before { background: #D97706; }
-.rec-edge.edge-danger::before { background: #DC2626; }
+.rec-edge.edge-warning::before { background: var(--navy-900); }
+.rec-edge.edge-danger::before { background: var(--status-danger); }
 
 /* Header kartu dengan garis pemisah ala Stitch card header */
 .rec-edge .card-header,
@@ -1302,7 +1317,7 @@ a:focus-visible {
 }
 .rec-meta { display: flex; flex-direction: column; gap: 2px; }
 .rec-meta dt {
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -1320,37 +1335,35 @@ a:focus-visible {
 
 /* EXPIRED badge: netral gelap (usang, bukan bahaya) */
 .badge[data-status="EXPIRED"] {
-  background: #E8ECEF;
-  color: #56636D;
-  border: 1px solid #C4CDD3;
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  border: 1px solid var(--line-strong);
 }
 
 /* Konsol trace agent ala Stitch "Agent Activity Log": terminal gelap
-   #0F172A dengan border #1E293B + accent #2DD4BF, header chrome jendela */
+   #0F172A dengan border var(--line) + accent #2DD4BF, header chrome jendela */
 .agent-console {
-  background: var(--terminal);
-  border: 1px solid var(--terminal-border);
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
-  color: var(--terminal-ink);
+  color: var(--ink);
 }
 .agent-console-bar {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  background: var(--terminal-border);
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--line);
 }
-.agent-console-dots { display: inline-flex; gap: 6px; }
-.agent-console-dots i { width: 9px; height: 9px; border-radius: 50%; background: rgba(226, 232, 240, 0.35); }
-.agent-console-dots i:first-child { background: #f87171; }
-.agent-console-dots i:nth-child(2) { background: #fbbf24; }
-.agent-console-dots i:last-child { background: var(--terminal-accent); }
+/* Chrome jendela (titik merah/kuning/hijau) tidak ada di acuan */
+.agent-console-dots { display: none; }
 .agent-console-title {
   font-family: var(--font-data);
-  font-size: 11px;
-  color: var(--terminal-accent);
-  letter-spacing: 0.03em;
+  font-size: 12px;
+  color: var(--ink-muted);
+  letter-spacing: 0;
 }
 .agent-console .trace-timeline {
   margin: 0;
@@ -1358,28 +1371,27 @@ a:focus-visible {
   border-left: none;
   font-family: var(--font-data);
 }
-.agent-console .trace-step { border-left: 2px solid rgba(45, 212, 191, 0.35); padding-left: 12px; margin: 0 0 14px; }
+.agent-console .trace-step { border-left: 2px solid var(--line-strong); padding-left: 12px; margin: 0 0 14px; }
 .trace-step-head { display: flex; align-items: center; gap: 8px; }
-.trace-step-head time { margin-left: auto; font-size: 11px; color: #94A3B8; font-variant-numeric: tabular-nums; }
+.trace-step-head time { margin-left: auto; font-size: 12px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .agent-console .trace-step-name {
   font-family: var(--font-data);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--terminal-accent);
+  letter-spacing: 0.03em;
+  color: var(--navy-900);
 }
-.agent-console-ico { color: var(--terminal-accent); flex: none; }
-.agent-console .trace-tool { font-family: var(--font-data); font-size: 11px; color: #94A3B8; }
-.agent-console .trace-model { font-family: var(--font-data); font-size: 11px; color: #A3FAEF; margin-top: 2px; }
+.agent-console-ico { color: var(--accent-strong); flex: none; }
+.agent-console .trace-tool { font-family: var(--font-data); font-size: 12px; color: var(--ink-muted); }
+.agent-console .trace-model { font-family: var(--font-data); font-size: 12px; color: var(--navy-700); margin-top: 2px; }
 .agent-console .trace-output {
-  background: rgba(30, 41, 59, 0.6);
-  color: var(--terminal-ink);
-  border: 1px solid var(--terminal-border);
+  background: var(--surface-sunken);
+  color: var(--ink);
+  border: 1px solid var(--line);
   border-radius: 6px;
   padding: 8px 10px;
   font-family: var(--font-data);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.55;
   margin: 6px 0 0;
 }
@@ -1420,7 +1432,7 @@ a:focus-visible {
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   background: var(--bg-page);
-  font-size: 11.5px;
+  font-size: 12px;
   font-style: normal;
 }
 
@@ -1442,9 +1454,9 @@ a:focus-visible {
 .approval-modal-blockers {
   margin-top: 10px;
   padding: 8px 10px 8px 26px;
-  background: var(--status-danger, #FEF2F2);
-  background: #FEF2F2;
-  border: 1px solid #FECACA;
+  background: var(--status-danger, rgba(198, 40, 40, 0.1));
+  background: rgba(198, 40, 40, 0.1);
+  border: 1px solid rgba(198, 40, 40, 0.4);
   border-radius: 6px;
   color: var(--status-danger);
   font-size: 12.5px;
@@ -1461,13 +1473,13 @@ a:focus-visible {
 .button { border-radius: 4px; }
 .button-secondary {
   background: #fff;
-  color: #334155;
+  color: var(--navy-700);
   border: 1px solid var(--line-strong);
 }
-.button-secondary:hover:not(:disabled) { background: #F1F5F9; }
+.button-secondary:hover:not(:disabled) { background: rgba(9, 105, 218, 0.08); }
 .button:disabled {
-  background: #F1F5F9;
-  color: #94A3B8;
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
   border: 1px solid var(--line);
   cursor: not-allowed;
 }
@@ -1477,8 +1489,8 @@ a:focus-visible {
 .chain-reason {
   margin: 8px 0 0;
   padding: 6px 10px;
-  background: #FEF2F2;
-  border-left: 3px solid #DC2626;
+  background: rgba(198, 40, 40, 0.1);
+  border-left: 3px solid var(--status-danger);
   border-radius: 4px;
   font-size: 13px;
   color: var(--status-danger);
@@ -1530,7 +1542,7 @@ a:focus-visible {
   justify-content: center;
   padding: 8px;
   border-radius: 8px;
-  background: rgba(15, 118, 110, 0.1);
+  background: rgba(9, 105, 218, 0.08);
   color: var(--accent-strong);
 }
 
@@ -1560,10 +1572,10 @@ a:focus-visible {
   gap: 6px;
   padding: 2px 8px;
   border-radius: 6px;
-  background: #ECFDF5;
-  color: #065F46;
+  background: rgba(46, 125, 50, 0.1);
+  color: var(--status-safe);
   font-family: var(--font-data);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -1612,10 +1624,10 @@ a:focus-visible {
 }
 
 .kpi-card-safe { color: var(--accent-strong); }
-.kpi-card-danger { color: #991B1B; }
+.kpi-card-danger { color: var(--status-danger); }
 
 .kpi-card-foot {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-muted);
   font-family: var(--font-data);
 }
@@ -1630,7 +1642,7 @@ a:focus-visible {
 
 .commodity-filters-label {
   font-family: var(--font-data);
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--ink-muted);
@@ -1695,8 +1707,8 @@ a:focus-visible {
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  background: rgba(30, 41, 59, 0.7);
-  border-bottom: 1px solid var(--terminal-border);
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--line);
 }
 
 .map-panel-dark-dot {
@@ -1708,22 +1720,22 @@ a:focus-visible {
 }
 
 .map-panel-dark-title {
-  font-family: var(--font-data);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--terminal-ink);
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--navy-900);
 }
 
 .map-panel-dark-count {
   margin-left: auto;
   padding: 2px 8px;
-  border-radius: 4px;
-  background: var(--terminal-border);
-  color: var(--terminal-accent);
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-muted);
   font-family: var(--font-data);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 /* MapLibre di dalam panel gelap — bingkai ulang, fungsi peta utuh */
@@ -1758,7 +1770,7 @@ a:focus-visible {
   padding: 6px 8px;
   background: var(--bg-page);
   color: var(--ink-muted);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1790,22 +1802,22 @@ a:focus-visible {
   display: inline-block;
   padding: 1px 8px;
   border-radius: 4px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .location-status-surplus {
-  background: #ECFDF5;
-  color: #065F46;
-  border: 1px solid #A7F3D0;
+  background: rgba(46, 125, 50, 0.1);
+  color: var(--status-safe);
+  border: 1px solid rgba(46, 125, 50, 0.4);
 }
 
 .location-status-shortage {
-  background: #FEF2F2;
-  color: #991B1B;
-  border: 1px solid #FECACA;
+  background: rgba(198, 40, 40, 0.1);
+  color: var(--status-danger);
+  border: 1px solid rgba(198, 40, 40, 0.4);
 }
 
 .location-status-balanced {
@@ -1836,7 +1848,7 @@ a:focus-visible {
   align-items: center;
   gap: 6px;
   font-family: var(--font-data);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1864,7 +1876,7 @@ a:focus-visible {
   gap: 5px;
   padding: 2px 10px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   background: var(--surface-sunken);
   color: var(--ink-muted);
@@ -1920,27 +1932,27 @@ a:focus-visible {
   padding: 2px 8px;
   border-radius: 4px;
   font-family: var(--font-data);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 
 .kpi-state-available {
-  background: #ECFDF5;
-  color: #065F46;
-  border: 1px solid #A7F3D0;
+  background: rgba(46, 125, 50, 0.1);
+  color: var(--status-safe);
+  border: 1px solid rgba(46, 125, 50, 0.4);
 }
 
 .kpi-state-no_data {
-  background: #FFFBEB;
-  color: #92400E;
-  border: 1px solid #FDE68A;
+  background: rgba(249, 168, 37, 0.2);
+  color: var(--navy-900);
+  border: 1px solid rgba(249, 168, 37, 0.5);
 }
 
 .kpi-state-unavailable {
-  background: #FEF2F2;
-  color: #991B1B;
-  border: 1px solid #FECACA;
+  background: rgba(198, 40, 40, 0.1);
+  color: var(--status-danger);
+  border: 1px solid rgba(198, 40, 40, 0.4);
 }
 
 .kpi-reason {
@@ -1952,7 +1964,7 @@ a:focus-visible {
 
 .kpi-meta {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-muted);
 }
 
@@ -1966,20 +1978,20 @@ a:focus-visible {
   padding: 2px 8px;
   border-radius: 4px;
   font-family: var(--font-data);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
 .kpi-trend.trend-up {
-  background: #ECFDF5;
-  color: #065F46;
-  border: 1px solid #A7F3D0;
+  background: rgba(46, 125, 50, 0.1);
+  color: var(--status-safe);
+  border: 1px solid rgba(46, 125, 50, 0.4);
 }
 
 .kpi-trend.trend-down {
-  background: #FEF2F2;
-  color: #991B1B;
-  border: 1px solid #FECACA;
+  background: rgba(198, 40, 40, 0.1);
+  color: var(--status-danger);
+  border: 1px solid rgba(198, 40, 40, 0.4);
 }
 
 .kpi-trend.trend-flat {

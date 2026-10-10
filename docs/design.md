@@ -111,22 +111,34 @@ Detail muncul dengan evidence → Approve → status di peta berubah
 
 ## 4. Design system
 
-### Warna (design token — sinkron dengan `frontend/app/globals.css`, overhaul 2026-10-09)
-Latar halaman abu halus, kartu putih ber-shadow (depth) — token live di
-`globals.css` `:root` (sumber kebenaran teknis). Warna status tetap:
+### Warna (design token — sinkron dengan `frontend/app/globals.css`, overhaul 2026-10-11)
+Sejak 2026-10-11 konsol memakai palet aplikasi acuan `MealchainGuardian` (versi
+biru): navy untuk teks/heading, biru brand untuk aksi & navigasi, kartu putih
+ber-border tanpa bayangan.
 ```
---status-safe: #2E7D32    /* PASS / surplus */
---status-warning: #F9A825 /* tight / needs verification */
---status-danger: #C62828  /* FAIL / shortage */
+--navy-900 (ink): #1F3B4D   /* teks utama & heading */
+--navy-700:       #2E5266   /* aksen sekunder, item nav aktif */
+--line:           #DCE6E9   /* border & permukaan netral */
+--ink-muted:      #555555   /* teks sekunder, caption */
+--accent-strong:  #0969DA   /* brand: tombol, link, fokus */
+--accent:         #0550AE   /* hover aksi */
+--bg-page:        #F5F6FA   /* latar halaman */
+--status-safe:    #2E7D32   /* PASS / surplus */
+--status-warning: #F9A825   /* tight / needs verification — teks badge pakai navy */
+--status-danger:  #C62828   /* FAIL / shortage */
 ```
-> Catatan sinkronisasi: token navy/grey di versi lama bagian ini sudah tidak
-> dipakai sejak overhaul visual (arah Roy 2026-10-09, "masih sangat jelek" →
-> latar abu halus, kartu ber-depth, badge dot-status, angka tabular).
-> `globals.css` = sumber kebenaran token; bagian ini merangkum maksudnya.
+> Catatan sinkronisasi: `globals.css` `:root` = sumber kebenaran teknis; bagian ini
+> merangkum maksudnya. Panel gelap/teal ala mockup "Cold-Chain Integrity Console"
+> sudah tidak dipakai — acuan tidak punya panel gelap, jadi sidebar, panel peta,
+> dan konsol agent semuanya permukaan terang. Badge memakai label + tint warna
+> (tanpa titik), mengikuti komponen badge acuan.
 
 ### Tipografi
-- Font: Inter (fallback: system-ui) — jelas terbaca di data-dense dashboard
-- Heading: 600 weight, Body: 400 weight, ukuran dasar 14-16px untuk dashboard density
+- Font: Inter (fallback: system-ui) — jelas terbaca di data-dense dashboard.
+  Angka & telemetri memakai monospace sistem (`ui-monospace, SFMono-Regular,
+  Menlo, Consolas`) mengikuti `tailwind.config` acuan.
+- Heading: 600 weight, Body: 400 weight, ukuran dasar 14px (text-sm) — dashboard padat
+- Teks mikro minimal 12px (text-xs); nilai di bawah itu dinaikkan 2026-10-11
 
 ### Komponen inti
 | Komponen | Fungsi |
