@@ -1398,7 +1398,24 @@ a:focus-visible {
 }
 .kpi-target-bar i { display: block; height: 100%; background: var(--accent, #2E5266); }
 .section-sub { color: var(--muted, #555); font-size: 13px; max-width: 72ch; }
-.demo-control-section .button { margin: 10px 0 16px; }
+/* Panel demo: kartu-kartunya bertumpuk dengan jarak seragam, bukan tombol
+   yang mengambang di antara kepala halaman dan kartu pertama. */
+.demo-control-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.demo-control-section .button { margin: 0; }
+
+.demo-scenario {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.demo-scenario .section-sub { margin: 0; }
 
 .map-panel {
   background: var(--surface);

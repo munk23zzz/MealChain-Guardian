@@ -735,14 +735,24 @@ export default function Home() {
               title="Demo Control Panel"
               description="Skenario deterministik untuk demo day — dijalankan lewat API resmi (tanpa mock): muat kasus, picu Event 2 (price anomaly) &amp; Event 3 (thermal excursion) dari konsol, lalu lihat hasilnya di tab Recommendations &amp; Agent Log."
             />
-            <button
-              type="button"
-              className="button"
-              onClick={onSeedDemo}
-              title="Muat ulang 4 kasus demo (idempotent)"
-            >
-              Scenario 00 — Muat kasus demo
-            </button>
+            <section className="card demo-scenario" aria-label="Skenario demo">
+              <div className="card-header">
+                <h2>Skenario 00 — muat kasus demo</h2>
+              </div>
+              <p className="section-sub">
+                Memuat ulang empat kasus demo lewat API resmi (idempotent, aman
+                dijalankan berkali-kali sebelum demo day). Hasilnya muncul di
+                tab Recommendations &amp; Agent Log.
+              </p>
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={onSeedDemo}
+                title="Muat ulang 4 kasus demo (idempotent)"
+              >
+                Muat kasus demo
+              </button>
+            </section>
             <OpsConsole
               role={role ?? "sppg_head"}
               token={token}
