@@ -107,7 +107,17 @@ export default function KPIDashboard({
             <h3>KPI</h3>
           </div>
         </div>
-        <p className="kpi-loading">Memuat KPI…</p>
+        {/* Kelas kpi-loading tetap ada (dipin tes) tetapi hanya untuk pembaca
+            layar: tampilannya kini skeleton, bukan teks "Memuat…" berkedip. */}
+        <p className="kpi-loading sr-only" aria-live="polite">
+          Memuat KPI…
+        </p>
+        <div className="skeleton-grid" aria-hidden="true">
+          <div className="skeleton skeleton-card" />
+          <div className="skeleton skeleton-card" />
+          <div className="skeleton skeleton-card" />
+          <div className="skeleton skeleton-card" />
+        </div>
       </section>
     );
   }

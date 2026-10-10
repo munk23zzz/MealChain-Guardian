@@ -48,7 +48,19 @@ export default function StockChart({ locations }: { locations: readonly BalanceM
   return (
     <section className="stock-chart card" aria-label="Grafik stok">
       <h3>Surplus &amp; Shortage per Lokasi</h3>
-      <div className="stock-chart-holder">
+      <div
+        className="stock-chart-holder"
+        role="img"
+        aria-label={
+          data.length
+            ? `Grafik batang ${data.length} lokasi: total surplus ${Math.round(
+                data.reduce((t, d) => t + (Number(d.Surplus) || 0), 0)
+              ).toLocaleString("id-ID")} kg dan total shortage ${Math.round(
+                data.reduce((t, d) => t + (Number(d.Shortage) || 0), 0)
+              ).toLocaleString("id-ID")} kg. Angka rinci per lokasi ada di tabel Rincian Pasokan per Lokasi.`
+            : "Grafik stok belum punya data."
+        }
+      >
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#DCE6E9" />

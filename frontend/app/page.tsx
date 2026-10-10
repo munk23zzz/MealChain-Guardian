@@ -416,6 +416,11 @@ export default function Home() {
     setRole(null);
     setSelectedId(null);
     setTab("overview");
+    // Bersihkan data konsol: akun berikutnya tidak boleh sempat melihat angka
+    // sesi sebelumnya sebelum permintaan barunya selesai (terlihat saat uji
+    // skeleton: strip KPI sempat menampilkan nilai lama).
+    setMapData(null);
+    setMapUpdatedAt(null);
   };
 
   return (
@@ -503,9 +508,9 @@ export default function Home() {
               <div className="overview-header-main">
                 <h1>Overview Pasokan &amp; Distribusi</h1>
                 <p className="overview-header-sub">
-                  Peta {(mapData?.locations ?? []).length} lokasi SPPG — hijau
-                  surplus, merah shortage, abu seimbang. Klik kartu Status
-                  Lokasi untuk melihat angka pasokan dan kebutuhan.
+                  {mapData
+                    ? `Peta ${(mapData.locations ?? []).length} lokasi SPPG — hijau surplus, merah shortage, abu seimbang. Klik kartu Status Lokasi untuk melihat angka pasokan dan kebutuhan.`
+                    : "Memuat kondisi pasokan semua lokasi SPPG…"}
                 </p>
               </div>
               <div className="overview-header-status">
@@ -525,33 +530,43 @@ export default function Home() {
             <RoleHero role={role ?? "sppg_head"} />
 
             {/* Strip KPI: dihitung dari data peta real (tanpa fake 0) */}
-            <section className="overview-kpis" aria-label="KPI ringkas">
+            <section
+              className="overview-kpis"
+              aria-label="KPI ringkas"
+              aria-busy={!mapData && !mapError}
+            >
               <div className="kpi-card">
                 <span className="kpi-card-label">Volume Komoditas Aktif</span>
                 <span className="kpi-card-value">
-                  {formatKg(sumFiniteKg(mapData?.locations ?? []))}
+                  {mapData ? (
+                    formatKg(sumFiniteKg(mapData.locations ?? []))
+                  ) : (
+                    <span className="skeleton skeleton-value" aria-hidden="true" />
+                  )}
                 </span>
                 <span className="kpi-card-foot">total pasokan lokasi terpetakan</span>
               </div>
               <div className="kpi-card">
                 <span className="kpi-card-label">Lokasi Surplus</span>
                 <span className="kpi-card-value kpi-card-safe">
-                  {mapData
-                    ? (mapData.locations ?? []).filter(
-                        (l: any) => l.status === "surplus"
-                      ).length
-                    : "—"}
+                  {mapData ? (
+                    (mapData.locations ?? []).filter(
+                      (l: any) => l.status === "surplus"
+                    ).length
+                  ) : (
+                    <span className="skeleton skeleton-value" aria-hidden="true" />
+                  )}
                 </span>
                 <span className="kpi-card-foot">siap jadi sumber distribusi</span>
               </div>
               <div className="kpi-card">
                 <span className="kpi-card-label">Lokasi Shortage</span>
                 <span className="kpi-card-value kpi-card-danger">
-                  {mapData
-                    ? (mapData.locations ?? []).filter(
-                        (l: any) => l.status === "shortage"
-                      ).length
-                    : "—"}
+                  {mapData ? (
+                    mapShortage.length
+                  ) : (
+                    <span className="skeleton skeleton-value" aria-hidden="true" />
+                  )}
                 </span>
                 <span className="kpi-card-foot">butuh penyeimbangan</span>
               </div>
@@ -626,13 +641,18 @@ export default function Home() {
                     Koridor Pasokan Aktif: Jawa Barat &amp; DKI Jakarta
                   </span>
                   <span className="map-panel-dark-count">
-                    {(mapData?.locations ?? []).length} Lokasi
+                    {mapData ? (
+                      `${(mapData.locations ?? []).length} Lokasi`
+                    ) : (
+                      <span className="skeleton skeleton-pill" aria-hidden="true" />
+                    )}
                   </span>
                 </div>
                 <div className="map-panel-dark-body">
                   <SupplyMap
                     locations={mapData?.locations ?? []}
                     commodity={mapData?.commodity}
+                    loading={!mapData && !mapError}
                   />
                 </div>
               </div>

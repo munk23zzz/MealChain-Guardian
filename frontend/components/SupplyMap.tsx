@@ -38,11 +38,14 @@ function fitBoundsFor(locations: readonly BalanceMapLocation[]): [[number, numbe
 }
 
 export default function SupplyMap({
+  loading = false,
   locations,
   commodity,
 }: {
   locations: readonly BalanceMapLocation[];
   commodity?: string;
+  /** Data peta belum tiba: tampilkan skeleton, bukan pesan "belum ada data". */
+  loading?: boolean;
 }) {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -93,12 +96,25 @@ export default function SupplyMap({
 
   if (!locations?.length) {
     return (
-      <section className="map-card card" aria-label="Peta kondisi komoditas">
+      <section
+        className="map-card card"
+        aria-label="Peta kondisi komoditas"
+        aria-busy={loading || undefined}
+      >
         <h3>Peta Kondisi</h3>
-        <p className="map-empty">
-          Belum ada data peta — pilih komoditas untuk memuat kondisi semua
-          lokasi.
-        </p>
+        {loading ? (
+          <>
+            <p className="sr-only" aria-live="polite">
+              Memuat peta kondisi semua lokasi…
+            </p>
+            <div className="skeleton skeleton-map" aria-hidden="true" />
+          </>
+        ) : (
+          <p className="map-empty">
+            Belum ada data peta — pilih komoditas untuk memuat kondisi semua
+            lokasi.
+          </p>
+        )}
       </section>
     );
   }

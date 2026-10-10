@@ -36,6 +36,13 @@ function EmptyState({ loading }: { loading: boolean }) {
     <div className={styles.empty} aria-busy={loading || undefined}>
       <p>{loading ? "Memuat data lokasi…" : "Belum ada data lokasi"}</p>
       <span>{loading ? "Mengambil kondisi pasokan terbaru." : "Belum ada snapshot pasokan untuk ditampilkan."}</span>
+      {loading && (
+        <div className="skeleton-rows" aria-hidden="true">
+          <div className="skeleton skeleton-row" />
+          <div className="skeleton skeleton-row" />
+          <div className="skeleton skeleton-row" />
+        </div>
+      )}
     </div>
   );
 }
