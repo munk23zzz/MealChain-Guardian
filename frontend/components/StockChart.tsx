@@ -30,11 +30,19 @@ export default function StockChart({ locations }: { locations: readonly BalanceM
 
   if (!locations.length) return null;
 
-  const data: ChartPoint[] = locations.map((location) => ({
-    lokasi: location.location,
-    Shortage: toChartValue(location.shortage_kg),
-    Surplus: toChartValue(location.surplus_kg),
-  }));
+  // Urut menurun menurut shortage (peringkat = inti wawasan operasional),
+  // lalu surplus — panduan chart: urutkan menurun, bukan urutan acak.
+  const data: ChartPoint[] = locations
+    .map((location) => ({
+      lokasi: location.location,
+      Shortage: toChartValue(location.shortage_kg),
+      Surplus: toChartValue(location.surplus_kg),
+    }))
+    .sort(
+      (a, b) =>
+        (b.Shortage ?? 0) - (a.Shortage ?? 0) ||
+        (b.Surplus ?? 0) - (a.Surplus ?? 0),
+    );
 
   if (!mounted) {
     return (
@@ -61,18 +69,35 @@ export default function StockChart({ locations }: { locations: readonly BalanceM
             : "Grafik stok belum punya data."
         }
       >
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#DCE6E9" />
-            <XAxis dataKey="lokasi" tick={{ fontSize: 12, fill: "#555" }} interval={0} angle={-30} textAnchor="end" height={54} />
-            <YAxis tick={{ fontSize: 12, fill: "#555" }} tickFormatter={(value: number) => value.toLocaleString("id-ID")} />
+        {/* Batang HORIZONTAL: kartu ini hanya sepertiga lebar halaman, dan 10
+            label lokasi yang diputar tetap saling tumpang tindih di sana.
+            Mendatar = label terbaca penuh tanpa rotasi. */}
+        <ResponsiveContainer width="100%" height={380}>
+          <BarChart
+            data={data}
+            layout="vertical"
+            margin={{ top: 4, right: 16, left: 4, bottom: 4 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#DCE6E9" horizontal={false} />
+            <XAxis
+              type="number"
+              tick={{ fontSize: 12, fill: "#555" }}
+              tickFormatter={(value: number) => value.toLocaleString("id-ID")}
+            />
+            <YAxis
+              type="category"
+              dataKey="lokasi"
+              width={84}
+              interval={0}
+              tick={{ fontSize: 12, fill: "#555" }}
+            />
             <Tooltip formatter={(value) => {
               const numeric = Number(value);
               return Number.isFinite(numeric) ? `${numeric.toLocaleString("id-ID")} kg` : "—";
             }} />
             <Legend />
-            <Bar dataKey="Shortage" fill={SHORTAGE} radius={[3, 3, 0, 0]} />
-            <Bar dataKey="Surplus" fill={SURPLUS} radius={[3, 3, 0, 0]} />
+            <Bar dataKey="Shortage" fill={SHORTAGE} radius={[0, 3, 3, 0]} />
+            <Bar dataKey="Surplus" fill={SURPLUS} radius={[0, 3, 3, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

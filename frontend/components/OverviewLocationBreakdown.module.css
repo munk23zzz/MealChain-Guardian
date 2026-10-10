@@ -7,6 +7,17 @@
 .table tbody th { font-weight: 700; }
 .table tbody td:nth-child(n+3) { font-family: var(--font-data, ui-monospace, monospace); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .table tbody tr:last-child th, .table tbody tr:last-child td { border-bottom: 0; }
+
+/* >=721px: kolom angka dipatok lebarnya dan judulnya ikut rata kanan, supaya
+   angka tidak menggantung jauh dari judul kolomnya. Di mobile tabel berubah
+   jadi kartu (media query di bawah), jadi aturan ini tidak berlaku di sana. */
+@media (min-width: 721px) {
+  .table { table-layout: fixed; }
+  .table thead th:nth-child(1) { width: 30%; }
+  .table thead th:nth-child(2) { width: 18%; }
+  .table thead th:nth-child(3), .table thead th:nth-child(4), .table thead th:nth-child(5) { width: 17.33%; }
+  .table thead th:nth-child(n+3) { text-align: right; }
+}
 .status { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 4px 8px; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .statusDot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .shortage { color: #C62828; background: rgba(198, 40, 40, 0.1); }

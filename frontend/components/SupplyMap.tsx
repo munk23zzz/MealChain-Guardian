@@ -37,15 +37,72 @@ function fitBoundsFor(locations: readonly BalanceMapLocation[]): [[number, numbe
   return [[Math.min(...lons) - pad, Math.min(...lats) - pad], [Math.max(...lons) + pad, Math.max(...lats) + pad]];
 }
 
+/**
+ * Daftar status per lokasi (kartu bertumpuk dalam grid).
+ *
+ * Dipisah dari peta supaya bisa dirender sebagai bagian tersendiri selebar
+ * halaman — tata letak dashboard acuan: peta + grafik berdampingan, daftar
+ * lokasi di bawahnya. `SupplyMap` tetap merendernya secara bawaan supaya
+ * kontrak render lama (dan tesnya) tidak berubah.
+ */
+export function StatusLocationList({
+  locations,
+}: {
+  locations: readonly BalanceMapLocation[];
+}) {
+  if (!locations.length) return null;
+
+  return (
+    <>
+      <div className="map-section-head">
+        <h3>Status Lokasi</h3>
+        <span className="map-section-count">{locations.length} Lokasi</span>
+        <span className="map-legend" aria-label="Legenda status">
+          <span className="map-legend-item">
+            <i className="map-dot map-dot-shortage" aria-hidden="true" /> Shortage
+          </span>
+          <span className="map-legend-item">
+            <i className="map-dot map-dot-surplus" aria-hidden="true" /> Surplus
+          </span>
+          <span className="map-legend-item">
+            <i className="map-dot map-dot-balanced" aria-hidden="true" /> Seimbang
+          </span>
+        </span>
+      </div>
+      <ul className="map-list">
+        {locations.map((l) => (
+          <li key={l.location} className={`map-row map-row-${l.status}`}>
+            <i className={`map-dot map-dot-${l.status}`} aria-hidden="true" />
+            <span className="map-row-name">{l.location}</span>
+            <span className="map-row-status">
+              {formatBalanceStatus(l.status)}
+            </span>
+            <span className="map-row-supply">Pasokan: {formatKg(l.supply_kg)}</span>
+            <span className="map-row-demand">Kebutuhan: {formatKg(l.demand_kg)}</span>
+            <span className="map-row-gap">Selisih: {formatBalanceGap(l)}</span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
 export default function SupplyMap({
   loading = false,
   locations,
   commodity,
+  showStatusList = true,
+  showHeader = true,
 }: {
   locations: readonly BalanceMapLocation[];
   commodity?: string;
   /** Data peta belum tiba: tampilkan skeleton, bukan pesan "belum ada data". */
   loading?: boolean;
+  /** false = daftar status dirender pemanggil sendiri (mis. selebar halaman). */
+  showStatusList?: boolean;
+  /** false = kartu peta tidak menulis judul/atribusi lagi karena pembungkus
+   *  halaman sudah menulisnya (menghindari dua judul bertumpuk). */
+  showHeader?: boolean;
 }) {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -101,7 +158,7 @@ export default function SupplyMap({
         aria-label="Peta kondisi komoditas"
         aria-busy={loading || undefined}
       >
-        <h3>Peta Kondisi</h3>
+        {showHeader && <h3>Peta Kondisi</h3>}
         {loading ? (
           <>
             <p className="sr-only" aria-live="polite">
@@ -121,47 +178,20 @@ export default function SupplyMap({
 
   return (
     <section className="map-card card" aria-label="Peta kondisi komoditas">
-      <div className="card-header">
-        <h3>Peta Kondisi{commodity ? ` — ${commodity}` : ""}</h3>
-        <span className="map-attrib">MapLibre GL · tile OpenStreetMap · koordinat dari database</span>
-      </div>
+      {showHeader && (
+        <div className="card-header">
+          <h3>Peta Kondisi{commodity ? ` — ${commodity}` : ""}</h3>
+          <span className="map-attrib">MapLibre GL · tile OpenStreetMap · koordinat dari database</span>
+        </div>
+      )}
       <div className="map-body">
         {/* Container peta — dirender SSR, MapLibre menempel di client */}
         <div ref={mapContainer} className="map-gl" />
-        <div className="map-side">
-          {/* Kepala bagian ala acuan: judul + jumlah lokasi + legenda status
-              (kolom tabel lama tidak dipakai lagi karena kartu kini bertumpuk
-              dalam grid, bukan baris tabel). */}
-          <div className="map-section-head">
-            <h3>Status Lokasi</h3>
-            <span className="map-section-count">{locations.length} Lokasi</span>
-            <span className="map-legend" aria-label="Legenda status">
-              <span className="map-legend-item">
-                <i className="map-dot map-dot-shortage" aria-hidden="true" /> Shortage
-              </span>
-              <span className="map-legend-item">
-                <i className="map-dot map-dot-surplus" aria-hidden="true" /> Surplus
-              </span>
-              <span className="map-legend-item">
-                <i className="map-dot map-dot-balanced" aria-hidden="true" /> Seimbang
-              </span>
-            </span>
+        {showStatusList && (
+          <div className="map-side">
+            <StatusLocationList locations={locations} />
           </div>
-          <ul className="map-list">
-            {locations.map((l) => (
-              <li key={l.location} className={`map-row map-row-${l.status}`}>
-                <i className={`map-dot map-dot-${l.status}`} aria-hidden="true" />
-                <span className="map-row-name">{l.location}</span>
-                <span className="map-row-status">
-                  {formatBalanceStatus(l.status)}
-                </span>
-                <span className="map-row-supply">Pasokan: {formatKg(l.supply_kg)}</span>
-                <span className="map-row-demand">Kebutuhan: {formatKg(l.demand_kg)}</span>
-                <span className="map-row-gap">Selisih: {formatBalanceGap(l)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        )}
       </div>
     </section>
   );

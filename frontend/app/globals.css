@@ -1352,11 +1352,12 @@ a:focus-visible {
 }
 
 .stock-chart-holder {
-  height: 280px;
+  /* Diselaraskan dengan tinggi peta (420px) supaya baris atas rata. */
+  height: 380px;
 }
 
 .stock-chart-placeholder {
-  height: 280px;
+  height: 380px;
   border-radius: 8px;
   background: repeating-linear-gradient(
     45deg,
@@ -1799,15 +1800,23 @@ a:focus-visible {
 }
 
 /* Strip KPI = SATU kartu dengan beberapa kolom (pola MetricStrip acuan):
-   label kecil + titik nada, nilai tunggal besar, keterangan di bawah. */
+   label kecil + titik nada, nilai tunggal besar, keterangan di bawah.
+   Tiga kolom sama lebar — `auto-fit` menyisakan satu kolom kosong di kanan. */
 .overview-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px 24px;
   padding: 14px 16px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+}
+
+/* Layar sempit: tiga kolom jadi terlalu sempit — tumpuk satu per baris. */
+@media (max-width: 720px) {
+  .overview-kpis {
+    grid-template-columns: 1fr;
+  }
 }
 
 .kpi-card {
@@ -2071,6 +2080,11 @@ a:focus-visible {
   text-transform: none;
   letter-spacing: 0;
   color: var(--navy-900);
+}
+
+.map-panel-dark-head .map-attrib {
+  font-size: 12px;
+  color: var(--ink-muted);
 }
 
 .map-panel-dark-count {

@@ -28,6 +28,7 @@ import NavIcon, {
   LogoutIcon,
   SeedIcon,
 } from "../components/NavIcon";
+import { StatusLocationList } from "../components/SupplyMap";
 import RecommendationCard from "../components/RecommendationCard";
 import AgentTraceViewer from "../components/AgentTraceViewer";
 import IntegrityPanel from "../components/IntegrityPanel";
@@ -509,7 +510,7 @@ export default function Home() {
                 <h1>Overview Pasokan &amp; Distribusi</h1>
                 <p className="overview-header-sub">
                   {mapData
-                    ? `Peta ${(mapData.locations ?? []).length} lokasi SPPG — hijau surplus, merah shortage, abu seimbang. Klik kartu Status Lokasi untuk melihat angka pasokan dan kebutuhan.`
+                    ? `Peta ${(mapData.locations ?? []).length} lokasi SPPG — hijau surplus, merah shortage, abu seimbang.`
                     : "Memuat kondisi pasokan semua lokasi SPPG…"}
                 </p>
               </div>
@@ -640,6 +641,9 @@ export default function Home() {
                   <span className="map-panel-dark-title">
                     Koridor Pasokan Aktif: Jawa Barat &amp; DKI Jakarta
                   </span>
+                  <span className="map-attrib">
+                    MapLibre GL · tile OpenStreetMap · koordinat dari database
+                  </span>
                   <span className="map-panel-dark-count">
                     {mapData ? (
                       `${(mapData.locations ?? []).length} Lokasi`
@@ -653,6 +657,8 @@ export default function Home() {
                     locations={mapData?.locations ?? []}
                     commodity={mapData?.commodity}
                     loading={!mapData && !mapError}
+                    showStatusList={false}
+                    showHeader={false}
                   />
                 </div>
               </div>
@@ -662,6 +668,28 @@ export default function Home() {
                   <StockChart locations={mapData?.locations ?? []} />
                 </div>
               </div>
+            </section>
+
+            {/* Status lokasi selebar halaman (tata letak acuan): baris atas
+                peta + grafik yang tingginya seimbang, daftar lokasi di bawah. */}
+            <section
+              className="map-card card status-location-list"
+              aria-label="Status lokasi"
+              aria-busy={!mapData && !mapError}
+            >
+              {mapData ? (
+                <StatusLocationList locations={mapData.locations ?? []} />
+              ) : (
+                <>
+                  <div className="map-section-head">
+                    <h3>Status Lokasi</h3>
+                  </div>
+                  <p className="sr-only" aria-live="polite">
+                    Memuat status lokasi…
+                  </p>
+                  <div className="skeleton skeleton-map" aria-hidden="true" />
+                </>
+              )}
             </section>
 
             {/* Rincian angka per lokasi — kartu selebar halaman supaya lima
