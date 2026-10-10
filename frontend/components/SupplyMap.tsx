@@ -113,20 +113,22 @@ export default function SupplyMap({
         {/* Container peta — dirender SSR, MapLibre menempel di client */}
         <div ref={mapContainer} className="map-gl" />
         <div className="map-side">
-          <div className="map-legend" aria-label="Legenda status">
-            <span className="map-column-label">Lokasi</span>
-            <span className="map-column-label">Status</span>
-            <span className="map-column-label">Pasokan</span>
-            <span className="map-column-label">Kebutuhan</span>
-            <span className="map-column-label">Selisih</span>
-            <span className="map-legend-item">
-              <i className="map-dot map-dot-shortage" /> Shortage
-            </span>
-            <span className="map-legend-item">
-              <i className="map-dot map-dot-surplus" /> Surplus
-            </span>
-            <span className="map-legend-item">
-              <i className="map-dot map-dot-balanced" /> Seimbang
+          {/* Kepala bagian ala acuan: judul + jumlah lokasi + legenda status
+              (kolom tabel lama tidak dipakai lagi karena kartu kini bertumpuk
+              dalam grid, bukan baris tabel). */}
+          <div className="map-section-head">
+            <h3>Status Lokasi</h3>
+            <span className="map-section-count">{locations.length} Lokasi</span>
+            <span className="map-legend" aria-label="Legenda status">
+              <span className="map-legend-item">
+                <i className="map-dot map-dot-shortage" aria-hidden="true" /> Shortage
+              </span>
+              <span className="map-legend-item">
+                <i className="map-dot map-dot-surplus" aria-hidden="true" /> Surplus
+              </span>
+              <span className="map-legend-item">
+                <i className="map-dot map-dot-balanced" aria-hidden="true" /> Seimbang
+              </span>
             </span>
           </div>
           <ul className="map-list">

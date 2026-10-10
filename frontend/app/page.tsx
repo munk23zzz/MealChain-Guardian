@@ -121,6 +121,8 @@ export default function Home() {
   const [mapData, setMapData] = useState<any>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapRefresh, setMapRefresh] = useState(0);
+  // Waktu pembaruan peta terakhir (acuan menampilkan "terakhir diperbarui").
+  const [mapUpdatedAt, setMapUpdatedAt] = useState<number | null>(null);
   // Kerangka acuan: rail bisa dilipat (lebar 68px, label disembunyikan).
   const [sideCollapsed, setSideCollapsed] = useState(false);
   useEffect(() => {
@@ -132,6 +134,7 @@ export default function Home() {
         if (!stopped) {
           setMapData(data);
           setMapError(null);
+          setMapUpdatedAt(Date.now());
         }
       } catch (error) {
         if (!stopped) setMapError(error instanceof Error ? error.message : "Peta tidak tersedia.");
@@ -363,6 +366,10 @@ export default function Home() {
   }
 
   const selected = decisions.find((d) => d.decision_id === selectedId) ?? null;
+  // Turunan data peta untuk banner + judul (dipakai tab Overview).
+  const mapShortage: any[] = (mapData?.locations ?? []).filter(
+    (l: any) => l.status === "shortage"
+  );
   const roleLabel = ROLE_LABEL[role ?? ""] ?? (role ?? "user");
 
   // Feed traceable (arah Roy 2026-10-09): EXPIRED TIDAK disembunyikan.
@@ -485,43 +492,37 @@ export default function Home() {
       <div className="app-content">
         {tab === "overview" && (
           <div className="overview-page">
-            {/* Layout mengikuti mockup Stitch overview_map_supply_status:
-                strip KPI → filter pill komoditas → split peta (gelap) +
-                panel samping (grafik + breakdown). Angka dihitung dari
-                data peta real (mapData), tanpa karangan. */}
-            <RoleHero role={role ?? "sppg_head"} />
-
-            {/* Subheader ala mockup: judul + status live sync (polling 5s) */}
+            {/* Tata letak mengikuti dashboard acuan: header halaman → strip
+                peran → strip KPI → banner lokasi kritis → kartu filter →
+                peta (2/3) + grafik stok (1/3) → kartu Status Lokasi.
+                Angka dihitung dari data peta real (mapData), tanpa karangan. */}
             <section
               className="overview-header"
               aria-label="Ringkasan peta pasokan"
             >
               <div className="overview-header-main">
-                <span className="overview-header-icon" aria-hidden="true">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <circle cx="12" cy="12" r="3" />
-                    <circle cx="5" cy="7" r="2.2" />
-                    <circle cx="19" cy="7" r="2.2" />
-                    <circle cx="6" cy="17.5" r="2.2" />
-                    <circle cx="18" cy="17.5" r="2.2" />
-                    <path d="M6.8 8.3 9.8 10.5M17.2 8.3 14.2 10.5M7 15.8 9.9 13.9M17 15.8 14.1 13.9" />
-                  </svg>
+                <h1>Overview Pasokan &amp; Distribusi</h1>
+                <p className="overview-header-sub">
+                  Peta {(mapData?.locations ?? []).length} lokasi SPPG — hijau
+                  surplus, merah shortage, abu seimbang. Klik kartu Status
+                  Lokasi untuk melihat angka pasokan dan kebutuhan.
+                </p>
+              </div>
+              <div className="overview-header-status">
+                <span className="overview-live-pill">
+                  <span className="overview-live-dot" aria-hidden="true" />
+                  Live Sync (5s)
                 </span>
-                <div>
-                  <div className="overview-header-title">
-                    <h1>Overview Map &amp; Supply Status</h1>
-                    <span className="overview-live-pill">
-                      <span className="overview-live-dot" aria-hidden="true" />
-                      Live Sync (5s)
-                    </span>
-                  </div>
-                  <p className="overview-header-sub">
-                    Telemetri koridor redistribusi SPPG — surplus, shortage,
-                    dan kondisi stok per lokasi.
-                  </p>
-                </div>
+                {mapUpdatedAt !== null && (
+                  <span className="overview-updated" aria-live="polite">
+                    terakhir diperbarui{" "}
+                    {new Date(mapUpdatedAt).toLocaleTimeString("id-ID")}
+                  </span>
+                )}
               </div>
             </section>
+
+            <RoleHero role={role ?? "sppg_head"} />
 
             {/* Strip KPI: dihitung dari data peta real (tanpa fake 0) */}
             <section className="overview-kpis" aria-label="KPI ringkas">
@@ -556,9 +557,35 @@ export default function Home() {
               </div>
             </section>
 
-            {/* Filter pill komoditas (menggantikan select — perilaku sama) */}
+            {/* Banner peringatan ala acuan: lokasi kritis disebut namanya,
+                angkanya dari data peta real (bukan karangan). */}
+            {mapShortage.length > 0 && (
+              <div className="overview-alert" role="alert">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+                  <path d="M12 9v4M12 17h.01" />
+                </svg>
+                <p>
+                  <strong>{mapShortage.length} lokasi shortage</strong>{" "}
+                  — {mapShortage.map((l: any) => l.location).join(", ")}. Cek
+                  rekomendasi agent untuk alokasi ulang.
+                </p>
+              </div>
+            )}
+
+            {/* Filter pill komoditas di dalam kartu (acuan: kartu filter) */}
             <div
-              className="commodity-filters"
+              className="commodity-filters filter-card"
               role="group"
               aria-label="Komoditas peta"
             >
@@ -611,14 +638,18 @@ export default function Home() {
               </div>
               <div className="overview-side">
                 <div className="map-panel">
+                  <h3>Pasokan per Lokasi</h3>
                   <StockChart locations={mapData?.locations ?? []} />
                 </div>
-                {/* Breakdown tabel lokasi — angka dari data real mapData */}
-                <div className="map-panel">
-                  <h3>Breakdown Lokasi</h3>
-                  <OverviewLocationBreakdown locations={mapData?.locations ?? []} loading={!mapData && !mapError} />
-                </div>
               </div>
+            </section>
+
+            {/* Rincian angka per lokasi — kartu selebar halaman supaya lima
+                kolomnya tidak terpotong (di acuan, angka ini ada di kartu
+                Status lokasi). */}
+            <section className="map-panel" aria-label="Rincian pasokan per lokasi">
+              <h3>Rincian Pasokan per Lokasi</h3>
+              <OverviewLocationBreakdown locations={mapData?.locations ?? []} loading={!mapData && !mapError} />
             </section>
           </div>
         )}

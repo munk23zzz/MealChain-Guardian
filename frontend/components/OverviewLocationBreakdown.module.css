@@ -2,7 +2,7 @@
 .summary { margin: 0 0 12px; color: var(--ink-muted, #555555); font-size: 12px; font-weight: 600; }
 .tableWrap { overflow-x: auto; }
 .table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
-.table th, .table td { padding: 10px 8px; border-bottom: 1px solid var(--line, #DCE6E9); text-align: left; vertical-align: middle; }
+.table th, .table td { padding: 9px 10px; border-bottom: 1px solid var(--line, #DCE6E9); text-align: left; vertical-align: middle; }
 .table thead th { color: var(--ink-muted, #555555); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
 .table tbody th { font-weight: 700; }
 .table tbody td:nth-child(n+3) { font-family: var(--font-data, ui-monospace, monospace); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }

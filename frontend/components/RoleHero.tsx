@@ -49,9 +49,9 @@ export default function RoleHero({ role }: { role: string }) {
   };
   return (
     <section className="role-hero" aria-label={p.title}>
-      <div>
+      <div className="role-hero-text">
         <h2>{p.title}</h2>
-        <p>{p.mission}</p>
+        <p className="role-mission">{p.mission}</p>
       </div>
       {p.steps.length > 0 && (
         <ol className="role-steps">

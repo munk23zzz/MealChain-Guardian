@@ -730,40 +730,60 @@ a:focus-visible {
 /* ============ Ops Console + polish role (arah Roy 2026-10-07) ============ */
 
 /* Hero per role — identitas konsol, bukan halaman polos */
+/* Strip peran = kartu ringkas satu blok (padanan kartu cakupan di acuan):
+   judul kecil, misi muted, langkah kerja sebagai daftar inline. */
 .role-hero {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
-  align-items: center;
-  justify-content: space-between;
-  margin: 18px 0 14px;
-  padding: 18px 20px;
+  display: block;
+  padding: 12px 16px;
   border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--ink);
 }
 
+.role-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .role-hero h2 {
-  margin: 0 0 4px;
-  font-size: 20px;
+  margin: 0;
+  font-size: 15px;
   font-weight: 600;
   color: var(--navy-900);
 }
 
 .role-hero p {
   margin: 0;
-  max-width: 46ch;
-  font-size: 14px;
+  max-width: 92ch;
+  font-size: 13px;
   color: var(--ink-muted);
 }
 
-.role-steps {
-  margin: 0;
-  padding-left: 20px;
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--ink);
+.role-hero .role-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+
+.role-hero .role-steps li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+/* Penanda langkah: arah panah kecil, bukan emoji. */
+.role-hero .role-steps li::before {
+  content: "\2192";
+  color: var(--accent-strong);
 }
 
 /* Konsol operasi — interaksi sebelum hasil */
@@ -1206,16 +1226,22 @@ a:focus-visible {
 .map-marker-balanced { background: #555555; }
 
 .map-card .map-side { margin-top: 16px; container-type: inline-size; }
-.map-card .map-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.map-card .map-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 0; }
+
+/* Kepala bagian "Status Lokasi" (judul + jumlah + legenda). */
+.map-section-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; }
+.map-section-head h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--navy-900); }
+.map-section-head .map-legend { margin-left: auto; }
+.map-section-count { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-sunken); color: var(--ink-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .map-card .map-column-label { display: none; }
 .map-card .map-legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 .map-card .map-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .map-card .map-dot-shortage { background: var(--status-danger); }
 .map-card .map-dot-surplus { background: var(--accent-strong); }
 .map-card .map-dot-balanced { background: var(--ink-muted); }
-.map-card .map-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.map-card .map-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; align-items: start; }
 .map-card .map-row { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 8px 10px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); }
-.map-card .map-row-name { font-weight: 650; overflow-wrap: anywhere; }
+.map-card .map-row-name { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
 .map-card .map-row-status { font-size: 12px; padding: 3px 8px; border-radius: 4px; background: var(--bg-page); }
 .map-card .map-row-shortage .map-row-status { color: var(--status-danger); background: rgba(198, 40, 40, 0.1); }
 .map-card .map-row-surplus .map-row-status { color: var(--status-safe); background: rgba(46, 125, 50, 0.1); }
@@ -1269,17 +1295,16 @@ a:focus-visible {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-1);
-  padding: 14px 16px;
+  padding: 16px;
 }
 
 .map-panel h3 {
-  margin: 0 0 8px;
-  font-size: 13px;
-  font-weight: 650;
-  letter-spacing: 0.2px;
-  text-transform: uppercase;
-  color: var(--ink-muted);
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--navy-900);
 }
 
 .map-controls {
@@ -1689,8 +1714,31 @@ a:focus-visible {
 
 .overview-header-main {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.overview-header-main h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--navy-900);
+}
+
+.overview-header-status {
+  display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.overview-updated {
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .overview-header-icon {
@@ -1718,9 +1766,10 @@ a:focus-visible {
 }
 
 .overview-header-sub {
-  margin: 2px 0 0;
-  font-size: 12.5px;
+  margin: 0;
+  font-size: 14px;
   color: var(--ink-muted);
+  max-width: 72ch;
 }
 
 .overview-live-pill {
@@ -1749,44 +1798,70 @@ a:focus-visible {
   50% { opacity: 0.35; }
 }
 
-/* Strip KPI — kartu putih hairline ala DESIGN.md */
+/* Strip KPI = SATU kartu dengan beberapa kolom (pola MetricStrip acuan):
+   label kecil + titik nada, nilai tunggal besar, keterangan di bawah. */
 .overview-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px 24px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
 }
 
 .kpi-card {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 14px 16px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-1);
+  gap: 2px;
+  min-width: 0;
 }
 
 .kpi-card-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   font-weight: 500;
   color: var(--ink-muted);
 }
 
+/* Titik nada hanya menandai, tidak mewarnai angka (kuning di atas putih
+   tidak terbaca — aturan yang sama dipakai komponen MetricStrip acuan). */
+.kpi-card-label::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex: none;
+  background: var(--ink-muted);
+  opacity: 0.6;
+}
+
+.kpi-card:has(.kpi-card-safe) .kpi-card-label::before {
+  background: var(--status-safe);
+  opacity: 1;
+}
+
+.kpi-card:has(.kpi-card-danger) .kpi-card-label::before {
+  background: var(--status-danger);
+  opacity: 1;
+}
+
 .kpi-card-value {
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--navy-900);
   font-variant-numeric: tabular-nums;
 }
 
-.kpi-card-safe { color: var(--accent-strong); }
-.kpi-card-danger { color: var(--status-danger); }
+.kpi-card-safe { color: var(--navy-900); }
+.kpi-card-danger { color: var(--navy-900); }
 
 .kpi-card-foot {
   font-size: 12px;
   color: var(--ink-muted);
-  font-family: var(--font-data);
 }
 
 /* Filter pill komoditas — pill bulat ala mockup */
@@ -1798,11 +1873,50 @@ a:focus-visible {
 }
 
 .commodity-filters-label {
-  font-family: var(--font-data);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--ink-muted);
+}
+
+/* Kartu filter (acuan: satu kartu putih berisi label + pill). */
+.filter-card {
+  padding: 10px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.filter-card .commodity-pill {
+  background: var(--surface);
+  font-size: 14px;
+  padding: 6px 14px;
+}
+
+/* Banner peringatan lokasi kritis (tint danger, teks navy terbaca). */
+.overview-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(198, 40, 40, 0.4);
+  background: rgba(198, 40, 40, 0.1);
+  color: var(--navy-900);
+  font-size: 14px;
+}
+
+.overview-alert svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--status-danger);
+}
+
+.overview-alert p {
+  margin: 0;
+}
+
+.overview-alert strong {
+  color: var(--status-danger);
 }
 
 .commodity-pill {
@@ -1834,10 +1948,10 @@ a:focus-visible {
   font-size: 12.5px;
 }
 
-/* Split 60/40: peta gelap kiri, telemetri kanan (ala mockup) */
+/* Split 2:1 seperti dashboard acuan: peta lebar, telemetri kanan. */
 .overview-split {
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   gap: 12px;
   align-items: start;
 }
@@ -1901,8 +2015,8 @@ a:focus-visible {
 }
 
 .map-panel-dark-body .map-gl {
-  height: 460px;
-  border-color: var(--terminal-border);
+  height: 420px;
+  border-color: var(--line);
 }
 
 .overview-side {
