@@ -43,3 +43,74 @@ export function nodeGauges(row: BalanceMapLocation): { supply: Gauge; demand: Ga
     demand: { value: demand, share: share(demand) },
   };
 }
+
+// --- Sinkronisasi peta tanpa menyentuh zoom (arah Roy 2026-10-11) -----------
+// Keluhan: tiap polling (5 detik) membuat peta "nge-zoom" sendiri — peta
+// dibangun ulang tiap kali array `locations` berganti identitas, lalu
+// fitBounds dijalankan lagi, sehingga zoom/geser pengguna hilang.
+// Dua penjaga murni di bawah ini yang menjaga perilakunya:
+//   1. `pinSignature`/`pinDiff` — tahu penanda MANA yang isinya berubah,
+//      supaya penanda diperbarui di tempat (tanpa membangun ulang peta).
+//   2. `nextMapFocus` — kapan peta BOLEH di-dekatkan: hanya saat pertama
+//      tampil atau saat lokasi aktif BERGANTI.
+
+/** Tanda tangan isi satu penanda: berubah hanya bila nada/label/posisi/angka
+ *  lokasi benar-benar berubah — bukan karena objeknya baru. */
+export function pinSignature(row: BalanceMapLocation): string {
+  return [
+    pinTone(row.status),
+    finiteOrNull(row.latitude) ?? "",
+    finiteOrNull(row.longitude) ?? "",
+    pinLabel(row),
+    finiteOrNull(row.supply_kg) ?? "",
+    finiteOrNull(row.demand_kg) ?? "",
+  ].join("|");
+}
+
+/** Peta tanda tangan per nama lokasi (hanya lokasi berkoordinat yang punya
+ *  penanda — sama dengan aturan pembuatan penanda). */
+export function pinSignatures(locations: readonly BalanceMapLocation[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  locations.forEach((row) => {
+    if (finiteOrNull(row.latitude) === null || finiteOrNull(row.longitude) === null) return;
+    out[row.location] = pinSignature(row);
+  });
+  return out;
+}
+
+/** Penanda yang perlu ditambah / diperbarui / dibuang antara dua snapshot. */
+export function pinDiff(
+  previous: Readonly<Record<string, string>>,
+  current: Readonly<Record<string, string>>
+): { added: string[]; changed: string[]; removed: string[] } {
+  const added: string[] = [];
+  const changed: string[] = [];
+  const removed: string[] = [];
+  Object.keys(current).forEach((name) => {
+    if (!(name in previous)) added.push(name);
+    else if (previous[name] !== current[name]) changed.push(name);
+  });
+  Object.keys(previous).forEach((name) => {
+    if (!(name in current)) removed.push(name);
+  });
+  return { added, changed, removed };
+}
+
+/** Keadaan fokus peta: sudah pernah di-dekatkan, dan untuk lokasi apa. */
+export type MapFocus = { fitted: boolean; active: string | null };
+
+export const MAP_FOCUS_INITIAL: MapFocus = { fitted: false, active: null };
+
+/**
+ * Keputusan fokus peta. `fit: true` hanya saat belum pernah fokus atau saat
+ * lokasi aktif BERGANTI; sinkronisasi data (isi sama, atau angka/status
+ * berubah pada lokasi yang sama) TIDAK pernah menghasilkan `fit: true` —
+ * itulah sebabnya zoom & geser pengguna bertahan saat sync.
+ */
+export function nextMapFocus(previous: MapFocus, active: string | null): { focus: MapFocus; fit: boolean } {
+  const target = active ?? null;
+  if (!previous.fitted) return { focus: { fitted: true, active: target }, fit: true };
+  if (previous.active === target) return { focus: previous, fit: false };
+  return { focus: { fitted: true, active: target }, fit: true };
+}
+

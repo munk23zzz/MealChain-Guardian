@@ -12,7 +12,7 @@
 // kanan-bawah. Tanpa kepala panel mengapung dan tanpa kaki panel.
 // Warna pin & legenda memakai token status aplikasi (`--status-*`), sama dengan
 // badge di permukaan terang; tidak ada hex di komponen ini.
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
@@ -21,7 +21,15 @@ import {
   formatKg,
   type BalanceMapLocation,
 } from "../lib/overview-format";
-import { pinLabel, pinTone } from "../lib/map-console";
+import {
+  MAP_FOCUS_INITIAL,
+  nextMapFocus,
+  pinDiff,
+  pinLabel,
+  pinSignatures,
+  pinTone,
+  type MapFocus,
+} from "../lib/map-console";
 
 function fitBoundsFor(locations: readonly BalanceMapLocation[]): [[number, number], [number, number]] {
   const points = locations.flatMap((location) => {
@@ -49,6 +57,50 @@ function popupNode(location: BalanceMapLocation): HTMLElement {
   gap.textContent = formatBalanceGap(location);
   box.append(title, numbers, gap);
   return box;
+}
+
+/** Membuat penanda satu lokasi (titik + label + popup). Node DOM — nama lokasi
+ *  datang dari database, jadi bukan innerHTML. */
+function createPin(map: maplibregl.Map, location: BalanceMapLocation, active: boolean): maplibregl.Marker {
+  const el = document.createElement("div");
+  el.className = `map-pin map-pin-${pinTone(location.status)}${active ? " map-pin-active" : ""}`;
+  const accessible = pinAccessibleLabel(location);
+  el.title = accessible;
+  el.setAttribute("aria-label", accessible);
+  // Titik + label sebagai DUA node: elemen marker tetap seukuran titik supaya
+  // koordinat lokasi tepat di tengah titik (label meluber ke kanan).
+  const dot = document.createElement("span");
+  dot.className = "map-pin-dot";
+  dot.setAttribute("aria-hidden", "true");
+  const label = document.createElement("span");
+  label.className = "map-pin-label";
+  label.textContent = pinLabel(location);
+  el.append(dot, label);
+  return new maplibregl.Marker({ element: el })
+    .setLngLat([Number(location.longitude), Number(location.latitude)])
+    .setPopup(new maplibregl.Popup({ offset: 14 }).setDOMContent(popupNode(location)))
+    .addTo(map);
+}
+
+/** Segarkan isi penanda yang sudah ada (posisi, label, keterangan, popup) —
+ *  tanpa menyentuh kamera peta. Dipakai saat sinkronisasi data. */
+function refreshPin(marker: maplibregl.Marker, location: BalanceMapLocation): void {
+  const el = marker.getElement();
+  const wasActive = el.classList.contains("map-pin-active");
+  el.className = `map-pin map-pin-${pinTone(location.status)}${wasActive ? " map-pin-active" : ""}`;
+  const accessible = pinAccessibleLabel(location);
+  el.title = accessible;
+  el.setAttribute("aria-label", accessible);
+  const label = el.querySelector(".map-pin-label");
+  if (label) label.textContent = pinLabel(location);
+  marker.setLngLat([Number(location.longitude), Number(location.latitude)]);
+  marker.setPopup(new maplibregl.Popup({ offset: 14 }).setDOMContent(popupNode(location)));
+}
+
+/** Keterangan penanda untuk pembaca layar (MapLibre menandai tiap penanda
+ *  "Map marker"; sepuluh penanda tanpa keterangan tidak berguna). */
+function pinAccessibleLabel(location: BalanceMapLocation): string {
+  return `${location.location} — pasokan ${formatKg(location.supply_kg)}, permintaan ${formatKg(location.demand_kg)}, ${formatBalanceGap(location)}`;
 }
 
 /**
@@ -124,14 +176,61 @@ export default function SupplyMap({
 }) {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  // Marker per lokasi — dipakai efek sinkronisasi di bawah (tanpa membangun ulang).
+  // Marker per lokasi — dipakai efek sinkronisasi di bawah (tanpa membangun
+  // ulang peta).
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
-  // Penjaga: peta hanya di-dekatkan saat PILIHAN berubah, bukan tiap polling
-  // 5 detik (kalau tidak, pengguna tidak pernah bisa menggeser peta).
-  const lastActiveRef = useRef<string | null | undefined>(undefined);
+  // Data terbaru dibaca lewat ref: peta dibangun SEKALI, sedangkan sinkronisasi
+  // (polling 5 detik) hanya memperbarui isi penanda. Kalau efek pembangunan peta
+  // bergantung pada array `locations` — yang identitasnya berganti tiap polling —
+  // peta dibongkar-pasang tiap 5 detik dan zoom/geser pengguna ikut tersentak.
+  const locationsRef = useRef<readonly BalanceMapLocation[]>(locations);
+  const activeLocationRef = useRef<string | null>(activeLocation ?? null);
+  // Isi penanda terakhir (tanda tangan, bukan identitas objek) + keadaan fokus
+  // peta. Keduanya murni & diuji di lib/map-console.ts.
+  const pinSignaturesRef = useRef<Record<string, string>>({});
+  const focusRef = useRef<MapFocus>(MAP_FOCUS_INITIAL);
+
+  const hasLocations = Boolean(locations?.length);
+  // Pemicu sinkronisasi = tanda tangan ISI data, bukan identitas array.
+  const pinSnapshot = useMemo(() => pinSignatures(locations ?? []), [locations]);
+
+  // Ref data terbaru (efek ini tidak menyentuh kamera peta sama sekali).
+  useEffect(() => {
+    locationsRef.current = locations;
+    activeLocationRef.current = activeLocation ?? null;
+  }, [locations, activeLocation]);
+
+  /** Sinkronkan penanda dengan data terbaru: tambah / ubah isi / buang.
+   *  Tidak ada fitBounds di sini — zoom & geser pengguna tidak disentuh. */
+  const syncMarkers = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const rows = (locationsRef.current ?? []).filter(
+      (l) => Number.isFinite(Number(l.latitude)) && Number.isFinite(Number(l.longitude))
+    );
+    const next = pinSignatures(rows);
+    const diff = pinDiff(pinSignaturesRef.current, next);
+    diff.removed.forEach((name) => {
+      markersRef.current.get(name)?.remove();
+      markersRef.current.delete(name);
+    });
+    rows.forEach((row) => {
+      const existing = markersRef.current.get(row.location);
+      if (!existing) {
+        markersRef.current.set(
+          row.location,
+          createPin(map, row, row.location === activeLocationRef.current)
+        );
+        return;
+      }
+      // Hanya penanda yang isinya benar-benar berubah yang disentuh.
+      if (diff.changed.includes(row.location)) refreshPin(existing, row);
+    });
+    pinSignaturesRef.current = next;
+  }, []);
 
   useEffect(() => {
-    if (!mapContainer.current || mapRef.current || !locations?.length) return;
+    if (!mapContainer.current || mapRef.current || !locationsRef.current?.length) return;
     // Salinan ref untuk cleanup: nilai `.current` bisa berubah sebelum cleanup
     // dijalankan (aturan react-hooks/exhaustive-deps).
     const markers = markersRef.current;
@@ -156,33 +255,10 @@ export default function SupplyMap({
     // contributors · MapLibre) kanan-bawah — seperti acuan.
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     map.addControl(new maplibregl.AttributionControl({ compact: false }), "bottom-right");
-    map.fitBounds(fitBoundsFor(locations), { padding: 40, duration: 0 });
-
-    locations.forEach((l) => {
-      if (l.latitude == null || l.longitude == null) return;
-      const tone = pinTone(l.status);
-      const accessible = `${l.location} — pasokan ${formatKg(l.supply_kg)}, permintaan ${formatKg(l.demand_kg)}, ${formatBalanceGap(l)}`;
-      const el = document.createElement("div");
-      el.className = `map-pin map-pin-${tone}`;
-      el.title = accessible;
-      // Titik + label sebagai DUA node: elemen marker tetap seukuran titik
-      // supaya koordinat lokasi tepat di tengah titik (label meluber ke kanan).
-      const dot = document.createElement("span");
-      dot.className = "map-pin-dot";
-      dot.setAttribute("aria-hidden", "true");
-      const label = document.createElement("span");
-      label.className = "map-pin-label";
-      label.textContent = pinLabel(l);
-      el.append(dot, label);
-      const marker = new maplibregl.Marker({ element: el })
-        .setLngLat([Number(l.longitude), Number(l.latitude)])
-        .setPopup(new maplibregl.Popup({ offset: 14 }).setDOMContent(popupNode(l)))
-        .addTo(map);
-      markers.set(l.location, marker);
-      // MapLibre menandai tiap penanda "Map marker"; sepuluh penanda yang bisa
-      // difokus tanpa keterangan tidak berguna bagi pembaca layar.
-      el.setAttribute("aria-label", accessible);
-    });
+    // Fokus awal (semua lokasi). Efek fokus di bawah yang mengarahkan ke lokasi
+    // aktif bila ada. Setelah ini peta TIDAK pernah dibangun ulang lagi.
+    map.fitBounds(fitBoundsFor(locationsRef.current), { padding: 40, duration: 0 });
+    syncMarkers();
 
     // Kontainer berubah ukuran (jendela, sidebar dilipat, breakpoint tata
     // letak) tanpa MapLibre mengetahuinya — tanpa ini peta tertinggal di
@@ -195,21 +271,28 @@ export default function SupplyMap({
       map.remove();
       mapRef.current = null;
       markers.clear();
-      lastActiveRef.current = undefined;
+      pinSignaturesRef.current = {};
+      focusRef.current = MAP_FOCUS_INITIAL;
     };
-  }, [locations]);
+  }, [hasLocations, syncMarkers]);
+
+  // Sinkronisasi data (arah Roy 2026-10-11): penanda saja, tanpa fitBounds.
+  useEffect(() => {
+    syncMarkers();
+  }, [pinSnapshot, syncMarkers]);
 
   // Sorotan lokasi aktif. Peta hanya di-dekatkan saat PILIHAN lokasi berubah
-  // (polling 5 detik tidak boleh menarik kembali peta yang baru digeser).
+  // (sinkronisasi tidak boleh menarik kembali peta yang baru digeser).
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     markersRef.current.forEach((marker, name) => {
       marker.getElement().classList.toggle("map-pin-active", name === activeLocation);
     });
-    if (lastActiveRef.current === activeLocation) return;
-    lastActiveRef.current = activeLocation;
-    const target = locations.find((l) => l.location === activeLocation);
+    const decision = nextMapFocus(focusRef.current, activeLocation ?? null);
+    focusRef.current = decision.focus;
+    if (!decision.fit) return;
+    const target = (locationsRef.current ?? []).find((l) => l.location === activeLocation);
     const latitude = Number(target?.latitude);
     const longitude = Number(target?.longitude);
     if (target && Number.isFinite(latitude) && Number.isFinite(longitude)) {
@@ -223,8 +306,8 @@ export default function SupplyMap({
       );
       return;
     }
-    map.fitBounds(fitBoundsFor(locations), { padding: 40, duration: 600 });
-  }, [activeLocation, locations]);
+    map.fitBounds(fitBoundsFor(locationsRef.current), { padding: 40, duration: 600 });
+  }, [activeLocation, pinSnapshot]);
 
   if (!locations?.length) {
     return (
