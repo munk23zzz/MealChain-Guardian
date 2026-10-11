@@ -18,7 +18,10 @@ const UNIT_FMT: Record<string, (v: string) => string> = {
     "Rp" + Number(v).toLocaleString("id-ID", { maximumFractionDigits: 0 }),
 };
 
-function fmtValue(unit: string, value: string | null): string | null {
+/** Format nilai metrik KPI (id-ID; SDC memakai IDR). Diekspor supaya halaman
+ *  "Hari Ini" memakai format yang SAMA — dua format persen di satu aplikasi
+ *  akan terbaca seperti dua sumber data. */
+export function fmtValue(unit: string, value: string | null): string | null {
   if (value === null) return null;
   const fmt = UNIT_FMT[unit];
   return fmt ? fmt(value) : Number(value).toLocaleString("id-ID", {
@@ -46,7 +49,9 @@ function shortId(id?: string | null): string {
   return id.length > 10 ? `${id.slice(0, 8)}…` : id;
 }
 
-const STATE_LABEL: Record<string, string> = {
+/** Keadaan metrik dari backend (kata apa adanya, tidak dikarang). Diekspor
+ *  untuk halaman "Hari Ini" supaya istilahnya sama dengan tab KPI. */
+export const STATE_LABEL: Record<string, string> = {
   available: "tersedia",
   no_data: "belum ada data",
   unavailable: "tidak tersedia",

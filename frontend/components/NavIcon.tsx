@@ -8,9 +8,16 @@
 
 import type { ReactNode } from "react";
 
-type NavId = "overview" | "kpi" | "recommendations" | "agent-log" | "demo-control";
+type NavId = "today" | "overview" | "kpi" | "recommendations" | "evidence" | "agent-log" | "demo-control";
 
 const GLYPHS: Record<NavId, ReactNode> = {
+  // sun (Hari Ini) — hari berjalan
+  today: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </>
+  ),
   // layout-dashboard
   overview: (
     <>
@@ -36,6 +43,16 @@ const GLYPHS: Record<NavId, ReactNode> = {
       <path d="M12 16h4" />
       <path d="M8 11h.01" />
       <path d="M8 16h.01" />
+    </>
+  ),
+  // gavel (Decision & Evidence) — keputusan + buktinya
+  evidence: (
+    <>
+      <path d="m14 13-7.5 7.5a2.12 2.12 0 0 1-3-3L11 10" />
+      <path d="m16 16 6-6" />
+      <path d="m8 8 6-6" />
+      <path d="m9 7 8 8" />
+      <path d="m21 11-8-8" />
     </>
   ),
   // terminal
@@ -139,3 +156,25 @@ export function ClockIcon({ size = 12 }: { size?: number }) {
     </Glyph>
   );
 }
+
+// --- Ikon top bar (bentuk mengikuti header acuan) ---
+
+export function BellIcon({ size = 16 }: { size?: number }) {
+  return (
+    <Glyph size={size}>
+      <path d="M18 8a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7" />
+      <path d="M13.7 20a2 2 0 0 1-3.4 0" />
+    </Glyph>
+  );
+}
+
+export function RoleIcon({ size = 16 }: { size?: number }) {
+  return (
+    <Glyph size={size}>
+      <path d="M12 3 4.5 6v5.5c0 4.4 3.1 8.4 7.5 9.5 4.4-1.1 7.5-5.1 7.5-9.5V6z" />
+      <circle cx="12" cy="10.5" r="2.2" />
+      <path d="M8.8 16.2c.7-1.5 1.9-2.3 3.2-2.3s2.5.8 3.2 2.3" />
+    </Glyph>
+  );
+}
+

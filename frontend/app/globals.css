@@ -1065,6 +1065,15 @@ a:focus-visible {
 }
 
 .app-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* Padding pindah ke .app-body: top bar harus menempel penuh di tepi kolom
+     konten (acuan: header global flush ke rail dan ke tepi kanan). */
+  padding: 0;
+}
+
+.app-body {
   padding: 18px 22px 40px;
   min-width: 0;
 }
@@ -1317,6 +1326,266 @@ a:focus-visible {
   }
 }
 
+/* ============ Top bar global (acuan mockup: header 64px) ============
+   Struktur mengikuti mockupui/overview_map_supply_status/code.html:
+   brand → dropdown cakupan → pill status jaringan → chip peran → lonceng →
+   identitas pemakai → keluar. Menempel (sticky) di puncak kolom konten. */
+.top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 64px;
+  padding: 8px 22px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 1px 8px rgba(15, 23, 42, 0.04);
+}
+
+.top-bar-left,
+.top-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.top-bar-left { flex: 1 1 auto; }
+.top-bar-right { flex: 0 0 auto; }
+
+.top-bar-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: var(--accent-strong);
+}
+
+.top-bar-brand {
+  display: flex;
+  flex-direction: column;
+  /* Punya lantai lebar: kalau ruang habis, yang menyusut lebih dulu adalah
+     dropdown/pill — bukan nama brand (pernah terhimpit jadi 0 lalu menumpuk
+     di atas kontrol sebelahnya). */
+  flex: 0 1 auto;
+  min-width: 11ch;
+  min-height: 0;
+}
+
+.top-bar-brand strong {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--navy-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.top-bar-sub {
+  font-size: 12px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.top-bar-scope { display: flex; align-items: center; min-width: 0; }
+
+.top-bar-select {
+  height: 36px;
+  max-width: 260px;
+  min-width: 96px;
+  padding: 0 10px;
+  flex: 0 1 auto;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.top-bar-select:disabled {
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  cursor: not-allowed;
+}
+
+.top-bar-net {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.top-bar-net-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+/* Warna status bukan warna teks: teks tetap navy, titik yang menandai. */
+.top-bar-net-safe { background: rgba(46, 125, 50, 0.1); color: var(--navy-900); }
+.top-bar-net-safe .top-bar-net-dot {
+  background: var(--status-safe);
+  animation: overview-pulse 2s ease-in-out infinite;
+}
+.top-bar-net-warning { background: rgba(249, 168, 37, 0.18); color: var(--navy-900); }
+.top-bar-net-warning .top-bar-net-dot { background: var(--status-warning); }
+
+.top-bar-updated {
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.top-bar-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.top-bar-role svg { flex: none; color: var(--accent-strong); }
+
+.top-bar-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.top-bar-bell:hover { background: var(--surface-sunken); color: var(--accent-strong); }
+
+.top-bar-bell-count {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--status-danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.top-bar-user { display: flex; align-items: center; gap: 8px; }
+
+.top-bar-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--accent-strong);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.top-bar-user-meta { display: flex; flex-direction: column; min-width: 0; }
+
+.top-bar-user-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--navy-900);
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.top-bar-user-sub { font-size: 12px; color: var(--ink-muted); white-space: nowrap; }
+
+.top-bar-logout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.top-bar-logout:hover { background: rgba(198, 40, 40, 0.1); color: var(--status-danger); }
+
+.top-bar :focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+
+/* Bertahap menyusut: yang informatif hilang dulu, kontrol tetap utuh.
+   Ambangnya mengikuti header acuan: subjudul < 1280, pill status jaringan
+   < 1536 (acuan: `hidden 2xl:flex`), chip peran < 1024. */
+@media (max-width: 1536px) {
+  .top-bar-net { display: none; }
+}
+
+@media (max-width: 1500px) {
+  .top-bar-updated { display: none; }
+}
+
+@media (max-width: 1280px) {
+  .top-bar-sub { display: none; }
+}
+
+@media (max-width: 1024px) {
+  .top-bar-role { display: none; }
+}
+
+@media (max-width: 720px) {
+  .top-bar { gap: 10px; padding: 8px 14px; }
+  .top-bar-user-meta { display: none; }
+  .top-bar-select { max-width: 132px; min-width: 88px; }
+}
+
+/* Layar sangat sempit: ruang tidak cukup untuk brand + cakupan + identitas.
+   Nama brand dilepas (mark logo tetap ada, dan rail di atas sudah menulis
+   namanya); yang dipertahankan justru kontrol dan identitas pemakai. */
+@media (max-width: 480px) {
+  .top-bar { gap: 8px; }
+  .top-bar-brand { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .top-bar-net-safe .top-bar-net-dot { animation: none; }
+}
+
 /* Peta + grafik — panel tersendiri di atas latar abu */
 .map-section {
   margin-top: 18px;
@@ -1324,24 +1593,98 @@ a:focus-visible {
   gap: 14px;
 }
 
-/* S4-07: peta MapLibre GL (ganti SVG skematik — arah Roy 2026-10-09) */
+/* S4-07: peta MapLibre GL (ganti SVG skematik — arah Roy 2026-10-09).
+   Peta TERANG (arah Roy 2026-10-11): tinggi 460px, sudut membulat, tanpa
+   penggelapan kanvas. */
 .map-gl {
   width: 100%;
-  height: 380px;
+  height: 460px;
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid var(--border);
 }
-.map-marker {
-  width: 16px;
-  height: 16px;
+
+/* Pin peta: titik status + label mono di sisi kanannya. Elemen marker
+   seukuran TITIK saja supaya koordinat lokasi tepat di tengah titik; label
+   meluber ke kanan (overflow-nya tidak dipotong). Warna memakai token status
+   aplikasi — sama dengan badge di daftar lokasi. */
+.map-pin {
+  position: relative;
+  width: 14px;
+  height: 14px;
+}
+.map-pin-dot {
+  position: absolute;
+  inset: 0;
   border-radius: 50%;
   border: 2px solid #fff;
+  background: var(--ink-muted);
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
 }
-.map-marker-shortage { background: var(--status-danger); }
-.map-marker-surplus { background: var(--status-safe); }
-.map-marker-balanced { background: #555555; }
+.map-pin-surplus .map-pin-dot { background: var(--status-safe); }
+.map-pin-shortage .map-pin-dot { background: var(--status-danger); }
+.map-pin-label {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 7px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--ink);
+  font-family: var(--font-data);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+/* Lokasi aktif dari dropdown cakupan top bar: cincin brand, ukuran sama
+   supaya tidak ada pin yang "melompat" saat disorot. */
+.map-pin-active .map-pin-dot {
+  box-shadow: 0 0 0 4px rgba(9, 105, 218, 0.45), 0 1px 4px rgba(15, 23, 42, 0.35);
+}
+
+/* Legenda peta (kiri-bawah, kotak putih seperti acuan) — warna titik SAMA
+   dengan pin di kanvas, jadi legenda ini sumber maknanya. */
+.map-shell { position: relative; }
+.map-legend-box {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
+  font-size: 12.5px;
+  color: var(--ink);
+  pointer-events: none;
+}
+.map-legend-box-title { color: var(--ink-muted); }
+.map-legend-box-item { display: inline-flex; align-items: center; gap: 6px; }
+.map-legend-box-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+}
+.map-legend-box-dot-surplus { background: var(--status-safe); }
+.map-legend-box-dot-balanced { background: var(--ink-muted); }
+.map-legend-box-dot-shortage { background: var(--status-danger); }
+
+/* Kendali bawaan MapLibre (zoom + kompas kanan-atas, atribusi kanan-bawah). */
+.map-shell .maplibregl-ctrl-attrib { font-size: 11px; }
+.map-shell .maplibregl-ctrl-attrib a { color: var(--navy-700); }
 
 .map-card .map-side { margin-top: 16px; container-type: inline-size; }
 .map-card .map-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 0; }
@@ -1355,7 +1698,9 @@ a:focus-visible {
 .map-card .map-legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 .map-card .map-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .map-card .map-dot-shortage { background: var(--status-danger); }
-.map-card .map-dot-surplus { background: var(--accent-strong); }
+/* Surplus = hijau, sama dengan badge baris dan pin di kanvas (dulu biru brand
+   sehingga legenda daftar lokasi tidak cocok dengan makna status di peta). */
+.map-card .map-dot-surplus { background: var(--status-safe); }
 .map-card .map-dot-balanced { background: var(--ink-muted); }
 .map-card .map-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; align-items: start; }
 .map-card .map-row { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 8px 10px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); }
@@ -1444,7 +1789,7 @@ a:focus-visible {
 
 .map-controls {
   display: flex;
-  align-items: end;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 4px;
@@ -2080,7 +2425,11 @@ a:focus-visible {
   border-color: var(--line-strong);
 }
 
-.commodity-pill-active,
+/* Status aktif harus MENANG atas aturan dasar di dalam kartu filter: dulu
+   `.filter-card .commodity-pill` (2 kelas) mengalahkan `.commodity-pill-active`
+   (1 kelas) sehingga latar tetap putih — teks putih jadi tak terlihat. */
+.filter-card .commodity-pill-active,
+.filter-card .commodity-pill-active:hover,
 .commodity-pill-active:hover {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
@@ -2163,9 +2512,25 @@ a:focus-visible {
     height: 44px;
   }
 
+  /* Tombol aksi & item nav rail ikut naik ke 44px di perangkat sentuh. */
   .side-actions .button,
   .side-tab {
     min-height: 44px;
+  }
+}
+
+/* Kontrol top bar: 44px pada perangkat sentuh ATAU jendela sempit —
+   dua-duanya ditulis supaya jendela ponsel-desktop (tanpa pointer sentuh)
+   tidak ketinggalan, dan supaya audit lebar viewport bisa mengukurnya. */
+@media (pointer: coarse), (max-width: 720px) {
+  .top-bar-bell,
+  .top-bar-logout {
+    width: 44px;
+    height: 44px;
+  }
+
+  .top-bar-select {
+    height: 44px;
   }
 }
 
@@ -2185,68 +2550,71 @@ a:focus-visible {
   }
 }
 
-/* Panel peta gelap ala mockup: terminal + hairline + header overlay */
-.map-panel-dark {
-  display: flex;
-  flex-direction: column;
-  background: var(--terminal);
-  border: 1px solid var(--terminal-border);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.map-panel-dark-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: var(--surface-sunken);
-  border-bottom: 1px solid var(--line);
-}
-
-.map-panel-dark-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--terminal-accent);
-  flex: none;
-}
-
-.map-panel-dark-title {
-  font-size: 14px;
-  font-weight: 600;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--navy-900);
-}
-
-.map-panel-dark-head .map-attrib {
-  font-size: 12px;
-  color: var(--ink-muted);
-}
-
-.map-panel-dark-count {
-  margin-left: auto;
+/* Telemetri node (kartu terang; batang aksen brand di kiri). */
+.node-telemetry { border-left: 4px solid var(--accent-strong); }
+.node-telemetry-body { padding: 0 16px 16px; }
+.node-telemetry-title { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.node-telemetry-name { font-size: 16px; font-weight: 600; color: var(--ink); }
+.node-badge {
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--surface);
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-sunken);
   color: var(--ink-muted);
+}
+.node-badge-surplus { color: var(--status-safe); border-color: rgba(46, 125, 50, 0.4); background: rgba(46, 125, 50, 0.1); }
+.node-badge-shortage { color: var(--status-danger); border-color: rgba(198, 40, 40, 0.35); background: rgba(198, 40, 40, 0.1); }
+.node-badge-balanced { color: var(--ink-muted); }
+.node-badge-unknown { color: var(--ink-muted); }
+.node-telemetry-meta {
+  margin: 6px 0 14px;
   font-family: var(--font-data);
-  font-size: 12px;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+.node-telemetry-empty { margin: 0; font-size: 13px; color: var(--ink-muted); }
+.node-gauge-list { margin: 0; display: grid; gap: 12px; }
+.node-gauge { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; }
+.node-gauge dt { font-size: 12px; color: var(--ink-muted); }
+.node-gauge dd {
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.node-gauge-track {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.node-gauge-bar { display: block; height: 100%; border-radius: 999px; }
+.node-gauge-bar-supply { background: var(--accent-strong); }
+.node-gauge-bar-demand { background: var(--navy-700); }
+.node-telemetry-gap {
+  margin: 14px 0 0;
+  font-family: var(--font-data);
+  font-size: 12.5px;
+  color: var(--ink);
 }
 
-/* MapLibre di dalam panel gelap — bingkai ulang, fungsi peta utuh */
-.map-panel-dark-body {
-  padding: 10px;
+/* Peta di layar sempit: kanvas lebih pendek supaya kartu kanan tetap terbaca. */
+@media (max-width: 900px) {
+  .map-gl { height: 380px; }
 }
 
-.map-panel-dark-body .map-gl {
-  height: 420px;
-  border-color: var(--line);
+/* Ponsel: label pin bisa saling menumpuk di peta sekecil ini — sembunyikan,
+   titiknya tetap terlihat dan legenda tetap menjelaskan maknanya. */
+@media (max-width: 720px) {
+  .map-gl { height: 320px; }
+  .map-pin-label { display: none; }
+  .map-legend-box { gap: 8px; padding: 6px 10px; font-size: 12px; }
 }
-
 .overview-side {
   display: flex;
   flex-direction: column;
@@ -2647,4 +3015,296 @@ a:focus-visible {
 
 .kpi-target-bar i {
   background: var(--accent-strong);
+}
+
+/* --- Langkah 3: halaman "Hari Ini" (rekap operasional harian) --- */
+/* Kartu memakai pola yang sama dengan kartu lain (.card) supaya tidak ada
+   permukaan baru; yang khas di sini hanya daftar barisnya. */
+.today-page {
+  display: grid;
+  gap: 18px;
+}
+.today-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.today-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+}
+.today-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.today-card-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.today-count {
+  min-width: 28px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-sunken);
+  font-family: var(--font-data);
+  font-size: 12px;
+  text-align: center;
+  color: var(--ink-muted);
+}
+.today-card-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+.today-error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--status-danger);
+}
+.today-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+/* Baris "+N lainnya": menyatakan jumlah yang tidak ditampilkan — daftar tidak
+   boleh tampak lengkap kalau sebenarnya dipotong. */
+.today-more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+/* Di layar lebar kartu keputusan menunggu tindakan dua kolom lebih lebar:
+   isinya paling panjang sehingga tidak menyisakan celah besar di sebelahnya. */
+@media (min-width: 1080px) {
+  .today-pending {
+    grid-column: span 2;
+  }
+}
+.today-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.today-list > .today-row:first-child {
+  border-top: 0;
+}
+.today-row-expired .today-row-title {
+  color: var(--status-danger);
+}
+.today-row-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.today-row-title {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.today-row-meta {
+  font-family: var(--font-data);
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+.today-due {
+  font-family: var(--font-data);
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--ink-muted);
+}
+.today-due-over {
+  color: var(--status-danger);
+  font-weight: 600;
+}
+.today-value {
+  font-family: var(--font-data);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink);
+}
+.today-value-none {
+  color: var(--ink-muted);
+}
+.today-badge {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+}
+.today-badge-ok {
+  color: var(--status-safe);
+  border-color: rgba(46, 125, 50, 0.4);
+  background: rgba(46, 125, 50, 0.1);
+}
+.today-badge-bad {
+  color: var(--status-danger);
+  border-color: rgba(198, 40, 40, 0.35);
+  background: rgba(198, 40, 40, 0.1);
+}
+/* Tombol aksi baris (Buka / Lihat di peta / Coba lagi) — sekunder, ringkas. */
+.today-row-action {
+  grid-column: 2;
+  justify-self: end;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+/* Target sentuh 44px hanya di perangkat sentuh / layar sempit (aturan global). */
+@media (pointer: coarse), (max-width: 720px) {
+  .today-row-action {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+}
+@media (max-width: 720px) {
+  .today-grid {
+    grid-template-columns: 1fr;
+  }
+  .today-card {
+    padding: 14px 14px;
+  }
+}
+
+/* --- Langkah 4: halaman "Decision & Evidence" (halaman ke-3 sidebar acuan) --- */
+.evidence-page {
+  display: grid;
+  gap: 18px;
+}
+.evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.evidence-page .card {
+  padding: 16px 18px;
+  display: grid;
+  gap: 10px;
+}
+.evidence-page .card > h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.evidence-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+/* Daftar fakta label→nilai (dipakai semua kartu). */
+.fact-list {
+  margin: 0;
+  display: grid;
+  gap: 0;
+}
+.fact-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 45%) 1fr;
+  gap: 8px 14px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+}
+.fact-list > .fact-row:first-child {
+  border-top: 0;
+}
+.fact-row dt {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+.fact-row dd {
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.fact-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+.fact-ok { color: var(--status-safe); font-weight: 600; }
+.fact-warn { color: var(--status-warning); font-weight: 600; }
+.fact-danger { color: var(--status-danger); font-weight: 600; }
+.fact-muted, .fact-plain { color: var(--ink); }
+.fact-muted { color: var(--ink-muted); }
+/* Keadaan kosong: belum ada keputusan dipilih. */
+.evidence-empty {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+.evidence-empty h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.evidence-suggest {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+.evidence-suggest-button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+}
+.evidence-suggest-title {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.evidence-suggest-meta {
+  font-family: var(--font-data);
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+/* Catatan kecil di feed Recommendations setelah detail pindah tab. */
+.feed-hint {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+@media (pointer: coarse), (max-width: 720px) {
+  .evidence-suggest-button {
+    min-height: 44px;
+  }
+}
+@media (max-width: 720px) {
+  .fact-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .evidence-grid {
+    grid-template-columns: 1fr;
+  }
 }

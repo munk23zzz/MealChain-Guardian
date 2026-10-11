@@ -22,14 +22,19 @@ const CASE_LABELS: Record<string, string> = {
   "gangguan-logistik": "Kasus: Gangguan Logistik",
 };
 
-// Judul dari decision_type — kosakatanya mengikuti schema backend.
-const TYPE_LABELS: Record<string, string> = {
+// Judul dari decision_type — kosakatanya mengikuti schema backend. Diekspor
+// karena dipakai dua tempat (kartu rekomendasi + halaman "Hari Ini") dan dua
+// peta label akan cepat menyimpang.
+export const DECISION_TYPE_LABELS: Record<string, string> = {
   regional_balance: "Alokasi regional direkomendasikan",
   safety_disruption: "Pengalihan pasokan (gangguan keamanan)",
   price_anomaly: "Penyesuaian harga direkomendasikan",
   surplus_redistribution: "Redistribusi surplus direkomendasikan",
   supplier_exclusion: "Usulan pengecualian pemasok",
 };
+
+// Catatan yang isinya hanya kata penanda: bukan narasi, jangan dicetak.
+const PLACEHOLDER_NOTES = new Set(["unavailable", "n/a", "na", "-", "none", "null", "undefined"]);
 
 // Peta status → kelas tepi kartu (alert edge ala Stitch).
 const EDGE: Record<string, string> = {
@@ -48,7 +53,7 @@ export default function RecommendationCard({
   decision: any;
   mockSourced?: boolean;
 }) {
-  const typeLabel = TYPE_LABELS[decision.decision_type] ?? "Rekomendasi baru";
+  const typeLabel = DECISION_TYPE_LABELS[decision.decision_type] ?? "Rekomendasi baru";
   const caseLabel = decision.demo_case
     ? (CASE_LABELS[decision.demo_case] ??
       `Kasus: ${decision.demo_case.replace(/-/g, " ")}`)
@@ -56,7 +61,13 @@ export default function RecommendationCard({
   const edge = EDGE[(decision.status ?? "").toUpperCase()] ?? "edge-primary";
   // Alasan penolakan / catatan verifier = satu-satunya narasi yang benar-benar
   // ada di data; kalau dua-duanya kosong, tidak ada paragraf yang ditampilkan.
-  const narrative = decision.rejection_reason || decision.verifier_note || null;
+  // Backend kadang mengisi catatan dengan kata penanda ("unavailable") — itu
+  // bukan narasi dan tidak boleh muncul sebagai paragraf di kartu.
+  const rawNarrative = decision.rejection_reason || decision.verifier_note || null;
+  const narrative =
+    typeof rawNarrative === "string" && PLACEHOLDER_NOTES.has(rawNarrative.trim().toLowerCase())
+      ? null
+      : rawNarrative;
 
   return (
     <article className={`card recommendation-card rec-edge ${edge}`}>

@@ -6,6 +6,9 @@ import { readFileSync } from "node:fs";
 const pageSrc = readFileSync("app/page.tsx", "utf8");
 const apiSrc = readFileSync("lib/api.ts", "utf8");
 const opsSrc = readFileSync("components/OpsConsole.tsx", "utf8");
+// Langkah 4 (11 Okt): detail keputusan pindah ke halaman tersendiri
+// "Decision & Evidence" — kontraknya diperiksa di komponen itu.
+const evidenceSrc = readFileSync("components/DecisionEvidence.tsx", "utf8");
 
 describe("wiring sidebar + map di app/page.tsx (S4-06 polish)", () => {
   it("page memakai layout sidebar (side-nav) + SupplyMap", () => {
@@ -39,7 +42,11 @@ describe("wiring sidebar + map di app/page.tsx (S4-06 polish)", () => {
     // Event2Panel dirender DI DALAM OpsConsole (komposisi), page cukup
     // memasang OpsConsole — kontrak fitur: kedua panel tetap ter-wire.
     expect(pageSrc).toMatch(/<OpsConsole/);
-    expect(pageSrc).toMatch(/<DecisionActions/);
+    // Halaman bukti keputusan kini tab tersendiri (sidebar acuan halaman 3):
+    expect(pageSrc).toMatch(/<DecisionEvidence/);
+    expect(evidenceSrc).toMatch(/<DecisionActions/);
+    expect(evidenceSrc).toMatch(/<RecommendationCard/);
+    expect(evidenceSrc).toMatch(/<IntegrityPanel/);
     expect(pageSrc).toMatch(/Recommendation Feed/);
     expect(pageSrc).toMatch(/Agent Activity Log/);
     // Event2Panel dirender DI DALAM OpsConsole (komposisi) —

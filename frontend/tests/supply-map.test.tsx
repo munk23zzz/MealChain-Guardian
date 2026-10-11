@@ -1,16 +1,21 @@
 // S4-07 (arah Roy 2026-10-09): peta = MapLibre GL sungguhan (bukan SVG
-// skematik) — sesuai docs/design.md §5. Kontrak render:
+// skematik) — sesuai docs/design.md §5. Gaya peta (arah Roy 2026-10-11):
+// peta TERANG seperti acuan — kanvas OSM apa adanya, legenda putih kiri-bawah,
+// kontrol bawaan MapLibre (zoom/kompas kanan-atas, atribusi kanan-bawah).
+// Kontrak render:
 // - SSR-safe: container .map-gl dirender server (maplibre di-mount client
 //   via useEffect — WebGL tidak ada di node);
-// - atribusi OpenStreetMap (tile raster gratis, tanpa API key);
-// - marker diwarnakan per status (shortage merah, surplus hijau, balanced
-//   abu) — diverifikasi via konfigurasi marker yang diekspos untuk test;
+// - atribusi OpenStreetMap tampil (kontrol bawaan MapLibre, bukan SSR);
+// - warna pin dari NADA status (shortage/surplus/balanced) via token CSS
+//   `--status-*`; lib/map-console.ts memutuskan nada + label, bukan hex;
+// - legenda putih memakai makna status aplikasi;
 // - legenda + daftar angka supply/demand/gap tetap (sumber angka utama);
 // - tanpa data → pesan kosong jujur.
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import SupplyMap, { markerColor } from "../components/SupplyMap";
+import SupplyMap from "../components/SupplyMap";
+import { pinLabel, pinTone } from "../lib/map-console";
 
 const LOCATIONS = [
   {
@@ -49,10 +54,25 @@ const LOCATIONS = [
 ];
 
 describe("SupplyMap (MapLibre GL)", () => {
-  it("merahkan shortage, hijaukan surplus, abukan balanced (markerColor)", () => {
-    expect(markerColor("shortage")).toBe("#C62828");
-    expect(markerColor("surplus")).toBe("#2E7D32");
-    expect(markerColor("balanced")).toBe("#555555");
+  it("nada pin mengikuti status, label pin dari angka data (gaya panel acuan)", () => {
+    // Warna tak lagi dipegang komponen: nada → kelas → token CSS --pin-*.
+    expect(pinTone("shortage")).toBe("shortage");
+    expect(pinTone("surplus")).toBe("surplus");
+    expect(pinTone("balanced")).toBe("balanced");
+    expect(pinLabel(LOCATIONS[0])).toBe("Jakarta −780 kg");
+    expect(pinLabel(LOCATIONS[1])).toBe("Cianjur +1.100 kg");
+    expect(pinLabel(LOCATIONS[2])).toBe("Bogor seimbang");
+  });
+
+  it("peta terang: legenda putih kiri-bawah memakai makna status aplikasi", () => {
+    const html = renderToStaticMarkup(<SupplyMap locations={LOCATIONS} />);
+    expect(html).toContain("map-legend-box");
+    expect(html).toContain("Status lokasi:");
+    expect(html).toContain("map-legend-box-dot-surplus");
+    expect(html).toContain("map-legend-box-dot-shortage");
+    // Tanpa kepala/kaki panel gelap dari versi sebelumnya.
+    expect(html).not.toContain("map-panel-dark");
+    expect(html).not.toContain("map-toggle");
   });
 
   it("SSR merender container .map-gl (mount MapLibre di client)", () => {

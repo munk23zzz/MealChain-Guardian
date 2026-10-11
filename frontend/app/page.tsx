@@ -11,16 +11,25 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   login,
+  fetchMe,
   fetchDecisions,
+  fetchBatches,
+  verifyLedger,
   fetchDecisionTraces,
   fetchDecisionChain,
   fetchApprovalSummary,
   fetchKpis,
   fetchBalanceMap,
-  fetchComplianceDossier,
   seedDemo,
 } from "../lib/api";
 import { decodeRole } from "../lib/auth";
+import TopBar from "../components/TopBar";
+import {
+  ALL_LOCATIONS,
+  countActionable,
+  defaultScope,
+  initialsOf,
+} from "../lib/topbar";
 import StatusBadge from "../components/StatusBadge";
 import NavIcon, {
   ChevronIcon,
@@ -31,9 +40,7 @@ import NavIcon, {
 import { StatusLocationList } from "../components/SupplyMap";
 import RecommendationCard from "../components/RecommendationCard";
 import AgentTraceViewer from "../components/AgentTraceViewer";
-import IntegrityPanel from "../components/IntegrityPanel";
 import ChaosPanel from "../components/ChaosPanel";
-import DecisionActions from "../components/DecisionActions";
 import DecisionChain from "../components/DecisionChain";
 import ProviderPanel from "../components/ProviderPanel";
 import RoleHero from "../components/RoleHero";
@@ -42,14 +49,14 @@ import KPIDashboard from "../components/KPIDashboard";
 import KpiTargets from "../components/KpiTargets";
 import OpsConsole from "../components/OpsConsole";
 import SupplyMap from "../components/SupplyMap";
+import NodeTelemetry from "../components/NodeTelemetry";
+import TodayDashboard from "../components/TodayDashboard";
 import StockChart from "../components/StockChart";
 import OverviewLocationBreakdown from "../components/OverviewLocationBreakdown";
 import { formatKg, sumFiniteKg } from "../lib/overview-format";
 import { SupplierExclusionView } from "../components/SupplierExclusionPanel";
 import { fetchSupplierContext, type SupplierContext } from "../lib/supplier-exclusions";
-import ComplianceEvidencePanel from "../components/ComplianceEvidencePanel";
-import { dossierToCsv, dossierToJson, downloadText } from "../lib/export";
-import type { ComplianceDossier } from "../lib/evidence";
+import DecisionEvidence from "../components/DecisionEvidence";
 
 const APPROVER_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
 
@@ -116,8 +123,10 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   // PRD 2.4 (arah Roy 2026-10-09): navigasi = 5 tab sesuai 7 screen PRD
   // (login terpisah; decision detail gabung di recommendations).
+  // + "today" (halaman "Hari Ini", permintaan Roy 2026-10-11). Halaman yang
+  // dibuka setelah login tetap Overview — tab baru tidak mengubah alur demo.
   const [tab, setTab] = useState<
-    "overview" | "kpi" | "recommendations" | "agent-log" | "demo-control"
+    "today" | "overview" | "kpi" | "recommendations" | "evidence" | "agent-log" | "demo-control"
   >("overview");
   const [mapCommodity, setMapCommodity] = useState("telur");
   const [mapData, setMapData] = useState<any>(null);
@@ -125,10 +134,21 @@ export default function Home() {
   const [mapRefresh, setMapRefresh] = useState(0);
   // Waktu pembaruan peta terakhir (acuan menampilkan "terakhir diperbarui").
   const [mapUpdatedAt, setMapUpdatedAt] = useState<number | null>(null);
+  // Identitas kanonik dari /auth/me — lokasi pemakai jadi pengunci cakupan
+  // dropdown di top bar (peran SPPG tidak boleh memperluas cakupan dari UI).
+  const [me, setMe] = useState<{
+    location_name?: string | null;
+    location_id?: string | null;
+    name?: string | null;
+  } | null>(null);
+  // Lokasi aktif yang disorot di peta, dipilih dari dropdown top bar.
+  const [activeLocation, setActiveLocation] = useState<string | null>(null);
   // Kerangka acuan: rail bisa dilipat (lebar 68px, label disembunyikan).
   const [sideCollapsed, setSideCollapsed] = useState(false);
   useEffect(() => {
-    if (!token || tab !== "overview") return;
+    // Peta dimuat di SEMUA tab: data lokasinya dipakai top bar (dropdown
+    // cakupan + ringkasan jaringan), bukan hanya halaman Overview.
+    if (!token) return;
     let stopped = false;
     const loadMap = async () => {
       try {
@@ -148,7 +168,32 @@ export default function Home() {
       stopped = true;
       clearInterval(interval);
     };
-  }, [mapCommodity, mapRefresh, tab, token]);
+  }, [mapCommodity, mapRefresh, token]);
+
+  // Identitas pemakai (server: GET /auth/me) — sumber lokasi pemakai untuk
+  // mengunci cakupan peran SPPG di top bar.
+  useEffect(() => {
+    if (!token) return;
+    let stopped = false;
+    fetchMe(token)
+      .then((data) => {
+        if (!stopped) setMe(data);
+      })
+      .catch(() => {
+        // Gagal membaca identitas: top bar gagal-tertutup (dropdown kosong),
+        // bukan menampilkan semua lokasi.
+        if (!stopped) setMe(null);
+      });
+    return () => {
+      stopped = true;
+    };
+  }, [token]);
+
+  // Cakupan awal: monitor nasional = semua lokasi, peran SPPG = SPPG-nya.
+  useEffect(() => {
+    if (!token) return;
+    setActiveLocation(defaultScope({ role, ownLocation: me?.location_name ?? null }));
+  }, [token, role, me]);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [traces, setTraces] = useState<any[]>([]);
@@ -156,12 +201,21 @@ export default function Home() {
   // S4-04: read model kanonik dari /approval-summary — sumber tunggal modal.
   const [approvalSummary, setApprovalSummary] = useState<any>(null);
   const [supplierContext, setSupplierContext] = useState<SupplierContext | null>(null);
-  const [complianceDossier, setComplianceDossier] = useState<ComplianceDossier | null>(null);
   // S4-03: envelope GET /kpi — loading/error state eksplisit, tanpa fake 0.
   const [kpi, setKpi] = useState<any>(null);
   const [kpiLoading, setKpiLoading] = useState(false);
   const [kpiError, setKpiError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Langkah 3: data halaman "Hari Ini" — batch (GET /batches) + rantai audit
+  // (GET /ledger/verify). Dimuat sekali per login lalu disegarkan tiap 60 detik;
+  // nilai kosong tetap "—", bukan 0.
+  const [batches, setBatches] = useState<any[] | null>(null);
+  const [batchesLoading, setBatchesLoading] = useState(false);
+  const [batchesError, setBatchesError] = useState<string | null>(null);
+  const [ledger, setLedger] = useState<any>(null);
+  // Jam klien: null sampai komponen ter-mount supaya HTML server dan render
+  // klien tidak berbeda (label waktu ditulis "—" sebelum jam siap).
+  const [now, setNow] = useState<Date | null>(null);
   // Feed traceable (arah Roy 2026-10-09): filter status = visual only;
   // EXPIRED TIDAK disembunyikan. Hook di level atas (rules-of-hooks).
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
@@ -212,6 +266,42 @@ export default function Home() {
     loadKpi(token);
   }, [token, loadKpi]);
 
+  // Langkah 3: data halaman "Hari Ini" — batch + rantai audit Merkle.
+  // Kegagalan salah satu panggilan tidak menjatuhkan yang lain, dan tidak
+  // pernah diisi angka karangan: kartu menulis "—" atau pesan galat.
+  const loadToday = useCallback(async (t: string) => {
+    setBatchesLoading(true);
+    setBatchesError(null);
+    try {
+      const rows = await fetchBatches(t);
+      setBatches(Array.isArray(rows) ? rows : []);
+    } catch (e: any) {
+      setBatchesError(String(e.message ?? e));
+    } finally {
+      setBatchesLoading(false);
+    }
+    try {
+      setLedger(await verifyLedger(t));
+    } catch {
+      setLedger(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    loadToday(token);
+    const iv = setInterval(() => loadToday(token), 60000);
+    return () => clearInterval(iv);
+  }, [token, loadToday]);
+
+  // Jam klien untuk label sisa waktu ("45 mnt lagi"): baru diisi setelah
+  // mount supaya HTML server dan render klien sepakat, lalu diperbarui.
+  useEffect(() => {
+    setNow(new Date());
+    const iv = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(iv);
+  }, []);
+
 
   useEffect(() => {
     if (!token || !selectedId) return;
@@ -244,12 +334,6 @@ export default function Home() {
       } catch {
         if (!stopped) setSupplierContext(null);
       }
-      try {
-        const data = await fetchComplianceDossier(selectedId, token);
-        if (!stopped) setComplianceDossier(data);
-      } catch {
-        if (!stopped) setComplianceDossier(null);
-      }
     };
     load();
     const iv = setInterval(load, 5000);
@@ -257,7 +341,6 @@ export default function Home() {
       stopped = true;
       clearInterval(iv);
       setSupplierContext(null);
-      setComplianceDossier(null);
     };
   }, [token, selectedId]);
 
@@ -394,33 +477,33 @@ export default function Home() {
     0,
   );
 
-  // PRD 2.4: nav 5 tab; demo-control approver-only; agent-log semua role
-  // (monitor read-only justru butuh observability).
+  // PRD 2.4: nav 5 tab (overview/kpi/recommendations/agent-log/demo-control)
+  // + tab "Hari Ini" (permintaan Roy 2026-10-11) sebagai halaman pertama;
+  // demo-control approver-only; agent-log semua role (monitor read-only justru
+  // butuh observability).
   const navItems: {
-    id: "overview" | "kpi" | "recommendations" | "agent-log" | "demo-control";
+    id: "today" | "overview" | "kpi" | "recommendations" | "evidence" | "agent-log" | "demo-control";
     label: string;
   }[] = [
+    { id: "today", label: "Hari Ini" },
     { id: "overview", label: "Overview" },
     { id: "kpi", label: "KPI" },
     {
       id: "recommendations",
       label: `Recommendations${decisions.length ? ` (${decisions.length})` : ""}`,
     },
+    { id: "evidence", label: "Decision & Evidence" },
     { id: "agent-log", label: "Agent Log" },
     ...(isApprover
       ? [{ id: "demo-control" as const, label: "Demo Control" }]
       : []),
   ];
 
-  // Inisial avatar di kaki rail (acuan: inisial nama; app ini tidak menyimpan
-  // nama pemakai, jadi dipakai email login dengan fallback label peran).
-  const initials = (email || roleLabel)
-    .split(/[\s@._-]+/)
-    .filter(Boolean)
-    .map((word) => word[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+  // Inisial avatar (rail + top bar) — satu sumber di lib/topbar.ts supaya
+  // tidak ada dua cara menghitung yang bisa menyimpang.
+  const initials = initialsOf(email, roleLabel);
+  // Notifikasi top bar: keputusan yang menunggu tindakan manusia.
+  const actionable = countActionable(decisions);
 
   const onLogout = () => {
     setToken(null);
@@ -432,6 +515,14 @@ export default function Home() {
     // skeleton: strip KPI sempat menampilkan nilai lama).
     setMapData(null);
     setMapUpdatedAt(null);
+    // Identitas & cakupan ikut direset: lokasi pemakai sebelumnya tidak boleh
+    // terbawa ke sesi akun berikutnya.
+    setMe(null);
+    setActiveLocation(null);
+    // Data halaman "Hari Ini" ikut dibersihkan (batch & rantai audit).
+    setBatches(null);
+    setBatchesError(null);
+    setLedger(null);
   };
 
   return (
@@ -506,6 +597,56 @@ export default function Home() {
       </aside>
 
       <div className="app-content">
+        {/* Header global ala mockup acuan (mockupui/…/code.html): brand →
+            dropdown cakupan lokasi → pill status jaringan → chip peran →
+            lonceng notifikasi → identitas pemakai → keluar. */}
+        <TopBar
+          role={role}
+          roleLabel={roleLabel}
+          userName={me?.name ?? (email || roleLabel)}
+          userSub={me?.location_name ? `SPPG ${me.location_name}` : null}
+          locations={mapData?.locations ?? []}
+          activeLocation={activeLocation}
+          onSelectLocation={(value) => setActiveLocation(value)}
+          ownLocation={me?.location_name ?? null}
+          decisions={decisions}
+          updatedAtLabel={
+            mapUpdatedAt !== null
+              ? `Diperbarui ${new Date(mapUpdatedAt).toLocaleTimeString("id-ID")}`
+              : null
+          }
+          onOpenNotifications={() => setTab("recommendations")}
+          onLogout={onLogout}
+        />
+        <div className="app-body">
+        {tab === "today" && (
+          /* Langkah 3 (permintaan Roy 2026-10-11): rekap operasional hari
+             berjalan. Semua angka dari API — keputusan menunggu tindakan,
+             batch mendekati kedaluwarsa, lokasi shortage, KPI 24 jam, dan
+             status rantai audit. Klik baris membawa ke halaman terkait. */
+          <TodayDashboard
+            decisions={decisions}
+            batches={batches}
+            locations={mapData?.locations ?? []}
+            commodity={mapData?.commodity ?? mapCommodity}
+            kpi={kpi}
+            ledger={ledger}
+            now={now}
+            batchesLoading={batchesLoading}
+            batchesError={batchesError}
+            onRetry={() => token && loadToday(token)}
+            onOpenDecision={(decisionId) => {
+              setSelectedId(decisionId);
+              setTab("recommendations");
+            }}
+            onOpenAllDecisions={() => setTab("recommendations")}
+            onOpenLocation={(location) => {
+              setActiveLocation(location);
+              setTab("overview");
+            }}
+          />
+        )}
+
         {tab === "overview" && (
           <div className="overview-page">
             {/* Tata letak mengikuti dashboard acuan: header halaman → strip
@@ -640,39 +781,27 @@ export default function Home() {
               )}
             </div>
 
-            {/* Split 60/40 ala mockup: peta gelap kiri, telemetri kanan */}
+            {/* Peta gaya acuan (arah Roy 2026-10-11): kanvas terang apa adanya,
+                legenda putih kiri-bawah, kontrol MapLibre (zoom + kompas)
+                kanan-atas & atribusi kanan-bawah. Tanpa kepala/kaki panel. */}
             <section
               className="overview-split"
-              aria-label="Peta dan grafik stok"
+              aria-label="Peta dan telemetri node"
             >
-              <div className="map-panel-dark">
-                <div className="map-panel-dark-head">
-                  <span className="map-panel-dark-dot" aria-hidden="true" />
-                  <span className="map-panel-dark-title">
-                    Koridor Pasokan Aktif: Jawa Barat &amp; DKI Jakarta
-                  </span>
-                  <span className="map-attrib">
-                    MapLibre GL · tile OpenStreetMap · koordinat dari database
-                  </span>
-                  <span className="map-panel-dark-count">
-                    {mapData ? (
-                      `${(mapData.locations ?? []).length} Lokasi`
-                    ) : (
-                      <span className="skeleton skeleton-pill" aria-hidden="true" />
-                    )}
-                  </span>
-                </div>
-                <div className="map-panel-dark-body">
-                  <SupplyMap
-                    locations={mapData?.locations ?? []}
-                    commodity={mapData?.commodity}
-                    loading={!mapData && !mapError}
-                    showStatusList={false}
-                    showHeader={false}
-                  />
-                </div>
-              </div>
+              <SupplyMap
+                locations={mapData?.locations ?? []}
+                commodity={mapData?.commodity}
+                activeLocation={activeLocation}
+                loading={!mapData && !mapError}
+                showStatusList={false}
+                showHeader={false}
+              />
               <div className="overview-side">
+                <NodeTelemetry
+                  locations={mapData?.locations ?? []}
+                  activeLocation={activeLocation}
+                  loading={!mapData && !mapError}
+                />
                 <div className="map-panel">
                   <h3>Pasokan per Lokasi</h3>
                   <StockChart locations={mapData?.locations ?? []} />
@@ -849,7 +978,10 @@ export default function Home() {
                     <button
                       type="button"
                       className="link-button"
-                      onClick={() => setSelectedId(d.decision_id)}
+                      onClick={() => {
+                        setSelectedId(d.decision_id);
+                        setTab("evidence");
+                      }}
                     >
                       <RecommendationCard
                         decision={d}
@@ -878,42 +1010,37 @@ export default function Home() {
               )}
             </section>
 
-            {selected && (
-              <section className="detail-section">
-                <h2>Decision Detail</h2>
-                <RecommendationCard decision={selected} mockSourced={false} />
-                <DecisionChain chain={selectedId ? chain : []} />
-                <DecisionActions
-                  decisionId={selected.decision_id}
-                  role={role ?? ""}
-                  status={selected.status}
-                  token={token}
-                  summary={approvalSummary}
-                />
-                {supplierContext && (
-                  <SupplierExclusionView
-                    key={selected.decision_id}
-                    context={supplierContext}
-                    role={role ?? ""}
-                    token={token}
-                    onCreated={(decisionId) => {
-                      void loadDecisions(token);
-                      setSelectedId(decisionId);
-                    }}
-                  />
-                )}
-                {complianceDossier && (
-                  <>
-                    <ComplianceEvidencePanel dossier={complianceDossier} />
-                    <div className="decision-export-actions">
-                      <button type="button" className="button-secondary button" onClick={() => downloadText(`decision-${selected.decision_id}.json`, dossierToJson(complianceDossier), "application/json")}>Export JSON</button>
-                      <button type="button" className="button-secondary button" onClick={() => downloadText(`decision-${selected.decision_id}.csv`, dossierToCsv(complianceDossier), "text/csv;charset=utf-8")}>Export CSV</button>
-                    </div>
-                  </>
-                )}
-              </section>
-            )}
+            {/* Detail keputusan pindah ke tab tersendiri "Decision & Evidence"
+                (halaman ke-3 sidebar acuan). Feed kembali fokus pada daftar;
+                klik kartu = pilih keputusan + buka halaman buktinya. */}
+            <p className="feed-hint">
+              Klik kartu untuk membuka halaman <strong>Decision &amp; Evidence</strong>{" "}
+              dengan seluruh bukti keputusan itu.
+            </p>
           </>
+        )}
+
+        {/* Langkah 4 (permintaan Roy 2026-10-11): halaman "Decision & Evidence"
+            — halaman ke-3 di sidebar acuan, sebelumnya menempel di bawah feed
+            Recommendations. Semua angka dari API; yang tidak ada ditulis "—". */}
+        {tab === "evidence" && (
+          <DecisionEvidence
+            decisions={decisions}
+            selected={selected}
+            selectedId={selectedId}
+            onSelect={(decisionId) => setSelectedId(decisionId)}
+            chain={selectedId ? chain : []}
+            summary={approvalSummary}
+            supplierContext={supplierContext}
+            role={role ?? ""}
+            token={token}
+            now={now}
+            onSupplierCreated={(decisionId) => {
+              if (token) void loadDecisions(token);
+              setSelectedId(decisionId);
+            }}
+            onOpenRecommendations={() => setTab("recommendations")}
+          />
         )}
 
         {/* PRD 2.4 Screen 5: Agent Activity Log & Traces Console — tab
@@ -951,11 +1078,9 @@ export default function Home() {
             )}
             <ProviderPanel providers={providersFromTraces(traces)} />
             <AgentTraceViewer steps={traces} />
-            {selected && (
-              <IntegrityPanel token={token ?? ""} decisionId={selected.decision_id} />
-            )}
           </section>
         )}
+        </div>
       </div>
     </main>
   );

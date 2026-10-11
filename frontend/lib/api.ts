@@ -26,6 +26,15 @@ export async function login(email: string, password: string) {
   });
 }
 
+// GET /auth/me — identitas kanonik pemakai (role + lokasi). Dipakai top bar:
+// dropdown cakupan peran SPPG harus terkunci ke SPPG pemakainya, dan itu
+// ditentukan server, bukan ditebak dari JWT.
+export async function fetchMe(token: string) {
+  return request("/auth/me", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export function fetchComplianceDossier(decisionId: string, token: string): Promise<any> {
   return request(`/decisions/${encodeURIComponent(decisionId)}/compliance`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -250,6 +259,17 @@ export async function fetchKpis(
   return request(`/kpi?${params.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
+}
+
+// GET /batches — inventaris batch (lokasi, komoditas, kg, kesegaran, batas
+// pakai). Dipakai halaman "Hari Ini" untuk daftar batch yang akan kedaluwarsa.
+// Backend membalas {batches: [...]} — envelope itu dibuka di sini supaya
+// pemanggil tidak perlu tahu bentuk amplopnya.
+export async function fetchBatches(token: string) {
+  const data = await request("/batches", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return Array.isArray(data) ? data : (data?.batches ?? []);
 }
 
 // S4-06 polish (arah Roy 2026-10-08): kondisi SEMUA lokasi untuk peta +

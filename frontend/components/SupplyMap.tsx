@@ -1,11 +1,17 @@
 "use client";
 
-// SupplyMap (S4-07, arah Roy 2026-10-09) — MapLibre GL sungguhan,
-// sesuai docs/design.md §5 (bukan lagi SVG skematik). Tile raster OSM
-// gratis TANPA API key — aman untuk demo offline-ish (tile di-cache
-// browser). Data REAL dari GET /balance/map (formula gap = panel —
-// tanpa rumus kedua). Mount di client via useEffect (WebGL tidak ada
-// di SSR); SSR tetap merender container + daftar angka.
+// SupplyMap (S4-07, arah Roy 2026-10-09) — MapLibre GL sungguhan, sesuai
+// docs/design.md §5 (bukan SVG skematik). Tile raster OSM gratis TANPA API key;
+// data REAL dari GET /balance/map (formula gap = panel, tanpa rumus kedua).
+// Mount di client via useEffect (WebGL tidak ada di SSR); SSR tetap merender
+// container + daftar angka.
+//
+// Gaya peta (arah Roy 2026-10-11, setelah revisi): PETA TERANG seperti acuan —
+// kanvas OSM apa adanya (tanpa penggelapan), legenda putih "Status lokasi"
+// kiri-bawah, kontrol bawaan MapLibre (zoom + kompas) kanan-atas, dan atribusi
+// kanan-bawah. Tanpa kepala panel mengapung dan tanpa kaki panel.
+// Warna pin & legenda memakai token status aplikasi (`--status-*`), sama dengan
+// badge di permukaan terang; tidak ada hex di komponen ini.
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -15,14 +21,7 @@ import {
   formatKg,
   type BalanceMapLocation,
 } from "../lib/overview-format";
-
-// Kontrak warna design.md §4: danger merah, safe hijau, netral abu.
-export function markerColor(status: string): string {
-  if (status === "shortage") return "#C62828";
-  if (status === "surplus") return "#2E7D32";
-  if (status === "balanced") return "#555555";
-  return "#92400E";
-}
+import { pinLabel, pinTone } from "../lib/map-console";
 
 function fitBoundsFor(locations: readonly BalanceMapLocation[]): [[number, number], [number, number]] {
   const points = locations.flatMap((location) => {
@@ -35,6 +34,21 @@ function fitBoundsFor(locations: readonly BalanceMapLocation[]): [[number, numbe
   const lons = points.map(([, longitude]) => longitude);
   const pad = 1.6;
   return [[Math.min(...lons) - pad, Math.min(...lats) - pad], [Math.max(...lons) + pad, Math.max(...lats) + pad]];
+}
+
+/** Konten popup dibangun sebagai NODE (bukan HTML string): nama lokasi datang
+ *  dari database, jadi jangan ditempel ke innerHTML. */
+function popupNode(location: BalanceMapLocation): HTMLElement {
+  const box = document.createElement("div");
+  box.className = "map-popup";
+  const title = document.createElement("strong");
+  title.textContent = location.location;
+  const numbers = document.createElement("p");
+  numbers.textContent = `pasokan ${formatKg(location.supply_kg)} · permintaan ${formatKg(location.demand_kg)}`;
+  const gap = document.createElement("em");
+  gap.textContent = formatBalanceGap(location);
+  box.append(title, numbers, gap);
+  return box;
 }
 
 /**
@@ -91,24 +105,36 @@ export default function SupplyMap({
   loading = false,
   locations,
   commodity,
+  activeLocation = null,
   showStatusList = true,
   showHeader = true,
 }: {
   locations: readonly BalanceMapLocation[];
   commodity?: string;
+  /** Lokasi yang sedang disorot (dipilih dari dropdown cakupan di top bar).
+   *  Nilai tak dikenal / "__all__" = tampilan semua lokasi (gagal-tertutup,
+   *  tidak ada tebakan). */
+  activeLocation?: string | null;
   /** Data peta belum tiba: tampilkan skeleton, bukan pesan "belum ada data". */
   loading?: boolean;
   /** false = daftar status dirender pemanggil sendiri (mis. selebar halaman). */
   showStatusList?: boolean;
-  /** false = kartu peta tidak menulis judul/atribusi lagi karena pembungkus
-   *  halaman sudah menulisnya (menghindari dua judul bertumpuk). */
+  /** false = pembungkus halaman sudah menulis judul kartunya sendiri. */
   showHeader?: boolean;
 }) {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  // Marker per lokasi — dipakai efek sinkronisasi di bawah (tanpa membangun ulang).
+  const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  // Penjaga: peta hanya di-dekatkan saat PILIHAN berubah, bukan tiap polling
+  // 5 detik (kalau tidak, pengguna tidak pernah bisa menggeser peta).
+  const lastActiveRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     if (!mapContainer.current || mapRef.current || !locations?.length) return;
+    // Salinan ref untuk cleanup: nilai `.current` bisa berubah sebelum cleanup
+    // dijalankan (aturan react-hooks/exhaustive-deps).
+    const markers = markersRef.current;
     const map = new maplibregl.Map({
       container: mapContainer.current,
       style: {
@@ -126,26 +152,36 @@ export default function SupplyMap({
       attributionControl: false,
     });
     mapRef.current = map;
-    map.addControl(new maplibregl.AttributionControl(), "bottom-right");
+    // Kontrol bawaan: zoom + kompas kanan-atas, atribusi (© OpenStreetMap
+    // contributors · MapLibre) kanan-bawah — seperti acuan.
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+    map.addControl(new maplibregl.AttributionControl({ compact: false }), "bottom-right");
     map.fitBounds(fitBoundsFor(locations), { padding: 40, duration: 0 });
 
     locations.forEach((l) => {
       if (l.latitude == null || l.longitude == null) return;
-      const label = formatBalanceGap(l);
+      const tone = pinTone(l.status);
+      const accessible = `${l.location} — pasokan ${formatKg(l.supply_kg)}, permintaan ${formatKg(l.demand_kg)}, ${formatBalanceGap(l)}`;
       const el = document.createElement("div");
-      el.className = `map-marker map-marker-${l.status}`;
-      el.title = `${l.location} — pasokan ${formatKg(l.supply_kg)}, permintaan ${formatKg(l.demand_kg)}, ${label}`;
-      new maplibregl.Marker({ color: markerColor(l.status), element: el })
+      el.className = `map-pin map-pin-${tone}`;
+      el.title = accessible;
+      // Titik + label sebagai DUA node: elemen marker tetap seukuran titik
+      // supaya koordinat lokasi tepat di tengah titik (label meluber ke kanan).
+      const dot = document.createElement("span");
+      dot.className = "map-pin-dot";
+      dot.setAttribute("aria-hidden", "true");
+      const label = document.createElement("span");
+      label.className = "map-pin-label";
+      label.textContent = pinLabel(l);
+      el.append(dot, label);
+      const marker = new maplibregl.Marker({ element: el })
         .setLngLat([Number(l.longitude), Number(l.latitude)])
-        .setPopup(
-          new maplibregl.Popup({ offset: 12 }).setHTML(
-            `<strong>${l.location}</strong><br/>pasokan ${formatKg(l.supply_kg)} · permintaan ${formatKg(l.demand_kg)}<br/><em>${label}</em>`
-          )
-        )
+        .setPopup(new maplibregl.Popup({ offset: 14 }).setDOMContent(popupNode(l)))
         .addTo(map);
+      markers.set(l.location, marker);
       // MapLibre menandai tiap penanda "Map marker"; sepuluh penanda yang bisa
       // difokus tanpa keterangan tidak berguna bagi pembaca layar.
-      el.setAttribute("aria-label", el.title);
+      el.setAttribute("aria-label", accessible);
     });
 
     // Kontainer berubah ukuran (jendela, sidebar dilipat, breakpoint tata
@@ -158,8 +194,37 @@ export default function SupplyMap({
       observer.disconnect();
       map.remove();
       mapRef.current = null;
+      markers.clear();
+      lastActiveRef.current = undefined;
     };
   }, [locations]);
+
+  // Sorotan lokasi aktif. Peta hanya di-dekatkan saat PILIHAN lokasi berubah
+  // (polling 5 detik tidak boleh menarik kembali peta yang baru digeser).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    markersRef.current.forEach((marker, name) => {
+      marker.getElement().classList.toggle("map-pin-active", name === activeLocation);
+    });
+    if (lastActiveRef.current === activeLocation) return;
+    lastActiveRef.current = activeLocation;
+    const target = locations.find((l) => l.location === activeLocation);
+    const latitude = Number(target?.latitude);
+    const longitude = Number(target?.longitude);
+    if (target && Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      const pad = 0.12;
+      map.fitBounds(
+        [
+          [longitude - pad, latitude - pad],
+          [longitude + pad, latitude + pad],
+        ],
+        { padding: 40, duration: 600 }
+      );
+      return;
+    }
+    map.fitBounds(fitBoundsFor(locations), { padding: 40, duration: 600 });
+  }, [activeLocation, locations]);
 
   if (!locations?.length) {
     return (
@@ -199,7 +264,21 @@ export default function SupplyMap({
       )}
       <div className="map-body">
         {/* Container peta — dirender SSR, MapLibre menempel di client */}
-        <div ref={mapContainer} className="map-gl" />
+        <div className="map-shell">
+          <div ref={mapContainer} className="map-gl" />
+          <div className="map-legend-box" role="group" aria-label="Legenda status lokasi">
+            <span className="map-legend-box-title">Status lokasi:</span>
+            <span className="map-legend-box-item">
+              <i className="map-legend-box-dot map-legend-box-dot-surplus" aria-hidden="true" /> Surplus
+            </span>
+            <span className="map-legend-box-item">
+              <i className="map-legend-box-dot map-legend-box-dot-balanced" aria-hidden="true" /> Seimbang
+            </span>
+            <span className="map-legend-box-item">
+              <i className="map-legend-box-dot map-legend-box-dot-shortage" aria-hidden="true" /> Shortage
+            </span>
+          </div>
+        </div>
         {showStatusList && (
           <div className="map-side">
             <StatusLocationList locations={locations} />

@@ -21,7 +21,9 @@ const summary = {
 
 describe("Approval administratif supplier", () => {
   it("mereset form supplier saat keputusan terpilih berganti", () => {
-    const page = readFileSync("app/page.tsx", "utf8");
+    // Langkah 4 (11 Okt): form supplier ikut pindah ke halaman tersendiri
+    // "Decision & Evidence" — kontrak `key` tetap sama, lokasinya berubah.
+    const page = readFileSync("components/DecisionEvidence.tsx", "utf8");
     expect(page).toMatch(/<SupplierExclusionView\s+key=\{selected\.decision_id\}/);
   });
   it("menampilkan supplier, alasan, scope dan bukti tanpa PO atau biaya palsu", () => {
