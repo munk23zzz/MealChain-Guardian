@@ -23,6 +23,7 @@ import {
   seedDemo,
 } from "../lib/api";
 import { decodeRole } from "../lib/auth";
+import { formatJam } from "../lib/jam";
 import TopBar from "../components/TopBar";
 import {
   ALL_LOCATIONS,
@@ -809,8 +810,7 @@ export default function Home() {
                 </span>
                 {mapUpdatedAt !== null && (
                   <span className="overview-updated" aria-live="polite">
-                    terakhir diperbarui{" "}
-                    {new Date(mapUpdatedAt).toLocaleTimeString("id-ID")}
+                    terakhir diperbarui {formatJam(new Date(mapUpdatedAt)).teks}
                   </span>
                 )}
               </div>

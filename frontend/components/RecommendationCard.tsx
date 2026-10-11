@@ -10,6 +10,7 @@
 // tidak ada, ia ditulis apa adanya ("—" dari formatKg/formatIDR).
 
 import StatusBadge from "./StatusBadge";
+import { cardEdge } from "../lib/recommendations";
 import { ClockIcon } from "./NavIcon";
 import { formatIDR } from "../lib/auth";
 import { formatDateTime } from "../lib/datetime";
@@ -36,15 +37,6 @@ export const DECISION_TYPE_LABELS: Record<string, string> = {
 // Catatan yang isinya hanya kata penanda: bukan narasi, jangan dicetak.
 const PLACEHOLDER_NOTES = new Set(["unavailable", "n/a", "na", "-", "none", "null", "undefined"]);
 
-// Peta status → kelas tepi kartu (alert edge ala Stitch).
-const EDGE: Record<string, string> = {
-  PENDING_APPROVAL: "edge-warning",
-  VERIFIER_FLAGGED: "edge-warning",
-  NEEDS_VERIFICATION: "edge-warning",
-  REJECTED: "edge-danger",
-  FAIL: "edge-danger",
-  SHORTAGE: "edge-danger",
-};
 
 export default function RecommendationCard({
   decision,
@@ -58,7 +50,7 @@ export default function RecommendationCard({
     ? (CASE_LABELS[decision.demo_case] ??
       `Kasus: ${decision.demo_case.replace(/-/g, " ")}`)
     : null;
-  const edge = EDGE[(decision.status ?? "").toUpperCase()] ?? "edge-primary";
+  const edge = cardEdge(decision);
   // Alasan penolakan / catatan verifier = satu-satunya narasi yang benar-benar
   // ada di data; kalau dua-duanya kosong, tidak ada paragraf yang ditampilkan.
   // Backend kadang mengisi catatan dengan kata penanda ("unavailable") — itu
@@ -95,6 +87,7 @@ export default function RecommendationCard({
           <span
             className={`badge ${decision.valid ? "badge-neutral" : "badge-expired"}`}
           >
+            {!decision.valid && <ClockIcon />}
             {decision.valid
               ? `berlaku ${decision.seconds_remaining ?? 0} dtk`
               : "kedaluwarsa"}

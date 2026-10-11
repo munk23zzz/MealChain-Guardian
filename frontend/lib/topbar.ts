@@ -93,6 +93,60 @@ export function countActionable(
   return total;
 }
 
+/** Jumlah maksimum baris notifikasi yang ditampilkan di popup lonceng. */
+export const NOTIF_LIMIT = 5;
+
+/** Keputusan yang dibutuhkan popup notifikasi (subset respons GET /decisions). */
+export type NotifDecision = {
+  decision_id?: string | null;
+  decision_type?: string | null;
+  status?: string | null;
+  quantity_kg?: number | null;
+  created_at?: string | null;
+};
+
+export type NotifList = {
+  /** Jumlah SELURUH keputusan yang menunggu tindakan (jujur, bukan yang tampil). */
+  total: number;
+  /** Baris yang ditampilkan, terbaru lebih dulu. */
+  shown: NotifDecision[];
+  /** Sisa yang tidak ditampilkan karena batas. */
+  rest: number;
+};
+
+/**
+ * Isi popup notifikasi: keputusan yang menunggu tindakan manusia, terbaru lebih
+ * dulu, dibatasi `limit` baris. Entri tanpa waktu ditaruh paling akhir, bukan
+ * dibuang — supaya jumlahnya tetap cocok dengan lonceng.
+ */
+export function notifList(
+  decisions: readonly NotifDecision[] | null | undefined,
+  limit: number = NOTIF_LIMIT
+): NotifList {
+  const waktu = (decision: NotifDecision): number => {
+    const parsed = decision?.created_at ? Date.parse(decision.created_at) : Number.NaN;
+    return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed;
+  };
+
+  const menunggu = (decisions ?? []).filter((decision) =>
+    ACTIONABLE_SET.has(String(decision?.status ?? "").toUpperCase())
+  );
+
+  const urut = [...menunggu].sort((a, b) => {
+    const wa = waktu(a);
+    const wb = waktu(b);
+    if (wa === wb) return 0; // urutan asli dipertahankan (sort stabil)
+    return wa > wb ? -1 : 1;
+  });
+
+  const batas = Math.max(0, Math.trunc(limit));
+  return {
+    total: urut.length,
+    shown: urut.slice(0, batas),
+    rest: Math.max(0, urut.length - batas),
+  };
+}
+
 /** Inisial untuk avatar (maks 2 huruf, dari nilai pertama yang terisi). */
 export function initialsOf(...values: (string | null | undefined)[]): string {
   const source = values.find((value) => value && value.trim());

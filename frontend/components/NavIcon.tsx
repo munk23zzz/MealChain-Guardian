@@ -223,3 +223,13 @@ export function RoleIcon({ size = 16 }: { size?: number }) {
   );
 }
 
+/** Penutup panel/popup (mis. popup notifikasi). */
+export function CloseIcon({ size = 16 }: { size?: number }) {
+  return (
+    <Glyph size={size}>
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </Glyph>
+  );
+}
+

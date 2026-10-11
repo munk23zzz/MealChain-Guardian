@@ -50,7 +50,7 @@
   --ok-bg: #ECFDF5;      --ok-border: #A7F3D0;      --ok-ink: #065F46;
   --warn-bg: #FFFBEB;    --warn-border: #FDE68A;    --warn-ink: #8A5A00;
   --danger-bg: #FEF2F2;  --danger-border: #FECACA;  --danger-ink: #991B1B;
-  --neutral-bg: #F1F5F9; --neutral-border: #CBD5E1; --neutral-ink: var(--neutral-ink);
+  --neutral-bg: #F1F5F9; --neutral-border: #CBD5E1; --neutral-ink: #475569;
   /* Fokus */
   --focus-ring: var(--accent-strong);
   /* Gerak — durasi/easing standar (bukan satu durasi untuk semua) */
@@ -661,6 +661,24 @@ a:focus-visible {
 .version-badge {
   margin-left: 8px;
   vertical-align: middle;
+  background: var(--neutral-bg);
+  border-color: var(--neutral-border);
+  color: var(--neutral-ink);
+  font-weight: 600;
+}
+
+/* Kedaluwarsa: abu netral + ikon jam — status "tidak bisa ditindak lagi",
+   dibedakan dari lencana status yang berwarna. */
+.badge-expired {
+  background: var(--neutral-bg);
+  border-color: var(--neutral-border);
+  color: var(--neutral-ink);
+}
+
+.badge-neutral {
+  background: var(--neutral-bg);
+  border-color: var(--neutral-border);
+  color: var(--neutral-ink);
 }
 
 .chain-reason {
@@ -1020,11 +1038,13 @@ a:focus-visible {
 
 .rec-narrative {
   margin: 10px 0 0;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
+  padding: 8px 10px;
+  background: var(--neutral-bg);
+  border: 1px solid var(--neutral-border);
+  border-radius: 6px;
   font-size: 13px;
   line-height: 1.5;
-  color: var(--ink-muted);
+  color: var(--ink);
 }
 
 .feed-more {
@@ -1502,7 +1522,7 @@ a:focus-visible {
 
 .top-bar-select {
   height: 36px;
-  max-width: 220px;
+  max-width: 260px; /* cukup untuk "Semua lokasi SPPG (10 lokasi)" tanpa terpotong */
   min-width: 96px;
   padding: 0 10px;
   flex: 0 1 auto;
@@ -1515,13 +1535,27 @@ a:focus-visible {
   cursor: pointer;
 }
 
-/* Peran SPPG: cakupan terkunci — tetap TAMPIL (bukan disembunyikan) supaya
-   jelas lokasi mana yang sedang dilihat, tetapi tidak bisa diubah. */
-.top-bar-select:disabled {
-  background: rgba(255, 255, 255, 0.16);
+/* Cakupan terkunci — tetap TAMPIL (bukan disembunyikan) supaya jelas lokasi
+   mana yang sedang dilihat, tetapi tidak bisa diubah. Tanpa panah dropdown:
+   tidak ada pilihan lain, jadi panahnya menyesatkan (dulu terlihat seperti
+   dropdown padahal hanya satu opsi). */
+.top-bar-select:disabled,
+.top-bar-select-locked {
+  padding-right: 12px;
+  /* Latar digelapkan (bukan diterangkan): teks putih di atas biru yang lebih
+     gelap memberi kontras jauh lebih tinggi daripada latar putih transparan. */
+  background: rgba(0, 0, 0, 0.18);
   color: var(--ink-inverse);
-  border-color: rgba(255, 255, 255, 0.45);
+  border-color: rgba(255, 255, 255, 0.35);
   cursor: default;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: none;
+}
+
+/* Chrome/Edge tetap menggambar panah lewat ::-ms-expand di sebagian versi. */
+.top-bar-select-locked::-ms-expand {
+  display: none;
 }
 
 .top-bar-net { display: none; }
@@ -1542,7 +1576,7 @@ a:focus-visible {
   border-left: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* Jam real-time */
+/* Jam real-time (memuat detik → angka tabular supaya tidak bergetar tiap detik) */
 .top-bar-clock {
   font-size: 13px;
   font-variant-numeric: tabular-nums;
@@ -1603,6 +1637,149 @@ a:focus-visible {
 }
 
 .top-bar-user { display: flex; align-items: center; gap: 8px; }
+
+/* --- Popup notifikasi (lonceng) ---
+   Lonceng sekarang membuka panel informasi di header, bukan langsung
+   memindahkan tab ke Recommendations (permintaan Roy 2026-10-11). */
+.top-bar-notif {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.top-bar-notif-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 60;
+  width: min(380px, calc(100vw - 24px));
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line-input);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.22);
+  text-align: left;
+}
+
+.top-bar-notif-panel:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.top-bar-notif-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.top-bar-notif-heading { min-width: 0; }
+
+.top-bar-notif-title {
+  display: block;
+  font-size: 14px;
+  color: var(--navy-900);
+}
+
+.top-bar-notif-sub {
+  margin: 2px 0 0;
+  font-size: var(--text-meta);
+  color: var(--ink-muted);
+}
+
+.top-bar-notif-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: 1px solid var(--line-input);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.top-bar-notif-close:hover { background: var(--canvas); color: var(--ink); }
+
+.top-bar-notif-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.top-bar-notif-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 4px;
+  border-top: 1px solid var(--line);
+}
+
+.top-bar-notif-item:first-child { border-top: 0; }
+
+.top-bar-notif-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.top-bar-notif-item-label {
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--navy-900);
+}
+
+/* Meta & lencana TIDAK boleh terlipat — hanya label yang boleh 2 baris supaya
+   tiap baris tetap ringkas dan mudah dipindai. */
+.top-bar-notif-item-meta {
+  font-size: var(--text-meta);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.top-bar-notif-item .badge {
+  flex: none;
+  white-space: nowrap;
+}
+
+.top-bar-notif-rest,
+.top-bar-notif-empty {
+  margin: 0;
+  font-size: var(--text-meta);
+  color: var(--ink-muted);
+}
+
+.top-bar-notif-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line-input);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.top-bar-notif-open:hover { background: rgba(9, 105, 218, 0.06); }
 
 .top-bar-avatar {
   display: flex;
@@ -2150,7 +2327,17 @@ a:focus-visible {
 /* --- Restyle Stitch: Recommendations / Agent Log / Demo Control (2026-10-10) --- */
 
 /* Kartu rekomendasi: alert edge kiri tingkat status (Stitch REC cards) */
-.rec-edge { position: relative; overflow: hidden; }
+.rec-edge {
+  position: relative;
+  overflow: hidden;
+  transition: border-color var(--dur-2) var(--ease-standard),
+    box-shadow var(--dur-2) var(--ease-standard);
+}
+
+.rec-edge:hover {
+  border-color: var(--line-input);
+  box-shadow: var(--shadow-1);
+}
 .rec-edge::before {
   content: "";
   position: absolute;
@@ -2158,8 +2345,10 @@ a:focus-visible {
   width: 4px;
   background: var(--accent-strong);
 }
-.rec-edge.edge-warning::before { background: var(--navy-900); }
+.rec-edge.edge-warning::before { background: var(--warn-ink); }
 .rec-edge.edge-danger::before { background: var(--status-danger); }
+/* Kartu kedaluwarsa: tepi netral — tidak lagi memakai warna "lihat saya". */
+.rec-edge.edge-expired::before { background: var(--line-input); }
 
 /* Header kartu dengan garis pemisah ala Stitch card header */
 .rec-edge .card-header,
@@ -2400,11 +2589,14 @@ a:focus-visible {
   color: var(--navy-900);
 }
 
+/* Pil "Live Sync" di ATAS, teks "terakhir diperbarui" di bawahnya (arah Roy
+   2026-10-11) — rata kanan supaya tetap sejajar tepi kartu. */
 .overview-header-status {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  text-align: right;
 }
 
 .overview-updated {
@@ -3595,7 +3787,7 @@ a:focus-visible {
 }
 
 .board-badge-warn {
-  background: var(--surface)beb;
+  background: var(--warn-bg);
   color: var(--warn-ink);
   border-color: var(--warn-border);
 }
@@ -3670,6 +3862,8 @@ button:active:not(:disabled),
 .side-actions .button:active,
 .top-bar-bell:active,
 .top-bar-logout:active,
+.top-bar-notif-close:active,
+.top-bar-notif-open:active,
 .top-bar-select:active,
 .page-header-select:active,
 .filter-chip:active,
@@ -3691,6 +3885,8 @@ button:active:not(:disabled),
 .board-link:focus-visible,
 .rec-case:focus-visible,
 .chain-item:focus-visible,
+.top-bar-notif-close:focus-visible,
+.top-bar-notif-open:focus-visible,
 .top-bar-select:focus-visible,
 .page-header-select:focus-visible,
 .event2-quotes li label:focus-visible {
@@ -3705,9 +3901,14 @@ button:active:not(:disabled),
   .side-collapse,
   .side-logout,
   .top-bar-bell,
-  .top-bar-logout {
+  .top-bar-logout,
+  .top-bar-notif-close {
     width: 44px;
     height: 44px;
+  }
+
+  .top-bar-notif-open {
+    min-height: 44px;
   }
 
   .side-tab,

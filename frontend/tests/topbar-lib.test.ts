@@ -11,6 +11,7 @@ import {
   initialsOf,
   isScopeChooser,
   networkState,
+  notifList,
   scopeModel,
   type TopBarLocation,
 } from "../lib/topbar";
@@ -113,5 +114,79 @@ describe("top bar — identitas & ringkasan jaringan", () => {
       label: "Jaringan normal (1 lokasi)",
     });
     expect(networkState([])).toEqual({ tone: "safe", label: "Jaringan normal (0 lokasi)" });
+  });
+});
+
+// Popup notifikasi lonceng (permintaan Roy 11 Okt: lonceng membuka popup, bukan
+// langsung pindah ke tab Recommendations). Logika murni: pilih yang menunggu
+// tindakan, urutkan terbaru lebih dulu, batasi jumlah tampil.
+describe("notifList", () => {
+  const KEPUTUSAN = [
+    {
+      decision_id: "d1",
+      status: "PENDING_APPROVAL",
+      decision_type: "regional_balance",
+      quantity_kg: 400,
+      created_at: "2026-10-11T08:00:00Z",
+    },
+    {
+      decision_id: "d2",
+      status: "APPROVED", // bukan actionable → tidak masuk notifikasi
+      decision_type: "price_anomaly",
+      quantity_kg: 100,
+      created_at: "2026-10-11T09:00:00Z",
+    },
+    {
+      decision_id: "d3",
+      status: "needs_verification", // huruf kecil tetap dikenali
+      decision_type: "safety_disruption",
+      quantity_kg: 250,
+      created_at: "2026-10-11T07:00:00Z",
+    },
+    {
+      decision_id: "d4",
+      status: "VERIFIER_FLAGGED",
+      decision_type: "supplier_exclusion",
+      quantity_kg: null,
+      created_at: null, // tanpa waktu → paling akhir
+    },
+  ];
+
+  it("hanya memuat keputusan yang menunggu tindakan", () => {
+    const { total, shown } = notifList(KEPUTUSAN);
+    expect(total).toBe(3);
+    expect(shown.map((d) => d.decision_id)).toEqual(["d1", "d3", "d4"]);
+  });
+
+  it("mengurutkan yang terbaru lebih dulu; tanpa waktu paling akhir", () => {
+    const { shown } = notifList(KEPUTUSAN);
+    expect(shown[0].decision_id).toBe("d1"); // 08.00
+    expect(shown[1].decision_id).toBe("d3"); // 07.00
+    expect(shown[2].decision_id).toBe("d4"); // tanpa created_at
+  });
+
+  it("membatasi jumlah tampil dan melaporkan sisanya", () => {
+    const { total, shown, rest } = notifList(KEPUTUSAN, 2);
+    expect(total).toBe(3);
+    expect(shown).toHaveLength(2);
+    expect(rest).toBe(1);
+  });
+
+  it("batas 0 → tidak menampilkan apa pun tetapi total tetap jujur", () => {
+    const { total, shown, rest } = notifList(KEPUTUSAN, 0);
+    expect(shown).toEqual([]);
+    expect(rest).toBe(3);
+    expect(total).toBe(3);
+  });
+
+  it("daftar kosong / null tidak meledak", () => {
+    expect(notifList([])).toEqual({ total: 0, shown: [], rest: 0 });
+    expect(notifList(null)).toEqual({ total: 0, shown: [], rest: 0 });
+    expect(notifList(undefined, 5).total).toBe(0);
+  });
+
+  it("entri tanpa status atau status kosong diabaikan", () => {
+    const { total } = notifList([{ decision_id: "x" }, { decision_id: "y", status: "" }]);
+    expect(total).toBe(0);
   });
 });

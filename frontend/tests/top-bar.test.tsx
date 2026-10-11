@@ -46,22 +46,29 @@ describe("TopBar (header global)", () => {
     expect(html).toContain("top-bar");
     expect(html).toContain("top-bar-role");
     expect(html).toContain("SPPG Operations Lead");
-    expect(html).toContain("top-bar-sppg");
-    expect(html).toContain("SPPG Jakarta");
+    // Lokasi diwakili pemilih cakupan; <span class="top-bar-sppg"> dihapus
+    // supaya tidak tampil dua kali.
+    expect(html).not.toContain("top-bar-sppg");
+    expect(html).not.toContain("SPPG Jakarta");
+    expect(html).toContain(">Jakarta<");
   });
 
-  it("tidak menampilkan lokasi SPPG kalau datanya belum ada (tanpa teks karangan)", () => {
-    expect(render({ userSub: null })).not.toContain("top-bar-sppg");
+  it("tanpa lokasi: tidak ada teks karangan, pemilih cakupan menampilkan placeholder", () => {
+    const html = render({ userSub: null, ownLocation: null, activeLocation: null });
+    expect(html).not.toContain("top-bar-sppg");
+    expect(html).toContain("Lokasi belum diketahui");
   });
 
   it("jam hanya dirender di klien (SSR tanpa jam supaya tidak hidrasi mismatch)", () => {
     // renderToStaticMarkup = sisi server: span jam TIDAK boleh ada di markup awal.
     expect(render()).not.toContain("top-bar-clock");
-    // Sisi kliennya ada di sumber: useEffect + interval 30 detik + label aksesibel.
+    // Sisi kliennya ada di sumber: useEffect + interval 1 detik (detik berjalan)
+    // + label aksesibel dari formatJam (waktu Indonesia, bukan zona mesin).
     const src = readFileSync("components/TopBar.tsx", "utf8");
     expect(src).toContain("top-bar-clock");
-    expect(src).toContain("Waktu saat ini:");
-    expect(src).toContain("setInterval");
+    expect(src).toContain("formatJam");
+    expect(src).toContain("setInterval(tick, 1000)");
+    expect(src).not.toContain("setInterval(tick, 30000)");
   });
 
   it("lonceng notifikasi menghitung keputusan yang menunggu tindakan", () => {
@@ -73,6 +80,27 @@ describe("TopBar (header global)", () => {
     const kosong = render({ decisions: [] });
     expect(kosong).toContain('aria-label="Notifikasi: 0 keputusan menunggu tindakan"');
     expect(kosong).not.toContain("top-bar-bell-count");
+  });
+
+  it("lonceng membuka POPUP, bukan langsung pindah tab", () => {
+    // Saat tertutup: panel tidak dirender, tetapi tombol mengumumkan bahwa ia
+    // membuka dialog (aria-haspopup/aria-expanded) supaya perilakunya terduga.
+    const html = render();
+    // Panelnya sendiri tidak dirender saat tertutup (id-nya muncul hanya di
+    // aria-controls, jadi yang diperiksa elemen panelnya).
+    expect(html).not.toContain('class="top-bar-notif-panel"');
+    expect(html).not.toContain('role="dialog"');
+    expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('aria-controls="top-bar-notif-panel"');
+    // Isi popup diambil dari logika murni lib/topbar.ts, bukan dihitung ulang
+    // di komponen, dan tombolnya TIDAK memanggil onOpenNotifications langsung.
+    const src = readFileSync("components/TopBar.tsx", "utf8");
+    expect(src).toContain("notifList");
+    expect(src).toContain('role="dialog"');
+    expect(src).toContain("Escape");
+    expect(src).toContain("setNotifOpen");
+    expect(src).not.toContain("onClick={onOpenNotifications}");
   });
 
   it("brand + tombol keluar tidak lagi di header (pindah ke rail sidebar)", () => {
@@ -96,11 +124,14 @@ describe("TopBar (header global)", () => {
     expect(html).toContain(">Jakarta<");
     // Opsi lokasi lain tidak ditawarkan ke peran SPPG.
     expect(html).not.toContain(">Bandung<");
+    // Satu opsi saja → tanpa panah dropdown (bukan pilihan).
+    expect(html).toContain("top-bar-select-locked");
   });
 
   it("monitor nasional melihat semua lokasi + opsi per lokasi", () => {
     const html = render({ role: "bgn_monitor", ownLocation: null, activeLocation: null });
     expect(html).not.toContain("disabled");
+    expect(html).not.toContain("top-bar-select-locked"); // ada pilihan → panah tetap
     expect(html).toContain("Semua lokasi SPPG (2 lokasi)");
     expect(html).toContain(">Bandung<");
     expect(html).toContain(">Jakarta<");
@@ -116,6 +147,11 @@ describe("TopBar (header global)", () => {
     const css = readFileSync("app/globals.css", "utf8");
     expect(css).not.toContain(".top-bar-scope { display: none; }");
     expect(css).not.toContain(".top-bar-select { display: none; }");
+    // Varian terkunci wajib mematikan panah dropdown.
+    expect(css).toContain(".top-bar-select-locked");
+    // Panah hilang = `appearance: none` di dalam blok aturan yang sama
+    // (regex dibatasi ke satu blok `{...}` supaya tidak bergantung jarak).
+    expect(css).toMatch(/\.top-bar-select-locked[^{]*\{[^}]*appearance: none;/);
   });
 });
 
