@@ -1,6 +1,9 @@
 services:
   postgres:
     image: postgres:16-alpine
+    # Demo day: kontainer bangkit sendiri setelah laptop tidur/VM reboot,
+    # kecuali dihentikan sengaja (`docker compose stop`).
+    restart: unless-stopped
     container_name: mealchain-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-mealchain}
@@ -21,6 +24,7 @@ services:
       - mealchain-network
 
   backend:
+    restart: unless-stopped
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -114,6 +118,7 @@ services:
       - mealchain-network
 
   frontend:
+    restart: unless-stopped
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -141,6 +146,7 @@ services:
       - mealchain-network
 
   mock-sap:
+    restart: unless-stopped
     build:
       context: ./backend
       dockerfile: Dockerfile

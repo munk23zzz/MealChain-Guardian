@@ -22,6 +22,8 @@ yarn-error.log*
 .next/
 out/
 build/
+# Artefak increment build TypeScript (`tsc --incremental`) — bukan sumber.
+*.tsbuildinfo
 
 # Testing
 .pytest_cache/
@@ -41,10 +43,23 @@ htmlcov/
 *~
 
 # Environment files
+# .env = nilai nyata (lokal saja, tidak pernah di-commit — Rules.md §7).
+# .env.example WAJIB ikut ter-commit: templat untuk teman/Kiro tanpa nilai asli.
 .env
 .env.local
 .env.*.local
-.env.example
+!.env.example
+
+# Scratch diagnosa AWS (dulu ikut ter-commit tanpa sengaja)
+/_diag.py
+/diag_*.py
+/*.stackdump
+/_iam_policy_*.json
+/_role_arn.txt
+
+# Ekspor dump database — memuat hash kata sandi pengguna demo; regenerasi lokal
+# lewat `pg_dump` bila perlu, jangan dibagikan lewat git.
+/data/export/
 
 # OS
 .DS_Store
@@ -63,3 +78,11 @@ dist/
 
 # Kredensial lokal (access key AWS) — JANGAN pernah di-commit
 secrets/
+
+# sap-joule (jembatan A2A Joule): kredensial lokal TIDAK pernah di-commit
+sap-joule/*-key.json
+sap-joule/group.json
+sap-joule/keybroker-credentials.txt
+sap-joule/*.env
+sap-joule/**/.venv/
+sap-joule/**/.pytest_cache/
