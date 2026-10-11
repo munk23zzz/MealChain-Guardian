@@ -1,18 +1,23 @@
-// S4-03 wiring — page.tsx memuat KPI via fetchKpis dan merender
-// KPIDashboard. Uji kontrak pada source (node-env, tanpa DOM).
+// S4-03 wiring — page.tsx memuat KPI lewat hook React Query (Rules.md §3), dan
+// hook itulah yang memanggil fetchKpis. Uji kontrak pada sumber (node-env,
+// tanpa DOM): batas "komponen tidak fetch sendiri" ikut dipatok di sini.
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
 const pageSrc = readFileSync("app/page.tsx", "utf8");
+const hookSrc = readFileSync("lib/hooks/useKpi.ts", "utf8");
 
 describe("wiring KPI di app/page.tsx (S4-03)", () => {
-  it("import fetchKpis + KPIDashboard", () => {
-    expect(pageSrc).toContain("fetchKpis");
+  it("halaman memakai hook useKpi + KPIDashboard", () => {
+    expect(pageSrc).toContain("useKpi");
+    expect(pageSrc).toMatch(/from "\.\.\/lib\/hooks\/useKpi"/);
     expect(pageSrc).toContain("KPIDashboard");
   });
 
-  it("fetchKpis dipanggil dengan token (scope default dari backend)", () => {
-    expect(pageSrc).toMatch(/fetchKpis\(/);
+  it("hanya hook yang memanggil fetchKpis (bukan komponen)", () => {
+    expect(hookSrc).toMatch(/fetchKpis\(/);
+    // Batas Rules.md §3: setelah migrasi, halaman tidak menyentuh API langsung.
+    expect(pageSrc).not.toMatch(/fetchKpis\(/);
   });
 
   it("KPIDashboard dirender dengan state loading/error/kpi", () => {

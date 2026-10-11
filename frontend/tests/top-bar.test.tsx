@@ -165,7 +165,9 @@ describe("wiring header & rail di app/page.tsx", () => {
   });
 
   it("lokasi pemakai datang dari server (GET /auth/me), bukan tebakan", () => {
-    expect(pageSrc).toContain("fetchMe");
+    const meHook = readFileSync("lib/hooks/useMe.ts", "utf8");
+    expect(pageSrc).toContain("useMe");
+    expect(meHook).toContain("fetchMe");
     expect(apiSrc).toContain("/auth/me");
   });
 

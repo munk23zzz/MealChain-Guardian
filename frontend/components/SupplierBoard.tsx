@@ -45,6 +45,9 @@ export default function SupplierBoard({
 }) {
   const roster = supplierRoster(pairs);
   const metrics = rosterMetrics(roster);
+  // `null` = register belum dimuat (endpoint belum dipanggil / gagal) — beda dari
+  // array kosong yang berarti "sudah dimuat, memang tidak ada eksklusi".
+  const registerDimuat = exclusions !== null && exclusions !== undefined;
   const register = exclusionRows(
     exclusions && typeof exclusions === "object" && "items" in (exclusions as object)
       ? (exclusions as { items?: unknown }).items
@@ -153,7 +156,13 @@ export default function SupplierBoard({
 
       <article className="card">
         <h2>Register eksklusi</h2>
-        {register.length === 0 ? (
+        {!registerDimuat ? (
+          <p className="evidence-note">
+            {loading
+              ? "Memuat register eksklusi…"
+              : "Register eksklusi belum dimuat — data ini diambil saat tab Pemasok dibuka."}
+          </p>
+        ) : register.length === 0 ? (
           <p className="evidence-note">
             Tidak ada pemasok yang sedang dieksklusi dalam cakupan Anda.
           </p>

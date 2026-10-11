@@ -44,4 +44,19 @@ describe("RecommendationCard — narasi", () => {
     const html = renderToStaticMarkup(<RecommendationCard decision={{ ...BASE } as any} />);
     expect(html).not.toContain("rec-narrative");
   });
+
+  it("valid tanpa sisa waktu: TIDAK mencetak '0 dtk' yang dikarang", () => {
+    const html = renderToStaticMarkup(
+      <RecommendationCard decision={{ ...BASE, valid: true, seconds_remaining: null } as any} />
+    );
+    expect(html).not.toContain("0 dtk");
+    expect(html).toContain("berlaku");
+  });
+
+  it("valid dengan sisa waktu: angka aslinya dicetak", () => {
+    const html = renderToStaticMarkup(
+      <RecommendationCard decision={{ ...BASE, valid: true, seconds_remaining: 600 } as any} />
+    );
+    expect(html).toContain("berlaku 600 dtk");
+  });
 });

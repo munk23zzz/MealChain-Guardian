@@ -4,13 +4,19 @@
  * ChaosPanel (P4, paket 1-6, keputusan Roy 2026-10-09).
  *
  * "Slider chaos" yang JUJUR: tidak ada injeksi di luar kontrak backend.
- * Slider memilih TINGKAT GANGGUAN (persen kenaikan suhu simulasi pada
- * batch terpilih) — namun penetapan safety TETAP dihitung server-side
- * dari temperature_log persisted via POST /events/safety-disruption
- * (Event 3, ambang 30 menit terkunci). Slider hanyalah pemilih skenario.
+ * Penetapan safety TETAP dihitung server-side dari temperature_log persisted
+ * via POST /events/safety-disruption (Event 3, ambang 30 menit terkunci).
+ *
+ * Catatan audit 2026-10-11: slider tingkat gangguan TIDAK dikirim ke server.
+ * Backend memakai extra="forbid" sehingga mengirim field tambahan membalas 422
+ * (dulu setiap "Picu Event 3" gagal karena itu). Besar gangguan yang dinilai
+ * adalah temperature_log batch terpilih — pilih batch, bukan angka slider.
+ * Semua panggilan lewat lib/api.ts (Rules.md §3: tanpa fetch manual di komponen).
  */
 
 import { useCallback, useEffect, useState } from "react";
+
+import { fetchBatches, triggerSafetyDisruption } from "../lib/api";
 
 import StatusBadge from "./StatusBadge";
 
@@ -38,18 +44,16 @@ export default function ChaosPanel({
     if (!token) return;
     setBusy(true);
     try {
-      const r = await fetch("/batches", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const d = await r.json();
-      setBatches(d.batches ?? []);
-      if (d.batches?.length && !batchId) setBatchId(d.batches[0].id);
+      const rows = await fetchBatches(token);
+      setBatches(rows);
+      // Bentuk fungsional: tidak menutup nilai batchId lama (dulu pilihan
+      // pengguna bisa diam-diam direset ke batch pertama).
+      if (rows.length) setBatchId((prev) => prev || rows[0].id);
     } catch (e: any) {
       setMsg(String(e.message ?? e));
     } finally {
       setBusy(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   useEffect(() => {
@@ -63,29 +67,16 @@ export default function ChaosPanel({
     setResult(null);
     try {
       const target = batches.find((b) => b.id === batchId);
-      const r = await fetch("/events/safety-disruption", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          batch_id: batchId,
-          target_location_id: batches.find((b) => b.id === batchId)
-            ?.location_id,
-          operation_key:
-            typeof crypto !== "undefined" && crypto.randomUUID
-              ? crypto.randomUUID()
-              : `${Date.now()}-0000-4000-8000-${Date.now()
-                  .toString()
-                  .padStart(12, "0")}`,
-          // severity = petunjuk skenario demo (ditampilkan di trace);
-          // keputusan safety TETAP dihitung server dari temperature_log.
-          severity_hint_pct: severity,
-        }),
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.detail ?? `HTTP ${r.status}`);
+      const d = await triggerSafetyDisruption(
+        batchId,
+        String(target?.location_id ?? ""),
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-0000-4000-8000-${Date.now()
+              .toString()
+              .padStart(12, "0")}`,
+        token
+      );
       setResult(d);
       if (d.decision_id) onDecisionCreated?.();
     } catch (e: any) {
@@ -102,11 +93,12 @@ export default function ChaosPanel({
         <StatusBadge status={result ? result.status : "proposed"} />
       </div>
       <p className="chaos-note">
-        Slider memilih tingkat gangguan skenario. Safety status TETAP dihitung
-        server dari temperature_log batch (tidak pernah dari browser).
+        Keputusan safety dihitung server dari temperature_log batch terpilih —
+        tidak pernah dari browser. Pilih batch untuk memilih skenario; angka
+        slider hanya penanda skenario dan TIDAK dikirim ke server.
       </p>
       <label className="field chaos-slider">
-        <span>Tingkat gangguan: {severity}%</span>
+        <span>Penanda tingkat gangguan (tidak memengaruhi hasil): {severity}%</span>
         <input
           type="range"
           min={0}

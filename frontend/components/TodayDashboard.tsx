@@ -248,9 +248,9 @@ export default function TodayDashboard({
                             freshnessLabel(batch.freshness_score) !== "—"
                               ? `kesegaran ${freshnessLabel(batch.freshness_score)}`
                               : null,
-                            batch.food_safety_status
-                              ? (SAFETY_LABELS[String(batch.food_safety_status)] ??
-                                String(batch.food_safety_status))
+                            batch.safety_status
+                              ? (SAFETY_LABELS[String(batch.safety_status)] ??
+                                String(batch.safety_status))
                               : null,
                           ]
                             .filter(Boolean)

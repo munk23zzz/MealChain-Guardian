@@ -88,4 +88,15 @@ describe("SupplierBoard", () => {
   it("catatan sumber menyebut keterbatasan endpoint", () => {
     expect(render()).toContain("belum punya endpoint daftar pemasok");
   });
+
+  it("register belum dimuat (exclusions null): TIDAK mengklaim tidak ada eksklusi", () => {
+    const html = render({ exclusions: null });
+    expect(html).not.toContain("Tidak ada pemasok yang sedang dieksklusi");
+    expect(html).toContain("belum dimuat");
+  });
+
+  it("register sudah dimuat dan kosong: klaim 'tidak ada eksklusi' sah", () => {
+    const html = render({ exclusions: { items: [], count: 0 } });
+    expect(html).toContain("Tidak ada pemasok yang sedang dieksklusi");
+  });
 });

@@ -31,7 +31,9 @@ export type TodayBatch = {
   location?: string | null;
   commodity?: string | null;
   quantity_kg?: number | string | null;
-  food_safety_status?: string | null;
+  // GET /batches mengirim `safety_status` (backend/app/api/batches.py:53);
+  // `food_safety_status` tidak pernah ada dan dulu membuat label safety hilang.
+  safety_status?: string | null;
   freshness_score?: number | string | null;
   usable_until?: string | null;
   [key: string]: unknown;

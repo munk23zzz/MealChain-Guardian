@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDate, formatDateTime } from "../lib/datetime";
+import { formatClockUtc, formatDate, formatDateTime } from "../lib/datetime";
 
 describe("formatDateTime (WIB, id-ID)", () => {
   it("format acuan: tanggal + jam titik + WIB", () => {
@@ -34,5 +34,17 @@ describe("formatDate", () => {
   it("kosong atau tidak sah → —", () => {
     expect(formatDate(null)).toBe("—");
     expect(formatDate("bukan-tanggal")).toBe("—");
+  });
+});
+
+describe("formatClockUtc (jam langkah jejak agen)", () => {
+  it("ISO dengan mikrodetik + offset → jam:menit:detik UTC", () => {
+    expect(formatClockUtc("2026-10-10T18:16:47.844642+00:00")).toBe("18:16:47");
+  });
+
+  it("kosong atau tidak sah → — (tidak melempar RangeError)", () => {
+    expect(formatClockUtc(null)).toBe("—");
+    expect(formatClockUtc(undefined)).toBe("—");
+    expect(formatClockUtc("bukan-tanggal")).toBe("—");
   });
 });

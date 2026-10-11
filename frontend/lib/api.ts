@@ -261,6 +261,31 @@ export async function fetchKpis(
   });
 }
 
+// POST /events/safety-disruption — pemicu Event 3 (thermal excursion).
+// Body PERSIS field yang diterima backend (SafetyDisruptionRequest memakai
+// extra="forbid"): batch_id + target_location_id + operation_key. TIDAK ada
+// field tingkat gangguan — besar gangguan dinilai server dari temperature_log
+// batch terpilih (mengirim field tambahan = 422, dan itu memang benar).
+export async function triggerSafetyDisruption(
+  batchId: string,
+  targetLocationId: string,
+  operationKey: string,
+  token: string
+) {
+  return request("/events/safety-disruption", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      batch_id: batchId,
+      target_location_id: targetLocationId,
+      operation_key: operationKey,
+    }),
+  });
+}
+
 // GET /batches — inventaris batch (lokasi, komoditas, kg, kesegaran, batas
 // pakai). Dipakai halaman "Hari Ini" untuk daftar batch yang akan kedaluwarsa.
 // Backend membalas {batches: [...]} — envelope itu dibuka di sini supaya

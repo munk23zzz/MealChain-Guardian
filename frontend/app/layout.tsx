@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
+import Providers from "./providers";
+
 /* Tipografi DESIGN.md mockupui: Inter (naratif) + JetBrains Mono (telemetri/ledger) */
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const jetbrainsMono = JetBrains_Mono({
@@ -21,7 +23,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id" className={`${inter.variable} ${jetbrainsMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

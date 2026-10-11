@@ -3,6 +3,8 @@
 // log buatan. Timestamp ditampilkan UTC agar bisa dibandingkan lintas hop.
 // Restyle Stitch: console terminal gelap (#0F172A) + accent #2DD4BF.
 
+import { formatClockUtc } from "../lib/datetime";
+
 // Icon status langkah — inline SVG, bukan emoji (DESIGN.md).
 function StepIcon({ done }: { done?: boolean }) {
   return done ? (
@@ -43,7 +45,7 @@ export default function AgentTraceViewer({ steps }: { steps: any[] }) {
             <div className="trace-step-head">
               <StepIcon done={true} />
               <div className="trace-step-name">{s.step_name}</div>
-              <time>{new Date(s.step_at).toISOString().slice(11, 19)} UTC</time>
+              <time>{formatClockUtc(s.step_at)} UTC</time>
             </div>
             <div className="trace-tool">{s.tool_called ?? "-"}</div>
             {s.step_name === "SUPERVISE" &&

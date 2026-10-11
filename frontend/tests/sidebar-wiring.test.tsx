@@ -17,8 +17,12 @@ describe("wiring sidebar + map di app/page.tsx (S4-06 polish)", () => {
     expect(pageSrc).toMatch(/<SupplyMap/);
   });
 
-  it("page memuat data map via fetchBalanceMap (data REAL, bukan karangan)", () => {
-    expect(pageSrc).toContain("fetchBalanceMap");
+  it("page memuat data map via hook React Query → fetchBalanceMap (data REAL)", () => {
+    // Rules.md §3: peta dipoll lewat useBalanceMap, bukan efek+setInterval lagi.
+    const hookSrc = readFileSync("lib/hooks/useBalanceMap.ts", "utf8");
+    expect(pageSrc).toContain("useBalanceMap");
+    expect(hookSrc).toContain("fetchBalanceMap");
+    expect(hookSrc).toContain("setInterval");
     expect(apiSrc).toContain("fetchBalanceMap");
     // Endpoint resmi:
     expect(apiSrc).toContain("/balance/map");

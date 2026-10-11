@@ -56,3 +56,13 @@ export function proposeSupplierRestoration(id: string, payload: {
 export function fetchExclusions(token: string): Promise<{ items: SupplierExclusion[]; count: number }> {
   return request(`/supplier-exclusions`, { headers: headers(token) });
 }
+
+/** Kapan register eksklusi diambil: hanya saat tab Pemasok terbuka dan token ada.
+ *
+ *  Dipakai di efek page.tsx supaya pengambilan register TIDAK menumpang efek
+ *  sampel (yang punya penjaga "sampel sudah dinilai"): kalau menumpang, membuka
+ *  tab Pemasok setelah tab Kualitas Agen membuat register tak pernah diambil.
+ */
+export function shouldLoadExclusions(tab: string | null | undefined, token: string | null): boolean {
+  return Boolean(token) && tab === "suppliers";
+}

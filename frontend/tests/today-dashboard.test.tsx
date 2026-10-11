@@ -37,7 +37,7 @@ const BATCHES = [
     commodity: "telur",
     quantity_kg: 400,
     freshness_score: 0.69,
-    food_safety_status: "pass",
+    safety_status: "pass",
     usable_until: iso(-3 * H),
   },
   {
@@ -46,7 +46,7 @@ const BATCHES = [
     commodity: "telur",
     quantity_kg: 250,
     freshness_score: 0.81,
-    food_safety_status: "pass",
+    safety_status: "pass",
     usable_until: iso(10 * H),
   },
 ];
@@ -112,6 +112,14 @@ describe("kartu keputusan menunggu tindakan", () => {
     expect(html).toContain("45 mnt lagi");
   });
 
+  it("baris batch menampilkan status keamanan yang dikirim server", () => {
+    // /batches mengirim `safety_status`. Dulu komponen membaca
+    // `food_safety_status` (tidak ada di backend) sehingga label ini selalu
+    // hilang tanpa error apa pun.
+    const html = render();
+    expect(html).toContain("lolos uji");
+  });
+
   it("menyebut agenda terdekat dan jumlah yang lewat tenggat", () => {
     const html = render();
     expect(html).toContain("Agenda terdekat 45 mnt lagi · 1 sudah lewat tenggat");
@@ -168,7 +176,7 @@ describe("kartu batch", () => {
   it("meta batch tidak menempelkan '—' saat kesegaran/uji tidak diketahui", () => {
     const html = render({
       batches: [
-        { id: "b-null", location: "Bandung", commodity: "telur", quantity_kg: 400, freshness_score: null, food_safety_status: null, usable_until: iso(-2 * H) },
+        { id: "b-null", location: "Bandung", commodity: "telur", quantity_kg: 400, freshness_score: null, safety_status: null, usable_until: iso(-2 * H) },
       ],
     });
     expect(html).toContain("400 kg");

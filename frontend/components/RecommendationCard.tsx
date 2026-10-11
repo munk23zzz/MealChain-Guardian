@@ -16,6 +16,15 @@ import { formatIDR } from "../lib/auth";
 import { formatDateTime } from "../lib/datetime";
 import { formatKg } from "../lib/overview-format";
 
+// Label masa berlaku. Angka hanya dicetak kalau memang berupa angka yang sah:
+// `seconds_remaining ?? 0` dulu menampilkan "berlaku 0 dtk" saat backend tidak
+// mengirim sisa waktu — angka karangan, bertentangan dengan aturan anti-fabricate.
+function validityBadge(decision: { valid?: boolean; seconds_remaining?: unknown }): string {
+  if (!decision.valid) return "kedaluwarsa";
+  const sisa = decision.seconds_remaining;
+  return typeof sisa === "number" && Number.isFinite(sisa) ? `berlaku ${sisa} dtk` : "berlaku";
+}
+
 const CASE_LABELS: Record<string, string> = {
   "rejection-loop-kuota": "Kasus: Rejection Loop (Kuota)",
   "shortage-darurat": "Kasus: Shortage Darurat",
@@ -88,9 +97,7 @@ export default function RecommendationCard({
             className={`badge ${decision.valid ? "badge-neutral" : "badge-expired"}`}
           >
             {!decision.valid && <ClockIcon />}
-            {decision.valid
-              ? `berlaku ${decision.seconds_remaining ?? 0} dtk`
-              : "kedaluwarsa"}
+            {validityBadge(decision)}
           </span>
         </div>
       </div>

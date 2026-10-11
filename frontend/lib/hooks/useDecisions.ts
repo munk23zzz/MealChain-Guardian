@@ -1,0 +1,39 @@
+"use client";
+
+/**
+ * Feed keputusan (Rules.md §3) — dulu polling 5 detik ditulis manual dengan
+ * useState + setInterval di app/page.tsx. Sekarang React Query yang mengelola
+ * siklus hidupnya; komponen tetap menerima daftar yang sama.
+ */
+import { useQuery } from "@tanstack/react-query";
+
+import { fetchDecisions } from "../api";
+import { queryKeys } from "../query";
+
+/** design.md §5: MVP memakai polling, belum WebSocket. */
+export const DECISIONS_POLL_MS = 5_000;
+
+/**
+ * Bentuk baris feed yang dipakai UI. Dulu tipe ini hidup di dalam page.tsx
+ * sebagai `type Decision`; sekarang tinggal di sini supaya hook dan halaman
+ * memakai kontrak yang sama (dan tidak ada `unknown` yang bocor ke render).
+ */
+export type DecisionRow = {
+  decision_id: string;
+  decision_type: string;
+  status: string;
+  quantity_kg: number | null;
+  safe_delivered_cost: number | null;
+  expires_at: string;
+  valid: boolean;
+};
+
+export function useDecisions(token: string | null, scope: string) {
+  return useQuery({
+    queryKey: queryKeys.decisions(scope),
+    queryFn: async () =>
+      (await fetchDecisions(token as string)) as { items?: DecisionRow[] },
+    enabled: Boolean(token),
+    refetchInterval: DECISIONS_POLL_MS,
+  });
+}

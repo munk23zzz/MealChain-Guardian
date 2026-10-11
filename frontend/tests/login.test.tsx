@@ -3,9 +3,10 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import Page from "../app/page";
+import { withProviders } from "./with-providers";
 
 describe("login polish", () => {
-  const html = renderToStaticMarkup(<Page />);
+  const html = renderToStaticMarkup(withProviders(<Page />));
 
   it("brand: judul MealChain Guardian + eyebrow SPPG/BGN", () => {
     expect(html).toContain("MealChain Guardian");

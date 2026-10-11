@@ -12,7 +12,11 @@ const BACKEND_INTERNAL_URL =
 
 // Root endpoint API backend (lihat frontend/lib/api.ts) — didaftarkan eksplisit
 // supaya tidak menabrak aset Next (/_next) atau halaman aplikasi.
+// WAJIB sinkron dengan prefix path di frontend/lib/api.ts; ada tes kontrak
+// (tests/proxy-roots.test.ts) yang gagal kalau ada root terlewat — dulu "admin"
+// tidak terdaftar sehingga tab Pengaturan membalas 404 HTML dari Next sendiri.
 const API_ROOTS = [
+  "admin",
   "auth",
   "decisions",
   "actions",

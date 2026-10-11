@@ -12,12 +12,19 @@ function pageSource(): string {
   return readFileSync(join(process.cwd(), "app", "page.tsx"), "utf-8");
 }
 
+function detailHookSource(): string {
+  return readFileSync(join(process.cwd(), "lib", "hooks", "useDecisionDetail.ts"), "utf-8");
+}
+
 describe("page wiring approval-summary (S4-04)", () => {
-  it("page memanggil fetchApprovalSummary (read model kanonik)", () => {
-    const src = pageSource();
-    expect(src).toContain("fetchApprovalSummary");
-    // Dipanggil dengan token + selectedId (bukan dekoratif import).
-    expect(src).toMatch(/fetchApprovalSummary\(\s*\w+,\s*\w+\s*\)/);
+  it("hook useDecisionDetail memanggil fetchApprovalSummary (read model kanonik)", () => {
+    // Rules.md §3: halaman memakai useDecisionDetail; panggilan API-nya di hook.
+    const page = pageSource();
+    const hook = detailHookSource();
+    expect(page).toContain("useDecisionDetail");
+    expect(hook).toContain("fetchApprovalSummary");
+    // Dipanggil dengan id keputusan + token (bukan import dekoratif).
+    expect(hook).toMatch(/fetchApprovalSummary\(\s*id,\s*token as string\s*\)/);
   });
 
   it("DecisionActions menerima summary kanonik, bukan objek feed", () => {

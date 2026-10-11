@@ -33,6 +33,17 @@ export function formatDateTime(iso: string | null | undefined): string {
   return `${tanggal} ${jam} WIB`;
 }
 
+/** ISO → "18:16:47" (jam UTC, dipakai jejak agen agar lintas hop bisa dibandingkan).
+ *  Nilai kosong/tidak sah → "—" — pemanggil TIDAK boleh memanggil toISOString
+ *  sendiri, karena new Date(undefined).toISOString() melempar RangeError dan
+ *  menjatuhkan seluruh render. */
+export function formatClockUtc(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toISOString().slice(11, 19);
+}
+
 /** ISO → "10 Okt 2026" (tanpa jam). Nilai kosong/tidak sah → "—". */
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—";

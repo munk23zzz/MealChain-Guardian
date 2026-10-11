@@ -7,24 +7,25 @@
 // Konsol operasi & analisis HANYA untuk role approver (bgn_monitor
 // read-only: tab analisis tidak ditampilkan).
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { MANAGE_ROLES } from "../lib/settings";
 
-import {
-  login,
-  fetchMe,
-  fetchDecisions,
-  fetchBatches,
-  verifyLedger,
-  fetchDecisionTraces,
-  fetchDecisionChain,
-  fetchApprovalSummary,
-  fetchKpis,
-  fetchBalanceMap,
-  seedDemo,
-} from "../lib/api";
+import { login, seedDemo } from "../lib/api";
+import { useBalanceMap } from "../lib/hooks/useBalanceMap";
+import { useDecisionDetail } from "../lib/hooks/useDecisionDetail";
+import { useExclusions } from "../lib/hooks/useExclusions";
+import { useKpi } from "../lib/hooks/useKpi";
+import { useMe } from "../lib/hooks/useMe";
+import { useQualitySample } from "../lib/hooks/useQualitySample";
 import { decodeRole } from "../lib/auth";
+import {
+  type DecisionRow as Decision,
+  useDecisions,
+} from "../lib/hooks/useDecisions";
+import { useToday } from "../lib/hooks/useToday";
+import { errorMessage } from "../lib/query";
+import { useQueryClient } from "@tanstack/react-query";
 import { formatJam } from "../lib/jam";
 import SettingsPanel from "../components/SettingsPanel";
 import TopBar from "../components/TopBar";
@@ -59,14 +60,12 @@ import StockChart from "../components/StockChart";
 import OverviewLocationBreakdown from "../components/OverviewLocationBreakdown";
 import { formatKg, sumFiniteKg } from "../lib/overview-format";
 import { SupplierExclusionView } from "../components/SupplierExclusionPanel";
-import { fetchSupplierContext, type SupplierContext } from "../lib/supplier-exclusions";
 import DecisionEvidence from "../components/DecisionEvidence";
 import AgentQualityBoard from "../components/AgentQualityBoard";
 import FoodSafetyBoard from "../components/FoodSafetyBoard";
 import SurplusBoard from "../components/SurplusBoard";
 import SupplierBoard from "../components/SupplierBoard";
 import { runOf, type QualityRun } from "../lib/agent-quality";
-import { fetchExclusions } from "../lib/supplier-exclusions";
 import type { SupplierPair } from "../lib/suppliers-board";
 import { defaultEvidenceId } from "../lib/evidence";
 
@@ -115,15 +114,8 @@ function providersFromTraces(steps: any[]): Record<string, any> {
   return out;
 }
 
-type Decision = {
-  decision_id: string;
-  decision_type: string;
-  status: string;
-  quantity_kg: number | null;
-  safe_delivered_cost: number | null;
-  expires_at: string;
-  valid: boolean;
-};
+// Tipe baris feed kini dipegang lib/hooks/useDecisions.ts (`DecisionRow`) supaya
+// hook dan halaman memakai kontrak yang sama.
 
 // Persona label sesuai PRD 2.4 §2 (Judul resmi, Indonesia pada sub-label).
 const ROLE_LABEL: Record<string, string> = {
@@ -160,104 +152,68 @@ export default function Home() {
     | "settings"
   >("overview");
   const [mapCommodity, setMapCommodity] = useState("telur");
-  const [mapData, setMapData] = useState<any>(null);
-  const [mapError, setMapError] = useState<string | null>(null);
-  const [mapRefresh, setMapRefresh] = useState(0);
-  // Waktu pembaruan peta terakhir (acuan menampilkan "terakhir diperbarui").
-  const [mapUpdatedAt, setMapUpdatedAt] = useState<number | null>(null);
-  // Identitas kanonik dari /auth/me — lokasi pemakai jadi pengunci cakupan
-  // dropdown di top bar (peran SPPG tidak boleh memperluas cakupan dari UI).
-  const [me, setMe] = useState<{
-    location_name?: string | null;
-    location_id?: string | null;
-    name?: string | null;
-  } | null>(null);
   // Lokasi aktif yang disorot di peta, dipilih dari dropdown top bar.
   const [activeLocation, setActiveLocation] = useState<string | null>(null);
   // Kerangka acuan: rail bisa dilipat (lebar 68px, label disembunyikan).
   const [sideCollapsed, setSideCollapsed] = useState(false);
-  useEffect(() => {
-    // Peta dimuat di SEMUA tab: data lokasinya dipakai top bar (dropdown
-    // cakupan + ringkasan jaringan), bukan hanya halaman Overview.
-    if (!token) return;
-    let stopped = false;
-    const loadMap = async () => {
-      try {
-        const data = await fetchBalanceMap(mapCommodity, token);
-        if (!stopped) {
-          setMapData(data);
-          setMapError(null);
-          setMapUpdatedAt(Date.now());
-        }
-      } catch (error) {
-        if (!stopped) setMapError(error instanceof Error ? error.message : "Peta tidak tersedia.");
-      }
-    };
-    loadMap();
-    const interval = setInterval(loadMap, 5000);
-    return () => {
-      stopped = true;
-      clearInterval(interval);
-    };
-  }, [mapCommodity, mapRefresh, token]);
-
-  // Identitas pemakai (server: GET /auth/me) — sumber lokasi pemakai untuk
-  // mengunci cakupan peran SPPG di top bar.
-  useEffect(() => {
-    if (!token) return;
-    let stopped = false;
-    fetchMe(token)
-      .then((data) => {
-        if (!stopped) setMe(data);
-      })
-      .catch(() => {
-        // Gagal membaca identitas: top bar gagal-tertutup (dropdown kosong),
-        // bukan menampilkan semua lokasi.
-        if (!stopped) setMe(null);
-      });
-    return () => {
-      stopped = true;
-    };
-  }, [token]);
+  // Identitas pemakai (GET /auth/me) lewat React Query (Rules.md §3). Kunci
+  // dibedakan per sesi token (potongan akhir, bukan token penuh) supaya cache
+  // identitas tidak tertukar antar akun; gagal membaca = gagal-tertutup (null),
+  // bukan menampilkan semua lokasi.
+  const sesiScope = token ? `sesi:${token.slice(-8)}` : "anon";
+  const me = useMe(token, sesiScope).me;
 
   // Cakupan awal: monitor nasional = semua lokasi, peran SPPG = SPPG-nya.
   useEffect(() => {
     if (!token) return;
     setActiveLocation(defaultScope({ role, ownLocation: me?.location_name ?? null }));
   }, [token, role, me]);
-  const [decisions, setDecisions] = useState<Decision[]>([]);
+  // Fase 2 Langkah 4 (Rules.md §3): feed lewat React Query. Cakupan kunci =
+  // peran + lokasi (itulah yang menentukan data yang berhak dilihat), dan cache
+  // dikosongkan saat keluar sehingga akun berikutnya tidak melihat sisa sesi
+  // sebelumnya.
+  const identityScope = `${role ?? "anon"}:${me?.location_name ?? "all"}`;
+  const queryClient = useQueryClient();
+  // Peta dimuat di SEMUA tab: datanya dipakai top bar (dropdown cakupan +
+  // ringkasan jaringan), bukan hanya halaman Overview. Stempel "terakhir
+  // diperbarui" datang dari React Query, bukan state kedua yang bisa menyimpang.
+  const mapQuery = useBalanceMap(token, identityScope, mapCommodity);
+  const mapData = mapQuery.data;
+  const mapError = mapQuery.error;
+  const mapUpdatedAt = mapQuery.updatedAt;
+  const decisionsQuery = useDecisions(token, identityScope);
+  // Dibungkus useMemo: literal `[]` baru setiap render akan membuat useMemo
+  // turunan (sampel → run/pemasok) dihitung ulang tanpa perlu.
+  const decisions = useMemo(() => decisionsQuery.data?.items ?? [], [decisionsQuery.data]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [traces, setTraces] = useState<any[]>([]);
-  const [chain, setChain] = useState<any[]>([]);
+  // Detail keputusan terpilih (jejak, rantai, ringkasan kanonik, konteks
+  // pemasok) lewat React Query — lihat lib/hooks/useDecisionDetail.ts.
+  const detail = useDecisionDetail(token, selectedId, identityScope);
+  const traces = detail.traces;
+  const chain = detail.chain;
   // S4-04: read model kanonik dari /approval-summary — sumber tunggal modal.
-  const [approvalSummary, setApprovalSummary] = useState<any>(null);
-  const [supplierContext, setSupplierContext] = useState<SupplierContext | null>(null);
-  // S4-03: envelope GET /kpi — loading/error state eksplisit, tanpa fake 0.
-  const [kpi, setKpi] = useState<any>(null);
-  const [kpiLoading, setKpiLoading] = useState(false);
-  const [kpiError, setKpiError] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  // Langkah 3: data halaman "Hari Ini" — batch (GET /batches) + rantai audit
-  // (GET /ledger/verify). Dimuat sekali per login lalu disegarkan tiap 60 detik;
-  // nilai kosong tetap "—", bukan 0.
-  const [batches, setBatches] = useState<any[] | null>(null);
-  const [batchesLoading, setBatchesLoading] = useState(false);
-  const [batchesError, setBatchesError] = useState<string | null>(null);
-  const [ledger, setLedger] = useState<any>(null);
+  const approvalSummary = detail.approvalSummary;
+  const supplierContext = detail.supplierContext;
+  // Galat yang bukan dari feed keputusan (mis. seed demo gagal) ditampung di
+  // sini; galat feed dibaca langsung dari status query.
+  const [traceError, setTraceError] = useState<string | null>(null);
+  // Fase 2 Langkah 4: data halaman "Hari Ini" (batch + rantai audit) lewat
+  // React Query. Nilai kosong tetap "—", bukan 0.
+  const todayQuery = useToday(token, identityScope);
+  const batches = todayQuery.data?.batches ?? null;
+  const ledger = todayQuery.data?.ledger ?? null;
+  const batchesLoading = todayQuery.isFetching;
+  const batchesError = errorMessage(todayQuery.error);
+  const decisionsError = errorMessage(decisionsQuery.error);
+  const error = decisionsError ?? traceError;
   // Jam klien: null sampai komponen ter-mount supaya HTML server dan render
   // klien tidak berbeda (label waktu ditulis "—" sebelum jam siap).
   const [now, setNow] = useState<Date | null>(null);
-  // Kualitas Agen: run agen (jejak + putusan verifikator) untuk sampel keputusan.
-  const [qualityRuns, setQualityRuns] = useState<QualityRun[]>([]);
-  const [qualityLoading, setQualityLoading] = useState(false);
-  const [qualityError, setQualityError] = useState<string | null>(null);
-  // Pemasok: pemasok per keputusan sampel + register eksklusi.
-  const [supplierPairs, setSupplierPairs] = useState<SupplierPair[]>([]);
-  const [exclusions, setExclusions] = useState<unknown>(null);
-  const [supplierLoading, setSupplierLoading] = useState(false);
-  const [supplierError, setSupplierError] = useState<string | null>(null);
-  const [evaluateTick, setEvaluateTick] = useState(0);
-  const evaluatedKey = useRef<string | null>(null);
+  // Kualitas Agen & Pemasok: sampel keputusan (jejak agen + ringkasan) dan
+  // register eksklusi lewat React Query — dua siklus muat yang berbeda.
+  const sampleIds = decisions.slice(0, EVALUATED_LIMIT).map((d) => d.decision_id);
+  const sampleQuery = useQualitySample(token, identityScope, tab, sampleIds);
+  const exclusions = useExclusions(token, identityScope, tab).data;
   // Feed traceable (arah Roy 2026-10-09): filter status = visual only;
   // EXPIRED TIDAK disembunyikan. Hook di level atas (rules-of-hooks).
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
@@ -267,138 +223,48 @@ export default function Home() {
 
   const isApprover = APPROVER_ROLES.has(role ?? "");
 
-  const loadDecisions = useCallback(async (t: string) => {
-    try {
-      const data = await fetchDecisions(t);
-      setDecisions(data.items ?? []);
-      setError(null);
-    } catch (e: any) {
-      setError(String(e.message ?? e));
-    }
-  }, []);
+  // S4-03: envelope GET /kpi lewat React Query — satu potret per sesi (periode
+  // 24 jam; scope ditentukan backend: SPPG own, monitor global). Loading dan
+  // galat dibaca dari status query; tombol "Coba lagi" memanggil refetch().
+  const kpiQuery = useKpi(token, identityScope);
+  const kpi = kpiQuery.data;
+  const kpiLoading = kpiQuery.loading;
+  const kpiError = kpiQuery.error;
 
-  // Polling 5 detik (design.md §5 — tanpa WebSocket untuk MVP).
-  useEffect(() => {
-    if (!token) return;
-    loadDecisions(token);
-    const iv = setInterval(() => loadDecisions(token), 5000);
-    return () => clearInterval(iv);
-  }, [token, loadDecisions]);
+  // Turunan dari sampel: run agen (jejak + putusan verifikator) dan pasangan
+  // pemasok. Dihitung dengan useMemo supaya tidak ada penulisan state di dalam
+  // efek — satu arah data: query → turunan → tampilan.
+  const byDecisionId = useMemo(
+    () => new Map(decisions.map((d) => [d.decision_id, d])),
+    [decisions]
+  );
+  const qualityRuns = useMemo<QualityRun[]>(
+    () =>
+      (sampleQuery.rows ?? []).map(({ decisionId, trace, summary }) =>
+        runOf(byDecisionId.get(decisionId), trace, summary)
+      ),
+    [sampleQuery.rows, byDecisionId]
+  );
+  const supplierPairs = useMemo<SupplierPair[]>(
+    () =>
+      (sampleQuery.rows ?? []).map(({ decisionId, summary }) => ({
+        decisionId,
+        decisionType: byDecisionId.get(decisionId)?.decision_type ?? null,
+        commodity: summary?.commodity ?? null,
+        supplier: summary?.supplier ?? null,
+      })),
+    [sampleQuery.rows, byDecisionId]
+  );
+  const qualityLoading = sampleQuery.loading;
+  const supplierLoading = sampleQuery.loading;
+  const qualityError = sampleQuery.error;
+  const supplierError = sampleQuery.error;
 
-  // S4-03: muat KPI sekali per login (periode 24 jam berakhir sekarang;
-  // scope ditentukan backend — SPPG own, monitor global) + retry manual.
-  const loadKpi = useCallback(async (t: string) => {
-    setKpiLoading(true);
-    setKpiError(null);
-    try {
-      const end = new Date();
-      const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
-      const data = await fetchKpis(start.toISOString(), end.toISOString(), t);
-      setKpi(data);
-    } catch (e: any) {
-      setKpiError(String(e.message ?? e));
-      setKpi(null);
-    } finally {
-      setKpiLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!token) return;
-    loadKpi(token);
-  }, [token, loadKpi]);
-
-  // Langkah 3: data halaman "Hari Ini" — batch + rantai audit Merkle.
-  // Kegagalan salah satu panggilan tidak menjatuhkan yang lain, dan tidak
-  // pernah diisi angka karangan: kartu menulis "—" atau pesan galat.
-  const loadToday = useCallback(async (t: string) => {
-    setBatchesLoading(true);
-    setBatchesError(null);
-    try {
-      const rows = await fetchBatches(t);
-      setBatches(Array.isArray(rows) ? rows : []);
-    } catch (e: any) {
-      setBatchesError(String(e.message ?? e));
-    } finally {
-      setBatchesLoading(false);
-    }
-    try {
-      setLedger(await verifyLedger(t));
-    } catch {
-      setLedger(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!token) return;
-    loadToday(token);
-    const iv = setInterval(() => loadToday(token), 60000);
-    return () => clearInterval(iv);
-  }, [token, loadToday]);
-
-  // Sampel keputusan untuk halaman Kualitas Agen & Pemasok: jejak agen +
-  // ringkasan persetujuan (yang memuat pemasok) diambil per keputusan.
-  const sampleIds = decisions.slice(0, EVALUATED_LIMIT).map((d) => d.decision_id);
-  const sampleKey = sampleIds.join(",");
-  useEffect(() => {
-    if (!token || !sampleKey) return;
-    if (tab !== "quality" && tab !== "suppliers") return;
-    const key = `${sampleKey}#${evaluateTick}`;
-    // Sampel yang sama tidak dinilai dua kali walau daftar keputusan dipolling.
-    if (evaluatedKey.current === key) return;
-    evaluatedKey.current = key;
-    let stopped = false;
-    const run = async () => {
-      if (tab === "quality") setQualityLoading(true);
-      else setSupplierLoading(true);
-      try {
-        const rows = await Promise.all(
-          sampleIds.map(async (decisionId) => {
-            const [trace, summary] = await Promise.all([
-              fetchDecisionTraces(decisionId, token).catch(() => null),
-              fetchApprovalSummary(decisionId, token).catch(() => null),
-            ]);
-            return { decisionId, trace, summary };
-          })
-        );
-        if (stopped) return;
-        const byId = new Map(decisions.map((d) => [d.decision_id, d]));
-        setQualityRuns(
-          rows.map(({ decisionId, trace, summary }) => runOf(byId.get(decisionId), trace, summary))
-        );
-        setSupplierPairs(
-          rows.map(({ decisionId, summary }) => ({
-            decisionId,
-            decisionType: byId.get(decisionId)?.decision_type ?? null,
-            commodity: summary?.commodity ?? null,
-            supplier: summary?.supplier ?? null,
-          }))
-        );
-        setQualityError(null);
-        setSupplierError(null);
-        if (tab === "suppliers") {
-          setExclusions(await fetchExclusions(token).catch(() => null));
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "gagal memuat";
-        if (stopped) return;
-        setQualityError(message);
-        setSupplierError(message);
-      } finally {
-        if (!stopped) {
-          setQualityLoading(false);
-          setSupplierLoading(false);
-        }
-      }
-    };
-    void run();
-    return () => {
-      stopped = true;
-    };
-    // decisions cukup lewat sampleKey (isi sampel); evaluatedKey menahan refetch
-    // saat daftar keputusan dipolling ulang.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, token, sampleKey, evaluateTick]);
+  // Register eksklusi punya siklus muat SENDIRI. Dulu ia diambil di dalam efek
+  // sampel di atas, yang ber-penjaga "sampel sudah dinilai" (evaluatedKey):
+  // membuka tab Pemasok SETELAH tab Kualitas Agen karena itu tidak pernah
+  // memanggil /supplier-exclusions, dan kartu register sempat mengklaim "tidak
+  // ada eksklusi" padahal datanya belum dimuat.
 
   const evaluatedCount = Math.min(decisions.length, EVALUATED_LIMIT);
 
@@ -411,54 +277,14 @@ export default function Home() {
   }, []);
 
 
-  useEffect(() => {
-    if (!token || !selectedId) return;
-    let stopped = false;
-    const load = async () => {
-      try {
-        const data = await fetchDecisionTraces(selectedId, token);
-        if (!stopped) setTraces(data.steps ?? []);
-      } catch {
-        /* feed tetap jalan; error trace tidak fatal */
-      }
-      try {
-        const data = await fetchDecisionChain(selectedId, token);
-        if (!stopped) setChain(data.chain ?? []);
-      } catch {
-        /* chain opsional; kegagalan tidak fatal */
-      }
-      try {
-        // S4-04: summary kanonik mengikuti decision terpilih (poll ikut
-        // menyegarkan approval_state/expiry saat pihak lain approve).
-        const data = await fetchApprovalSummary(selectedId, token);
-        if (!stopped) setApprovalSummary(data);
-      } catch {
-        /* summary opsional untuk feed; modal tetap menolak tanpa data */
-        if (!stopped) setApprovalSummary(null);
-      }
-      try {
-        const data = await fetchSupplierContext(selectedId, token);
-        if (!stopped) setSupplierContext(data);
-      } catch {
-        if (!stopped) setSupplierContext(null);
-      }
-    };
-    load();
-    const iv = setInterval(load, 5000);
-    return () => {
-      stopped = true;
-      clearInterval(iv);
-      setSupplierContext(null);
-    };
-  }, [token, selectedId]);
 
   async function onSeedDemo() {
     if (!token) return;
     try {
       await seedDemo(token, true);
-      await loadDecisions(token);
+      await decisionsQuery.refetch();
     } catch (e: any) {
-      setError(String(e.message ?? e));
+      setTraceError(String(e.message ?? e));
     }
   }
 
@@ -646,16 +472,11 @@ export default function Home() {
     // Bersihkan data konsol: akun berikutnya tidak boleh sempat melihat angka
     // sesi sebelumnya sebelum permintaan barunya selesai (terlihat saat uji
     // skeleton: strip KPI sempat menampilkan nilai lama).
-    setMapData(null);
-    setMapUpdatedAt(null);
-    // Identitas & cakupan ikut direset: lokasi pemakai sebelumnya tidak boleh
-    // terbawa ke sesi akun berikutnya.
-    setMe(null);
     setActiveLocation(null);
-    // Data halaman "Hari Ini" ikut dibersihkan (batch & rantai audit).
-    setBatches(null);
-    setBatchesError(null);
-    setLedger(null);
+    // Cache React Query dibersihkan seluruhnya: akun berikutnya tidak boleh
+    // sempat melihat keputusan/batch/KPI sesi sebelumnya (dulu dibersihkan
+    // manual satu per satu).
+    queryClient.clear();
   };
 
   return (
@@ -778,7 +599,7 @@ export default function Home() {
             now={now}
             batchesLoading={batchesLoading}
             batchesError={batchesError}
-            onRetry={() => token && loadToday(token)}
+            onRetry={() => void todayQuery.refetch()}
             onOpenDecision={(decisionId) => {
               setSelectedId(decisionId);
               setTab("recommendations");
@@ -916,7 +737,7 @@ export default function Home() {
                   {mapError}{" "}
                   <button
                     type="button"
-                    onClick={() => setMapRefresh((value) => value + 1)}
+                    onClick={() => void mapQuery.refetch()}
                   >
                     Coba lagi
                   </button>
@@ -996,7 +817,7 @@ export default function Home() {
               kpi={kpi}
               loading={kpiLoading}
               error={kpiError}
-              onRetry={() => token && loadKpi(token)}
+              onRetry={() => void kpiQuery.refetch()}
             />
             {/* PRD 2.4 §5: strip target demo — berlabel eksplisit,
                 BUKAN angka live (KPI live tetap jujur di atas). */}
@@ -1037,7 +858,7 @@ export default function Home() {
               role={role ?? "sppg_head"}
               token={token}
               onSubmitted={() => {
-                if (token) loadDecisions(token);
+                if (token) void decisionsQuery.refetch();
                 setTab("recommendations");
               }}
             />
@@ -1045,7 +866,7 @@ export default function Home() {
               role={role ?? "sppg_head"}
               token={token}
               onDecisionCreated={() => {
-                if (token) loadDecisions(token);
+                if (token) void decisionsQuery.refetch();
               }}
             />
           </section>
@@ -1073,7 +894,7 @@ export default function Home() {
                   Gagal memuat data: {error}{" "}
                   <button
                     type="button"
-                    onClick={() => token && loadDecisions(token)}
+                    onClick={() => void decisionsQuery.refetch()}
                   >
                     Coba lagi
                   </button>
@@ -1187,7 +1008,7 @@ export default function Home() {
             token={token}
             now={now}
             onSupplierCreated={(decisionId) => {
-              if (token) void loadDecisions(token);
+              if (token) void decisionsQuery.refetch();
               setSelectedId(decisionId);
             }}
             onOpenRecommendations={() => setTab("recommendations")}
@@ -1208,7 +1029,7 @@ export default function Home() {
             onChangeCommodity={setMapCommodity}
             loading={batchesLoading}
             error={batchesError}
-            onRetry={() => token && loadToday(token)}
+            onRetry={() => void todayQuery.refetch()}
           />
         )}
 
@@ -1220,7 +1041,7 @@ export default function Home() {
             onChangeCommodity={setMapCommodity}
             loading={!mapData && !mapError}
             error={mapError}
-            onRetry={() => setMapRefresh((value) => value + 1)}
+            onRetry={() => void mapQuery.refetch()}
             onOpenLocation={(location) => {
               setActiveLocation(location);
               setTab("overview");
@@ -1238,15 +1059,12 @@ export default function Home() {
             token={token ?? ""}
             loading={supplierLoading}
             error={supplierError}
-            onRetry={() => {
-              evaluatedKey.current = null;
-              setEvaluateTick((value) => value + 1);
-            }}
+            onRetry={() => void sampleQuery.refetch()}
             onOpenDecision={(decisionId) => {
               if (decisionId) setSelectedId(decisionId);
               setTab("evidence");
             }}
-            onExclusionCreated={() => token && loadDecisions(token)}
+            onExclusionCreated={() => void decisionsQuery.refetch()}
           />
         )}
 
@@ -1257,10 +1075,7 @@ export default function Home() {
             totalDecisions={decisions.length}
             loading={qualityLoading}
             error={qualityError}
-            onRetry={() => {
-              evaluatedKey.current = null;
-              setEvaluateTick((value) => value + 1);
-            }}
+            onRetry={() => void sampleQuery.refetch()}
             onOpenDecision={(decisionId) => {
               setSelectedId(decisionId);
               setTab("evidence");
