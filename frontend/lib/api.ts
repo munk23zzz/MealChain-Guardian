@@ -300,3 +300,72 @@ export async function fetchDossier(decisionId: string, token: string) {
   });
 }
 
+// --- Admin / Pengaturan (S4-11) -------------------------------------------
+// Backend membalas snake_case (kontrak domain); komponen memakai camelCase.
+
+function mapAdminUser(raw: any) {
+  return {
+    id: String(raw.id),
+    name: String(raw.name ?? ""),
+    email: String(raw.email ?? ""),
+    role: String(raw.role ?? ""),
+    locationId: raw.location_id === null || raw.location_id === undefined ? null : String(raw.location_id),
+    locationName: raw.location_name ?? null,
+  };
+}
+
+function mapAdminLocation(raw: any) {
+  return {
+    id: String(raw.id),
+    name: String(raw.name ?? ""),
+    region: String(raw.region ?? ""),
+    latitude: Number(raw.latitude),
+    longitude: Number(raw.longitude),
+  };
+}
+
+export async function fetchAdminUsers(token: string) {
+  const body = await request("/admin/users", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return (body.users ?? []).map(mapAdminUser);
+}
+
+export async function fetchAdminLocations(token: string) {
+  const body = await request("/admin/locations", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return (body.locations ?? []).map(mapAdminLocation);
+}
+
+export async function updateAdminUser(
+  userId: string,
+  payload: Record<string, string | null>,
+  token: string,
+) {
+  const body = await request(`/admin/users/${userId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  return mapAdminUser(body.user);
+}
+
+export async function updateAdminLocation(
+  locationId: string,
+  payload: Record<string, string | number>,
+  token: string,
+) {
+  const body = await request(`/admin/locations/${locationId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  return mapAdminLocation(body.location);
+}

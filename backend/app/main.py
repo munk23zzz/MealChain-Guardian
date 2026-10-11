@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.actions import router as actions_router
 from app.api.auth import router as auth_router
+from app.api.admin import router as admin_router
 from app.api.balance import router as balance_router
 from app.api.batches import router as batches_router
 from app.api.compliance import router as compliance_router
@@ -77,6 +78,7 @@ app.include_router(compliance_router)
 
 app.include_router(supplier_exclusions_router)
 app.include_router(supplier_exclusion_context_router)
+app.include_router(admin_router)
 
 
 @app.get("/health")

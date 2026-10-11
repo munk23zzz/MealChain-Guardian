@@ -9,6 +9,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { MANAGE_ROLES } from "../lib/settings";
+
 import {
   login,
   fetchMe,
@@ -24,6 +26,7 @@ import {
 } from "../lib/api";
 import { decodeRole } from "../lib/auth";
 import { formatJam } from "../lib/jam";
+import SettingsPanel from "../components/SettingsPanel";
 import TopBar from "../components/TopBar";
 import {
   ALL_LOCATIONS,
@@ -154,6 +157,7 @@ export default function Home() {
     | "agent-log"
     | "quality"
     | "demo-control"
+    | "settings"
   >("overview");
   const [mapCommodity, setMapCommodity] = useState("telur");
   const [mapData, setMapData] = useState<any>(null);
@@ -601,7 +605,8 @@ export default function Home() {
       | "suppliers"
       | "agent-log"
       | "quality"
-      | "demo-control";
+      | "demo-control"
+      | "settings";
     label: string;
     roles?: string[];
   }[] = [
@@ -618,6 +623,7 @@ export default function Home() {
     { id: "agent-log", label: "Agent Log" },
     { id: "quality", label: "Kualitas Agen" },
     { id: "kpi", label: "KPI" },
+    { id: "settings", label: "Pengaturan", roles: Array.from(MANAGE_ROLES) },
     ...(isApprover
       ? [{ id: "demo-control" as const, label: "Demo Control" }]
       : []),
@@ -997,6 +1003,8 @@ export default function Home() {
             <KpiTargets />
           </>
         )}
+
+        {tab === "settings" && <SettingsPanel token={token} />}
 
         {tab === "demo-control" && isApprover && (
           /* PRD 2.4 Screen 7: harness demo — konsol analisis (Event 1/2/3)

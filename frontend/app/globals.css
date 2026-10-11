@@ -4004,3 +4004,35 @@ button:active:not(:disabled),
   color: var(--ink-muted);
   font-size: 13px;
 }
+
+/* --- Pengaturan / admin (S4-11) -------------------------------------------
+   Semua warna dari token yang sudah ada (tidak ada warna liar). Tabel dibungkus
+   .settings-table-wrap dengan overflow-x:auto supaya di 375px halaman TIDAK
+   ikut melebar (audit overflow 0). Target sentuh control ≥44px. */
+.settings { display: flex; flex-direction: column; gap: var(--space-3, 16px); }
+.settings-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.settings-title { margin: 0; font-size: 18px; color: var(--ink); }
+.settings-sub { margin: 4px 0 0; color: var(--ink-muted); font-size: 13px; max-width: 70ch; }
+.settings-refresh, .settings-save { min-height: 44px; padding: 0 14px; border-radius: var(--radius, 10px); border: 1px solid var(--line-input); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; transition: background var(--dur-1, .12s) var(--ease-standard, ease); }
+.settings-save { min-width: 88px; }
+.settings-save:disabled { opacity: .55; cursor: not-allowed; }
+.settings-refresh:focus-visible, .settings-save:focus-visible,
+.settings-select:focus-visible, .settings-input:focus-visible { outline: 2px solid var(--focus-ring, var(--accent, #2563eb)); outline-offset: 2px; }
+.settings-notice { margin: 0; padding: 10px 12px; border-radius: var(--radius, 10px); background: var(--ok-bg); color: var(--ok-ink); font-size: 13px; }
+.settings-error { margin: 0; padding: 10px 12px; border-radius: var(--radius, 10px); background: var(--danger-bg); color: var(--danger-ink); font-size: 13px; }
+.settings-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius, 10px); padding: 14px; }
+.settings-card-title { margin: 0 0 6px; font-size: 15px; color: var(--ink); }
+.settings-table-wrap { overflow-x: auto; }
+.settings-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.settings-table th, .settings-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.settings-table th { color: var(--ink-muted); font-weight: 600; }
+.settings-name { display: block; color: var(--ink); }
+.settings-email { display: block; color: var(--ink-muted); font-size: 12px; }
+.settings-select, .settings-input { min-height: 44px; width: 100%; min-width: 150px; padding: 0 10px; border: 1px solid var(--line-input); border-radius: var(--radius, 10px); background: var(--surface); color: var(--ink); font: inherit; }
+.settings-coord { font-family: var(--font-data, monospace); color: var(--ink-muted); white-space: nowrap; }
+.settings-muted { color: var(--ink-muted); }
+.settings-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+@media (max-width: 720px) {
+  .settings-table th, .settings-table td { padding: 6px 8px; }
+  .settings-refresh { width: 100%; }
+}

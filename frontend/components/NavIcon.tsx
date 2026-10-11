@@ -19,7 +19,8 @@ type NavId =
   | "suppliers"
   | "agent-log"
   | "quality"
-  | "demo-control";
+  | "demo-control"
+  | "settings";
 
 const GLYPHS: Record<NavId, ReactNode> = {
   // sun (Hari Ini) — hari berjalan
@@ -112,6 +113,15 @@ const GLYPHS: Record<NavId, ReactNode> = {
       <path d="M12 14l4-4" />
       <path d="M3.3 18a9 9 0 1 1 17.4 0" />
       <circle cx="12" cy="14" r="1" />
+    </>
+  ),
+  // slider/gear (Pengaturan — admin pengguna & lokasi)
+  settings: (
+    <>
+      <path d="M4 6h16M4 12h16M4 18h16" />
+      <circle cx="9" cy="6" r="2" />
+      <circle cx="15" cy="12" r="2" />
+      <circle cx="8" cy="18" r="2" />
     </>
   ),
 };
