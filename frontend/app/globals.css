@@ -1490,12 +1490,38 @@ a:focus-visible {
   display: none; /* dipindah ke sidebar */
 }
 
-.top-bar-scope { display: none; }
+/* Pemilih cakupan lokasi — DIPULIHKAN 11 Okt: refactor header menghapusnya
+   tanpa pengganti, sehingga aturan peran (hanya monitor boleh ganti cakupan)
+   kehilangan UI dan `activeLocation` tidak bisa berubah lagi. Gaya mengikuti
+   kontrol kepala halaman; batas memakai --line-input (WCAG 1.4.11 >= 3:1). */
+.top-bar-scope {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
 
-.top-bar-select { display: none; }
+.top-bar-select {
+  height: 36px;
+  max-width: 220px;
+  min-width: 96px;
+  padding: 0 10px;
+  flex: 0 1 auto;
+  border: 1px solid var(--line-input);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
 
+/* Peran SPPG: cakupan terkunci — tetap TAMPIL (bukan disembunyikan) supaya
+   jelas lokasi mana yang sedang dilihat, tetapi tidak bisa diubah. */
 .top-bar-select:disabled {
-  display: none;
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--ink-inverse);
+  border-color: rgba(255, 255, 255, 0.45);
+  cursor: default;
 }
 
 .top-bar-net { display: none; }
@@ -1954,6 +1980,84 @@ a:focus-visible {
   .side-tabs {
     flex-direction: row;
     flex-wrap: wrap;
+  }
+}
+
+/* Nav mobile (arah Roy 2026-10-11): rail jadi SATU BARIS yang bisa digeser
+   mendatar. Sebelumnya 11 tab berbalut menumpuk dan memakan 509px dari 812px
+   layar, jadi isi halaman baru terlihat setelah menggulir. */
+@media (max-width: 720px) {
+  .side-nav {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
+  }
+
+  /* Logo tetap sebagai identitas; teks brand tidak (peran + lokasi sudah
+     tampil di header) supaya ruasnya diberikan ke tab. */
+  .side-brand {
+    padding: 0;
+    border-bottom: 0;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+
+  .side-brand-text,
+  .side-collapse {
+    display: none;
+  }
+
+  .side-tabs {
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    gap: 4px;
+    padding-bottom: 2px;
+  }
+
+  .side-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    min-height: 44px;
+  }
+
+  .side-tab-active::before {
+    display: none; /* penanda aktif khusus rail tegak */
+  }
+
+  .side-actions {
+    border-top: 0;
+    padding: 0;
+    flex: 0 0 auto;
+  }
+
+  .side-actions .button {
+    padding: 8px 10px;
+    min-width: 44px; /* ikon saja di mobile: tetap 44x44 seperti panduan sentuh */
+  }
+
+  .side-action-label {
+    display: none; /* ikon saja; nama tetap lewat aria-label tombolnya */
+  }
+
+  .side-user {
+    border-top: 0;
+    padding: 0;
+    flex: 0 0 auto;
+    gap: 6px;
+  }
+
+  .side-user-meta {
+    display: none; /* identitas sudah di header (peran + lokasi SPPG) */
   }
 }
 

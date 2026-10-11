@@ -24,7 +24,14 @@ function toChartValue(value: BalanceMapLocation["shortage_kg"]): number | null {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
-export default function StockChart({ locations }: { locations: readonly BalanceMapLocation[] }) {
+export default function StockChart({
+  locations,
+  stretch = false,
+}: {
+  locations: readonly BalanceMapLocation[];
+  /** Jika true, chart mengisi tinggi flex parent (pakai height="100%"). */
+  stretch?: boolean;
+}) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -48,7 +55,10 @@ export default function StockChart({ locations }: { locations: readonly BalanceM
   // dalam komponen dulu membuat dua judul bertumpuk dalam satu kartu.
   if (!mounted) {
     return (
-      <section className="stock-chart" aria-label="Grafik stok">
+      <section
+        className={`stock-chart${stretch ? " stock-chart-stretch" : ""}`}
+        aria-label="Grafik stok"
+      >
         <p className="sr-only">Grafik batang: Surplus dan Shortage per lokasi.</p>
         <div className="stock-chart-placeholder" aria-hidden="true" />
       </section>
@@ -56,7 +66,10 @@ export default function StockChart({ locations }: { locations: readonly BalanceM
   }
 
   return (
-    <section className="stock-chart" aria-label="Grafik stok">
+    <section
+      className={`stock-chart${stretch ? " stock-chart-stretch" : ""}`}
+      aria-label="Grafik stok"
+    >
       <div
         className="stock-chart-holder"
         role="img"
@@ -73,7 +86,7 @@ export default function StockChart({ locations }: { locations: readonly BalanceM
         {/* Batang HORIZONTAL: kartu ini hanya sepertiga lebar halaman, dan 10
             label lokasi yang diputar tetap saling tumpang tindih di sana.
             Mendatar = label terbaca penuh tanpa rotasi. */}
-        <ResponsiveContainer width="100%" height={380}>
+        <ResponsiveContainer width="100%" height={stretch ? "100%" : 380}>
           <BarChart
             data={data}
             layout="vertical"

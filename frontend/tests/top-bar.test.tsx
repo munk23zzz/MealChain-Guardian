@@ -1,6 +1,14 @@
 // Top bar — kontrak render (pola repo ini: renderToStaticMarkup, tanpa DOM).
-// Yang dipin: unsur header acuan benar-benar ada, angka/label datang dari
-// data yang dioper (bukan dikarang), dan cakupan peran tidak bisa diperluas.
+//
+// Kontrak BARU (refactor header 2026-10-11): header global hanya memuat
+// peran + lokasi SPPG + jam + lonceng notifikasi. Brand "MealChain Guardian",
+// tombol keluar, dan aksi lain PINDAH ke rail sidebar (dipin di blok wiring di
+// bawah) supaya pemindahan itu tidak menghilangkan unsurnya tanpa jejak.
+//
+// Yang dijaga berkas ini: (1) setiap unsur yang tampil berasal dari data yang
+// dioper, bukan dikarang; (2) aturan peran untuk cakupan lokasi tetap hidup di
+// lib/topbar.ts (`scopeModel`) dan diuji di tests/topbar-lib.test.ts — lihat
+// catatan di uji terakhir soal kontrol UInya yang belum dipasang kembali.
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -32,22 +40,61 @@ function render(overrides: Partial<Parameters<typeof TopBar>[0]> = {}) {
   );
 }
 
-describe("TopBar (header global acuan mockup)", () => {
-  it("menampilkan brand + subjudul seperti acuan", () => {
+describe("TopBar (header global)", () => {
+  it("menampilkan peran + lokasi SPPG apa adanya dari props", () => {
     const html = render();
     expect(html).toContain("top-bar");
-    expect(html).toContain("MealChain Guardian");
-    expect(html).toContain("Cold-Chain Integrity");
+    expect(html).toContain("top-bar-role");
+    expect(html).toContain("SPPG Operations Lead");
+    expect(html).toContain("top-bar-sppg");
+    expect(html).toContain("SPPG Jakarta");
+  });
+
+  it("tidak menampilkan lokasi SPPG kalau datanya belum ada (tanpa teks karangan)", () => {
+    expect(render({ userSub: null })).not.toContain("top-bar-sppg");
+  });
+
+  it("jam hanya dirender di klien (SSR tanpa jam supaya tidak hidrasi mismatch)", () => {
+    // renderToStaticMarkup = sisi server: span jam TIDAK boleh ada di markup awal.
+    expect(render()).not.toContain("top-bar-clock");
+    // Sisi kliennya ada di sumber: useEffect + interval 30 detik + label aksesibel.
+    const src = readFileSync("components/TopBar.tsx", "utf8");
+    expect(src).toContain("top-bar-clock");
+    expect(src).toContain("Waktu saat ini:");
+    expect(src).toContain("setInterval");
+  });
+
+  it("lonceng notifikasi menghitung keputusan yang menunggu tindakan", () => {
+    const html = render();
+    expect(html).toContain('aria-label="Notifikasi: 1 keputusan menunggu tindakan"');
+    expect(html).toContain("top-bar-bell-count");
+    expect(html).toContain(">1<");
+    // Tanpa keputusan menunggu: tanpa angka, klaim tetap jujur.
+    const kosong = render({ decisions: [] });
+    expect(kosong).toContain('aria-label="Notifikasi: 0 keputusan menunggu tindakan"');
+    expect(kosong).not.toContain("top-bar-bell-count");
+  });
+
+  it("brand + tombol keluar tidak lagi di header (pindah ke rail sidebar)", () => {
+    const html = render();
+    expect(html).not.toContain("MealChain Guardian");
+    expect(html).not.toContain("Keluar akun");
+  });
+
+  it("pemilih cakupan lokasi ADA di header (dipulihkan 11 Okt)", () => {
+    const html = render();
+    expect(html).toContain("top-bar-scope");
+    expect(html).toContain("Cakupan lokasi yang ditampilkan");
+    expect(html).toContain("top-bar-select");
+    expect(html).toContain("<select");
   });
 
   it("dropdown cakupan terkunci untuk peran SPPG (cakupan tidak diperluas)", () => {
     const html = render();
-    expect(html).toContain("Cakupan lokasi yang ditampilkan");
-    expect(html).toContain("<select");
     expect(html).toContain("disabled");
     expect(html).toContain("Peran SPPG hanya memantau SPPG-nya sendiri");
     expect(html).toContain(">Jakarta<");
-    // Opsi lokasi lain tidak ikut ditawarkan ke peran SPPG.
+    // Opsi lokasi lain tidak ditawarkan ke peran SPPG.
     expect(html).not.toContain(">Bandung<");
   });
 
@@ -65,38 +112,14 @@ describe("TopBar (header global acuan mockup)", () => {
     expect(html).not.toContain(">Bandung<");
   });
 
-  it("ringkasan jaringan memakai angka nyata dari data peta", () => {
-    expect(render()).toContain("1 lokasi shortage (2 terpantau)");
-    expect(
-      render({ locations: [{ location: "Bogor", status: "surplus" }] })
-    ).toContain("Jaringan normal (1 lokasi)");
-  });
-
-  it("chip peran + identitas pemakai + waktu pembaruan tampil", () => {
-    const html = render();
-    expect(html).toContain("Peran: SPPG Operations Lead");
-    expect(html).toContain("SPPG Head Demo");
-    expect(html).toContain("SPPG Jakarta");
-    expect(html).toContain("top-bar-avatar");
-    expect(html).toContain("Diperbarui 10.15.30");
-  });
-
-  it("lonceng notifikasi menghitung keputusan yang menunggu tindakan", () => {
-    const html = render();
-    expect(html).toContain('aria-label="Notifikasi: 1 keputusan menunggu tindakan"');
-    expect(html).toContain(">1<");
-    // Tanpa keputusan menunggu: tanpa angka, klaim tetap jujur.
-    const kosong = render({ decisions: [] });
-    expect(kosong).toContain('aria-label="Notifikasi: 0 keputusan menunggu tindakan"');
-    expect(kosong).not.toContain("top-bar-bell-count");
-  });
-
-  it("tombol keluar punya nama aksesibel (bukan hanya ikon)", () => {
-    expect(render()).toContain('aria-label="Keluar akun"');
+  it("pemilih cakupan TIDAK disembunyikan CSS (jebakan 11 Okt)", () => {
+    const css = readFileSync("app/globals.css", "utf8");
+    expect(css).not.toContain(".top-bar-scope { display: none; }");
+    expect(css).not.toContain(".top-bar-select { display: none; }");
   });
 });
 
-describe("wiring top bar di app/page.tsx", () => {
+describe("wiring header & rail di app/page.tsx", () => {
   const pageSrc = readFileSync("app/page.tsx", "utf8");
   const apiSrc = readFileSync("lib/api.ts", "utf8");
 
@@ -110,12 +133,39 @@ describe("wiring top bar di app/page.tsx", () => {
     expect(apiSrc).toContain("/auth/me");
   });
 
-  it("peta memuat data di semua tab (top bar butuh daftar lokasi)", () => {
+  it("peta memuat data di semua tab (header butuh daftar lokasi)", () => {
     // Gerbang lama: fetch peta hanya saat tab overview.
     expect(pageSrc).not.toContain('tab !== "overview"');
   });
 
   it("lokasi aktif dioper ke peta untuk disorot", () => {
     expect(pageSrc).toMatch(/activeLocation=\{activeLocation\}/);
+  });
+
+  it("TopBar tetap menerima daftar lokasi & penangan pilih lokasi", () => {
+    expect(pageSrc).toMatch(/onSelectLocation=\{/);
+    expect(pageSrc).toMatch(/locations=\{[^}]*\}/);
+  });
+
+  it("brand + tombol keluar ada di rail sidebar (dipindah, bukan dihapus)", () => {
+    // Rail memakai template literal di className, jadi patokannya unsur di dalamnya.
+    const rail = pageSrc.slice(pageSrc.indexOf("side-brand"), pageSrc.indexOf("</aside>"));
+    expect(rail).toContain("MealChain Guardian");
+    expect(rail).toContain('aria-label="Keluar"');
+    expect(rail).toContain("side-tab");
+  });
+
+  it("aturan cakupan lokasi masih dijaga logika murninya (lib/topbar.ts)", () => {
+    const topbarSrc = readFileSync("lib/topbar.ts", "utf8");
+    expect(topbarSrc).toContain("export function scopeModel");
+    expect(topbarSrc).toContain("Semua lokasi SPPG");
+    // Komponen TopBar memakai scopeModel (bukan logika tulis-sendiri).
+    const topBarSrc = readFileSync("components/TopBar.tsx", "utf8");
+    expect(topBarSrc).toContain("<select");
+    expect(topBarSrc).toContain("scopeModel");
+    // CATATAN (11 Okt): setelah refactor header, KONTROL pemilih cakupan belum
+    // dipasang kembali di UI mana pun — scopeModel masih ada dan teruji, tetapi
+    // belum dipakai komponen. Bila kontrolnya dipasang kembali (header atau
+    // rail), tambahkan uji render-nya di sini.
   });
 });

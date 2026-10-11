@@ -663,7 +663,9 @@ export default function Home() {
           <span className="side-logo">
             <LogoMark />
           </span>
-          <strong>MealChain Guardian</strong>
+          <span className="side-brand-text">
+            <strong>MealChain Guardian</strong>
+          </span>
           <button
             type="button"
             className="side-collapse"
@@ -697,6 +699,20 @@ export default function Home() {
             </button>
           ))}
         </nav>
+        <div className="side-actions">
+          {isApprover && (
+            <button
+              type="button"
+              className="button-secondary button"
+              onClick={onSeedDemo}
+              aria-label="Muat kasus demo"
+              title="Muat ulang 4 kasus demo (idempotent)"
+            >
+              <SeedIcon />
+              <span className="side-action-label">Muat kasus demo</span>
+            </button>
+          )}
+        </div>
         <div className="side-user">
           <span className="side-avatar" aria-hidden="true">
             {initials}
@@ -714,19 +730,6 @@ export default function Home() {
           >
             <LogoutIcon />
           </button>
-        </div>
-        <div className="side-actions">
-          {isApprover && (
-            <button
-              type="button"
-              className="button-secondary button"
-              onClick={onSeedDemo}
-              title="Muat ulang 4 kasus demo (idempotent)"
-            >
-              <SeedIcon />
-              <span className="side-action-label">Muat kasus demo</span>
-            </button>
-          )}
         </div>
       </aside>
 
@@ -917,10 +920,12 @@ export default function Home() {
 
             {/* Peta gaya acuan (arah Roy 2026-10-11): kanvas terang apa adanya,
                 legenda putih kiri-bawah, kontrol MapLibre (zoom + kompas)
-                kanan-atas & atribusi kanan-bawah. Tanpa kepala/kaki panel. */}
+                kanan-atas & atribusi kanan-bawah. Tanpa kepala/kaki panel.
+                Layout: peta (kiri) + tabel Pasokan per Lokasi (kanan);
+                Telemetri Node di bawah peta. */}
             <section
               className="overview-split"
-              aria-label="Peta dan telemetri node"
+              aria-label="Peta dan pasokan per lokasi"
             >
               <SupplyMap
                 locations={mapData?.locations ?? []}
@@ -931,16 +936,20 @@ export default function Home() {
                 showHeader={false}
               />
               <div className="overview-side">
-                <NodeTelemetry
-                  locations={mapData?.locations ?? []}
-                  activeLocation={activeLocation}
-                  loading={!mapData && !mapError}
-                />
                 <div className="map-panel">
                   <h3>Pasokan per Lokasi</h3>
-                  <StockChart locations={mapData?.locations ?? []} />
+                  <StockChart locations={mapData?.locations ?? []} stretch />
                 </div>
               </div>
+            </section>
+
+            {/* Telemetri Node di bawah baris peta */}
+            <section aria-label="Telemetri node">
+              <NodeTelemetry
+                locations={mapData?.locations ?? []}
+                activeLocation={activeLocation}
+                loading={!mapData && !mapError}
+              />
             </section>
 
             {/* Status lokasi selebar halaman (tata letak acuan): baris atas
@@ -1187,6 +1196,8 @@ export default function Home() {
             batches={batches}
             now={now}
             commodity={mapCommodity}
+            commodities={COMMODITIES}
+            onChangeCommodity={setMapCommodity}
             loading={batchesLoading}
             error={batchesError}
             onRetry={() => token && loadToday(token)}
@@ -1197,6 +1208,8 @@ export default function Home() {
           <SurplusBoard
             locations={mapData?.locations ?? null}
             commodity={mapData?.commodity ?? mapCommodity}
+            commodities={COMMODITIES}
+            onChangeCommodity={setMapCommodity}
             loading={!mapData && !mapError}
             error={mapError}
             onRetry={() => setMapRefresh((value) => value + 1)}

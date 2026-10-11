@@ -1,24 +1,13 @@
-// TopBar — header global 64px mengikuti mockup acuan
-// (mockupui/overview_map_supply_status/code.html): brand → dropdown cakupan
-// lokasi → pill status jaringan → chip peran → lonceng notifikasi →
-// avatar pemakai → tombol keluar.
-//
-// Aturan yang dipegang:
-// - semua angka/label di sini berasal dari props yang diisi data REAL
-//   (peta /balance/map, keputusan /decisions, identitas /auth/me);
-// - cakupan peran tidak bisa diperluas dari sini (lihat lib/topbar.ts);
-// - ikon dekoratif aria-hidden, tombol punya nama aksesibel dari labelnya.
+// TopBar — header global 64px: kiri = peran + nama SPPG + jam; kanan = notifikasi + akun + logout.
+// Brand "MealChain Guardian" dipindah ke sidebar.
+import { useEffect, useState } from "react";
 import {
   BellIcon,
-  LogoMark,
-  LogoutIcon,
   RoleIcon,
 } from "./NavIcon";
 import {
   ALL_LOCATIONS,
   countActionable,
-  initialsOf,
-  networkState,
   scopeModel,
   type TopBarLocation,
 } from "../lib/topbar";
@@ -61,31 +50,46 @@ export default function TopBar({
   onOpenNotifications,
   onLogout,
 }: TopBarProps) {
-  const scope = scopeModel({ role, locations, ownLocation });
-  const net = networkState(locations);
   const pending = countActionable(decisions);
-  const initials = initialsOf(userName, roleLabel);
-  // Nilai dropdown: lokasi aktif, atau "seluruh lokasi" selama belum dipilih.
-  const value = activeLocation ?? ALL_LOCATIONS;
+  // Model cakupan lokasi (murni, teruji): hanya monitor nasional boleh memilih;
+  // peran SPPG terkunci ke lokasinya; lokasi belum diketahui → fail-closed.
+  const scope = scopeModel({ role, locations, ownLocation });
+  // Nilai awal: lokasi aktif, atau "seluruh lokasi" selama belum dipilih.
+  const scopeValue = activeLocation ?? scope.options[0]?.value ?? ALL_LOCATIONS;
+
+  // Jam real-time — dirender client only (null saat SSR supaya tidak hidrasi mismatch)
+  const [clock, setClock] = useState<string | null>(null);
+  useEffect(() => {
+    const fmt = () =>
+      new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    setClock(fmt());
+    const iv = setInterval(() => setClock(fmt()), 30000);
+    return () => clearInterval(iv);
+  }, []);
 
   return (
     <header className="top-bar">
       <div className="top-bar-left">
-        <span className="top-bar-logo" aria-hidden="true">
-          <LogoMark />
-        </span>
-        <span className="top-bar-brand">
-          <strong>MealChain Guardian</strong>
-          <span className="top-bar-sub">
-            Cold-Chain Integrity &amp; Food Supply Intelligence
-          </span>
+        {/* Peran */}
+        <span className="top-bar-role">
+          <RoleIcon />
+          <span className="top-bar-role-text">{roleLabel}</span>
         </span>
 
+        {/* Nama / lokasi SPPG */}
+        {userSub && (
+          <span className="top-bar-sppg">{userSub}</span>
+        )}
+
+        {/* Pemilih cakupan lokasi — aturan peran dijaga scopeModel (murni,
+            teruji): monitor bebas memilih, SPPG terkunci, belum diketahui →
+            fail-closed. Dihilangkan pada 11 Okt lalu DIPULIHKAN di sini karena
+            tanpa itu tidak ada UI yang bisa mengubah lokasi aktif di peta. */}
         <label className="top-bar-scope">
           <span className="sr-only">Cakupan lokasi yang ditampilkan</span>
           <select
             className="top-bar-select"
-            value={value}
+            value={scopeValue}
             disabled={scope.disabled}
             onChange={(event) => onSelectLocation(event.target.value)}
             title={
@@ -95,9 +99,7 @@ export default function TopBar({
             }
           >
             {/* Opsi kosong = placeholder (mis. lokasi pemakai belum diketahui). */}
-            {scope.options.length === 0 && (
-              <option value="">{scope.placeholder}</option>
-            )}
+            {scope.options.length === 0 && <option value="">{scope.placeholder}</option>}
             {scope.options.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -106,24 +108,15 @@ export default function TopBar({
           </select>
         </label>
 
-        <span className={`top-bar-net top-bar-net-${net.tone}`}>
-          <i className="top-bar-net-dot" aria-hidden="true" />
-          {net.label}
-        </span>
+        {/* Jam */}
+        {clock && (
+          <span className="top-bar-clock" aria-label={`Waktu saat ini: ${clock}`}>
+            {clock}
+          </span>
+        )}
       </div>
 
       <div className="top-bar-right">
-        {updatedAtLabel && (
-          <span className="top-bar-updated" aria-live="polite">
-            {updatedAtLabel}
-          </span>
-        )}
-
-        <span className="top-bar-role">
-          <RoleIcon />
-          <span className="top-bar-role-text">Peran: {roleLabel}</span>
-        </span>
-
         <button
           type="button"
           className="top-bar-bell"
@@ -137,26 +130,6 @@ export default function TopBar({
               {pending > 9 ? "9+" : pending}
             </span>
           )}
-        </button>
-
-        <span className="top-bar-user">
-          <span className="top-bar-avatar" aria-hidden="true">
-            {initials}
-          </span>
-          <span className="top-bar-user-meta">
-            <span className="top-bar-user-name">{userName}</span>
-            {userSub && <span className="top-bar-user-sub">{userSub}</span>}
-          </span>
-        </span>
-
-        <button
-          type="button"
-          className="top-bar-logout"
-          onClick={onLogout}
-          aria-label="Keluar akun"
-          title="Keluar"
-        >
-          <LogoutIcon />
         </button>
       </div>
     </header>
