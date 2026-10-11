@@ -41,6 +41,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:-}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-30}
+      # P3 integritas (S4-12): kunci ECDSA secp256k1 untuk tanda tangan dossier.
+      # Nilai di .env; bila kosong → state `unsigned` jujur (bukan ttd palsu).
+      SIGNING_KEY_HEX: ${SIGNING_KEY_HEX:-}
       AWS_REGION: ${AWS_REGION:-us-west-2}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
