@@ -1,0 +1,11 @@
+schema_version: 1.4.0
+
+# Nama digital assistant (DA) — INI yang dipakai `joule launch` dan yang muncul di kolom
+# "Digital Assistant Name" pada `joule list`. Diberi akhiran slug tim karena tenant ini dipakai
+# bersama semua tim hackathon; nama generik berisiko bentrok. Kalau `joule deploy -n "<nama>"`
+# dipakai, nama di flag itulah yang menang dan harus sama dengan yang di-launch.
+name: mealchain_assistant_4sehat3trio
+
+capabilities:
+  - type: local
+    folder: ./mealchain_capability

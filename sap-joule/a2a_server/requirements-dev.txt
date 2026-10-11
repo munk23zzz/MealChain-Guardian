@@ -1,0 +1,6 @@
+# Dependensi untuk menjalankan tes & server jembatan di laptop (bukan untuk
+# Cloud Foundry — di sana cukup requirements.txt). Ditambahkan 2026-10-11 saat
+# jembatan dipindah ke klon (a).
+-r requirements.txt
+pytest
+uvicorn

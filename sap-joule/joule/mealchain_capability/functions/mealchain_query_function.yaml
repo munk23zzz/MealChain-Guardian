@@ -1,0 +1,19 @@
+# Satu fungsi dipakai ketiga scenario: action `agent-request` meneruskan pesan pengguna apa
+# adanya ke agen A2A, dan agen itu memilih skill dari KATA KUNCI kalimat pengguna
+# (deterministik, lihat a2a_server/server.py -> resolve_skill).
+#
+# `content` memakai SpEL: ambil teks artefak pertama dari balasan A2A. Artefak itu ditulis oleh
+# a2a_server/server.py (artifactId `mealchain_report`).
+action_groups:
+  - actions:
+      - type: status-update
+        message: Mengambil data MealChain Guardian...
+      - type: agent-request
+        system_alias: MEALCHAIN_AGENT
+        agent_type: remote
+        result_variable: "apiResponse"
+      - type: message
+        message:
+          type: text
+          markdown: true
+          content: "<? apiResponse.body.artifacts[0].parts[0].text ?>"

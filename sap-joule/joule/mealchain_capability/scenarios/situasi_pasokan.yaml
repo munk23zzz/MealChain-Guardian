@@ -1,0 +1,8 @@
+description: >-
+  This skill reports the current food supply situation for Indonesian school-meal kitchens
+  (SPPG): usable stock, demand, surplus or shortage per SPPG and commodity, freshness status,
+  and food-safety status. Use it for questions about pasokan, stok, surplus, kekurangan,
+  kelebihan, kesegaran, or food safety per SPPG.
+target:
+  name: mealchain_query_function
+  type: function

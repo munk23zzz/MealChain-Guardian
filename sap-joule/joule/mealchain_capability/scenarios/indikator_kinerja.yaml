@@ -1,0 +1,10 @@
+description: >-
+  This skill reports MealChain Guardian performance indicators (KPI) for the school-meal
+  programme: meal continuity rate, avoidable food loss in kg and rupiah, share of resolved
+  regional imbalances, average safe delivered cost per kilogram, procurement price deviation,
+  average decision time, and evidence completeness. Indicators that cannot be computed are
+  reported as unavailable together with the reason, never as zero. Use it for questions about
+  KPI, indikator, kinerja, or metrik.
+target:
+  name: mealchain_query_function
+  type: function

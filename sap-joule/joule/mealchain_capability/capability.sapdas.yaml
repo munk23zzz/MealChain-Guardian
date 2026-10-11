@@ -1,0 +1,27 @@
+# Root capability: metadata + peta alias sistem -> BTP Destination.
+#
+# Wajib:
+#   * schema_version >= 3.28.0  (action `agent-request` belum ada di versi bawah)
+#   * namespace: joule.ext      (namespace lain dianggap milik SAP internal dan ditolak saat deploy)
+schema_version: 3.28.0
+
+metadata:
+  namespace: joule.ext
+  name: mealchain_capability
+  version: 1.1.0
+  display_name: MealChain_Guardian
+  description: >-
+    Melihat situasi pasokan SPPG, indikator kinerja, dan antrean usulan keputusan
+    MealChain Guardian. Baca-saja: persetujuan tetap dilakukan manusia di UI MealChain.
+
+system_aliases:
+  # Kunci alias (MEALCHAIN_AGENT) dipakai di functions/*.yaml.
+  # Nilai `destination` HARUS sama dengan nama BTP Destination yang dibuat di cockpit
+  # (Connectivity -> Destinations) — lihat ../../docs/runbook-cf-joule.md langkah 5.
+  MEALCHAIN_AGENT:
+    # Nama Destination di cockpit BTP harus PERSIS sama dengan nilai ini.
+    # NILAI KANONIK = `SWZ_JOULE` (huruf Z), destination yang disediakan panitia hackathon.
+    # JANGAN "perbaiki" jadi SWJ_JOULE: cockpit tidak boleh diubah dari sisi tim, jadi sisi
+    # kitalah yang menyesuaikan. Salah satu huruf -> `agent-request` gagal "destination not found"
+    # dan web client hanya menampilkan "Something went wrong".
+    destination: SWZ_JOULE

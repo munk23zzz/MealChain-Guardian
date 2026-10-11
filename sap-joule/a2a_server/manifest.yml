@@ -1,0 +1,27 @@
+# =============================================================================
+# MealChain Guardian — jembatan Joule (A2A) di SAP BTP Cloud Foundry
+# =============================================================================
+# Yang TIDAK ada di sini dan memang tidak boleh ada: kredensial apa pun.
+# Username/password akun baca MealChain diisi lewat `cf set-env` (lihat docs/runbook-cf-joule.md),
+# jadi nilainya tidak pernah masuk git.
+#
+# Catatan: manifest ini TIDAK butuh kredensial SAP AI Core, karena jembatan ini hanya membaca
+# backend MealChain. AI Core dipakai oleh skrip probe terpisah (scripts/probe_ai_core.py).
+applications:
+  - name: mealchain-joule-bridge-4sehat3trio
+    memory: 512M
+    disk_quota: 1024M
+    instances: 1
+    buildpacks:
+      - https://github.com/cloudfoundry/python-buildpack/releases/download/v1.8.43/python-buildpack-cflinuxfs4-v1.8.43.zip
+    health-check-type: http
+    health-check-http-endpoint: /health
+    timeout: 180
+    command: python -m uvicorn server:app --host 0.0.0.0 --port $PORT --workers 1
+    env:
+      BP_PYTHON_VERSION: "3.13.11"
+      # URL backend MealChain yang bisa dijangkau DARI Cloud Foundry.
+      # Kalau backend hanya hidup di laptop, pakai tunnel (mis. cloudflared) dan isi URL publiknya.
+      MEALCHAIN_API_URL: https://gossip-move-emphasis-alice.trycloudflare.com
+      # Origin yang boleh memanggil jembatan ini (dipisah koma).
+      MEALCHAIN_BRIDGE_CORS_ORIGINS: "*"

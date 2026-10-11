@@ -1,0 +1,9 @@
+description: >-
+  This skill lists the pending decision proposals in MealChain Guardian: regional balancing,
+  price anomaly, food-safety disruption, and supplier exclusion, with their status. It is
+  read-only on purpose - approvals must be performed by a human approver inside the MealChain
+  user interface, never through Joule. Use it for questions about usulan, persetujuan,
+  approval, antrean, or keputusan yang menunggu.
+target:
+  name: mealchain_query_function
+  type: function

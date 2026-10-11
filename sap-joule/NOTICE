@@ -1,0 +1,33 @@
+MealChain Guardian — sap-joule (jembatan A2A ke SAP Joule)
+Copyright 2026 MealChain Guardian contributors
+
+------------------------------------------------------------------------------
+Bagian ini memuat karya pihak ketiga berlisensi Apache License 2.0.
+------------------------------------------------------------------------------
+
+1. SAP-AWS ID Hackathon 2026 — repo starter/enabler
+   Sumber: https://github.com/SAP-AWS-ID-Hackathon-2026/SAP_AWS_Hackathon_ID_2026
+   Lisensi: Apache License, Version 2.0 (salinan penuh: ./LICENSE)
+
+   Berkas di folder `joule_a2a/` dari repo itu dipakai sebagai RANCANGAN (bukan disalin
+   mentah) untuk berkas-berkas berikut di folder ini:
+
+   Berkas turunan                          | Asal (repo SAP-AWS ID Hackathon 2026)
+   ---------------------------------------|-------------------------------------------
+   a2a_server/server.py                     | joule_a2a/project/Python-LangGraph/solution/server.py
+   a2a_server/manifest.yml                  | joule_a2a/project/Python-LangGraph/solution/manifest.yml
+   a2a_server/runtime.txt                   | joule_a2a/project/Python-LangGraph/solution/runtime.txt
+   a2a_server/.cfignore                     | joule_a2a/project/Python-LangGraph/solution/.cfignore
+   a2a_server/requirements.txt              | joule_a2a/project/Python-LangGraph/solution/requirements.txt
+   joule/da.sapdas.yaml                     | joule_a2a/project/Python-LangGraph/solution/joule/da.sapdas.yaml
+   joule/mealchain_capability/**.yaml       | joule_a2a/project/Python-LangGraph/solution/joule/investigator_capability/**.yaml
+   docs/runbook-cf-joule.md                 | BTP_Instructions/README.md (ditulis ulang untuk tim ini)
+
+   Yang TIDAK diambil dari repo itu: graph LangGraph (`investigator_graph.py`,
+   `config/agents.py`), payload domain teka-teki seni, dan seluruh berkas JavaScript.
+   Orkestrasi MealChain Guardian tetap milik backend sendiri (`backend/app/services/`).
+
+2. Perangkat lunak pihak ketiga yang dipakai sebagai dependensi (tidak dimodifikasi):
+   a2a-sdk (Apache-2.0), FastAPI/Starlette/Uvicorn (MIT/BSD), httpx (BSD), pytest (MIT),
+   Pillow (MIT-CMU, dipakai skrip frontend di luar folder ini).
+   Daftar versi yang benar-benar dipakai: a2a_server/requirements.txt.

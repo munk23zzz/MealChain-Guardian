@@ -1,0 +1,16 @@
+# Jembatan MealChain Guardian <-> SAP Joule (A2A).
+# Sengaja TANPA LangGraph/LiteLLM: aplikasi ini hanya adaptor HTTP baca-saja ke backend
+# MealChain (endpoint baca v0.2.0: /batches, /balance/map, /kpi, /decisions). Orkestrator agen
+# MealChain sudah ada di `backend/app/services/` dan sudah lulus gatenya sendiri — menambah
+# mesin agen kedua di sini berarti dua sumber kebenaran.
+
+# A2A SDK + dukungan server HTTP (FastAPI + Starlette). Kurung siku itu penting.
+a2a-sdk[http-server]==0.3.25
+
+# PENTING: extra [http-server] TIDAK membawa uvicorn (hanya fastapi/starlette/sse-starlette),
+# sedangkan perintah start di manifest.yml memakai `python -m uvicorn`. Tanpa baris ini app
+# di Cloud Foundry crash: "No module named uvicorn" (terbukti 10 Okt 2026).
+uvicorn
+
+# Klien HTTP ke backend MealChain + ke SAP AI Core (skrip probe, bukan jalur demo).
+httpx
