@@ -28,6 +28,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # Nilai .env dibaca VERBATIM lewat env_file. Sebabnya: SAP_AI_CORE_CLIENT_SECRET
+    # memuat karakter `$`, dan interpolasi compose `${VAR}` memotong nilai setelah
+    # `$` (terukur: 81 char di .env → 37 char di kontainer, sehingga OAuth SAP AI
+    # Core selalu gagal). Kunci yang butuh interpolasi/nilai turunan tetap di
+    # `environment:` di bawah (precedence: environment menang atas env_file).
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mealchain}:${POSTGRES_PASSWORD:-mealchain_local}@postgres:5432/${POSTGRES_DB:-mealchain}
       DEMO_MODE: ${DEMO_MODE:-false}
@@ -57,7 +64,8 @@ services:
       SAP_AI_CORE_API_URL: ${SAP_AI_CORE_API_URL:-}
       SAP_AI_CORE_AUTH_URL: ${SAP_AI_CORE_AUTH_URL:-}
       SAP_AI_CORE_CLIENT_ID: ${SAP_AI_CORE_CLIENT_ID:-}
-      SAP_AI_CORE_CLIENT_SECRET: ${SAP_AI_CORE_CLIENT_SECRET:-}
+      # SAP_AI_CORE_CLIENT_SECRET TIDAK di sini: nilainya memuat `$` sehingga
+      # interpolasi compose memotongnya. Diambil verbatim dari env_file di atas.
       SUPERVISOR_MODEL_PRIMARY: ${SUPERVISOR_MODEL_PRIMARY:-}
       SUPERVISOR_MODEL_FALLBACK: ${SUPERVISOR_MODEL_FALLBACK:-}
       SUPERVISOR_MODEL_FALLBACK_1: ${SUPERVISOR_MODEL_FALLBACK_1:-}

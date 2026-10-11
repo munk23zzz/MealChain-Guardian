@@ -86,7 +86,16 @@ ke file apapun yang ter-commit.
 5. **Secrets hanya di `.env`** — jangan buat `.env.example`, jangan commit kredensial baru.
    ⚠️ Saat ini `.env` SENGAJA ter-commit oleh Roy untuk onboarding — setelah semua dev
    beres clone, `.env` akan dikeluarkan lagi + keys di-rotate. Jangan tambah secret baru
-   ke file apapun yang ter-commit.
+   ke file apapun yang ter-commit. **Status 2026-10-11: `.env` MASIH ter-track**
+   (`.gitignore` tidak berpengaruh pada berkas yang sudah dilacak — untuk melepas:
+   `git rm --cached .env`). Karena berkas ini ter-track, riwayatnya memuat rahasia NYATA
+   yang harus di-rotate SEBELUM repo dipublikasikan: `AWS_ACCESS_KEY_ID`,
+   `AWS_SECRET_ACCESS_KEY`, `AWS_BEARER_TOKEN_BEDROCK`, `SAP_AI_CORE_CLIENT_SECRET`,
+   `SIGNING_KEY_HEX`, `POSTGRES_PASSWORD`. Rotate dulu, baru purge riwayat.
+   ⚠️ **Escape `$` wajib**: nilai `.env` yang memuat `$` harus ditulis `$$`, karena
+   interpolasi docker compose memotong nilai setelah `$` (terbukti: `SAP_AI_CORE_CLIENT_SECRET`
+   81 char → 37 char di kontainer, sehingga OAuth SAP AI Core gagal). Pembaca `.env` di host
+   (bukan docker) harus mengembalikan `$$` menjadi `$` lebih dulu.
 6. **Update `TODO.md`** setiap status task berubah — bukan opsional.
 7. Keputusan arsitektur/arah baru → append `memory/global/decisions.md`.
 8. Komentar kode & dokumen berbahasa Indonesia.
