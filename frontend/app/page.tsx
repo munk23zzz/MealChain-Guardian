@@ -57,6 +57,7 @@ import { formatKg, sumFiniteKg } from "../lib/overview-format";
 import { SupplierExclusionView } from "../components/SupplierExclusionPanel";
 import { fetchSupplierContext, type SupplierContext } from "../lib/supplier-exclusions";
 import DecisionEvidence from "../components/DecisionEvidence";
+import { defaultEvidenceId } from "../lib/evidence";
 
 const APPROVER_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
 
@@ -555,7 +556,15 @@ export default function Home() {
               key={n.id}
               type="button"
               className={`side-tab${tab === n.id ? " side-tab-active" : ""}`}
-              onClick={() => setTab(n.id)}
+              onClick={() => {
+                setTab(n.id);
+                // Halaman bukti tidak boleh terbuka kosong: begitu tabnya ditekan,
+                // keputusan yang butuh tindakan langsung dipilih.
+                if (n.id === "evidence" && !selectedId) {
+                  const fallback = defaultEvidenceId(decisions);
+                  if (fallback) setSelectedId(fallback);
+                }
+              }}
               title={sideCollapsed ? n.label : undefined}
             >
               <NavIcon id={n.id} />

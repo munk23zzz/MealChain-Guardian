@@ -59,4 +59,10 @@ describe("wiring sidebar + map di app/page.tsx (S4-06 polish)", () => {
     expect(pageSrc).toMatch(/isApprover/);
     expect(pageSrc).not.toMatch(/APPROVER_TABS/);
   });
+
+  it("tab Decision & Evidence memilih keputusan default (halaman tidak kosong)", () => {
+    const page = readFileSync("app/page.tsx", "utf8");
+    expect(page).toMatch(/defaultEvidenceId\(decisions\)/);
+    expect(page).toMatch(/n\.id === "evidence" && !selectedId/);
+  });
 });

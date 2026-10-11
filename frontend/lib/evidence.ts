@@ -9,6 +9,28 @@ const REQUIREMENT_VERDICT_ID: Record<string, string> = {
   unavailable: "tidak dapat dievaluasi",
 };
 
+// Keputusan yang dipakai saat halaman "Decision & Evidence" dibuka tanpa
+// pilihan: utamakan yang BUTUH tindakan (menunggu persetujuan, ditandai
+// verifikator, terverifikasi), lalu yang paling baru. Halaman tidak boleh
+// terbuka kosong kalau datanya ada — itu yang membuat halaman terasa "tidak ada".
+const NEEDS_ACTION = ["pending_approval", "verifier_flagged", "verified", "proposed"];
+
+export function defaultEvidenceId(
+  decisions: Array<{ decision_id?: string; status?: string; created_at?: string; expires_at?: string }> | null | undefined
+): string | null {
+  const list = (decisions ?? []).filter((d) => typeof d?.decision_id === "string" && d.decision_id);
+  if (!list.length) return null;
+  const time = (d: { expires_at?: string; created_at?: string }) => {
+    const t = Date.parse(String(d?.expires_at ?? d?.created_at ?? ""));
+    return Number.isFinite(t) ? t : 0;
+  };
+  for (const status of NEEDS_ACTION) {
+    const kandidat = list.filter((d) => String(d.status) === status).sort((a, b) => time(a) - time(b));
+    if (kandidat.length) return kandidat[0].decision_id!;
+  }
+  return [...list].sort((a, b) => time(b) - time(a))[0].decision_id!;
+}
+
 export type ComplianceStatus = "PASS" | "FAIL" | "NEEDS_VERIFICATION";
 
 export type ComplianceEvidence = {

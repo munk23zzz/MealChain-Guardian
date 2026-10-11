@@ -14,6 +14,7 @@ import {
   approvalFacts,
   costFacts,
   decisionFacts,
+  defaultEvidenceId,
   dossierMeta,
   evidenceTally,
   safetyFacts,
@@ -253,5 +254,30 @@ describe("approvalFacts — governance", () => {
     expect(find(rows("consistent"), "Syarat persetujuan").hint).toBe("putusan aturan: konsisten");
     expect(find(rows("ok"), "Syarat persetujuan").hint).toBe(null);
     expect(find(rows("aneh-sekali"), "Syarat persetujuan").hint).toBe("putusan aturan: aneh-sekali");
+  });
+});
+
+describe("defaultEvidenceId — halaman bukti tidak boleh terbuka kosong", () => {
+  it("utamakan keputusan yang menunggu persetujuan, paling dekat tenggat", () => {
+    const list = [
+      { decision_id: "d-proposed", status: "proposed", created_at: "2026-10-11T01:00:00Z" },
+      { decision_id: "d-pending-lama", status: "pending_approval", expires_at: "2026-10-11T05:00:00Z" },
+      { decision_id: "d-pending-dekat", status: "pending_approval", expires_at: "2026-10-11T03:00:00Z" },
+    ];
+    expect(defaultEvidenceId(list)).toBe("d-pending-dekat");
+  });
+
+  it("tanpa yang butuh tindakan: ambil yang paling baru", () => {
+    const list = [
+      { decision_id: "lama", status: "executed", created_at: "2026-10-10T01:00:00Z" },
+      { decision_id: "baru", status: "executed", created_at: "2026-10-11T01:00:00Z" },
+    ];
+    expect(defaultEvidenceId(list)).toBe("baru");
+  });
+
+  it("daftar kosong / null → null (keadaan kosong tetap jujur)", () => {
+    expect(defaultEvidenceId([])).toBe(null);
+    expect(defaultEvidenceId(null)).toBe(null);
+    expect(defaultEvidenceId([{ status: "proposed" } as any])).toBe(null);
   });
 });
