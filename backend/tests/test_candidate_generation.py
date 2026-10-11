@@ -109,6 +109,33 @@ def test_quantity_capped_by_surplus_not_shortage():
     assert out[0].quantity_kg == Decimal("500")
 
 
+def test_batch_kuantitas_nol_tidak_meledakkan_pipeline():
+    """Batch quantity_kg=0 tidak boleh menjadi 0/0 (decimal.InvalidOperation).
+
+    Regresi audit 2026-10-11: _aggregate_batches membagi weighted_freshness /
+    total_qty, jadi satu batch berkuantitas nol membuat generate_candidates
+    melempar InvalidOperation (ArithmeticError, bukan ValueError) dan mematikan
+    pipeline rekomendasi/Event 1/Event 3. Batch berkuantitas nol memang tidak
+    bisa dikirim → hasilnya tanpa kandidat.
+    """
+    s, d, b, lg, p = _inputs(batches=[_batch(quantity_kg=Decimal("0"))])
+    assert generate_candidates(s, d, b, lg, prices=p) == []
+
+
+def test_batch_kuantitas_nol_diabaikan_yang_positif_tetap_dihitung():
+    """Batch nol dilewati; agregat dihitung dari batch yang benar-benar dikirim."""
+    s, d, b, lg, p = _inputs(
+        batches=[
+            _batch(quantity_kg=Decimal("0")),
+            _batch(quantity_kg=Decimal("300")),
+        ]
+    )
+    out = generate_candidates(s, d, b, lg, prices=p)
+    assert len(out) == 1
+    assert out[0].quantity_kg == Decimal("300")
+    assert out[0].freshness_score == Decimal("0.92")
+
+
 def test_source_shortage_excluded():
     s, d, b, lg, p = _inputs(
         source_records={("Cianjur", "telur"): Decimal("400"),

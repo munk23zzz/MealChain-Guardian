@@ -72,18 +72,18 @@ def skenario():
                     text("UPDATE users SET role=:r, location_id=:l WHERE id=:i"),
                     {"r": u["role"], "l": u["location_id"], "i": u["id"]},
                 )
-            for l in lokasi_awal:
+            for lok in lokasi_awal:
                 conn.execute(
                     text(
                         "UPDATE locations SET name=:n, region=:g, latitude=:la, "
                         "longitude=:lo WHERE id=:i"
                     ),
                     {
-                        "n": l["name"],
-                        "g": l["region"],
-                        "la": l["latitude"],
-                        "lo": l["longitude"],
-                        "i": l["id"],
+                        "n": lok["name"],
+                        "g": lok["region"],
+                        "la": lok["latitude"],
+                        "lo": lok["longitude"],
+                        "i": lok["id"],
                     },
                 )
         engine.dispose()
@@ -157,7 +157,10 @@ def test_role_tak_dikenal_ditolak_422(skenario):
 
 def test_pengguna_tidak_ditemukan_404(skenario):
     with _client_sebagai(_user("bgn_monitor")) as client:
-        assert client.patch("/admin/users/bukan-uuid", json={"role": "bgn_monitor"}).status_code == 404
+        assert (
+            client.patch("/admin/users/bukan-uuid", json={"role": "bgn_monitor"}).status_code
+            == 404
+        )
         assert (
             client.patch(f"/admin/users/{uuid.uuid4()}", json={"role": "bgn_monitor"}).status_code
             == 404

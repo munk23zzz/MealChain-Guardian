@@ -199,7 +199,12 @@ def test_invoke_menggabungkan_beberapa_bagian_teks():
         (
             200,
             json.dumps(
-                {"content": [{"type": "text", "text": "bagian-1 "}, {"type": "text", "text": "bagian-2"}]}
+                {
+                    "content": [
+                        {"type": "text", "text": "bagian-1 "},
+                        {"type": "text", "text": "bagian-2"},
+                    ]
+                }
             ).encode(),
         ),
     )
@@ -278,7 +283,9 @@ def test_rpt_caller_menghasilkan_json_yang_dibaca_parser_forecast():
     from app.ai_providers.forecast_client import _parse_sap_response
 
     tp = TransportPalsu(_token_response(), _predict_response([300.0, 310.0, 320.0, 330.0]))
-    caller = build_rpt_caller(client=SapAiCoreClient(SapAiCoreConfig.from_env(ENV_LENGKAP), transport=tp))
+    caller = build_rpt_caller(
+        client=SapAiCoreClient(SapAiCoreConfig.from_env(ENV_LENGKAP), transport=tp)
+    )
     prompt = json.dumps(
         {"task": "forecast demand", "history_daily_kg": [280.0, 290.0], "horizon_days": 4}
     )
@@ -294,7 +301,9 @@ def test_rpt_caller_menghasilkan_json_yang_dibaca_parser_forecast():
 
 def test_rpt_caller_prompt_tak_terbaca_ditolak_tanpa_panggilan():
     tp = TransportPalsu(_token_response())
-    caller = build_rpt_caller(client=SapAiCoreClient(SapAiCoreConfig.from_env(ENV_LENGKAP), transport=tp))
+    caller = build_rpt_caller(
+        client=SapAiCoreClient(SapAiCoreConfig.from_env(ENV_LENGKAP), transport=tp)
+    )
     with pytest.raises(SapAiCoreError):
         caller("ini bukan json")
     assert tp.calls == []  # tidak ada panggilan jaringan sama sekali
@@ -302,7 +311,9 @@ def test_rpt_caller_prompt_tak_terbaca_ditolak_tanpa_panggilan():
 
 def test_llm_caller_meneruskan_prompt_apa_adanya():
     tp = TransportPalsu(_token_response(), _invoke_response("VERDICT: CONSISTENT"))
-    caller = build_llm_caller(client=SapAiCoreClient(SapAiCoreConfig.from_env(ENV_LENGKAP), transport=tp))
+    caller = build_llm_caller(
+        client=SapAiCoreClient(SapAiCoreConfig.from_env(ENV_LENGKAP), transport=tp)
+    )
     assert caller("judge ini") == "VERDICT: CONSISTENT"
     assert _payload(tp.calls[1])["messages"][0]["content"] == "judge ini"
 
@@ -312,7 +323,9 @@ def test_rpt_caller_lolos_run_forecast_label_jujur():
     from app.ai_providers.forecast_client import run_forecast
 
     tp = TransportPalsu(_token_response(), _predict_response([100.0, 200.0]))
-    caller = build_rpt_caller(client=SapAiCoreClient(SapAiCoreConfig.from_env(ENV_LENGKAP), transport=tp))
+    caller = build_rpt_caller(
+        client=SapAiCoreClient(SapAiCoreConfig.from_env(ENV_LENGKAP), transport=tp)
+    )
 
     hasil = run_forecast([400.0, 420.0], horizon_days=2, sap_rpt=caller)
 

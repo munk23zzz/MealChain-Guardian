@@ -99,15 +99,16 @@ def require_roles(*allowed: str):
     return _guard
 
 
-def require_target_location(
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> User:
-    """Guard scope lokasi target (O-SEC-2): decision/action untuk SPPG
-    hanya boleh menyasar lokasi miliknya. bgn_monitor bebas membaca
-    (read-only, lintas lokasi). Dipakai endpoint yang perlu user+db
-    terautentikasi; lokasi target diekstrak dari payload di handler."""
-    return user
+# CATATAN audit 2026-10-11: di sini dulu ada `require_target_location` yang
+# mengembalikan `user` apa adanya — dependency tanpa penjagaan apa pun yang
+# namanya menjanjikan penegakan O-SEC-2. Tidak satu pun endpoint memakainya,
+# jadi ia dihapus supaya tidak ada yang mengira cakupan lokasi sudah dijaga.
+# Penegakan yang NYATA ada di dua tempat:
+#   - `app/api/decisions.py::_assert_target_location_allowed` (dipakai POST
+#     /decisions dan aksi yang menyasar decision),
+#   - handler yang mengekstrak target dari payload lalu membandingkannya dengan
+#     `user.location_id`.
+# /events/* BELUM menegakkannya — lihat catatan audit di app/api/events.py.
 
 
 # Role yang boleh melakukan mutasi/komputasi endpoint (bgn_monitor read-only

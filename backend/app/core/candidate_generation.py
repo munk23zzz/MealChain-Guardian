@@ -61,18 +61,36 @@ def _worst_safety(statuses: set) -> str:
 
 
 def _aggregate_batches(batches) -> dict:
-    """Gabungkan batch eligible satu lokasi secara konservatif."""
+    """Gabungkan batch eligible satu lokasi secara konservatif.
+
+    Batch berkuantitas <= 0 dilewati: tidak ada kilogram yang bisa dikirim, dan
+    kalau ikut dijumlahkan, total_qty bisa 0 sehingga rata-rata berbobot menjadi
+    0/0 — `decimal.InvalidOperation` (ArithmeticError, BUKAN ValueError) yang
+    mematikan seluruh pipeline rekomendasi/Event 1/Event 3.
+    """
     total_qty = Decimal("0")
     weighted_freshness = Decimal("0")
     freshness_statuses = set()
     safety_statuses = set()
     for b in batches:
         qty = _to_decimal(b["quantity_kg"], "quantity_kg")
+        if qty <= 0:
+            continue
         score = _to_decimal(b["freshness_score"], "freshness_score")
         total_qty += qty
         weighted_freshness += qty * score
         freshness_statuses.add(b["freshness_status"])
         safety_statuses.add(b["safety_status"])
+    if total_qty <= 0:
+        # Tidak ada kuantitas terkirim: skor tidak punya makna. Pemanggil
+        # berhenti di `available_kg <= 0` (tanpa kandidat), jadi nilai di sini
+        # tidak pernah dibaca sebagai hasil.
+        return {
+            "available_kg": Decimal("0"),
+            "freshness_score": Decimal("0"),
+            "freshness_status": "pass",
+            "safety_status": "pass",
+        }
     freshness_status = (
         "needs_verification" if "needs_verification" in freshness_statuses else "pass"
     )

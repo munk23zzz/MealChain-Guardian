@@ -21,7 +21,6 @@ from app.core.approval_matrix import APPROVER_ROLES, evaluate_approvals
 from app.core.decision_validity import is_decision_valid
 from app.models import (
     Approval,
-    Batch,
     Commodity,
     Decision,
     Location,
@@ -75,26 +74,38 @@ def _material_number(commodity: Commodity | None) -> str | None:
 
 
 async def _safety_view(db: AsyncSession, decision: Decision) -> dict:
-    """Safety batch sumber (lokasi+komoditas sama) — sejajar revalidation
-    execute (O-EVENT-2). Tanpa lokasi/komoditas → unavailable, bukan fail."""
-    if decision.source_location_id is None or decision.commodity_id is None:
-        return {"worst_status": None, "blocked": False, "batches_checked": 0}
-    batches = (
-        (
-            await db.execute(
-                select(Batch).where(
-                    Batch.location_id == decision.source_location_id,
-                    Batch.commodity_id == decision.commodity_id,
-                )
-            )
-        )
-        .scalars()
-        .all()
+    """Safety batch sumber yang AKAN dipakai execute — sejajar revalidation
+    execute (O-EVENT-2). Tanpa lokasi/komoditas → unavailable, bukan fail.
+
+    Set batch & definisi blokir diambil dari `supplier_eligibility`
+    (`batch_sumber_transfer` + `source_batch_safety_blocked`) supaya
+    `can_execute` tidak pernah menjanjikan eksekusi yang pasti 409.
+    """
+    from app.services.supplier_eligibility import (
+        batch_sumber_transfer,
+        source_batch_safety_blocked,
     )
+
+    tak_terdefinisi = {
+        "worst_status": None,
+        "blocked": False,
+        "batches_checked": 0,
+        "reason": None,
+    }
+    if decision.source_location_id is None or decision.commodity_id is None:
+        return tak_terdefinisi
+    batches = await batch_sumber_transfer(db, decision)
     if not batches:
-        return {"worst_status": None, "blocked": False, "batches_checked": 0}
+        # Tidak ada batch sumber terjangkau: execute menolak (revalidate_transfer),
+        # tetapi tidak ada status yang bisa dilaporkan — jangan mengarang "fail".
+        return {
+            "worst_status": None,
+            "blocked": True,
+            "batches_checked": 0,
+            "reason": "safety revalidation gagal: tidak ada batch sumber",
+        }
     statuses = [(b.safety_status or "pending") for b in batches]
-    blocked = all(s == "fail" for s in statuses)
+    blocked = source_batch_safety_blocked(batches)
     worst = (
         "fail"
         if blocked
@@ -110,6 +121,7 @@ async def _safety_view(db: AsyncSession, decision: Decision) -> dict:
         "worst_status": worst,
         "blocked": blocked,
         "batches_checked": len(batches),
+        "reason": "safety revalidation gagal: batch sumber kini FAIL" if blocked else None,
     }
 
 
@@ -245,7 +257,9 @@ async def build_approval_summary(db: AsyncSession, decision: Decision) -> dict:
     if not approval_state["satisfied"]:
         blocking.append("approval belum memenuhi requirement (missing/rejected)")
     if safety["blocked"]:
-        blocking.append("safety revalidation gagal: batch sumber kini FAIL")
+        # Alasan diambil dari _safety_view (bisa "batch sumber FAIL" atau
+        # "tidak ada batch sumber") — jangan menuliskan sebab yang belum tentu.
+        blocking.append(safety.get("reason") or "safety revalidation gagal")
     can_execute = not blocking
     # Decision yang sudah executed tetap tampil executed tanpa tombol baru.
     if decision.status == "executed":

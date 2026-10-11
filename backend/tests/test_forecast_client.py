@@ -87,3 +87,36 @@ def test_horizon_delegated_to_statistical_core():
 
     expected = statistical_forecast(_HISTORY, horizon_days=2)
     assert result.forecast_qty_kg == expected["forecast_qty_kg"]
+
+
+def _mati(pesan):
+    def fn(prompt):
+        raise RuntimeError(pesan)
+
+    return fn
+
+
+def test_chain_panjang_tidak_dipotong_tiga_slot():
+    """Slot ke-4 dan seterusnya harus benar-benar dicoba.
+
+    Uji audit 2026-10-11: `_run_forecast_via_chain` hanya meneruskan
+    fallback_1/fallback_2, jadi provider ke-4+ tidak pernah dipanggil walau
+    `with_fallback_chain` sudah mendukung `fallbacks=[...]` panjang — dan rantai
+    yang dipotong membuat forecast jatuh ke statistik padahal provider masih ada.
+    """
+    chain = [
+        ("primary:bedrock", _mati("primary mati"), "bedrock"),
+        ("fallback_1:inferhub", _mati("fallback_1 mati"), "inferhub"),
+        ("fallback_2:inferhub", _mati("fallback_2 mati"), "inferhub"),
+        (
+            "fallback_3:inferhub",
+            lambda prompt: json.dumps({"forecast_qty_kg": 714.0, "confidence": 0.9}),
+            "inferhub",
+        ),
+    ]
+    result = run_forecast(_HISTORY, horizon_days=7, default_chain=chain)
+
+    assert result.method == "provider_forecast"
+    assert result.provider == "fallback_3:inferhub"
+    assert result.forecast_qty_kg == 714.0
+    assert len(result.attempts) == 4

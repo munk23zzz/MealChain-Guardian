@@ -16,7 +16,6 @@ Kontrak:
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass, field
 from importlib import resources
 from typing import Callable

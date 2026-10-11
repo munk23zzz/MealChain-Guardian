@@ -10,12 +10,12 @@ Kontrak provider SAP-RPT-1.6 dengan fallback statistik yang jujur:
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass, field
 from typing import Callable
 
 from app.ai_providers.resilience import (
     ProviderUnavailableError,
+    provider_slot_index,
     with_fallback_chain,
 )
 from app.core.forecasting_fallback import statistical_forecast
@@ -172,11 +172,13 @@ def _run_forecast_via_chain(
 ) -> ForecastResult:
     """Forecast lewat chain model generik (env); output angka tervalidasi."""
     prompt = _build_prompt(history_daily_kg, horizon_days)
+    # Pakai `fallbacks=[...]`: bentuk kwargs fallback_1/fallback_2 dulu memotong
+    # rantai di tiga slot, sehingga provider ke-4+ dari env tidak pernah dipanggil
+    # walau ada. `fallbacks` memberi label fallback_1..N untuk seluruh rantai.
     result = with_fallback_chain(
         primary=chain[0][1],
         prompt=prompt,
-        fallback_1=chain[1][1] if len(chain) > 1 else None,
-        fallback_2=chain[2][1] if len(chain) > 2 else None,
+        fallbacks=[fn for _label, fn, _kind in chain[1:]],
         timeout_seconds=timeout_seconds,
     )
     parsed = _parse_forecast_response(result.text, horizon_days)
@@ -186,8 +188,9 @@ def _run_forecast_via_chain(
             history_daily_kg, horizon_days, attempts=result.attempts
         )
     # nama pemenang chain posisional → translasi label jujur slot:kind
-    slot_to_index = {"primary": 0, "fallback_1": 1, "fallback_2": 2}
-    winner_index = slot_to_index.get(result.provider, 0)
+    # (helper terpusat: peta lokal 3 entri salah melabeli fallback_3 sebagai
+    # "primary", sama seperti yang dulu ada di supervisor_client)
+    winner_index = provider_slot_index(result.provider)
     winner_label = (
         chain[winner_index][0]
         if winner_index < len(chain)

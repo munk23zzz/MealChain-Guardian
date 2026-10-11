@@ -1,13 +1,14 @@
 """MealChain Guardian — FastAPI backend (Sprint 1: domain tools + supply/demand)."""
 
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.actions import router as actions_router
-from app.api.auth import router as auth_router
 from app.api.admin import router as admin_router
+from app.api.auth import router as auth_router
 from app.api.balance import router as balance_router
 from app.api.batches import router as batches_router
 from app.api.compliance import router as compliance_router
@@ -44,13 +45,37 @@ app = FastAPI(
     lifespan=_lifespan_wrapper,
 )
 
-# CORS: frontend Next.js (localhost:3000) fetch API lintas origin.
+def _cors_origins() -> list[str]:
+    """Origin browser yang boleh memanggil API lintas-origin.
+
+    Bawaan memuat port 3000 (nilai lama) DAN 3010 (port konsol resmi sejak
+    S4-19) — keduanya perlu, karena port host dapat diubah lewat FRONTEND_PORT
+    di .env. Untuk origin lain (mis. domain Codespaces) set CORS_ORIGINS
+    sebagai daftar dipisah koma.
+    """
+    bawaan = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3010",
+        "http://127.0.0.1:3010",
+    ]
+    mentah = os.environ.get("CORS_ORIGINS", "").strip()
+    if not mentah:
+        return bawaan
+    return [asal.strip() for asal in mentah.split(",") if asal.strip()]
+
+
+# CORS: frontend Next.js fetch API lintas origin (dipakai hanya kalau UI
+# dijalankan dengan NEXT_PUBLIC_API_URL absolut; dalam mode proxy Next,
+# browser memakai origin sendiri sehingga CORS tidak terlibat).
 # Allow-list eksplisit — jangan wildcard (kredensial JWT tetap via header).
+# PATCH wajib ada: tab Pengaturan memakai PATCH /admin/users/{id} dan
+# /admin/locations/{id} (S4-11).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=_cors_origins(),
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 

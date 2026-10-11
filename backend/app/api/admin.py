@@ -88,7 +88,7 @@ async def list_users(
             .order_by(User.email.asc())
         )
     ).all()
-    return {"users": [_user_out(u, l) for u, l in baris]}
+    return {"users": [_user_out(u, lokasi) for u, lokasi in baris]}
 
 
 @router.patch("/users/{user_id}")
@@ -133,7 +133,7 @@ async def list_locations(
     baris = (
         await db.execute(select(Location).order_by(Location.name.asc()))
     ).scalars().all()
-    return {"locations": [_location_out(l) for l in baris]}
+    return {"locations": [_location_out(lokasi) for lokasi in baris]}
 
 
 @router.patch("/locations/{location_id}")

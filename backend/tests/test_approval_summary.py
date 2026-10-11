@@ -520,3 +520,127 @@ def test_approval_summary_missing_facts_null_not_fake(client):
         assert any("supplier_unknown" in r for r in summary["blocking_reasons"])
     finally:
         _cleanup_decision(did)
+
+
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Parity summary ↔ execute (temuan audit 2026-10-11)
+# ---------------------------------------------------------------------------
+
+
+def _siapkan_verified_approved(did: str) -> None:
+    """Loloskan prasyarat execute: terverifikasi + approval memenuhi matriks."""
+    _db_exec(
+        "UPDATE decisions SET verifier_note='consistent', "
+        "verified_by='verifier_agent' WHERE id=:d",
+        {"d": did},
+    )
+    users = _db_all("SELECT id FROM users WHERE role='sppg_head' ORDER BY id LIMIT 1")
+    _db_exec(
+        "INSERT INTO approvals (decision_id, approved_by, approved) VALUES (:d, :u, True)",
+        {"d": did, "u": str(users[0][0])},
+    )
+
+
+def _sumber_baru(prefix: str) -> str:
+    suffix = uuid.uuid4().hex[:8]
+    return str(
+        _db_exec_returning(
+            "INSERT INTO locations (name, region, latitude, longitude) "
+            "VALUES (:n, 'Test', -6.9, 107.6) RETURNING id",
+            {"n": f"{prefix}-{suffix}"},
+        )
+    )
+
+
+def _ikat_batch(decision_id: str, supplier_id: str, batch_ids: list) -> None:
+    """Binding eksplisit (allocation_binding) satu supplier + N batch."""
+    _db_exec(
+        "INSERT INTO decision_evidence (decision_id, evidence_type, payload) "
+        "VALUES (:d, 'human_inspection', CAST(:p AS jsonb))",
+        {
+            "d": decision_id,
+            "p": __import__("json").dumps({
+                "allocation_binding": True,
+                "supplier_id": supplier_id,
+                "batch_ids": batch_ids,
+            }),
+        },
+    )
+
+
+def test_approval_summary_parity_execute_batch_sumber_campuran(client):
+    """Parity can_execute ↔ execute saat batch terikat CAMPURAN (1 FAIL, 1 aman).
+
+    Guard execute (supplier_eligibility.revalidate_transfer) memblokir bila ADA
+    batch terikat yang FAIL, sedangkan approval-summary dulu memakai `all(...)`
+    sehingga hanya memblokir bila SEMUA batch sumber FAIL. Akibatnya summary
+    menjanjikan can_execute=true padahal POST /actions/execute membalas 409.
+    """
+    src = _sumber_baru("SUM-mix")
+    b1 = _mk_batch(src, fail=False)
+    b2 = _mk_batch(src, fail=False)
+    # Satu supplier untuk kedua batch — prasyarat binding valid.
+    _db_exec(
+        "UPDATE batches SET supplier_id=:s WHERE id=:b",
+        {"s": b1["supplier_id"], "b": b2["batch_id"]},
+    )
+    did = _mk_decision(src, _jakarta_id())
+    try:
+        _siapkan_verified_approved(did)
+        _ikat_batch(did, b1["supplier_id"], [b1["batch_id"], b2["batch_id"]])
+        # Hanya satu dari dua batch terikat yang FAIL.
+        _db_exec(
+            "UPDATE batches SET safety_status='fail' WHERE id=:b",
+            {"b": b2["batch_id"]},
+        )
+        summary = client.get(
+            f"/decisions/{did}/approval-summary", headers=_head_user(client)
+        ).json()
+        eksekusi = client.post(
+            "/actions/execute", json={"decision_id": did}, headers=_head_user(client)
+        )
+        assert eksekusi.status_code == 409, eksekusi.text
+        assert "safety" in eksekusi.json()["detail"].lower()
+        # Inti bug: summary TIDAK boleh mengaku bisa dieksekusi.
+        assert summary["safety"]["blocked"] is True, summary["safety"]
+        assert summary["can_execute"] is False, summary
+    finally:
+        _cleanup_decision(did)
+        # b2 dulu: batch-nya memakai supplier milik b1 (FK batches.supplier_id).
+        _cleanup_batch(b2)
+        _cleanup_batch(b1)
+        _db_exec("DELETE FROM suppliers WHERE name=:n", {"n": f"SUM-sup-{b2['suffix']}"})
+        _db_exec("DELETE FROM locations WHERE id = :l", {"l": src})
+
+
+def test_approval_summary_parity_execute_batch_terikat_hilang(client):
+    """Batch terikat hilang (dikonsumsi) → execute 409, summary blocked.
+
+    Keadaan ini hanya terlihat oleh cek safety batch sumber, jadi kalau summary
+    mengabaikannya, UI menampilkan tombol eksekusi untuk aksi yang pasti gagal.
+    """
+    src = _sumber_baru("SUM-hilang")
+    b1 = _mk_batch(src, fail=False)
+    did = _mk_decision(src, _jakarta_id())
+    try:
+        _siapkan_verified_approved(did)
+        _ikat_batch(did, b1["supplier_id"], [b1["batch_id"]])
+        _db_exec("DELETE FROM batches WHERE id=:b", {"b": b1["batch_id"]})
+        summary = client.get(
+            f"/decisions/{did}/approval-summary", headers=_head_user(client)
+        ).json()
+        eksekusi = client.post(
+            "/actions/execute", json={"decision_id": did}, headers=_head_user(client)
+        )
+        assert eksekusi.status_code != 200, eksekusi.text
+        assert summary["safety"]["blocked"] is True, summary["safety"]
+        assert summary["can_execute"] is False, summary
+        # Tidak ada batch → tidak ada status untuk dilaporkan (jangan mengarang).
+        assert summary["safety"]["worst_status"] is None
+    finally:
+        _cleanup_decision(did)
+        _cleanup_batch(b1)
+        _db_exec("DELETE FROM locations WHERE id = :l", {"l": src})

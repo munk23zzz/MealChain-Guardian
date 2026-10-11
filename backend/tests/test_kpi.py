@@ -311,6 +311,25 @@ def test_food_loss_from_disposal_events(fx):
         _db_exec("DELETE FROM disposal_events WHERE location_id=:l", {"l": fx.loc})
 
 
+def test_food_loss_sample_count_ikut_jumlah_event(fx):
+    """sample_count = jumlah event disposal nyata, bukan angka tetap 2.
+
+    Uji audit 2026-10-11: kpi_service menulis `sample_count=2  # dua disposal di
+    test; live = jumlah event`, sehingga angka sampel yang ditampilkan ke juri
+    tidak mencerminkan data begitu jumlah disposal bukan dua.
+    """
+    _fx_disposal(fx, Decimal("5"), "expired_transport")
+    _fx_disposal(fx, Decimal("7"), "spoilage_cold_chain")
+    _fx_disposal(fx, Decimal("3"), "quality_reject")
+    try:
+        m = {m["name"]: m for m in _run(lambda s: compute_kpis(
+            s, NOW - timedelta(days=7), NOW, fx.loc))}["Avoidable Food Loss"]
+        assert m["state"] == "available"
+        assert m["sample_count"] == 3
+    finally:
+        _db_exec("DELETE FROM disposal_events WHERE location_id=:l", {"l": fx.loc})
+
+
 def test_food_loss_no_disposal_no_data(fx):
     m = {m["name"]: m for m in _run(lambda s: compute_kpis(
         s, NOW - timedelta(days=7), NOW, fx.loc))}["Avoidable Food Loss"]

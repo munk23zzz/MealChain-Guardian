@@ -102,6 +102,74 @@ async def resolve_binding(db: AsyncSession, decision: Decision) -> tuple[uuid.UU
     return supplier_id, batches
 
 
+def source_batch_safety_blocked(batches) -> bool:
+    """True bila transfer TIDAK boleh dieksekusi karena keadaan batch sumber.
+
+    Definisi TUNGGAL untuk blokir safety batch sumber: tidak ada batch sumber,
+    atau ADA batch sumber ber-status FAIL. Dipakai bersama oleh
+    `revalidate_transfer` (guard execute) dan `_safety_view` pada
+    approval-summary, supaya readiness `can_execute` tidak pernah menjanjikan
+    eksekusi yang pasti ditolak 409.
+
+    Sebelum audit 2026-10-11, approval-summary memakai `all(... == "fail")`
+    sehingga dua batch sumber (satu FAIL, satu aman) dilaporkan `blocked=False`.
+    """
+    if not batches:
+        return True
+    return any((b.safety_status or "pending") == "fail" for b in batches)
+
+
+async def batch_sumber_transfer(db: AsyncSession, decision: Decision) -> list:
+    """Batch sumber yang DIPAKAI execute: batch terikat bila ada binding,
+    kalau tidak seluruh batch lokasi+komoditas sumber.
+
+    Sama dengan set yang dihitung `resolve_binding`, tetapi TIDAK melempar:
+    keadaan yang tidak dapat dipastikan (binding ganda / id rusak) dikembalikan
+    sebagai daftar kosong — oleh `source_batch_safety_blocked` itu terbaca
+    "diblokir", sikap konservatif untuk read model.
+    """
+    evidence = (
+        (
+            await db.execute(
+                select(DecisionEvidence).where(
+                    DecisionEvidence.decision_id == decision.id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    bindings = [
+        (e.payload or {})
+        for e in evidence
+        if (e.payload or {}).get("allocation_binding") is True
+    ]
+    if len(bindings) > 1:
+        return []
+    if len(bindings) == 1:
+        try:
+            ids = {uuid.UUID(str(v)) for v in bindings[0]["batch_ids"]}
+        except (ValueError, KeyError, TypeError):
+            return []
+        if not ids:
+            return []
+        return list(
+            (await db.execute(select(Batch).where(Batch.id.in_(ids)))).scalars().all()
+        )
+    return list(
+        (
+            await db.execute(
+                select(Batch).where(
+                    Batch.location_id == decision.source_location_id,
+                    Batch.commodity_id == decision.commodity_id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
 async def revalidate_transfer(db: AsyncSession, decision: Decision) -> uuid.UUID:
     """Supplier row stabil diserialisasi dengan activation, termasuk tanpa exclusion row."""
     supplier_id, batches = await resolve_binding(db, decision)
@@ -122,7 +190,9 @@ async def revalidate_transfer(db: AsyncSession, decision: Decision) -> uuid.UUID
     reasons = []
     if active:
         reasons.append("supplier excluded pada SPPG penerima")
-    if not batches or any(b.safety_status == "fail" for b in batches):
+    if not batches:
+        reasons.append("safety revalidation gagal: tidak ada batch sumber")
+    elif source_batch_safety_blocked(batches):
         reasons.append("safety revalidation gagal: batch sumber kini FAIL")
 
     if reasons:

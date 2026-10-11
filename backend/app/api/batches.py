@@ -23,24 +23,30 @@ async def list_batches(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> dict:
-    rows = (
-        await db.execute(
-            select(
-                Batch.id,
-                Batch.quantity_kg,
-                Batch.safety_status,
-                Batch.freshness_score,
-                Batch.usable_until,
-                Batch.location_id,
-                Location.name.label("location"),
-                Commodity.name.label("commodity"),
-            )
-            .join(Location, Location.id == Batch.location_id)
-            .join(Commodity, Commodity.id == Batch.commodity_id)
-            .order_by(Batch.created_at.desc())
-            .limit(50)
+    """Daftar batch untuk panel chaos Event 3.
+
+    CATATAN audit 2026-10-11: daftar ini sengaja lintas lokasi (batch source
+    chaos bisa berada di lokasi mana pun) — kalau O-SEC-2 dikunci untuk
+    /events/*, daftar ini juga wajib di-scope, dan panel akan kosong untuk
+    SPPG Head di Jakarta (seed tidak punya batch Jakarta).
+    """
+    query = (
+        select(
+            Batch.id,
+            Batch.quantity_kg,
+            Batch.safety_status,
+            Batch.freshness_score,
+            Batch.usable_until,
+            Batch.location_id,
+            Location.name.label("location"),
+            Commodity.name.label("commodity"),
         )
-    ).all()
+        .join(Location, Location.id == Batch.location_id)
+        .join(Commodity, Commodity.id == Batch.commodity_id)
+        .order_by(Batch.created_at.desc())
+        .limit(50)
+    )
+    rows = (await db.execute(query)).all()
     return {
         "batches": [
             {

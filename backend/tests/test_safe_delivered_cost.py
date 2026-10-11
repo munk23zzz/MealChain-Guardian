@@ -165,3 +165,52 @@ def test_deterministic_repeat():
     a = calculate_safe_delivered_cost(i)
     b = calculate_safe_delivered_cost(i)
     assert a == b
+
+
+def test_setiap_komponen_dibulatkan_2dp():
+    """Kontrak modul: "Rounding HALF_UP 2dp per komponen; total = jumlah
+    komponen terbulatkan".
+
+    Uji audit 2026-10-11: hanya expected_loss yang di-quantize; freshness_risk
+    dan safety_risk keluar mentah (mis. 12345.67 × 0.50 = 6172.835) sehingga
+    breakdown tidak lagi 2dp — padahal angka ini dipakai membandingkan/meranking
+    biaya dan (nanti) dikirim sebagai NetPriceAmount ke SAP.
+    """
+    r = calculate_safe_delivered_cost(
+        _inputs(
+            purchase_cost=Decimal("12345.67"),
+            transport_cost=Decimal("150.005"),
+            handling_cost=Decimal("50.004"),
+            freshness_score=Decimal("0.55"),  # < 0.60 → freshness risk aktif
+            safety_status="needs_verification",  # → safety risk aktif
+        )
+    )
+    komponen = {
+        "purchase_cost": r.purchase_cost,
+        "transport_cost": r.transport_cost,
+        "handling_cost": r.handling_cost,
+        "expected_loss": r.expected_loss,
+        "freshness_risk_penalty": r.freshness_risk_penalty,
+        "safety_risk_penalty": r.safety_risk_penalty,
+        "total": r.total,
+    }
+    for nama, nilai in komponen.items():
+        eksponen = nilai.as_tuple().exponent
+        assert isinstance(eksponen, int) and -eksponen <= 2, f"{nama} tidak 2dp: {nilai}"
+
+    # nilai terbulatkan HALF_UP, bukan dipotong
+    assert r.freshness_risk_penalty == Decimal("6172.84")  # 6172.835
+    assert r.safety_risk_penalty == Decimal("1234.57")  # 1234.567
+    assert r.transport_cost == Decimal("150.01")  # 150.005
+    assert r.handling_cost == Decimal("50.00")  # 50.004
+
+    # breakdown tetap menjumlah persis ke total
+    assert (
+        r.purchase_cost
+        + r.transport_cost
+        + r.handling_cost
+        + r.expected_loss
+        + r.freshness_risk_penalty
+        + r.safety_risk_penalty
+        == r.total
+    )

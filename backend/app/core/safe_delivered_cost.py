@@ -110,32 +110,39 @@ def calculate_safe_delivered_cost(
             "batch dengan safety_status=fail tidak boleh dihitung biaya "
             "eligible-nya — hard exclusion terkunci"
         )
-    purchase = inputs.purchase_cost
+    # Rounding HALF_UP 2dp PER KOMPONEN (kontrak modul), lalu total = jumlah
+    # komponen terbulatkan sehingga breakdown selalu menjumlah persis ke total.
+    # Sebelumnya hanya expected_loss yang di-quantize: freshness/safety penalty
+    # keluar tiga desimal (mis. 12.345,67 × 0,50 = 6.172,835) dan angka itu ikut
+    # dipakai membandingkan biaya serta (nanti) dikirim sebagai NetPriceAmount.
+    purchase = inputs.purchase_cost.quantize(_TWO_DP, rounding=ROUND_HALF_UP)
+    transport = inputs.transport_cost.quantize(_TWO_DP, rounding=ROUND_HALF_UP)
+    handling = inputs.handling_cost.quantize(_TWO_DP, rounding=ROUND_HALF_UP)
     expected_loss = (
         purchase * _EXPECTED_LOSS_RATE * (Decimal("1") - inputs.freshness_score)
     ).quantize(_TWO_DP, rounding=ROUND_HALF_UP)
     freshness_risk = (
-        purchase * _FRESHNESS_RISK_FACTOR
+        (purchase * _FRESHNESS_RISK_FACTOR).quantize(_TWO_DP, rounding=ROUND_HALF_UP)
         if inputs.freshness_score < _FRESHNESS_RISK_THRESHOLD
         else Decimal("0.00")
     )
     safety_risk = (
-        purchase * _SAFETY_RISK_RATE
+        (purchase * _SAFETY_RISK_RATE).quantize(_TWO_DP, rounding=ROUND_HALF_UP)
         if inputs.safety_status == "needs_verification"
         else Decimal("0.00")
     )
     total = (
         purchase
-        + inputs.transport_cost
-        + inputs.handling_cost
+        + transport
+        + handling
         + expected_loss
         + freshness_risk
         + safety_risk
     )
     return SafeDeliveredCostResult(
         purchase_cost=purchase,
-        transport_cost=inputs.transport_cost,
-        handling_cost=inputs.handling_cost,
+        transport_cost=transport,
+        handling_cost=handling,
         expected_loss=expected_loss,
         freshness_risk_penalty=freshness_risk,
         safety_risk_penalty=safety_risk,

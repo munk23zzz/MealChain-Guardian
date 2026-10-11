@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from app.core.admin_rules import (
-    UNSET,
     AdminRuleError,
     resolve_location_update,
     resolve_user_update,

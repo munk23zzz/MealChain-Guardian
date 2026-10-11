@@ -39,7 +39,11 @@ def _cleanup(decision_id: str | None) -> None:
 
 
 def _stub_chain(*responses):
-    """Chain stub: callable → teks, atau Exception untuk slot mati."""
+    """Chain stub: callable → teks, atau Exception untuk slot mati.
+
+    Panjang chain tidak dibatasi 3 slot: label dihasilkan sebagai
+    primary/fallback_N supaya bisa menguji chain panjang (uji audit 2026-10-11).
+    """
     callables = []
     for resp in responses:
         if isinstance(resp, Exception):
@@ -52,13 +56,12 @@ def _stub_chain(*responses):
                 return _t
 
             callables.append(ok)
-    kinds = ["bedrock", "inferhub", "inferhub"][: len(callables)]
-    labels = ["primary", "fallback_1", "fallback_2"][: len(callables)]
+    kinds = ["bedrock", "inferhub", "inferhub", "inferhub"][: len(callables)]
+    labels = ["primary"] + [f"fallback_{i}" for i in range(1, len(callables))]
     return [
         (f"{label}:{kind}", fn, kind)
         for label, kind, fn in zip(labels, kinds, callables)
     ]
-
 
 NARRATION_OK = (
     '{"ringkasan": "Distribusi telur Bogor ke Jakarta layak dieksekusi '
@@ -136,5 +139,40 @@ def test_supervise_unavailable_recorded_honestly(client):
             "proposed",
             "pending_approval",
         }
+    finally:
+        _cleanup(outcome.get("decision_id"))
+
+
+def test_supervise_chain_panjang_label_jujur(client, monkeypatch):
+    """Pemenang slot ke-4 tidak boleh dilaporkan sebagai slot pertama.
+
+    Uji audit 2026-10-11: supervisor_client memakai peta 3 entri
+    {"primary": 0, "fallback_1": 1, "fallback_2": 2} dan `.get(..., 0)`, jadi
+    pemenang `fallback_3` dipetakan ke indeks 0 dan dilaporkan sebagai
+    "primary:bedrock" — label yang salah untuk langkah yang mengklaim
+    provider (aturan anti-fabricate). resilience.py sudah punya helper
+    `provider_slot_index` yang benar.
+    """
+    from app.services.event1_orchestrator import run_event1
+
+    monkeypatch.setattr(
+        chain_mod,
+        "build_default_callers",
+        lambda agent: _stub_chain(
+            RuntimeError("primary mati"),
+            RuntimeError("fallback_1 mati"),
+            RuntimeError("fallback_2 mati"),
+            NARRATION_OK,
+        )
+        if agent == "supervisor"
+        else [],
+    )
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+    try:
+        sup = outcome["supervisor"]
+        assert sup["status"] == "narrated"
+        assert sup["provider"] == "fallback_3:inferhub"
+        assert sup["fallback_used"] is True
+        assert len(sup["attempts"]) == 4
     finally:
         _cleanup(outcome.get("decision_id"))

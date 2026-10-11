@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-from app.ai_providers.resilience import with_fallback_chain
+from app.ai_providers.resilience import provider_slot_index, with_fallback_chain
 
 NARRATION_KEYS = ("ringkasan",)
 
@@ -108,9 +108,11 @@ def run_supervisor(
             fallback_used=result.fallback_used,
             attempts=result.attempts,
         )
-    # nama pemenang chain posisional → translasi label jujur slot:kind
-    slot_to_index = {"primary": 0, "fallback_1": 1, "fallback_2": 2}
-    winner_index = slot_to_index.get(result.provider, 0)
+    # nama pemenang chain posisional → translasi label jujur slot:kind.
+    # Pakai helper terpusat dari resilience.py: peta 3 entri lokal dulu memetakan
+    # pemenang `fallback_3` ke indeks 0 sehingga dilaporkan sebagai "primary"
+    # (label karangan) begitu rantai punya lebih dari tiga slot.
+    winner_index = provider_slot_index(result.provider)
     winner_label = (
         chain[winner_index][0] if winner_index < len(chain) else result.provider
     )

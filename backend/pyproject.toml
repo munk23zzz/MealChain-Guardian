@@ -5,11 +5,19 @@ requires-python = ">=3.12"
 
 [tool.ruff]
 line-length = 100
+
+# Ruff ≥0.2: opsi pilihan aturan pindah ke [tool.ruff.lint] (bentuk lama
+# masih jalan tapi memunculkan peringatan deprecation di setiap pemanggilan).
+[tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# pytest-asyncio ≥0.24 memperingatkan kalau scope loop fixture async tidak
+# eksplisit; default lama (= scope caching fixture) ditulis apa adanya di sini.
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+
 markers = [
     "live: test/probe yang memanggil model provider NYATA (Bedrock/Inferhub) — jalankan eksplisit: pytest -m live",
 ]

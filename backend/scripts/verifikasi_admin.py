@@ -71,7 +71,8 @@ def main() -> int:
     status, users = _panggil("GET", "/admin/users", monitor)
     print(f"  GET /admin/users     -> HTTP {status} ({len(_obj(users).get('users', []))} pengguna)")
     status, locs = _panggil("GET", "/admin/locations", monitor)
-    print(f"  GET /admin/locations -> HTTP {status} ({len(_obj(locs).get('locations', []))} lokasi)")
+    jumlah_lokasi = len(_obj(locs).get("locations", []))
+    print(f"  GET /admin/locations -> HTTP {status} ({jumlah_lokasi} lokasi)")
 
     uji = _obj(users)["users"][0]
     status, ubah = _panggil("PATCH", f"/admin/users/{uji['id']}", monitor, {"role": "admin"})

@@ -43,6 +43,15 @@ async def trigger_price_anomaly(
     200: tidak ada anomali → decision_id null, tanpa write.
     409: operation_key sama dipakai untuk payload berbeda.
     """
+    # CATATAN audit 2026-10-11 (BELUM selesai — butuh keputusan Roy):
+    # require_roles hanya menguji PERAN, bukan lokasi target, sehingga SPPG
+    # lokasi A bisa membuat decision ber-target lokasi B (POST /decisions
+    # menegakkan O-SEC-2 lewat _assert_target_location_allowed, di sini tidak).
+    # Menambahkan `exclusions.require_scope(user, payload.target_location_id)`
+    # mematikan panel chaos demo: SPPG Head ada di Jakarta sedangkan keenam
+    # batch seed ada di lokasi lain (batch FAIL di Surabaya).
+    # Pilihan: (a) kunci O-SEC-2 + sediakan batch di lokasi SPPG Head,
+    #          (b) biarkan lintas lokasi (panel jalan, celah tetap ada).
     try:
         outcome = await svc.run_price_anomaly_event(
             quote_id=payload.quote_id,
@@ -101,6 +110,8 @@ async def trigger_safety_disruption(
     Safety dihitung server-side dari temperature_log persisted (core
     Sprint 1, ambang 30 menit terkunci) — bukan dari payload browser.
     """
+    # Cakupan lokasi target: lihat catatan audit 2026-10-11 di
+    # trigger_price_anomaly (masih terbuka, butuh keputusan Roy).
     try:
         outcome = await svc3.run_safety_disruption_event(
             batch_id=payload.batch_id,

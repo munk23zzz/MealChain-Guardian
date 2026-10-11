@@ -147,18 +147,25 @@ async def compute_kpis(
         "(SELECT COALESCE(SUM(quantity_kg),0) FROM supply_records "
         "WHERE recorded_at >= :start AND recorded_at < :end"
         + (" AND location_id = :loc" if location_id else "") +
-        ") AS supply_kg",
+        ") AS supply_kg, "
+        # sample_count = jumlah event disposal yang benar-benar dipakai di window
+        # ini (dulu di-hardcode 2 sehingga angka sampel tidak mencerminkan data).
+        "(SELECT COUNT(*) FROM disposal_events "
+        "WHERE disposed_at >= :start AND disposed_at < :end"
+        + (" AND location_id = :loc" if location_id else "") +
+        ") AS disposal_events",
         {"start": start, "end": end, **loc_param},
     )
     disposed_kg = Decimal(str(fl_rows[0][0] or 0)) if fl_rows else Decimal(0)
     supply_kg = Decimal(str(fl_rows[0][1] or 0)) if fl_rows else Decimal(0)
+    disposal_count = int(fl_rows[0][2] or 0) if fl_rows else 0
     if disposed_kg > 0:
         denom = disposed_kg + supply_kg
         fl_rate = disposed_kg * 100 / denom if denom > 0 else None
         fl_metric = _metric(
             "Avoidable Food Loss", "percent", "available",
             value=fl_rate,
-            sample_count=2,  # dua disposal di test; live = jumlah event
+            sample_count=disposal_count,
             coverage=Decimal(1),
         )
     elif disposed_kg == 0 and supply_kg > 0:
