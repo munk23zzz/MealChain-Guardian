@@ -60,3 +60,6 @@ dist/
 
 # SDD scratch workspace (subagent-driven-development)
 .superpowers/
+
+# Kredensial lokal (access key AWS) — JANGAN pernah di-commit
+secrets/

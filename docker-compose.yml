@@ -35,6 +35,10 @@ services:
     # `environment:` di bawah (precedence: environment menang atas env_file).
     env_file:
       - .env
+      # Kunci AWS akun baru ada di berkas ini. Compose memakai berkas
+      # BELAKANGAN sebagai pemenang → nilainya menimpa .env, sehingga kunci
+      # baru tidak perlu masuk ke berkas yang di-track git.
+      - secrets/aws-app.env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mealchain}:${POSTGRES_PASSWORD:-mealchain_local}@postgres:5432/${POSTGRES_DB:-mealchain}
       DEMO_MODE: ${DEMO_MODE:-false}
@@ -51,14 +55,6 @@ services:
       # P3 integritas (S4-12): kunci ECDSA secp256k1 untuk tanda tangan dossier.
       # Nilai di .env; bila kosong → state `unsigned` jujur (bukan ttd palsu).
       SIGNING_KEY_HEX: ${SIGNING_KEY_HEX:-}
-      AWS_REGION: ${AWS_REGION:-us-west-2}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
-      AWS_BEARER_TOKEN_BEDROCK: ${AWS_BEARER_TOKEN_BEDROCK:-}
-      AGENTCORE_RUNTIME_ARN: ${AGENTCORE_RUNTIME_ARN:-}
-      AGENTCORE_GATEWAY_URL: ${AGENTCORE_GATEWAY_URL:-}
-      AGENTCORE_MEMORY_ID: ${AGENTCORE_MEMORY_ID:-}
       INFERHUB_URL: ${INFERHUB_URL:-}
       INFERHUB_API_KEY: ${INFERHUB_API_KEY:-}
       SAP_AI_CORE_API_URL: ${SAP_AI_CORE_API_URL:-}
