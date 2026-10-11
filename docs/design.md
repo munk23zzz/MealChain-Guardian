@@ -183,6 +183,10 @@ Aturan yang dipegang (sama seperti halaman lain): angka yang tidak ada ditulis
 **Surplus & Limbah** dibatasi peran SPPG (`sppg_head`, `sppg_nutritionist`) seperti
 acuan; sisanya semua peran.
 
+Konvensi tabel baru: tabel lebar WAJIB dibungkus `<div className="board-table-wrap">`
+(geser di dalam kartu) + petunjuk `.board-scroll-hint` yang hanya tampil ≤640px —
+tanpa itu tabel melebarkan seluruh halaman di 375px.
+
 ## 4. Design system
 
 ### Warna (design token — sinkron dengan `frontend/app/globals.css`, overhaul 2026-10-11)
