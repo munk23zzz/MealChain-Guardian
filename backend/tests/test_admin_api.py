@@ -31,6 +31,22 @@ def _user(role: str, location_id: uuid.UUID | None = None) -> User:
     )
 
 
+@pytest.fixture(autouse=True)
+def _pulihkan_override():
+    """WAJIB: `app.dependency_overrides` bertahan antar-tes dalam satu proses.
+
+    Tanpa pembersihan ini, identitas admin palsu bocor ke modul tes berikutnya
+    (gejala: ratusan tes lain jadi 403 "role tidak diizinkan" / 200 di tempat
+    yang seharusnya 401). Snapshot + restore, bukan sekadar `.clear()`.
+    """
+    simpan = dict(app.dependency_overrides)
+    try:
+        yield
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(simpan)
+
+
 @pytest.fixture
 def skenario():
     """Klien admin + snapshot master data yang dipulihkan sesudah tes."""
