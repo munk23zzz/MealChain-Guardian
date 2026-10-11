@@ -8,7 +8,18 @@
 
 import type { ReactNode } from "react";
 
-type NavId = "today" | "overview" | "kpi" | "recommendations" | "evidence" | "agent-log" | "demo-control";
+type NavId =
+  | "today"
+  | "overview"
+  | "kpi"
+  | "recommendations"
+  | "evidence"
+  | "safety"
+  | "surplus"
+  | "suppliers"
+  | "agent-log"
+  | "quality"
+  | "demo-control";
 
 const GLYPHS: Record<NavId, ReactNode> = {
   // sun (Hari Ini) — hari berjalan
@@ -67,6 +78,40 @@ const GLYPHS: Record<NavId, ReactNode> = {
     <>
       <path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3" />
       <path d="M14 2v4M8 10v4M16 18v4" />
+    </>
+  ),
+
+  // shield-check (Keamanan Pangan)
+  safety: (
+    <>
+      <path d="M12 3l7 3v6c0 4.2-2.9 7.9-7 9-4.1-1.1-7-4.8-7-9V6l7-3z" />
+      <path d="M9 12l2 2 4-4" />
+    </>
+  ),
+  // recycle (Surplus & Limbah)
+  surplus: (
+    <>
+      <path d="M7 19H5a2 2 0 0 1-1.7-3l2-3.2" />
+      <path d="M10.5 4.6a2 2 0 0 1 3.4 0l1.8 2.9" />
+      <path d="M17 19h2a2 2 0 0 0 1.7-3L18 11.4" />
+      <path d="M9 19h6" />
+      <path d="M4.5 12.8l2.4-1.4M15.6 8.6l2.3 1.3M12 5v3" />
+    </>
+  ),
+  // users (Pemasok)
+  suppliers: (
+    <>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" />
+    </>
+  ),
+  // gauge (Kualitas Agen)
+  quality: (
+    <>
+      <path d="M12 14l4-4" />
+      <path d="M3.3 18a9 9 0 1 1 17.4 0" />
+      <circle cx="12" cy="14" r="1" />
     </>
   ),
 };

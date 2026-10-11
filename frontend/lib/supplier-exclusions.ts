@@ -51,3 +51,8 @@ export function proposeSupplierRestoration(id: string, payload: {
     method: "POST", headers: headers(token), body: JSON.stringify(payload),
   });
 }
+
+/** Register eksklusi (semua pemasok yang sedang/ pernah dieksklusi). */
+export function fetchExclusions(token: string): Promise<{ items: SupplierExclusion[]; count: number }> {
+  return request(`/supplier-exclusions`, { headers: headers(token) });
+}

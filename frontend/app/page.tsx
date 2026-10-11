@@ -7,7 +7,7 @@
 // Konsol operasi & analisis HANYA untuk role approver (bgn_monitor
 // read-only: tab analisis tidak ditampilkan).
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   login,
@@ -57,9 +57,24 @@ import { formatKg, sumFiniteKg } from "../lib/overview-format";
 import { SupplierExclusionView } from "../components/SupplierExclusionPanel";
 import { fetchSupplierContext, type SupplierContext } from "../lib/supplier-exclusions";
 import DecisionEvidence from "../components/DecisionEvidence";
+import AgentQualityBoard from "../components/AgentQualityBoard";
+import FoodSafetyBoard from "../components/FoodSafetyBoard";
+import SurplusBoard from "../components/SurplusBoard";
+import SupplierBoard from "../components/SupplierBoard";
+import { runOf, type QualityRun } from "../lib/agent-quality";
+import { fetchExclusions } from "../lib/supplier-exclusions";
+import type { SupplierPair } from "../lib/suppliers-board";
 import { defaultEvidenceId } from "../lib/evidence";
 
 const APPROVER_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
+
+// Halaman Kualitas Agen & Pemasok menilai SAMPEL keputusan terakhir dalam
+// cakupan: jejak agen + putusan verifikator dipanggil per keputusan, jadi
+// jumlahnya dibatasi — angkanya ditulis apa adanya di halaman, bukan
+// diam-diam dipotong. Halaman Surplus & Limbah ikut aturan acuan: hanya
+// peran SPPG yang melihatnya.
+const EVALUATED_LIMIT = 8;
+const SURPLUS_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
 
 // Panel provider dihitung dari trace aktual (VERIFY/PREDICT/SUPERVISE);
 // tanpa karangan — agen tanpa langkah model tampil UNAVAILABLE.
@@ -127,7 +142,17 @@ export default function Home() {
   // + "today" (halaman "Hari Ini", permintaan Roy 2026-10-11). Halaman yang
   // dibuka setelah login tetap Overview — tab baru tidak mengubah alur demo.
   const [tab, setTab] = useState<
-    "today" | "overview" | "kpi" | "recommendations" | "evidence" | "agent-log" | "demo-control"
+    | "today"
+    | "overview"
+    | "kpi"
+    | "recommendations"
+    | "evidence"
+    | "safety"
+    | "surplus"
+    | "suppliers"
+    | "agent-log"
+    | "quality"
+    | "demo-control"
   >("overview");
   const [mapCommodity, setMapCommodity] = useState("telur");
   const [mapData, setMapData] = useState<any>(null);
@@ -217,6 +242,17 @@ export default function Home() {
   // Jam klien: null sampai komponen ter-mount supaya HTML server dan render
   // klien tidak berbeda (label waktu ditulis "—" sebelum jam siap).
   const [now, setNow] = useState<Date | null>(null);
+  // Kualitas Agen: run agen (jejak + putusan verifikator) untuk sampel keputusan.
+  const [qualityRuns, setQualityRuns] = useState<QualityRun[]>([]);
+  const [qualityLoading, setQualityLoading] = useState(false);
+  const [qualityError, setQualityError] = useState<string | null>(null);
+  // Pemasok: pemasok per keputusan sampel + register eksklusi.
+  const [supplierPairs, setSupplierPairs] = useState<SupplierPair[]>([]);
+  const [exclusions, setExclusions] = useState<unknown>(null);
+  const [supplierLoading, setSupplierLoading] = useState(false);
+  const [supplierError, setSupplierError] = useState<string | null>(null);
+  const [evaluateTick, setEvaluateTick] = useState(0);
+  const evaluatedKey = useRef<string | null>(null);
   // Feed traceable (arah Roy 2026-10-09): filter status = visual only;
   // EXPIRED TIDAK disembunyikan. Hook di level atas (rules-of-hooks).
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
@@ -294,6 +330,72 @@ export default function Home() {
     const iv = setInterval(() => loadToday(token), 60000);
     return () => clearInterval(iv);
   }, [token, loadToday]);
+
+  // Sampel keputusan untuk halaman Kualitas Agen & Pemasok: jejak agen +
+  // ringkasan persetujuan (yang memuat pemasok) diambil per keputusan.
+  const sampleIds = decisions.slice(0, EVALUATED_LIMIT).map((d) => d.decision_id);
+  const sampleKey = sampleIds.join(",");
+  useEffect(() => {
+    if (!token || !sampleKey) return;
+    if (tab !== "quality" && tab !== "suppliers") return;
+    const key = `${sampleKey}#${evaluateTick}`;
+    // Sampel yang sama tidak dinilai dua kali walau daftar keputusan dipolling.
+    if (evaluatedKey.current === key) return;
+    evaluatedKey.current = key;
+    let stopped = false;
+    const run = async () => {
+      if (tab === "quality") setQualityLoading(true);
+      else setSupplierLoading(true);
+      try {
+        const rows = await Promise.all(
+          sampleIds.map(async (decisionId) => {
+            const [trace, summary] = await Promise.all([
+              fetchDecisionTraces(decisionId, token).catch(() => null),
+              fetchApprovalSummary(decisionId, token).catch(() => null),
+            ]);
+            return { decisionId, trace, summary };
+          })
+        );
+        if (stopped) return;
+        const byId = new Map(decisions.map((d) => [d.decision_id, d]));
+        setQualityRuns(
+          rows.map(({ decisionId, trace, summary }) => runOf(byId.get(decisionId), trace, summary))
+        );
+        setSupplierPairs(
+          rows.map(({ decisionId, summary }) => ({
+            decisionId,
+            decisionType: byId.get(decisionId)?.decision_type ?? null,
+            commodity: summary?.commodity ?? null,
+            supplier: summary?.supplier ?? null,
+          }))
+        );
+        setQualityError(null);
+        setSupplierError(null);
+        if (tab === "suppliers") {
+          setExclusions(await fetchExclusions(token).catch(() => null));
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "gagal memuat";
+        if (stopped) return;
+        setQualityError(message);
+        setSupplierError(message);
+      } finally {
+        if (!stopped) {
+          setQualityLoading(false);
+          setSupplierLoading(false);
+        }
+      }
+    };
+    void run();
+    return () => {
+      stopped = true;
+    };
+    // decisions cukup lewat sampleKey (isi sampel); evaluatedKey menahan refetch
+    // saat daftar keputusan dipolling ulang.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, token, sampleKey, evaluateTick]);
+
+  const evaluatedCount = Math.min(decisions.length, EVALUATED_LIMIT);
 
   // Jam klien untuk label sisa waktu ("45 mnt lagi"): baru diisi setelah
   // mount supaya HTML server dan render klien sepakat, lalu diperbarui.
@@ -482,23 +584,46 @@ export default function Home() {
   // + tab "Hari Ini" (permintaan Roy 2026-10-11) sebagai halaman pertama;
   // demo-control approver-only; agent-log semua role (monitor read-only justru
   // butuh observability).
+  // Urutan mengikuti sidebar acuan (HackathonBil/MealchainGuardian): Hari Ini →
+  // Overview → Keputusan → Decision & Evidence → Keamanan Pangan → Surplus &
+  // Limbah → Pemasok → Agent Log → Kualitas Agen → KPI. Halaman yang di acuan
+  // dibatasi peran (Surplus & Limbah = peran SPPG) ikut dibatasi di sini.
   const navItems: {
-    id: "today" | "overview" | "kpi" | "recommendations" | "evidence" | "agent-log" | "demo-control";
+    id:
+      | "today"
+      | "overview"
+      | "kpi"
+      | "recommendations"
+      | "evidence"
+      | "safety"
+      | "surplus"
+      | "suppliers"
+      | "agent-log"
+      | "quality"
+      | "demo-control";
     label: string;
+    roles?: string[];
   }[] = [
     { id: "today", label: "Hari Ini" },
     { id: "overview", label: "Overview" },
-    { id: "kpi", label: "KPI" },
     {
       id: "recommendations",
       label: `Recommendations${decisions.length ? ` (${decisions.length})` : ""}`,
     },
     { id: "evidence", label: "Decision & Evidence" },
+    { id: "safety", label: "Keamanan Pangan" },
+    { id: "surplus", label: "Surplus & Limbah", roles: Array.from(SURPLUS_ROLES) },
+    { id: "suppliers", label: "Pemasok" },
     { id: "agent-log", label: "Agent Log" },
+    { id: "quality", label: "Kualitas Agen" },
+    { id: "kpi", label: "KPI" },
     ...(isApprover
       ? [{ id: "demo-control" as const, label: "Demo Control" }]
       : []),
   ];
+  const visibleNavItems = navItems.filter(
+    (item) => !item.roles || (role !== null && item.roles.includes(role))
+  );
 
   // Inisial avatar (rail + top bar) — satu sumber di lib/topbar.ts supaya
   // tidak ada dua cara menghitung yang bisa menyimpang.
@@ -551,7 +676,7 @@ export default function Home() {
           </button>
         </div>
         <nav className="side-tabs" aria-label="Bagian konsol">
-          {navItems.map((n) => (
+          {visibleNavItems.map((n) => (
             <button
               key={n.id}
               type="button"
@@ -1049,6 +1174,76 @@ export default function Home() {
               setSelectedId(decisionId);
             }}
             onOpenRecommendations={() => setTab("recommendations")}
+          />
+        )}
+
+        {/* Langkah 5 (permintaan Roy 2026-10-11): halaman sidebar ACUAN
+            (E:\hackathon\HackathonBil\MealchainGuardian) yang belum ada di repo
+            ini — Keamanan Pangan (/compliance), Surplus & Limbah (/surplus),
+            Pemasok (/suppliers), Kualitas Agen (/quality) — disesuaikan ke
+            endpoint yang benar-benar ada. Angka kosong ditulis "—". */}
+        {tab === "safety" && (
+          <FoodSafetyBoard
+            batches={batches}
+            now={now}
+            commodity={mapCommodity}
+            loading={batchesLoading}
+            error={batchesError}
+            onRetry={() => token && loadToday(token)}
+          />
+        )}
+
+        {tab === "surplus" && (
+          <SurplusBoard
+            locations={mapData?.locations ?? null}
+            commodity={mapData?.commodity ?? mapCommodity}
+            loading={!mapData && !mapError}
+            error={mapError}
+            onRetry={() => setMapRefresh((value) => value + 1)}
+            onOpenLocation={(location) => {
+              setActiveLocation(location);
+              setTab("overview");
+            }}
+          />
+        )}
+
+        {tab === "suppliers" && (
+          <SupplierBoard
+            pairs={supplierPairs}
+            exclusions={exclusions}
+            selectedDecisionId={selectedId}
+            supplierContext={supplierContext}
+            role={role ?? ""}
+            token={token ?? ""}
+            loading={supplierLoading}
+            error={supplierError}
+            onRetry={() => {
+              evaluatedKey.current = null;
+              setEvaluateTick((value) => value + 1);
+            }}
+            onOpenDecision={(decisionId) => {
+              if (decisionId) setSelectedId(decisionId);
+              setTab("evidence");
+            }}
+            onExclusionCreated={() => token && loadDecisions(token)}
+          />
+        )}
+
+        {tab === "quality" && (
+          <AgentQualityBoard
+            runs={qualityRuns}
+            evaluatedCount={evaluatedCount}
+            totalDecisions={decisions.length}
+            loading={qualityLoading}
+            error={qualityError}
+            onRetry={() => {
+              evaluatedKey.current = null;
+              setEvaluateTick((value) => value + 1);
+            }}
+            onOpenDecision={(decisionId) => {
+              setSelectedId(decisionId);
+              setTab("evidence");
+            }}
           />
         )}
 

@@ -47,6 +47,10 @@ Detail muncul dengan evidence → Approve → status di peta berubah
 | 2 | Overview Map (`/overview`) | Tab **Overview** — MapLibre + chart stok + tabel node ✓ | Wajib |
 | 3 | Recommendation Feed (`/recommendations`) | Tab **Recommendations** + Decision Detail digabung ✓ | Wajib |
 | 4 | Decision Detail & Evidence | Tab **Decision & Evidence** (Langkah 4, permintaan Roy 2026-10-11) — halaman tersendiri seperti sidebar acuan: ringkasan + identitas/tenggat, biaya, keamanan & pemasok, governance, riwayat iterasi, bukti tersimpan/ledger/ttd; klik kartu di feed membawa ke sini ✓ | Wajib |
+| — | *(acuan app)* **Keamanan Pangan** | Tab **Keamanan Pangan** (Langkah 5, permintaan Roy 2026-10-11) — halaman `/compliance` di acuan: ringkasan pengawasan batch (aman/gagal uji/perlu verifikasi), blokir batch gagal, daftar batch perlu segera dipakai, tabel status per batch (status, kesegaran, sisa masa layak) ✓ | Tambahan demo |
+| — | *(acuan app)* **Surplus & Limbah** | Tab **Surplus & Limbah** (Langkah 5) — halaman `/surplus` di acuan: neraca surplus/kekurangan komoditas aktif, rencana alokasi surplus→kekurangan (greedy, jarak dari koordinat), keadaan pencatatan limbah ✓ (hanya peran SPPG, seperti acuan) | Tambahan demo |
+| — | *(acuan app)* **Pemasok** | Tab **Pemasok** (Langkah 5) — halaman `/suppliers` di acuan: daftar pemasok + keandalan dari keputusan terakhir, register eksklusi, form usul eksklusi ✓ | Tambahan demo |
+| — | *(acuan app)* **Kualitas Agen** | Tab **Kualitas Agen** (Langkah 5) — halaman `/quality` di acuan: skor agregat (langkah/run, kesesuaian verifikator, tingkat fallback, keputusan diubah manusia, rata-rata durasi) + rincian per run dari jejak agen nyata ✓ | Tambahan demo |
 | 5 | Agent Activity Log (`/agent-log`) | Tab **Agent Log** — trace console + provider panel, pilih decision via dropdown ✓ | Wajib |
 | 6 | Approval Modal/Flow | Di dalam Decision Detail ✓ | Wajib |
 | 7 | KPI Dashboard (`/kpi`) | Tab **KPI** — 7 KPI live jujur + strip **Target KPI Demo Day** (PRD §5, berlabel "TARGET DEMO · bukan angka live") ✓ | Wajib |
@@ -156,6 +160,28 @@ Lima kartu, semuanya dari API, tanpa angka karangan:
 Logika murni (tanpa DOM, diuji) ada di `frontend/lib/today.ts`; komponennya
 `frontend/components/TodayDashboard.tsx`. Kelas `.today-*` di `globals.css`
 memakai token yang sudah ada (tidak ada token baru).
+
+### 3.8 Halaman sidebar acuan yang disesuaikan (Langkah 5 — permintaan Roy 2026-10-11)
+
+Aplikasi acuan `E:\hackathon\HackathonBil\MealchainGuardian` punya 9 halaman sidebar
+(`frontend/lib/nav.ts`); repo ini sudah setara untuk 5 (Hari Ini/Overview/Keputusan/
+Decision & Evidence/Agent Log) dan **kurang 4**. Keempatnya dibangun ulang di sini
+dengan **data API nyata** — bukan data contoh seperti di acuan:
+
+| Tab baru | Di acuan | Sumber angka di repo ini | Yang TIDAK dipakai dari acuan |
+|---|---|---|---|
+| Keamanan Pangan | `/compliance` | `GET /batches`: `safety_status`, `freshness_score`, `usable_until`, `quantity_kg` | papan CCP per-alat, bank sampel, jejak lot EPCIS (tidak ada endpoint) |
+| Surplus & Limbah | `/surplus` | `GET /balance/map?commodity=…`: `surplus_kg`, `shortage_kg`, `latitude`/`longitude`, `region` | pencatatan limbah/disposal (tidak ada tabel; ditulis "—" + alasan) |
+| Pemasok | `/suppliers` | pemasok pada `GET /decisions/{id}/approval-summary` (sampel 8 keputusan terakhir) + `GET /supplier-exclusions` | daftar pemasok mandiri, harga/PO (tidak ada endpoint daftar pemasok) |
+| Kualitas Agen | `/quality` (`MOCK_AGENT_RUNS` di acuan) | `GET /decisions/{id}/traces` + `verdict` pada `approval-summary` (sampel 8) | LLM-as-judge, biaya token (belum ada di repo) |
+
+Aturan yang dipegang (sama seperti halaman lain): angka yang tidak ada ditulis
+"**—**", dan halaman yang memakai **sampel** menyatakan jumlahnya terang-terangan
+("dinilai 8 dari 95 keputusan dalam cakupan"). Logika murni dipisah ke
+`lib/food-safety.ts`, `lib/surplus.ts`, `lib/suppliers-board.ts`, `lib/agent-quality.ts`
+(diuji) dan markup ke `components/*Board.tsx` (kontrak markup diuji). Halaman
+**Surplus & Limbah** dibatasi peran SPPG (`sppg_head`, `sppg_nutritionist`) seperti
+acuan; sisanya semua peran.
 
 ## 4. Design system
 

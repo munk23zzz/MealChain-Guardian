@@ -111,7 +111,9 @@ export function evidenceRowsFromDossier(dossier: ComplianceDossier): EvidenceRow
 // ---------------------------------------------------------------------------
 
 /** Nada warna untuk satu baris fakta (dipetakan ke kelas CSS oleh komponen). */
-export type FactTone = "ok" | "warn" | "danger" | "muted";
+// "plain" = tanpa penekanan warna (kelas .fact-plain sudah ada di globals.css);
+// diketik eksplisit supaya halaman baru tidak perlu menulis `tone: undefined`.
+export type FactTone = "plain" | "ok" | "warn" | "danger" | "muted";
 
 export type FactRow = {
   label: string;

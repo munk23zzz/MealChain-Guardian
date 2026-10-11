@@ -32,25 +32,8 @@ import {
   decisionFacts,
   safetyFacts,
   supplierFact,
-  type FactRow,
 } from "../lib/evidence";
-
-/** Daftar fakta label→nilai (dipakai semua kartu di halaman ini). */
-function FactList({ rows }: { rows: FactRow[] }) {
-  return (
-    <dl className="fact-list">
-      {rows.map((row) => (
-        <div className="fact-row" key={row.label}>
-          <dt>{row.label}</dt>
-          <dd className={`fact-value fact-${row.tone ?? "plain"}`}>
-            {row.value}
-            {row.hint && <span className="fact-hint">{row.hint}</span>}
-          </dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
+import FactList, { type FactRow } from "./FactList";
 
 export default function DecisionEvidence({
   decisions,
