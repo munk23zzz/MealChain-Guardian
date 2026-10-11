@@ -89,6 +89,11 @@ Detail muncul dengan evidence → Approve → status di peta berubah
 - Sidebar: filter komoditas (telur/ayam/beras/wortel), filter status feed
 - Untuk SPPG Head/Nutritionist: peta fit ke bounds lokasi-lokasi dari data
   (dropdown cakupan terkunci ke SPPG-nya; koridor tetap terlihat untuk konteks)
+- **Zoom milik pengguna tidak disentuh sinkronisasi** (arah Roy 2026-10-11):
+  peta dibangun SEKALI, polling `/balance/map` tiap 5 detik hanya memperbarui
+  isi penanda (angka/label/posisi/popup). `fitBounds` hanya saat pertama tampil
+  atau saat pilihan lokasi di dropdown cakupan BERGANTI (`nextMapFocus`,
+  `pinSignatures`/`pinDiff` di `lib/map-console.ts`)
 
 ### 3.2 Recommendation Feed
 - List card, sorted by urgency (safety issue > regional imbalance > price anomaly)
