@@ -64,3 +64,24 @@ Topologi model setelah migrasi (`MAX_FALLBACK_SLOTS = 12`, slot diisi sekuensial
 6. `freetier:GetAccountPlanState` tidak diizinkan untuk user `megu`, jadi status free-plan tidak
    dapat dibaca lewat API; kuota Bedrock dibaca lewat `service-quotas` (nama service di SDK:
    `service-quotas`, bukan `servicequotas`).
+
+## AgentCore di akun baru (2026-10-11)
+
+- **Memory DIBUAT**: `mealchain_memory_01-soAIdH8viw`
+  (`arn:aws:bedrock-agentcore:us-west-2:624606539664:memory/mealchain_memory_01-soAIdH8viw`),
+  status saat dibuat `CREATING` — provisioning berjalan di sisi AWS. ID dicatat di `.env`
+  sebagai `AGENTCORE_MEMORY_ID`.
+- **Gateway TERBLOKIR IZIN**: `CreateGateway` mewajibkan `roleArn`, dan user `megu` ditolak
+  `iam:CreateRole`. Perlu sekali dibuat oleh pemilik akun (root): role
+  `mealchain-agentcore-gateway-role` dengan trust policy ke `bedrock-agentcore.amazonaws.com`.
+  Setelah ada, Gateway (`AWS_IAM`, protokol MCP) + GatewayTarget berisi 10 tool dari
+  `backend/agent_tools/gateway_config.json` dapat dibuat.
+- **Fakta jujur yang harus diingat**: `AGENTCORE_GATEWAY_URL` **tidak dibaca kode mana pun**
+  (grep `backend/app` dan `frontend/` nihil), dan frontend tidak pernah menyebut "AgentCore" —
+  jadi mengisi nilai itu baru bersifat dokumentasi sampai ada kode yang mengonsumsinya.
+- **Adapter data-plane Memory belum ada**: `AgentCoreMemoryBackend.write/read` sengaja melempar
+  `MemoryUnavailableError` (tanpa fallback diam). Akibatnya `AGENTCORE_MEMORY_ID` yang terisi
+  membuat `memory_provider_from_env()` melaporkan `agentcore`, sedangkan jalur runtime aplikasi
+  tetap memakai provider `local`. Suite tetap **630 passed / 3 skipped**. Item lanjutan:
+  implementasi adapter data-plane (`CreateEvent`/`ListEvents`/`RetrieveMemoryRecords`) + tes.
+
