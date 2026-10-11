@@ -246,13 +246,21 @@ def _default_env_chain() -> list:
 
 
 def _default_sap_rpt_caller() -> Callable | None:
-    """Factory caller SAP-RPT-1.6 dari env (kosong → None, jujur)."""
-    if not (os.environ.get("SAP_AI_CORE_API_URL") or "").strip():
-        return None
-    if not (os.environ.get("SAP_AI_CORE_CLIENT_ID") or "").strip():
+    """Factory caller SAP-RPT-1.6 dari env (kosong → None, jujur).
+
+    S4-10: mengembalikan pemanggil NYATA ke deployment SAP-RPT-1.6 di SAP AI
+    Core (`/predict`). Tak ada panggilan jaringan saat membangun — hanya
+    validasi env; env belum lengkap → None supaya `run_forecast` memakai
+    chain/statistik dan tidak mengklaim SAP.
+    """
+    from app.ai_providers.sap_ai_core_caller import build_rpt_caller
+
+    try:
+        return build_rpt_caller()
+    except RuntimeError:
         return None
 
-    def sap_rpt(prompt: str) -> str:  # pragma: no cover - butuh jaringan
-        raise RuntimeError("SAP-RPT-1.6 caller belum terimplementasi penuh")
 
-    return sap_rpt
+def sap_rpt_caller_from_env() -> Callable | None:
+    """Alias publik untuk pemanggil produksi (orkestrator Event 1)."""
+    return _default_sap_rpt_caller()

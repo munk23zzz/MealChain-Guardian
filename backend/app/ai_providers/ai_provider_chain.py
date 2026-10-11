@@ -3,6 +3,8 @@
 Menyambungkan model_registry → callers nyata:
 - ModelRef bedrock  → app.ai_providers.bedrock_caller.build_model_caller
 - ModelRef inferhub → app.ai_providers.inferhub_caller.build_caller
+- ModelRef sap_ai_core → app.ai_providers.sap_ai_core_caller (S4-10): `rpt` =
+  SAP-RPT-1.6 tabular (`/predict`), `llm` = general model (`/invoke`)
 - ModelRef agentcore → stub eksplisit yang melempar NotImplementedError
   (honest-unavailable sampai AgentCore Runtime benar-benar disiapkan)
 
@@ -21,6 +23,18 @@ from app.ai_providers.model_registry import (
 )
 
 
+def _dead_slot_caller(message: str) -> Callable[[str], str]:
+    """Slot tanpa konfigurasi: gagal SAAT DIPANGGIL, bukan saat dibangun.
+
+    Chain tetap mencatat slot ini di `attempts` (jejak jujur) lalu lanjut.
+    """
+
+    def _dead_slot(prompt: str) -> str:
+        raise RuntimeError(message)
+
+    return _dead_slot
+
+
 def _build_ref_caller(ref: ModelRef) -> Callable[[str], str]:
     if ref.kind == "bedrock":
         from app.ai_providers.bedrock_caller import build_model_caller
@@ -34,12 +48,20 @@ def _build_ref_caller(ref: ModelRef) -> Callable[[str], str]:
         except RuntimeError as exc:
             # env Inferhub belum lengkap: slot jadi "mati" — gagal saat
             # dipanggil, chain lanjut ke slot berikutnya (jujur di attempts)
-            message = str(exc)
+            return _dead_slot_caller(str(exc))
+    if ref.kind == "sap_ai_core":
+        # S4-10: SAP AI Core. Id deployment NYATA dibaca dari env oleh modul
+        # caller; `rpt` = SAP-RPT-1.6 (tabular), selain itu general LLM.
+        from app.ai_providers import sap_ai_core_caller
 
-            def _dead_slot(prompt: str) -> str:
-                raise RuntimeError(message)
-
-            return _dead_slot
+        try:
+            if ref.model_id == "rpt":
+                return sap_ai_core_caller.build_rpt_caller()
+            if ref.model_id in ("", "llm"):
+                return sap_ai_core_caller.build_llm_caller()
+            return sap_ai_core_caller.build_llm_caller(deployment_id=ref.model_id)
+        except RuntimeError as exc:
+            return _dead_slot_caller(str(exc))
     if ref.kind == "agentcore":
         # O-AI (S4-00): caller invoke runtime NYATA — bukan stub lagi.
         from app.ai_providers.agentcore_caller import build_runtime_caller

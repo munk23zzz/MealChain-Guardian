@@ -19,7 +19,10 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
-from app.ai_providers.forecast_client import run_forecast
+from app.ai_providers.forecast_client import (
+    run_forecast,
+    sap_rpt_caller_from_env,
+)
 from app.ai_providers.verifier_client import run_verifier
 from app.core.config import settings
 from app.db import create_engine, create_session_maker
@@ -251,7 +254,11 @@ async def _run_event1(
         history = [float(r.quantity_kg) for r in demand_rows]
         if history:
             forecast = run_forecast(
-                history, horizon_days=FORECAST_HORIZON_DAYS
+                history,
+                horizon_days=FORECAST_HORIZON_DAYS,
+                # S4-10: provider NYATA bila env SAP AI Core lengkap; None
+                # (env kosong/tes terisolasi) → chain/statistik seperti sebelumnya.
+                sap_rpt=sap_rpt_caller_from_env(),
             )
             predict_out = {
                 "forecast_qty_kg": forecast.forecast_qty_kg,

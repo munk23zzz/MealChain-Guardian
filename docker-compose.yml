@@ -64,6 +64,9 @@ services:
       SAP_AI_CORE_API_URL: ${SAP_AI_CORE_API_URL:-}
       SAP_AI_CORE_AUTH_URL: ${SAP_AI_CORE_AUTH_URL:-}
       SAP_AI_CORE_CLIENT_ID: ${SAP_AI_CORE_CLIENT_ID:-}
+      SAP_AI_CORE_RESOURCE_GROUP: ${SAP_AI_CORE_RESOURCE_GROUP:-}
+      SAP_AI_CORE_DEPLOYMENT_ID_LLM: ${SAP_AI_CORE_DEPLOYMENT_ID_LLM:-}
+      SAP_AI_CORE_DEPLOYMENT_ID_RPT: ${SAP_AI_CORE_DEPLOYMENT_ID_RPT:-}
       # SAP_AI_CORE_CLIENT_SECRET TIDAK di sini: nilainya memuat `$` sehingga
       # interpolasi compose memotongnya. Diambil verbatim dari env_file di atas.
       SUPERVISOR_MODEL_PRIMARY: ${SUPERVISOR_MODEL_PRIMARY:-}

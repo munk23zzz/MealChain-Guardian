@@ -10,6 +10,7 @@ dibaca; frontend hanya menampilkan identitas model/provider dari trace
 Format ref di env:
 - prefix Inferhub: `cc/`, `cb/`, `cbcn/`, `cx/`, `ali/` (katalog valid, lihat
   probe 2026-10-06/07 — model truncated/unknown ditolak API Inferhub)
+- prefix SAP AI Core: `sap-ai-core:llm` / `sap-ai-core:rpt` / `sap-ai-core:<deployment-id>`
 - ARN AgentCore: `arn:aws:bedrock:...:agent-runtime/...` → slot AgentCore
 - selain itu: model Bedrock (inference profile us./global., dsb.)
 
@@ -24,6 +25,10 @@ from dataclasses import dataclass
 from typing import Literal
 
 INFERHUB_PREFIXES = ("cc/", "cb/", "cbcn/", "cx/", "ali/")
+# S4-10: SAP AI Core = provider nyata milik paket akses SAP. Bentuk ref:
+# `sap-ai-core:llm` (general model), `sap-ai-core:rpt` (SAP-RPT-1.6), atau
+# `sap-ai-core:<deployment-id>` (eksplisit).
+SAP_AI_CORE_PREFIX = "sap-ai-core:"
 AGENT_PREFIX_ENV = {
     "supervisor": {
         "primary": "SUPERVISOR_MODEL_PRIMARY",
@@ -51,7 +56,7 @@ AGENT_FALLBACK_TEMPLATE = {
     "forecast": "FORECAST_MODEL_FALLBACK_{}",
 }
 
-ModelKind = Literal["bedrock", "inferhub", "agentcore"]
+ModelKind = Literal["bedrock", "inferhub", "agentcore", "sap_ai_core"]
 
 
 @dataclass(frozen=True)
@@ -72,6 +77,11 @@ def parse_model_ref(raw: str | None) -> ModelRef | None:
         return ModelRef(kind="agentcore", agentcore_arn=value)
     if any(value.startswith(p) for p in INFERHUB_PREFIXES):
         return ModelRef(kind="inferhub", model_id=value)
+    if value.startswith(SAP_AI_CORE_PREFIX):
+        return ModelRef(
+            kind="sap_ai_core",
+            model_id=value[len(SAP_AI_CORE_PREFIX) :].strip(),
+        )
     return ModelRef(kind="bedrock", model_id=value)
 
 

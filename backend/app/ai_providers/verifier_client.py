@@ -209,16 +209,10 @@ def _default_sap_ai_core_callers() -> tuple[Callable | None, Callable | None]:
 
     Dipisah agar test bisa menyuntik callable tanpa env.
     """
-    api_url = (os.environ.get("SAP_AI_CORE_API_URL") or "").strip()
-    if not api_url:
-        return None, None
-    # Implementasi HTTP nyata menyusul saat kredensial penuh tersedia;
-    # untuk sekarang URL tanpa client id tetap dianggap belum siap.
-    client_id = (os.environ.get("SAP_AI_CORE_CLIENT_ID") or "").strip()
-    if not client_id:
-        return None, None
+    from app.ai_providers.sap_ai_core_caller import build_llm_caller
 
-    def sap_primary(prompt: str) -> str:  # pragma: no cover - butuh jaringan
-        raise RuntimeError("SAP AI Core caller belum terimplementasi penuh")
-
-    return sap_primary, None
+    try:
+        # S4-10: general model SAP AI Core (`/invoke`), bukan stub lagi.
+        return build_llm_caller(), None
+    except RuntimeError:
+        return None, None

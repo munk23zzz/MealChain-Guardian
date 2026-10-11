@@ -65,6 +65,18 @@ MODEL_ENV_KEYS += ["VERIFIER_MODEL_PRIMARY"]
 MODEL_ENV_KEYS += [f"VERIFIER_MODEL_FALLBACK_{i}" for i in range(1, 13)]
 MODEL_ENV_KEYS += ["FORECAST_MODEL"]
 MODEL_ENV_KEYS += [f"FORECAST_MODEL_FALLBACK_{i}" for i in range(1, 13)]
+# S4-10: SAP AI Core = provider NYATA. Kredensialnya ikut diisolasi supaya
+# suite tetap hermetik (tanpa jaringan); test yang memang mau memanggil AI
+# Core ditandai @pytest.mark.live.
+MODEL_ENV_KEYS += [
+    "SAP_AI_CORE_AUTH_URL",
+    "SAP_AI_CORE_API_URL",
+    "SAP_AI_CORE_CLIENT_ID",
+    "SAP_AI_CORE_CLIENT_SECRET",
+    "SAP_AI_CORE_RESOURCE_GROUP",
+    "SAP_AI_CORE_DEPLOYMENT_ID_LLM",
+    "SAP_AI_CORE_DEPLOYMENT_ID_RPT",
+]
 
 
 @pytest.fixture(autouse=True)
