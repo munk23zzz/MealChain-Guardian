@@ -49,7 +49,7 @@ docker compose up -d
 
 ```bash
 curl http://localhost:8000/health        # 200
-curl -o /dev/null -s -w "%{http_code}\n" http://localhost:3000   # 200
+curl -o /dev/null -s -w "%{http_code}\n" http://localhost:3010   # 200 (FRONTEND_PORT di .env)
 
 # test backend + frontend
 docker compose exec backend pytest
@@ -59,7 +59,13 @@ docker compose exec frontend npm run test
 Angka yang diharapkan (per 2026-10-10): backend ~567 passed, frontend 107 passed.
 Kalau beda tipis karena commit baru, wajar — yang penting exit 0.
 
-## 4. Akun demo (login UI di localhost:3000)
+## 4. Akun demo (login UI di localhost:3010)
+
+> Konsol aktif ada di **`http://localhost:3010`** (nilai `FRONTEND_PORT` di `.env`).
+> Di mesin demo port 3000 dipakai aplikasi acuan (`HackathonBil\MealchainGuardian`)
+> yang dibiarkan berjalan untuk pembanding, jadi jangan kembalikan ke 3000 tanpa
+> mematikan proses itu dulu.
+
 
 | Role | Kegunaan |
 |---|---|

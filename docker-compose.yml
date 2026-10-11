@@ -97,7 +97,12 @@ services:
       - ./backend:/app
       # Seed sintetis read-only (Task 10) — jangan di-copy ke image
       - ./data:/data:ro
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # --reload sudah aktif dan TERBUKTI bekerja dari sisi host (uji 11 Okt:
+    # GET /health berubah dalam 15 detik setelah berkas disunting dari Windows),
+    # jadi TIDAK perlu WATCHFILES_FORCE_POLLING di sini. Cakupan pantau
+    # dirapatkan ke paket app/ dan __pycache__ dikecualikan supaya penulisan
+    # bytecode saat pytest tidak memicu reload beruntun.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/app --reload-exclude "*__pycache__*"
     networks:
       - mealchain-network
 
@@ -110,6 +115,14 @@ services:
       - backend
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:${BACKEND_PORT:-8000}
+      # Dev experience (arah Roy 2026-10-11): bind mount dari drive E: (exFAT)
+      # tidak meneruskan notifikasi perubahan berkas ke kontainer, jadi watcher
+      # webpack Next tidak pernah tahu berkas disunting — edit dari Kiro/Hermes
+      # dulu hanya terpakai setelah `docker compose restart frontend` (terukur:
+      # 75 detik menunggu, 0 baris kompilasi di log). Polling membuat Next
+      # memeriksa berkas berkala sehingga edit langsung terpakai.
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     volumes:
