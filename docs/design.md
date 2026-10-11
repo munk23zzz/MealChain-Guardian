@@ -210,6 +210,46 @@ ber-border tanpa bayangan.
 --status-warning: #F9A825   /* tight / needs verification — teks badge pakai navy */
 --status-danger:  #C62828   /* FAIL / shortage */
 ```
+
+Token tambahan hasil audit UI/UX 2026-10-11 (semua sudah diuji kontras WCAG AA
+secara terhitung, bukan dikira-kira):
+
+```
+--ink-subtle:     #5F6E77   /* teks tersier & pemisah: 5,27:1 di putih, 4,88:1 di latar */
+--line-input:     #7C8B9B   /* batas KONTROL interaktif (input/select/chip/tombol): >= 3:1 (WCAG 1.4.11) */
+--ok-bg/--ok-border/--ok-ink             /* #ECFDF5 / #A7F3D0 / #065F46 — lencana aman (7,3:1) */
+--warn-bg/--warn-border/--warn-ink       /* #FFFBEB / #FDE68A / #8A5A00 — lencana & TEKS peringatan (5,9:1) */
+--danger-bg/--danger-border/--danger-ink /* #FEF2F2 / #FECACA / #991B1B — lencana bahaya (7,6:1) */
+--neutral-bg/--neutral-border/--neutral-ink /* #F1F5F9 / #CBD5E1 / #475569 — lencana netral (6,9:1) */
+--ink-inverse:    #FFFFFF   /* teks di atas latar berwarna (rail, top bar, tombol primer) */
+--on-dark-danger: #FF8A80   /* aksi merusak di atas rail biru */
+--skeleton-base:  #E8EDF2   /* kerangka memuat */
+--dur-1/--dur-2/--dur-3     /* 90ms tekan, 160ms hover/fokus, 240ms panel */
+--ease-standard:  cubic-bezier(0.2, 0.8, 0.2, 1)
+--space-1..--space-6        /* 4/8/12/16/24/32px */
+--text-meta: 12.5px ; --text-micro: 12px   /* lantai ukuran teks */
+```
+
+Aturan yang mengikat setelah audit (jangan dilanggar saat menambah UI):
+
+- Token **garis** jangan dipakai sebagai **warna teks** — inilah penyebab temuan
+  kontras terbesar (`.rec-sep` & `.kpi-breadcrumb-sep` memakai `--line-strong`
+  = 1,49:1; sekarang `--ink-subtle` = 5,27:1).
+- Warna status **#F9A825 dilarang sebagai warna teks** di latar terang (1,97:1);
+  teks peringatan memakai `--warn-ink`. `--status-warning` tetap untuk lencana/tint.
+- Batas kontrol interaktif memakai `--line-input` (≥3:1); `--line`/`--line-strong`
+  hanya untuk garis dekoratif.
+- Teks di atas rail/top bar biru minimal `rgba(255,255,255,0.92)` (4,64:1 di
+  #0969DA). Nilai 0,45–0,6 sebelumnya gagal AA (label nav 2,84:1).
+- Ukuran teks data ≥ 12px (`--text-micro`/`--text-meta`).
+- Target sentuh ≥ 44px pada `(pointer: coarse)` **atau** `(max-width: 720px)`
+  untuk nav rail, chip, pil komoditas, pilih cakupan, dan tombol ikon.
+- Setiap kontrol punya umpan balik `:active` (transform 1px + peredupan, 90ms)
+  dan cincin fokus `:focus-visible`; gerak dimatikan saat
+  `prefers-reduced-motion: reduce` (umpan balik peredupan tetap ada).
+- Keadaan memuat memakai satu pola: komponen `LoadingState` (skeleton +
+  `role="status"` + `aria-busy`) — bukan teks "Memuat…" polos.
+
 Panel peta memakai palet aplikasi yang sama (arah Roy 2026-10-11): peta TERANG
 apa adanya, legenda putih, pin hijau/merah/abu dari `--status-*` — tidak ada
 palet gelap kedua dan tidak ada token tambahan untuk peta.

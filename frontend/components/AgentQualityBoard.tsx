@@ -14,6 +14,7 @@ import {
   qualityMetrics,
   type QualityRun,
 } from "../lib/agent-quality";
+import { LoadingState } from "./LoadingState";
 
 export default function AgentQualityBoard({
   runs,
@@ -35,7 +36,7 @@ export default function AgentQualityBoard({
   const metrics = qualityMetrics(runs);
 
   return (
-    <section className="board-page">
+    <section className="board-page" aria-busy={loading || undefined}>
       <PageHeader
         title="Kualitas Agen"
         description="Seberapa baik rantai agen bekerja pada keputusan terakhir cakupan Anda: langkah yang diambil, kesesuaian dengan verifikator, dan berapa yang akhirnya diubah manusia."
@@ -107,7 +108,7 @@ export default function AgentQualityBoard({
         <h2>Rincian per run</h2>
         {runs.length === 0 ? (
           <p className="evidence-note">
-            {loading ? "Memuat jejak agen…" : "Belum ada run agen yang tercatat untuk keputusan dalam cakupan ini."}
+            {loading ? <LoadingState label="Memuat jejak agen…" /> : "Belum ada run agen yang tercatat untuk keputusan dalam cakupan ini."}
           </p>
         ) : (
           <>

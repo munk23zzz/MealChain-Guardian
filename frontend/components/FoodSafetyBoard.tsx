@@ -14,11 +14,14 @@ import {
   type SafetyRow,
 } from "../lib/food-safety";
 import { formatKg } from "../lib/overview-format";
+import { LoadingState } from "./LoadingState";
 
 export default function FoodSafetyBoard({
   batches,
   now,
   commodity,
+  commodities,
+  onChangeCommodity,
   loading = false,
   error = null,
   onRetry,
@@ -26,6 +29,8 @@ export default function FoodSafetyBoard({
   batches: unknown[] | null;
   now: Date | null;
   commodity?: string | null;
+  commodities?: string[];
+  onChangeCommodity?: (c: string) => void;
   loading?: boolean;
   error?: string | null;
   onRetry?: () => void;
@@ -35,7 +40,7 @@ export default function FoodSafetyBoard({
   const rows = safetyRows(batches, clock);
 
   return (
-    <section className="board-page">
+    <section className="board-page" aria-busy={loading || undefined}>
       <PageHeader
         title="Keamanan Pangan"
         description="Status keamanan tiap batch, kesegaran, dan sisa masa layak pakai — dibaca langsung dari /batches. Batch gagal uji diblokir dari alokasi."
@@ -46,6 +51,23 @@ export default function FoodSafetyBoard({
           </span>
         }
       />
+
+      {commodities && commodities.length > 0 && onChangeCommodity && (
+        <div className="commodity-filters filter-card" role="group" aria-label="Komoditas peta">
+          <span className="commodity-filters-label">Komoditas:</span>
+          {commodities.map((c) => (
+            <button
+              key={c}
+              type="button"
+              className={`commodity-pill${commodity === c ? " commodity-pill-active" : ""}`}
+              aria-pressed={commodity === c}
+              onClick={() => onChangeCommodity(c)}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error ? (
         <article className="card">
@@ -123,7 +145,7 @@ export default function FoodSafetyBoard({
         <h2>Status keamanan per batch</h2>
         {rows.length === 0 ? (
           <p className="evidence-note">
-            {loading ? "Memuat batch…" : "Belum ada batch pada cakupan Anda."}
+            {loading ? <LoadingState label="Memuat batch…" /> : "Belum ada batch pada cakupan Anda."}
           </p>
         ) : (
           <>

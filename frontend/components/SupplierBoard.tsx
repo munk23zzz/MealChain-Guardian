@@ -16,6 +16,7 @@ import {
   type SupplierPair,
 } from "../lib/suppliers-board";
 import type { SupplierContext } from "../lib/supplier-exclusions";
+import { LoadingState } from "./LoadingState";
 
 export default function SupplierBoard({
   pairs,
@@ -51,7 +52,7 @@ export default function SupplierBoard({
   );
 
   return (
-    <section className="board-page">
+    <section className="board-page" aria-busy={loading || undefined}>
       <PageHeader
         title="Pemasok"
         description="Kepercayaan pemasok dalam cakupan Anda, register eksklusi, dan usul eksklusi baru — semua lewat endpoint /supplier-exclusions."
@@ -114,7 +115,7 @@ export default function SupplierBoard({
         {roster.length === 0 ? (
           <p className="evidence-note">
             {loading
-              ? "Memuat pemasok…"
+              ? <LoadingState label="Memuat pemasok…" />
               : "Belum ada keputusan dengan pemasok pada cakupan ini."}
           </p>
         ) : (

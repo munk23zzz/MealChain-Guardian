@@ -13,10 +13,13 @@ import {
   wasteFacts,
 } from "../lib/surplus";
 import { formatKg } from "../lib/overview-format";
+import { LoadingState } from "./LoadingState";
 
 export default function SurplusBoard({
   locations,
   commodity,
+  commodities,
+  onChangeCommodity,
   loading = false,
   error = null,
   onRetry,
@@ -24,6 +27,8 @@ export default function SurplusBoard({
 }: {
   locations: unknown[] | null;
   commodity?: string | null;
+  commodities?: string[];
+  onChangeCommodity?: (c: string) => void;
   loading?: boolean;
   error?: string | null;
   onRetry?: () => void;
@@ -33,7 +38,7 @@ export default function SurplusBoard({
   const plan = allocationPlan(locations, 6);
 
   return (
-    <section className="board-page">
+    <section className="board-page" aria-busy={loading || undefined}>
       <PageHeader
         title="Surplus & Limbah"
         description="Surplus yang bisa dialihkan antar-SPPG, rencana alokasinya, dan keadaan pencatatan limbah — dari /balance/map untuk komoditas yang dipilih di peta."
@@ -44,6 +49,23 @@ export default function SurplusBoard({
           </span>
         }
       />
+
+      {commodities && commodities.length > 0 && onChangeCommodity && (
+        <div className="commodity-filters filter-card" role="group" aria-label="Komoditas peta">
+          <span className="commodity-filters-label">Komoditas:</span>
+          {commodities.map((c) => (
+            <button
+              key={c}
+              type="button"
+              className={`commodity-pill${commodity === c ? " commodity-pill-active" : ""}`}
+              aria-pressed={commodity === c}
+              onClick={() => onChangeCommodity(c)}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error ? (
         <article className="card">
@@ -97,7 +119,7 @@ export default function SurplusBoard({
         <h2>Rencana alokasi surplus</h2>
         {plan.length === 0 ? (
           <p className="evidence-note">
-            {loading ? "Memuat neraca…" : "Tidak ada pasangan surplus→kekurangan yang bisa dialokasikan saat ini."}
+            {loading ? <LoadingState label="Memuat neraca…" /> : "Tidak ada pasangan surplus→kekurangan yang bisa dialokasikan saat ini."}
           </p>
         ) : (
           <>

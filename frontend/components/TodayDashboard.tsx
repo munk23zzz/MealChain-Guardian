@@ -27,6 +27,7 @@ import {
   type TodayDecision,
   type TodayLocation,
 } from "../lib/today";
+import { LoadingState } from "./LoadingState";
 
 type KpiEnvelope = {
   metrics?: {
@@ -208,7 +209,7 @@ export default function TodayDashboard({
               )}
             </p>
           ) : batchesLoading || !batches ? (
-            <p className="today-card-note">Memuat data batch…</p>
+            <p className="today-card-note"><LoadingState label="Memuat data batch…" /></p>
           ) : (
             <>
               <p className="today-card-note">

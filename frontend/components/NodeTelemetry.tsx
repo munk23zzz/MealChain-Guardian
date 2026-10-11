@@ -15,6 +15,7 @@ import {
 } from "../lib/overview-format";
 import { nodeGauges, pinTone } from "../lib/map-console";
 import { ALL_LOCATIONS } from "../lib/topbar";
+import { LoadingState } from "./LoadingState";
 
 function coordinate(value: number | string | null | undefined): string {
   const numeric = Number(value);
@@ -49,7 +50,7 @@ export default function NodeTelemetry({
         {!requested && (
           <p className="node-telemetry-empty">
             {loading
-              ? "Memuat kondisi lokasi…"
+              ? <LoadingState label="Memuat kondisi lokasi…" />
               : "Belum ada lokasi yang disorot. Pilih lokasi lewat dropdown cakupan di bar atas untuk membuka telemetri node ini."}
           </p>
         )}
