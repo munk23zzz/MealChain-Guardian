@@ -2050,6 +2050,18 @@ a:focus-visible {
   color: var(--ink-subtle);
   white-space: nowrap;
 }
+/* Status "sedang mengirim" di tabel Pemasok (keputusan pemilik 2026-10-16).
+   Token hijau-aman: fakta positif, bukan peringatan. Teksnya memuat jumlah
+   kiriman, berat, dan batas layak, jadi sengaja dibiarkan membungkus. */
+.shipping-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--ok-border);
+  border-radius: 999px;
+  background: var(--ok-bg);
+  color: var(--ok-ink);
+  font-size: var(--text-meta);
+}
 .reach-filter {
   display: flex;
   flex-wrap: wrap;
@@ -2076,6 +2088,14 @@ a:focus-visible {
 /* Di luar jangkauan: bentuk KOSONG dengan garis putus-putus, supaya beda dari
    pemasok terdekat (penuh) dan dari "dikecualikan" (merah penuh). Warna tetap token. */
 .map-legend-box-shape-far { background: var(--surface); border: 1px dashed var(--ink-subtle); }
+/* Sedang mengirim (keputusan pemilik 2026-10-16): CINCIN hijau-aman. Bentuk ini
+   sengaja bukan nada kelima yang saling menutup - cincin dipakai bersama warna
+   nada mana pun, jadi pemasok pengirim aktif tetap memperlihatkan keandalan dan
+   jangkauannya. Warna memakai token, tanpa hex mentah (design.md §4). */
+.map-legend-box-shape-shipping { background: var(--surface); border: 2px solid var(--status-safe); }
+.map-pin-supplier-shipping .map-pin-supplier-dot {
+  box-shadow: 0 0 0 2px var(--status-safe), 0 1px 4px rgba(15, 23, 42, 0.35);
+}
 .map-pin-supplier { width: 12px; height: 12px; }
 .map-pin-supplier-dot {
   position: absolute;

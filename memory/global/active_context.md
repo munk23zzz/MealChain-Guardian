@@ -36,6 +36,18 @@
   `transport_supplier_leg`, `supplier_leg_km`, `supplier_leg_reference` + alias `logistics`. Panel
   biaya Decision & Evidence memecah baris angkut bila pecahannya ada. Gerbang: pytest 782 lulus /
   3 skip, ruff bersih, vitest 545, tsc 0, lint 0 (build tidak dijalankan — dev hidup).
+- **F9 SELESAI 2026-10-16 — data pemasok: profil kanonik + "sedang mengirim"** (permintaan pemilik).
+  Audit: 14/14 pemasok kanonik kosong profil; hanya 3 dipakai batch. Profil kanonik kini **diturunkan
+  dari batch kiriman** (`backend/app/seed/supplier_profile.py`; komoditas = total kg terbesar, seri →
+  batch terbaru, masih seri → kosong; sertifikasi = nilai terbanyak; **kapasitas tidak diturunkan**),
+  seeder mengisi **hanya celah kosong** → A/B/C Cianjur = telur + HACCP, 11 kanonik tanpa batch tetap
+  kosong. "Sedang mengirim" = batch **`usable_until >= sekarang`** (`app/core/supplier_shipping.py`),
+  dikirim sebagai kunci `shipping` per baris `GET /suppliers`; di peta jadi **cincin** pada pin
+  (`map-pin-supplier-shipping`), bukan nada kelima; tabel Pemasok menampilkan kalimat kiriman.
+  Saat ini 2 pengirim aktif (A: 3 kiriman/1.400 kg telur s/d 2 Nov; B: 1 kiriman/600 kg s/d 26 Okt,
+  1 gagal uji — dilaporkan). Bukti: `docs/verification/fase-9.md`, skrip
+  `backend/scripts/verifikasi_pemasok_kirim.py`. Gerbang: pytest 806 lulus / 3 skip, ruff bersih,
+  vitest 552 lulus/60 berkas, tsc 0, lint 0.
 - Sprint 4 IN PROGRESS — Roy yang menandai DONE, jangan ditandai agent.
 
 ## Next step (urutan eksekusi)
@@ -46,9 +58,13 @@
    skor/eligibilitas tidak bergeser; koordinat kosong → biaya 0 + label, tidak ditebak.
 
 ➡️ Kandidat penyempurnaan berikutnya (belum diminta pemilik):
-   header tunggal untuk halaman gabungan KPI & Kualitas Agen (sekarang tiap bagian masih membawa
-   `PageHeader` sendiri), dan keputusan atas **fixture 4 kasus skrip** yang angka SDC-nya sudah
-   berbeda dari mesin bahkan sebelum 7d (DB 16.206.000 vs mesin ±14.169.953).
+   (a) **kiriman aktif hanya 2 pemasok** (A/B Cianjur) karena definisi "sedang mengirim" memakai batch
+   yang sudah ada — kalau demo butuh lebih banyak pengirim di peta, itu keputusan data baru (angka kg +
+   tujuan harus dari pemilik); (b) `capacity_kg_per_week` kanonik masih kosong (tidak ada sumber data);
+   (c) 11 pemasok kanonik tanpa batch tetap tanpa komoditas/sertifikasi;
+   (d) utang lama yang belum ditutup: `TEST_DATABASE_URL` (suite pytest masih menulis ke DB demo →
+   residu `users`/`decisions`), fixture 4 kasus skrip di `app/api/demo.py`, rotate `SIGNING_KEY_HEX` +
+   `POSTGRES_PASSWORD`, dan header tunggal halaman gabungan KPI & Kualitas Agen.
 
 ➡️ (konteks lama, sudah selesai) **Fase 7 — pemasok mock yang benar-benar terjangkau SPPG Jakarta.** Keputusan sudah dikunci
 (plan §7.4, 2026-10-15): klaster Jabodetabek + penyangga Jawa Barat ≤ ~150 km, 10–12 pemasok,

@@ -31,6 +31,8 @@ import {
   supplierReachMeta,
   supplierReachNote,
   withinReachKm,
+  shippingLabel,
+  supplierShipping,
   supplierLayerSummary,
   supplierPinClass,
   supplierPinRows,
@@ -242,19 +244,22 @@ describe("ringkasan layer & gerbang zoom", () => {
   });
 
   it("legenda pemasok memuat SETIAP nada yang bisa dipakai pin", () => {
-    // "far" masuk di Fase 7b; kalau nada baru ditambahkan tanpa legenda, tes ini
-    // gagal — peta tidak boleh punya makna yang tidak dijelaskan.
+    // "far" masuk di Fase 7b, "shipping" (pengirim aktif) 2026-10-16; kalau
+    // makna baru ditambahkan tanpa legenda, tes ini gagal — peta tidak boleh
+    // punya makna yang tidak dijelaskan.
     expect(SUPPLIER_PIN_LEGEND.map((entry) => entry.tone)).toEqual([
       "ok",
       "low",
       "excluded",
       "far",
+      "shipping",
     ]);
     expect(SUPPLIER_PIN_LEGEND.map((entry) => entry.label)).toEqual([
       "Pemasok",
       "Keandalan rendah",
       "Dikecualikan",
       "Di luar jangkauan",
+      "Sedang mengirim",
     ]);
   });
 });
@@ -439,5 +444,106 @@ describe("jarak & jangkauan (Fase 7b)", () => {
 
     const rows = supplierPinRows(PAYLOAD_JANGKAUAN);
     expect(isWithinReach(rows[3], SUPPLIER_REACH_KM)).toBe(false);
+  });
+});
+
+// Keputusan pemilik 2026-10-16: pemasok yang "sedang mengirim" = punya batch
+// kiriman yang MASIH LAYAK hari ini (`usable_until >= sekarang`). Backend yang
+// menghitung (`shipping` per baris `GET /suppliers`); modul ini hanya menampilkan
+// angka itu apa adanya — tidak ada perhitungan ulang di frontend.
+describe("pemasok yang sedang mengirim", () => {
+  const ITEM = {
+    id: "sup-a",
+    name: "Supplier A Cianjur",
+    location: "Cianjur",
+    commodity: "telur",
+    certification_status: "haccp",
+    reliability_score: 0.92,
+    latitude: -6.854,
+    longitude: 107.1306,
+    distance_km: 82.5,
+    excluded_at_hub: false,
+    excluded_scope_locations: [],
+    shipping: {
+      count: 3,
+      total_kg: 1400,
+      until: "2026-11-02T12:00:00+00:00",
+      commodities: ["telur"],
+      safety_fail_count: 0,
+    },
+  };
+
+  it("membaca blok shipping dari respons server", () => {
+    const [row] = supplierPinRows({ items: [ITEM] });
+
+    expect(row.shipping).toEqual({
+      count: 3,
+      totalKg: 1400,
+      until: "2026-11-02T12:00:00+00:00",
+      commodities: ["telur"],
+      safetyFailCount: 0,
+    });
+  });
+
+  it("pemasok tanpa kiriman layak tidak diklaim sedang mengirim", () => {
+    const [row] = supplierPinRows({ items: [{ ...ITEM, shipping: null }] });
+
+    expect(row.shipping).toBeNull();
+    expect(supplierShipping(null)).toBeNull();
+    expect(supplierShipping({})).toBeNull();
+    expect(supplierShipping({ count: 0 })).toBeNull();
+    // count 0 = tidak sedang mengirim (bukan entri "0 kiriman").
+    expect(shippingLabel({ count: 0, totalKg: 0, until: null, commodities: [], safetyFailCount: 0 })).toBe(
+      "—"
+    );
+  });
+
+  it("kalimat status menyebut jumlah kiriman, berat, dan batas layak", () => {
+    const row = supplierPinRows({ items: [ITEM] })[0];
+
+    expect(shippingLabel(row.shipping)).toBe(
+      "Sedang mengirim · 3 kiriman · 1.400 kg · s/d 2 Nov 2026"
+    );
+    expect(shippingLabel(null)).toBe("—");
+  });
+
+  it("kiriman yang gagal uji disebut, bukan disembunyikan", () => {
+    const label = shippingLabel({
+      count: 1,
+      totalKg: 600,
+      until: "2026-10-26T12:00:00+00:00",
+      commodities: ["telur"],
+      safetyFailCount: 1,
+    });
+
+    expect(label).toContain("1 gagal uji");
+  });
+
+  it("pin pengirim dapat kelas sendiri tanpa mengubah warna nadanya", () => {
+    const row = supplierPinRows({ items: [ITEM] })[0];
+    const kelas = supplierPinClass(row, true, SUPPLIER_REACH_KM);
+
+    expect(kelas).toContain("map-pin-supplier-shipping");
+    expect(kelas).toContain("map-pin-supplier-ok");
+  });
+
+  it("pembaca layar & popup menyebut kiriman yang berjalan", () => {
+    const row = supplierPinRows({ items: [ITEM] })[0];
+
+    expect(supplierAccessibleLabel(row, SUPPLIER_REACH_KM)).toContain(
+      "sedang mengirim 3 kiriman"
+    );
+    expect(supplierPopupLines(row, SUPPLIER_REACH_KM).lines).toContain(
+      "Sedang mengirim: 3 kiriman · 1.400 kg telur · s/d 2 Nov 2026"
+    );
+  });
+
+  it("ringkasan layer dan legenda menyebut pengirim aktif", () => {
+    const rows = supplierPinRows({
+      items: [ITEM, { ...ITEM, id: "sup-b", name: "Supplier B Cianjur", shipping: null }],
+    });
+
+    expect(supplierLayerSummary(rows, SUPPLIER_REACH_KM).shipping).toBe(1);
+    expect(SUPPLIER_PIN_LEGEND.map((entry) => entry.tone)).toContain("shipping");
   });
 });

@@ -14,6 +14,7 @@ TDD RED dulu — endpoint read-only `GET /suppliers`:
 
 import json
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -94,28 +95,46 @@ def test_supplier_item_carries_map_profile(client, tokens):
 
 
 def test_supplier_without_profile_reports_null_not_zero(client, tokens):
-    """14 pemasok kanonik tidak punya kapasitas/sertifikasi → NULL, bukan 0.
+    """Yang TIDAK punya sumber tetap NULL, bukan 0.
 
     NULL berarti "tidak diketahui"; 0 akan berbohong (seolah kapasitasnya nol)
     dan bisa memicu perhitungan yang salah di UI.
+
+    Perubahan sadar 2026-10-16 (keputusan pemilik): profil yang BISA diturunkan
+    dari batch kiriman kini terisi — `Supplier A Cianjur` (3 batch telur) jadi
+    `commodity=telur`, `certification_status=haccp`. Yang tidak punya batch
+    (mis. `Supplier Medan-1`) tetap kosong, dan `capacity_kg_per_week` selalu
+    kosong karena tidak ada satu pun sumber datanya.
     """
-    resp = client.get("/suppliers?q=Supplier%20A%20Cianjur", headers=tokens["bgn_monitor"])
-    item = resp.json()["items"][0]
-    assert item["capacity_kg_per_week"] is None
-    assert item["certification_status"] is None
-    assert item["commodity"] is None
-    assert item["latitude"] is not None  # koordinat di-backfill migrasi 012
+    telur = client.get(
+        "/suppliers?q=Supplier%20A%20Cianjur", headers=tokens["bgn_monitor"]
+    ).json()["items"][0]
+    assert telur["commodity"] == "telur"
+    assert telur["certification_status"] == "haccp"
+    assert telur["capacity_kg_per_week"] is None
+    assert telur["latitude"] is not None  # koordinat di-backfill migrasi 012
+
+    tanpa_batch = client.get(
+        "/suppliers?q=Supplier%20Medan-1", headers=tokens["bgn_monitor"]
+    ).json()["items"][0]
+    assert tanpa_batch["commodity"] is None
+    assert tanpa_batch["certification_status"] is None
+    assert tanpa_batch["capacity_kg_per_week"] is None
 
 
 def test_suppliers_filter_by_commodity(client, tokens):
     """Telur: 4 pemasok klaster Jakarta + 2 pemasok hub lain (Surabaya, Medan).
 
-    Angka ini sadar berubah di Fase 7 (2026-10-15): dulu 3 per hub × 10 kota = 10.
+    Angka ini sadar berubah dua kali: Fase 7 (2026-10-15) 10 → 6; lalu
+    2026-10-16 profil kanonik A/B/C Cianjur terisi dari batch kiriman telur
+    → 6 + 3 = 9.
     """
     resp = client.get("/suppliers?commodity=telur", headers=tokens["bgn_monitor"])
     body = resp.json()
-    assert body["count"] == 6
+    assert body["count"] == 9
     assert {i["commodity"] for i in body["items"]} == {"telur"}
+    # Kanonik yang kini ikut tersaring membuktikan profilnya memang terisi.
+    assert "Supplier A Cianjur" in {i["name"] for i in body["items"]}
 
 
 def test_suppliers_filter_by_location(client, tokens):
@@ -234,6 +253,9 @@ def test_suppliers_response_is_json_serializable_contract(client, tokens):
         "address",
         "contact_name",
         "distance_km",
+        # Keputusan pemilik 2026-10-16: kunci `shipping` (ringkasan kiriman layak)
+        # ikut ke kontrak JSON — null bila pemasok tidak sedang mengirim.
+        "shipping",
         "excluded_at_hub",
         "excluded_scope_locations",
     }
@@ -326,3 +348,76 @@ def test_max_distance_is_range_checked(client, tokens, value):
         ).status_code
         == 422
     )
+
+
+# ---------------------------------------------------------------------------
+# "Sedang mengirim" (keputusan pemilik 2026-10-16): pemasok yang batch kirimannya
+# MASIH LAYAK hari ini. Endpoint yang menghitung - peta/daftar hanya menampilkan.
+# ---------------------------------------------------------------------------
+
+
+def _sql_shipping(supplier_name: str) -> dict:
+    """Angka pembanding langsung dari DB (API vs SQL), tanpa lewat endpoint."""
+    engine = create_engine(DB_URL)
+    now = datetime.now(UTC)
+    with engine.connect() as conn:
+        total, kg, until, fails = conn.execute(
+            text(
+                """
+                SELECT count(*), coalesce(sum(b.quantity_kg), 0), max(b.usable_until),
+                       count(*) FILTER (WHERE b.safety_status = 'fail')
+                FROM batches b
+                JOIN suppliers s ON s.id = b.supplier_id
+                WHERE s.name = :name AND b.usable_until >= :now
+                """
+            ),
+            {"name": supplier_name, "now": now},
+        ).one()
+    return {"count": total, "total_kg": float(kg), "until": until, "fails": fails}
+
+
+def test_item_carries_shipping_field(client, tokens):
+    """Setiap baris membawa kunci `shipping` (null bila tidak sedang mengirim)."""
+    body = client.get("/suppliers?limit=200", headers=tokens["sppg_head"]).json()
+
+    assert all("shipping" in item for item in body["items"])
+    no_batch = next(i for i in body["items"] if i["name"] == "Telur Berkah Jakarta")
+    assert no_batch["shipping"] is None
+
+
+def test_shipping_matches_sql_for_active_supplier(client, tokens):
+    """Supplier A Cianjur: 3 kiriman layak, 1.400 kg, semuanya telur — sama dengan SQL."""
+    body = client.get(
+        "/suppliers?q=Supplier%20A%20Cianjur", headers=tokens["sppg_head"]
+    ).json()
+    item = next(i for i in body["items"] if i["name"] == "Supplier A Cianjur")
+    sql = _sql_shipping("Supplier A Cianjur")
+
+    assert sql["count"] == 3, "prasyarat: seed kanonik utuh"
+    assert item["shipping"]["count"] == sql["count"]
+    assert item["shipping"]["total_kg"] == sql["total_kg"] == 1400.0
+    assert item["shipping"]["commodities"] == ["telur"]
+    assert item["shipping"]["safety_fail_count"] == 0
+    assert datetime.fromisoformat(item["shipping"]["until"]) == sql["until"]
+
+
+def test_shipping_reports_batch_that_failed_testing(client, tokens):
+    """Supplier B Cianjur mengirim telur 600 kg yang gagal uji - dilaporkan, bukan disembunyikan."""
+    body = client.get(
+        "/suppliers?q=Supplier%20B%20Cianjur", headers=tokens["sppg_head"]
+    ).json()
+    item = next(i for i in body["items"] if i["name"] == "Supplier B Cianjur")
+
+    assert item["shipping"]["count"] == 1
+    assert item["shipping"]["safety_fail_count"] == 1
+
+
+def test_expired_batch_is_not_counted(client, tokens):
+    """Supplier C Cianjur: kirimannya layak sampai 10 Sep → tidak dihitung hari ini."""
+    body = client.get(
+        "/suppliers?q=Supplier%20C%20Cianjur", headers=tokens["sppg_head"]
+    ).json()
+    item = next(i for i in body["items"] if i["name"] == "Supplier C Cianjur")
+
+    assert _sql_shipping("Supplier C Cianjur")["count"] == 0
+    assert item["shipping"] is None

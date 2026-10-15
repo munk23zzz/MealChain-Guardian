@@ -31,6 +31,7 @@ from app.models import (
     Supplier,
     SupplyRecord,
 )
+from app.seed.supplier_profile import derive_supplier_profiles
 
 SEED_PATH = Path(os.environ.get("SEED_PATH", "/data/seed/sprint1_seed.json"))
 
@@ -89,12 +90,21 @@ def build_seed_rows(reference_time: datetime, seed_path: Path | None = None) -> 
         }
         for com in data["commodities"]
     ]
+    # Profil pemasok kanonik DITURUNKAN dari batch kiriman (keputusan pemilik
+    # 2026-10-16): `commodity` + `certification_status` saja, dan hanya bila
+    # datanya memang ada. `capacity_kg_per_week` TIDAK diturunkan - tidak ada
+    # sumbernya. Aturan lengkap + tes: app/seed/supplier_profile.py.
+    profiles = derive_supplier_profiles(
+        data["batches"], [sup["name"] for sup in data["suppliers"]]
+    )
     suppliers = [
         {
             "id": stable_uuid("supplier", sup["name"]),
             "name": sup["name"],
             "location": sup["location"],
             "reliability_score": Decimal(str(sup["reliability_score"])),
+            "commodity": profiles[sup["name"]]["commodity"],
+            "certification_status": profiles[sup["name"]]["certification_status"],
         }
         for sup in data["suppliers"]
     ]
@@ -321,21 +331,45 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
                             name=item["name"],
                             location_id=loc_by_name[item["location"]].id,
                             reliability_score=item["reliability_score"],
+                            commodity_id=(
+                                com_by_name[item["commodity"]].id
+                                if item["commodity"] in com_by_name
+                                else None
+                            ),
+                            certification_status=item["certification_status"],
                         )
                     )
                     counts["suppliers"] = counts.get("suppliers", 0) + 1
-                elif existing.reliability_score != item["reliability_score"]:
-                    # Baris kanonik warisan (dibuat sebelum skor JSON terpasang,
-                    # jadi mewarisi DEFAULT 0.80 kolom) DIKOREKSI ke nilai berkas
-                    # kanonik. Tanpa ini, skor pemasok yang dipakai mesin
-                    # rekomendasi (`services/recommendation_service.py`) diam-diam
-                    # bukan skor yang tertulis di `data/seed/sprint1_seed.json`.
-                    # Hanya skor: id lokasi/komoditas/sertifikasi tidak disentuh
-                    # supaya seeder tetap tidak merombak identitas baris.
-                    existing.reliability_score = item["reliability_score"]
-                    counts["suppliers_corrected"] = (
-                        counts.get("suppliers_corrected", 0) + 1
-                    )
+                else:
+                    if existing.reliability_score != item["reliability_score"]:
+                        # Baris kanonik warisan (dibuat sebelum skor JSON terpasang,
+                        # jadi mewarisi DEFAULT 0.80 kolom) DIKOREKSI ke nilai berkas
+                        # kanonik. Tanpa ini, skor pemasok yang dipakai mesin
+                        # rekomendasi (`services/recommendation_service.py`) diam-diam
+                        # bukan skor yang tertulis di `data/seed/sprint1_seed.json`.
+                        # Hanya skor: id lokasi/komoditas/sertifikasi tidak disentuh
+                        # supaya seeder tetap tidak merombak identitas baris.
+                        existing.reliability_score = item["reliability_score"]
+                        counts["suppliers_corrected"] = (
+                            counts.get("suppliers_corrected", 0) + 1
+                        )
+                    # Profil kanonik: ISI HANYA CELAH KOSONG (keputusan pemilik
+                    # 2026-10-16). Nilai yang sudah terisi - mis. pemasok demo
+                    # Jabodetabek - tidak pernah ditimpa, dan kapasitas mingguan
+                    # tidak disentuh sama sekali karena tidak ada sumbernya.
+                    if existing.commodity_id is None and item["commodity"] in com_by_name:
+                        existing.commodity_id = com_by_name[item["commodity"]].id
+                        counts["suppliers_commodity_filled"] = (
+                            counts.get("suppliers_commodity_filled", 0) + 1
+                        )
+                    if (
+                        existing.certification_status is None
+                        and item["certification_status"]
+                    ):
+                        existing.certification_status = item["certification_status"]
+                        counts["suppliers_certification_filled"] = (
+                            counts.get("suppliers_certification_filled", 0) + 1
+                        )
             await session.flush()
 
             loc_by_name = {

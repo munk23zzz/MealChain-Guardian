@@ -10,6 +10,13 @@
 //   filter komoditas aktif — lebih baik tidak tampil daripada menebak.
 // - Keandalan yang tidak diketahui punya nada sendiri ("unknown"), bukan
 //   diam-diam dianggap normal.
+// - Angka kiriman datang APA ADANYA dari server (`shipping` pada `GET /suppliers`):
+//   frontend tidak menghitung ulang "sedang mengirim", karena itu keputusan
+//   pemilik 2026-10-16 (batch masih layak hari ini) yang harus tetap satu suara
+//   dengan backend.
+
+import { formatDate } from "./datetime";
+import { formatKg } from "./overview-format";
 
 /** Ambang "keandalan rendah" — sama untuk pin, legenda, dan kartu ringkasan. */
 export const LOW_RELIABILITY = 0.6;
@@ -61,6 +68,22 @@ export function shouldLoadSuppliers(tab: string, token?: string | null): boolean
 
 export type SupplierPinTone = "excluded" | "far" | "low" | "ok" | "unknown";
 
+/**
+ * Ringkasan kiriman yang SEDANG BERJALAN untuk satu pemasok (dari server).
+ *
+ * `count > 0` berarti pemasok itu punya batch kiriman yang masih layak hari ini.
+ * `safetyFailCount` dipisah supaya kiriman yang gagal uji tidak bisa hilang di
+ * balik kata "sedang mengirim".
+ */
+export type SupplierShipping = {
+  count: number;
+  totalKg: number;
+  /** ISO `usable_until` terjauh, atau null bila server tidak melaporkannya. */
+  until: string | null;
+  commodities: string[];
+  safetyFailCount: number;
+};
+
 export type SupplierPinRow = {
   id: string;
   name: string;
@@ -74,6 +97,8 @@ export type SupplierPinRow = {
   distanceKm: number | null;
   excludedAtHub: boolean;
   excludedScopes: string[];
+  /** Kiriman aktif (layak hari ini) menurut server, atau null. */
+  shipping: SupplierShipping | null;
 };
 
 function text(value: unknown): string | null {
@@ -86,6 +111,46 @@ function number(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
+}
+
+/**
+ * Blok `shipping` dari satu baris `GET /suppliers`: hanya dianggap "sedang
+ * mengirim" bila `count > 0`. Nilai aneh dari server (kosong/bukan angka)
+ * menghasilkan null — bukan 0 yang bisa terbaca "sedang mengirim 0 kiriman".
+ */
+export function supplierShipping(raw: unknown): SupplierShipping | null {
+  if (raw === null || raw === undefined || typeof raw !== "object") return null;
+  const fields = raw as Record<string, unknown>;
+  const count = number(fields.count);
+  if (count === null || count <= 0) return null;
+  const commodities = Array.isArray(fields.commodities)
+    ? fields.commodities.map((item) => text(item)).filter((item): item is string => Boolean(item))
+    : [];
+  return {
+    count,
+    totalKg: number(fields.total_kg) ?? 0,
+    until: text(fields.until),
+    commodities,
+    safetyFailCount: number(fields.safety_fail_count) ?? 0,
+  };
+}
+
+/**
+ * Kalimat status kiriman untuk tabel/legenda.
+ *
+ * Contoh: "Sedang mengirim · 3 kiriman · 1.400 kg · s/d 2 Nov 2026".
+ * Pemasok yang tidak sedang mengirim → "—" (pemanggil yang memilih kata lain,
+ * mis. "Aktif", supaya tidak ada dua tempat yang mengklaim hal berbeda).
+ */
+export function shippingLabel(shipping: SupplierShipping | null): string {
+  if (!shipping || shipping.count <= 0) return "—";
+  const parts = [
+    `${shipping.count} kiriman`,
+    formatKg(shipping.totalKg),
+    shipping.until ? `s/d ${formatDate(shipping.until)}` : null,
+    shipping.safetyFailCount > 0 ? `${shipping.safetyFailCount} gagal uji` : null,
+  ].filter((part): part is string => Boolean(part));
+  return `Sedang mengirim · ${parts.join(" · ")}`;
 }
 
 /**
@@ -120,6 +185,7 @@ export function supplierPinRows(raw: unknown): SupplierPinRow[] {
       distanceKm: number(record.distance_km),
       excludedAtHub: record.excluded_at_hub === true || scopes.includes(text(record.location) ?? ""),
       excludedScopes: scopes,
+      shipping: supplierShipping(record.shipping),
     });
   }
   return rows;
@@ -249,7 +315,10 @@ export function supplierPinClass(
   showLabels = true,
   reachKm?: number | null
 ): string {
-  return `map-pin map-pin-supplier map-pin-supplier-${supplierPinTone(row, reachKm)}${
+  // Kelas "shipping" DITAMBAHKAN, bukan menggantikan kelas nada: warna tetap
+  // berarti keandalan/jangkauan, sedangkan cincin berarti kiriman berjalan.
+  const shipping = row.shipping ? " map-pin-supplier-shipping" : "";
+  return `map-pin map-pin-supplier map-pin-supplier-${supplierPinTone(row, reachKm)}${shipping}${
     showLabels ? "" : " map-pin-supplier-compact"
   }`;
 }
@@ -282,6 +351,7 @@ export function supplierAccessibleLabel(
     `hub ${row.hub}`,
   ];
   if (row.distanceKm !== null) parts.push(reachLabel(row, reachKm));
+  if (row.shipping) parts.push(`sedang mengirim ${row.shipping.count} kiriman`);
   const suffix =
     row.excludedAtHub && row.excludedScopes.length
       ? ` (dikecualikan di ${row.excludedScopes.join(", ")})`
@@ -302,6 +372,16 @@ export function supplierPopupLines(
     `Sertifikasi: ${certificationLabel(row.certification)}`,
   ];
   if (row.distanceKm !== null) lines.push(`Jarak: ${reachLabel(row, reachKm)}`);
+  if (row.shipping) {
+    const commodities = row.shipping.commodities.join(", ");
+    const berat = `${formatKg(row.shipping.totalKg)}${commodities ? ` ${commodities}` : ""}`;
+    const sampai = row.shipping.until ? ` · s/d ${formatDate(row.shipping.until)}` : "";
+    const gagal =
+      row.shipping.safetyFailCount > 0 ? ` · ${row.shipping.safetyFailCount} gagal uji` : "";
+    lines.push(
+      `Sedang mengirim: ${row.shipping.count} kiriman · ${berat}${sampai}${gagal}`
+    );
+  }
   if (row.excludedAtHub && row.excludedScopes.length) {
     lines.push(`Dikecualikan di: ${row.excludedScopes.join(", ")}`);
   }
@@ -315,6 +395,8 @@ export type SupplierLayerSummary = {
   low: number;
   ok: number;
   unknown: number;
+  /** Berapa pemasok yang sedang mengirim barang (kiriman masih layak). */
+  shipping: number;
 };
 
 /**
@@ -334,6 +416,7 @@ export function supplierLayerSummary(
     low: rows.filter((row) => row.reliability !== null && row.reliability < LOW_RELIABILITY).length,
     ok: rows.filter((row) => row.reliability !== null && row.reliability >= LOW_RELIABILITY).length,
     unknown: rows.filter((row) => row.reliability === null).length,
+    shipping: rows.filter((row) => row.shipping !== null).length,
   };
 }
 
@@ -391,10 +474,20 @@ export function supplierLabelsVisible(zoom: number): boolean {
   return Number.isFinite(zoom) && zoom >= SUPPLIER_LABEL_MIN_ZOOM;
 }
 
-/** Legenda layer pemasok — makna yang benar-benar dipakai nada pin. */
-export const SUPPLIER_PIN_LEGEND: readonly { tone: SupplierPinTone; label: string }[] = [
+/**
+ * Legenda layer pemasok — makna yang benar-benar dipakai nada pin.
+ *
+ * `shipping` bukan nada kelima yang saling menutup: itu cincin TAMBAHAN pada pin
+ * (lihat `supplierPinClass`), jadi pemasok pengirim aktif tetap memperlihatkan
+ * warna keandalan/jangkauannya.
+ */
+export const SUPPLIER_PIN_LEGEND: readonly {
+  tone: SupplierPinTone | "shipping";
+  label: string;
+}[] = [
   { tone: "ok", label: "Pemasok" },
   { tone: "low", label: "Keandalan rendah" },
   { tone: "excluded", label: "Dikecualikan" },
   { tone: "far", label: "Di luar jangkauan" },
+  { tone: "shipping", label: "Sedang mengirim" },
 ] as const;

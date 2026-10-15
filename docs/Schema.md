@@ -68,6 +68,26 @@ Kolom profil & peta (migrasi `012_supplier_profile`, Fase 2 rencana 2026-10-14):
   Sebelum Fase 7: 30 pemasok demo (3 per hub × 10 kota) — jumlah itu **berubah sadar**, aturan
   kanonik vs demo tidak.
 
+Profil pemasok kanonik — **DITURUNKAN dari batch, bukan dikarang** (keputusan pemilik 2026-10-16):
+
+- `commodity_id` dan `certification_status` 14 pemasok kanonik diisi dari batch kiriman mereka
+  di `data/seed/sprint1_seed.json` (`app/seed/supplier_profile.py`): komoditas = total
+  `quantity_kg` terbesar (seri → batch terbaru; masih seri → `NULL`), sertifikasi = nilai
+  terbanyak (seri → `NULL`). Seeder mengisi **hanya bila kolomnya masih NULL** — nilai yang
+  sudah ada tidak pernah ditimpa.
+- Hanya **3 pemasok kanonik punya batch** (`Supplier A/B/C Cianjur` → `telur` + `haccp`); 11
+  sisanya tidak punya batch sehingga tetap `NULL` (jujur, bukan nilai default).
+- `capacity_kg_per_week` kanonik **tetap NULL**: batch hanya memuat berat per kiriman, bukan
+  kapasitas mingguan — tidak ada satu pun sumbernya. Kolom ini terisi hanya untuk 21 baris demo.
+- Catatan: baris kanonik **punya** koordinat di DB (di-backfill migrasi 012); yang tidak memuat
+  koordinat hanyalah berkas seed kanoniknya.
+
+Turunan "sedang mengirim" (`GET /suppliers`, kunci `shipping`) — keputusan pemilik 2026-10-16:
+pemasok dianggap sedang mengirim bila punya batch dengan `usable_until >= sekarang`
+(`app/core/supplier_shipping.py`). Bentuknya `{count, total_kg, until, commodities,
+safety_fail_count}`; `null` bila tidak ada. Batch dengan `safety_status='fail'` tetap dihitung
+dan dilaporkan lewat `safety_fail_count`.
+
 ## 2. Data operasional (time-series-ish)
 
 ### `supply_records`

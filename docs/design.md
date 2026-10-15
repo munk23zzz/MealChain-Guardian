@@ -111,9 +111,18 @@ Detail muncul dengan evidence → Approve → status di peta berubah
   `map-pin-supplier-excluded` untuk pemasok di register eksklusi, `map-pin-supplier-far` untuk
   pemasok **di luar jangkauan** — titik kosong bergaris putus-putus, warna tetap token), label
   (`aria-label`) berbunyi `"<nama> — pemasok <komoditas>, keandalan NN%, hub <kota>, dalam/di luar
-  jangkauan (N km)"`, legenda "Pemasok · Keandalan rendah · Dikecualikan · Di luar jangkauan".
+  jangkauan (N km)", legenda "Pemasok · Keandalan rendah · Dikecualikan · Di luar jangkauan ·
+  Sedang mengirim".
   Pemasok **tanpa koordinat tidak dipin** (tidak ada titik karangan) dan jumlahnya dinyatakan di
   samping tombol.
+- **Penanda "sedang mengirim" (keputusan pemilik 2026-10-16):** pemasok yang punya batch kiriman
+  **masih layak** (`usable_until >= sekarang`, dihitung backend dan dikirim sebagai kunci
+  `shipping` pada `GET /suppliers`) mendapat **cincin** di sekeliling titiknya
+  (`map-pin-supplier-shipping`, cincin `--status-safe`) — **bukan nada kelima**: warna pin tetap
+  berarti keandalan/jangkauan, cincin berarti kiriman berjalan, jadi dua fakta berbeda bisa
+  terbaca bersamaan dan tidak saling menutup. Label (`aria-label`) dan popup menambah
+  "sedang mengirim N kiriman"; kiriman yang gagal uji disebut terpisah (`safety_fail_count`),
+  tidak disembunyikan di balik kata "sedang mengirim".
 - **Ambang jangkauan (relevansi, bukan scope).** Peta Overview meminta
   `GET /suppliers?commodity=…&max_distance_km=150` bila perannya SPPG
   (`supplierReachKmForRole`; `bgn_monitor` tanpa ambang = nasional). Rujukan jarak datang dari
@@ -214,7 +223,7 @@ dengan **data API nyata** — bukan data contoh seperti di acuan:
 |---|---|---|---|
 | Keamanan Pangan | `/compliance` | `GET /batches`: `safety_status`, `freshness_score`, `usable_until`, `quantity_kg` | papan CCP per-alat, bank sampel, jejak lot EPCIS (tidak ada endpoint) |
 | Surplus & Limbah | `/surplus` | `GET /balance/map?commodity=…`: `surplus_kg`, `shortage_kg`, `latitude`/`longitude`, `region` | pencatatan limbah/disposal (tidak ada tabel; ditulis "—" + alasan) |
-| Pemasok | `/suppliers` | **`GET /suppliers`** (35 pemasok: 14 kanonik + 21 demo — daftar, keandalan, komoditas, kapasitas, jarak/koordinat, status eksklusi) + `GET /supplier-exclusions`; pin di peta (lihat §3.1). Halaman Pemasok: kolom **Jarak** (dari `distance_km` server) + penyaring "Hanya dalam jangkauan" untuk peran SPPG; jarak tanpa rujukan ditulis "—" | harga/PO per pemasok (belum ada endpoint; ditulis "—") |
+| Pemasok | `/suppliers` | **`GET /suppliers`** (35 pemasok: 14 kanonik + 21 demo — daftar, keandalan, komoditas, kapasitas, jarak/koordinat, status eksklusi) + `GET /supplier-exclusions`; pin di peta (lihat §3.1). Halaman Pemasok: kolom **Jarak** (dari `distance_km` server) + penyaring "Hanya dalam jangkauan" untuk peran SPPG; jarak tanpa rujukan ditulis "—". Kolom **Status** menulis "Sedang mengirim · N kiriman · N kg · s/d <tgl>" dari kunci `shipping` server (lencana `.shipping-tag`, token ok) bila pemasok itu punya kiriman masih layak, "Dikecualikan di …" bila ada eksklusi, selain itu "Aktif"; kartu Ringkasan memuat "Sedang mengirim barang: N dari M". Pemasok tanpa sumber profil tetap "—" (tidak dikarang) | harga/PO per pemasok (belum ada endpoint; ditulis "—") |
 | Kualitas Agen (bagian 2 tab **KPI & Kualitas Agen**) | `/quality` (`MOCK_AGENT_RUNS` di acuan) | `GET /decisions/{id}/traces` + `verdict` pada `approval-summary` (sampel 8) | LLM-as-judge, biaya token (belum ada di repo) |
 
 Aturan yang dipegang (sama seperti halaman lain): angka yang tidak ada ditulis

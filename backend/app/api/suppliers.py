@@ -33,6 +33,7 @@ koordinat per baris; ukuran tabel pemasok kecil (35 baris) dan itu disengaja -
 """
 
 import uuid
+from datetime import UTC, datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -41,7 +42,8 @@ from sqlalchemy import func, or_, select
 from app.api.auth import get_current_user
 from app.api.dependencies import get_db
 from app.core.geo import haversine_km
-from app.models import Commodity, Location, Supplier, SupplierExclusion
+from app.core.supplier_shipping import shipping_for, shipping_summary
+from app.models import Batch, Commodity, Location, Supplier, SupplierExclusion
 
 router = APIRouter()
 
@@ -99,6 +101,53 @@ def _distance_km(reference: Optional[dict], supplier: Supplier) -> Optional[floa
             float(reference["longitude"]),
         ),
         1,
+    )
+
+
+def _shipping_payload(summary: Optional[dict]) -> Optional[dict]:
+    """Bentuk JSON ringkasan kiriman aktif (tanggal ISO, kg float)."""
+    if summary is None:
+        return None
+    return {
+        "count": summary["count"],
+        "total_kg": summary["total_kg"],
+        "until": summary["until"].isoformat(),
+        "commodities": summary["commodities"],
+        "safety_fail_count": summary["safety_fail_count"],
+    }
+
+
+async def _active_shipping(db, now: datetime) -> dict[str, dict]:
+    """Ringkasan kiriman aktif SEMUA pemasok (satu query, bukan per baris).
+
+    Sumbernya batch kiriman: `usable_until >= now` = masih layak, yaitu definisi
+    "sedang mengirim" yang dikunci pemilik 2026-10-16 (`app/core/supplier_shipping.py`).
+    Endpoint ini tidak menghitung apa pun di sisi frontend: peta/daftar hanya
+    menampilkan angka yang datang dari sini.
+    """
+    rows = (
+        await db.execute(
+            select(
+                Batch.supplier_id,
+                Commodity.name.label("commodity"),
+                Batch.quantity_kg,
+                Batch.usable_until,
+                Batch.safety_status,
+            ).outerjoin(Commodity, Commodity.id == Batch.commodity_id)
+        )
+    ).all()
+    return shipping_summary(
+        [
+            {
+                "supplier_id": row.supplier_id,
+                "commodity": row.commodity,
+                "quantity_kg": row.quantity_kg,
+                "usable_until": row.usable_until,
+                "safety_status": row.safety_status,
+            }
+            for row in rows
+        ],
+        now,
     )
 
 
@@ -188,6 +237,7 @@ async def list_suppliers(
         excluded.setdefault(supplier_id, []).append(scope_name)
 
     items = []
+    shipping_map = await _active_shipping(db, datetime.now(UTC))
     for supplier, location_name, commodity_name, distance in page:
         scopes = sorted(excluded.get(supplier.id, []))
         items.append(
@@ -206,6 +256,9 @@ async def list_suppliers(
                 "address": supplier.address,
                 "contact_name": supplier.contact_name,
                 "distance_km": distance,
+                # "Sedang mengirim" = punya batch kiriman yang masih layak hari ini
+                # (keputusan pemilik 2026-10-16). null = tidak sedang mengirim.
+                "shipping": _shipping_payload(shipping_for(shipping_map, supplier.id)),
                 "excluded_at_hub": location_name in scopes,
                 "excluded_scope_locations": scopes,
             }

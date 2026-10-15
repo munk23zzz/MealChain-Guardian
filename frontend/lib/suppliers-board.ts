@@ -12,11 +12,14 @@
 // - Urutan = risiko dulu: dikecualikan → skor terendah → terbaik → tanpa skor.
 
 import {
+  LOW_RELIABILITY,
   certificationLabel,
   distanceLabel as formatDistance,
   distanceReachLabel,
-  LOW_RELIABILITY,
+  shippingLabel,
+  supplierShipping,
   withinReachKm,
+  type SupplierShipping,
 } from "./supplier-pins";
 
 const DASH = "—";
@@ -35,6 +38,10 @@ export type SupplierDirectoryRow = {
   distanceLabel: string;
   excluded: boolean;
   excludedScopes: string[];
+  /** Kiriman yang sedang berjalan (dari server), atau null bila tidak ada. */
+  shipping: SupplierShipping | null;
+  /** Kalimat status kiriman; "—" bila tidak sedang mengirim. */
+  shippingLabel: string;
 };
 
 export function reliabilityLabel(score: unknown): string {
@@ -90,6 +97,7 @@ export function supplierDirectory(raw: unknown): SupplierDirectoryRow[] {
           .filter((s): s is string => Boolean(s))
       : [];
     const distanceKm = number(record.distance_km);
+    const shipping = supplierShipping(record.shipping);
     rows.push({
       id: text(record.id) ?? name,
       name,
@@ -103,6 +111,8 @@ export function supplierDirectory(raw: unknown): SupplierDirectoryRow[] {
       distanceLabel: formatDistance(distanceKm),
       excluded: record.excluded_at_hub === true || scopes.includes(text(record.location) ?? ""),
       excludedScopes: scopes,
+      shipping,
+      shippingLabel: shippingLabel(shipping),
     });
   }
   return rows.sort(compareByRisk);
@@ -131,6 +141,8 @@ export type DirectoryMetrics = {
   outOfReach: number;
   /** Jumlah pemasok yang jaraknya tidak dilaporkan server. */
   unknownDistance: number;
+  /** Berapa pemasok yang sedang mengirim barang hari ini. */
+  shipping: number;
 };
 
 export function directoryMetrics(
@@ -159,6 +171,7 @@ export function directoryMetrics(
         ? 0
         : known.filter((row) => !withinReachKm(row.distanceKm, reachKm)).length,
     unknownDistance: list.length - known.length,
+    shipping: list.filter((row) => row.shipping !== null).length,
   };
 }
 

@@ -143,6 +143,13 @@ export default function SupplierBoard({
                 label: "Punya titik peta",
                 value: `${metrics.withCoordinates} dari ${metrics.suppliers}`,
               },
+              // Keputusan pemilik 2026-10-16: kiriman berjalan = batch masih
+              // layak hari ini. Angkanya dari `shipping` server, bukan hitungan UI.
+              {
+                label: "Sedang mengirim barang",
+                value: `${metrics.shipping} dari ${metrics.suppliers}`,
+                tone: metrics.shipping ? ("ok" as const) : ("plain" as const),
+              },
               ...(reachKm === null
                 ? []
                 : [
@@ -229,7 +236,13 @@ export default function SupplierBoard({
                       <td>
                         {row.excluded
                           ? `Dikecualikan di ${row.excludedScopes.join(", ")}`
-                          : "Aktif"}
+                          : row.shipping
+                            ? (
+                                <span className="shipping-tag" title={row.shippingLabel}>
+                                  {row.shippingLabel}
+                                </span>
+                              )
+                            : "Aktif"}
                         {reachKm !== null && !jarakDalamJangkauan(row, reachKm) ? (
                           <span className="reach-tag">{directoryReachLabel(row, reachKm)}</span>
                         ) : null}
