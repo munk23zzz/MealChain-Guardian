@@ -111,16 +111,11 @@ export type SurplusFact = { label: string; value: string; hint?: string | null }
 /** Bagian limbah/sisa pangan yang sumbernya belum ada di repo ini. */
 export function wasteFacts(): SurplusFact[] {
   return [
-    { label: "Sisa pangan dicatat", value: DASH, hint: "tidak ada tabel limbah/disposal di backend ini" },
-    { label: "Limbah dialihkan", value: DASH, hint: "butuh endpoint pencatatan disposal" },
+    { label: "Sisa pangan dicatat", value: DASH, hint: "pencatatan limbah/sisa pangan belum tersedia" },
+    { label: "Limbah dialihkan", value: DASH, hint: "pengalihan limbah belum tercatat" },
     { label: "Komposter / bank pangan", value: DASH, hint: "belum ada data mitra pengolahan" },
   ];
 }
-
-export const SURPLUS_SOURCE_NOTE =
-  "Surplus dan kekurangan dihitung dari GET /balance/map (stok − kebutuhan per lokasi, satu komoditas terpilih). " +
-  "Jarak memakai koordinat lokasi (jarak lingkaran besar, bukan rute jalan). " +
-  "Pencatatan limbah/sisa pangan belum ada di backend ini sehingga ditulis \"—\".";
 
 function nodes(locations: unknown): BalanceNode[] {
   return Array.isArray(locations) ? (locations as BalanceNode[]) : [];

@@ -125,7 +125,7 @@ export default function KPIDashboard({
       <section className="kpi-dashboard" aria-busy="true">
         <PageHeader
           title="KPI"
-          description="Tujuh indikator kontinuitas pangan institusional dari /kpi."
+          description="Tujuh indikator kontinuitas pangan institusional."
         />
         {/* Kelas kpi-loading tetap ada (dipin tes) tetapi hanya untuk pembaca
             layar: tampilannya kini skeleton, bukan teks "Memuat…" berkedip. */}
@@ -147,7 +147,7 @@ export default function KPIDashboard({
       <section className="kpi-dashboard">
         <PageHeader
           title="KPI"
-          description="Tujuh indikator kontinuitas pangan institusional dari /kpi."
+          description="Tujuh indikator kontinuitas pangan institusional."
         />
         <p className="kpi-error status-danger" role="alert">
           {error}
@@ -169,7 +169,7 @@ export default function KPIDashboard({
     <section className="kpi-dashboard">
       <PageHeader
         title="KPI"
-        description="Tujuh indikator kontinuitas pangan institusional dari /kpi. Nilai null tidak pernah diganti 0 — keadaan dan alasannya selalu terlihat."
+        description="Tujuh indikator kontinuitas pangan institusional. Indikator yang belum bisa dihitung ditulis alasannya, bukan diganti nol."
         meta={
           <span className="page-header-pills" data-testid="kpi-scope">
             <span className="commodity-pill">

@@ -9,7 +9,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import OpsConsole from "../components/OpsConsole";
 import RoleHero, { roleProfile } from "../components/RoleHero";
 import RecommendationCard from "../components/RecommendationCard";
-import DecisionActions from "../components/DecisionActions";
+import DecisionActions, { visibleActions } from "../components/DecisionActions";
+import ApprovalMenu from "../components/ApprovalMenu";
 
 const SNAPSHOT = {
   location: "Jakarta",
@@ -164,16 +165,31 @@ describe("Label kasus demo pada kartu feed", () => {
 
 describe("Langkah Verifikasi (syarat execute — kontrol backend nyata)", () => {
   it("role approver melihat tombol Verifikasi pada status actionable", () => {
+    // 2026-10-14: tombol pindah ke popup — yang diperiksa adalah ISI popup
+    // (ApprovalMenu dengan aksi hasil visibleActions), bukan lagi deretan
+    // tombol di dalam kartu halaman.
+    const noop = async () => null;
     const html = renderToStaticMarkup(
-      <DecisionActions
-        decisionId="d1"
-        role="sppg_head"
-        status="pending_approval"
-        token="t"
+      <ApprovalMenu
+        summary={{
+          decision_id: "d1",
+          status: "pending_approval",
+          can_approve: true,
+          can_execute: false,
+          verifier: { verdict: null, verified_by: null },
+        }}
+        actions={visibleActions("sppg_head", "pending_approval")}
+        administrative={false}
+        onApprove={noop}
+        onReject={noop}
+        onVerify={noop}
+        onExecute={noop}
+        onRepropose={noop}
+        onClose={() => {}}
       />
     );
     expect(html).toContain("Verifikasi");
-    expect(html).toContain("Execute");
+    expect(html).toContain("Eksekusi");
   });
 
   it("bgn_monitor tidak melihat Verifikasi (read-only)", () => {

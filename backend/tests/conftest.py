@@ -144,6 +144,108 @@ def auth_headers():
         engine.dispose()
 
 
+# ---------------------------------------------------------------------------
+# Fixture `monitor_headers` — bgn_monitor TANPA lokasi (cakupan nasional).
+#
+# Sejak Ruling 2026-10-14 cakupan lokasi ditegakkan di server, test yang
+# subjeknya data lintas lokasi (semantik supply/demand/price, peta nasional)
+# TIDAK boleh memakai token kepala SPPG lagi — memakainya akan 403. Peran yang
+# memang berhak membaca nasional adalah bgn_monitor (read-only), jadi test
+# seperti itu memakai fixture ini. Test yang justru menguji penguncian lokasi
+# tetap memakai `auth_headers` (kepala SPPG Jakarta).
+# ---------------------------------------------------------------------------
+
+_MONITOR_EMAIL = "pytest-monitor-national@test.local"
+
+
+@pytest.fixture(scope="session")
+def monitor_headers():
+    engine = create_engine(
+        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+    )
+    pw = "TestPass#2026"
+    digest = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM users WHERE email = :e"), {"e": _MONITOR_EMAIL}
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO users (id, name, email, password_hash, role, location_id) "
+                    "VALUES (gen_random_uuid(), 'Test Monitor Nasional', :e, :h, "
+                    "'bgn_monitor', NULL)"
+                ),
+                {"e": _MONITOR_EMAIL, "h": digest},
+            )
+        from fastapi.testclient import TestClient
+
+        from app.main import app
+
+        with TestClient(app) as c:
+            resp = c.post(
+                "/auth/login", json={"email": _MONITOR_EMAIL, "password": pw}
+            )
+            assert resp.status_code == 200, resp.text
+            token = resp.json()["access_token"]
+        yield {"Authorization": f"Bearer {token}"}
+    finally:
+        with engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM users WHERE email = :e"), {"e": _MONITOR_EMAIL}
+            )
+        engine.dispose()
+
+
+_FAR_NUT_EMAIL = "pytest-far-nutritionist@test.local"
+
+
+@pytest.fixture(scope="session")
+def far_nutritionist_headers():
+    """Ahli gizi di SPPG LAIN (Bogor) — untuk menguji aturan cakupan.
+
+    Sengaja dibuat di sini, bukan memakai akun demo: sejak Ruling 2026-10-14
+    KEDUA akun approver demo berada di satu SPPG (Jakarta) supaya matriks AND
+    bisa didemokan. Tes aturan scope karena itu tidak boleh bergantung pada
+    lokasi akun demo — ia menyiapkan sendiri peran "SPPG lain".
+    """
+    engine = create_engine(
+        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+    )
+    pw = "TestPass#2026"
+    digest = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM users WHERE email = :e"), {"e": _FAR_NUT_EMAIL}
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO users (id, name, email, password_hash, role, location_id) "
+                    "SELECT gen_random_uuid(), 'Far Nutritionist', :e, :h, "
+                    "'sppg_nutritionist', id FROM locations WHERE name = 'Bogor'"
+                ),
+                {"e": _FAR_NUT_EMAIL, "h": digest},
+            )
+        from fastapi.testclient import TestClient
+
+        from app.main import app
+
+        with TestClient(app) as c:
+            resp = c.post(
+                "/auth/login", json={"email": _FAR_NUT_EMAIL, "password": pw}
+            )
+            assert resp.status_code == 200, resp.text
+            token = resp.json()["access_token"]
+        yield {"Authorization": f"Bearer {token}"}
+    finally:
+        with engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM users WHERE email = :e"), {"e": _FAR_NUT_EMAIL}
+            )
+        engine.dispose()
+
+
 def pytest_collection_modifyitems(config, items):
     """Skip test live di sesi biasa (hanya jalan via `pytest -m live`)."""
     if config.getoption("-m") and "live" in config.getoption("-m"):

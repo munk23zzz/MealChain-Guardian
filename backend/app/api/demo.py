@@ -12,6 +12,11 @@ menghapus ulang HANYA baris ber-demo_case). Kasus:
   4. gangguan-logistik    : v1 ditolak (rute Bogor banjir) → v2
      pending_approval dengan sumber alternatif Cianjur.
 
+Catatan (Ruling 2026-10-14): Event 3 tetap bisa dipicu kepala SPPG dengan batch
+di lokasi SUMBER mana pun — yang dikunci cakupan adalah LOKASI TUJUAN keputusan
+(SPPG pemakai), dan itu ditentukan pemanggil (target_location_id), bukan lokasi
+batch. Panel chaos sengaja TIDAK mengirim lokasi batch sebagai target.
+
 Demo-day guard (Roy 2026-10-07): SEMUA kasus berstatus
 pending_approval/verifier_flagged dijaga TTL >= 60 menit pasca-seed
 (di-guard test) — tidak ada kasus mati sebelum sempat didemokan.
@@ -22,7 +27,7 @@ freshness 0,90). Tidak ada auto-approve — loop manusia tetap wajib.
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +35,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import require_roles
 from app.api.dependencies import get_db
 from app.models import AgentTrace, Commodity, Decision, Location, User
+from app.seed.timeseries import (
+    DEFAULT_END,
+    DEFAULT_INTERVAL_HOURS,
+    DEFAULT_START,
+    demo_data_status,
+    generate_timeseries,
+    preview_timeseries,
+    purge_demo_rows,
+    validate_range,
+)
 
 router = APIRouter()
 
@@ -108,6 +123,8 @@ def _decision(
         iteration=iteration,
         supersedes_id=supersedes,
         demo_case=case,
+        origin="demo",
+        generated_at=datetime.now(timezone.utc),
         source_location_id=src,
         target_location_id=tgt,
         commodity_id=commodity_id,
@@ -122,24 +139,25 @@ def _decision(
     )
 
 
-@router.post("/demo/seed", status_code=200)
-async def seed_demo(
-    payload: SeedRequest,
-    db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
-):
+async def _seed_demo_cases(db: AsyncSession, force: bool) -> dict:
+    """Badan `POST /demo/seed` — dipakai juga oleh `/demo/refresh`.
+
+    Dipisah sebagai fungsi supaya "Segarkan ke hari ini" bisa menjalankan
+    seeder relatif lalu MEMUAT ULANG kasus skrip (TTL baru) tanpa menduplikasi
+    logika kasus di dua tempat.
+    """
     existing = (
         await db.execute(
             select(Decision).where(Decision.demo_case.in_(DEMO_CASES))
         )
     ).scalars().all()
-    if existing and not payload.force:
+    if existing and not force:
         return {
             "seeded": False,
             "already": len(existing),
             "message": "Kasus demo sudah ada — pakai force=true untuk reset.",
         }
-    if payload.force and existing:
+    if force and existing:
         # Hanya baris demo (demo_case NOT NULL) yang dihapus.
         await db.execute(
             delete(Decision).where(Decision.demo_case.in_(DEMO_CASES))
@@ -297,4 +315,129 @@ async def seed_demo(
         "cases": len(DEMO_CASES),
         "decisions": len(created),
         "message": "4 kasus demo siap — v3 kuota & v2 logistik siap approve.",
+    }
+
+
+@router.post("/demo/seed", status_code=200)
+async def seed_demo(
+    payload: SeedRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
+) -> dict:
+    """Muat 4 kasus skrip. Idempotent; `force=true` menghapus ulang HANYA baris kasus."""
+    return await _seed_demo_cases(db, payload.force)
+
+
+# --------------------------------------------------------------------------
+# Data & rentang waktu (Fase 4): generator deret waktu demo.
+#
+# Peran: sama dengan /demo/seed (kepala SPPG) — panel Demo Control memang
+# dipakai operator demo, bukan pemantau BGN.
+# --------------------------------------------------------------------------
+
+
+class TimeseriesRequest(BaseModel):
+    start: datetime = DEFAULT_START
+    end: datetime = DEFAULT_END
+    interval_hours: int = DEFAULT_INTERVAL_HOURS
+    force: bool = False
+
+
+def _validate_or_422(start: datetime, end: datetime) -> None:
+    try:
+        validate_range(start, end)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/demo/preview")
+async def preview_timeseries_data(
+    start: datetime = Query(default=DEFAULT_START),
+    end: datetime = Query(default=DEFAULT_END),
+    interval_hours: int = Query(default=DEFAULT_INTERVAL_HOURS, ge=1, le=168),
+    _user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
+) -> dict:
+    """Pratinjau: berapa baris yang AKAN ditambah. Tidak menulis apa pun."""
+    _validate_or_422(start, end)
+    return await preview_timeseries(start, end, interval_hours=interval_hours)
+
+
+@router.post("/demo/timeseries", status_code=200)
+async def generate_timeseries_data(
+    payload: TimeseriesRequest,
+    _user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
+) -> dict:
+    """Buat/perbarui baris demo `origin='demo'`. Idempoten.
+
+    `force=true` menghapus dulu baris demo (bukan baris kanonik) supaya rentang
+    bisa diganti bersih — pola yang sama dengan `POST /demo/seed`.
+    """
+    _validate_or_422(payload.start, payload.end)
+    summary: dict = {"purged": None}
+    if payload.force:
+        summary["purged"] = await purge_demo_rows()
+    summary.update(
+        await generate_timeseries(
+            payload.start, payload.end, interval_hours=payload.interval_hours
+        )
+    )
+    return summary
+
+
+@router.post("/demo/timeseries/purge", status_code=200)
+async def purge_timeseries_data(
+    _user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
+) -> dict:
+    """Hapus HANYA baris deret waktu `origin='demo'`; snapshot kanonik tidak disentuh."""
+    return await purge_demo_rows()
+
+
+@router.get("/demo/data-status")
+async def get_data_status(
+    _user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
+) -> dict:
+    """Keadaan data demo SEKARANG (baca DB, bukan ingatan klien).
+
+    Panel Demo Control memakainya untuk baris status; kalau operator membuka
+    tab baru atau kontainer di-restart, UI tetap jujur.
+    """
+    return await demo_data_status()
+
+
+#: Peringatan yang WAJIB tampil bersama tombol "Segarkan ke hari ini".
+#: Bukan basa-basi: menjalankan seeder relatif `now` memang menggeser tanggal
+#: snapshot kanonik, dan itu punya konsekuensi yang harus diketahui operator.
+REFRESH_WARNING = (
+    "Seeder relatif menjalankan ulang snapshot kanonik pada tanggal HARI INI "
+    "dan memuat ulang 4 kasus skrip dengan batas waktu baru. Nilai jangkar "
+    "(4.900 kg, 3 surplus : 7 shortage, Cianjur 1.400 kg) tidak berubah karena "
+    "angkanya berasal dari berkas seed yang sama — yang bergeser adalah "
+    "TANGGALNYA. Akibatnya tes backend yang memaku 8 Okt 12:00 tidak lagi "
+    "cocok sampai snapshot dikembalikan (lihat prosedur rollback di rencana "
+    "Fase 6). Baris deret waktu demo lama tetap ada sampai Anda menekan "
+    "\"Bersihkan data demo\" atau membangun ulang rentangnya."
+)
+
+
+@router.post("/demo/refresh", status_code=200)
+async def refresh_to_today(
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
+) -> dict:
+    """Tombol hari demo: seeder relatif `now` + muat ulang 4 kasus skrip.
+
+    Akun demo TIDAK disentuh (password tidak direset) dan baris deret waktu
+    demo TIDAK dihapus — keduanya punya tombol sendiri di panel.
+    """
+    from app.seed.seed_data import load_seed
+
+    now = datetime.now(timezone.utc)
+    rows = await load_seed(now)
+    cases = await _seed_demo_cases(db, force=True)
+    return {
+        "reference_time": now.isoformat(),
+        "rows": rows,
+        "cases": cases,
+        "warning": REFRESH_WARNING,
+        "message": "Snapshot kanonik disegarkan ke hari ini; 4 kasus skrip dimuat ulang.",
     }

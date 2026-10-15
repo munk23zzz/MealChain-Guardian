@@ -4,7 +4,16 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -17,6 +26,17 @@ class DemandRecord(Base):
         CheckConstraint(
             "quantity_kg >= 0", name="demand_records_quantity_nonneg_check"
         ),
+        CheckConstraint(
+            "origin IN ('seed','demo')", name="check_demand_records_origin_vocab"
+        ),
+        # Satu observasi kebutuhan per lokasi×komoditas per waktu (migrasi 013).
+        UniqueConstraint(
+            "location_id",
+            "commodity_id",
+            "recorded_at",
+            name="uq_demand_records_loc_com_time",
+        ),
+        Index("ix_demand_records_origin_recorded_at", "origin", "recorded_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -34,6 +54,12 @@ class DemandRecord(Base):
     )
     recorded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
+    )
+    origin: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="seed"
+    )
+    generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

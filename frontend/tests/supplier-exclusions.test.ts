@@ -12,7 +12,7 @@ describe("shouldLoadExclusions", () => {
   });
 
   it("tab lain → tidak diambil (walau token ada)", () => {
-    expect(shouldLoadExclusions("quality", "tok")).toBe(false);
+    expect(shouldLoadExclusions("kpi-kualitas", "tok")).toBe(false);
     expect(shouldLoadExclusions("today", "tok")).toBe(false);
   });
 

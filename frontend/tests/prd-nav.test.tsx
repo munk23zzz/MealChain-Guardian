@@ -1,17 +1,18 @@
 // PRD 2.4 alignment (arah Roy 2026-10-09): navigasi konsol = 5 tab sesuai
 // 7 screen PRD (login sudah ada; decision detail gabung di recommendations).
 // Kontrak: tab overview/kpi/recommendations/agent-log; demo-control
-// approver-only. KPI target PRD tampil BERLABEL "TARGET DEMO" (bukan
-// angka live). Persona label sesuai PRD §2.
+// approver-only. Strip "Target KPI — Demo Day" (PRD 2.4 §5) DIHAPUS
+// 2026-10-15 atas arahan pemilik — halaman KPI hanya menampilkan angka
+// live dari backend. Persona label sesuai PRD §2.
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const pageSrc = readFileSync("app/page.tsx", "utf8");
 
 describe("navigasi PRD 2.4 (7 screen → konsol tab)", () => {
   it("memiliki tab overview, kpi, recommendations, agent-log", () => {
     expect(pageSrc).toContain('"overview"');
-    expect(pageSrc).toContain('"kpi"');
+    expect(pageSrc).toContain('"kpi-kualitas"');
     expect(pageSrc).toContain('"recommendations"');
     expect(pageSrc).toContain('"agent-log"');
   });
@@ -21,12 +22,13 @@ describe("navigasi PRD 2.4 (7 screen → konsol tab)", () => {
     expect(pageSrc).toMatch(/demo-control[\s\S]{0,200}isApprover|isApprover[\s\S]{0,200}demo-control/);
   });
 
-  it("KPI target PRD tampil berlabel TARGET DEMO (bukan angka live)", () => {
-    expect(pageSrc).toMatch(/<KpiTargets/);
-    const targets = readFileSync("components/KpiTargets.tsx", "utf8");
-    expect(targets).toContain("TARGET DEMO");
-    // Angka target PRD §5 ada, dengan label eksplisit:
-    expect(targets).toContain("99,42");
+  it("strip \"Target KPI — Demo Day\" sudah dihapus dari halaman KPI (arahan pemilik)", () => {
+    // Dulu tab KPI memuat <KpiTargets/> berlabel "TARGET DEMO · bukan angka live"
+    // (PRD 2.4 §5). Pemilik meminta bagian itu dibuang; kontrak barunya: tab KPI
+    // tetap ada, tetapi tidak ada lagi angka target yang tidak berasal dari backend.
+    expect(pageSrc).toMatch(/tab === "kpi-kualitas"/);
+    expect(pageSrc).not.toContain("KpiTargets");
+    expect(existsSync("components/KpiTargets.tsx")).toBe(false);
   });
 
   it("persona label sesuai PRD §2 (Operations Lead / Food Safety Officer / National Inspector)", () => {

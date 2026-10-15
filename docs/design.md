@@ -24,6 +24,18 @@
 > decision detail digabung ke Recommendations, tab = Overview / KPI /
 > Recommendations / Agent Log / Demo Control (approver-only).
 
+### Cakupan data per peran (ruling 2026-10-14 — `docs/ruling-2026-10-14-scope-lokasi.md`)
+
+| Peran | Keputusan (`/decisions`) | Peta & angka (`/balance/map`, `/supply`, `/demand`) | Data sumber (`/suppliers`, register pemasok) | Demo Control (`/demo/*`) | Admin (`/admin/*`) |
+|---|---|---|---|---|---|
+| `sppg_head` | hanya yang **target lokasi = lokasi sendiri** | hanya lokasi sendiri (`/supply/Cianjur/...` → **403**) | boleh dibaca lintas daerah (opsi pemasok tidak dibatasi wilayah pengguna) | penuh (kecuali yang destruktif butuh 2 langkah) | 403 |
+| `sppg_nutritionist` | idem | idem | idem | penuh | 403 |
+| `bgn_monitor` | semua lokasi | semua lokasi | idem | **403** (read-only demo, tidak boleh mengubah/mengisi data) | boleh dibaca |
+
+Artinya angka yang sama bisa sah berbeda antar peran di layar — bukan bug; yang salah
+adalah menampilkan angka lintas daerah ke peran SPPG. Setiap penolakan cakupan dijawab
+`403` oleh API (bukan daftar kosong), supaya UI bisa menampilkan alasan, bukan "tidak ada data".
+
 ### Flow: SPPG Staff
 Login → Dashboard (lokasi sendiri) → lihat status supply/demand → notifikasi ada rekomendasi
 baru → buka Decision Detail → review evidence → Approve/Reject → lihat status di feed berubah
@@ -50,10 +62,9 @@ Detail muncul dengan evidence → Approve → status di peta berubah
 | — | *(acuan app)* **Keamanan Pangan** | Tab **Keamanan Pangan** (Langkah 5, permintaan Roy 2026-10-11) — halaman `/compliance` di acuan: ringkasan pengawasan batch (aman/gagal uji/perlu verifikasi), blokir batch gagal, daftar batch perlu segera dipakai, tabel status per batch (status, kesegaran, sisa masa layak) ✓ | Tambahan demo |
 | — | *(acuan app)* **Surplus & Limbah** | Tab **Surplus & Limbah** (Langkah 5) — halaman `/surplus` di acuan: neraca surplus/kekurangan komoditas aktif, rencana alokasi surplus→kekurangan (greedy, jarak dari koordinat), keadaan pencatatan limbah ✓ (hanya peran SPPG, seperti acuan) | Tambahan demo |
 | — | *(acuan app)* **Pemasok** | Tab **Pemasok** (Langkah 5) — halaman `/suppliers` di acuan: daftar pemasok + keandalan dari keputusan terakhir, register eksklusi, form usul eksklusi ✓ | Tambahan demo |
-| — | *(acuan app)* **Kualitas Agen** | Tab **Kualitas Agen** (Langkah 5) — halaman `/quality` di acuan: skor agregat (langkah/run, kesesuaian verifikator, tingkat fallback, keputusan diubah manusia, rata-rata durasi) + rincian per run dari jejak agen nyata ✓ | Tambahan demo |
 | 5 | Agent Activity Log (`/agent-log`) | Tab **Agent Log** — trace console + provider panel, pilih decision via dropdown ✓ | Wajib |
 | 6 | Approval Modal/Flow | Di dalam Decision Detail ✓ | Wajib |
-| 7 | KPI Dashboard (`/kpi`) | Tab **KPI** — 7 KPI live jujur + strip **Target KPI Demo Day** (PRD §5, berlabel "TARGET DEMO · bukan angka live") ✓ | Wajib |
+| 7 | KPI Dashboard (`/kpi`) + *(acuan app)* Kualitas Agen (`/quality`) | Tab **KPI & Kualitas Agen** — **digabung 2026-10-15 atas keputusan pemilik** (dua tab lama "KPI" + "Kualitas Agen" jadi satu, urutan KPI dulu lalu mutu agen). Bagian 1: 7 KPI live jujur dari `/kpi` (strip **Target KPI Demo Day** dihapus hari yang sama). Bagian 2: skor agregat mutu agen (langkah/run, kesesuaian verifikator, tingkat fallback, keputusan diubah manusia, rata-rata durasi) + rincian per run dari jejak agen nyata ✓. Komposisi ada di `components/KpiQualityBoard.tsx`; isi kedua bagian tidak diubah | Wajib |
 | 8 | Demo Control Panel (`/demo-control`) | Tab **Demo Control** (approver-only) — skenario via API resmi: seed kasus + konsol analisis Event 1/2/3 ✓ | Wajib (demo) |
 | 9 | Settings/Admin | Nice-to-have |
 
@@ -94,6 +105,28 @@ Detail muncul dengan evidence → Approve → status di peta berubah
   isi penanda (angka/label/posisi/popup). `fitBounds` hanya saat pertama tampil
   atau saat pilihan lokasi di dropdown cakupan BERGANTI (`nextMapFocus`,
   `pinSignatures`/`pinDiff` di `lib/map-console.ts`)
+- **Layer pemasok (Fase 2–3 rencana 2026-10-14; jangkauan ditambahkan Fase 7b 2026-10-15):** tombol
+  "Tampilkan pemasok (N)" memunculkan pin pemasok dari `GET /suppliers` — warna pin dari
+  `reliability_score` (`map-pin-supplier-ok` ≥ ambang, `map-pin-supplier-low` di bawahnya,
+  `map-pin-supplier-excluded` untuk pemasok di register eksklusi, `map-pin-supplier-far` untuk
+  pemasok **di luar jangkauan** — titik kosong bergaris putus-putus, warna tetap token), label
+  (`aria-label`) berbunyi `"<nama> — pemasok <komoditas>, keandalan NN%, hub <kota>, dalam/di luar
+  jangkauan (N km)"`, legenda "Pemasok · Keandalan rendah · Dikecualikan · Di luar jangkauan".
+  Pemasok **tanpa koordinat tidak dipin** (tidak ada titik karangan) dan jumlahnya dinyatakan di
+  samping tombol.
+- **Ambang jangkauan (relevansi, bukan scope).** Peta Overview meminta
+  `GET /suppliers?commodity=…&max_distance_km=150` bila perannya SPPG
+  (`supplierReachKmForRole`; `bgn_monitor` tanpa ambang = nasional). Rujukan jarak datang dari
+  server (`distance_reference`); UI tidak menghitung jarak sendiri. Di samping tombol layer ada
+  kalimat status dari `supplierReachNote`, mis. "4 dari 6 pemasok dalam jangkauan 150 km dari
+  Jakarta · 2 di luar jangkauan tidak dipasang di peta" — angka "2" berasal dari
+  `reach.excluded_out_of_reach` server, dan untuk peran SPPG **jarak yang tidak diketahui tidak
+  pernah dihitung sebagai dekat**. Ruling cakupan 2026-10-14 §4 tetap: semua peran boleh membaca
+  pemasok lintas lokasi; yang dibatasi hanya apa yang ditonjolkan.
+- Catatan data apa adanya: filter komoditas peta memuat 4 pilihan (telur/ayam/beras/wortel)
+  sedangkan DB demo hanya punya `ayam`, `telur`, `wortel`. Pilihan `beras` dijawab API
+  dengan `404` dan UI menampilkan galat + tombol "Coba lagi" — disengaja (bukan angka
+  kosong yang menyamar sebagai data), dan akan rapi setelah komoditas diselaraskan.
 
 ### 3.2 Recommendation Feed
 - List card, sorted by urgency (safety issue > regional imbalance > price anomaly)
@@ -110,7 +143,11 @@ Detail muncul dengan evidence → Approve → status di peta berubah
   1. **Ringkasan keputusan** — kartu keputusan + identitas/tenggat
      (`Rute`, `Komoditas`, `Jumlah`, `Iterasi`, `Menggantikan`, `Diusulkan oleh`,
      `Tenggat` dalam sisa waktu manusiawi) dari `/decisions/{id}` + `/approval-summary`
-  2. **Biaya** — harga beli, logistik, biaya aman terkirim, catatan (`cost_breakdown`)
+  2. **Biaya** — harga beli, logistik, biaya aman terkirim, catatan (`cost_breakdown`).
+     Sejak Fase 7d (2026-10-15) biaya angkut dipecah dua baris **hanya bila
+     backend mengirim pecahannya**: `Angkut pemasok → SPPG` (kaki pertama, hint
+     "N km dari pemasok" atau alasannya bila jarak tidak diketahui) dan
+     `Angkut antar SPPG` (linehaul); baris `Logistik` tetap total angkut.
   3. **Keamanan & pemasok** — status keamanan terburuk, batch diperiksa, diblokir,
      verifikator, nomor material, target eksekusi, pemasok + skor keandalan
   4. **Governance & persetujuan** — jumlah/syarat persetujuan, boleh disetujui/dieksekusi,
@@ -177,8 +214,8 @@ dengan **data API nyata** — bukan data contoh seperti di acuan:
 |---|---|---|---|
 | Keamanan Pangan | `/compliance` | `GET /batches`: `safety_status`, `freshness_score`, `usable_until`, `quantity_kg` | papan CCP per-alat, bank sampel, jejak lot EPCIS (tidak ada endpoint) |
 | Surplus & Limbah | `/surplus` | `GET /balance/map?commodity=…`: `surplus_kg`, `shortage_kg`, `latitude`/`longitude`, `region` | pencatatan limbah/disposal (tidak ada tabel; ditulis "—" + alasan) |
-| Pemasok | `/suppliers` | pemasok pada `GET /decisions/{id}/approval-summary` (sampel 8 keputusan terakhir) + `GET /supplier-exclusions` | daftar pemasok mandiri, harga/PO (tidak ada endpoint daftar pemasok) |
-| Kualitas Agen | `/quality` (`MOCK_AGENT_RUNS` di acuan) | `GET /decisions/{id}/traces` + `verdict` pada `approval-summary` (sampel 8) | LLM-as-judge, biaya token (belum ada di repo) |
+| Pemasok | `/suppliers` | **`GET /suppliers`** (35 pemasok: 14 kanonik + 21 demo — daftar, keandalan, komoditas, kapasitas, jarak/koordinat, status eksklusi) + `GET /supplier-exclusions`; pin di peta (lihat §3.1). Halaman Pemasok: kolom **Jarak** (dari `distance_km` server) + penyaring "Hanya dalam jangkauan" untuk peran SPPG; jarak tanpa rujukan ditulis "—" | harga/PO per pemasok (belum ada endpoint; ditulis "—") |
+| Kualitas Agen (bagian 2 tab **KPI & Kualitas Agen**) | `/quality` (`MOCK_AGENT_RUNS` di acuan) | `GET /decisions/{id}/traces` + `verdict` pada `approval-summary` (sampel 8) | LLM-as-judge, biaya token (belum ada di repo) |
 
 Aturan yang dipegang (sama seperti halaman lain): angka yang tidak ada ditulis
 "**—**", dan halaman yang memakai **sampel** menyatakan jumlahnya terang-terangan
@@ -191,6 +228,33 @@ acuan; sisanya semua peran.
 Konvensi tabel baru: tabel lebar WAJIB dibungkus `<div className="board-table-wrap">`
 (geser di dalam kartu) + petunjuk `.board-scroll-hint` yang hanya tampil ≤640px —
 tanpa itu tabel melebarkan seluruh halaman di 375px.
+
+### 3.9 Panel "Data & rentang waktu" di Demo Control (Fase 5 rencana 2026-10-14)
+
+Tab **Demo Control** (khusus approver) memuat dua hal, dalam urutan kerja yang disengaja:
+**siapkan data dulu → picu skenario → analisis**. Panel baru berada DI ATAS konsol pemicu
+skenario, karena mengubah rentang data tanpa sadar setelah menjalankan skenario adalah
+sumber angka yang tidak bisa dipertanggungjawabkan.
+
+Aturan yang dipegang panel ini:
+
+- **Pratinjau dipicu tombol, bukan per ketikan tanggal** — satu permintaan
+  `GET /demo/preview?start&end`, hasilnya dibuang begitu rentang berubah, supaya angka lama
+  tidak pernah tampil berpasangan dengan rentang baru.
+- **Semua kalimat dan angka berasal dari payload backend** (`totals`, `generated_at`,
+  `writes:false`) — tidak ada hitungan di frontend. Kalimat status dibangun di
+  `lib/demo-data.ts` dan diuji (`tests/demo-data.test.ts`).
+- **Peringatan destruktif tampil SEBELUM tombol ditekan**, dan "Bersihkan data demo"
+  (hapus `origin='demo'`) berjalan dua langkah dengan konfirmasi eksplisit; "Buat/perbarui"
+  menyatakan lebih dulu berapa baris yang akan dihapus/ditambah.
+- **"Segarkan ke hari ini" memindahkan jangkar snapshot kanonik** (seeder menggeser tanggal
+  relatif ke sekarang). Karena itu peringatannya tegas dan ada tes backend yang memaku
+  tanggal kanonik (`test_refresh_hari_ini_bergeser_dan_bisa_dikembalikan`) — kalau tombol
+  ini ditekan, angka demo berubah sampai data kanonik dimuat ulang.
+- Respons backend ditampilkan apa adanya (termasuk `0` dan galat), bukan diringkas menjadi
+  kalimat yang lebih enak dibaca.
+
+
 
 ## 4. Design system
 

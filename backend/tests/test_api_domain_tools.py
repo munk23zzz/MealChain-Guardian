@@ -165,8 +165,9 @@ def test_safety_missing_batch_404(client):
     assert resp.status_code == 404
 
 
-def test_price_latest_reference(client):
-    resp = client.get("/price/Cianjur/telur")
+def test_price_latest_reference(client, monitor_headers):
+    # Cianjur = lokasi lain; dibaca sebagai bgn_monitor (Ruling 2026-10-14).
+    resp = client.get("/price/Cianjur/telur", headers=monitor_headers)
     assert resp.status_code == 200
     body = resp.json()
     assert body["price_per_kg"] == 26500.0

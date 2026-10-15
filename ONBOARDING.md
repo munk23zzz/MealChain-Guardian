@@ -32,7 +32,17 @@ docker compose exec postgres psql -U mealchain -d mealchain -c "SELECT count(*) 
 
 # (opsional) samakan schema migration state
 docker compose exec backend alembic upgrade head
-docker compose exec backend alembic current   # harus = heads (008_rejection_loop)
+docker compose exec backend alembic current   # harus = heads (012_supplier_profile)
+```
+
+Kalau TIDAK memakai dump (schema dari nol), jalankan seed kanonik + data demo:
+
+```bash
+docker compose exec -T backend python -m app.seed.seed_data \
+  --reference-time 2026-10-08T12:00:00+00:00 --with-demo-users --with-demo-suppliers
+# --with-demo-suppliers = 30 pemasok demo (data/seed/suppliers_demo.json) supaya
+# pemasok bisa ditampilkan di peta; tanpa flag ini hanya 14 pemasok kanonik ada.
+docker compose exec -T backend python -m app.seed.suppliers_demo   # bisa diulang, idempoten
 ```
 
 Kalau dump gagal karena schema bentrok (volume sudah terisi migration awal), reset dulu:
@@ -56,8 +66,8 @@ docker compose exec backend pytest
 docker compose exec frontend npm run test
 ```
 
-Angka yang diharapkan (per 2026-10-10): backend ~567 passed, frontend 107 passed.
-Kalau beda tipis karena commit baru, wajar — yang penting exit 0.
+Angka yang diharapkan (per 2026-10-14, sesudah Fase 2 pemasok): backend 720 passed (3 skip),
+frontend 53 berkas / 449 passed. Kalau beda tipis karena commit baru, wajar — yang penting exit 0.
 
 ## 4. Akun demo (login UI di localhost:3010)
 

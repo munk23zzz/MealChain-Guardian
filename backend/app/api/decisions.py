@@ -15,9 +15,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.actions import VERIFIER_ROLES
 from app.api.auth import get_current_user
 from app.api.dependencies import get_db
+from app.core.scope import apply_location_scope, assert_in_scope
 from app.models import Commodity, Decision, Location, User
 from app.services.approval_summary import build_approval_summary
 
@@ -63,27 +63,18 @@ async def _assert_target_location_allowed(db: AsyncSession, user: User, target_l
 
 
 async def _assert_decision_readable(db: AsyncSession, user: User, row: Decision) -> None:
-    """O-SEC-2: SPPG hanya membaca decision target lokasinya;
-    bgn_monitor membaca semua (read-only role).
+    """Ruling 2026-10-14: SPPG hanya membaca keputusan ber-TARGET lokasinya.
 
-    Ruling Owner 2026-10-08 (S4-05 p10): VERIFIER_ROLES
-    (sppg_head/sppg_nutritionist) adalah approver lintas lokasi pada
-    matriks AND — write path (POST /actions/approve) tidak membatasi
-    lokasi, jadi read path summary juga tidak: approver ke-2 wajib bisa
-    MELIHAT ringkasan keputusan yang sah ia setujui. Role lain tetap
-    O-SEC-2 (scope lokasi).
+    Menggantikan pengecualian ruling 2026-10-08 (S4-05 p10) yang membiarkan
+    VERIFIER_ROLES membaca lintas lokasi. Alasan pencabutan ada di
+    `docs/ruling-2026-10-14-scope-lokasi.md`: jalur tulis sudah dikunci ke
+    lokasi sendiri sejak awal, jadi jalur baca kini simetris; matriks AND dua
+    verifier tetap berlaku tetapi di dalam satu SPPG.
+
+    bgn_monitor (read-only nasional) tidak dibatasi. Lokasi SUMBER tetap
+    lintas daerah — yang dikunci hanya lokasi tujuan.
     """
-    if user.role == "bgn_monitor":
-        return
-    if user.role in VERIFIER_ROLES:
-        return
-    if row.target_location_id is None:
-        return
-    if user.location_id != row.target_location_id:
-        raise HTTPException(
-            status_code=403,
-            detail="decision di luar scope lokasi Anda",
-        )
+    assert_in_scope(user, row.target_location_id, what="keputusan")
 
 
 def _validity(expires_at: datetime) -> dict:
@@ -169,13 +160,21 @@ async def create_decision(
 @router.get("/decisions")
 async def list_decisions(
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
-    """Feed keputusan (S3-12): baris aktual, terbaru dulu, tanpa karangan."""
+    """Feed keputusan (S3-12): baris aktual, terbaru dulu, tanpa karangan.
+
+    Ruling 2026-10-14: peran SPPG hanya melihat keputusan yang menyasar
+    lokasinya; `bgn_monitor` melihat semuanya (read-only nasional).
+    """
     rows = (
         (
             await db.execute(
-                select(Decision).order_by(Decision.created_at.desc(), Decision.id.desc())
+                apply_location_scope(
+                    select(Decision).order_by(Decision.created_at.desc(), Decision.id.desc()),
+                    Decision.target_location_id,
+                    user,
+                )
             )
         )
         .scalars()
@@ -215,7 +214,7 @@ async def list_decisions(
 async def get_decision_chain(
     decision_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     """Timeline keluarga iterasi (rejection loop): v1 → v2 → v3...
 
@@ -227,6 +226,7 @@ async def get_decision_chain(
     ).scalar_one_or_none()
     if anchor is None:
         raise HTTPException(status_code=404, detail="decision tidak ditemukan")
+    await _assert_decision_readable(db, user, anchor)
 
     async def _parent_of(row: Decision):
         if not row.supersedes_id:
@@ -283,7 +283,7 @@ async def get_decision_chain(
 async def get_decision_traces(
     decision_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     """Timeline AgentTrace aktual (S3-12): urutan langkah asli dari DB."""
     decision = (
@@ -291,6 +291,7 @@ async def get_decision_traces(
     ).scalar_one_or_none()
     if decision is None:
         raise HTTPException(status_code=404, detail="decision tidak ditemukan")
+    await _assert_decision_readable(db, user, decision)
     from app.models import AgentTrace
 
     rows = (

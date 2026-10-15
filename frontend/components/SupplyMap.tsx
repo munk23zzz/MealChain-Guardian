@@ -12,7 +12,7 @@
 // kanan-bawah. Tanpa kepala panel mengapung dan tanpa kaki panel.
 // Warna pin & legenda memakai token status aplikasi (`--status-*`), sama dengan
 // badge di permukaan terang; tidak ada hex di komponen ini.
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
@@ -30,6 +30,25 @@ import {
   pinTone,
   type MapFocus,
 } from "../lib/map-console";
+import {
+  SUPPLIER_LABEL_MIN_ZOOM,
+  SUPPLIER_PIN_LEGEND,
+  SUPPLIER_PIN_MIN_ZOOM,
+  supplierAccessibleLabel,
+  supplierDistanceReference,
+  supplierReachMeta,
+  supplierLayerSummary,
+  supplierLabelsVisible,
+  supplierPinClass,
+  supplierPinRows,
+  supplierPinsForMap,
+  supplierPinsVisible,
+  supplierPopupLines,
+  supplierReachNote,
+  supplierToggleLabel,
+  suppliersForCommodity,
+  type SupplierPinRow,
+} from "../lib/supplier-pins";
 
 function fitBoundsFor(locations: readonly BalanceMapLocation[]): [[number, number], [number, number]] {
   const points = locations.flatMap((location) => {
@@ -65,8 +84,6 @@ function createPin(map: maplibregl.Map, location: BalanceMapLocation, active: bo
   const el = document.createElement("div");
   el.className = `map-pin map-pin-${pinTone(location.status)}${active ? " map-pin-active" : ""}`;
   const accessible = pinAccessibleLabel(location);
-  el.title = accessible;
-  el.setAttribute("aria-label", accessible);
   // Titik + label sebagai DUA node: elemen marker tetap seukuran titik supaya
   // koordinat lokasi tepat di tengah titik (label meluber ke kanan).
   const dot = document.createElement("span");
@@ -76,10 +93,17 @@ function createPin(map: maplibregl.Map, location: BalanceMapLocation, active: bo
   label.className = "map-pin-label";
   label.textContent = pinLabel(location);
   el.append(dot, label);
-  return new maplibregl.Marker({ element: el })
+  const marker = new maplibregl.Marker({ element: el })
     .setLngLat([Number(location.longitude), Number(location.latitude)])
     .setPopup(new maplibregl.Popup({ offset: 14 }).setDOMContent(popupNode(location)))
     .addTo(map);
+  // Keterangan aksesibilitas dipasang SETELAH marker dibuat: MapLibre 4.7
+  // menulis aria-label="Map marker" pada elemen saat konstruksi, menimpa teks
+  // yang dipasang sebelumnya — pembaca layar lalu membacakan "Map marker" untuk
+  // setiap penanda.
+  el.title = accessible;
+  el.setAttribute("aria-label", accessible);
+  return marker;
 }
 
 /** Segarkan isi penanda yang sudah ada (posisi, label, keterangan, popup) —
@@ -101,6 +125,70 @@ function refreshPin(marker: maplibregl.Marker, location: BalanceMapLocation): vo
  *  "Map marker"; sepuluh penanda tanpa keterangan tidak berguna). */
 function pinAccessibleLabel(location: BalanceMapLocation): string {
   return `${location.location} — pasokan ${formatKg(location.supply_kg)}, permintaan ${formatKg(location.demand_kg)}, ${formatBalanceGap(location)}`;
+}
+
+/** Isi popup pemasok — NODE DOM, bukan innerHTML (nama pemasok dari DB). */
+function supplierPopupNode(row: SupplierPinRow, reachKm: number | null): HTMLElement {
+  const { title, lines } = supplierPopupLines(row, reachKm);
+  const box = document.createElement("div");
+  box.className = "map-popup map-popup-supplier";
+  const head = document.createElement("strong");
+  head.textContent = title;
+  box.append(head);
+  lines.forEach((line) => {
+    const p = document.createElement("p");
+    p.textContent = line;
+    box.append(p);
+  });
+  return box;
+}
+
+/** Penanda pemasok: BENTUK berbeda dari pin SPPG (kotak miring, bukan titik
+ *  bulat) supaya dua lapisan tidak bisa tertukar di peta yang sama. */
+function createSupplierPin(
+  map: maplibregl.Map,
+  row: SupplierPinRow,
+  showLabels: boolean,
+  reachKm: number | null
+): maplibregl.Marker {
+  const el = document.createElement("div");
+  el.className = supplierPinClass(row, showLabels, reachKm);
+  const accessible = supplierAccessibleLabel(row, reachKm);
+  const dot = document.createElement("span");
+  dot.className = "map-pin-supplier-dot";
+  dot.setAttribute("aria-hidden", "true");
+  const label = document.createElement("span");
+  label.className = "map-pin-label";
+  label.textContent = row.name;
+  el.append(dot, label);
+  const marker = new maplibregl.Marker({ element: el })
+    .setLngLat([row.longitude, row.latitude])
+    .setPopup(new maplibregl.Popup({ offset: 14 }).setDOMContent(supplierPopupNode(row, reachKm)))
+    .addTo(map);
+  // Sama seperti pin SPPG: MapLibre menimpa aria-label saat konstruksi.
+  el.title = accessible;
+  el.setAttribute("aria-label", accessible);
+  return marker;
+}
+
+/** Segarkan penanda pemasok yang sudah ada (posisi, nada, keterangan, popup). */
+function refreshSupplierPin(
+  marker: maplibregl.Marker,
+  row: SupplierPinRow,
+  showLabels: boolean,
+  reachKm: number | null
+): void {
+  const el = marker.getElement();
+  el.className = supplierPinClass(row, showLabels, reachKm);
+  const accessible = supplierAccessibleLabel(row, reachKm);
+  el.title = accessible;
+  el.setAttribute("aria-label", accessible);
+  const label = el.querySelector(".map-pin-label");
+  if (label) label.textContent = row.name;
+  marker.setLngLat([row.longitude, row.latitude]);
+  marker.setPopup(
+    new maplibregl.Popup({ offset: 14 }).setDOMContent(supplierPopupNode(row, reachKm))
+  );
 }
 
 /**
@@ -160,6 +248,8 @@ export default function SupplyMap({
   activeLocation = null,
   showStatusList = true,
   showHeader = true,
+  suppliers = null,
+  reachKm = null,
 }: {
   locations: readonly BalanceMapLocation[];
   commodity?: string;
@@ -173,6 +263,15 @@ export default function SupplyMap({
   showStatusList?: boolean;
   /** false = pembungkus halaman sudah menulis judul kartunya sendiri. */
   showHeader?: boolean;
+  /** Payload `GET /suppliers` (amplop atau array) — layer pemasok. Lapisan ini
+   *  mati secara bawaan: pemilik proyek memintanya sebagai tambahan, bukan
+   *  pengganti pin SPPG, dan 30+ pin kota pada zoom Indonesia akan menutupi
+   *  pin SPPG. */
+  suppliers?: unknown;
+  /** Ambang jangkauan (km) untuk pin pemasok; `null` = tampilan nasional
+   *  (Fase 7b). Peran SPPG memakai 150 km — diputuskan di pemanggil lewat
+   *  `supplierReachKmForRole`, bukan di dalam peta, supaya aturannya satu tempat. */
+  reachKm?: number | null;
 }) {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -193,6 +292,41 @@ export default function SupplyMap({
   const hasLocations = Boolean(locations?.length);
   // Pemicu sinkronisasi = tanda tangan ISI data, bukan identitas array.
   const pinSnapshot = useMemo(() => pinSignatures(locations ?? []), [locations]);
+
+  // --- Layer pemasok (Fase 3) ---------------------------------------------
+  // Lapisan mati secara bawaan; pengguna menyalakannya sendiri.
+  const [showSuppliers, setShowSuppliers] = useState(false);
+  // null = belum tahu (SSR / peta belum siap) — pesan "perbesar peta" hanya
+  // muncul setelah zoom benar-benar diketahui, bukan dari tebakan.
+  const [zoomEnough, setZoomEnough] = useState<boolean | null>(null);
+  const supplierRows = useMemo(
+    () => suppliersForCommodity(supplierPinRows(suppliers), commodity ?? null),
+    [suppliers, commodity]
+  );
+  // Rujukan jarak dari server (untuk kalimat "…dari SPPG Jakarta"), bukan hitungan UI.
+  const supplierReference = useMemo(
+    () => supplierDistanceReference(suppliers),
+    [suppliers]
+  );
+  // Kalau server sudah menyaring (`reach.max_distance_km` terisi), jumlah yang
+  // dibuang datang dari server — UI tidak menghitung ulang atau menebaknya.
+  const supplierReach = useMemo(() => supplierReachMeta(suppliers), [suppliers]);
+  const hiddenByServer =
+    supplierReach.maxDistanceKm === null ? 0 : supplierReach.excludedOutOfReach;
+  // Baris yang benar-benar dipasang: jangkauan hanya berlaku bagi pemanggil yang
+  // memberi ambang; `null` = seluruh baris (tampilan nasional).
+  const supplierMapRows = useMemo(
+    () => supplierPinsForMap(supplierRows, reachKm ?? null),
+    [supplierRows, reachKm]
+  );
+  const supplierSummary = useMemo(
+    () => supplierLayerSummary(supplierRows, reachKm ?? null),
+    [supplierRows, reachKm]
+  );
+  const supplierMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const supplierRowsRef = useRef<readonly SupplierPinRow[]>(supplierMapRows);
+  const supplierReachRef = useRef<number | null>(reachKm ?? null);
+  const showSuppliersRef = useRef(false);
 
   // Ref data terbaru (efek ini tidak menyentuh kamera peta sama sekali).
   useEffect(() => {
@@ -229,11 +363,39 @@ export default function SupplyMap({
     pinSignaturesRef.current = next;
   }, []);
 
+  /** Sinkronkan penanda PEMASOK: hanya saat lapisan dinyalakan DAN zoom cukup
+   *  dekat. Semua penanda dibuang saat lapisan dimatikan atau zoom dijauhkan —
+   *  tidak ada yang tertinggal setengah aktif. */
+  const syncSupplierMarkers = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const markers = supplierMarkersRef.current;
+    const visible = showSuppliersRef.current && supplierPinsVisible(map.getZoom());
+    const rows = visible ? supplierRowsRef.current : [];
+    const showLabels = visible && supplierLabelsVisible(map.getZoom());
+    const keep = new Set(rows.map((row) => row.id));
+    markers.forEach((marker, id) => {
+      if (!keep.has(id)) {
+        marker.remove();
+        markers.delete(id);
+      }
+    });
+    rows.forEach((row) => {
+      const existing = markers.get(row.id);
+      if (existing) {
+        refreshSupplierPin(existing, row, showLabels, supplierReachRef.current);
+        return;
+      }
+      markers.set(row.id, createSupplierPin(map, row, showLabels, supplierReachRef.current));
+    });
+  }, []);
+
   useEffect(() => {
     if (!mapContainer.current || mapRef.current || !locationsRef.current?.length) return;
     // Salinan ref untuk cleanup: nilai `.current` bisa berubah sebelum cleanup
     // dijalankan (aturan react-hooks/exhaustive-deps).
     const markers = markersRef.current;
+    const supplierMarkers = supplierMarkersRef.current;
     const map = new maplibregl.Map({
       container: mapContainer.current,
       style: {
@@ -259,6 +421,16 @@ export default function SupplyMap({
     // aktif bila ada. Setelah ini peta TIDAK pernah dibangun ulang lagi.
     map.fitBounds(fitBoundsFor(locationsRef.current), { padding: 40, duration: 0 });
     syncMarkers();
+    // Zoom menentukan apakah pin pemasok boleh tampil (mereka baru muncul di
+    // zoom 8+). Keadaan zoom juga dipakai untuk memberi tahu pengguna kenapa
+    // lapisan yang dinyalakan masih kosong.
+    setZoomEnough(supplierPinsVisible(map.getZoom()));
+    const onZoom = () => {
+      setZoomEnough(supplierPinsVisible(map.getZoom()));
+      syncSupplierMarkers();
+    };
+    map.on("zoomend", onZoom);
+    syncSupplierMarkers();
 
     // Kontainer berubah ukuran (jendela, sidebar dilipat, breakpoint tata
     // letak) tanpa MapLibre mengetahuinya — tanpa ini peta tertinggal di
@@ -268,18 +440,28 @@ export default function SupplyMap({
 
     return () => {
       observer.disconnect();
+      map.off("zoomend", onZoom);
       map.remove();
       mapRef.current = null;
       markers.clear();
+      supplierMarkers.clear();
       pinSignaturesRef.current = {};
       focusRef.current = MAP_FOCUS_INITIAL;
     };
-  }, [hasLocations, syncMarkers]);
+  }, [hasLocations, syncMarkers, syncSupplierMarkers]);
 
   // Sinkronisasi data (arah Roy 2026-10-11): penanda saja, tanpa fitBounds.
   useEffect(() => {
     syncMarkers();
   }, [pinSnapshot, syncMarkers]);
+
+  // Layer pemasok: tombol + data. Keduanya hanya menyentuh penanda pemasok.
+  useEffect(() => {
+    showSuppliersRef.current = showSuppliers;
+    supplierRowsRef.current = supplierMapRows;
+    supplierReachRef.current = reachKm ?? null;
+    syncSupplierMarkers();
+  }, [showSuppliers, supplierMapRows, reachKm, syncSupplierMarkers]);
 
   // Sorotan lokasi aktif. Peta hanya di-dekatkan saat PILIHAN lokasi berubah
   // (sinkronisasi tidak boleh menarik kembali peta yang baru digeser).
@@ -342,7 +524,6 @@ export default function SupplyMap({
       {showHeader && (
         <div className="card-header">
           <h3>Peta Kondisi{commodity ? ` — ${commodity}` : ""}</h3>
-          <span className="map-attrib">MapLibre GL · tile OpenStreetMap · koordinat dari database</span>
         </div>
       )}
       <div className="map-body">
@@ -361,6 +542,49 @@ export default function SupplyMap({
               <i className="map-legend-box-dot map-legend-box-dot-shortage" aria-hidden="true" /> Shortage
             </span>
           </div>
+          {Boolean(suppliers) && (
+            <div className="map-supplier-controls">
+              <button
+                type="button"
+                className="map-layer-toggle"
+                aria-pressed={showSuppliers}
+                onClick={() => setShowSuppliers((value) => !value)}
+              >
+                {supplierToggleLabel(supplierMapRows, showSuppliers)}
+              </button>
+              <p className="map-supplier-note" role="status">
+                {supplierReachNote(
+                  supplierRows,
+                  reachKm ?? null,
+                  supplierReference?.location,
+                  hiddenByServer
+                )}
+              </p>
+              <div
+                className="map-legend-box map-legend-box-suppliers"
+                role="group"
+                aria-label="Legenda pemasok"
+              >
+                <span className="map-legend-box-title">Pemasok:</span>
+                {SUPPLIER_PIN_LEGEND.map((entry) => (
+                  <span key={entry.tone} className="map-legend-box-item">
+                    <i
+                      className={`map-legend-box-shape map-legend-box-shape-${entry.tone}`}
+                      aria-hidden="true"
+                    />{" "}
+                    {entry.label}
+                  </span>
+                ))}
+              </div>
+              {showSuppliers && zoomEnough === false && (
+                <p className="map-layer-hint" role="status">
+                  Perbesar peta untuk melihat {supplierSummary.total} pemasok — pin pemasok
+                  muncul pada zoom {SUPPLIER_PIN_MIN_ZOOM} ke atas, nama pemasok pada zoom{" "}
+                  {SUPPLIER_LABEL_MIN_ZOOM} ke atas.
+                </p>
+              )}
+            </div>
+          )}
         </div>
         {showStatusList && (
           <div className="map-side">

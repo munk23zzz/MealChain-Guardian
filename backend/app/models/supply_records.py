@@ -4,7 +4,16 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,6 +30,19 @@ class SupplyRecord(Base):
             "source IN ('mock_sap','manual','sensor')",
             name="supply_records_source_check",
         ),
+        CheckConstraint(
+            "origin IN ('seed','demo')", name="check_supply_records_origin_vocab"
+        ),
+        # Kunci upsert deret waktu (migrasi 013): sumber berbeda pada waktu sama
+        # MEMANG boleh ada (kontrak "mock > manual > sensor").
+        UniqueConstraint(
+            "location_id",
+            "commodity_id",
+            "recorded_at",
+            "source",
+            name="uq_supply_records_loc_com_time_source",
+        ),
+        Index("ix_supply_records_origin_recorded_at", "origin", "recorded_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -37,6 +59,12 @@ class SupplyRecord(Base):
         DateTime(timezone=True), nullable=False
     )
     source: Mapped[str] = mapped_column(String, nullable=False)
+    origin: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="seed"
+    )
+    generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

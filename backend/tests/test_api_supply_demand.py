@@ -21,9 +21,16 @@ LATEST = datetime(2026, 10, 8, 12, 0, 0, tzinfo=UTC)
 
 
 @pytest.fixture()
-def client(auth_headers):
+def client(monitor_headers):
+    """Klien baca nasional (bgn_monitor).
+
+    Ruling 2026-10-14: kepala SPPG Jakarta hanya boleh membaca lokasinya
+    sendiri, sedangkan berkas ini menguji semantik nilai supply/demand di
+    Cianjur/Bogor (jangkar angka Sprint 1). Peran yang sah membaca lintas
+    lokasi adalah bgn_monitor — berkas ini tidak menguji mutasi apa pun.
+    """
     with TestClient(app) as c:
-        c.headers.update(auth_headers)
+        c.headers.update(monitor_headers)
         yield c
 
 

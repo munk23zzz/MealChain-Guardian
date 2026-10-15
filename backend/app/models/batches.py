@@ -4,7 +4,16 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,6 +35,8 @@ class Batch(Base):
             "certification_status IN ('none','hygiene','haccp')",
             name="batches_certification_check",
         ),
+        CheckConstraint("origin IN ('seed','demo')", name="check_batches_origin_vocab"),
+        Index("ix_batches_origin_harvested_at", "origin", "harvested_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -57,6 +68,12 @@ class Batch(Base):
         Text, nullable=False, server_default="pending"
     )
     usable_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    origin: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="seed"
+    )
+    generated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(

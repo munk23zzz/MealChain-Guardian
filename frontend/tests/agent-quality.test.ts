@@ -2,7 +2,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  AGENT_QUALITY_METHOD_NOTE,
   VERDICT_LABEL,
   averageLabel,
   durationLabel,
@@ -120,11 +119,6 @@ describe("qualityMetrics", () => {
     expect(metrics.totalSteps).toBe(null);
     expect(metrics.avgDurationMs).toBe(null);
     expect(metrics.avgDurationLabel).toBe("—");
-  });
-
-  it("catatan metode menyebut cara penilaian dan yang belum ada", () => {
-    expect(AGENT_QUALITY_METHOD_NOTE).toContain("consistent");
-    expect(AGENT_QUALITY_METHOD_NOTE).toContain("LLM-as-judge belum ada");
   });
 
   it("durasi sub-detik ditulis jujur (stempel waktu hanya sampai detik)", () => {

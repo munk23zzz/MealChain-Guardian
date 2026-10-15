@@ -2,6 +2,8 @@
 
 Kontrak §11 + prompt Owner §8/9/15:
 - 401 unauth; monitor 403 (mutating); location scope
+- (Ruling 2026-10-14) target event = lokasi SPPG pemakai; quote tetap boleh
+  berasal dari lokasi uji terisolasi (sisi SUMBER)
 - 201 anomaly (decision_id, deviation_pct, classification, trace)
 - 200 no-anomaly, decision_id null, TIDAK menulis decision
 - replay key+payload sama → outcome sama (satu decision saja)
@@ -71,13 +73,24 @@ def _monitor_user(client: TestClient) -> dict:
 from tests.test_event2_service import mk_pair  # noqa: E402
 
 
+def _sppg_target() -> str:
+    """Lokasi TUJUAN event = SPPG pemakai (kepala demo di Jakarta).
+
+    Ruling 2026-10-14 mengunci target ke lokasi SPPG sendiri, sedangkan
+    `mk_pair` sengaja membuat lokasi uji terisolasi. Quote/pasokan tetap di
+    lokasi itu (sisi SUMBER — tetap lintas lokasi), tetapi keputusannya harus
+    menyasar SPPG pemakai.
+    """
+    return str(_db_all("SELECT id FROM locations WHERE name='Jakarta'")[0][0])
+
+
 def test_api_price_anomaly_unauth_401(client, request):
-    quote_id, _ref, loc_id = mk_pair(request, "1.2")
+    quote_id, _ref, _loc = mk_pair(request, "1.2")
     resp = client.post(
         "/events/price-anomaly",
         json={
             "quote_id": quote_id,
-            "target_location_id": loc_id,
+            "target_location_id": _sppg_target(),
             "operation_key": str(uuid.uuid4()),
         },
     )
@@ -85,13 +98,13 @@ def test_api_price_anomaly_unauth_401(client, request):
 
 
 def test_api_price_anomaly_monitor_403(client, request):
-    quote_id, _ref, loc_id = mk_pair(request, "1.2")
+    quote_id, _ref, _loc = mk_pair(request, "1.2")
     headers = _monitor_user(client)
     resp = client.post(
         "/events/price-anomaly",
         json={
             "quote_id": quote_id,
-            "target_location_id": loc_id,
+            "target_location_id": _sppg_target(),
             "operation_key": str(uuid.uuid4()),
         },
         headers=headers,
@@ -106,7 +119,7 @@ def test_api_price_anomaly_anomaly_201(client, request):
         "/events/price-anomaly",
         json={
             "quote_id": quote_id,
-            "target_location_id": loc_id,
+            "target_location_id": _sppg_target(),
             "operation_key": str(uuid.uuid4()),
         },
         headers=headers,
@@ -135,14 +148,14 @@ def test_api_price_anomaly_anomaly_201(client, request):
 
 
 def test_api_price_anomaly_no_anomaly_200_no_write(client, request):
-    quote_id, _ref, loc_id = mk_pair(request, "1.025")  # +2.5% normal
+    quote_id, _ref, _loc = mk_pair(request, "1.025")  # +2.5% normal
     headers = _head_user(client)
     before = _db_all("SELECT count(*) FROM decisions")[0][0]
     resp = client.post(
         "/events/price-anomaly",
         json={
             "quote_id": quote_id,
-            "target_location_id": loc_id,
+            "target_location_id": _sppg_target(),
             "operation_key": str(uuid.uuid4()),
         },
         headers=headers,
@@ -156,12 +169,12 @@ def test_api_price_anomaly_no_anomaly_200_no_write(client, request):
 
 
 def test_api_price_anomaly_replay_idempotent(client, request):
-    quote_id, _ref, loc_id = mk_pair(request, "1.2")
+    quote_id, _ref, _loc = mk_pair(request, "1.2")
     headers = _head_user(client)
     op_key = str(uuid.uuid4())
     payload = {
         "quote_id": quote_id,
-        "target_location_id": loc_id,
+        "target_location_id": _sppg_target(),
         "operation_key": op_key,
     }
     r1 = client.post("/events/price-anomaly", json=payload, headers=headers)
@@ -180,7 +193,7 @@ def test_api_price_anomaly_replay_idempotent(client, request):
 
 
 def test_api_price_anomaly_key_reuse_other_quote_409(client, request):
-    quote_id, _ref, loc_id = mk_pair(request, "1.2")
+    quote_id, _ref, _loc = mk_pair(request, "1.2")
     other_quote, _ref2, _loc2 = mk_pair(request, "1.3")
     headers = _head_user(client)
     op_key = str(uuid.uuid4())
@@ -188,7 +201,7 @@ def test_api_price_anomaly_key_reuse_other_quote_409(client, request):
         "/events/price-anomaly",
         json={
             "quote_id": quote_id,
-            "target_location_id": loc_id,
+            "target_location_id": _sppg_target(),
             "operation_key": op_key,
         },
         headers=headers,
@@ -198,7 +211,7 @@ def test_api_price_anomaly_key_reuse_other_quote_409(client, request):
         "/events/price-anomaly",
         json={
             "quote_id": other_quote,
-            "target_location_id": loc_id,
+            "target_location_id": _sppg_target(),
             "operation_key": op_key,
         },
         headers=headers,
@@ -224,14 +237,14 @@ def test_api_price_anomaly_unknown_quote_404(client):
 
 def test_api_price_anomaly_no_po_created(client, request):
     """Zero PO selama Event 2 review-only (ruling O-PO, §15–17)."""
-    quote_id, _ref, loc_id = mk_pair(request, "1.25")
+    quote_id, _ref, _loc = mk_pair(request, "1.25")
     headers = _head_user(client)
     before = _db_all("SELECT count(*) FROM sap_mock_purchase_orders")[0][0]
     resp = client.post(
         "/events/price-anomaly",
         json={
             "quote_id": quote_id,
-            "target_location_id": loc_id,
+            "target_location_id": _sppg_target(),
             "operation_key": str(uuid.uuid4()),
         },
         headers=headers,

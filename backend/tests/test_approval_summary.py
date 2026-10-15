@@ -220,22 +220,35 @@ def test_approval_summary_unknown_404(client):
     assert resp.status_code == 404
 
 
-def test_approval_summary_verifier_lintas_lokasi_200_ruling_a(client):
-    """REVISI S4-05 (Ruling Owner 2026-10-08): nutritionist Bogor BOLEH
-    membaca summary decision Jakarta.
+def test_approval_summary_verifier_lintas_lokasi_403(client, far_nutritionist_headers):
+    """Ruling 2026-10-14 MENGGANTIKAN ruling 2026-10-08: nutritionist Bogor
+    TIDAK boleh membaca summary decision Jakarta.
 
-    Test lama mem-pin 403 (kontrak pra-ruling O-SEC-2 untuk semua SPPG).
-    Write path approve tidak membatasi lokasi → read path summary
-    selaras (approver ke-2 matriks AND wajib bisa melihat ringkasan).
+    Alasan pencabutan ada di docs/ruling-2026-10-14-scope-lokasi.md: jalur
+    tulis (POST /actions/approve) memang sudah terkunci ke lokasi sendiri,
+    jadi jalur baca dibuat simetris dan matriks AND dua verifier berlaku di
+    dalam satu SPPG.
     """
     did = _mk_decision(_jakarta_id(), _jakarta_id())
     try:
         resp = client.get(
-            f"/decisions/{did}/approval-summary", headers=_nut_user(client)
+            f"/decisions/{did}/approval-summary", headers=far_nutritionist_headers
+        )
+        assert resp.status_code == 403, resp.text
+        assert "cakupan lokasi" in resp.json()["detail"]
+    finally:
+        _cleanup_decision(did)
+
+
+def test_approval_summary_sppg_sendiri_tetap_200(client):
+    """Yang tidak berubah: kepala SPPG membaca summary SPPG-nya sendiri."""
+    did = _mk_decision(_jakarta_id(), _jakarta_id())
+    try:
+        resp = client.get(
+            f"/decisions/{did}/approval-summary", headers=_head_user(client)
         )
         assert resp.status_code == 200, resp.text
-        body = resp.json()
-        assert body["decision_id"] == did
+        assert resp.json()["decision_id"] == did
     finally:
         _cleanup_decision(did)
 
@@ -485,7 +498,12 @@ def test_approval_summary_safety_revalidation_block(client):
 
 def test_approval_summary_missing_facts_null_not_fake(client):
     """Decision tanpa lokasi/komoditas → field null + safety unavailable,
-    BUKAN default palsu."""
+    BUKAN default palsu.
+
+    Catatan cakupan (Ruling 2026-10-14): baris tanpa lokasi TUJUAN tidak
+    dimiliki SPPG mana pun, jadi hanya bgn_monitor yang boleh membacanya;
+    kepala SPPG menerima 403 (bukan 200 dengan tebakan lokasi).
+    """
     did = str(_db_exec_returning(
         "INSERT INTO decisions (id, decision_type, status, proposed_by, "
         "expires_at, iteration) VALUES (:id, 'price_anomaly', "
@@ -507,8 +525,14 @@ def test_approval_summary_missing_facts_null_not_fake(client):
             "VALUES (:d, :u, True)",
             {"d": did, "u": str(users[0][0])},
         )
+        assert (
+            client.get(
+                f"/decisions/{did}/approval-summary", headers=_head_user(client)
+            ).status_code
+            == 403
+        )
         summary = client.get(
-            f"/decisions/{did}/approval-summary", headers=_head_user(client)
+            f"/decisions/{did}/approval-summary", headers=_monitor_user(client)
         ).json()
         assert summary["source_location"] is None
         assert summary["commodity"] is None

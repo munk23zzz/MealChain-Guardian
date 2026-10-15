@@ -47,7 +47,9 @@ describe("SurplusBoard", () => {
     expect(render({ onOpenLocation: () => {} })).toContain("Lihat di peta");
   });
 
-  it("catatan sumber menyebut endpoint", () => {
-    expect(render()).toContain("/balance/map");
+  it("tidak ada catatan internal (path API) di layar", () => {
+    const html = render();
+    expect(html).not.toContain("/balance/map");
+    expect(html).not.toContain("Catatan sumber");
   });
 });

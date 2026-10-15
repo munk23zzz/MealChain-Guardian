@@ -34,6 +34,14 @@ working MVP untuk kompetisi Sokrates x SAP x AWS.
 | **Dinas/BGN Admin** | Melihat semua lokasi, audit evidence, approve aksi lintas-wilayah, monitor KPI | Dashboard scoped ke semua lokasi |
 | **Juri kompetisi** | Melihat agent bekerja autonomous, memahami value proposition dalam < 10 menit demo | Guided demo flow, bukan role terpisah |
 
+**Cakupan data per peran (dikunci 2026-10-14 — `docs/ruling-2026-10-14-scope-lokasi.md`):**
+`SPPG Staff` membaca **hanya lokasi sendiri** (keputusan yang targetnya lokasi itu, peta, supply,
+demand); permintaan ke lokasi lain dijawab `403`. `Dinas/BGN Admin` (`bgn_monitor`) membaca
+**semua lokasi** dan **read-only** — tidak boleh mengubah/mengisi data demo. Aturan ini berlaku
+juga di dalam peta dan feed (angka yang sah berbeda antar peran bukan bug). Pengecualian yang
+disengaja: **data sumber pemasok** (`GET /suppliers`, register eksklusi) boleh dibaca lintas
+daerah oleh peran SPPG, karena memilih pemasok tidak dibatasi wilayah pengguna.
+
 ## 4. Scope MVP (3-4 minggu)
 
 ### In-scope
@@ -75,7 +83,12 @@ working MVP untuk kompetisi Sokrates x SAP x AWS.
 4. **Agent Activity Log** — trace step-by-step (DETECT→VERIFY→TRACE→PREDICT→OPTIMIZE→DECIDE→ACT→LEARN),
    diambil dari AgentCore Observability
 5. **Approval Flow** — approver SPPG (SPPG Head / SPPG Nutritionist) approve atau reject aksi berisiko tinggi sebelum eksekusi; `bgn_monitor` read-only
-6. **KPI Dashboard** — 7 indikator (lihat `Skill.md` untuk definisi)
+6. **KPI Dashboard** — 7 indikator (lihat `Skill.md` untuk definisi).
+   *Catatan 2026-10-15 (keputusan pemilik):* tab KPI dan halaman tambahan **Kualitas Agen**
+   disatukan menjadi satu tab sidebar **"KPI & Kualitas Agen"** (KPI dulu, lalu mutu kerja agen);
+   strip "Target KPI Demo Day" dihapus dari halaman KPI. Penyimpangan yang disengaja dari daftar
+   layar §5 di atas — dicatat supaya klaim alignment PRD tidak dibaca berlebihan. Bukti:
+   `docs/verification/fase-8.md`.
 7. **Auth & Role-based View** — login, 3 role (sppg_head, sppg_nutritionist, bgn_monitor)
 
 ## 6. Technical requirements (ringkas — detail di `Architecture.md`)

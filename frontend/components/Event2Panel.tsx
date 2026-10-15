@@ -3,7 +3,7 @@
 // Event 2 Panel (S4-01) — price anomaly review, TANPA auto-PO.
 // Semua angka dari backend (GET /price/quotes + POST /events/price-anomaly).
 // Wording review-required (plan §11/§16), bukan tuduhan fraud.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import StatusBadge from "./StatusBadge";
 import { formatIDR } from "../lib/auth";
 import { fetchPriceQuotes, triggerPriceAnomaly } from "../lib/api";
@@ -14,12 +14,14 @@ const COMMODITIES = ["telur", "ayam", "wortel"];
 export default function Event2Panel({
   role,
   token,
+  ownLocationName = null,
   onDecisionCreated,
   initialQuotes = null,
   initialResult = null,
 }: {
   role: string;
   token: string | null;
+  ownLocationName?: string | null;
   onDecisionCreated?: () => void;
   initialQuotes?: any;
   initialResult?: any;
@@ -41,6 +43,13 @@ export default function Event2Panel({
 
   const canRun =
     token !== null && (role === "sppg_head" || role === "sppg_nutritionist");
+  // Ruling 2026-10-14: penawaran hanya boleh dibaca untuk SPPG sendiri, jadi
+  // pilihan lokasi dikunci untuk peran SPPG (hanya bgn_monitor lintas lokasi).
+  const canChooseLocation = role === "bgn_monitor";
+
+  useEffect(() => {
+    if (!canChooseLocation && ownLocationName) setLocation(ownLocationName);
+  }, [canChooseLocation, ownLocationName]);
 
   async function loadQuotes() {
     if (!token) return setMsg("Login diperlukan");
@@ -103,12 +112,20 @@ export default function Event2Panel({
             className="event2-location"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
-            disabled={!canRun || busy}
+            disabled={!canRun || busy || !canChooseLocation}
+            aria-describedby="event2-location-note"
           >
-            {LOCATIONS.map((l) => (
-              <option key={l}>{l}</option>
-            ))}
+            {canChooseLocation
+              ? LOCATIONS.map((l) => <option key={l}>{l}</option>)
+              : ownLocationName
+                ? [ownLocationName].map((l) => <option key={l}>{l}</option>)
+                : null}
           </select>
+          <small id="event2-location-note" className="field-note">
+            {canChooseLocation
+              ? "Cakupan nasional (bgn_monitor) — semua lokasi."
+              : "Terkunci ke SPPG Anda (cakupan lokasi 2026-10-14)."}
+          </small>
         </label>
         <label className="field">
           <span>Komoditas</span>

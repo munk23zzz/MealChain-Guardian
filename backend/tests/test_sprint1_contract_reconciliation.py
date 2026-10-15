@@ -12,6 +12,8 @@ boleh mengubah jumlah baris maupun kontrak source/supplier.
 
 from sqlalchemy import create_engine, text
 
+from app.seed.suppliers_demo import load_demo_rows
+
 DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
 
 
@@ -40,8 +42,12 @@ def test_reconciliation_preserves_row_counts():
     engine = create_engine(DB_URL)
     try:
         with engine.connect() as conn:
+            # Fase 4 (2026-10-15): tabel yang sama juga memuat deret waktu DEMO
+            # (`origin='demo'`, lihat app/seed/timeseries.py). Kontrak
+            # rekonsiliasi ini soal baris KANONIK hasil seed, jadi dihitung
+            # dengan `origin='seed'` — bukan lagi count(*) seluruh tabel.
             prices = conn.execute(
-                text("SELECT count(*) FROM price_signals")
+                text("SELECT count(*) FROM price_signals WHERE origin='seed'")
             ).scalar()
             suppliers = conn.execute(
                 text("SELECT count(*) FROM suppliers")
@@ -49,17 +55,21 @@ def test_reconciliation_preserves_row_counts():
             refs = conn.execute(
                 text(
                     "SELECT count(*) FROM price_signals "
-                    "WHERE source='pihps_reference'"
+                    "WHERE source='pihps_reference' AND origin='seed'"
                 )
             ).scalar()
             quotes = conn.execute(
                 text(
                     "SELECT count(*) FROM price_signals "
-                    "WHERE source='supplier_quote'"
+                    "WHERE source='supplier_quote' AND origin='seed'"
                 )
             ).scalar()
         assert prices == 44
-        assert suppliers == 14
+        # Fase 2 (2026-10-14): +30 pemasok DEMO (data/seed/suppliers_demo.json)
+        # supaya pemasok bisa ditampilkan di peta. Angka 14 = pemasok kanonik
+        # sprint1_seed.json; keutuhan mereka (nama, skor, id) diverifikasi
+        # terpisah di tests/test_suppliers_data.py.
+        assert suppliers == 14 + len(load_demo_rows())
         assert refs == 30
         assert quotes == 14
     finally:

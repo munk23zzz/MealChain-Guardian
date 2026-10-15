@@ -2,7 +2,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  FOOD_SAFETY_SOURCE_NOTE,
   hoursLabel,
   hoursLeft,
   safetyLabel,
@@ -121,8 +120,4 @@ describe("safetySummary", () => {
     expect(summary.hasFail).toBe(false);
   });
 
-  it("catatan sumber menyebut endpoint nyata dan bagian yang tidak ada", () => {
-    expect(FOOD_SAFETY_SOURCE_NOTE).toContain("/batches");
-    expect(FOOD_SAFETY_SOURCE_NOTE).toContain("tidak diisi angka karangan");
-  });
 });

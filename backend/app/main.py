@@ -29,6 +29,7 @@ from app.api.price import router as price_router
 from app.api.safety import router as safety_router
 from app.api.supplier_exclusion_context import router as supplier_exclusion_context_router
 from app.api.supplier_exclusions import router as supplier_exclusions_router
+from app.api.suppliers import router as suppliers_router
 from app.api.supply import router as supply_router
 
 
@@ -102,6 +103,7 @@ app.include_router(dossier_router)
 app.include_router(compliance_router)
 
 app.include_router(supplier_exclusions_router)
+app.include_router(suppliers_router)
 app.include_router(supplier_exclusion_context_router)
 app.include_router(admin_router)
 

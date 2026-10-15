@@ -9,7 +9,7 @@
 //      POST /decisions → muncul di feed → approve/reject/execute.
 // bgn_monitor read-only: bisa melihat semuanya, tanpa tombol Ajukan.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import StatusBadge from "./StatusBadge";
 import Event2Panel from "./Event2Panel";
 import { formatIDR } from "../lib/auth";
@@ -22,6 +22,7 @@ const COMMODITIES = ["telur", "beras", "ayam"];
 export default function OpsConsole({
   role,
   token,
+  ownLocationName = null,
   onSubmitted,
   snapshot: initialSnapshot = null,
   analysis: initialAnalysis = null,
@@ -29,6 +30,7 @@ export default function OpsConsole({
   event2: initialEvent2 = null,
 }: {
   role: string;
+  ownLocationName?: string | null;
   token: string | null;
   onSubmitted?: () => void;
   snapshot?: any;
@@ -37,6 +39,13 @@ export default function OpsConsole({
   event2?: any;
 }) {
   const [location, setLocation] = useState("Jakarta");
+  // Ruling 2026-10-14: kondisi lokasi lain hanya boleh dibaca bgn_monitor;
+  // peran SPPG terkunci ke lokasinya (server membalas 403 untuk yang lain).
+  const canChooseLocation = role === "bgn_monitor";
+
+  useEffect(() => {
+    if (!canChooseLocation && ownLocationName) setLocation(ownLocationName);
+  }, [canChooseLocation, ownLocationName]);
   const [commodity, setCommodity] = useState("telur");
   const [snapshot, setSnapshot] = useState<any>(initialSnapshot);
   const [analysis, setAnalysis] = useState<any>(initialAnalysis);
@@ -115,11 +124,20 @@ export default function OpsConsole({
             className="ops-location"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
+            disabled={!canChooseLocation}
+            aria-describedby="ops-location-note"
           >
-            {LOCATIONS.map((l) => (
-              <option key={l}>{l}</option>
-            ))}
+            {canChooseLocation
+              ? LOCATIONS.map((l) => <option key={l}>{l}</option>)
+              : ownLocationName
+                ? [ownLocationName].map((l) => <option key={l}>{l}</option>)
+                : null}
           </select>
+          <small id="ops-location-note" className="field-note">
+            {canChooseLocation
+              ? "Cakupan nasional (bgn_monitor) — semua lokasi."
+              : "Terkunci ke SPPG Anda (cakupan lokasi 2026-10-14)."}
+          </small>
         </label>
         <label className="field">
           <span>Komoditas</span>
@@ -225,6 +243,7 @@ export default function OpsConsole({
       <Event2Panel
         role={role}
         token={token}
+        ownLocationName={ownLocationName}
         onDecisionCreated={onSubmitted}
         initialQuotes={initialPriceQuotes}
         initialResult={initialEvent2}

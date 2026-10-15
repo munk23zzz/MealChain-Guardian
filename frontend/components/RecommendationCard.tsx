@@ -47,12 +47,22 @@ export const DECISION_TYPE_LABELS: Record<string, string> = {
 const PLACEHOLDER_NOTES = new Set(["unavailable", "n/a", "na", "-", "none", "null", "undefined"]);
 
 
+// Ajakan pada kartu. Hanya berlaku di FEED, karena di sana seluruh kartu
+// dibungkus <button> yang membuka halaman Decision & Evidence. Di halaman bukti
+// kartu ini dirender tanpa pembungkus, jadi teks ajakannya jadi janji kosong
+// (terukur: kursor auto, tak ada induk yang bisa diklik, klik tidak mengubah
+// apa pun) — karena itu pemanggil di sana mengirim `hint={null}`.
+export const CARD_HINT = "Klik untuk rincian & jejak agen";
+
 export default function RecommendationCard({
   decision,
   mockSourced = false,
+  hint = CARD_HINT,
 }: {
   decision: any;
   mockSourced?: boolean;
+  /** Teks ajakan; null/"" = tidak ditampilkan (kartu tidak bisa diklik). */
+  hint?: string | null;
 }) {
   const typeLabel = DECISION_TYPE_LABELS[decision.decision_type] ?? "Rekomendasi baru";
   const caseLabel = decision.demo_case
@@ -105,9 +115,11 @@ export default function RecommendationCard({
       <div className="rec-foot">
         {caseLabel && <span className="badge rec-case">{caseLabel}</span>}
         {mockSourced && <span className="badge mock-badge">Data Simulasi</span>}
-        <span className="rec-hint" aria-hidden="true">
-          Klik untuk rincian &amp; jejak agen
-        </span>
+        {hint ? (
+          <span className="rec-hint" aria-hidden="true">
+            {hint}
+          </span>
+        ) : null}
       </div>
 
       {narrative && <p className="rec-narrative">{narrative}</p>}

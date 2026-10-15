@@ -13,10 +13,16 @@ Jalankan dari dalam kontainer backend: `python scripts/verifikasi_admin.py`.
 from __future__ import annotations
 
 import json
+import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 
-from app.seed.seed_data import DEMO_USERS
+# `python scripts/verifikasi_admin.py` menaruh folder `scripts/` sebagai sys.path[0],
+# bukan akar repo — tanpa baris ini impor `app.*` gagal walau dijalankan di kontainer.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from app.seed.seed_data import DEMO_USERS  # noqa: E402  (butuh sys.path di atas)
 
 BASE = "http://127.0.0.1:8000"
 

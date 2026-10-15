@@ -1,33 +1,40 @@
-// Halaman "Pemasok" — meniru halaman /suppliers di aplikasi acuan
-// (E:\hackathon\HackathonBil\MealchainGuardian: daftar + kepercayaan + eksklusi),
-// DISESUAIKAN ke endpoint yang ADA di repo ini:
-//   GET /supplier-exclusions                       → register eksklusi
-//   GET /decisions/{id}/approval-summary           → pemasok + skor keandalan
+// Halaman "Pemasok" — daftar + kepercayaan + eksklusi.
 //
-// Backend ini TIDAK punya endpoint daftar pemasok, jadi daftarnya disusun dari
-// pemasok yang muncul pada keputusan terakhir dalam cakupan — dan jumlah
-// keputusan yang dipindai ditulis apa adanya di halaman (bukan "semua pemasok").
+// Sumber daftar (Fase 3, 2026-10-14): `GET /suppliers` — endpoint daftar pemasok
+// yang BARU ada di Fase 2. Sebelumnya halaman ini menyusun daftarnya dari
+// pemasok yang kebetulan muncul pada sampel keputusan terakhir (dan menuliskan
+// keterbatasan itu di layar) karena backend belum punya endpoint daftar.
+//
+// Aturan tampilan:
+// - Nilai yang tidak ada ditulis "—" (bukan 0, bukan string kosong).
+// - Enum internal ('none'/'hygiene'/'haccp') TIDAK pernah tampil; labelnya dari
+//   `certificationLabel` di lib/supplier-pins.ts supaya tidak ada dua kamus.
+// - Urutan = risiko dulu: dikecualikan → skor terendah → terbaik → tanpa skor.
+
+import {
+  certificationLabel,
+  distanceLabel as formatDistance,
+  distanceReachLabel,
+  LOW_RELIABILITY,
+  withinReachKm,
+} from "./supplier-pins";
 
 const DASH = "—";
 
-export type SupplierPair = {
-  decisionId?: string | null;
-  decisionType?: string | null;
-  commodity?: string | null;
-  supplier?: {
-    id?: string | null;
-    name?: string | null;
-    reliability_score?: number | string | null;
-  } | null;
-};
-
-export type SupplierRosterRow = {
+export type SupplierDirectoryRow = {
   id: string;
   name: string;
-  reliabilityLabel: string;
+  hub: string;
+  commodity: string;
   reliability: number | null;
-  decisions: number;
-  commodities: string[];
+  reliabilityLabel: string;
+  certification: string;
+  coordinates: string;
+  /** Jarak dari rujukan server (`distance_reference`), atau null bila tidak ada rujukan. */
+  distanceKm: number | null;
+  distanceLabel: string;
+  excluded: boolean;
+  excludedScopes: string[];
 };
 
 export function reliabilityLabel(score: unknown): string {
@@ -37,62 +44,164 @@ export function reliabilityLabel(score: unknown): string {
   return `${Math.round(numeric * 100)}%`;
 }
 
-export function supplierRoster(pairs: unknown): SupplierRosterRow[] {
-  const list = Array.isArray(pairs) ? (pairs as SupplierPair[]) : [];
-  const byId = new Map<string, SupplierRosterRow & { commoditySet: Set<string> }>();
-  for (const pair of list) {
-    const supplier = pair?.supplier;
-    const name = supplier?.name ? String(supplier.name).trim() : "";
-    const id = supplier?.id ? String(supplier.id) : name;
-    if (!name && !id) continue;
-    const key = id || name;
-    const existing = byId.get(key);
-    const score = supplier?.reliability_score;
-    const numeric = score === null || score === undefined || score === "" ? null : Number(score);
-    const commodity = pair?.commodity ? String(pair.commodity).trim() : "";
-    if (existing) {
-      existing.decisions += 1;
-      if (commodity) existing.commoditySet.add(commodity);
-      if (existing.reliability === null && numeric !== null && Number.isFinite(numeric)) {
-        existing.reliability = numeric;
-        existing.reliabilityLabel = reliabilityLabel(numeric);
-      }
-      continue;
-    }
-    byId.set(key, {
-      id: key,
-      name: name || key,
-      reliability: numeric !== null && Number.isFinite(numeric) ? numeric : null,
-      reliabilityLabel: reliabilityLabel(score),
-      decisions: 1,
-      commodities: [],
-      commoditySet: commodity ? new Set([commodity]) : new Set(),
-    });
-  }
-  return Array.from(byId.values())
-    .map(({ commoditySet, ...row }) => ({ ...row, commodities: Array.from(commoditySet).sort() }))
-    .sort((a, b) => b.decisions - a.decisions || a.name.localeCompare(b.name));
+function text(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const raw = String(value).trim();
+  return raw ? raw : null;
 }
 
-export type RosterMetrics = {
+function number(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+/** Koordinat 4 desimal dengan pemisah desimal koma (gaya id-ID), tanpa ICU. */
+function coordinate(value: number): string {
+  return value.toFixed(4).replace(".", ",");
+}
+
+function coordinatesLabel(latitude: number | null, longitude: number | null): string {
+  if (latitude === null || longitude === null) return DASH;
+  return `${coordinate(latitude)} / ${coordinate(longitude)}`;
+}
+
+/**
+ * Baris tabel daftar pemasok dari payload `GET /suppliers`
+ * (amplop `{items: [...]}` atau array langsung).
+ */
+export function supplierDirectory(raw: unknown): SupplierDirectoryRow[] {
+  const list = Array.isArray(raw)
+    ? raw
+    : Array.isArray((raw as { items?: unknown } | null)?.items)
+      ? ((raw as { items: unknown[] }).items as unknown[])
+      : [];
+  const rows: SupplierDirectoryRow[] = [];
+  for (const item of list) {
+    const record = (item ?? {}) as Record<string, unknown>;
+    const name = text(record.name);
+    if (!name) continue;
+    const reliability = number(record.reliability_score);
+    const latitude = number(record.latitude);
+    const longitude = number(record.longitude);
+    const scopes = Array.isArray(record.excluded_scope_locations)
+      ? record.excluded_scope_locations
+          .map((s) => text(s))
+          .filter((s): s is string => Boolean(s))
+      : [];
+    const distanceKm = number(record.distance_km);
+    rows.push({
+      id: text(record.id) ?? name,
+      name,
+      hub: text(record.location) ?? DASH,
+      commodity: text(record.commodity) ?? DASH,
+      reliability,
+      reliabilityLabel: reliabilityLabel(reliability),
+      certification: certificationLabel(text(record.certification_status)),
+      coordinates: coordinatesLabel(latitude, longitude),
+      distanceKm,
+      distanceLabel: formatDistance(distanceKm),
+      excluded: record.excluded_at_hub === true || scopes.includes(text(record.location) ?? ""),
+      excludedScopes: scopes,
+    });
+  }
+  return rows.sort(compareByRisk);
+}
+
+/** Risiko dulu: dikecualikan → skor terendah → terbaik → tanpa skor → nama. */
+function compareByRisk(a: SupplierDirectoryRow, b: SupplierDirectoryRow): number {
+  if (a.excluded !== b.excluded) return a.excluded ? -1 : 1;
+  const unknownRank = (row: SupplierDirectoryRow) => (row.reliability === null ? 1 : 0);
+  const byRank = unknownRank(a) - unknownRank(b);
+  if (byRank !== 0) return byRank;
+  if (a.reliability !== null && b.reliability !== null && a.reliability !== b.reliability) {
+    return a.reliability - b.reliability;
+  }
+  return a.name.localeCompare(b.name);
+}
+
+export type DirectoryMetrics = {
   suppliers: number;
   avgReliability: number | null;
   avgReliabilityLabel: string;
-  totalDecisions: number;
+  lowReliability: number;
+  excluded: number;
+  withCoordinates: number;
+  /** Jumlah pemasok di luar jangkauan (0 bila tidak ada ambang / jarak tak diketahui). */
+  outOfReach: number;
+  /** Jumlah pemasok yang jaraknya tidak dilaporkan server. */
+  unknownDistance: number;
 };
 
-export function rosterMetrics(roster: unknown): RosterMetrics {
-  const list = Array.isArray(roster) ? (roster as SupplierRosterRow[]) : [];
+export function directoryMetrics(
+  rows: unknown,
+  reachKm?: number | null
+): DirectoryMetrics {
+  const list = Array.isArray(rows) ? (rows as SupplierDirectoryRow[]) : [];
   const scores = list
     .map((row) => row.reliability)
     .filter((score): score is number => typeof score === "number" && Number.isFinite(score));
-  const avg = scores.length ? scores.reduce((total, score) => total + score, 0) / scores.length : null;
+  const avg = scores.length
+    ? scores.reduce((total, score) => total + score, 0) / scores.length
+    : null;
+  const known = list.filter(
+    (row) => typeof row.distanceKm === "number" && Number.isFinite(row.distanceKm)
+  );
   return {
     suppliers: list.length,
     avgReliability: avg,
     avgReliabilityLabel: avg === null ? DASH : reliabilityLabel(avg),
-    totalDecisions: list.reduce((total, row) => total + row.decisions, 0),
+    lowReliability: scores.filter((score) => score < LOW_RELIABILITY).length,
+    excluded: list.filter((row) => row.excluded).length,
+    withCoordinates: list.filter((row) => row.coordinates !== DASH).length,
+    outOfReach:
+      reachKm === null || reachKm === undefined
+        ? 0
+        : known.filter((row) => !withinReachKm(row.distanceKm, reachKm)).length,
+    unknownDistance: list.length - known.length,
   };
+}
+
+/**
+ * Saring daftar pemasok berdasarkan jangkauan (Fase 7b).
+ *
+ * `reachKm` null/undefined = daftar apa adanya (perilaku lama, dan perilaku
+ * `bgn_monitor`). Baris tanpa jarak TIDAK ikut saat penyaringan aktif: tidak bisa
+ * dibuktikan dekat, jadi tidak diklaim dekat — sama dengan aturan di peta dan di
+ * endpoint `GET /suppliers?max_distance_km=`.
+ */
+export function filterDirectoryByReach(
+  rows: readonly SupplierDirectoryRow[],
+  reachKm?: number | null
+): SupplierDirectoryRow[] {
+  if (reachKm === null || reachKm === undefined || !Number.isFinite(reachKm)) {
+    return [...rows];
+  }
+  return rows.filter((row) => withinReachKm(row.distanceKm, reachKm));
+}
+
+/** Nada baris tabel untuk kolom jarak: dalam / luar jangkauan / tidak diketahui. */
+export function directoryReachLabel(
+  row: SupplierDirectoryRow,
+  reachKm?: number | null
+): string {
+  return distanceReachLabel(row.distanceKm, reachKm);
+}
+
+/** Ringkasan jujur di atas tabel: berapa yang tampil dari berapa, dari rujukan mana. */
+export function directoryReachSummary(
+  rows: readonly SupplierDirectoryRow[],
+  reachKm?: number | null,
+  reference?: string | null
+): string {
+  if (reachKm === null || reachKm === undefined || !Number.isFinite(reachKm)) {
+    const unknown = rows.filter((row) => row.distanceKm === null).length;
+    const ekor = unknown > 0 ? ` · ${unknown} tanpa jarak` : "";
+    return `${rows.length} pemasok ditampilkan (semua, tanpa ambang jarak)${ekor}`;
+  }
+  const within = rows.filter((row) => withinReachKm(row.distanceKm, reachKm)).length;
+  const dari = reference ? ` dari ${reference}` : "";
+  return `${within} dari ${rows.length} pemasok dalam jangkauan ${reachKm} km${dari}`;
 }
 
 export type ExclusionRow = {
@@ -122,15 +231,4 @@ export function exclusionRows(items: unknown): ExclusionRow[] {
       status: text(record.status) ?? "excluded",
     };
   });
-}
-
-export const SUPPLIER_SOURCE_NOTE =
-  "Daftar pemasok disusun dari pemasok pada keputusan terakhir dalam cakupan Anda (backend ini belum " +
-  "punya endpoint daftar pemasok). Skor keandalan dibaca apa adanya dari payung keputusan " +
-  "(reliability_score) — tidak dihitung ulang di layar. Register eksklusi dari GET /supplier-exclusions.";
-
-function text(value: unknown): string | null {
-  if (value === null || value === undefined) return null;
-  const raw = String(value).trim();
-  return raw ? raw : null;
 }

@@ -243,18 +243,62 @@ export function decisionFacts(decision: unknown, now: Date): FactRow[] {
   ];
 }
 
+/** Label jujur untuk baris angkut kaki pertama (Fase 7d). */
+const LEG_REFERENCE_HINT: Record<string, string> = {
+  supplier_coordinates: "koordinat pemasok",
+  supplier_coordinates_missing: "jarak tidak diketahui — koordinat pemasok kosong",
+  no_supplier: "tanpa identitas pemasok",
+};
+
+/**
+ * Hint baris angkut pemasok → SPPG: km bila benar-benar diketahui, atau
+ * ALASANnya bila tidak. Angka 0 km tidak pernah ditampilkan sebagai jarak —
+ * nol berarti "pemasok menempel di dinding SPPG", klaim yang tidak punya dasar.
+ */
+export function supplierLegHint(breakdown: unknown): string | null {
+  const bd = (breakdown ?? {}) as Record<string, unknown>;
+  const reference = text(bd.supplier_leg_reference);
+  const km = Number(bd.supplier_leg_km);
+  if (reference === "supplier_coordinates" && Number.isFinite(km)) {
+    return `${km.toLocaleString("id-ID", { maximumFractionDigits: 3 })} km dari pemasok`;
+  }
+  if (reference) return LEG_REFERENCE_HINT[reference] ?? "jarak tidak diketahui";
+  return null;
+}
+
 /** Biaya: rincian + total biaya aman terkirim. */
 export function costFacts(decision: unknown): FactRow[] {
   const payload = (decision ?? {}) as Record<string, unknown>;
   const summary = (payload.summary ?? null) as Record<string, unknown> | null;
   const breakdown = (summary?.cost_breakdown ?? payload.cost_breakdown ?? {}) as Record<string, unknown>;
   const total = summary?.safe_delivered_cost ?? payload.safe_delivered_cost;
-  return [
+  const rows: FactRow[] = [
     { label: "Harga beli", value: breakdown.purchase === undefined ? DASH : idr(breakdown.purchase) },
     { label: "Logistik", value: breakdown.logistics === undefined ? DASH : idr(breakdown.logistics) },
     { label: "Biaya aman terkirim", value: total === undefined || total === null ? DASH : idr(total) },
     { label: "Catatan", value: text(breakdown.note) ?? DASH },
   ];
+  // Fase 7d: biaya angkut dipecah jadi kaki pertama (pemasok → SPPG sumber) dan
+  // linehaul (SPPG → SPPG). Baris hanya muncul bila backend memang mengirim
+  // pecahannya — keputusan lama tidak diberi baris "—" palsu.
+  const leg = breakdown.transport_supplier_leg;
+  const linehaul = breakdown.transport_linehaul;
+  if (leg !== undefined || linehaul !== undefined) {
+    rows.splice(
+      2,
+      0,
+      {
+        label: "Angkut pemasok → SPPG",
+        value: leg === undefined ? DASH : idr(leg),
+        hint: supplierLegHint(breakdown),
+      },
+      {
+        label: "Angkut antar SPPG",
+        value: linehaul === undefined ? DASH : idr(linehaul),
+      }
+    );
+  }
+  return rows;
 }
 
 /** Keamanan pangan & jejak eksekusi dari /approval-summary. */

@@ -23,10 +23,16 @@ export default function ApprovalModal({
   summary,
   onConfirm,
   onCancel,
+  showActions = true,
+  busy = false,
 }: {
   summary: any;
   onConfirm?: () => void;
   onCancel?: () => void;
+  /** false → tanpa tombol Setuju (mis. bgn_monitor, atau status `rejected`). */
+  showActions?: boolean;
+  /** true → aksi sedang berjalan: tombol dikunci, label berubah. */
+  busy?: boolean;
 }) {
   if (!summary) {
     return (
@@ -52,7 +58,10 @@ export default function ApprovalModal({
   const administrative = ["supplier_exclusion", "supplier_exclusion_restoration"].includes(summary.decision_type);
   const governance = summary.supplier_governance;
   return (
-    <div className="approval-modal" role="dialog" aria-label="Konfirmasi approval">
+    // Sejak 14 Okt 2026 komponen ini SELALU hidup di dalam Popup (yang memegang
+    // role="dialog" + aria-modal). Root-nya karena itu sebuah <section>: dialog
+    // bersarang membuat pembaca layar mengumumkan dua konteks modal sekaligus.
+    <section className="approval-modal" aria-label="Ringkasan approval">
       <h3>Konfirmasi Approval</h3>
       <ul>
         <li>
@@ -111,28 +120,31 @@ export default function ApprovalModal({
           ))}
         </ul>
       )}
-      <div className="approval-modal-actions">
-        <button
-          type="button"
-          className="button"
-          onClick={onConfirm}
-          disabled={!canApprove || (administrative && !governance)}
-          title={
-            canApprove
-              ? undefined
-              : "Approve tidak tersedia untuk keputusan ini (expired/rejected)"
-          }
-        >
-          Setuju
-        </button>
-        <button
-          type="button"
-          className="button-secondary button"
-          onClick={onCancel}
-        >
-          Batal
-        </button>
-      </div>
-    </div>
+      {showActions && (
+        <div className="approval-modal-actions">
+          <button
+            type="button"
+            className="button"
+            onClick={onConfirm}
+            disabled={!canApprove || (administrative && !governance) || busy}
+            title={
+              canApprove
+                ? undefined
+                : "Approve tidak tersedia untuk keputusan ini (expired/rejected)"
+            }
+          >
+            {busy ? "Memproses…" : "Setuju"}
+          </button>
+          <button
+            type="button"
+            className="button-secondary button"
+            onClick={onCancel}
+            disabled={busy}
+          >
+            Batal
+          </button>
+        </div>
+      )}
+    </section>
   );
 }

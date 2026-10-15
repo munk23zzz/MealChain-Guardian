@@ -35,7 +35,9 @@ def test_ensure_demo_users_idempotent_and_scoped():
         by_role = {r["role"]: r for r in rows}
         assert set(by_role) == {"sppg_head", "sppg_nutritionist", "bgn_monitor"}
         assert by_role["sppg_head"]["location_name"] == "Jakarta"
-        assert by_role["sppg_nutritionist"]["location_name"] == "Bogor"
+        # Ruling 2026-10-14: ahli gizi demo ikut Jakarta (satu SPPG dengan
+        # kepala) supaya matriks AND dua verifier bisa didemokan.
+        assert by_role["sppg_nutritionist"]["location_name"] == "Jakarta"
         assert by_role["bgn_monitor"]["location_name"] is None
         # idempoten: tidak ada duplikat
         assert len(rows) == 3

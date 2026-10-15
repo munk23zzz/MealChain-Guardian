@@ -129,13 +129,24 @@ def test_cianjur_reference_still_locked():
 
 def test_no_orphan_price_rows_after_load():
     """Invariant idempotensi: DB tidak boleh punya row price_signals di luar
-    set id hasil build_seed_rows (deteksi drift skema natural key)."""
+    set id hasil build_seed_rows (deteksi drift skema natural key).
+
+    Fase 4 (2026-10-15): invariant ini soal baris SEED, jadi dibatasi
+    `origin='seed'`. Baris deret waktu demo (`origin='demo'`) memang bukan
+    hasil `build_seed_rows` — keberadaannya sah dan diuji di
+    tests/test_timeseries_db.py.
+    """
     rows = build_seed_rows(REF)
     expected = {str(r["id"]) for r in rows["price_signals"]}
     engine = create_engine(DB_URL)
     try:
         with engine.connect() as conn:
-            db_ids = {str(r[0]) for r in conn.execute(text("SELECT id FROM price_signals"))}
+            db_ids = {
+                str(r[0])
+                for r in conn.execute(
+                    text("SELECT id FROM price_signals WHERE origin = 'seed'")
+                )
+            }
     finally:
         engine.dispose()
     orphans = db_ids - expected

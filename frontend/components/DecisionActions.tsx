@@ -2,11 +2,23 @@
 
 // DecisionActions — role scope (design.md §1.4): bgn_monitor read-only;
 // approve/reject hanya role approver; execute hanya setelah approval.
-// §1.3: approve SELALU lewat ApprovalModal (friksi disengaja).
+// §1.3: approve SELALU lewat ringkasan (ApprovalModal).
+//
+// 2026-10-14 (permintaan Roy): pilihan tindakan TIDAK lagi deretan tombol di
+// dalam kartu Governance — kartu itu jadi tinggi dan berdesakan di grid 3
+// kolom, dan kotak alasan penolakan melebar di situ. Kini kartu hanya memuat
+// SATU tombol pemicu; seluruh pilihan hidup di popup
+// (components/Popup.tsx + components/ApprovalMenu.tsx).
+//
+// Pembagian tugas sengaja: komponen ini satu-satunya pemanggil API (menu hanya
+// presentasional, jadi tetap bisa diuji tanpa DOM), dan tiap handler
+// mengembalikan pesan galat — menu menampilkan galat itu DI DALAM popup,
+// bukan di kartu yang sudah tertutup popup.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { approveAction, executeAction, reproposeAction, verifyAction } from "../lib/api";
-import ApprovalModal from "./ApprovalModal";
+import ApprovalMenu from "./ApprovalMenu";
+import Popup from "./Popup";
 
 const APPROVER_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
 
@@ -47,86 +59,77 @@ export default function DecisionActions({
   token: string | null;
   summary?: any;
 }) {
+  const [opened, setOpened] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
-  const [rejecting, setRejecting] = useState(false);
-  const [reason, setReason] = useState("");
+  // Tombol pemicu: fokus dikembalikan ke sini saat popup ditutup.
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   const actions = visibleActions(role, status);
-  const administrative = ["supplier_exclusion", "supplier_exclusion_restoration"].includes(summary?.decision_type);
+  const administrative = [
+    "supplier_exclusion",
+    "supplier_exclusion_restoration",
+  ].includes(summary?.decision_type);
   if (actions.readOnly) {
     return <p className="read-only-note">Peran {role} bersifat read-only.</p>;
   }
 
-  async function onApproved() {
-    setConfirming(false);
-    if (!token) {
-      setMessage("Login diperlukan");
-      return;
-    }
+  // Setiap handler: `null` = berhasil (menu menutup popup & pesan tampil di
+  // kartu), string = galat yang ditampilkan DI DALAM popup.
+  async function approve(): Promise<string | null> {
+    if (!token) return "Login diperlukan";
     try {
       await approveAction(decisionId, true, token);
       setMessage("Approval tercatat");
+      return null;
     } catch (err: any) {
-      setMessage(String(err.message ?? err));
+      return String(err.message ?? err);
     }
   }
 
-  async function onRejected() {
-    setConfirming(false);
+  async function reject(reason: string): Promise<string | null> {
     if (!reason.trim()) {
-      setMessage("Alasan penolakan wajib diisi — ini bahan learning agent.");
-      return;
+      return "Alasan penolakan wajib diisi — ini bahan learning agent.";
     }
-    if (!token) {
-      setMessage("Login diperlukan");
-      return;
-    }
+    if (!token) return "Login diperlukan";
     try {
       await approveAction(decisionId, false, token, reason.trim());
       setMessage("Keputusan ditolak — agent bisa re-propose dengan iterasi baru.");
-      setRejecting(false);
-      setReason("");
+      return null;
     } catch (err: any) {
-      setMessage(String(err.message ?? err));
+      return String(err.message ?? err);
     }
   }
 
-  async function onRepropose() {
-    if (!token) {
-      setMessage("Login diperlukan");
-      return;
-    }
+  async function repropose(): Promise<string | null> {
+    if (!token) return "Login diperlukan";
     try {
       const result = await reproposeAction(decisionId, token);
       setMessage(
         `Iterasi v${result.iteration ?? "?"} dibuat — menunggu verifikasi & approval.`
       );
+      return null;
     } catch (err: any) {
-      setMessage(String(err.message ?? err));
+      return String(err.message ?? err);
     }
   }
 
-  async function onExecute() {
-    if (!token) {
-      setMessage("Login diperlukan");
-      return;
-    }
+  async function execute(): Promise<string | null> {
+    if (!token) return "Login diperlukan";
     try {
       const result = await executeAction(decisionId, token);
-      setMessage(administrative
-        ? `Status administratif supplier tercatat: ${result.status ?? "executed"}. Safety batch tidak diubah.`
-        : `PO ${result.po_number ?? ""} dibuat (mock)`);
+      setMessage(
+        administrative
+          ? `Status administratif supplier tercatat: ${result.status ?? "executed"}. Safety batch tidak diubah.`
+          : `PO ${result.po_number ?? ""} dibuat (mock)`
+      );
+      return null;
     } catch (err: any) {
-      setMessage(String(err.message ?? err));
+      return String(err.message ?? err);
     }
   }
 
-  async function onVerify() {
-    if (!token) {
-      setMessage("Login diperlukan");
-      return;
-    }
+  async function verify(): Promise<string | null> {
+    if (!token) return "Login diperlukan";
     try {
       // O-SEC-3: server menurunkan verdict independen; UI hanya memicu
       // verifikasi dan menampilkan hasil server apa adanya.
@@ -134,76 +137,56 @@ export default function DecisionActions({
       setMessage(
         `Verifier (${result.provider ?? "tanpa provider"}): ${result.verdict ?? "UNAVAILABLE"} — keputusan siap dieksekusi setelah approval terpenuhi.`
       );
+      return null;
     } catch (err: any) {
-      setMessage(String(err.message ?? err));
+      return String(err.message ?? err);
     }
   }
 
   return (
     <div className="decision-actions">
-      {actions.approve && (
-        <>
-          <button
-            type="button"
-            className="button"
-            onClick={() => setConfirming(true)}
-          >
-            Approve
-          </button>
-          <button
-            type="button"
-            className="button-secondary button"
-            onClick={() => setRejecting((v) => !v)}
-          >
-            Reject
-          </button>
-        </>
+      <button
+        type="button"
+        ref={triggerRef}
+        className="button"
+        onClick={() => setOpened(true)}
+        aria-haspopup="dialog"
+        aria-expanded={opened}
+      >
+        Kelola persetujuan
+        <span aria-hidden="true">…</span>
+      </button>
+      <span className="decision-actions-hint">
+        Ringkasan bukti &amp; pilihan tindakan dibuka di jendela terpisah — tidak ada aksi satu
+        klik.
+      </span>
+      {message && (
+        <p className="action-message" role="status">
+          {message}
+        </p>
       )}
-      {actions.repropose && administrative && <p>Ajukan ulang melalui panel supplier dengan bukti baru.</p>}
-      {actions.repropose && !administrative && (
-        <button type="button" className="button" onClick={onRepropose}>
-          Minta re-propose (iterasi baru)
-        </button>
-      )}
-      {rejecting && (
-        <div className="reject-reason-box">
-          <label className="field">
-            <span>Alasan penolakan (wajib — jadi bahan learning agent)</span>
-            <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={2}
-              placeholder="cth: Kuota SPPG Jakarta penuh minggu ini"
-            />
-          </label>
-          <button type="button" className="button" onClick={onRejected}>
-            Kirim penolakan
-          </button>
-        </div>
-      )}
-      {actions.execute && (
-        <button type="button" className="button" onClick={onExecute}>
-          Execute
-        </button>
-      )}
-      {actions.execute && (
-        <button
-          type="button"
-          className="button-secondary button"
-          onClick={onVerify}
-          title="Catat hasil verifier (CONSISTENT) — syarat sebelum Execute"
-        >
-          Verifikasi
-        </button>
-      )}
-      {confirming && (
-        <ApprovalModal
+      <Popup
+        open={opened}
+        onClose={() => setOpened(false)}
+        title={"Governance & persetujuan"}
+        description={`Keputusan ${String(decisionId).slice(0, 8)} · ${String(
+          summary?.decision_type ?? "keputusan"
+        ).replace(/_/g, " ")} — periksa ringkasan bukti sebelum menyetujui.`}
+        labelledBy="approval-popup-title"
+        returnFocusRef={triggerRef}
+      >
+        <ApprovalMenu
           summary={summary}
-          onConfirm={onApproved}
-          onCancel={() => setConfirming(false)}
+          actions={actions}
+          administrative={administrative}
+          onApprove={approve}
+          onReject={reject}
+          onVerify={verify}
+          onExecute={execute}
+          onRepropose={repropose}
+          onClose={() => setOpened(false)}
         />
-      )}
-      {message && <p className="action-message">{message}</p>}
+      </Popup>
     </div>
   );
 }

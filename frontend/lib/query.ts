@@ -15,6 +15,14 @@ export const QUERY_STALE_MS = 30_000;
 export const QUERY_POLL_MS = 60_000;
 
 /**
+ * Data pemasok nyaris statis (profil + koordinat) — cukup segar 5 menit dan
+ * TIDAK di-poll: kalau di-poll, 44 baris × 15 field ikut terkirim tiap putaran
+ * padahal isinya tidak berubah. Tombol "Coba lagi"/invalidasi tetap bisa
+ * memaksa muat ulang.
+ */
+export const SUPPLIERS_STALE_MS = 5 * 60_000;
+
+/**
  * Kunci query terpusat. Sengaja berupa fungsi (bukan literal yang tersebar) agar
  * invalidasi setelah mutasi menyasar kunci yang sama persis — salah satu penyebab
  * umum data basi di UI.
@@ -26,6 +34,8 @@ export const queryKeys = {
   kpi: (start: string, end: string, scope: string) =>
     ["kpi", start, end, scope] as const,
   exclusions: (scope: string) => ["exclusions", scope] as const,
+  suppliers: (scope: string, reachKm?: number | null, commodity?: string | null) =>
+    ["suppliers", scope, reachKm ?? "all", commodity ?? "all"] as const,
   me: (scope: string) => ["me", scope] as const,
   balanceMap: (scope: string, commodity: string) =>
     ["balance-map", scope, commodity] as const,

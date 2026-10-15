@@ -6,12 +6,16 @@ import { readFileSync } from "node:fs";
 
 const pageSrc = readFileSync("app/page.tsx", "utf8");
 const hookSrc = readFileSync("lib/hooks/useKpi.ts", "utf8");
+// Tab gabungan (2026-10-15): halaman menyerahkan kedua payload ke satu
+// komponen, dan KOMPONEN ITU yang merender KPIDashboard.
+const boardSrc = readFileSync("components/KpiQualityBoard.tsx", "utf8");
 
 describe("wiring KPI di app/page.tsx (S4-03)", () => {
-  it("halaman memakai hook useKpi + KPIDashboard", () => {
+  it("halaman memakai hook useKpi lewat komponen tab gabungan", () => {
     expect(pageSrc).toContain("useKpi");
     expect(pageSrc).toMatch(/from "\.\.\/lib\/hooks\/useKpi"/);
-    expect(pageSrc).toContain("KPIDashboard");
+    expect(pageSrc).toContain("KpiQualityBoard");
+    expect(pageSrc).toMatch(/<KpiQualityBoard/);
   });
 
   it("hanya hook yang memanggil fetchKpis (bukan komponen)", () => {
@@ -20,7 +24,10 @@ describe("wiring KPI di app/page.tsx (S4-03)", () => {
     expect(pageSrc).not.toMatch(/fetchKpis\(/);
   });
 
-  it("KPIDashboard dirender dengan state loading/error/kpi", () => {
-    expect(pageSrc).toMatch(/<KPIDashboard/);
+  it("KPIDashboard dirender oleh tab gabungan dengan state loading/error/kpi", () => {
+    expect(boardSrc).toMatch(/<KPIDashboard/);
+    expect(boardSrc).toContain("kpiLoading");
+    expect(boardSrc).toContain("kpiError");
+    expect(boardSrc).toContain("kpi={kpi}");
   });
 });

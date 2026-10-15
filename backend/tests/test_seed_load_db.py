@@ -81,13 +81,18 @@ def test_locked_values_cianjur_jakarta_bogor(sync_engine):
 
 
 def test_supplier_quotes_persisted_as_price_signals(sync_engine):
-    """Revisi kedua Roy: quote = source 'supplier_quote' + supplier_id FK terisi."""
+    """Revisi kedua Roy: quote = source 'supplier_quote' + supplier_id FK terisi.
+
+    Fase 4 (2026-10-15): dibatasi `origin='seed'`. Semenjak ada deret waktu
+    demo, satu pemasok punya banyak kutipan (mingguan) di tabel yang sama;
+    tanpa saringan ini dict di bawah menimpa nilai kanonik dengan nilai demo.
+    """
     with sync_engine.connect() as conn:
         rows = conn.execute(
             text(
                 "SELECT s.name, ps.price_per_kg FROM price_signals ps "
                 "JOIN suppliers s ON s.id = ps.supplier_id "
-                "WHERE ps.source = 'supplier_quote'"
+                "WHERE ps.source = 'supplier_quote' AND ps.origin = 'seed'"
             )
         ).fetchall()
         prices = {r[0]: float(r[1]) for r in rows}

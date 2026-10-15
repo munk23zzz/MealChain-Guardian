@@ -127,31 +127,51 @@ def _cleanup_decision(decision_id: str) -> None:
 
 
 # ============================================================================
-# RULING A — scope baca approval-summary selaras write path (VERIFIER_ROLES)
+# RULING A (DICABUT 2026-10-14) — baca approval-summary LINTAS LOKASI
+#
+# Ruling Owner 2026-10-08 membolehkan VERIFIER_ROLES membaca summary keputusan
+# SPPG lain (alasannya: matriks AND butuh approver ke-2 lintas lokasi).
+# Ruling 2026-10-14 (docs/ruling-2026-10-14-scope-lokasi.md) mencabutnya:
+# jalur tulis sudah dikunci ke lokasi sendiri sejak awal, jadi jalur baca
+# dibuat simetris dan matriks AND berlaku di dalam satu SPPG.
 # ============================================================================
 
-def test_ruling_a_nutritionist_baca_summary_lintas_lokasi_200(client):
-    """Nutritionist (Bogor) BOLEH membaca summary decision Jakarta."""
+def test_ruling_a_nutritionist_baca_summary_lintas_lokasi_403(
+    client, far_nutritionist_headers
+):
+    """Ahli gizi SPPG lain (Bogor) TIDAK boleh membaca summary decision Jakarta."""
     did = _mk_decision(_jakarta_id(), _jakarta_id())
     try:
         resp = client.get(
-            f"/decisions/{did}/approval-summary", headers=_nut_user(client)
+            f"/decisions/{did}/approval-summary", headers=far_nutritionist_headers
         )
-        assert resp.status_code == 200, resp.text
-        body = resp.json()
-        assert body["decision_id"] == did
+        assert resp.status_code == 403, resp.text
+        assert "cakupan lokasi" in resp.json()["detail"]
     finally:
         _cleanup_decision(did)
 
 
-def test_ruling_a_head_baca_summary_lintas_lokasi_200(client):
-    """SPPG Head (Jakarta) membaca summary decision Bogor — simetris."""
+def test_ruling_a_head_baca_summary_lintas_lokasi_403(client):
+    """SPPG Head (Jakarta) membaca summary decision Bogor — ditolak simetris."""
     did = _mk_decision(_bogor_id(), _bogor_id())
     try:
         resp = client.get(
             f"/decisions/{did}/approval-summary", headers=_head_user(client)
         )
+        assert resp.status_code == 403, resp.text
+    finally:
+        _cleanup_decision(did)
+
+
+def test_summary_keputusan_sendiri_tetap_200(client):
+    """Yang TIDAK berubah: kepala SPPG tetap membaca summary SPPG-nya sendiri."""
+    did = _mk_decision(_jakarta_id(), _jakarta_id())
+    try:
+        resp = client.get(
+            f"/decisions/{did}/approval-summary", headers=_head_user(client)
+        )
         assert resp.status_code == 200, resp.text
+        assert resp.json()["decision_id"] == did
     finally:
         _cleanup_decision(did)
 

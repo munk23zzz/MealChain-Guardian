@@ -223,21 +223,24 @@ describe("ApprovalModal (friksi disengaja)", () => {
 });
 
 describe("DecisionActions (role scope)", () => {
-  it("approver melihat tombol approve/reject/execute", () => {
+  it("approver melihat pemicu popup persetujuan (bukan tombol telanjang di kartu)", () => {
+    // 2026-10-14: pilihan tindakan pindah ke popup — markup statis (popup
+    // tertutup, dirender lewat portal) hanya memuat pemicunya. Isi menunya
+    // diuji di tests/approval-menu.test.tsx.
     const html = renderToStaticMarkup(
       <DecisionActions decisionId="d1" role="sppg_head" status="pending_approval" token="t" />
     );
-    expect(html).toContain("Approve");
-    expect(html).toContain("Reject");
-    expect(html).toContain("Execute");
+    expect(html).toContain("Kelola persetujuan");
+    expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).not.toContain("read-only");
   });
 
-  it("bgn_monitor read-only: tidak ada tombol approve/execute", () => {
+  it("bgn_monitor read-only: tanpa pemicu approve/execute sama sekali", () => {
     const html = renderToStaticMarkup(
       <DecisionActions decisionId="d1" role="bgn_monitor" status="pending_approval" token="t" />
     );
-    expect(html).not.toContain("Approve");
-    expect(html).not.toContain("Execute");
+    expect(html).not.toContain("Kelola persetujuan");
+    expect(html).not.toContain('aria-haspopup="dialog"');
     expect(html).toContain("read-only");
   });
 });

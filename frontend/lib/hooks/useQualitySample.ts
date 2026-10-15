@@ -25,7 +25,9 @@ export function useQualitySample(
   sampleIds: string[]
 ) {
   const sampleKey = sampleIds.join(",");
-  const tabRelevan = tab === "quality" || tab === "suppliers";
+  // Tab gabungan "kpi-kualitas" (keputusan pemilik 2026-10-15) menggantikan
+  // tab "quality" lama; tab Pemasok tetap memakainya untuk konteks eksklusi.
+  const tabRelevan = tab === "kpi-kualitas" || tab === "suppliers";
   const query = useQuery({
     queryKey: queryKeys.qualitySample(scope, sampleKey),
     queryFn: async (): Promise<SampleRow[]> =>

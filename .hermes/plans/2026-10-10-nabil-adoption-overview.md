@@ -8,7 +8,13 @@
 
 **Stack:** FastAPI, SQLAlchemy async, PostgreSQL, Next.js, TypeScript, MapLibre, Recharts, Vitest dan pytest. Tidak ada upgrade framework dalam pekerjaan ini.
 
-**Status:** Eksekusi parsial. Paket A dan B diimplementasikan. Paket C berhenti pada proposal schema karena migration memerlukan review Roy.
+**Status (diperbarui 2026-10-15):** **A, B, C, D1, D2 selesai diimplementasikan** — lihat TODO.md `S4-09d`
+(schema exclusion lokal per SPPG + restorasi berbukti dengan approval baru; migrasi `011_supplier_exclusions`;
+bukti `docs/verification/sprint-4.md` + `docs/verification/sprint-0-2-cross-sprint-audit.md`). Status TODO tetap
+`In Progress` HANYA karena Sprint 4 ditandai Done oleh Roy, bukan oleh agent.
+
+Catatan historis: **Status (saat ditulis 2026-10-10):** Eksekusi parsial — Paket A dan B diimplementasikan,
+Paket C berhenti pada proposal schema karena migration memerlukan review Roy.
 
 ## 1. Scope yang dipakai
 

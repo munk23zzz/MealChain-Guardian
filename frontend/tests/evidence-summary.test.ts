@@ -163,6 +163,47 @@ describe("costFacts — biaya", () => {
     expect(find(rows, "Logistik").value).toBe("—");
     expect(find(rows, "Biaya aman terkirim").value).toBe("—");
   });
+
+  // Fase 7d: jarak pemasok masuk biaya → panel menampilkan pecahannya.
+  it("pecahan angkut (pemasok → SPPG + antar SPPG) tampil dengan km dan label", () => {
+    const rows = costFacts({
+      cost_breakdown: {
+        purchase: "13772500",
+        logistics: "18471.85",
+        transport_supplier_leg: "6653.07",
+        transport_linehaul: "11818.78",
+        supplier_leg_km: "45.075",
+        supplier_leg_reference: "supplier_coordinates",
+      },
+      safe_delivered_cost: "14980976.71",
+    });
+    expect(find(rows, "Logistik").value).toBe("Rp18.472");
+    expect(find(rows, "Angkut pemasok → SPPG").value).toBe("Rp6.653");
+    expect(find(rows, "Angkut pemasok → SPPG").hint).toBe("45,075 km dari pemasok");
+    expect(find(rows, "Angkut antar SPPG").value).toBe("Rp11.819");
+  });
+
+  it("koordinat pemasok kosong: biayanya 0 tetapi alasannya ditulis, bukan diklaim 0 km", () => {
+    const rows = costFacts({
+      cost_breakdown: {
+        transport_supplier_leg: "0.00",
+        transport_linehaul: "21600.00",
+        supplier_leg_km: null,
+        supplier_leg_reference: "supplier_coordinates_missing",
+      },
+    });
+    expect(find(rows, "Angkut pemasok → SPPG").value).toBe("Rp0");
+    expect(find(rows, "Angkut pemasok → SPPG").hint).toBe(
+      "jarak tidak diketahui — koordinat pemasok kosong"
+    );
+  });
+
+  it("keputusan lama tanpa pecahan: tidak ada baris angkut tambahan", () => {
+    const labels = costFacts(SUMMARY).map((r) => r.label);
+    expect(labels).not.toContain("Angkut pemasok → SPPG");
+    expect(labels).not.toContain("Angkut antar SPPG");
+    expect(labels).toEqual(["Harga beli", "Logistik", "Biaya aman terkirim", "Catatan"]);
+  });
 });
 
 describe("safetyFacts — keamanan & pemasok", () => {

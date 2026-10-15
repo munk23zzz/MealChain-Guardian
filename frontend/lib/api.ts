@@ -161,6 +161,66 @@ export async function seedDemo(token: string, force = false) {
   });
 }
 
+// --- Data & rentang waktu (Fase 5) — panel Demo Control ---
+// Rentang dikirim sebagai ISO dengan offset eksplisit (`<input type="date">`
+// hanya punya tanggal); kontrak ini yang menolak waktu tanpa offset (422).
+
+function authHeaders(token: string): HeadersInit {
+  return { Authorization: `Bearer ${token}` };
+}
+
+/** `GET /demo/data-status` — keadaan DB sekarang (bukan ingatan klien). */
+export async function fetchDemoDataStatus(token: string) {
+  return request("/demo/data-status", { headers: authHeaders(token) });
+}
+
+/** `GET /demo/preview` — hitungan baris yang AKAN ditambah; tidak menulis apa pun. */
+export async function fetchDemoPreview(
+  startIso: string,
+  endIso: string,
+  token: string,
+  intervalHours = 12
+) {
+  const qs = new URLSearchParams({
+    start: startIso,
+    end: endIso,
+    interval_hours: String(intervalHours),
+  });
+  return request(`/demo/preview?${qs.toString()}`, { headers: authHeaders(token) });
+}
+
+/** `POST /demo/timeseries` — tambah/perbarui baris `origin='demo'` (idempoten). */
+export async function runDemoTimeseries(
+  startIso: string,
+  endIso: string,
+  token: string,
+  { force = false, intervalHours = 12 }: { force?: boolean; intervalHours?: number } = {}
+) {
+  return request("/demo/timeseries", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify({
+      start: startIso,
+      end: endIso,
+      interval_hours: intervalHours,
+      force,
+    }),
+  });
+}
+
+/** `POST /demo/timeseries/purge` — hapus HANYA baris demo; kanonik tidak disentuh. */
+export async function purgeDemoTimeseries(token: string) {
+  return request("/demo/timeseries/purge", { method: "POST", headers: authHeaders(token) });
+}
+
+/**
+ * `POST /demo/refresh` — tombol hari demo: seeder relatif `now` + muat ulang
+ * 4 kasus skrip. Akun demo tidak direset, baris deret waktu demo tidak dihapus.
+ */
+export async function refreshDemoToToday(token: string) {
+  return request("/demo/refresh", { method: "POST", headers: authHeaders(token) });
+}
+
 // --- Ops Console (interaksi sebelum hasil — arah Roy 2026-10-07) ---
 
 export async function fetchBalance(
@@ -302,6 +362,32 @@ export async function fetchBatches(token: string) {
 // formula gap = panel snapshot, koordinat dari DB).
 export async function fetchBalanceMap(commodity: string, token: string) {
   return request(`/balance/map?commodity=${encodeURIComponent(commodity)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// GET /suppliers — daftar pemasok + profil peta (Fase 2, 2026-10-14). Dipakai
+// layer pemasok di peta dan halaman Pemasok. Data ini nyaris statis: diambil
+// SEKALI per sesi (staleTime panjang, tanpa polling) — alasan pemasok tidak
+// ditempelkan ke payload `GET /balance/map` yang di-poll berkala.
+//
+// `maxDistanceKm` (Fase 7b): memakai penyaring server supaya jumlah yang
+// disembunyikan datang dari server (`reach.excluded_out_of_reach`), bukan dari
+// hitungan UI. Tanpa parameter ini seluruh tabel dikirim (jarak tetap dilaporkan
+// per baris), dan UI-lah yang memutuskan apa yang ditampilkan.
+//
+// `commodity` (Fase 7b): ikut dikirim ke server supaya `reach.excluded_out_of_reach`
+// berlaku untuk SUBSET yang sedang dilihat. Kalau penyaringan komoditas dilakukan
+// di klien setelah server menyaring jarak, angka "N di luar jangkauan" akan
+// bercerita tentang komoditas lain — angka yang tidak boleh tampil di layar.
+export async function fetchSuppliers(
+  token: string,
+  maxDistanceKm?: number | null,
+  commodity?: string | null
+) {
+  const jarak = typeof maxDistanceKm === "number" ? `&max_distance_km=${maxDistanceKm}` : "";
+  const komoditas = commodity ? `&commodity=${encodeURIComponent(commodity)}` : "";
+  return request(`/suppliers?limit=200${komoditas}${jarak}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 }

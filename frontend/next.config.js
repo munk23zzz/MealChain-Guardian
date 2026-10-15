@@ -28,6 +28,7 @@ const API_ROOTS = [
   "demo",
   "batches",
   "supplier-exclusions",
+  "suppliers",
 ];
 
 const nextConfig = {

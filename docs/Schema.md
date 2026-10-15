@@ -39,8 +39,34 @@ kecuali disebutkan lain. Semua tabel punya `created_at TIMESTAMPTZ DEFAULT now()
 |---|---|---|
 | id | UUID | PK |
 | name | TEXT | NOT NULL |
-| location_id | UUID | FK → locations.id, NOT NULL |
+| location_id | UUID | FK → locations.id, NOT NULL — hub SPPG tempat pemasok terdaftar |
 | reliability_score | NUMERIC(3,2) | NOT NULL, DEFAULT 0.80, CHECK BETWEEN 0 AND 1 |
+
+Kolom profil & peta (migrasi `012_supplier_profile`, Fase 2 rencana 2026-10-14):
+
+| Kolom | Tipe | Constraint |
+|---|---|---|
+| latitude | NUMERIC(9,6) | NULLABLE, CHECK −90…90 |
+| longitude | NUMERIC(9,6) | NULLABLE, CHECK −180…180 |
+| commodity_id | UUID | FK → commodities.id, NULLABLE (pemasok multi-komoditas boleh NULL) |
+| capacity_kg_per_week | NUMERIC(10,2) | NULLABLE, CHECK >= 0 |
+| certification_status | TEXT | NULLABLE, CHECK IN ('none','hygiene','haccp') |
+| address | TEXT | NULLABLE |
+| contact_name | TEXT | NULLABLE |
+| updated_at | TIMESTAMPTZ | NULLABLE |
+
+- **CHECK koordinat BERPASANGAN**: `(latitude IS NULL) = (longitude IS NULL)` — separuh
+  koordinat dilarang, karena baris seperti itu akan tampak seperti data nyata di peta.
+- Index: `location_id`, `commodity_id`.
+- **Isi tabel saat ini (setelah Fase 7, 2026-10-15)**: 14 pemasok kanonik
+  (`data/seed/sprint1_seed.json`, nama pola `Supplier <Kota>-N`, tanpa koordinat — terikat 14 kutipan
+  harga) + **21 pemasok demo** (`data/seed/suppliers_demo.json`) = **35 baris**.
+  Dari 21 itu: **12 pemasok hub Jakarta** berkoordinat ABSOLUT di Jakarta + kota penyangga
+  (Bekasi, Depok, Tangerang, Bogor, Karawang, Cisarua, Serang, Subang, Cianjur) dengan jarak
+  berjenjang 0–25 / 25–60 / 60–150 km dari SPPG Jakarta (ambang `REACH_KM_MAX = 150 km`),
+  dan **9 pemasok hub lain** (satu per hub) berkoordinat hub + geseran tetap.
+  Sebelum Fase 7: 30 pemasok demo (3 per hub × 10 kota) — jumlah itu **berubah sadar**, aturan
+  kanonik vs demo tidak.
 
 ## 2. Data operasional (time-series-ish)
 
@@ -90,6 +116,26 @@ Unit inti untuk freshness/safety check.
 | freshness_score | NUMERIC(3,2) | nullable, CHECK BETWEEN 0 AND 1 — diisi oleh `/freshness/evaluate` |
 | safety_status | TEXT | NOT NULL, DEFAULT 'pending', CHECK IN ('pending','pass','fail','needs_verification') |
 
+### Penanda asal data (`origin`) & `generated_at` — migrasi `013_origin_generated_at`
+Enam tabel deret waktu/operasional membawa penanda asal baris:
+
+| Tabel | Kolom | Catatan |
+|---|---|---|
+| supply_records, demand_records, price_signals, menu_plans, batches, decisions | `origin` | TEXT NOT NULL, DEFAULT `'seed'`, CHECK `origin IN ('seed','demo')` |
+| idem | `generated_at` | TIMESTAMPTZ NULLABLE — **NULL = baris kanonik** (ditulis tangan), terisi = baris yang dibuat generator deret waktu |
+
+- Index `(origin, <kolom tanggal>)` per tabel (`ix_<tabel>_origin_<kolom>`).
+- **Kunci upsert** (Fase 4): `uq_supply_records_loc_com_time_source`
+  (location, commodity, recorded_at, **source**) dan `uq_demand_records_loc_com_time`; untuk
+  `price_signals` dua index parsial `uq_price_signals_reference` (`source='pihps_reference'`) dan
+  `uq_price_signals_quote` (`source='supplier_quote'`). `menu_plans` **tidak** punya kunci yang
+  memuat `origin` → generator memakai `DO NOTHING` supaya hari kanonik menang.
+- **`downgrade()` MENGHAPUS baris `origin='demo'` lebih dulu.** Tanpa kolom `origin`, baris demo
+  akan terbaca sebagai kanonik dan menggeser jangkar angka; baris demo turunan dan bisa dibangun
+  ulang dalam detik (`POST /demo/timeseries`).
+- Arti praktisnya untuk demo: **`origin='demo'` = yang boleh dihapus** ("Bersihkan data demo" di
+  tab Demo Control), `origin='seed'` = snapshot kanonik yang tidak boleh disentuh panel mana pun.
+
 ## 3. Keputusan & audit trail
 
 ### `supplier_exclusions`
@@ -125,7 +171,7 @@ Status administratif historis, lokal pada `scope_location_id` (SPPG penerima), t
 | commodity_id | UUID | FK → commodities.id, nullable |
 | quantity_kg | NUMERIC(10,2) | nullable |
 | safe_delivered_cost | NUMERIC(12,2) | nullable |
-| cost_breakdown | JSONB | nullable — `{purchase, transport, handling, expected_loss, freshness_risk, safety_penalty}` |
+| cost_breakdown | JSONB | nullable — komponen SDC `{purchase, transport, handling, expected_loss, freshness_risk, safety_penalty}`. Sejak Fase 7d (2026-10-15) ikut memuat pecahan angkut: `transport_linehaul` (SPPG sumber → SPPG tujuan), `transport_supplier_leg` (pemasok → SPPG sumber), `supplier_leg_km` (string km atau null), `supplier_leg_reference` (`supplier_coordinates` \| `supplier_coordinates_missing` \| `no_supplier`), plus alias `logistics` = total `transport`. Lihat `docs/ruling-2026-10-15-jarak-pemasok-biaya.md`. |
 | expires_at | TIMESTAMPTZ | NOT NULL — batas validitas keputusan. Aturan: `now < expires_at` valid; `now >= expires_at` expired. Keputusan expired tetap disimpan untuk audit trail, tidak dihapus, dan tidak dapat dihidupkan kembali oleh approval. (Keputusan Roy 2026-10-05, Sprint 2.) |
 
 ### `decision_evidence`

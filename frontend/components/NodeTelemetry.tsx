@@ -42,9 +42,6 @@ export default function NodeTelemetry({
     <section className="card node-telemetry" aria-label="Telemetri node">
       <div className="card-header">
         <h3>Telemetri Node</h3>
-        {rows.length > 0 && (
-          <span className="map-attrib">angka dari GET /balance/map</span>
-        )}
       </div>
       <div className="node-telemetry-body">
         {!requested && (

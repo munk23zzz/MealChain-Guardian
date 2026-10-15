@@ -27,6 +27,20 @@ def client(auth_headers):
         yield c
 
 
+@pytest.fixture()
+def national_client(monitor_headers):
+    """Klien baca NAsional untuk nilai lintas lokasi.
+
+    Ruling 2026-10-14: kepala SPPG Jakarta hanya boleh membaca lokasinya
+    sendiri, jadi nilai Cianjur/Bogor (jangkar docs/verification/sprint-1.md)
+    dibaca sebagai bgn_monitor — peran yang memang berhak lintas lokasi.
+    Endpoint yang mengubah data tetap memakai `client` (peran approver).
+    """
+    with TestClient(app) as c:
+        c.headers.update(monitor_headers)
+        yield c
+
+
 def test_acceptance_1_freshness_boundaries():
     """Freshness 0.85 PASS; 0.60 NEEDS_VERIFICATION; 0.599999 FAIL."""
     assert classify_freshness(0.85) == "pass"
@@ -67,19 +81,19 @@ def test_acceptance_3b_delivery_window_constraint():
     assert check_delivery_window(151.0, 150.0) is False
 
 
-def test_acceptance_4_seed_dataset_10x3_and_locked_values(client):
+def test_acceptance_4_seed_dataset_10x3_and_locked_values(national_client):
     """Seed 10×3 dan angka Cianjur/Jakarta tepat."""
     with create_engine(DB_URL).connect() as conn:
         n_loc = conn.execute(text("SELECT COUNT(*) FROM locations")).scalar()
         n_com = conn.execute(text("SELECT COUNT(*) FROM commodities")).scalar()
         assert n_loc == 10
         assert n_com == 3
-    assert client.get("/supply/Cianjur/telur").json()["quantity_kg"] == 1400.0
-    assert client.get("/supply/Jakarta/telur").json()["quantity_kg"] == 300.0
-    assert client.get("/supply/Bogor/telur").json()["quantity_kg"] == 800.0
+    assert national_client.get("/supply/Cianjur/telur").json()["quantity_kg"] == 1400.0
+    assert national_client.get("/supply/Jakarta/telur").json()["quantity_kg"] == 300.0
+    assert national_client.get("/supply/Bogor/telur").json()["quantity_kg"] == 800.0
 
 
-def test_acceptance_5_all_sprint1_endpoints_live(client):
+def test_acceptance_5_all_sprint1_endpoints_live(client, monitor_headers):
     """Seluruh endpoint Sprint 1 dipanggil terhadap PostgreSQL migration+seed."""
     paths = [
         ("GET", "/supply/Cianjur/telur", None),
@@ -88,7 +102,10 @@ def test_acceptance_5_all_sprint1_endpoints_live(client):
         ("GET", "/price/Cianjur/telur", None),
     ]
     for method, path, _ in paths:
-        resp = client.get(path)
+        # Rute lintas lokasi dibaca sebagai bgn_monitor (Ruling 2026-10-14).
+        # Header ditimpa per-permintaan: dua TestClient dalam satu test
+        # menabrak loop asyncpg yang berbeda.
+        resp = client.get(path, headers=monitor_headers)
         assert resp.status_code == 200, f"{method} {path} → {resp.status_code}"
     posts = [
         ("/freshness/evaluate", {"batch_id": _any_batch_id()}),
@@ -115,8 +132,8 @@ def _any_batch_id() -> str:
         )
 
 
-def test_acceptance_6_mock_sap_header(client):
-    resp = client.get("/supply/Cianjur/telur")
+def test_acceptance_6_mock_sap_header(national_client):
+    resp = national_client.get("/supply/Cianjur/telur")
     assert resp.headers.get("X-Data-Source") == "MOCK"
 
 

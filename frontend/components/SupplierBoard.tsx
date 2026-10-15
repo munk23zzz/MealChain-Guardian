@@ -1,25 +1,52 @@
 "use client";
 
-// Halaman "Pemasok" — halaman sidebar acuan /suppliers, disesuaikan ke repo ini:
-// daftar pemasok disusun dari pemasok pada keputusan terakhir dalam cakupan
-// (backend belum punya endpoint daftar pemasok), ditambah register eksklusi
-// dari /supplier-exclusions dan form usul eksklusi yang sudah ada.
+// Halaman "Pemasok" — halaman sidebar acuan /suppliers, disesuaikan ke repo ini.
+//
+// Fase 3 (2026-10-14): daftar pemasok kini dari `GET /suppliers` (endpoint Fase 2).
+// Sebelumnya halaman ini menyusun daftarnya dari pemasok yang muncul pada sampel
+// keputusan terakhir dan menuliskan keterbatasan itu di layar — keterbatasan itu
+// sudah hilang, jadi catatannya juga hilang.
+//
+// Register eksklusi tetap dari /supplier-exclusions, dan form usul eksklusi tetap
+// memakai panel yang sudah ada (alur approval-nya tidak berubah).
+//
+// Fase 7b (2026-10-15): kolom Jarak + penyaring "Dalam jangkauan". Tabel ini
+// sengaja menampilkan SEMUA pemasok (jarak ditulis apa adanya, yang jauh diberi
+// label "di luar jangkauan") — penyaringan di sini adalah pilihan pengguna, bukan
+// default yang menyembunyikan baris. Angka jaraknya datang dari `distance_km`
+// server, bukan hitungan UI.
+
+import { useState } from "react";
 
 import PageHeader from "./PageHeader";
 import FactList from "./FactList";
 import { SupplierExclusionView } from "./SupplierExclusionPanel";
 import {
-  SUPPLIER_SOURCE_NOTE,
+  directoryMetrics,
+  directoryReachLabel,
+  directoryReachSummary,
   exclusionRows,
-  rosterMetrics,
-  supplierRoster,
-  type SupplierPair,
+  filterDirectoryByReach,
+  supplierDirectory,
 } from "../lib/suppliers-board";
+import {
+  LOW_RELIABILITY,
+  supplierDistanceReference,
+  withinReachKm,
+} from "../lib/supplier-pins";
+
+/** Jarak baris ada di dalam ambang jangkauan (jarak tak diketahui = tidak diklaim dekat). */
+function jarakDalamJangkauan(
+  row: { distanceKm: number | null },
+  reachKm: number
+): boolean {
+  return withinReachKm(row.distanceKm, reachKm);
+}
 import type { SupplierContext } from "../lib/supplier-exclusions";
 import { LoadingState } from "./LoadingState";
 
 export default function SupplierBoard({
-  pairs,
+  suppliers,
   exclusions,
   selectedDecisionId,
   supplierContext,
@@ -30,8 +57,10 @@ export default function SupplierBoard({
   onRetry,
   onOpenDecision,
   onExclusionCreated,
+  reachKm = null,
 }: {
-  pairs: SupplierPair[];
+  /** Payload `GET /suppliers` (amplop atau array). `null` = belum dimuat. */
+  suppliers: unknown;
   exclusions: unknown;
   selectedDecisionId: string | null;
   supplierContext: SupplierContext | null;
@@ -42,9 +71,17 @@ export default function SupplierBoard({
   onRetry?: () => void;
   onOpenDecision?: (decisionId: string) => void;
   onExclusionCreated?: () => void;
+  /** Ambang jangkauan (km) untuk penyaring tabel; `null` = tanpa ambang (nasional). */
+  reachKm?: number | null;
 }) {
-  const roster = supplierRoster(pairs);
-  const metrics = rosterMetrics(roster);
+  const directoryDimuat = suppliers !== null && suppliers !== undefined;
+  const rows = supplierDirectory(suppliers);
+  const reference = supplierDistanceReference(suppliers);
+  const metrics = directoryMetrics(rows, reachKm);
+  const [hanyaJangkauan, setHanyaJangkauan] = useState(false);
+  const penyaringAktif = hanyaJangkauan && reachKm !== null;
+  const shownRows = penyaringAktif ? filterDirectoryByReach(rows, reachKm) : rows;
+  const reachSummary = directoryReachSummary(rows, reachKm, reference?.location);
   // `null` = register belum dimuat (endpoint belum dipanggil / gagal) — beda dari
   // array kosong yang berarti "sudah dimuat, memang tidak ada eksklusi".
   const registerDimuat = exclusions !== null && exclusions !== undefined;
@@ -53,12 +90,13 @@ export default function SupplierBoard({
       ? (exclusions as { items?: unknown }).items
       : exclusions
   );
+  const lowThreshold = `${Math.round(LOW_RELIABILITY * 100)}%`;
 
   return (
     <section className="board-page" aria-busy={loading || undefined}>
       <PageHeader
         title="Pemasok"
-        description="Kepercayaan pemasok dalam cakupan Anda, register eksklusi, dan usul eksklusi baru — semua lewat endpoint /supplier-exclusions."
+        description="Daftar pemasok di jaringan, kepercayaan, sebarannya di peta, register eksklusi, dan usul eksklusi baru."
         meta={
           <span className="page-header-pills">
             <span className="commodity-pill">{metrics.suppliers} pemasok</span>
@@ -70,7 +108,10 @@ export default function SupplierBoard({
       {error ? (
         <article className="card">
           <h2>Tidak bisa memuat data pemasok</h2>
-          <p className="evidence-note">{error}</p>
+          <p className="evidence-note">
+            Data pemasok tidak bisa diambil dari server aplikasi saat ini. Coba muat
+            ulang; kalau masih gagal, periksa koneksi ke backend dan coba lagi.
+          </p>
           {onRetry ? (
             <button type="button" className="button button-secondary" onClick={onRetry}>
               Coba lagi
@@ -85,15 +126,32 @@ export default function SupplierBoard({
           <FactList
             rows={[
               {
-                label: "Pemasok terlibat",
-                value: loading && !pairs.length ? "…" : String(metrics.suppliers),
+                label: "Pemasok terdaftar",
+                value: !directoryDimuat && loading ? "…" : String(metrics.suppliers),
               },
-              { label: "Keputusan terpindai", value: String(metrics.totalDecisions) },
               {
                 label: "Rata-rata keandalan",
                 value: metrics.avgReliabilityLabel,
                 tone: metrics.avgReliability === null ? "plain" : metrics.avgReliability >= 0.8 ? "ok" : "warn",
               },
+              {
+                label: `Keandalan rendah (< ${lowThreshold})`,
+                value: String(metrics.lowReliability),
+                tone: metrics.lowReliability ? "warn" : "plain",
+              },
+              {
+                label: "Punya titik peta",
+                value: `${metrics.withCoordinates} dari ${metrics.suppliers}`,
+              },
+              ...(reachKm === null
+                ? []
+                : [
+                    {
+                      label: `Di luar jangkauan ${reachKm} km`,
+                      value: `${metrics.outOfReach} dari ${metrics.suppliers}`,
+                      tone: metrics.outOfReach ? ("warn" as const) : ("plain" as const),
+                    },
+                  ]),
               {
                 label: "Pemasok dieksklusi",
                 value: String(register.length),
@@ -106,51 +164,83 @@ export default function SupplierBoard({
             purchase order oleh backend.
           </p>
         </article>
-
-        <article className="card">
-          <h2>Dari mana angka ini</h2>
-          <p className="evidence-note">{SUPPLIER_SOURCE_NOTE}</p>
-        </article>
       </div>
 
       <article className="card">
         <h2>Daftar pemasok</h2>
-        {roster.length === 0 ? (
+        {!directoryDimuat ? (
           <p className="evidence-note">
             {loading
               ? <LoadingState label="Memuat pemasok…" />
-              : "Belum ada keputusan dengan pemasok pada cakupan ini."}
+              : "Daftar pemasok belum dimuat — data ini diambil saat tab Pemasok dibuka."}
           </p>
+        ) : rows.length === 0 ? (
+          <p className="evidence-note">Tidak ada pemasok yang terdaftar.</p>
         ) : (
           <>
-              <div className="board-table-wrap">
+            <p className="evidence-note">{reachSummary}</p>
+            {reachKm !== null && metrics.outOfReach > 0 ? (
+              <p className="reach-filter">
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  aria-pressed={penyaringAktif}
+                  onClick={() => setHanyaJangkauan((value) => !value)}
+                >
+                  {penyaringAktif
+                    ? "Tampilkan semua pemasok"
+                    : `Hanya dalam jangkauan (${metrics.suppliers - metrics.outOfReach})`}
+                </button>
+                <span className="reach-filter-note">
+                  Menyembunyikan {metrics.outOfReach} pemasok yang jaraknya di atas {reachKm} km
+                  {reference ? ` dari ${reference.location}` : ""}. Baris yang disembunyikan bukan
+                  dihapus — matikan penyaring untuk melihatnya lagi.
+                </span>
+              </p>
+            ) : null}
+            <div className="board-table-wrap">
               <table className="location-table">
-            <thead>
-              <tr>
-                <th scope="col">Pemasok</th>
-                <th scope="col" className="num">
-                  Keandalan
-                </th>
-                <th scope="col" className="num">
-                  Keputusan
-                </th>
-                <th scope="col">Komoditas</th>
-              </tr>
-            </thead>
-            <tbody>
-              {roster.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.name}</td>
-                  <td className="num">{row.reliabilityLabel}</td>
-                  <td className="num">{row.decisions}</td>
-                  <td>{row.commodities.length ? row.commodities.join(", ") : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                <thead>
+                  <tr>
+                    <th scope="col">Pemasok</th>
+                    <th scope="col">Hub</th>
+                    <th scope="col">Komoditas</th>
+                    <th scope="col" className="num">
+                      Keandalan
+                    </th>
+                    <th scope="col">Sertifikasi</th>
+                    <th scope="col">Koordinat</th>
+                    <th scope="col" className="num">
+                      Jarak
+                    </th>
+                    <th scope="col">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shownRows.map((row) => (
+                    <tr key={row.id}>
+                      <td>{row.name}</td>
+                      <td>{row.hub}</td>
+                      <td>{row.commodity}</td>
+                      <td className="num">{row.reliabilityLabel}</td>
+                      <td>{row.certification}</td>
+                      <td className="num">{row.coordinates}</td>
+                      <td className="num">{row.distanceLabel}</td>
+                      <td>
+                        {row.excluded
+                          ? `Dikecualikan di ${row.excludedScopes.join(", ")}`
+                          : "Aktif"}
+                        {reachKm !== null && !jarakDalamJangkauan(row, reachKm) ? (
+                          <span className="reach-tag">{directoryReachLabel(row, reachKm)}</span>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
             <p className="board-scroll-hint">Geser tabel ke samping untuk melihat kolom lain.</p>
-              </>
+          </>
         )}
       </article>
 
@@ -168,32 +258,32 @@ export default function SupplierBoard({
           </p>
         ) : (
           <>
-              <div className="board-table-wrap">
+            <div className="board-table-wrap">
               <table className="location-table">
-            <thead>
-              <tr>
-                <th scope="col">Pemasok</th>
-                <th scope="col">Alasan</th>
-                <th scope="col">Waktu</th>
-                <th scope="col">Keputusan</th>
-              </tr>
-            </thead>
-            <tbody>
-              {register.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.supplier}</td>
-                  <td>{row.reason}</td>
-                  <td>{row.at}</td>
-                  <td>
-                    <code>{row.decisionId.slice(0, 8)}</code>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                <thead>
+                  <tr>
+                    <th scope="col">Pemasok</th>
+                    <th scope="col">Alasan</th>
+                    <th scope="col">Waktu</th>
+                    <th scope="col">Keputusan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {register.map((row) => (
+                    <tr key={row.id}>
+                      <td>{row.supplier}</td>
+                      <td>{row.reason}</td>
+                      <td>{row.at}</td>
+                      <td>
+                        <code>{row.decisionId.slice(0, 8)}</code>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
             <p className="board-scroll-hint">Geser tabel ke samping untuk melihat kolom lain.</p>
-              </>
+          </>
         )}
       </article>
 

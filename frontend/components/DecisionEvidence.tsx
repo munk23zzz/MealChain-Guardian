@@ -25,6 +25,7 @@ import IntegrityPanel from "./IntegrityPanel";
 import PageHeader from "./PageHeader";
 import { SupplierExclusionView } from "./SupplierExclusionPanel";
 import { pendingDecisions, type TodayDecision } from "../lib/today";
+import { decisionGroups } from "../lib/decision-picker";
 import type { SupplierContext } from "../lib/supplier-exclusions";
 import {
   approvalFacts,
@@ -48,6 +49,7 @@ export default function DecisionEvidence({
   now,
   onSupplierCreated,
   onOpenRecommendations,
+  onOpenTraces,
 }: {
   decisions: TodayDecision[];
   selected: any | null;
@@ -61,10 +63,14 @@ export default function DecisionEvidence({
   now: Date | null;
   onSupplierCreated?: (decisionId: string) => void;
   onOpenRecommendations?: () => void;
+  /** Membuka tab Agent Log untuk keputusan yang sedang dibuka. */
+  onOpenTraces?: () => void;
 }) {
   const clock = now ?? new Date(0);
   // Pilihan untuk empty state: yang paling perlu tindakan lebih dulu.
   const suggestions = pendingDecisions(decisions, clock).items.slice(0, 6);
+  // Kelompok dropdown dari lib/decision-picker (satu sumber dengan tab Agent Log).
+  const groups = decisionGroups(decisions, now);
 
   return (
     <section className="evidence-page">
@@ -79,11 +85,14 @@ export default function DecisionEvidence({
             onChange={(event) => onSelect(event.target.value)}
           >
             <option value="">— pilih keputusan —</option>
-            {decisions.map((decision) => (
-              <option key={String(decision.decision_id)} value={String(decision.decision_id)}>
-                {String(decision.decision_type ?? "keputusan")} · {String(decision.status)} ·{" "}
-                {String(decision.decision_id ?? "").slice(0, 8)}
-              </option>
+            {groups.map((group) => (
+              <optgroup key={group.id} label={group.label}>
+                {group.options.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         }
@@ -131,8 +140,24 @@ export default function DecisionEvidence({
         <>
           <article className="card evidence-summary">
             <h2>Ringkasan keputusan</h2>
-            <RecommendationCard decision={selected} mockSourced={false} />
+            {/* hint={null}: di halaman ini kartu TIDAK dibungkus tombol (tidak
+                seperti di feed), jadi ajakan "klik untuk rincian" akan jadi janji
+                kosong. Jejak agennya sendiri ada di tab Agent Log — ditautkan di
+                bawah, dan tautan itu benar-benar bisa diklik. */}
+            <RecommendationCard decision={selected} mockSourced={false} hint={null} />
             <FactList rows={decisionFacts({ ...selected, summary }, clock)} />
+            {onOpenTraces ? (
+              <p className="evidence-traces">
+                <button type="button" className="button button-secondary" onClick={onOpenTraces}>
+                  Buka jejak agen
+                  <span aria-hidden="true"> →</span>
+                </button>
+                <span className="evidence-note">
+                  Jejak reasoning tiap langkah (model, alat, durasi) ada di tab Agent Log, untuk
+                  keputusan yang sedang dibuka ini.
+                </span>
+              </p>
+            ) : null}
           </article>
 
           <div className="evidence-grid">

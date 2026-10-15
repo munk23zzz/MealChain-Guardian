@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import RecommendationCard from "../components/RecommendationCard";
+import RecommendationCard, { CARD_HINT } from "../components/RecommendationCard";
 
 const BASE = {
   decision_id: "d1",
@@ -58,5 +58,28 @@ describe("RecommendationCard — narasi", () => {
       <RecommendationCard decision={{ ...BASE, valid: true, seconds_remaining: 600 } as any} />
     );
     expect(html).toContain("berlaku 600 dtk");
+  });
+});
+
+// Ajakan "klik" hanya jujur kalau kartunya memang terbungkus tombol (di feed).
+// Di halaman Decision & Evidence kartunya dirender polos, jadi pemanggil di
+// sana mengirim hint={null} — lihat tests/decision-evidence.test.tsx.
+describe("RecommendationCard — ajakan klik", () => {
+  it("bawaan (dipakai feed): ajakan tampil, dan tetap disembunyikan dari pembaca layar", () => {
+    const html = renderToStaticMarkup(<RecommendationCard decision={{ ...BASE } as any} />);
+    // React meng-escape "&" jadi "&amp;" di markup — bandingkan setelah dibalik.
+    expect(html.replace(/&amp;/g, "&")).toContain(CARD_HINT);
+    expect(html).toContain('aria-hidden="true"');
+  });
+
+  it("hint={null}: tidak ada ajakan sama sekali", () => {
+    const html = renderToStaticMarkup(<RecommendationCard decision={{ ...BASE } as any} hint={null} />);
+    expect(html).not.toContain("rec-hint");
+    expect(html).not.toContain("Klik untuk rincian");
+  });
+
+  it("hint kosong: juga tidak menghasilkan penanda kosong", () => {
+    const html = renderToStaticMarkup(<RecommendationCard decision={{ ...BASE } as any} hint="" />);
+    expect(html).not.toContain("rec-hint");
   });
 });

@@ -160,15 +160,14 @@ def test_sppg_can_create_decision_targeting_own_location(client):
 
 
 def test_sppg_foreign_decision_detail_read_allowed_by_ruling(client):
-    """REVISI S4-05 (Ruling Owner 2026-10-08): approver VERIFIER_ROLES
-    lintas lokasi BOLEH membaca detail decision (selaras write path
-    /actions/approve yang tidak membatasi lokasi).
+    """REVISI 2026-10-14 (Ruling lokasi): approver SPPG lain TIDAK boleh
+    membaca detail decision kita.
 
-    Test lama mem-pin 403 untuk sppg_head Bogor membaca decision
-    Jakarta — kontrak pra-ruling. Matriks AND butuh approver ke-2 lintas
-    lokasi; tanpa baca, approver sah jadi buta di UI (temuan rehearsal
-    p10: approve 200 vs summary/detail 403). Role selain VERIFIER_ROLES
-    dan bgn_monitor tetap terikat O-SEC-2 (helper _assert_decision_readable).
+    Menegakkan kembali O-SEC-2 yang sempat dibuka ruling 2026-10-08
+    (docs/ruling-2026-10-14-scope-lokasi.md): jalur tulis memang sudah
+    terkunci ke lokasi sendiri, jadi matriks AND dua verifier berlaku di
+    dalam satu SPPG, dan pembacaan lintas SPPG ditolak 403. bgn_monitor
+    tetap lintas lokasi (read-only nasional) — diuji terpisah di bawah.
     """
     owner = _mk_user("sppg_head", "Jakarta")
     foreign = _mk_user("sppg_head", "Bogor")
@@ -182,8 +181,8 @@ def test_sppg_foreign_decision_detail_read_allowed_by_ruling(client):
         assert resp.status_code == 201, resp.text
         did = resp.json()["decision_id"]
         resp = client.get(f"/decisions/{did}", headers=_login(client, foreign))
-        assert resp.status_code == 200, resp.text
-        assert resp.json()["decision_id"] == did
+        assert resp.status_code == 403, resp.text
+        assert "cakupan lokasi" in resp.json()["detail"]
     finally:
         if did:
             _cleanup(did, [])

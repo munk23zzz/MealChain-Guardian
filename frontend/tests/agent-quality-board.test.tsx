@@ -36,7 +36,8 @@ describe("AgentQualityBoard", () => {
   it("tabel per run memuat langkah, alat, verifikator, durasi, iterasi", () => {
     const html = render();
     expect(html).toContain("Rincian per run");
-    expect(html).toContain("forecast.daily, supply_balance.propose");
+    expect(html).toContain("forecast.daily");
+    expect(html).toContain("supply_balance.propose");
     expect(html).toContain("Setuju");
     expect(html).toContain("Tidak setuju");
     expect(html).toContain("2.0 s");
@@ -54,13 +55,59 @@ describe("AgentQualityBoard", () => {
     expect(html).toContain("Belum ada run agen yang tercatat");
   });
 
-  it("catatan metode + cakupan pemindaian ditulis apa adanya", () => {
+  it("cakupan sampel ditulis apa adanya, tanpa catatan metode internal", () => {
     const html = render();
-    expect(html).toContain("Cara kami menilai");
+    expect(html).not.toContain("Cara kami menilai");
+    expect(html).not.toContain("/decisions/{id}/traces");
     expect(html).toContain("8 keputusan terakhir");
   });
 
   it("galat pemuatan dijelaskan", () => {
     expect(render({ error: "traces 500" })).toContain("Tidak bisa memuat jejak agen");
+  });
+
+  it("skor agregat jadi kartu metrik dengan meter dari persennya", () => {
+    const html = render();
+    expect(html).toContain("class=\"quality-stat quality-stat-hero\"");
+    // Kesesuaian verifier 1 dari 2 = 50% → meter 50, bukan angka lain.
+    expect(html).toContain("data-meter=\"50\"");
+    expect(html).toContain("quality-meter-fill");
+  });
+
+  it("putusan verifikator jadi bar bertumpuk + legenda berlabel", () => {
+    const html = render();
+    expect(html).toContain("role=\"img\"");
+    expect(html).toContain(
+      "Komposisi putusan verifikator: 1 setuju, 1 tidak setuju, 0 tidak tersedia dari 2 run."
+    );
+    expect(html).toContain("quality-verdict-seg-ok");
+    expect(html).toContain("quality-legend-dot-danger");
+  });
+
+  it("tanpa run, bar putusan ditandai kosong (bukan segmen palsu)", () => {
+    const html = render({ runs: [] });
+    expect(html).toContain("data-empty=\"true\"");
+    expect(html).not.toContain("quality-verdict-seg-ok");
+  });
+
+  it("status & putusan jadi lencana bertone, kata statusnya tetap apa adanya", () => {
+    const html = render();
+    expect(html).toContain("data-status-tone=\"warn\""); // pending_approval
+    expect(html).toContain("data-status-tone=\"danger\""); // verifier_flagged
+    expect(html).toContain("pending approval");
+    expect(html).toContain("verifier flagged");
+  });
+
+  it("persen legenda tidak dibulatkan sendiri-sendiri (jumlahnya tetap 100%)", () => {
+    const three = [
+      runOf({ decision_id: "a1", iteration: 1 }, TRACE, { verifier: { verdict: "consistent" } }),
+      runOf({ decision_id: "b1", iteration: 1 }, TRACE, null),
+      runOf({ decision_id: "c1", iteration: 1 }, TRACE, null),
+    ];
+    const html = render({ runs: three });
+    // 1/3 dan 2/3: dibulatkan penuh akan jadi 33% + 67% (tetap 100), tetapi
+    // satu desimal lebih jujur dan tetap berjumlah 100,0%.
+    expect(html).toContain("1 · 33.3%");
+    expect(html).toContain("2 · 66.7%");
   });
 });

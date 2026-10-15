@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import ApprovalModal from "../components/ApprovalModal";
-import DecisionActions from "../components/DecisionActions";
+import DecisionActions, { visibleActions } from "../components/DecisionActions";
+import ApprovalMenu from "../components/ApprovalMenu";
 
 const summary = {
   decision_id: "decision-local",
@@ -50,8 +51,22 @@ describe("Approval administratif supplier", () => {
   });
 
   it("administratif rejected tidak menawarkan repropose transfer", () => {
-    const html = renderToStaticMarkup(<DecisionActions decisionId="d" role="sppg_head"
-      status="rejected" token="test-token" summary={summary} />);
+    // 2026-10-14: menu approval kini di dalam popup → yang diperiksa adalah
+    // isi popup-nya (ApprovalMenu), bukan kartu halaman.
+    const noop = async () => null;
+    const html = renderToStaticMarkup(
+      <ApprovalMenu
+        summary={summary}
+        actions={visibleActions("sppg_head", "rejected")}
+        administrative
+        onApprove={noop}
+        onReject={noop}
+        onVerify={noop}
+        onExecute={noop}
+        onRepropose={noop}
+        onClose={() => {}}
+      />
+    );
     expect(html).not.toContain("Minta re-propose");
     expect(html).toContain("bukti baru");
   });

@@ -4,21 +4,20 @@
 // (pola sama seperti ikon metrik KPI). Bentuknya mengikuti ikon pada aplikasi
 // acuan MealchainGuardian (dashboard, gauge, clipboard-list, terminal, slider).
 // aria-hidden: label tombol tetap menjadi nama aksesibel (nav tetap "Overview",
-// "KPI", dst.) sehingga pembaca layar dan tes tidak berubah.
+// "KPI & Kualitas Agen", dst.) sehingga pembaca layar dan tes tidak berubah.
 
 import type { ReactNode } from "react";
 
 type NavId =
   | "today"
   | "overview"
-  | "kpi"
+  | "kpi-kualitas"
   | "recommendations"
   | "evidence"
   | "safety"
   | "surplus"
   | "suppliers"
   | "agent-log"
-  | "quality"
   | "demo-control"
   | "settings";
 
@@ -40,10 +39,13 @@ const GLYPHS: Record<NavId, ReactNode> = {
     </>
   ),
   // gauge
-  kpi: (
+  // gauge — tab gabungan "KPI & Kualitas Agen" (2026-10-15): satu ikon untuk
+  // dua bagiannya (keduanya dulu memakai ikon gauge yang sama).
+  "kpi-kualitas": (
     <>
-      <path d="m12 14 4-4" />
-      <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+      <path d="M12 14l4-4" />
+      <path d="M3.3 18a9 9 0 1 1 17.4 0" />
+      <circle cx="12" cy="14" r="1" />
     </>
   ),
   // clipboard-list
@@ -105,14 +107,6 @@ const GLYPHS: Record<NavId, ReactNode> = {
       <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
       <circle cx="9" cy="7" r="4" />
       <path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" />
-    </>
-  ),
-  // gauge (Kualitas Agen)
-  quality: (
-    <>
-      <path d="M12 14l4-4" />
-      <path d="M3.3 18a9 9 0 1 1 17.4 0" />
-      <circle cx="12" cy="14" r="1" />
     </>
   ),
   // slider/gear (Pengaturan — admin pengguna & lokasi)

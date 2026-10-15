@@ -11,6 +11,7 @@ from app.api.auth import MUTATING_ROLES, get_current_user, require_roles
 from app.api.dependencies import get_db
 from app.api.supply import _resolve_commodity, _resolve_location
 from app.core.price import price_deviation
+from app.core.scope import assert_in_scope
 from app.models import PriceSignal, Supplier, User
 
 router = APIRouter()
@@ -21,7 +22,7 @@ async def list_quotes(
     location: str,
     commodity: str,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> dict:
     """Daftar supplier_quote + reference terkini (S4-01 UI Event 2).
 
@@ -30,6 +31,7 @@ async def list_quotes(
     lokasi/period.
     """
     loc = await _resolve_location(db, location)
+    assert_in_scope(user, loc.id, what="lokasi")
     com = await _resolve_commodity(db, commodity)
     quotes = (
         (
@@ -107,9 +109,10 @@ async def get_price(
     location: str,
     commodity: str,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> dict:
     loc = await _resolve_location(db, location)
+    assert_in_scope(user, loc.id, what="lokasi")
     com = await _resolve_commodity(db, commodity)
     record = (
         await db.execute(

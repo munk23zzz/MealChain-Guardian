@@ -50,9 +50,13 @@ def test_balance_endpoint_returns_gap_facts(client):
     assert body["status"] == "shortage"
 
 
-def test_balance_endpoint_surplus_city_without_demand(client):
-    """Cianjur tanpa demand rows → demand 0, surplus murni."""
-    resp = client.get("/balance/Cianjur/telur")
+def test_balance_endpoint_surplus_city_without_demand(client, monitor_headers):
+    """Cianjur tanpa demand rows → demand 0, surplus murni.
+
+    Dibaca sebagai bgn_monitor: Cianjur bukan lokasi kepala SPPG Jakarta
+    (Ruling 2026-10-14), dan tes ini menguji arti surplus, bukan cakupan.
+    """
+    resp = client.get("/balance/Cianjur/telur", headers=monitor_headers)
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["supply_kg"] == 1400.0

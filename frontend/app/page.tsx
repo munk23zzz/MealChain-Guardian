@@ -18,6 +18,10 @@ import { useExclusions } from "../lib/hooks/useExclusions";
 import { useKpi } from "../lib/hooks/useKpi";
 import { useMe } from "../lib/hooks/useMe";
 import { useQualitySample } from "../lib/hooks/useQualitySample";
+import { useSuppliers } from "../lib/hooks/useSuppliers";
+// Fase 7b: ambang jangkauan peran (SPPG 150 km, monitor tanpa ambang) — satu
+// tempat aturannya, dipakai peta + halaman Pemasok.
+import { supplierReachKmForRole } from "../lib/supplier-pins";
 import { decodeRole } from "../lib/auth";
 import {
   type DecisionRow as Decision,
@@ -25,6 +29,16 @@ import {
 } from "../lib/hooks/useDecisions";
 import { useToday } from "../lib/hooks/useToday";
 import { errorMessage } from "../lib/query";
+import {
+  FEED_SCOPE_ALL,
+  FEED_SORT_LABELS,
+  feedChips,
+  feedSummary,
+  feedVisible,
+  hasActiveFilter,
+  sortFeed,
+  type FeedSort,
+} from "../lib/decision-feed";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatJam } from "../lib/jam";
 import SettingsPanel from "../components/SettingsPanel";
@@ -46,12 +60,13 @@ import { StatusLocationList } from "../components/SupplyMap";
 import RecommendationCard from "../components/RecommendationCard";
 import AgentTraceViewer from "../components/AgentTraceViewer";
 import ChaosPanel from "../components/ChaosPanel";
+import DemoDataPanel from "../components/DemoDataPanel";
+import { mapHeaderSubtitle } from "../lib/overview-copy";
 import DecisionChain from "../components/DecisionChain";
 import ProviderPanel from "../components/ProviderPanel";
 import RoleHero from "../components/RoleHero";
 import PageHeader from "../components/PageHeader";
-import KPIDashboard from "../components/KPIDashboard";
-import KpiTargets from "../components/KpiTargets";
+import KpiQualityBoard from "../components/KpiQualityBoard";
 import OpsConsole from "../components/OpsConsole";
 import SupplyMap from "../components/SupplyMap";
 import NodeTelemetry from "../components/NodeTelemetry";
@@ -61,13 +76,12 @@ import OverviewLocationBreakdown from "../components/OverviewLocationBreakdown";
 import { formatKg, sumFiniteKg } from "../lib/overview-format";
 import { SupplierExclusionView } from "../components/SupplierExclusionPanel";
 import DecisionEvidence from "../components/DecisionEvidence";
-import AgentQualityBoard from "../components/AgentQualityBoard";
 import FoodSafetyBoard from "../components/FoodSafetyBoard";
 import SurplusBoard from "../components/SurplusBoard";
 import SupplierBoard from "../components/SupplierBoard";
 import { runOf, type QualityRun } from "../lib/agent-quality";
-import type { SupplierPair } from "../lib/suppliers-board";
 import { defaultEvidenceId } from "../lib/evidence";
+import { decisionGroups, statusWord, typeWord } from "../lib/decision-picker";
 
 const APPROVER_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
 
@@ -140,14 +154,13 @@ export default function Home() {
   const [tab, setTab] = useState<
     | "today"
     | "overview"
-    | "kpi"
+    | "kpi-kualitas"
     | "recommendations"
     | "evidence"
     | "safety"
     | "surplus"
     | "suppliers"
     | "agent-log"
-    | "quality"
     | "demo-control"
     | "settings"
   >("overview");
@@ -214,9 +227,30 @@ export default function Home() {
   const sampleIds = decisions.slice(0, EVALUATED_LIMIT).map((d) => d.decision_id);
   const sampleQuery = useQualitySample(token, identityScope, tab, sampleIds);
   const exclusions = useExclusions(token, identityScope, tab).data;
-  // Feed traceable (arah Roy 2026-10-09): filter status = visual only;
-  // EXPIRED TIDAK disembunyikan. Hook di level atas (rules-of-hooks).
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  // Daftar pemasok (GET /suppliers) — dipakai DUA permukaan dengan aturan jangkauan
+  // berbeda (Fase 7b):
+  // - peta Overview: peran SPPG memakai penyaring server 150 km (hanya pemasok
+  //   terjangkau yang dikirim, jumlah yang dibuang dilaporkan server di `reach`);
+  // - halaman Pemasok: daftar PENUH + kolom jarak + label "di luar jangkauan",
+  //   supaya penyaringan tidak pernah berarti penyembunyian.
+  const supplierReachKm = useMemo(() => supplierReachKmForRole(role), [role]);
+  // Filter komoditas ikut ke server (bukan hanya di klien) supaya "N di luar
+  // jangkauan" yang dilaporkan server berlaku untuk komoditas yang dilihat.
+  const mapSuppliersQuery = useSuppliers(
+    token,
+    identityScope,
+    tab,
+    supplierReachKm,
+    mapData?.commodity ?? null
+  );
+  const suppliersQuery = useSuppliers(token, identityScope, tab);
+  // Feed (14 Okt 2026): cakupan + pencarian + urutan. Cakupan "action" =
+  // keputusan yang benar-benar menunggu tindakan manusia — definisi yang sama
+  // dengan lonceng top bar dan angka di sidebar. EXPIRED tetap bisa dilihat
+  // lewat chip "Semua"/status (tidak pernah disembunyikan).
+  const [feedScope, setFeedScope] = useState<string>(FEED_SCOPE_ALL);
+  const [feedQuery, setFeedQuery] = useState("");
+  const [feedSort, setFeedSort] = useState<FeedSort>("urgency");
   // Feed berisi puluhan keputusan; tampilkan bertahap supaya halaman tidak
   // menjadi gulungan panjang. Jumlah tersisa selalu dinyatakan terang-terangan.
   const [feedLimit, setFeedLimit] = useState(24);
@@ -226,7 +260,7 @@ export default function Home() {
   // S4-03: envelope GET /kpi lewat React Query — satu potret per sesi (periode
   // 24 jam; scope ditentukan backend: SPPG own, monitor global). Loading dan
   // galat dibaca dari status query; tombol "Coba lagi" memanggil refetch().
-  const kpiQuery = useKpi(token, identityScope);
+  const kpiQuery = useKpi(token, identityScope, tab);
   const kpi = kpiQuery.data;
   const kpiLoading = kpiQuery.loading;
   const kpiError = kpiQuery.error;
@@ -245,20 +279,12 @@ export default function Home() {
       ),
     [sampleQuery.rows, byDecisionId]
   );
-  const supplierPairs = useMemo<SupplierPair[]>(
-    () =>
-      (sampleQuery.rows ?? []).map(({ decisionId, summary }) => ({
-        decisionId,
-        decisionType: byDecisionId.get(decisionId)?.decision_type ?? null,
-        commodity: summary?.commodity ?? null,
-        supplier: summary?.supplier ?? null,
-      })),
-    [sampleQuery.rows, byDecisionId]
-  );
   const qualityLoading = sampleQuery.loading;
-  const supplierLoading = sampleQuery.loading;
+  // Halaman Pemasok tidak lagi menurunkan daftarnya dari sampel keputusan —
+  // sumbernya `GET /suppliers` (lihat suppliersQuery di atas).
+  const supplierLoading = suppliersQuery.loading;
   const qualityError = sampleQuery.error;
-  const supplierError = sampleQuery.error;
+  const supplierError = suppliersQuery.error;
 
   // Register eksklusi punya siklus muat SENDIRI. Dulu ia diambil di dalam efek
   // sampel di atas, yang ber-penjaga "sampel sudah dinilai" (evaluatedKey):
@@ -394,22 +420,20 @@ export default function Home() {
   );
   const roleLabel = ROLE_LABEL[role ?? ""] ?? (role ?? "user");
 
-  // Feed traceable (arah Roy 2026-10-09): EXPIRED TIDAK disembunyikan.
-  // Filter status hanya menyaring TAMPILAN; count = data live penuh.
-  const statusCounts = decisions.reduce<Record<string, number>>((acc, d) => {
-    const s = (d.status ?? "").toUpperCase();
-    acc[s] = (acc[s] ?? 0) + 1;
-    return acc;
-  }, {});
-  const visibleDecisions = statusFilter
-    ? decisions.filter((d) => (d.status ?? "").toUpperCase() === statusFilter)
-    : decisions;
-  // Status yang menunggu tindakan manusia — dipakai sebagai meta kepala feed
-  // (acuan: "2 menunggu keputusan · 2 ber-flag Verifier · 1 dieksekusi").
-  const perluKeputusan = ["PENDING_APPROVAL", "NEEDS_VERIFICATION", "VERIFIER_FLAGGED"].reduce(
-    (total, s) => total + (statusCounts[s] ?? 0),
-    0,
-  );
+  // Feed traceable (arah Roy 2026-10-09): EXPIRED TIDAK disembunyikan — semua
+  // status tetap muncul sebagai chip + angka. Chip, penyaring, dan urutan
+  // dihitung lib/decision-feed (label bahasa manusia, "Perlu tindakan" dulu).
+  // Tanpa useMemo: nilainya kecil (126 baris) dan di bawah ini tidak boleh ada
+  // hook baru — komponen sudah punya early return untuk layar login.
+  const feedFilter = { scope: feedScope, query: feedQuery };
+  const feedChipList = feedChips(decisions);
+  const feedRows = sortFeed(feedVisible(decisions, feedFilter), feedSort, now);
+  const feedTotal = feedRows.length;
+  const feedCards = feedRows.slice(0, feedLimit);
+  const feedFilterActive = hasActiveFilter(feedFilter);
+  // Keputusan yang menunggu tindakan manusia — satu definisi dengan lonceng
+  // notifikasi top bar (dulu dihitung sendiri di sini dari statusCounts).
+  const perluKeputusan = countActionable(decisions);
 
   // PRD 2.4: nav 5 tab (overview/kpi/recommendations/agent-log/demo-control)
   // + tab "Hari Ini" (permintaan Roy 2026-10-11) sebagai halaman pertama;
@@ -417,38 +441,44 @@ export default function Home() {
   // butuh observability).
   // Urutan mengikuti sidebar acuan (HackathonBil/MealchainGuardian): Hari Ini →
   // Overview → Keputusan → Decision & Evidence → Keamanan Pangan → Surplus &
-  // Limbah → Pemasok → Agent Log → Kualitas Agen → KPI. Halaman yang di acuan
+  // Limbah → Pemasok → Agent Log → KPI & Kualitas Agen (tab gabungan sejak
+  // 2026-10-15). Halaman yang di acuan
   // dibatasi peran (Surplus & Limbah = peran SPPG) ikut dibatasi di sini.
   const navItems: {
     id:
       | "today"
       | "overview"
-      | "kpi"
+      | "kpi-kualitas"
       | "recommendations"
       | "evidence"
       | "safety"
       | "surplus"
       | "suppliers"
       | "agent-log"
-      | "quality"
       | "demo-control"
       | "settings";
     label: string;
+    /** Keterangan tambahan saat kursor berhenti di tab (mis. arti angkanya). */
+    title?: string;
     roles?: string[];
   }[] = [
     { id: "today", label: "Hari Ini" },
     { id: "overview", label: "Overview" },
     {
+      // Angka = jumlah yang PERLU DI-APPROVE, bukan seluruh keputusan yang
+      // pernah dibuat (dulu 126 dan sulit ditafsirkan).
       id: "recommendations",
-      label: `Recommendations${decisions.length ? ` (${decisions.length})` : ""}`,
+      label: `Recommendations${perluKeputusan ? ` (${perluKeputusan})` : ""}`,
+      title: perluKeputusan
+        ? `${perluKeputusan} rekomendasi perlu tindakan`
+        : "Tidak ada rekomendasi yang perlu tindakan",
     },
     { id: "evidence", label: "Decision & Evidence" },
     { id: "safety", label: "Keamanan Pangan" },
     { id: "surplus", label: "Surplus & Limbah", roles: Array.from(SURPLUS_ROLES) },
     { id: "suppliers", label: "Pemasok" },
     { id: "agent-log", label: "Agent Log" },
-    { id: "quality", label: "Kualitas Agen" },
-    { id: "kpi", label: "KPI" },
+    { id: "kpi-kualitas", label: "KPI & Kualitas Agen" },
     { id: "settings", label: "Pengaturan", roles: Array.from(MANAGE_ROLES) },
     ...(isApprover
       ? [{ id: "demo-control" as const, label: "Demo Control" }]
@@ -520,7 +550,7 @@ export default function Home() {
                   if (fallback) setSelectedId(fallback);
                 }
               }}
-              title={sideCollapsed ? n.label : undefined}
+              title={n.title ?? (sideCollapsed ? n.label : undefined)}
             >
               <NavIcon id={n.id} />
               <span className="side-tab-label">{n.label}</span>
@@ -626,7 +656,7 @@ export default function Home() {
                 <h1>Overview Pasokan &amp; Distribusi</h1>
                 <p className="overview-header-sub">
                   {mapData
-                    ? `Peta ${(mapData.locations ?? []).length} lokasi SPPG — hijau surplus, merah shortage, abu seimbang.`
+                    ? mapHeaderSubtitle((mapData.locations ?? []).length)
                     : "Memuat kondisi pasokan semua lokasi SPPG…"}
                 </p>
               </div>
@@ -761,6 +791,8 @@ export default function Home() {
                 loading={!mapData && !mapError}
                 showStatusList={false}
                 showHeader={false}
+                suppliers={mapSuppliersQuery.data}
+                reachKm={supplierReachKm}
               />
               <div className="overview-side">
                 <div className="map-panel">
@@ -811,19 +843,6 @@ export default function Home() {
           </div>
         )}
 
-        {tab === "kpi" && (
-          <>
-            <KPIDashboard
-              kpi={kpi}
-              loading={kpiLoading}
-              error={kpiError}
-              onRetry={() => void kpiQuery.refetch()}
-            />
-            {/* PRD 2.4 §5: strip target demo — berlabel eksplisit,
-                BUKAN angka live (KPI live tetap jujur di atas). */}
-            <KpiTargets />
-          </>
-        )}
 
         {tab === "settings" && <SettingsPanel token={token} />}
 
@@ -854,9 +873,20 @@ export default function Home() {
                 Muat kasus demo
               </button>
             </section>
+            {/* Fase 5 (2026-10-15): data & rentang waktu — riwayat demo dibangun
+                dari sini. Ditaruh SEBELUM konsol analisis karena urutan demo
+                nyata: siapkan data dulu, baru picu skenario. */}
+            <DemoDataPanel
+              token={token}
+              role={role ?? "sppg_head"}
+              onDataChanged={() => {
+                if (token) void decisionsQuery.refetch();
+              }}
+            />
             <OpsConsole
               role={role ?? "sppg_head"}
               token={token}
+              ownLocationName={me?.location_name ?? null}
               onSubmitted={() => {
                 if (token) void decisionsQuery.refetch();
                 setTab("recommendations");
@@ -865,6 +895,8 @@ export default function Home() {
             <ChaosPanel
               role={role ?? "sppg_head"}
               token={token}
+              ownLocationId={me?.location_id ?? null}
+              ownLocationName={me?.location_name ?? null}
               onDecisionCreated={() => {
                 if (token) void decisionsQuery.refetch();
               }}
@@ -877,14 +909,14 @@ export default function Home() {
             <section className="feed-section">
               <PageHeader
                 title="Recommendation Feed"
-                description="Urutan berdasarkan urgensi: isu keamanan lebih dulu, lalu ketidakseimbangan regional, terakhir anomali harga."
+                description="Satu kartu satu keputusan agent. Yang menunggu tindakan Anda selalu di paling atas, lalu isu keamanan, ketidakseimbangan, terakhir anomali harga."
                 meta={
                   <>
                     <span className="commodity-pill">
-                      {decisions.length} rekomendasi
+                      {perluKeputusan} perlu tindakan
                     </span>
                     <span className="commodity-pill">
-                      {perluKeputusan} menunggu keputusan
+                      {decisions.length} total rekomendasi
                     </span>
                   </>
                 }
@@ -910,85 +942,142 @@ export default function Home() {
                 </p>
               )}
 
-              {/* Filter status: semua status punya chip + count (traceable;
-                  EXPIRED tetap ada, tidak pernah disembunyikan by default). */}
               {decisions.length > 0 && (
-                <div className="feed-filters" aria-label="Filter status">
-                  <button
-                    type="button"
-                    className={`filter-chip${statusFilter === null ? " filter-chip-active" : ""}`}
-                    onClick={() => {
-                      setStatusFilter(null);
-                      setFeedLimit(24);
-                    }}
-                  >
-                    Semua
-                    <span className="legend-count">{decisions.length}</span>
-                  </button>
-                  {Object.entries(statusCounts)
-                    .sort(([a], [b]) => a.localeCompare(b))
-                    .map(([s, n]) => (
+                <>
+                  {/* Petunjuk ditaruh SEBELUM daftar: dulu ada di bawah 24 kartu,
+                      jadi pembaca baru menemukannya setelah menggulung jauh. */}
+                  <p className="feed-hint">
+                    Klik kartu untuk membuka{" "}
+                    <strong>Decision &amp; Evidence</strong> beserta seluruh bukti
+                    keputusan itu.
+                  </p>
+
+                  {/* Cari + urutkan: sebelumnya tidak ada sama sekali, jadi 126
+                      kartu hanya bisa dipindai satu per satu. */}
+                  <div className="feed-toolbar">
+                    <div className="feed-field feed-field-search">
+                      <label htmlFor="feed-search">Cari rekomendasi</label>
+                      <input
+                        id="feed-search"
+                        type="search"
+                        value={feedQuery}
+                        placeholder="Jenis, status, kasus, atau ID keputusan…"
+                        onChange={(e) => {
+                          setFeedQuery(e.target.value);
+                          setFeedLimit(24);
+                        }}
+                      />
+                    </div>
+                    <div className="feed-field feed-field-sort">
+                      <label htmlFor="feed-sort">Urutkan</label>
+                      <select
+                        id="feed-sort"
+                        value={feedSort}
+                        onChange={(e) => setFeedSort(e.target.value as FeedSort)}
+                      >
+                        {(["urgency", "due", "newest"] as FeedSort[]).map((mode) => (
+                          <option key={mode} value={mode}>
+                            {FEED_SORT_LABELS[mode]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Filter status: semua status punya chip + count (traceable;
+                      EXPIRED tetap ada, tidak pernah disembunyikan by default).
+                      Label bahasa manusia + aria-pressed supaya pembaca layar
+                      tahu mana yang sedang aktif. */}
+                  <div className="feed-filters" role="group" aria-label="Filter status">
+                    {feedChipList.map((chip) => (
                       <button
-                        key={s}
+                        key={chip.id}
                         type="button"
-                        className={`filter-chip${statusFilter === s ? " filter-chip-active" : ""}`}
+                        aria-pressed={feedScope === chip.id}
+                        className={`filter-chip${
+                          feedScope === chip.id ? " filter-chip-active" : ""
+                        }`}
                         onClick={() => {
-                          setStatusFilter(statusFilter === s ? null : s);
+                          setFeedScope(feedScope === chip.id ? FEED_SCOPE_ALL : chip.id);
                           setFeedLimit(24);
                         }}
                       >
-                        {s}
-                        <span className="legend-count">{n}</span>
+                        {chip.label}
+                        <span className="legend-count">{chip.count}</span>
                       </button>
                     ))}
-                </div>
-              )}
-
-              <div className="feed">
-                {visibleDecisions.slice(0, feedLimit).map((d) => (
-                  <div key={d.decision_id}>
-                    <button
-                      type="button"
-                      className="link-button"
-                      onClick={() => {
-                        setSelectedId(d.decision_id);
-                        setTab("evidence");
-                      }}
-                    >
-                      <RecommendationCard
-                        decision={d}
-                        mockSourced={d.status === "executed"}
-                      />
-                    </button>
                   </div>
-                ))}
-              </div>
-              {visibleDecisions.length > feedLimit && (
-                <div className="feed-more">
-                  <p>
-                    Menampilkan {feedLimit} dari {visibleDecisions.length}{" "}
-                    rekomendasi
-                    {statusFilter ? ` berstatus ${statusFilter}` : ""}.
-                  </p>
-                  <button
-                    type="button"
-                    className="button button-secondary"
-                    onClick={() => setFeedLimit(feedLimit + 24)}
-                  >
-                    Tampilkan{" "}
-                    {Math.min(24, visibleDecisions.length - feedLimit)} lagi
-                  </button>
-                </div>
+
+                  <div className="feed-status-row">
+                    <p className="feed-status" role="status" aria-atomic="true">
+                      {feedSummary({
+                        shown: feedCards.length,
+                        total: decisions.length,
+                        scope: feedScope,
+                        query: feedQuery,
+                      })}
+                    </p>
+                    {feedFilterActive && (
+                      <button
+                        type="button"
+                        className="feed-reset"
+                        onClick={() => {
+                          setFeedScope(FEED_SCOPE_ALL);
+                          setFeedQuery("");
+                          setFeedLimit(24);
+                        }}
+                      >
+                        Kosongkan filter
+                      </button>
+                    )}
+                  </div>
+
+                  {feedCards.length === 0 ? (
+                    <p className="empty-state feed-empty">
+                      Tidak ada rekomendasi yang cocok dengan filter atau kata
+                      kunci ini. Coba kata lain, atau kosongkan filter untuk
+                      melihat seluruh {decisions.length} rekomendasi.
+                    </p>
+                  ) : (
+                    <div className="feed">
+                      {feedCards.map((d) => (
+                        <div key={d.decision_id}>
+                          <button
+                            type="button"
+                            className="link-button"
+                            onClick={() => {
+                              setSelectedId(String(d.decision_id));
+                              setTab("evidence");
+                            }}
+                          >
+                            <RecommendationCard
+                              decision={d}
+                              mockSourced={d.status === "executed"}
+                            />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {feedTotal > feedLimit && (
+                    <div className="feed-more">
+                      <p>
+                        Menampilkan {feedCards.length} dari {feedTotal} rekomendasi
+                        yang lolos filter.
+                      </p>
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        onClick={() => setFeedLimit(feedLimit + 24)}
+                      >
+                        Tampilkan {Math.min(24, feedTotal - feedLimit)} lagi
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </section>
-
-            {/* Detail keputusan pindah ke tab tersendiri "Decision & Evidence"
-                (halaman ke-3 sidebar acuan). Feed kembali fokus pada daftar;
-                klik kartu = pilih keputusan + buka halaman buktinya. */}
-            <p className="feed-hint">
-              Klik kartu untuk membuka halaman <strong>Decision &amp; Evidence</strong>{" "}
-              dengan seluruh bukti keputusan itu.
-            </p>
           </>
         )}
 
@@ -1012,6 +1101,7 @@ export default function Home() {
               setSelectedId(decisionId);
             }}
             onOpenRecommendations={() => setTab("recommendations")}
+            onOpenTraces={() => setTab("agent-log")}
           />
         )}
 
@@ -1051,7 +1141,7 @@ export default function Home() {
 
         {tab === "suppliers" && (
           <SupplierBoard
-            pairs={supplierPairs}
+            suppliers={suppliersQuery.data}
             exclusions={exclusions}
             selectedDecisionId={selectedId}
             supplierContext={supplierContext}
@@ -1059,7 +1149,8 @@ export default function Home() {
             token={token ?? ""}
             loading={supplierLoading}
             error={supplierError}
-            onRetry={() => void sampleQuery.refetch()}
+            onRetry={() => void suppliersQuery.refetch()}
+            reachKm={supplierReachKm}
             onOpenDecision={(decisionId) => {
               if (decisionId) setSelectedId(decisionId);
               setTab("evidence");
@@ -1068,14 +1159,22 @@ export default function Home() {
           />
         )}
 
-        {tab === "quality" && (
-          <AgentQualityBoard
+        {/* Tab gabungan "KPI & Kualitas Agen" (keputusan pemilik
+            2026-10-15): KPI (hasil) dulu, lalu mutu kerja agen (cara).
+            Kedua bagian mempertahankan loading/error-nya sendiri supaya satu
+            bagian gagal tidak menyembunyikan bagian lain. */}
+        {tab === "kpi-kualitas" && (
+          <KpiQualityBoard
+            kpi={kpi}
+            kpiLoading={kpiLoading}
+            kpiError={kpiError}
+            onRetryKpi={() => void kpiQuery.refetch()}
             runs={qualityRuns}
             evaluatedCount={evaluatedCount}
             totalDecisions={decisions.length}
-            loading={qualityLoading}
-            error={qualityError}
-            onRetry={() => void sampleQuery.refetch()}
+            qualityLoading={qualityLoading}
+            qualityError={qualityError}
+            onRetryQuality={() => void sampleQuery.refetch()}
             onOpenDecision={(decisionId) => {
               setSelectedId(decisionId);
               setTab("evidence");
@@ -1100,20 +1199,22 @@ export default function Home() {
                   onChange={(e) => setSelectedId(e.target.value)}
                 >
                   <option value="">— pilih keputusan —</option>
-                  {decisions.map((d) => (
-                    <option key={d.decision_id} value={d.decision_id}>
-                      {(d.decision_type ?? "keputusan")} · {d.status} ·{" "}
-                      {d.decision_id.slice(0, 8)}
-                    </option>
+                  {decisionGroups(decisions, now).map((group) => (
+                    <optgroup key={group.id} label={group.label}>
+                      {group.options.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               }
             />
             {selected && (
               <p className="section-sub">
-                Trace untuk{" "}
-                <strong>{selected.decision_type ?? "keputusan"}</strong>{" "}
-                ({selected.decision_id.slice(0, 8)}) — status {selected.status}.
+                Trace untuk <strong>{typeWord(selected.decision_type)}</strong> (
+                {selected.decision_id.slice(0, 8)}) — status {statusWord(selected.status)}.
               </p>
             )}
             <ProviderPanel providers={providersFromTraces(traces)} />

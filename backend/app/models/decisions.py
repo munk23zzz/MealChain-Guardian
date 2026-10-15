@@ -43,6 +43,7 @@ class Decision(Base):
             name="decisions_quantity_positive_check",
         ),
         Index("idx_decisions_status", "status"),
+        Index("idx_decisions_origin_created_at", "origin", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -89,6 +90,12 @@ class Decision(Base):
     cost_breakdown: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
+    )
+    origin: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default="seed"
+    )
+    generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

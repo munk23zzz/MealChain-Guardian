@@ -152,12 +152,6 @@ export function safetySummary(batches: unknown): SafetySummary {
   };
 }
 
-/** Catatan kejujuran sumber data (ditampilkan di kartu catatan). */
-export const FOOD_SAFETY_SOURCE_NOTE =
-  "Angka di halaman ini dari GET /batches (status keamanan, skor kesegaran, batas layak pakai). " +
-  "Papan CCP per-alat, bank sampel, jejak lot EPCIS, dan sensor suhu belum ada di backend ini — " +
-  "bagian itu tidak diisi angka karangan.";
-
 function text(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   const raw = String(value).trim();

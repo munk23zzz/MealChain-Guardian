@@ -357,14 +357,12 @@ export default function TodayDashboard({
             <li className="today-row">
               <div className="today-row-main">
                 <span className="today-row-title">Blok terverifikasi</span>
-                <span className="today-row-meta">GET /ledger/verify</span>
               </div>
               <span className="today-value">{ledgerState.blocksLabel}</span>
             </li>
             <li className="today-row">
               <div className="today-row-main">
                 <span className="today-row-title">Head hash</span>
-                <span className="today-row-meta">dipotong 10 karakter pertama</span>
               </div>
               <span className="today-value today-value-mono">{ledgerState.headShort}</span>
             </li>

@@ -97,11 +97,11 @@ def test_compliance_uses_exact_decision_read_scope_for_other_user_and_monitor():
     with TestClient(app) as client:
         decision_id = _decision_with_evidence(client, owner)
         try:
-            # _assert_decision_readable explicitly permits verifier roles cross-location
-            # for the second approval, and permits the read-only monitor globally.
+            # Ruling 2026-10-14: verifier lintas SPPG TIDAK lagi boleh membaca
+            # (pengecualian 2026-10-08 dicabut); bgn_monitor tetap global.
             assert client.get(
                 f"/decisions/{decision_id}/compliance", headers=_login(client, other)
-            ).status_code == 200
+            ).status_code == 403
             assert client.get(
                 f"/decisions/{decision_id}/compliance", headers=_login(client, monitor)
             ).status_code == 200

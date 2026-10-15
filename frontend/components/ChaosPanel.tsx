@@ -12,11 +12,22 @@
  * (dulu setiap "Picu Event 3" gagal karena itu). Besar gangguan yang dinilai
  * adalah temperature_log batch terpilih — pilih batch, bukan angka slider.
  * Semua panggilan lewat lib/api.ts (Rules.md §3: tanpa fetch manual di komponen).
+ *
+ * Ruling 2026-10-14 (cakupan lokasi): yang dikunci adalah lokasi TUJUAN
+ * keputusan. Panel karenanya mengirim target = lokasi SPPG pemakai (dari
+ * /auth/me), bukan lokasi batch seperti sebelumnya — batch dari lokasi sumber
+ * mana pun tetap sah dan justru itu skenarionya. Lihat lib/chaos-scope.ts.
  */
 
 import { useCallback, useEffect, useState } from "react";
 
 import { fetchBatches, triggerSafetyDisruption } from "../lib/api";
+import {
+  batchLabel,
+  blockedReason,
+  eventTargetNote,
+  resolveEventTarget,
+} from "../lib/chaos-scope";
 
 import StatusBadge from "./StatusBadge";
 
@@ -25,10 +36,14 @@ const MUTATING = new Set(["sppg_head", "sppg_nutritionist"]);
 export default function ChaosPanel({
   role,
   token,
+  ownLocationId,
+  ownLocationName = null,
   onDecisionCreated,
 }: {
   role: string;
   token: string | null;
+  ownLocationId?: string | null;
+  ownLocationName?: string | null;
   onDecisionCreated?: () => void;
 }) {
   const [batches, setBatches] = useState<any[]>([]);
@@ -48,7 +63,7 @@ export default function ChaosPanel({
       setBatches(rows);
       // Bentuk fungsional: tidak menutup nilai batchId lama (dulu pilihan
       // pengguna bisa diam-diam direset ke batch pertama).
-      if (rows.length) setBatchId((prev) => prev || rows[0].id);
+      if (rows.length) setBatchId((prev) => prev || String(rows[0].id ?? ""));
     } catch (e: any) {
       setMsg(String(e.message ?? e));
     } finally {
@@ -60,16 +75,22 @@ export default function ChaosPanel({
     void loadBatches();
   }, [loadBatches]);
 
+  const eventTarget = resolveEventTarget(ownLocationId);
+  const blocked = blockedReason(ownLocationId);
+
   async function run() {
     if (!token || !batchId) return;
+    if (!eventTarget) {
+      setMsg(blockedReason(ownLocationId));
+      return;
+    }
     setBusy(true);
     setMsg(null);
     setResult(null);
     try {
-      const target = batches.find((b) => b.id === batchId);
       const d = await triggerSafetyDisruption(
         batchId,
-        String(target?.location_id ?? ""),
+        eventTarget,
         typeof crypto !== "undefined" && crypto.randomUUID
           ? crypto.randomUUID()
           : `${Date.now()}-0000-4000-8000-${Date.now()
@@ -120,22 +141,23 @@ export default function ChaosPanel({
           <option value="">— pilih batch —</option>
           {batches.map((b) => (
             <option key={b.id} value={b.id}>
-              {b.commodity} · {b.location} · {b.quantity_kg} kg ·{" "}
-              {b.safety_status}
+              {batchLabel(b)}
             </option>
           ))}
         </select>
+        <small className="field-note">{eventTargetNote(ownLocationId, ownLocationName)}</small>
       </label>
       {canRun && (
         <button
           type="button"
           className="button button-primary"
-          disabled={busy || !batchId}
+          disabled={busy || !batchId || blocked !== null}
           onClick={run}
         >
           {busy ? "Agent menganalisis…" : "Picu Event 3"}
         </button>
       )}
+      {blocked && <p className="chaos-readonly">{blocked}</p>}
       {result && (
         <div className={`chaos-result chaos-${result.status}`}>
           <p>{result.message ?? result.status}</p>

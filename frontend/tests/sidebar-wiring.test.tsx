@@ -37,9 +37,20 @@ describe("wiring sidebar + map di app/page.tsx (S4-06 polish)", () => {
   it("feed traceable: chip filter status + count, EXPIRED tampil", () => {
     // Arah Roy 2026-10-09: EXPIRED TIDAK disembunyikan — harus tetap
     // terbaca; filter status = visual only, semua status punya chip+count.
+    // 14 Okt 2026: chip + angkanya dihitung lib/decision-feed (label bahasa
+    // manusia, "Perlu tindakan" di chip pertama).
     expect(pageSrc).toMatch(/feed-filters/);
-    expect(pageSrc).toMatch(/statusCounts/);
+    expect(pageSrc).toMatch(/feedChips\(decisions\)/);
     expect(pageSrc).toMatch(/filter-chip/);
+  });
+
+  it("angka sidebar Recommendations = yang PERLU TINDAKAN, bukan total keputusan", () => {
+    // Dulu `Recommendations (126)` = seluruh keputusan yang pernah dibuat;
+    // pengguna tidak bisa menebak artinya. Sekarang = jumlah yang menunggu
+    // tindakan manusia, satu definisi dengan lonceng notifikasi top bar.
+    expect(pageSrc).toMatch(/perluKeputusan = countActionable\(decisions\)/);
+    expect(pageSrc).toMatch(/Recommendations\$\{perluKeputusan/);
+    expect(pageSrc).not.toMatch(/Recommendations\$\{decisions\.length/);
   });
 
   it("fitur lama tetap ada: OpsConsole (dgn Event2Panel nested), feed, detail", () => {

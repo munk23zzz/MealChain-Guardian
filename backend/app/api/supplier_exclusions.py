@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from app.api.auth import MUTATING_ROLES, get_current_user, require_roles
 from app.api.dependencies import get_db
+from app.core.scope import assert_in_scope, is_national_scope
 from app.models import SupplierExclusion
 from app.services import supplier_exclusion_service as service
 
@@ -85,7 +86,16 @@ async def listing(
     user=Depends(get_current_user),
     db=Depends(get_db),
 ):
+    """Register eksklusi. Ruling 2026-10-14: peran SPPG hanya melihat eksklusi
+    ber-scope lokasinya (parameter `scope_location_id` asing → 403, bukan
+    diabaikan diam-diam); bgn_monitor melihat semua."""
     query = select(SupplierExclusion)
+    # Parameter cakupan asing = 403 (bukan diabaikan diam-diam). Tanpa
+    # parameter, peran SPPG tetap hanya melihat eksklusi lokasinya sendiri.
+    if scope_location_id is not None:
+        assert_in_scope(user, scope_location_id, what="lokasi eksklusi")
+    if not is_national_scope(user):
+        query = query.where(SupplierExclusion.scope_location_id == user.location_id)
     for field, value in (
         (SupplierExclusion.supplier_id, supplier_id),
         (SupplierExclusion.scope_location_id, scope_location_id),

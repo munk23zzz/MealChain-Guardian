@@ -17,6 +17,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.db import create_engine, create_session_maker
 from app.models import (
@@ -313,7 +314,8 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
                     session.add(Commodity(name=item["name"], unit=item["unit"]))
                     counts["commodities"] = counts.get("commodities", 0) + 1
             for item in rows["suppliers"]:
-                if item["name"] not in sup_by_name:
+                existing = sup_by_name.get(item["name"])
+                if existing is None:
                     session.add(
                         Supplier(
                             name=item["name"],
@@ -322,6 +324,18 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
                         )
                     )
                     counts["suppliers"] = counts.get("suppliers", 0) + 1
+                elif existing.reliability_score != item["reliability_score"]:
+                    # Baris kanonik warisan (dibuat sebelum skor JSON terpasang,
+                    # jadi mewarisi DEFAULT 0.80 kolom) DIKOREKSI ke nilai berkas
+                    # kanonik. Tanpa ini, skor pemasok yang dipakai mesin
+                    # rekomendasi (`services/recommendation_service.py`) diam-diam
+                    # bukan skor yang tertulis di `data/seed/sprint1_seed.json`.
+                    # Hanya skor: id lokasi/komoditas/sertifikasi tidak disentuh
+                    # supaya seeder tetap tidak merombak identitas baris.
+                    existing.reliability_score = item["reliability_score"]
+                    counts["suppliers_corrected"] = (
+                        counts.get("suppliers_corrected", 0) + 1
+                    )
             await session.flush()
 
             loc_by_name = {
@@ -467,12 +481,43 @@ async def _load_p6_facts(session, rows: dict, loc_by_name, com_by_name,
     for item in rows["menu_plans"]:
         loc_id = loc_by_name[item["location"]].id
         key = (loc_id, item["plan_date"])
-        await session.merge(MenuPlan(
-            id=item["id"], location_id=loc_id,
-            plan_date=item["plan_date"],
-            planned_portions=item["planned_portions"],
-        ))
         plan_by_key.setdefault(key, None)
+
+    # Upsert pada kunci unik (location_id, plan_date) — bukan `merge` per PK.
+    #
+    # Sebabnya nyata (Fase 5, 2026-10-15): generator deret waktu demo mengisi
+    # `plan_date` sampai 5 Nov, jadi tanggal di sekitar "hari ini" bisa SUDAH
+    # terisi baris `origin='demo'`. `merge` memakai PK, sehingga baris demo itu
+    # tidak terlihat dan INSERT menabrak `uq_menu_plans_loc_date` →
+    # UniqueViolationError, dan baris kanonik tidak pernah ada di tanggal itu.
+    #
+    # Prioritas: baris KANONIK menang atas baris demo (id demo diganti id kanonik
+    # supaya FK `delivery_events` di bawah menunjuk baris yang benar). Baris
+    # kanonik yang sudah ada TIDAK disentuh (`WHERE origin='demo'`) — kebijakan
+    # "hari kanonik menang" yang sama dengan generator.
+    if rows["menu_plans"]:
+        plan_stmt = pg_insert(MenuPlan).values(
+            [
+                {
+                    "id": item["id"],
+                    "location_id": loc_by_name[item["location"]].id,
+                    "plan_date": item["plan_date"],
+                    "planned_portions": item["planned_portions"],
+                    "origin": "seed",
+                }
+                for item in rows["menu_plans"]
+            ]
+        )
+        plan_stmt = plan_stmt.on_conflict_do_update(
+            constraint="uq_menu_plans_loc_date",
+            set_={
+                "id": plan_stmt.excluded.id,
+                "planned_portions": plan_stmt.excluded.planned_portions,
+                "origin": "seed",
+            },
+            where=MenuPlan.origin == "demo",
+        )
+        await session.execute(plan_stmt)
     await session.flush()  # pastikan menu_plan tersimpan sebelum delivery FK
     for item in rows["delivery_events"]:
         if item["id"] in delivery_ids:
@@ -502,6 +547,12 @@ async def _load_p6_facts(session, rows: dict, loc_by_name, com_by_name,
 # ---------------------------------------------------------------------------
 # Demo users (S3-01) — 3 role final, idempoten.
 # Password demo statis (bukan secret produksi); dipakai untuk demo juri.
+#
+# Ruling 2026-10-14: KEDUA approver demo sengaja di SPPG yang sama (Jakarta).
+# Matriks AND dua verifier kini berlaku di dalam satu SPPG (approve/execute
+# memakai `require_scope(user, decision.target_location_id)`), jadi ahli gizi
+# di lokasi lain hanya akan mendapat 403 dan feed kosong — kasus FLAGGED/
+# UNAVAILABLE tidak bisa didemokan. bgn_monitor tetap nasional (tanpa lokasi).
 # ---------------------------------------------------------------------------
 
 DEMO_USERS = [
@@ -516,7 +567,7 @@ DEMO_USERS = [
         "email": "sppg.nutritionist@demo.local",
         "name": "SPPG Nutritionist Demo",
         "role": "sppg_nutritionist",
-        "location": "Bogor",
+        "location": "Jakarta",  # satu SPPG dengan kepala demo (Ruling 2026-10-14)
         "password": "Demo#Nut2026",
     },
     {
@@ -577,6 +628,11 @@ def main() -> None:
         action="store_true",
         help="Juga pastikan 3 akun demo role ada (S3-01)",
     )
+    parser.add_argument(
+        "--with-demo-suppliers",
+        action="store_true",
+        help="Juga pastikan 30 pemasok demo ada (Fase 2: pemasok tampil di peta)",
+    )
     args = parser.parse_args()
     ref = datetime.fromisoformat(args.reference_time)
     if ref.tzinfo is None:
@@ -589,6 +645,14 @@ def main() -> None:
     if args.with_demo_users:
         ensure_demo_users()
         print("Demo users siap (3 role, idempoten).")
+    if args.with_demo_suppliers:
+        from app.seed.suppliers_demo import seed_demo_suppliers
+
+        added = asyncio.run(seed_demo_suppliers())
+        print(
+            f"Pemasok demo siap (30 baris, idempoten): baru {added['created']}, "
+            f"diperbarui {added['updated']}."
+        )
     print(f"Seed selesai (idempoten). Row baru: {counts or '{}'}")
 
 

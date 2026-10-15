@@ -7,10 +7,13 @@ Read-only, semua role terautentikasi.
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import get_current_user
+from app.api.decisions import _assert_decision_readable
 from app.api.dependencies import get_db
+from app.models.decisions import Decision
 from app.models.users import User
 from app.services.dossier_service import build_dossier, content_address
 from app.services.ledger_service import _canonical
@@ -35,6 +38,12 @@ async def decision_dossier(
     dossier = await build_dossier(db, decision_id)
     if not dossier:
         raise HTTPException(status_code=404, detail="decision tidak ditemukan")
+    # Ruling 2026-10-14: dossier keputusan milik SPPG lain tidak boleh dibaca.
+    row = (
+        await db.execute(select(Decision).where(Decision.id == decision_id))
+    ).scalar_one_or_none()
+    if row is not None:
+        await _assert_decision_readable(db, user, row)
     payload = _canonical(dossier).encode()
     address = content_address(dossier)
     sig = sign_payload(payload)

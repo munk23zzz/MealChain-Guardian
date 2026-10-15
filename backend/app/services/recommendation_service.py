@@ -11,6 +11,17 @@ Ruling Task 9 (ledger progress.md):
 3. supplier_reliability dari DB (Task 4); fallback 0.80 bila quote
    tanpa supplier dikenal.
 4. purchase_cost = supplier_quote bila ada, else pihps reference.
+
+Fase 7d (keputusan pemilik 2026-10-15, plan §7.4 #4 + §7.4b) MENAMBAH satu
+komponen biaya angkut TANPA mengubah kontrak di atas:
+- transport = kaki pertama (pemasok → SPPG sumber, dari koordinat:
+  `app/core/supplier_leg.py`) + linehaul (SPPG sumber → SPPG tujuan, matriks
+  `logistics.py`, tarif tetap 300 Rp/km/ton).
+- fetch_facts BOLEH mengembalikan elemen ke-7 = peta jarak pemasok
+  {(supplier_id, nama lokasi) -> km}. 6-tuple lama tetap sah: tanpa peta itu
+  kaki pertama ditandai "tidak diketahui" dan bernilai 0 — tidak ditebak.
+- Jarak linehaul (`logistics_distance_km`) dan kelayakan delivery window
+  TIDAK berubah: yang berubah hanya angka biaya, bukan eligibilitas.
 """
 
 import inspect
@@ -32,6 +43,12 @@ from app.core.safe_delivered_cost import (
     calculate_safe_delivered_cost,
 )
 from app.core.scoring import CandidateScoreFactors, calculate_candidate_score
+from app.core.supplier_leg import (
+    LEG_REFERENCE_COORDINATES,
+    LEG_REFERENCE_MISSING,
+    LEG_REFERENCE_NO_SUPPLIER,
+    supplier_leg_map,
+)
 from app.models import (
     Batch,
     Commodity,
@@ -79,10 +96,17 @@ def _shelf_life_map():
 
 
 async def fetch_operational_facts(db, as_of):
-    """Baca DB dan kembalikan 6-tuple facts untuk build_recommendations."""
+    """Baca DB dan kembalikan facts untuk build_recommendations.
+
+    7 elemen sejak Fase 7d: 6-tuple Task 9 + peta jarak pemasok→SPPG
+    {(supplier_id, nama lokasi) -> km}. Peta ini dibangun dari koordinat
+    NYATA (`suppliers.latitude/longitude` vs `locations.latitude/longitude`);
+    pemasok tanpa koordinat sengaja TIDAK muncul di peta (bukan 0 km).
+    """
     if as_of is None:
         as_of = datetime.now(timezone.utc)
-    locs = {loc.id: loc.name for loc in (await db.execute(select(Location))).scalars()}
+    loc_rows = (await db.execute(select(Location))).scalars().all()
+    locs = {loc.id: loc.name for loc in loc_rows}
     coms = {c.id: c.name for c in (await db.execute(select(Commodity))).scalars()}
     shelf = _shelf_life_map()
 
@@ -154,11 +178,16 @@ async def fetch_operational_facts(db, as_of):
             }
         )
 
+    supplier_rows = (await db.execute(select(Supplier))).scalars().all()
     reliability = {
-        str(s.id): Decimal(str(s.reliability_score))
-        for s in (await db.execute(select(Supplier))).scalars()
+        str(s.id): Decimal(str(s.reliability_score)) for s in supplier_rows
     }
-    return supply, demand, refs, quotes, batches, reliability
+    # Fase 7d: kaki pertama angkut = pemasok → SPPG tempat batch berada.
+    supplier_legs = supplier_leg_map(
+        {str(s.id): (s.latitude, s.longitude) for s in supplier_rows},
+        {loc.name: (loc.latitude, loc.longitude) for loc in loc_rows},
+    )
+    return supply, demand, refs, quotes, batches, reliability, supplier_legs
 
 
 def _build_prices_map(refs, quotes):
@@ -202,6 +231,23 @@ def _filter_commodity(
     )
 
 
+def _resolve_supplier_leg(supplier_legs, supplier_id, source_location):
+    """Jarak kaki pertama untuk satu kandidat + label kejujurannya.
+
+    Tiga kemungkinan, tidak ada tebakan:
+    - tidak ada identitas pemasok → `no_supplier`;
+    - pemasok ada tetapi tanpa koordinat lengkap (atau lokasi tanpa koordinat)
+      → `supplier_coordinates_missing`;
+    - ada di peta → km eksak + `supplier_coordinates`.
+    """
+    if not supplier_id:
+        return None, LEG_REFERENCE_NO_SUPPLIER
+    km = (supplier_legs or {}).get((str(supplier_id), str(source_location)))
+    if km is None:
+        return None, LEG_REFERENCE_MISSING
+    return Decimal(str(km)), LEG_REFERENCE_COORDINATES
+
+
 async def build_recommendations(
     fetch_facts, as_of=None, logistics_by_pair=None, commodity: str | None = None
 ):
@@ -215,7 +261,10 @@ async def build_recommendations(
     facts = fetch_facts()
     if inspect.isawaitable(facts):
         facts = await facts
-    supply, demand, refs, quotes, batches, reliability = facts
+    supply, demand, refs, quotes, batches, reliability = facts[:6]
+    # Fase 7d: elemen ke-7 (peta jarak pemasok) opsional — 6-tuple kontrak
+    # Task 9 tetap sah; tanpa peta kaki pertama ditandai "tidak diketahui".
+    supplier_legs = facts[6] if len(facts) > 6 else {}
     supply, demand, refs, quotes, batches = _filter_commodity(
         supply, demand, refs, quotes, batches, commodity
     )
@@ -257,12 +306,23 @@ async def build_recommendations(
             )
         )
         unit = cand.price.supplier_quote or cand.price.reference_price
+        # Fase 7d: biaya angkut = kaki pertama (pemasok → SPPG sumber) +
+        # linehaul (SPPG sumber → SPPG tujuan); satu tarif 300 Rp/km/ton.
+        linehaul_cost = _money(
+            TRANSPORT_RATE * cand.logistics_distance_km * cand.quantity_kg / 1000
+        )
+        leg_km, leg_reference = _resolve_supplier_leg(
+            supplier_legs, sid, cand.source_location
+        )
+        leg_cost = (
+            _money(TRANSPORT_RATE * leg_km * cand.quantity_kg / 1000)
+            if leg_km is not None
+            else Decimal("0.00")
+        )
         sdc = calculate_safe_delivered_cost(
             SafeDeliveredCostInputs(
                 purchase_cost=_money(cand.quantity_kg * unit),
-                transport_cost=_money(
-                    TRANSPORT_RATE * cand.logistics_distance_km * cand.quantity_kg / 1000
-                ),
+                transport_cost=linehaul_cost + leg_cost,
                 handling_cost=HANDLING_FLAT,
                 freshness_score=cand.freshness_score,
                 safety_status=cand.safety_status,
@@ -271,6 +331,13 @@ async def build_recommendations(
         breakdown = {
             "purchase": str(sdc.purchase_cost),
             "transport": str(sdc.transport_cost),
+            # "logistics" = alias total angkut untuk pembaca lama (label UI
+            # "Logistik"); BUKAN komponen ketujuh — komponen SDC tetap 6.
+            "logistics": str(sdc.transport_cost),
+            "transport_linehaul": str(linehaul_cost),
+            "transport_supplier_leg": str(leg_cost),
+            "supplier_leg_km": str(leg_km) if leg_km is not None else None,
+            "supplier_leg_reference": leg_reference,
             "handling": str(sdc.handling_cost),
             "expected_loss": str(sdc.expected_loss),
             "freshness_risk": str(sdc.freshness_risk_penalty),
@@ -301,6 +368,15 @@ async def build_recommendations(
         payload = rc.to_dict()
         payload["rank"] = rc.rank
         payload["cost_breakdown"] = breakdowns[rc.candidate_id]
+        # Fase 7d: kaki pertama angkut dilaporkan eksplisit (auditable).
+        leg_bd = breakdowns[rc.candidate_id]
+        payload["supplier_leg"] = {
+            "source_location": cand.source_location,
+            "supplier_id": cand.supplier_id or cand.price.supplier_id,
+            "km": leg_bd.get("supplier_leg_km"),
+            "cost": leg_bd.get("transport_supplier_leg"),
+            "reference": leg_bd.get("supplier_leg_reference"),
+        }
         # Anomali harga: reuse engine price_deviation Sprint 1 (5%/15%).
         if cand.price.supplier_quote is not None:
             dev = price_deviation(cand.price.supplier_quote, cand.price.reference_price)

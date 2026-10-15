@@ -7,7 +7,6 @@
 import PageHeader from "./PageHeader";
 import FactList from "./FactList";
 import {
-  SURPLUS_SOURCE_NOTE,
   allocationPlan,
   surplusSummary,
   wasteFacts,
@@ -41,7 +40,7 @@ export default function SurplusBoard({
     <section className="board-page" aria-busy={loading || undefined}>
       <PageHeader
         title="Surplus & Limbah"
-        description="Surplus yang bisa dialihkan antar-SPPG, rencana alokasinya, dan keadaan pencatatan limbah — dari /balance/map untuk komoditas yang dipilih di peta."
+        description="Surplus yang bisa dialihkan antar-SPPG, rencana alokasinya, dan keadaan pencatatan limbah untuk komoditas yang dipilih di peta."
         meta={
           <span className="page-header-pills">
             <span className="commodity-pill">Komoditas {commodity ? commodity : "—"}</span>
@@ -176,10 +175,6 @@ export default function SurplusBoard({
         )}
       </article>
 
-      <article className="card">
-        <h2>Catatan sumber</h2>
-        <p className="evidence-note">{SURPLUS_SOURCE_NOTE}</p>
-      </article>
     </section>
   );
 }

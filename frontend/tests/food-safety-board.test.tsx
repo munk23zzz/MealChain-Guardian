@@ -56,9 +56,10 @@ describe("FoodSafetyBoard", () => {
     expect(html).toContain("batches 500");
   });
 
-  it("catatan sumber menyebut endpoint dan bagian yang tidak ada", () => {
+  it("tidak ada catatan internal (path API / nama kolom) di layar", () => {
     const html = render();
-    expect(html).toContain("Catatan sumber");
-    expect(html).toContain("/batches");
+    expect(html).not.toContain("Catatan sumber");
+    expect(html).not.toContain("/batches");
+    expect(html).not.toContain("usable_until");
   });
 });

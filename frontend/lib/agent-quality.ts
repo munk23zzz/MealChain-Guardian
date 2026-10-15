@@ -180,10 +180,3 @@ export function averageLabel(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return DASH;
   return value.toFixed(1);
 }
-
-export const AGENT_QUALITY_METHOD_NOTE =
-  "Penilaian memakai jejak agen yang tersimpan (GET /decisions/{id}/traces) dan putusan verifikator " +
-  "(verdict di /decisions/{id}/approval-summary): \"Setuju\" = consistent, \"Tidak setuju\" = flagged, " +
-  "sisanya \"Tidak tersedia\" dan TIDAK dihitung sebagai sepakat. \"Diubah manusia\" = keputusan yang " +
-  "sudah pernah ditolak (iterasi > 1). Tingkat fallback = langkah yang keluaran alatnya menyebut " +
-  "fallback. Penilai LLM-as-judge belum ada di repo ini.";

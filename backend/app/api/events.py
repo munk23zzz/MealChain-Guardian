@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import MUTATING_ROLES, require_roles
 from app.api.dependencies import get_db
+from app.core.scope import assert_in_scope
 from app.models import User
 from app.services import event2_service as svc
 from app.services.event2_service import Event2ConflictError, Event2NotFoundError
@@ -43,15 +44,12 @@ async def trigger_price_anomaly(
     200: tidak ada anomali → decision_id null, tanpa write.
     409: operation_key sama dipakai untuk payload berbeda.
     """
-    # CATATAN audit 2026-10-11 (BELUM selesai — butuh keputusan Roy):
-    # require_roles hanya menguji PERAN, bukan lokasi target, sehingga SPPG
-    # lokasi A bisa membuat decision ber-target lokasi B (POST /decisions
-    # menegakkan O-SEC-2 lewat _assert_target_location_allowed, di sini tidak).
-    # Menambahkan `exclusions.require_scope(user, payload.target_location_id)`
-    # mematikan panel chaos demo: SPPG Head ada di Jakarta sedangkan keenam
-    # batch seed ada di lokasi lain (batch FAIL di Surabaya).
-    # Pilihan: (a) kunci O-SEC-2 + sediakan batch di lokasi SPPG Head,
-    #          (b) biarkan lintas lokasi (panel jalan, celah tetap ada).
+    # Ruling 2026-10-14: celah O-SEC-2 yang dicatat audit 2026-10-11 DITUTUP —
+    # event wajib menyasar lokasi SPPG sendiri (target-side). Panel chaos tetap
+    # bisa dipakai karena POST /demo/seed menyediakan batch di Jakarta;
+    # GET /batches sengaja tetap lintas lokasi karena batch = data sisi SUMBER
+    # (lokasi asal pasokan), bukan target SPPG.
+    assert_in_scope(user, payload.target_location_id, what="lokasi tujuan event")
     try:
         outcome = await svc.run_price_anomaly_event(
             quote_id=payload.quote_id,
@@ -110,8 +108,10 @@ async def trigger_safety_disruption(
     Safety dihitung server-side dari temperature_log persisted (core
     Sprint 1, ambang 30 menit terkunci) — bukan dari payload browser.
     """
-    # Cakupan lokasi target: lihat catatan audit 2026-10-11 di
-    # trigger_price_anomaly (masih terbuka, butuh keputusan Roy).
+    # Ruling 2026-10-14: target wajib lokasi SPPG sendiri (lihat catatan di
+    # trigger_price_anomaly). Batch pemicu boleh di lokasi lain (sisi sumber),
+    # tetapi keputusan yang lahir harus menyasar SPPG Anda.
+    assert_in_scope(user, payload.target_location_id, what="lokasi tujuan event")
     try:
         outcome = await svc3.run_safety_disruption_event(
             batch_id=payload.batch_id,

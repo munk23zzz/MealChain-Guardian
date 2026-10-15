@@ -4,7 +4,16 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,6 +35,30 @@ class PriceSignal(Base):
             "(source = 'supplier_quote' AND supplier_id IS NOT NULL)",
             name="price_signals_supplier_consistency_check",
         ),
+        CheckConstraint(
+            "origin IN ('seed','demo')", name="check_price_signals_origin_vocab"
+        ),
+        # Kunci upsert deret waktu (migrasi 013): dua index PARSIAL karena
+        # aturannya berbeda — referensi PIHPS per lokasi×komoditas, kutipan
+        # pemasok per pemasok.
+        Index(
+            "uq_price_signals_reference",
+            "location_id",
+            "commodity_id",
+            "recorded_at",
+            unique=True,
+            postgresql_where=text("source = 'pihps_reference'"),
+        ),
+        Index(
+            "uq_price_signals_quote",
+            "location_id",
+            "commodity_id",
+            "supplier_id",
+            "recorded_at",
+            unique=True,
+            postgresql_where=text("source = 'supplier_quote'"),
+        ),
+        Index("ix_price_signals_origin_recorded_at", "origin", "recorded_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -45,6 +78,12 @@ class PriceSignal(Base):
         DateTime(timezone=True), nullable=False
     )
     source: Mapped[str] = mapped_column(String, nullable=False)
+    origin: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="seed"
+    )
+    generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

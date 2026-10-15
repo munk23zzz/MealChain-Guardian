@@ -7,7 +7,6 @@
 import PageHeader from "./PageHeader";
 import FactList from "./FactList";
 import {
-  FOOD_SAFETY_SOURCE_NOTE,
   hoursLabel,
   safetyRows,
   safetySummary,
@@ -43,7 +42,7 @@ export default function FoodSafetyBoard({
     <section className="board-page" aria-busy={loading || undefined}>
       <PageHeader
         title="Keamanan Pangan"
-        description="Status keamanan tiap batch, kesegaran, dan sisa masa layak pakai — dibaca langsung dari /batches. Batch gagal uji diblokir dari alokasi."
+        description="Status keamanan tiap batch, kesegaran, dan sisa masa layak pakai. Batch gagal uji diblokir dari alokasi."
         meta={
           <span className="page-header-pills">
             <span className="commodity-pill">{summary.total} batch</span>
@@ -186,16 +185,6 @@ export default function FoodSafetyBoard({
             <p className="board-scroll-hint">Geser tabel ke samping untuk melihat kolom lain.</p>
               </>
         )}
-      </article>
-
-      <article className="card">
-        <h2>Catatan sumber</h2>
-        <p className="evidence-note">{FOOD_SAFETY_SOURCE_NOTE}</p>
-        <p className="evidence-note">
-          Kesegaran ditulis sebagai persen skor batch; sisa masa dihitung dari kolom{" "}
-          <code>usable_until</code> relatif terhadap jam perangkat Anda. Nilai yang tidak ada di
-          backend ditulis “—”.
-        </p>
       </article>
     </section>
   );

@@ -7,6 +7,8 @@ TDD RED dulu — endpoint read-only `GET /balance/map?commodity=telur`:
 - Read-only: get_current_user (JWT) — semua role boleh baca; 401 unauth.
 - 404 komoditas tak dikenal; lokasi tanpa data → zeros (bukan 404) agar
   map tetap lengkap.
+- (Ruling 2026-10-14) peta ikut tercakup: peran SPPG hanya menerima lokasinya
+  sendiri, bgn_monitor tetap menerima seluruh lokasi nasional.
 - Response menyertakan lat/long dari DB (bukan koordinat karangan FE).
 """
 import uuid
@@ -116,9 +118,14 @@ def test_balance_map_unknown_commodity_404(client):
     assert resp.status_code == 404
 
 
-def test_balance_map_returns_all_demo_locations(client):
-    """10 lokasi demo → 10 titik + koordinat DB + formula selaras panel."""
-    headers = _login(client, "sppg.head@demo.local", "Demo#SPPG2026")
+def test_balance_map_monitor_returns_all_demo_locations(client):
+    """10 lokasi demo → 10 titik + koordinat DB + formula selaras panel.
+
+    Memakai bgn_monitor karena cakupan nasional memang milik peran itu
+    (Ruling 2026-10-14); kepala SPPG hanya menerima lokasinya sendiri —
+    lihat test_balance_map_kepala_hanya_sppg_sendiri.
+    """
+    headers = _login(client, "bgn.monitor@demo.local", "Demo#BGN2026")
     resp = client.get(f"/balance/map?commodity={COMMODITY}", headers=headers)
     assert resp.status_code == 200, resp.text
     body = resp.json()
@@ -140,7 +147,7 @@ def test_balance_map_seed_test_data_visible(client):
     """Lokasi test dengan data sendiri ikut tampil (map tidak hardcode)."""
     key, loc_id = _seed_location(COMMODITY, 500.0, 300.0)
     try:
-        headers = _login(client, "sppg.head@demo.local", "Demo#SPPG2026")
+        headers = _login(client, "bgn.monitor@demo.local", "Demo#BGN2026")
         resp = client.get(
             f"/balance/map?commodity={COMMODITY}", headers=headers
         )
@@ -158,6 +165,15 @@ def test_balance_map_seed_test_data_visible(client):
         assert mine["status"] == "surplus"
     finally:
         _cleanup(loc_id)
+
+
+def test_balance_map_kepala_hanya_sppg_sendiri(client):
+    """Kepala SPPG melihat satu titik saja — SPPG-nya sendiri."""
+    headers = _login(client, "sppg.head@demo.local", "Demo#SPPG2026")
+    resp = client.get(f"/balance/map?commodity={COMMODITY}", headers=headers)
+    assert resp.status_code == 200, resp.text
+    locations = resp.json()["locations"]
+    assert [x["location"] for x in locations] == ["Jakarta"], locations
 
 
 def test_balance_map_monitor_can_read(client):

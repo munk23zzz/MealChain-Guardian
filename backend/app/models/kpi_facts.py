@@ -14,8 +14,10 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
+    String,
     Text,
     UniqueConstraint,
     func,
@@ -31,6 +33,10 @@ class MenuPlan(Base):
     __table_args__ = (
         UniqueConstraint("location_id", "plan_date", name="uq_menu_plans_loc_date"),
         CheckConstraint("planned_portions >= 0", name="menu_plans_portions_check"),
+        CheckConstraint(
+            "origin IN ('seed','demo')", name="check_menu_plans_origin_vocab"
+        ),
+        Index("ix_menu_plans_origin_plan_date", "origin", "plan_date"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -41,6 +47,12 @@ class MenuPlan(Base):
     )
     plan_date: Mapped[date] = mapped_column(Date, nullable=False)
     planned_portions: Mapped[int] = mapped_column(Integer, nullable=False)
+    origin: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="seed"
+    )
+    generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

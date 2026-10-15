@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import MUTATING_ROLES, get_current_user, require_roles
 from app.api.dependencies import get_db
+from app.core.scope import apply_location_scope, assert_in_scope
 from app.models import (
     Commodity,
     DemandRecord,
@@ -54,9 +55,10 @@ async def get_balance(
     location: str,
     commodity: str,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     loc = await _resolve_location(db, location)
+    assert_in_scope(user, loc.id, what="lokasi")
     com = await _resolve_commodity(db, commodity)
     from app.core.gaps import calculate_supply_gap
 
@@ -149,7 +151,7 @@ class AnalyzeRequest(BaseModel):
 async def get_balance_map(
     commodity: str,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     """S4-06 polish (arah Roy 2026-10-08): kondisi semua lokasi utk map.
 
@@ -161,9 +163,15 @@ async def get_balance_map(
     Koordinat dari DB.
     """
     com = await _resolve_commodity(db, commodity)
+    # Ruling 2026-10-14: peran SPPG hanya menerima lokasinya sendiri;
+    # bgn_monitor tetap menerima seluruh lokasi (pengawasan nasional).
     locs = (
         (
-            await db.execute(select(Location).order_by(Location.name.asc()))
+            await db.execute(
+                apply_location_scope(
+                    select(Location).order_by(Location.name.asc()), Location.id, user
+                )
+            )
         )
         .scalars()
         .all()

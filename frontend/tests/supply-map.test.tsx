@@ -80,9 +80,10 @@ describe("SupplyMap (MapLibre GL)", () => {
     expect(html).toContain("map-gl");
   });
 
-  it("atribusi tile OpenStreetMap tampil", () => {
+  it("kepala peta tidak menyebut tumpukan teknologi", () => {
     const html = renderToStaticMarkup(<SupplyMap locations={LOCATIONS} />);
-    expect(html).toContain("OpenStreetMap");
+    expect(html).not.toContain("MapLibre GL");
+    expect(html).toContain("Peta Kondisi");
   });
 
   it("menampilkan nama semua lokasi + angka gap REAL dari data", () => {

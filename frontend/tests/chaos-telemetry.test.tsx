@@ -43,6 +43,28 @@ describe("markup kontrak P4/P5 (file-level, tanpa render app penuh)", () => {
     expect(src).not.toMatch(/safety_status\s*[:=]\s*(?!.*server)/);
   });
 
+  it("ChaosPanel memakai penjaga cakupan lokasi (Ruling 2026-10-14)", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const panel = fs.readFileSync(
+      path.resolve(__dirname, "../components/ChaosPanel.tsx"),
+      "utf-8"
+    );
+    const page = fs.readFileSync(
+      path.resolve(__dirname, "../app/page.tsx"),
+      "utf-8"
+    );
+    // Target event = lokasi SPPG pemakai (bukan lokasi batch) — kalau lokasi
+    // batch dikirim sebagai target, server membalas 403 setelah ruling.
+    expect(panel).toContain("lib/chaos-scope");
+    expect(panel).toContain("resolveEventTarget");
+    expect(panel).toContain("blockedReason");
+    expect(panel).not.toMatch(/location_id\s*\?\?\s*""/);
+    // Lokasi pemakai datang dari identitas server (/auth/me), bukan tebakan.
+    expect(page).toMatch(/ownLocationId=\{me\?\.location_id/);
+    expect(page).toMatch(/ownLocationName=\{me\?\.location_name/);
+  });
+
   it("IntegrityPanel memanggil endpoint ledger & dossier", async () => {
     const fs = await import("node:fs");
     const path = await import("node:path");

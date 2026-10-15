@@ -166,3 +166,71 @@ describe("Decision & Evidence — dengan keputusan", () => {
     expect(html).toContain("Ditolak: Kuota penuh");
   });
 });
+
+// Dropdown 126 keputusan dulu mencetak istilah backend mentah
+// ("regional_balance · pending_approval · ef347f91") berurutan apa adanya,
+// sehingga pengguna tidak tahu mana yang perlu ditindak. Kontrak barunya:
+// dikelompokkan + kata manusia (lib/decision-picker).
+describe("Decision & Evidence — pemilih keputusan", () => {
+  it("dikelompokkan dan memakai bahasa manusia, bukan istilah backend mentah", () => {
+    const html = render();
+    expect(html).toContain("<optgroup");
+    expect(html).toContain("Menunggu tindakan (2)");
+    expect(html).toContain("Alokasi regional direkomendasikan");
+    expect(html).toContain("Pengalihan pasokan (gangguan keamanan)");
+    // Bentuk lama label opsi: "<jenis> · <status> · <id 8>".
+    expect(html).not.toContain("regional_balance ·");
+    expect(html).not.toContain("safety_disruption ·");
+    expect(html).not.toContain("pending_approval ·");
+  });
+
+  it("yang menunggu tindakan membawa sisa waktu supaya bisa diprioritaskan", () => {
+    expect(render()).toContain("Lewat 13 mnt · d1");
+  });
+
+  it("tanpa jam klien, sisa waktu tidak dikarang jadi '—' di dalam opsi", () => {
+    const html = render({ now: null });
+    expect(html).toContain('value="d1"');
+    expect(html).not.toContain("— · d1");
+  });
+
+  it("keputusan lama tetap dapat dipilih sendiri (nilai opsi = id utuh)", () => {
+    const html = render({
+      decisions: [
+        {
+          decision_id: "0267f818-f8f2-4e65-a299-f2627ad8ec71",
+          decision_type: "price_anomaly",
+          status: "rejected",
+          created_at: "2026-10-01T00:00:00Z",
+        },
+      ],
+    });
+    expect(html).toContain('value="0267f818-f8f2-4e65-a299-f2627ad8ec71"');
+    expect(html).toContain("Tidak menunggu tindakan (1)");
+    expect(html).toContain("ditolak");
+    expect(html).toContain("Penyesuaian harga direkomendasikan");
+  });
+});
+
+// Ajakan "Klik untuk rincian & jejak agen" benar di feed (seluruh kartu
+// dibungkus <button>), tapi di halaman ini kartu dirender tanpa pembungkus:
+// kursor auto, tak ada induk yang bisa diklik, klik tidak mengubah apa pun.
+// Jadi di sini diganti tombol nyata ke tab Agent Log.
+describe("Decision & Evidence — jejak agen", () => {
+  it("tidak ada lagi ajakan klik yang mati di kartu ringkasan", () => {
+    const html = render({ onOpenTraces: () => {} });
+    expect(html).not.toContain("Klik untuk rincian");
+    expect(html).not.toContain("rec-hint");
+  });
+
+  it("jejak agen punya tombol nyata + keterangan ke mana ia membawa", () => {
+    const html = render({ onOpenTraces: () => {} });
+    expect(html).toContain("Buka jejak agen");
+    expect(html).toContain("evidence-traces");
+    expect(html).toContain("tab Agent Log");
+  });
+
+  it("tanpa callback, tombolnya tidak dirender (bukan tombol mati)", () => {
+    expect(render()).not.toContain("Buka jejak agen");
+  });
+});

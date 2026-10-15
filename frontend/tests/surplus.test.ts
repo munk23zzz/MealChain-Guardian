@@ -2,7 +2,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  SURPLUS_SOURCE_NOTE,
   allocationPlan,
   haversineKm,
   surplusSummary,
@@ -92,8 +91,4 @@ describe("bagian limbah", () => {
     }
   });
 
-  it("catatan sumber menyebut endpoint dan keterbatasan", () => {
-    expect(SURPLUS_SOURCE_NOTE).toContain("/balance/map");
-    expect(SURPLUS_SOURCE_NOTE).toContain("limbah");
-  });
 });
