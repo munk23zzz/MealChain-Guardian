@@ -29,6 +29,8 @@ const API_ROOTS = [
   "batches",
   "supplier-exclusions",
   "suppliers",
+  // Fase 10: rute JALAN kiriman pemasok → tujuan (dipakai peta untuk garis).
+  "supplier-routes",
 ];
 
 const nextConfig = {

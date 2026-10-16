@@ -392,6 +392,21 @@ export async function fetchSuppliers(
   });
 }
 
+// GET /supplier-routes — garis JALUR KIRIMAN pemasok → tujuan (Fase 10).
+// Geometrinya datang dari cache OSRM di server (diisi saat sinkronisasi), jadi
+// peta tidak pernah memanggil OSRM sendiri dan demo tetap jalan tanpa internet.
+export async function fetchSupplierRoutes(
+  token: string,
+  commodity?: string | null,
+  location?: string | null
+) {
+  const komoditas = commodity ? `&commodity=${encodeURIComponent(commodity)}` : "";
+  const lokasi = location ? `&location=${encodeURIComponent(location)}` : "";
+  return request(`/supplier-routes?limit=200${komoditas}${lokasi}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 // --- P1 Merkle ledger (paket 1-6, keputusan Roy 2026-10-09) ---
 
 // GET /ledger/verify — verifikasi rantai hash dari genesis (read-only).

@@ -36,15 +36,51 @@ const fake = vi.hoisted(() => {
       mapLog.push(this);
     }
     addControl() {}
+    // Fase 10: komponen kini juga memasang source/layer GeoJSON (garis jalur
+    // kiriman), jadi tiruan peta perlu API-nya seperti MapLibre asli.
+    sources: Record<string, { data: unknown; setData: (data: unknown) => void }> = {};
+    layers: Record<string, Record<string, unknown>> = {};
+    styleLoaded = true;
+    isStyleLoaded() {
+      return this.styleLoaded;
+    }
+    getSource(id: string) {
+      return this.sources[id];
+    }
+    getLayer(id: string) {
+      return this.layers[id];
+    }
+    addSource(id: string, spec: { data: unknown }) {
+      const sumber = {
+        data: spec.data,
+        setData: (data: unknown) => {
+          sumber.data = data;
+        },
+      };
+      this.sources[id] = sumber;
+    }
+    addLayer(spec: { id: string }) {
+      this.layers[spec.id] = spec as unknown as Record<string, unknown>;
+    }
+    removeLayer(id: string) {
+      delete this.layers[id];
+    }
+    removeSource(id: string) {
+      delete this.sources[id];
+    }
     fitBounds() {}
     resize() {}
     getZoom() {
       return this.zoom;
     }
-    on(event: string, handler: () => void) {
+    // MapLibre menerima bentuk `on(tipe, layerId, handler)` untuk event layer
+    // (Fase 10 memakai itu untuk popup garis) — handler selalu argumen terakhir.
+    on(event: string, ...args: unknown[]) {
+      const handler = args[args.length - 1] as () => void;
       (this.handlers[event] ??= []).push(handler);
     }
-    off(event: string, handler: () => void) {
+    off(event: string, ...args: unknown[]) {
+      const handler = args[args.length - 1];
       this.handlers[event] = (this.handlers[event] ?? []).filter((item) => item !== handler);
     }
     fire(event: string) {
@@ -177,6 +213,23 @@ function mount() {
   });
 }
 
+function mountWithRoutes() {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  mounted = true;
+  act(() => {
+    root.render(<SupplyMap locations={LOCATIONS} supplierRoutes={ROUTES} />);
+  });
+}
+
+function routeToggle() {
+  const button = host.querySelector<HTMLButtonElement>(".map-route-toggle");
+  if (!button) throw new Error("tombol layer jalur kiriman tidak ada");
+  return button;
+}
+
 function unmount() {
   if (!mounted) return;
   act(() => root.unmount());
@@ -187,8 +240,45 @@ function unmount() {
 type FakeMapInstance = {
   removed: boolean;
   zoom: number;
+  sources: Record<string, { data: unknown; setData: (data: unknown) => void }>;
+  layers: Record<string, Record<string, unknown>>;
   setZoom: (zoom: number) => void;
   fire: (event: string) => void;
+};
+
+/** Jalur kiriman uji — angka dari respons nyata `GET /supplier-routes`. */
+const ROUTES = {
+  routes: [
+    {
+      batch_id: "b1",
+      supplier_id: "s1",
+      supplier_name: "Supplier A Cianjur",
+      origin: { latitude: -6.854, longitude: 107.1306, name: "Supplier A Cianjur" },
+      destination_id: "l1",
+      destination_name: "Jakarta",
+      destination: { latitude: -6.2088, longitude: 106.8456, name: "Jakarta" },
+      commodity: "telur",
+      quantity_kg: 800,
+      usable_until: "2026-11-07T12:00:00+00:00",
+      safety_status: "pass",
+      straight_km: 78.35,
+      road: {
+        distance_km: 110.4,
+        duration_min: 84.3,
+        ratio_vs_straight: 1.41,
+        geometry: {
+          type: "LineString",
+          coordinates: [
+            [107.1306, -6.854],
+            [106.8456, -6.2088],
+          ],
+        },
+        source: "osrm",
+        fetched_at: "2026-10-16T00:00:00+00:00",
+      },
+      road_missing_reason: null,
+    },
+  ],
 };
 
 const map = () => mapLog[mapLog.length - 1] as FakeMapInstance;
@@ -354,6 +444,49 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     )!;
     expect(wortel.element.className).toContain("map-pin-supplier-ok");
     expect(wortel.popup?.node?.textContent).toContain("Sertifikasi: HACCP");
+  });
+
+  it("memasang source & layer garis untuk jalur kiriman (Fase 10)", () => {
+    mountWithRoutes();
+    const peta = map();
+    expect(peta.sources["supplier-routes"]).toBeDefined();
+    const layer = peta.layers["supplier-route-line"];
+    expect(layer).toBeDefined();
+    expect(layer.type).toBe("line");
+    // Geometrinya dari server (cache OSRM) — bukan garis lurus buatan UI.
+    const data = peta.sources["supplier-routes"].data as {
+      features: { geometry: { coordinates: number[][] } }[];
+    };
+    expect(data.features).toHaveLength(1);
+    expect(data.features[0].geometry.coordinates).toEqual([
+      [107.1306, -6.854],
+      [106.8456, -6.2088],
+    ]);
+  });
+
+  it("tanpa data jalur: tidak ada source sama sekali (bukan garis kosong)", () => {
+    mount();
+    expect(map().sources["supplier-routes"]).toBeUndefined();
+    expect(host.querySelector(".map-route-toggle")).toBeNull();
+  });
+
+  it("sakelar jalur dimatikan membuang layer dan source", () => {
+    mountWithRoutes();
+    expect(map().layers["supplier-route-line"]).toBeDefined();
+    act(() => {
+      routeToggle().click();
+    });
+    expect(map().layers["supplier-route-line"]).toBeUndefined();
+    expect(map().sources["supplier-routes"]).toBeUndefined();
+    expect(routeToggle().textContent).toContain("Tampilkan jalur kiriman (1)");
+  });
+
+  it("legenda jalur menyebut asal OSRM dan jumlahnya", () => {
+    mountWithRoutes();
+    expect(host.textContent).toContain("Jalur kiriman:");
+    expect(host.textContent).toContain("Jalur kiriman (jalan)");
+    expect(host.textContent).toContain("1 jalur kiriman");
+    expect(host.textContent).toContain("OSRM");
   });
 
   it("membongkar peta: peta dilepas tanpa error (penanda dibersihkan bersama peta)", () => {

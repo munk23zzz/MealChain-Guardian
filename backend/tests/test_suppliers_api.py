@@ -386,16 +386,21 @@ def test_item_carries_shipping_field(client, tokens):
 
 
 def test_shipping_matches_sql_for_active_supplier(client, tokens):
-    """Supplier A Cianjur: 3 kiriman layak, 1.400 kg, semuanya telur — sama dengan SQL."""
+    """Supplier A Cianjur: 4 kiriman layak, 2.200 kg, semuanya telur — sama dengan SQL.
+
+    Sebelum Fase 10 angkanya 3 kiriman / 1.400 kg. Kiriman kanonik ke SPPG Jakarta
+    (800 kg, keputusan pemilik 2026-10-16) menambah satu kiriman layak, jadi angka
+    tes ini berubah SADAR karena data berubah — bukan karena aturannya dilonggarkan.
+    """
     body = client.get(
         "/suppliers?q=Supplier%20A%20Cianjur", headers=tokens["sppg_head"]
     ).json()
     item = next(i for i in body["items"] if i["name"] == "Supplier A Cianjur")
     sql = _sql_shipping("Supplier A Cianjur")
 
-    assert sql["count"] == 3, "prasyarat: seed kanonik utuh"
+    assert sql["count"] == 4, "prasyarat: seed kanonik utuh (Fase 10 menambah kiriman Jakarta)"
     assert item["shipping"]["count"] == sql["count"]
-    assert item["shipping"]["total_kg"] == sql["total_kg"] == 1400.0
+    assert item["shipping"]["total_kg"] == sql["total_kg"] == 2200.0
     assert item["shipping"]["commodities"] == ["telur"]
     assert item["shipping"]["safety_fail_count"] == 0
     assert datetime.fromisoformat(item["shipping"]["until"]) == sql["until"]

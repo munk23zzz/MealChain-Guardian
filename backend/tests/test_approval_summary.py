@@ -149,8 +149,15 @@ def _mk_decision(
     target_location_id: str,
     expires_minutes: int = 30,
     status: str = "pending_approval",
+    commodity: str = "telur",
 ) -> str:
-    """Decision uji target Jakarta komoditas telur (fixture DB langsung)."""
+    """Decision uji target Jakarta (fixture DB langsung), komoditas bisa dipilih.
+
+    Komoditas perlu bisa diganti sejak Fase 10: kiriman kanonik A Cianjur → Jakarta
+    (telur) membuat pemasok keputusan telur Jakarta BISA disimpulkan dari batch
+    sumber, sehingga skenario "pemasok tak diketahui" harus memakai komoditas yang
+    memang belum punya kiriman ke Jakarta.
+    """
     did = str(_db_exec_returning(
         "INSERT INTO decisions (id, decision_type, status, proposed_by, "
         "source_location_id, target_location_id, commodity_id, quantity_kg, "
@@ -158,13 +165,14 @@ def _mk_decision(
         "SELECT :id, 'regional_balance', :st, 'supervisor_agent', :src, :tgt, "
         "c.id, 488.88, 16206000.00, now() + make_interval(mins => :m), "
         "'{\"purchase\": \"15720000\"}'::jsonb, 1 "
-        "FROM commodities c WHERE c.name='telur' RETURNING id",
+        "FROM commodities c WHERE c.name=:komoditas RETURNING id",
         {
             "id": str(uuid.uuid4()),
             "st": status,
             "src": source_location_id,
             "tgt": target_location_id,
             "m": expires_minutes,
+            "komoditas": commodity,
         },
     ))
     return did
@@ -293,11 +301,15 @@ def test_approval_summary_canonical_fields(client):
         assert body["quantity_kg"] == 488.88
         assert body["safe_delivered_cost"] is not None
         assert body["cost_breakdown"] is not None
-        # Legacy decision has no batch binding: never guess a supplier.
         assert body["execution_target"] == "MOCK"
         assert body["material_number"] == "MAT-TELUR"
-        assert body["supplier"] is None
-        assert any("supplier_unknown" in r for r in body["blocking_reasons"])
+        # Sejak Fase 10 ada kiriman kanonik Supplier A Cianjur → Jakarta (telur), jadi
+        # pemasok untuk keputusan telur Jakarta BISA disimpulkan dari batch sumber
+        # (satu pemasok, tidak ambigu). Aturan "jangan menebak pemasok" tetap berlaku
+        # dan diuji di test_approval_summary_or_complete_then_execute_parity[missing]
+        # lewat komoditas yang memang belum punya kiriman ke Jakarta.
+        assert body["supplier"]["name"] == "Supplier A Cianjur"
+        assert not any("supplier_unknown" in r for r in body["blocking_reasons"])
         # Verifier hasil server (bukan karangan UI).
         assert body["verifier"]["verdict"] in {
             "consistent",
@@ -324,7 +336,13 @@ def test_approval_summary_canonical_fields(client):
 def test_approval_summary_or_complete_then_execute_parity(client, binding):
     """Only a bound transfer promises a supplier and can execute."""
     batch = _mk_batch(_bogor_id(), fail=False) if binding == "explicit" else None
-    did = _mk_decision(_bogor_id() if batch else _jakarta_id(), _jakarta_id())
+    # "missing" sengaja memakai komoditas AYAM: kiriman kanonik ke Jakarta hanya telur,
+    # jadi tidak ada satu pun batch sumber yang bisa dipakai menyimpulkan pemasok.
+    did = (
+        _mk_decision(_bogor_id(), _jakarta_id())
+        if batch
+        else _mk_decision(_jakarta_id(), _jakarta_id(), commodity="ayam")
+    )
     try:
         if batch:
             _bind_decision(did, batch)

@@ -110,6 +110,9 @@ API == SQL untuk semua pemasok yang mengirim. Bukti lulus.
   dua baris Status berisi kalimat kiriman:
   `Sedang mengirim · 1 kiriman · 600 kg · s/d 26 Okt 2026 · 1 gagal uji` (Supplier B Cianjur)
   dan `Sedang mengirim · 3 kiriman · 1.400 kg · s/d 2 Nov 2026` (Supplier A Cianjur).
+  *(Angka ini keadaan saat Fase 9 ditulis. Fase 10 menambah kiriman Jakarta sehingga A
+  menjadi 4 kiriman/2.200 kg, dan REF kanonik saat seeder F10 dijalankan menggeser tanggal
+  B→Surabaya ke 1 Nov 2026 — lihat catatan di akhir dokumen ini.)*
   Baris kanonik itu juga kini menampilkan `telur` + `HACCP` — bukti profil yang
   terisi benar-benar sampai ke layar.
 - 11 kanonik tanpa batch tetap menampilkan `—` (tidak dikarang).
@@ -145,3 +148,25 @@ punya batch terisi" vs "yang tidak punya batch tetap kosong".
    yang harus dibicarakan dulu.
 5. Residu uji di DB demo masih ada (suite menulis ke DB yang sama; lihat Fase 6)
    → hitungan `users`/`decisions` naik setiap kali suite dijalankan.
+
+---
+
+## Catatan pasca-Fase 10 (2026-10-16) — angka yang bergeser
+
+Dokumen ini merekam keadaan **saat Fase 9 selesai** dan tidak diubah agar tetap bisa dibaca
+sebagai bukti historis. Fase 10 (`docs/verification/fase-10.md`) mengubah dua hal yang
+bersinggungan dengan angka di atas:
+
+1. **Kiriman demo baru** A Cianjur → SPPG Jakarta ditambahkan atas permintaan pemilik (angka
+   dari pemilik). Akibatnya pemasok A Cianjur: **3 → 4 kiriman**, **1.400 → 2.200 kg**; total
+   `batches` **6 → 7**, total kg **2.450 → 3.250** (baris pengukuran §"sebelum/sesudah" di atas
+   tetap benar sebagai pengukuran saat itu). Jumlah **pengirim aktif tidak berubah (2 pemasok)**.
+2. **Satu tanggal batch ternormalkan.** Seeder Fase 10 dijalankan dengan REF kanonik
+   (`2026-10-08T12:00:00+00:00`), sehingga batch B→Surabaya yang tadinya `26 Okt 2026` menjadi
+   **1 Nov 2026**; kalimat Status di tabel Pemasok karena itu terbaca `s/d 1 Nov 2026`. Status
+   keamanannya tetap `fail` dan tetap dilaporkan (`safety_fail_count`).
+
+Tes yang ekspektasinya ikut diselaraskan secara sadar (bukan aturan produksi yang dilonggarkan):
+`test_shipping_matches_sql_for_active_supplier`, `test_approval_summary_canonical_fields`, dan
+`test_approval_summary_or_complete_then_execute_parity[missing]` — alasan tiap perubahan ditulis
+di komentar berkas tes masing-masing, ringkasannya di `docs/verification/fase-10.md` §6.

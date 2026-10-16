@@ -88,6 +88,30 @@ pemasok dianggap sedang mengirim bila punya batch dengan `usable_until >= sekara
 safety_fail_count}`; `null` bila tidak ada. Batch dengan `safety_status='fail'` tetap dihitung
 dan dilaporkan lewat `safety_fail_count`.
 
+### `road_routes`
+Cache geometri rute **jalan** (OSRM) — migrasi `014_road_routes`, diisi saat seeding/sync
+(`app/seed/road_routes.py`), TIDAK pernah diambil saat peta dibuka.
+
+| Kolom | Tipe | Constraint |
+|---|---|---|
+| `id` | uuid | PK, `gen_random_uuid()` |
+| `route_key` | varchar(120) | UNIQUE (`uq_road_routes_key`) — `profil:lat_a,lon_a>lat_b,lon_b` 4 desimal |
+| `profile` | varchar(20) | NOT NULL, default `driving` |
+| `origin_lat`/`origin_lon`/`destination_lat`/`destination_lon` | numeric(9,6) | NOT NULL |
+| `distance_m`, `duration_s` | int | NOT NULL, CHECK ≥ 0 |
+| `geometry` | jsonb | NOT NULL — GeoJSON LineString apa adanya dari OSRM (`[lon, lat]`) |
+| `source` | varchar(20) | NOT NULL, CHECK `source = 'osrm'` (data pihak ketiga, disebut di UI) |
+| `fetched_at` | timestamptz | NOT NULL, default `now()` |
+
+Kunci memakai KOORDINAT (bukan id pemasok/lokasi): dua batch dari pemasok→tujuan yang sama
+cukup satu rute, dan `UNIQUE` membuat sinkronisasi idempoten. Rute hanya diambil untuk
+kiriman yang masih layak (`usable_until >= now`) — kiriman kedaluwarsa tidak pernah digambar.
+
+Turunan rute di `GET /supplier-routes`: tiap baris membawa `straight_km` (haversine server,
+Fase 7) dan `road` **atau** `road_missing_reason` (`belum_disinkron`,
+`layanan_rute_tidak_terjangkau`, `rute_tidak_ditemukan`, `respons_rute_tidak_dikenal`).
+Tidak ada kolom di tabel ini yang dipakai untuk menghitung ulang klaim jarak di UI.
+
 ## 2. Data operasional (time-series-ish)
 
 ### `supply_records`

@@ -200,6 +200,25 @@
         {"timestamp_offset_hours": 0, "temperature_c": 4.0}
       ],
       "certification_status": "haccp"
+    },
+    {
+      "code": "BATCH-JAKARTA-TELUR-CIANJUR",
+      "location": "Jakarta",
+      "commodity": "telur",
+      "supplier": "Supplier A Cianjur",
+      "quantity_kg": 800,
+      "harvested_at_offset_hours": -36,
+      "shelf_life_days": 35,
+      "freshness_score": 0.90,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {"timestamp_offset_hours": -36, "temperature_c": 4.1},
+        {"timestamp_offset_hours": -24, "temperature_c": 4.0},
+        {"timestamp_offset_hours": -8, "temperature_c": 4.2},
+        {"timestamp_offset_hours": 0, "temperature_c": 4.0}
+      ],
+      "certification_status": "haccp"
     }
   ],
   "prices": [

@@ -123,6 +123,24 @@ Detail muncul dengan evidence → Approve → status di peta berubah
   terbaca bersamaan dan tidak saling menutup. Label (`aria-label`) dan popup menambah
   "sedang mengirim N kiriman"; kiriman yang gagal uji disebut terpisah (`safety_fail_count`),
   tidak disembunyikan di balik kata "sedang mengirim".
+- **Garis jalur kiriman (`ship-route`).** Garis putus-putus di peta menandai rute kiriman
+  pemasok → tujuan **mengikuti jalan** (geometri OSRM, disimpan di tabel `road_routes`), bukan
+  garis lurus. Warna garis memakai token yang sama dengan nada mutu kiriman
+  (`--status-safe` / `--status-danger`) supaya satu fakta tidak punya dua bahasa; nilai paint
+  WebGL tidak bisa membaca CSS var, jadi `ROUTE_LINE_COLORS` di
+  `frontend/lib/supplier-routes.ts` dikunci tes yang **membaca `app/globals.css`** — token
+  berubah tanpa menyentuh modul itu akan memerahkan tes.
+- **Kontrol layer sejajar, tidak menumpuk.** Sakelar pemasok dan sakelar jalur duduk dalam satu
+  wadah `.map-layer-controls` (kolom, `gap: 8px`) — dua kotak yang saling menimpa di pojok kiri
+  atas pernah jadi masalah nyata; `.map-supplier-controls` di dalam wadah tidak lagi `position:
+  absolute`.
+- **Legenda jalur memakai contoh garis, bukan kotak warna**, karena yang digambar peta memang
+  garis: "Jalur kiriman (jalan)" / "Jalur kiriman gagal uji". Catatan "jalur jalan dari OSRM
+  (diambil saat sinkronisasi, bukan saat peta dibuka)" ditulis di legenda supaya angka jarak
+  tidak pernah dibaca sebagai hitungan aplikasi sendiri.
+- **Popup klik pada garis** menampilkan pemasok → tujuan, komoditas & berat, jarak jalan vs
+  jarak lurus + rasio (`1,41×`), masa layak, dan status keamanan kiriman — semua dari data API,
+  bukan dihitung ulang di peramban.
 - **Ambang jangkauan (relevansi, bukan scope).** Peta Overview meminta
   `GET /suppliers?commodity=…&max_distance_km=150` bila perannya SPPG
   (`supplierReachKmForRole`; `bgn_monitor` tanpa ambang = nasional). Rujukan jarak datang dari

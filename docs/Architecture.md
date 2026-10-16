@@ -30,7 +30,7 @@ Supplier exclusion adalah workflow administratif lokal SPPG: dedicated proposal/
 | Database | **PostgreSQL 16** | Relasional cocok untuk data supply/demand/evidence yang saling terhubung; satu instance untuk semua data (bukan dipisah) |
 | Frontend | **Next.js 14 (App Router) + TypeScript + Tailwind CSS + shadcn/ui** | Modern, cepat untuk build, tim tidak ada preferensi kuat jadi pilih yang paling banyak dukungan skill (`frontend-design`, `ui-ux-pro-max` Hermes sudah punya konvensi untuk stack ini) |
 | Charting | **Recharts** | Konsisten dengan chart yang sudah dibuat untuk proposal |
-| Map | **MapLibre GL JS** + tile OSM gratis | Konsisten dengan pemakaian OSM/OSRM di proposal, tidak butuh API key berbayar |
+| Map | **MapLibre GL JS** + tile OSM gratis; **garis jalur pakai OSRM** (routing OSM) | Konsisten dengan pemakaian OSM/OSRM di proposal, tidak butuh API key berbayar. Geometri rute JALAN diambil saat seeding/sync lalu di-cache di tabel `road_routes` — peta tidak pernah memanggil OSRM sendiri, jadi demo tetap jalan tanpa internet dan server OSRM demo tidak dibanjiri peramban pengunjung (`docs/verification/fase-10.md`) |
 | Auth | **JWT + bcrypt**, RBAC sederhana (3 role) | Cukup untuk MVP, tidak perlu SSO enterprise |
 | Dev environment | **Docker Compose** (backend, frontend, postgres, mock-sap) | Lokal, konsisten cross-machine untuk duo team |
 | Hosting | Lokal untuk semua service KECUALI agent layer | AgentCore Runtime/Gateway **wajib** jalan di AWS asli (tidak bisa di-Docker-kan lokal) — lihat §5 |

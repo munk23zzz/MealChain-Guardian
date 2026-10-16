@@ -49,17 +49,53 @@ import {
   suppliersForCommodity,
   type SupplierPinRow,
 } from "../lib/supplier-pins";
+import {
+  ROUTE_LINE_COLORS,
+  routeBoundsPoints,
+  routeGeoJson,
+  routeLayerSummary,
+  routeLegendEntries,
+  routeLineClass,
+  routePopupLines,
+  routeToggleLabel,
+  supplierRoutes as supplierRouteRows,
+  type SupplierRoute,
+} from "../lib/supplier-routes";
 
-function fitBoundsFor(locations: readonly BalanceMapLocation[]): [[number, number], [number, number]] {
+/** Id source/layer MapLibre untuk garis jalur kiriman (Fase 10). */
+const ROUTE_SOURCE_ID = "supplier-routes";
+const ROUTE_LAYER_ID = "supplier-route-line";
+
+const ROUTE_LINE_WIDTH: maplibregl.ExpressionSpecification = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  5,
+  2,
+  10,
+  4,
+];
+
+function fitBoundsFor(
+  locations: readonly BalanceMapLocation[],
+  extraPoints: readonly [number, number][] = [],
+  pad = 1.6
+): [[number, number], [number, number]] {
   const points = locations.flatMap((location) => {
     const latitude = Number(location.latitude);
     const longitude = Number(location.longitude);
     return Number.isFinite(latitude) && Number.isFinite(longitude) ? [[latitude, longitude] as const] : [];
   });
-  if (!points.length) return [[105, -8], [109, -5]];
-  const lats = points.map(([latitude]) => latitude);
-  const lons = points.map(([, longitude]) => longitude);
-  const pad = 1.6;
+  // Ujung jalur kiriman (dari `routeBoundsPoints`, urutan [lon, lat]) ikut
+  // menentukan batas: tanpa itu, pemasok pengirim yang berada di luar cakupan
+  // peta SPPG akan tampak "tidak ada", padahal kirimannya sedang jalan.
+  const extra = extraPoints
+    .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat))
+    .map(([lon, lat]) => [lat, lon] as const);
+  const semua = [...points, ...extra];
+  if (!semua.length) return [[105, -8], [109, -5]];
+  const lats = semua.map(([latitude]) => latitude);
+  const lons = semua.map(([, longitude]) => longitude);
   return [[Math.min(...lons) - pad, Math.min(...lats) - pad], [Math.max(...lons) + pad, Math.max(...lats) + pad]];
 }
 
@@ -241,6 +277,27 @@ export function StatusLocationList({
   );
 }
 
+/** Popup jalur kiriman: menyandingkan jarak JALAN (OSRM) dan jarak lurus, jadi
+ *  klaim jarak selalu bisa ditelusuri asalnya. */
+function routePopupNode(row: SupplierRoute): HTMLElement {
+  const box = document.createElement("div");
+  box.className = "map-popup";
+  const title = document.createElement("strong");
+  title.textContent = `${row.supplierName} → ${row.destinationName}`;
+  box.appendChild(title);
+  const swatch = document.createElement("i");
+  swatch.className = routeLineClass(row);
+  swatch.setAttribute("aria-hidden", "true");
+  box.appendChild(swatch);
+  for (const baris of routePopupLines(row)) {
+    const p = document.createElement("p");
+    p.className = "map-popup-line";
+    p.textContent = baris;
+    box.appendChild(p);
+  }
+  return box;
+}
+
 export default function SupplyMap({
   loading = false,
   locations,
@@ -249,6 +306,7 @@ export default function SupplyMap({
   showStatusList = true,
   showHeader = true,
   suppliers = null,
+  supplierRoutes = null,
   reachKm = null,
 }: {
   locations: readonly BalanceMapLocation[];
@@ -268,6 +326,11 @@ export default function SupplyMap({
    *  pengganti pin SPPG, dan 30+ pin kota pada zoom Indonesia akan menutupi
    *  pin SPPG. */
   suppliers?: unknown;
+  /** Payload `GET /supplier-routes` (amplop `{routes}` atau array) — garis JALUR
+   *  KIRIMAN pemasok → tujuan (Fase 10). Dinyalakan secara bawaan: inilah yang
+   *  diminta pemilik proyek (2026-10-16) untuk diperlihatkan di peta. Geometrinya
+   *  datang dari cache OSRM di server, jadi peta sendiri tidak memanggil jaringan. */
+  supplierRoutes?: unknown;
   /** Ambang jangkauan (km) untuk pin pemasok; `null` = tampilan nasional
    *  (Fase 7b). Peran SPPG memakai 150 km — diputuskan di pemanggil lewat
    *  `supplierReachKmForRole`, bukan di dalam peta, supaya aturannya satu tempat. */
@@ -328,6 +391,23 @@ export default function SupplyMap({
   const supplierReachRef = useRef<number | null>(reachKm ?? null);
   const showSuppliersRef = useRef(false);
 
+  // --- Layer jalur kiriman (Fase 10) ---------------------------------------
+  // Nyalakan secara bawaan: garis inilah yang diminta pemilik proyek untuk
+  // diperlihatkan di peta (keputusan 2026-10-16). Geometri datang dari server
+  // (cache OSRM saat sinkronisasi) — peta tidak pernah memanggil OSRM sendiri.
+  const [showRoutes, setShowRoutes] = useState(true);
+  const routePinRows = useMemo(() => supplierRouteRows(supplierRoutes), [supplierRoutes]);
+  const routeFeatures = useMemo(() => routeGeoJson(supplierRoutes), [supplierRoutes]);
+  const routeSummary = useMemo(() => routeLayerSummary(supplierRoutes), [supplierRoutes]);
+  const routeBounds = useMemo(() => routeBoundsPoints(supplierRoutes), [supplierRoutes]);
+  const routeRowsRef = useRef<readonly SupplierRoute[]>(routePinRows);
+  const routeFeaturesRef = useRef(routeFeatures);
+  const routeBoundsRef = useRef<readonly [number, number][]>(routeBounds);
+  const showRoutesRef = useRef(true);
+  // Peta dibuka ulang SEKALI saat jalur pertama tiba: ujung asal (mis. Cianjur)
+  // berada di luar cakupan peta SPPG tujuan, jadi tanpa ini garisnya tak terlihat.
+  const routeFitDoneRef = useRef(false);
+
   // Ref data terbaru (efek ini tidak menyentuh kamera peta sama sekali).
   useEffect(() => {
     locationsRef.current = locations;
@@ -361,6 +441,58 @@ export default function SupplyMap({
       if (diff.changed.includes(row.location)) refreshPin(existing, row);
     });
     pinSignaturesRef.current = next;
+  }, []);
+
+  /** Sinkronkan layer jalur kiriman dengan data terbaru.
+   *
+   *  Bedanya dengan penanda: garis digambar sebagai source/layer MapLibre (GeoJSON),
+   *  jadi butuh gaya peta siap (`load`) sebelum source bisa ditambahkan. Saat
+   *  data tiba sebelum gaya siap, handler `load` yang memanggil ulang fungsi ini. */
+  const syncRouteLayer = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const aktif = showRoutesRef.current && routeFeaturesRef.current.features.length > 0;
+    const source = map.getSource(ROUTE_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    if (!aktif) {
+      // Dimatikan / tidak ada data: bersihkan sepenuhnya, jangan tinggalkan
+      // setengah lapisan yang tampak "masih ada jalur".
+      if (map.getLayer(ROUTE_LAYER_ID)) map.removeLayer(ROUTE_LAYER_ID);
+      if (source) map.removeSource(ROUTE_SOURCE_ID);
+      return;
+    }
+    if (source) {
+      source.setData(routeFeaturesRef.current);
+      return;
+    }
+    if (!map.isStyleLoaded()) return;
+    map.addSource(ROUTE_SOURCE_ID, { type: "geojson", data: routeFeaturesRef.current });
+    map.addLayer({
+      id: ROUTE_LAYER_ID,
+      type: "line",
+      source: ROUTE_SOURCE_ID,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": [
+          "match",
+          ["get", "tone"],
+          "fail",
+          ROUTE_LINE_COLORS.fail,
+          ROUTE_LINE_COLORS.ok,
+        ],
+        "line-width": ROUTE_LINE_WIDTH,
+        "line-dasharray": [2, 1.2],
+        "line-opacity": 0.9,
+      },
+    });
+    map.on("click", ROUTE_LAYER_ID, (event) => {
+      const id = (event.features?.[0]?.properties as { id?: string } | undefined)?.id;
+      const row = routeRowsRef.current.find((item) => item.id === id);
+      if (!row) return;
+      new maplibregl.Popup({ offset: 10 })
+        .setLngLat(event.lngLat)
+        .setDOMContent(routePopupNode(row))
+        .addTo(map);
+    });
   }, []);
 
   /** Sinkronkan penanda PEMASOK: hanya saat lapisan dinyalakan DAN zoom cukup
@@ -419,7 +551,10 @@ export default function SupplyMap({
     map.addControl(new maplibregl.AttributionControl({ compact: false }), "bottom-right");
     // Fokus awal (semua lokasi). Efek fokus di bawah yang mengarahkan ke lokasi
     // aktif bila ada. Setelah ini peta TIDAK pernah dibangun ulang lagi.
-    map.fitBounds(fitBoundsFor(locationsRef.current), { padding: 40, duration: 0 });
+    map.fitBounds(fitBoundsFor(locationsRef.current, routeBoundsRef.current), {
+      padding: 40,
+      duration: 0,
+    });
     syncMarkers();
     // Zoom menentukan apakah pin pemasok boleh tampil (mereka baru muncul di
     // zoom 8+). Keadaan zoom juga dipakai untuk memberi tahu pengguna kenapa
@@ -431,6 +566,9 @@ export default function SupplyMap({
     };
     map.on("zoomend", onZoom);
     syncSupplierMarkers();
+    // Source/layer GeoJSON hanya bisa ditambahkan setelah gaya peta siap.
+    map.on("load", syncRouteLayer);
+    syncRouteLayer();
 
     // Kontainer berubah ukuran (jendela, sidebar dilipat, breakpoint tata
     // letak) tanpa MapLibre mengetahuinya — tanpa ini peta tertinggal di
@@ -441,6 +579,7 @@ export default function SupplyMap({
     return () => {
       observer.disconnect();
       map.off("zoomend", onZoom);
+      map.off("load", syncRouteLayer);
       map.remove();
       mapRef.current = null;
       markers.clear();
@@ -448,7 +587,7 @@ export default function SupplyMap({
       pinSignaturesRef.current = {};
       focusRef.current = MAP_FOCUS_INITIAL;
     };
-  }, [hasLocations, syncMarkers, syncSupplierMarkers]);
+  }, [hasLocations, syncMarkers, syncSupplierMarkers, syncRouteLayer]);
 
   // Sinkronisasi data (arah Roy 2026-10-11): penanda saja, tanpa fitBounds.
   useEffect(() => {
@@ -462,6 +601,32 @@ export default function SupplyMap({
     supplierReachRef.current = reachKm ?? null;
     syncSupplierMarkers();
   }, [showSuppliers, supplierMapRows, reachKm, syncSupplierMarkers]);
+
+  // Layer jalur kiriman: tombol + data (garis, bukan penanda).
+  useEffect(() => {
+    showRoutesRef.current = showRoutes;
+    routeRowsRef.current = routePinRows;
+    routeFeaturesRef.current = routeFeatures;
+    syncRouteLayer();
+  }, [showRoutes, routePinRows, routeFeatures, syncRouteLayer]);
+
+  useEffect(() => {
+    routeBoundsRef.current = routeBounds;
+  }, [routeBounds]);
+
+  // Buka tampilan SEKALI saat jalur pertama tiba — supaya kedua ujung kiriman
+  // terlihat. Sinkronisasi berikutnya tidak pernah menyentuh kamera peta lagi
+  // (aturan lama: zoom & geser pengguna tidak boleh tersentak).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || routeFitDoneRef.current) return;
+    if (!routeFeatures.features.length) return;
+    routeFitDoneRef.current = true;
+    map.fitBounds(fitBoundsFor(locationsRef.current, routeBoundsRef.current, 0.5), {
+      padding: 40,
+      duration: 600,
+    });
+  }, [routeFeatures]);
 
   // Sorotan lokasi aktif. Peta hanya di-dekatkan saat PILIHAN lokasi berubah
   // (sinkronisasi tidak boleh menarik kembali peta yang baru digeser).
@@ -542,8 +707,10 @@ export default function SupplyMap({
               <i className="map-legend-box-dot map-legend-box-dot-shortage" aria-hidden="true" /> Shortage
             </span>
           </div>
-          {Boolean(suppliers) && (
-            <div className="map-supplier-controls">
+          {(Boolean(suppliers) || Boolean(supplierRoutes)) && (
+            <div className="map-layer-controls">
+              {Boolean(suppliers) && (
+                <div className="map-supplier-controls">
               <button
                 type="button"
                 className="map-layer-toggle"
@@ -582,6 +749,40 @@ export default function SupplyMap({
                   muncul pada zoom {SUPPLIER_PIN_MIN_ZOOM} ke atas, nama pemasok pada zoom{" "}
                   {SUPPLIER_LABEL_MIN_ZOOM} ke atas.
                 </p>
+              )}
+                </div>
+              )}
+              {Boolean(supplierRoutes) && (
+                <div className="map-route-controls">
+                  <button
+                    type="button"
+                    className="map-layer-toggle map-route-toggle"
+                    aria-pressed={showRoutes}
+                    onClick={() => setShowRoutes((value) => !value)}
+                  >
+                    {routeToggleLabel(routePinRows, showRoutes)}
+                  </button>
+                  <p className="map-supplier-note" role="status">
+                    {routeSummary.label} — jalur jalan dari OSRM (diambil saat sinkronisasi,
+                    bukan saat peta dibuka).
+                  </p>
+                  <div
+                    className="map-legend-box map-legend-box-routes"
+                    role="group"
+                    aria-label="Legenda jalur kiriman"
+                  >
+                    <span className="map-legend-box-title">Jalur kiriman:</span>
+                    {routeLegendEntries().map((entry) => (
+                      <span key={entry.tone} className="map-legend-box-item">
+                        <i
+                          className={`map-legend-line map-legend-line-${entry.tone}`}
+                          aria-hidden="true"
+                        />{" "}
+                        {entry.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           )}

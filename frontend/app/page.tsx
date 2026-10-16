@@ -19,6 +19,7 @@ import { useKpi } from "../lib/hooks/useKpi";
 import { useMe } from "../lib/hooks/useMe";
 import { useQualitySample } from "../lib/hooks/useQualitySample";
 import { useSuppliers } from "../lib/hooks/useSuppliers";
+import { useSupplierRoutes } from "../lib/hooks/useSupplierRoutes";
 // Fase 7b: ambang jangkauan peran (SPPG 150 km, monitor tanpa ambang) — satu
 // tempat aturannya, dipakai peta + halaman Pemasok.
 import { supplierReachKmForRole } from "../lib/supplier-pins";
@@ -244,6 +245,15 @@ export default function Home() {
     mapData?.commodity ?? null
   );
   const suppliersQuery = useSuppliers(token, identityScope, tab);
+  // Jalur kiriman (Fase 10): garis jalan pemasok → tujuan. Peta memakai yang
+  // sekomoditas dengan tampilan; halaman Pemasok memakai daftar penuh supaya
+  // tabel bisa menyebut jalur untuk semua kiriman aktif.
+  const mapSupplierRoutesQuery = useSupplierRoutes(
+    token,
+    identityScope,
+    tab,
+    mapData?.commodity ?? null
+  );
   // Feed (14 Okt 2026): cakupan + pencarian + urutan. Cakupan "action" =
   // keputusan yang benar-benar menunggu tindakan manusia — definisi yang sama
   // dengan lonceng top bar dan angka di sidebar. EXPIRED tetap bisa dilihat
@@ -792,6 +802,7 @@ export default function Home() {
                 showStatusList={false}
                 showHeader={false}
                 suppliers={mapSuppliersQuery.data}
+                supplierRoutes={mapSupplierRoutesQuery.data}
                 reachKm={supplierReachKm}
               />
               <div className="overview-side">

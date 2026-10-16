@@ -36,6 +36,8 @@ export const queryKeys = {
   exclusions: (scope: string) => ["exclusions", scope] as const,
   suppliers: (scope: string, reachKm?: number | null, commodity?: string | null) =>
     ["suppliers", scope, reachKm ?? "all", commodity ?? "all"] as const,
+  supplierRoutes: (scope: string, commodity?: string | null, location?: string | null) =>
+    ["supplier-routes", scope, commodity ?? "all", location ?? "all"] as const,
   me: (scope: string) => ["me", scope] as const,
   balanceMap: (scope: string, commodity: string) =>
     ["balance-map", scope, commodity] as const,

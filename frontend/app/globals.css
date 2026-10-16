@@ -2039,6 +2039,60 @@ a:focus-visible {
   color: var(--ink-subtle);
   max-width: 46ch;
 }
+/* --- Jalur kiriman di peta (Fase 10) -------------------------------------
+   Wadah baru supaya sakelar+legenda jalur tidak menumpuk dengan kontrol layer
+   pemasok di sudut yang sama. Kontrol di dalamnya jadi static. */
+.map-layer-controls {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+}
+.map-supplier-controls,
+.map-route-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 100%;
+}
+.map-layer-controls .map-supplier-controls,
+.map-layer-controls .map-route-controls {
+  position: static;
+  top: auto;
+  left: auto;
+  z-index: auto;
+}
+.map-layer-controls .map-legend-box {
+  position: static;
+  left: auto;
+  bottom: auto;
+  z-index: auto;
+  pointer-events: auto;
+}
+/* Contoh garis: dipakai legenda jalur, popup, dan sakelar. SENGAJA kelas
+   tersendiri (`map-legend-line`/`ship-route`) — `.route-line` sudah milik
+   signature halaman login. */
+.map-legend-line,
+.ship-route {
+  display: inline-block;
+  width: 22px;
+  height: 0;
+  border-top: 3px dashed var(--status-safe);
+  flex: none;
+}
+.map-legend-line-fail,
+.ship-route-fail { border-top-color: var(--status-danger); }
+.map-popup-line {
+  margin: 4px 0 0;
+  font-size: var(--text-meta);
+  color: var(--ink-subtle);
+}
 /* Kolom jarak + penyaring jangkauan halaman Pemasok (Fase 7b). */
 .reach-tag {
   display: inline-block;

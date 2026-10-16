@@ -283,6 +283,28 @@ def build_seed_rows(reference_time: datetime, seed_path: Path | None = None) -> 
     }
 
 
+async def sync_routes_after_seed(reference_time: datetime) -> dict:
+    """Sinkronkan rute JALAN (OSRM) sesudah batch ada di DB.
+
+    Dipanggil di akhir seeding (keputusan pemilik 2026-10-16: rute diambil saat
+    seeding/sync, bukan saat peta dibuka). Jaringan mati TIDAK menggagalkan
+    seeding: laporan gagal dicetak, dan peta akan menulis "belum disinkronkan".
+    """
+    from app.seed.road_routes import sync_road_routes
+
+    database_url = os.environ.get(
+        "DATABASE_URL",
+        "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain",
+    )
+    engine = create_engine(database_url)
+    maker = create_session_maker(engine)
+    try:
+        async with maker() as session:
+            return await sync_road_routes(session, now=reference_time)
+    finally:
+        await engine.dispose()
+
+
 async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> dict:
     """Muat seed ke PostgreSQL secara idempoten (upsert by deterministic PK)."""
     rows = build_seed_rows(reference_time, seed_path)
@@ -667,6 +689,15 @@ def main() -> None:
         action="store_true",
         help="Juga pastikan 30 pemasok demo ada (Fase 2: pemasok tampil di peta)",
     )
+    parser.add_argument(
+        "--skip-routes",
+        action="store_true",
+        help=(
+            "Jangan sinkronkan rute jalan (OSRM) sesudah seeding. Tanpa flag ini, "
+            "rute kiriman aktif diambil dari OSRM dan disimpan di tabel road_routes "
+            "supaya peta tidak butuh internet (keputusan pemilik 2026-10-16)."
+        ),
+    )
     args = parser.parse_args()
     ref = datetime.fromisoformat(args.reference_time)
     if ref.tzinfo is None:
@@ -687,6 +718,19 @@ def main() -> None:
             f"Pemasok demo siap (30 baris, idempoten): baru {added['created']}, "
             f"diperbarui {added['updated']}."
         )
+    if not args.skip_routes:
+        try:
+            laporan = asyncio.run(sync_routes_after_seed(ref))
+            print(
+                "Rute jalan (OSRM): "
+                f"{laporan['diambil']} diambil, {laporan['sudah_ada']} sudah ada, "
+                f"{laporan['gagal']} gagal — hanya kiriman aktif."
+            )
+            for alasan, jumlah in sorted(laporan["alasan_gagal"].items()):
+                print(f"  gagal ({alasan}): {jumlah} — peta akan menulis 'belum disinkronkan'")
+        except Exception as exc:  # jaringan/DB di luar dugaan tidak membatalkan seed
+            print(f"Rute jalan: GAGAL disinkronkan ({type(exc).__name__}: {exc}).")
+            print("  Peta akan menulis 'belum disinkronkan'; seeding tetap selesai.")
     print(f"Seed selesai (idempoten). Row baru: {counts or '{}'}")
 
 

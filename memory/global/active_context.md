@@ -44,10 +44,32 @@
   kosong. "Sedang mengirim" = batch **`usable_until >= sekarang`** (`app/core/supplier_shipping.py`),
   dikirim sebagai kunci `shipping` per baris `GET /suppliers`; di peta jadi **cincin** pada pin
   (`map-pin-supplier-shipping`), bukan nada kelima; tabel Pemasok menampilkan kalimat kiriman.
-  Saat ini 2 pengirim aktif (A: 3 kiriman/1.400 kg telur s/d 2 Nov; B: 1 kiriman/600 kg s/d 26 Okt,
+  Saat itu 2 pengirim aktif (A: 3 kiriman/1.400 kg telur s/d 2 Nov; B: 1 kiriman/600 kg s/d 26 Okt,
   1 gagal uji — dilaporkan). Bukti: `docs/verification/fase-9.md`, skrip
-  `backend/scripts/verifikasi_pemasok_kirim.py`. Gerbang: pytest 806 lulus / 3 skip, ruff bersih,
-  vitest 552 lulus/60 berkas, tsc 0, lint 0.
+  `backend/scripts/verifikasi_pemasok_kirim.py`. Gerbang saat itu: pytest 806 lulus / 3 skip, ruff
+  bersih, vitest 552 lulus/60 berkas, tsc 0, lint 0. **Angka yang bergeser di Fase 10**: A kini
+  **4 kiriman/2.200 kg** (kiriman Jakarta ditambahkan), dan tanggal B→Surabaya menjadi **1 Nov 2026**
+  (REF kanonik saat seeder F10 dijalankan) — silang di akhir `docs/verification/fase-9.md`.
+- **F10 SELESAI 2026-10-16 — garis jalur kiriman (pemasok → tujuan) MENGIKUTI JALAN** (permintaan
+  pemilik: "dimap ada seperti garis mengikuti jalur dari suplier ke tujuan"). Keputusan pemilik:
+  rute **OSRM** (bukan garis lurus), geometri diambil **saat seeding/sync lalu di-cache di DB**
+  (bukan saat peta dibuka → demo offline-aman & server OSRM demo tidak dibanjiri). Tabel baru
+  `road_routes` (migrasi `014_road_routes`; kunci = koordinat 4 desimal → idempoten), modul murni
+  `app/core/road_route.py` (urutan **lon,lat** OSRM dikunci di satu tempat), penyimpan
+  `app/seed/road_routes.py` (hanya kiriman `usable_until >= now`; jaringan mati tidak menggagalkan
+  seeding), CLI `scripts/sync_road_routes.py`, endpoint **`GET /supplier-routes`** (cakupan per peran
+  ditegakkan server; tiap baris bawa `road` ATAU `road_missing_reason`, tidak pernah keduanya).
+  Kiriman demo baru menuju Jakarta (angka dari pemilik): **A Cianjur → SPPG Jakarta, telur 800 kg,
+  s/d 7 Nov 2026, pass** → sekarang **5** rute di cache (Cianjur→Jakarta **78,35 km lurus vs 110,4 km
+  jalan = 1,41x**, 36 titik). Frontend: `lib/supplier-routes.ts` (murni), hook `useSupplierRoutes`,
+  rewrite proxy `/supplier-routes`, layer MapLibre garis putus-putus + popup klik + sakelar
+  "Tampilkan/Sembunyikan jalur kiriman (N)" (aktif bawaan) + legenda, pembukaan tampilan **sekali**
+  saat jalur pertama tiba (pin Cianjur dulu di luar bingkai peta Jakarta). Kelas DOM **`ship-route`**
+  (`route-line` sudah milik signature login). Bukti: `docs/verification/fase-10.md`, skrip
+  `backend/scripts/verifikasi_rute_jalan.py` (API vs SQL, jarak jalan >= lurus) exit 0. Gerbang:
+  pytest **851 lulus / 3 skip** (naik dari 806), ruff bersih, vitest **578 lulus/61 berkas** (naik dari 552/60), tsc 0, lint 0
+  (`next build` tidak dijalankan — `next dev` hidup). **Belum**: kolom jalur di tabel Pemasok
+  (lingkup baru, belum diminta) dan push commit F10.
 - Sprint 4 IN PROGRESS — Roy yang menandai DONE, jangan ditandai agent.
 
 ## Next step (urutan eksekusi)
