@@ -285,3 +285,31 @@ ter-stage) sehingga kunci index bentrok. Commit dibuat memakai index SEMENTARA
 (`GIT_INDEX_FILE`) dan patch content-level dari HEAD; index sesi lain tidak disentuh sama
 sekali, dan hanya berkas pekerjaan ini yang masuk.
 
+## 9. Info yang tidak mengubah keputusan dibuang dari papan kiriman (16 Okt 2026)
+
+**Permintaan pemilik:** *"terdapat info yang tidak penting, anda hapus saja, karena user tidak
+memerlukan info tersebut"* — merujuk pada papan kiriman di halaman Pemasok yang menampilkan
+`110,4 km jalan · ± 1 jam 24 menit`, `1,41× jarak lurus · OSRM`, dan `tiba sebelum batas`.
+
+**Yang dibuang** (tidak menambah keputusan apa pun di layar):
+- `boardRasio()` beserta tampilannya (`1,41× jarak lurus`) — fungsi ini dihapus, bukan hanya
+  disembunyikan;
+- catatan kabar baik `tiba sebelum batas` — kolom "Masa layak" kini hanya menulis tanggalnya
+  (`7 Nov 2026`), karena tanggal itu sendiri sudah fakta yang dipakai;
+- kelas CSS `.cell-tone-ok` yang menjadi mati setelah catatan itu hilang.
+
+**Yang SENGAJA tetap:**
+- peringatan `tiba MELEWATI batas` (nada bahaya) — inilah yang mengubah keputusan, sejalan
+  dengan keputusan F12b: peringatan tetap, kabar baik dibuang;
+- jarak + waktu tempuh jalur jalan (`110,4 km jalan · ± 1 jam 24 menit`);
+- jejak sumber `OSRM` sebagai label kecil, kini dengan `title` yang menjelaskan asalnya
+  ("dihitung OSRM saat sinkronisasi rute, bukan saat papan dibuka") supaya angka jalur tetap
+  bisa ditelusuri tanpa memenuhi sel.
+
+**Bukti:** markup diuji dengan penjaga "tidak boleh muncul" (`not.toContain("× jarak lurus")`,
+`"tiba sebelum batas"`, `"1,41"`, `"cell-tone-ok"`) selain penjaga `toContain("OSRM")`.
+Live 1440/768/375 px: 10 kolom tetap, tabel 1106 = 1106 px tanpa geser di 1440 px, luapan
+halaman 0 px, tidak ada satu pun frasa itu di teks papan; tangkapan layar kartu memastikan
+tata letak tetap seimbang. **Gerbang:** tsc 0 · ESLint 0 · suite 955 lulus / 0 gagal.
+
+

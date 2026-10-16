@@ -15,7 +15,6 @@ import {
   boardMasaLayak,
   boardMuatan,
   boardMutu,
-  boardRasio,
   boardSisa,
   boardSort,
   boardSumber,
@@ -111,7 +110,6 @@ export default function ShipmentBoard({
                 {rows.map((row) => {
                   const keadaan = boardKeadaan(row);
                   const layak = boardLayakNote(row);
-                  const rasio = boardRasio(row);
                   const sumber = boardSumber(row);
                   return (
                     <tr key={row.id}>
@@ -122,10 +120,15 @@ export default function ShipmentBoard({
                       <td>{boardMuatan(row)}</td>
                       <td className="route-cell">
                         {boardJalur(row)}
-                        {rasio ? (
-                          <span className="cell-meta">
-                            {rasio}
-                            {sumber ? ` · ${sumber}` : ""}
+                        {/* Jejak sumber geometri tetap ditulis (angka jalur harus bisa
+                            ditelusuri), tetapi rasio jalur↔garis lurus dibuang: 16 Okt 2026
+                            pemilik memutuskan info itu tidak diperlukan pembaca. */}
+                        {sumber ? (
+                          <span
+                            className="cell-meta"
+                            title="Jarak & waktu tempuh jalur jalan dihitung OSRM saat sinkronisasi rute, bukan saat papan ini dibuka."
+                          >
+                            {sumber}
                           </span>
                         ) : null}
                       </td>

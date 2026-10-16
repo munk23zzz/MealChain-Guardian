@@ -21,7 +21,6 @@ import {
   boardMasaLayak,
   boardMuatan,
   boardMutu,
-  boardRasio,
   boardSisa,
   boardSort,
   boardSumber,
@@ -118,9 +117,11 @@ describe("papan kiriman — isi sel (tanpa angka karangan)", () => {
     expect(boardJalur(route({ road: undefined, straightKm: null }))).toBe("—");
   });
 
-  it("rasio & sumber hanya muncul bila server mengirimnya", () => {
-    expect(boardRasio(route())).toBe("1,41× jarak lurus");
-    expect(boardRasio(tanpaJalur)).toBeNull();
+  it("sumber geometri tetap dilaporkan; rasio jarak lurus TIDAK lagi ditampilkan", () => {
+    // Rasio jalur↔garis lurus dibuang atas permintaan pemilik (16 Okt 2026): angka itu
+    // tidak mengubah keputusan apa pun di layar. Jejak sumbernya (OSRM) TETAP, supaya
+    // angka jarak/waktu masih bisa ditelusuri. Penjaga "tidak boleh muncul" ada di tes
+    // markup (tests/shipment-board-component.test.tsx).
     expect(boardSumber(route())).toBe("OSRM");
     expect(boardSumber(tanpaJalur)).toBeNull();
   });
@@ -155,10 +156,13 @@ describe("papan kiriman — isi sel (tanpa angka karangan)", () => {
     expect(boardSisa(route({ journey: journey({ state: "belum_berangkat" }) }))).toBe("—");
   });
 
-  it("masa layak + catatan 'tiba sebelum/melewati batas' dari server", () => {
+  it("catatan masa layak hanya untuk PERINGATAN, bukan kabar baik", () => {
     expect(boardMasaLayak(route())).toBe("16 Okt 2026");
     expect(boardMasaLayak(route({ usableUntil: null }))).toBe("—");
-    expect(boardLayakNote(route())?.tone).toBe("ok");
+    // "Tiba sebelum batas layak" dibuang (pemilik: info itu tidak diperlukan pembaca —
+    // tanggal layaknya sendiri sudah ada di kolom ini). Yang disimpan adalah yang
+    // mengubah keputusan: peringatan akan MELEWATI batas.
+    expect(boardLayakNote(route())).toBeNull();
     expect(boardLayakNote(route({ journey: journey({ arrivesBeforeUsableUntil: false }) }))).toEqual({
       text: "tiba MELEWATI batas",
       tone: "danger",

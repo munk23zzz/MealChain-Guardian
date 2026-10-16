@@ -89,12 +89,19 @@ describe("ShipmentBoard", () => {
   it("SSR: angka server dipakai apa adanya (jalur, muatan, sisa, mutu, keadaan)", () => {
     const html = renderToStaticMarkup(<ShipmentBoard routes={PAYLOAD} />);
     expect(html).toContain("110,4 km jalan · ± 1 jam 24 menit");
-    expect(html).toContain("1,41× jarak lurus");
     expect(html).toContain("800 kg telur");
     expect(html).toContain("20 menit");
     expect(html).toContain("Lolos uji");
     expect(html).toContain("shipment-pill-moving");
-    expect(html).toContain("tiba sebelum batas");
+    // Jejak sumber geometri tetap ada supaya angka jalur bisa ditelusuri...
+    expect(html).toContain("OSRM");
+    // ...tetapi dua info yang tidak dipakai pembaca TIDAK boleh kembali ke layar:
+    // rasio jalur↔garis lurus dan kabar "tiba sebelum batas" (16 Okt 2026).
+    expect(html).not.toContain("× jarak lurus");
+    expect(html).not.toContain("tiba sebelum batas");
+    expect(html).not.toContain("1,41");
+    // Tanpa catatan "kabar baik", kelas nada aman itu ikut tidak dirender.
+    expect(html).not.toContain("cell-tone-ok");
   });
 
   it("SSR: baris tanpa data menulis '—' dan sebabnya, bukan nol", () => {

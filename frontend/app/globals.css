@@ -7087,9 +7087,8 @@ button:active:not(:disabled),
   font-size: var(--fs-1);
 }
 
-.cell-tone-ok {
-  color: var(--status-safe);
-}
+/* `.cell-tone-ok` dihapus 16 Okt 2026: catatan masa layak kini hanya untuk PERINGATAN
+   ("tiba MELEWATI batas"), jadi tidak ada lagi nada "kabar baik" di kolom ini. */
 
 .cell-tone-danger {
   color: var(--status-danger);

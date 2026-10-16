@@ -63,12 +63,6 @@ export function boardJalur(row: SupplierRoute): string {
   return row.missingReason ? `${DASH} (${alasanJalur(row)})` : DASH;
 }
 
-/** Rasio jalur terhadap garis lurus — jejak audit, hanya bila server mengirimnya. */
-export function boardRasio(row: SupplierRoute): string | null {
-  if (!row.road || row.road.ratioVsStraight === null) return null;
-  return `${row.road.ratioVsStraight.toFixed(2).replace(".", ",")}× jarak lurus`;
-}
-
 /** Sumber geometri (OSRM/cache) — supaya angka jalur bisa ditelusuri. */
 export function boardSumber(row: SupplierRoute): string | null {
   return row.road ? row.road.source.toUpperCase() : null;
@@ -136,12 +130,15 @@ export function boardMasaLayak(row: SupplierRoute): string {
 }
 
 /**
- * Catatan masa layak: apakah kiriman ini akan tiba SEBELUM batasnya.
- * `null` = server belum bisa memastikan (jangan mengarang "aman").
+ * Catatan masa layak — PERINGATAN saja.
+ *
+ * "Tiba sebelum batas layak" dibuang (16 Okt 2026): tanggal layaknya sendiri sudah ada di
+ * kolom ini, dan kabar baik yang selalu muncul tidak menambah keputusan apa pun. Yang
+ * disimpan justru yang mengubah keputusan: peringatan akan MELEWATI batas.
+ * `null` = tanpa catatan (jangan mengarang "aman" saat server belum bisa memastikan).
  */
-export function boardLayakNote(row: SupplierRoute): { text: string; tone: "ok" | "danger" } | null {
+export function boardLayakNote(row: SupplierRoute): { text: string; tone: "danger" } | null {
   const tiba = row.journey?.arrivesBeforeUsableUntil;
-  if (tiba === true) return { text: "tiba sebelum batas", tone: "ok" };
   if (tiba === false) return { text: "tiba MELEWATI batas", tone: "danger" };
   return null;
 }
