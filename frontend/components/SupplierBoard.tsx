@@ -53,6 +53,7 @@ function jarakDalamJangkauan(
 }
 import type { SupplierContext } from "../lib/supplier-exclusions";
 import { LoadingState } from "./LoadingState";
+import ScrollHint from "./ScrollHint";
 
 export default function SupplierBoard({
   suppliers,
@@ -346,7 +347,7 @@ export default function SupplierBoard({
                 </tbody>
               </table>
             </div>
-            <p className="board-scroll-hint">Geser tabel ke samping untuk melihat kolom lain.</p>
+            <ScrollHint />
           </>
         )}
       </article>
@@ -389,7 +390,7 @@ export default function SupplierBoard({
                 </tbody>
               </table>
             </div>
-            <p className="board-scroll-hint">Geser tabel ke samping untuk melihat kolom lain.</p>
+            <ScrollHint />
           </>
         )}
       </article>

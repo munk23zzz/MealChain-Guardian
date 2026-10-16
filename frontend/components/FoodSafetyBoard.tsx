@@ -14,6 +14,7 @@ import {
 } from "../lib/food-safety";
 import { formatKg } from "../lib/overview-format";
 import { LoadingState } from "./LoadingState";
+import ScrollHint from "./ScrollHint";
 
 export default function FoodSafetyBoard({
   batches,
@@ -182,7 +183,7 @@ export default function FoodSafetyBoard({
             </tbody>
           </table>
             </div>
-            <p className="board-scroll-hint">Geser tabel ke samping untuk melihat kolom lain.</p>
+            <ScrollHint />
               </>
         )}
       </article>

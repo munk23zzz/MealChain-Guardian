@@ -22,6 +22,7 @@ import {
   type QualityVerdict,
 } from "../lib/agent-quality";
 import { LoadingState } from "./LoadingState";
+import ScrollHint from "./ScrollHint";
 
 const DASH = "—";
 
@@ -469,7 +470,7 @@ export default function AgentQualityBoard({
                 </tbody>
               </table>
             </div>
-            <p className="board-scroll-hint">Geser tabel ke samping untuk melihat kolom lain.</p>
+            <ScrollHint />
           </>
         )}
       </article>

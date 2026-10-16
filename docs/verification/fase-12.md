@@ -198,4 +198,55 @@ pekerjaan F12c murni frontend.
 | `npx tsc --noEmit` · `npx next lint` | `TSC_EXIT=0` · `No ESLint warnings or errors` |
 | Live `http://localhost:3010/` tab Pemasok | lebar tabel 913 = wadah 913 (**0 geser**), distribusi tinggi baris `{54: 34, 65: 1}`, jarak baris penyaring → kepala tabel 12 px, **0 error JS baru** selama 9 detik pengamatan (40 entri lama = `AbortError` permintaan ubin peta saat peta Overview dilepas) |
 
-Belum ada commit/push untuk F12c.
+## 7. Langkah lanjutan F12c — petunjuk geser tabel (16 Okt 2026)
+
+Permintaan pemilik: lanjutan F12c setelah commit `af2cf6f` (langkah 3, 4, 6).
+
+**Masalah terukur.** `.board-scroll-hint` ("Geser tabel ke samping untuk melihat kolom
+lain.", 7 tempat) semula hanya `display: block` di `max-width: 640px`, padahal tabel
+"Daftar pemasok" (7 kolom) butuh wadah >= 879 px. Jadi tabel BISA digeser tanpa petunjuk
+("zona geser senyap").
+
+**Percobaan pertama (langkah 3).** Ambang dinaikkan ke `max-width: 900px` (angka yang sudah
+dipakai repo untuk `.board-grid-2` / `.map-gl`). Hasil ukur membuktikan itu belum cukup —
+ambang lebar hanyalah PROKSI dari "tabel benar-benar meluap":
+
+| Lebar | Petunjuk (ambang 900) | Tabel meluap? | Wadah / tabel |
+|---|---|---|---|
+| 375 | ya | ya | 297 / 879 |
+| 768 | ya | ya | 690 / 879 |
+| 900 | ya | ya | 566 / 879 |
+| 901 | tidak | **ya** | 567 / 879 |
+| 1100 | tidak | **ya** | 766 / 879 |
+| 1440 | tidak | tidak | 1106 / 1106 |
+
+**Penyelesaian (langkah 4) — diukur, bukan ditebak.** `components/ScrollHint.tsx` mencari
+`.board-table-wrap` di kartunya, mengukur `scrollWidth` vs `clientWidth` (toleransi 1 px,
+`lib/scroll-hint.ts`), lalu menulis `data-tampil="true|false"`. Pengukuran diulang lewat
+ResizeObserver (wadah dan isinya) dan `resize`, sehingga tabel yang berubah lebar setelah
+data dimuat tetap benar. CSS-nya: `.board-scroll-hint { display: none }` +
+`.board-scroll-hint[data-tampil="true"] { display: block }` — **tanpa** ambang lebar layar.
+Kontrak murninya diuji di `tests/scroll-hint.test.ts`, perilaku pengukuran di
+`tests/scroll-hint-component.test.tsx` (ResizeObserver palsu), dan larangan ambang lebar di
+`tests/board-scroll-hint.test.ts`.
+
+**Bukti sesudah (akun SPPG Head, 8 lebar viewport, 0 pasangan tidak cocok):**
+
+| Lebar | Petunjuk tampil | Tabel meluap? | Wadah / tabel | Cocok |
+|---|---|---|---|---|
+| 375 | ya | ya | 297 / 879 | ya |
+| 640 | ya | ya | 562 / 879 | ya |
+| 768 | ya | ya | 690 / 879 | ya |
+| 900 | ya | ya | 566 / 879 | ya |
+| 901 | **ya** (dulu tidak) | ya | 567 / 879 | ya |
+| 1100 | **ya** (dulu tidak) | ya | 766 / 879 | ya |
+| 1262 | tidak | tidak | 928 / 928 | ya |
+| 1440 | tidak | tidak | 1106 / 1106 | ya |
+
+Luapan halaman tetap 0 px di semua lebar. Karena keputusannya kini per-tabel, tabel lebar di
+layar besar pun ikut tertangani tanpa perlu diatur satu per satu.
+
+**Catatan cakupan commit.** `SettingsPanel.tsx` TIDAK ikut di-commit di langkah ini: dua
+petunjuk di berkas itu tidak ada di HEAD (ditambahkan pekerjaan lain yang belum di-commit),
+sehingga meng-commit-nya akan menyapu pekerjaan sesi lain. Konversinya sudah ada di working
+tree dan menyusul bersama commit pekerjaan tersebut.
