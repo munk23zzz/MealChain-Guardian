@@ -121,23 +121,40 @@ def test_generate_idempoten(restore_demo):
     assert second["counts"]["prices"]["in_db"] == first["counts"]["prices"]["in_db"]
 
 
-def test_tidak_ada_baris_demo_di_jendela_kpi_atau_setelah_ref(restore_demo):
-    """Butir C2 rencana: jendela KPI harus tetap murni kanonik."""
+def test_deret_aktual_berhenti_di_ujung_rencana(restore_demo):
+    """Deret AKTUAL demo mengisi sampai ujung rencana — dan tidak melewatinya.
+
+    Menggantikan butir C2 rencana ("jendela KPI tetap murni kanonik"). Aturan itu
+    DIGANTI 2026-10-17 atas permintaan pemilik: pagar lama menyisakan 9 Okt → 5 Nov
+    kosong, sehingga kalender menulis "tidak ada catatan" dan jendela KPI 24 jam /
+    7 hari kosong. Kontrak baru: tidak ada baris aktual MELEWATI `DEFAULT_END`, dan
+    rentang sesudah REF tetap terisi.
+    """
     asyncio.run(_generate(start=DEFAULT_START, end=DEFAULT_END, interval_hours=12))
     with _engine().connect() as conn:
         for table, column in (
             ("supply_records", "recorded_at"),
             ("price_signals", "recorded_at"),
         ):
-            intruders = conn.execute(
+            lewat_ujung = conn.execute(
                 text(
                     f"SELECT count(*) FROM {table} WHERE origin = 'demo' "
-                    f"AND {column} >= :window_start"
+                    f"AND {column} >= :batas"
                 ),
-                {"window_start": WINDOW_START},
+                {"batas": DEFAULT_END},
             ).scalar()
-            assert int(intruders or 0) == 0, (
-                f"{table} punya baris demo di jendela KPI — ini akan mengubah /kpi"
+            assert int(lewat_ujung or 0) == 0, (
+                f"{table} punya baris demo MELEWATI ujung rencana (5 Nov)"
+            )
+            isi_sesudah_ref = conn.execute(
+                text(
+                    f"SELECT count(*) FROM {table} WHERE origin = 'demo' "
+                    f"AND {column} > :ref"
+                ),
+                {"ref": CANONICAL_REF},
+            ).scalar()
+            assert int(isi_sesudah_ref or 0) > 0, (
+                f"{table}: rentang 9 Okt → 5 Nov wajib terisi"
             )
         latest = conn.execute(
             text(
@@ -146,11 +163,17 @@ def test_tidak_ada_baris_demo_di_jendela_kpi_atau_setelah_ref(restore_demo):
         ).scalar()
     assert latest is not None
     assert latest < actual_cutoff()
-    assert latest == datetime(2026, 10, 7, 0, 0, tzinfo=UTC)
+    assert latest == datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
 
 
-def test_record_terbaru_per_pasangan_tetap_kanonik(restore_demo):
-    """Butir C1 rencana: nilai terbaru per lokasi×komoditas tetap kanonik."""
+def test_record_terbaru_per_pasangan_dari_deret_dan_kanonik_tetap_ada(restore_demo):
+    """Record terbaru per lokasi×komoditas = stamp terakhir deret; kanonik tetap ada.
+
+    Dulu tes ini menuntut record terbaru SEMUA pasangan tetap kanonik (butir C1).
+    Sejak 2026-10-17 deret aktual berjalan sampai 5 Nov, jadi yang terbaru memang
+    baris demo; yang wajib tetap benar adalah baris KANONIK per pasangan masih ada
+    dan nilainya tidak bergeser.
+    """
     asyncio.run(_generate(start=DEFAULT_START, end=DEFAULT_END, interval_hours=12))
     with _engine().connect() as conn:
         rows = conn.execute(
@@ -164,8 +187,17 @@ def test_record_terbaru_per_pasangan_tetap_kanonik(restore_demo):
             )
         ).all()
         assert len(rows) == 30
-        assert {row.origin for row in rows} == {"seed"}
-        assert {row.recorded_at for row in rows} == {CANONICAL_REF}
+        assert {row.origin for row in rows} == {"demo"}
+        assert {row.recorded_at for row in rows} == {
+            datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
+        }
+        kanonik = conn.execute(
+            text(
+                "SELECT count(*) FROM supply_records "
+                "WHERE origin = 'seed' AND recorded_at = :ref"
+            ),
+            {"ref": CANONICAL_REF},
+        ).scalar()
         cianjur_telur = conn.execute(
             text(
                 """
@@ -179,7 +211,9 @@ def test_record_terbaru_per_pasangan_tetap_kanonik(restore_demo):
                 """
             )
         ).scalar()
-    assert float(cianjur_telur) == 1400.0
+    assert int(kanonik or 0) == 30, "baris kanonik per pasangan harus tetap ada"
+    # Nilai terbaru kini dari deret (deterministik, bukan angka kanonik 1.400 kg).
+    assert float(cianjur_telur) != 1400.0
 
 
 def test_menu_plans_kanonik_tidak_ditimpa(restore_demo):
@@ -218,21 +252,31 @@ def test_menu_plans_kanonik_tidak_ditimpa(restore_demo):
 
 
 def test_rencana_menu_menjangkau_5_november(restore_demo):
-    """Masa depan HANYA di tabel perencanaan, dan sampai akhir rentang."""
+    """Rencana menu menutup sampai ujung rentang; deret aktual ikut terisi, tak lewat."""
     asyncio.run(_generate(start=DEFAULT_START, end=DEFAULT_END, interval_hours=12))
     with _engine().connect() as conn:
         terjauh = conn.execute(
             text("SELECT max(plan_date) FROM menu_plans WHERE origin = 'demo'")
         ).scalar()
-        aktual_masa_depan = conn.execute(
+        aktual_setelah_ref = conn.execute(
             text(
                 "SELECT count(*) FROM supply_records "
                 "WHERE origin = 'demo' AND recorded_at > :ref"
             ),
             {"ref": CANONICAL_REF},
         ).scalar()
+        aktual_lewat_ujung = conn.execute(
+            text(
+                "SELECT count(*) FROM supply_records "
+                "WHERE origin = 'demo' AND recorded_at >= :batas"
+            ),
+            {"batas": DEFAULT_END},
+        ).scalar()
     assert str(terjauh) == DEFAULT_END.date().isoformat()
-    assert int(aktual_masa_depan or 0) == 0, "aktual masa depan tidak boleh dikarang"
+    # Sejak 2026-10-17 aktual memang mengisi 9 Okt → 5 Nov (dulu dilarang karena
+    # "jendela KPI harus murni kanonik"). Yang tetap dilarang: melewati ujung rencana.
+    assert int(aktual_setelah_ref or 0) > 0, "aktual 9 Okt → 5 Nov wajib terisi"
+    assert int(aktual_lewat_ujung or 0) == 0, "aktual tidak boleh melewati ujung rencana"
 
 
 def test_purge_hanya_menghapus_baris_demo(restore_demo):

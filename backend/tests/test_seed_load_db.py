@@ -45,13 +45,18 @@ async def test_load_twice_is_idempotent(sync_engine):
 
 
 def test_locked_values_cianjur_jakarta_bogor(sync_engine):
+    # Fase 4 (deret AKTUAL diperluas s/d 4 Nov 12:00): baris demo (origin='demo')
+    # kini mendahului snapshot kanonik pada urutan recorded_at, sehingga
+    # 'ORDER BY recorded_at DESC LIMIT 1' mengembalikan angka demo, bukan angka
+    # kanonik. Inti tes ini = nilai KANONIK terkunci di dataset seed → batasi
+    # ke baris kanonik (origin='seed'). Angka yang dipaku tidak diubah.
     with sync_engine.connect() as conn:
         row = conn.execute(
             text(
                 "SELECT s.quantity_kg FROM supply_records s "
                 "JOIN locations l ON l.id = s.location_id "
                 "JOIN commodities c ON c.id = s.commodity_id "
-                "WHERE l.name='Cianjur' AND c.name='telur' "
+                "WHERE l.name='Cianjur' AND c.name='telur' AND s.origin='seed' "
                 "ORDER BY s.recorded_at DESC LIMIT 1"
             )
         ).scalar_one()
@@ -62,7 +67,7 @@ def test_locked_values_cianjur_jakarta_bogor(sync_engine):
                 "SELECT s.quantity_kg FROM supply_records s "
                 "JOIN locations l ON l.id = s.location_id "
                 "JOIN commodities c ON c.id = s.commodity_id "
-                "WHERE l.name='Jakarta' AND c.name='telur' "
+                "WHERE l.name='Jakarta' AND c.name='telur' AND s.origin='seed' "
                 "ORDER BY s.recorded_at DESC LIMIT 1"
             )
         ).scalar_one()
@@ -73,7 +78,7 @@ def test_locked_values_cianjur_jakarta_bogor(sync_engine):
                 "SELECT s.quantity_kg FROM supply_records s "
                 "JOIN locations l ON l.id = s.location_id "
                 "JOIN commodities c ON c.id = s.commodity_id "
-                "WHERE l.name='Bogor' AND c.name='telur' "
+                "WHERE l.name='Bogor' AND c.name='telur' AND s.origin='seed' "
                 "ORDER BY s.recorded_at DESC LIMIT 1"
             )
         ).scalar_one()

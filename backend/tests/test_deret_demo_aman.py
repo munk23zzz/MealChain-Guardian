@@ -2,11 +2,12 @@
 
 Kejadian nyata yang memunculkan berkas ini: `tests/test_demo_timeseries_api.py`
 dan `tests/test_timeseries_db.py` memanggil `purge_demo_rows()`, yang menghapus
-SELURUH baris `origin='demo'` — termasuk deret kanonik 1 Sep–5 Nov (supply 2190 ·
-price 2274 · menu 590). Ketika salah satu tes itu gagal di tengah (dulu: teardown
+SELURUH baris `origin='demo'` — termasuk deret kanonik 1 Sep–5 Nov. Sejak
+2026-10-17 rentang itu penuh sampai 5 Nov: 130 cap waktu × 30 pasangan =
+**3.900 baris supply** (3.870 demo + 30 kanonik 8 Okt 12:00) dan **4.040 baris
+harga** sebagai rencana. Ketika salah satu tes itu gagal di tengah (dulu: teardown
 memakai token HTTP yang sudah tidak sah → 401), pemulihannya tak jalan dan DB
-tertinggal ter-purge. Akibatnya puluhan tes lain gagal berantai (gejala `assert
-2190 == 0`, `401 token tidak valid` di berkas yang tak bersangkutan) DAN data
+tertinggal ter-purge. Akibatnya puluhan tes lain gagal berantai DAN data
 presentasi juri lenyap.
 
 Kontrak yang dikunci di sini:
@@ -16,6 +17,8 @@ Kontrak yang dikunci di sini:
    demo sudah terhapus.
 2. Idempoten: saat deret sudah lengkap, ia TIDAK menambah baris apa pun.
 3. Hanya menyentuh `origin='demo'`: baris kanonik `origin='seed'` tidak berubah.
+4. Kelengkapan diukur agnostik-origin (baris di dalam rentang dari SEMUA origin),
+   karena stamp 8 Okt 12:00 memang dipegang baris kanonik.
 """
 
 import asyncio
@@ -79,6 +82,9 @@ def test_idempoten_saat_deret_sudah_lengkap():
 
     assert hasil["dipulihkan"] is False
     assert hasil["kurang"] == {}
+    # 3.900 = 3.870 baris demo + 30 baris kanonik pada stamp 8 Okt 12:00 — bukti
+    # bahwa kelengkapan diukur agnostik-origin (kalau hanya baris demo, 3.870).
+    assert hasil["sesudah"]["supply_records"] == 3900
     assert _status() == sebelum
 
 
@@ -89,6 +95,8 @@ def test_melaporkan_kekurangan_sebagai_data_bukan_tebakan():
 
     for kunci in ("sebelum", "sesudah", "harapan", "kurang", "dipulihkan"):
         assert kunci in hasil, f"ringkasan harus memuat '{kunci}'"
-    assert hasil["sebelum"]["supply_records"] == 0
-    assert hasil["sesudah"]["supply_records"] == hasil["harapan"]["supply_records"]
+    # `sebelum`/`sesudah` dihitung dari SEMUA origin di dalam rentang, jadi setelah
+    # purge pun masih ada baris kanonik (30 baris supply 8 Okt 12:00, 44 harga).
+    assert hasil["sebelum"]["supply_records"] < hasil["harapan"]["supply_records"]
+    assert hasil["sesudah"]["supply_records"] >= hasil["harapan"]["supply_records"]
     assert set(hasil["sebelum"]) == set(TABEL)

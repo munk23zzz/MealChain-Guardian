@@ -29,7 +29,8 @@ from app.main import app
 
 ENGINE_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
 HARI_SEED = "2026-10-02"      # ada rencana + kiriman + pasokan
-HARI_KOSONG = "2026-10-20"    # rencana saja; tanpa catatan operasional
+HARI_RENCANA_SAJA = "2026-10-20"  # rencana ada; tanpa kiriman/limbah
+HARI_TANPA_RENCANA = "2026-11-06"  # setelah rencana menu berakhir (5 Nov)
 WIB_8_OKT_0030 = datetime(2026, 10, 7, 17, 30, tzinfo=timezone.utc)
 WIB_9_OKT_0030 = datetime(2026, 10, 8, 17, 30, tzinfo=timezone.utc)
 
@@ -172,16 +173,33 @@ def test_hari_berdata_dihitung_benar(client, sppg_head):
 
 
 def test_hari_tanpa_catatan_menulis_available_false(client, sppg_head):
-    """Hari tanpa baris TIDAK boleh jadi deretan nol yang tampak terukur."""
-    r = _get(client, sppg_head["token"], HARI_KOSONG, HARI_KOSONG)
+    """Hari yang BENAR-BENAR di luar rencana: semua bagian `available=false`.
+
+    Sejak deret aktual mengisi 1 Sep → 5 Nov, hari di dalam rentang itu tidak lagi
+    "kosong" untuk pasokan/harga. Karena itu kasus "tanpa catatan" diuji di hari
+    SETELAH rencana berakhir (6 Nov), dan hari tanpa kiriman/limbah diuji terpisah
+    di bawah — supaya aturan anti-deret-nol tetap terjaga, bukan sekadar dilonggarkan.
+    """
+    r = _get(client, sppg_head["token"], HARI_TANPA_RENCANA, HARI_TANPA_RENCANA)
     assert r.status_code == 200, r.text
-    d = _hari(r.json(), HARI_KOSONG)
-    for bagian in ("delivery", "disposal", "supply", "price", "decisions"):
+    d = _hari(r.json(), HARI_TANPA_RENCANA)
+    for bagian in ("delivery", "disposal", "supply", "price", "decisions", "menu"):
         assert d[bagian]["available"] is False, f"{bagian} harus available=false"
         assert d[bagian]["rows"] == 0
-    # Rencana menu tetap ada (menjorok ke depan sampai 5 Nov).
-    assert d["menu"]["rows"] == 1
-    assert d["menu"]["available"] is True
+
+
+def test_hari_dalam_rencana_tanpa_kiriman_limbah(client, sppg_head):
+    """Di dalam rentang: pasokan/harga/rencana ada, kiriman & limbah TIDAK dikarang."""
+    r = _get(client, sppg_head["token"], HARI_RENCANA_SAJA, HARI_RENCANA_SAJA)
+    assert r.status_code == 200, r.text
+    d = _hari(r.json(), HARI_RENCANA_SAJA)
+    for bagian in ("delivery", "disposal"):
+        assert d[bagian]["available"] is False, f"{bagian} harus available=false"
+        assert d[bagian]["rows"] == 0
+    for bagian in ("supply", "price", "menu"):
+        assert d[bagian]["available"] is True, f"{bagian} harus available=true"
+        assert d[bagian]["rows"] > 0
+    assert d["supply"]["available"] is True
 
 
 def test_batas_hari_pakai_wib_bukan_utc(client, monitor):

@@ -13,7 +13,7 @@ import pytest
 
 from app.seed.timeseries import (
     ACTUAL_HORIZON_MARGIN,
-    CANONICAL_REF,
+    ACTUAL_REF,
     DEFAULT_END,
     DEFAULT_START,
     WEEKEND_FACTOR,
@@ -62,17 +62,24 @@ def test_validate_range_menerima_rentang_default():
 # -------------------------------------------------------------- batas aktual
 
 
-def test_baris_aktual_tidak_menyentuh_jendela_kpi():
-    """Window KPI = [REF-24 jam, REF]; baris demo harus berhenti di bawahnya."""
+def test_baris_aktual_berhenti_di_ujung_rencana():
+    """Deret AKTUAL demo mengisi penuh 1 Sep → 5 Nov dan berhenti di `DEFAULT_END`.
+
+    Aturan lama ("baris aktual tidak menyentuh jendela KPI REF − 24 jam") DIUBAH
+    2026-10-17 atas permintaan pemilik: pagar itu menyisakan 9 hari terakhir
+    kosong, sehingga kalender menulis "tidak ada catatan" dan jendela KPI 24 jam /
+    7 hari kosong. Yang tetap berlaku: tidak ada baris aktual MELEWATI
+    `DEFAULT_END` (batas eksklusif) — ujung rencana tetap batas atasnya.
+    """
     stamps = actual_timestamps(DEFAULT_START, DEFAULT_END, 12)
     assert stamps, "harus ada baris aktual"
     cutoff = actual_cutoff()
     assert max(stamps) < cutoff
     assert all(cutoff - s >= timedelta(0) for s in stamps)
-    # 7 Okt 12:00 adalah batas atas eksklusif: tepat 7 Okt 00:00 masih boleh.
-    assert max(stamps) == datetime(2026, 10, 7, 0, 0, tzinfo=UTC)
-    assert cutoff == datetime(2026, 10, 7, 12, 0, tzinfo=UTC)
-    assert CANONICAL_REF - ACTUAL_HORIZON_MARGIN == cutoff
+    # 5 Nov 00:00 adalah batas atas eksklusif: tepat 4 Nov 12:00 masih boleh.
+    assert max(stamps) == datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
+    assert cutoff == DEFAULT_END
+    assert ACTUAL_REF - ACTUAL_HORIZON_MARGIN == cutoff
 
 
 def test_interval_minimal_satu_jam():
@@ -174,7 +181,7 @@ def test_plan_menu_harian_inklusif_tanpa_duplikat():
 def test_plan_kutipan_pemasok_mingguan_dan_konsisten():
     quotes = [("sup-1|kom-1", "lok-1", "kom-1", "sup-1", Decimal("27000"))]
     rows = plan_quote_price_rows(quotes, DEFAULT_START, actual_cutoff())
-    assert len(rows) == 6  # 1 Sep → 6 Okt, satu per pekan
+    assert len(rows) == 10  # 1 Sep → 3 Nov, satu per pekan (ujung = actual_cutoff)
     assert {r["source"] for r in rows} == {"supplier_quote"}
     assert all(r["supplier_id"] == "sup-1" for r in rows)
     assert all(r["price_per_kg"] > 0 for r in rows)
@@ -205,8 +212,8 @@ def test_plan_all_meringkas_batas_aktual_dan_rencana():
 
 
 def test_perkalian_data_tetap_terjangkau():
-    """Skala nyata: 10 lokasi × 3 komoditas (30 pasangan) × 73 cap waktu."""
+    """Skala nyata: 10 lokasi × 3 komoditas (30 pasangan) × 130 cap waktu."""
     stamps = actual_timestamps(DEFAULT_START, DEFAULT_END, 12)
     rows = plan_supply_rows(_pairs(30), stamps)
-    assert len(rows) == 30 * len(stamps) == 2190
-    assert 1500 <= len(rows) <= 3000
+    assert len(rows) == 30 * len(stamps) == 3900
+    assert 3000 <= len(rows) <= 5000

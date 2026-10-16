@@ -55,8 +55,20 @@ def _batch_luar_jakarta_id() -> str:
         engine.dispose()
 
 
-def _bersihkan(batch_id: str) -> None:
-    from sqlalchemy import create_engine, text
+def _bersihkan(*ids: str) -> None:
+    """Hapus HANYA catatan yang dibuat tes ini — per id, bukan per batch.
+
+    Dulu fungsi ini `DELETE FROM batch_receipts WHERE batch_id = <Jakarta>`, yaitu
+    menghapus SELURUH riwayat penerimaan batch itu. Batch Jakarta kebetulan satu-
+    satunya batch dalam scope peran SPPG, jadi sapuan itu ikut menghapus catatan
+    yang sah (isian demo untuk juri) setiap kali suite dijalankan — persis kelas
+    cacat isolasi yang dulu mengosongkan deret kanonik. Efek sampingnya dulu
+    tersamarkan karena asersi memakai `len(items) == 1`, yang justru BENAR hanya
+    bila tak ada catatan lain.
+    """
+    if not ids:
+        return
+    from sqlalchemy import bindparam, create_engine, text
 
     engine = create_engine(
         "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
@@ -64,7 +76,10 @@ def _bersihkan(batch_id: str) -> None:
     try:
         with engine.begin() as conn:
             conn.execute(
-                text("DELETE FROM batch_receipts WHERE batch_id = :b"), {"b": batch_id}
+                text("DELETE FROM batch_receipts WHERE id IN :ids").bindparams(
+                    bindparam("ids", expanding=True)
+                ),
+                {"ids": list(ids)},
             )
     finally:
         engine.dispose()
@@ -72,7 +87,7 @@ def _bersihkan(batch_id: str) -> None:
 
 def test_catat_penerimaan_tersimpan_dan_terbaca_kembali(auth_headers):
     batch_id = _batch_jakarta_id()
-    _bersihkan(batch_id)
+    dibuat: list[str] = []
     try:
         with _client() as c:
             resp = c.post(
@@ -86,6 +101,7 @@ def test_catat_penerimaan_tersimpan_dan_terbaca_kembali(auth_headers):
             )
             assert resp.status_code == 201, resp.text
             badan = resp.json()
+            dibuat.append(badan["id"])
             assert badan["checked_count"] == 2
             assert badan["other_note"] == "Karung lapis kedua basah, isi masih kering."
             assert badan["recorded_by_name"]
@@ -94,17 +110,19 @@ def test_catat_penerimaan_tersimpan_dan_terbaca_kembali(auth_headers):
             lagi = c.get(f"/receipts?batch_id={batch_id}", headers=auth_headers)
             assert lagi.status_code == 200, lagi.text
             item = lagi.json()["items"]
-            assert len(item) == 1
+            # Bukan `len(items) == 1`: batch ini boleh punya riwayat lain (mis.
+            # isian demo). Yang dipaku: catatan yang baru dibuat TERBACA dan
+            # berada paling depan (terbaru dulu).
             assert item[0]["id"] == badan["id"]
             assert item[0]["checked"] == {"kemasan": True, "suhu": True, "warna": False}
     finally:
-        _bersihkan(batch_id)
+        _bersihkan(*dibuat)
 
 
 def test_catatan_kosong_disimpan_sebagai_null(auth_headers):
     """Menulis spasi ≠ menulis catatan; UI harus bisa membedakannya."""
     batch_id = _batch_jakarta_id()
-    _bersihkan(batch_id)
+    dibuat: list[str] = []
     try:
         with _client() as c:
             resp = c.post(
@@ -113,10 +131,11 @@ def test_catatan_kosong_disimpan_sebagai_null(auth_headers):
                 json={"batch_id": batch_id, "checked": {}, "other_note": "   "},
             )
             assert resp.status_code == 201, resp.text
+            dibuat.append(resp.json()["id"])
             assert resp.json()["other_note"] is None
             assert resp.json()["checked_count"] == 0
     finally:
-        _bersihkan(batch_id)
+        _bersihkan(*dibuat)
 
 
 def test_batch_tidak_ada_dibalas_404(auth_headers):
@@ -143,20 +162,21 @@ def test_batch_lokasi_lain_dibalas_403(auth_headers):
 
 def test_monitor_nasional_hanya_bisa_membaca(monitor_headers, auth_headers):
     batch_id = _batch_jakarta_id()
-    _bersihkan(batch_id)
+    dibuat: list[str] = []
     try:
         with _client() as c:
-            dibuat = c.post(
+            catat = c.post(
                 "/receipts",
                 headers=auth_headers,
                 json={"batch_id": batch_id, "checked": {"kemasan": True}},
             )
-            assert dibuat.status_code == 201, dibuat.text
+            assert catat.status_code == 201, catat.text
+            dibuat.append(catat.json()["id"])
 
             # bgn_monitor: boleh baca (pengawas), tidak boleh mencatat.
             baca = c.get(f"/receipts?batch_id={batch_id}", headers=monitor_headers)
             assert baca.status_code == 200, baca.text
-            assert len(baca.json()["items"]) == 1
+            assert any(x["id"] == dibuat[0] for x in baca.json()["items"])
 
             tulis = c.post(
                 "/receipts",
@@ -165,12 +185,12 @@ def test_monitor_nasional_hanya_bisa_membaca(monitor_headers, auth_headers):
             )
             assert tulis.status_code == 403, tulis.text
     finally:
-        _bersihkan(batch_id)
+        _bersihkan(*dibuat)
 
 
 def test_urutan_terbaru_dulu_dan_batas_limit(auth_headers):
     batch_id = _batch_jakarta_id()
-    _bersihkan(batch_id)
+    dibuat: list[str] = []
     try:
         with _client() as c:
             pertama = c.post(
@@ -182,6 +202,7 @@ def test_urutan_terbaru_dulu_dan_batas_limit(auth_headers):
                     "other_note": "catatan satu",
                 },
             ).json()
+            dibuat.append(pertama["id"])
             kedua = c.post(
                 "/receipts",
                 headers=auth_headers,
@@ -191,17 +212,19 @@ def test_urutan_terbaru_dulu_dan_batas_limit(auth_headers):
                     "other_note": "catatan dua",
                 },
             ).json()
+            dibuat.append(kedua["id"])
 
             items = c.get(f"/receipts?batch_id={batch_id}", headers=auth_headers).json()["items"]
-            assert [x["id"] for x in items][0] == kedua["id"]
-            assert [x["id"] for x in items][1] == pertama["id"]
+            # Dua catatan ini yang TERBARU, jadi harus menempati dua posisi depan
+            # walaupun batch punya riwayat lain (mis. isian demo).
+            assert [x["id"] for x in items][:2] == [kedua["id"], pertama["id"]]
 
             satu = c.get(
                 f"/receipts?batch_id={batch_id}&limit=1", headers=auth_headers
             ).json()["items"]
             assert len(satu) == 1 and satu[0]["id"] == kedua["id"]
     finally:
-        _bersihkan(batch_id)
+        _bersihkan(*dibuat)
 
 
 def test_snapshot_terlalu_besar_dibalas_422(auth_headers):

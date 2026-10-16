@@ -498,6 +498,9 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
                             unit=item["unit"],
                         )
                     )
+                    counts["sap_mock_material_stock"] = (
+                        counts.get("sap_mock_material_stock", 0) + 1
+                    )
             for item in rows["purchase_orders"]:
                 existing_po = po_map.get(item["po_number"])
                 if existing_po is not None:
@@ -517,6 +520,9 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
                             price=item["price"],
                             status=item["status"],
                         )
+                    )
+                    counts["sap_mock_purchase_orders"] = (
+                        counts.get("sap_mock_purchase_orders", 0) + 1
                     )
             await _load_p6_facts(session, rows, loc_by_name, com_by_name, counts)
             await session.commit()

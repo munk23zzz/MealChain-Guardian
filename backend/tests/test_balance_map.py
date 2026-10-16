@@ -94,6 +94,32 @@ def _cleanup(loc_id) -> None:
         engine.dispose()
 
 
+def _latest_quantity_kg(table: str, location: str, commodity: str) -> float:
+    """Nilai baris TERBARU per lokasi×komoditas, dibaca dari DB yang sama.
+
+    Dipakai sebagai ACUAN (bukan angka kanonik yang dipaku): sejak deret aktual
+    demo diperluas sampai 5 Nov (`ACTUAL_REF` di app/seed/timeseries.py), baris
+    terbaru Jakarta/telur bukan lagi snapshot kanonik 8 Okt. Urutan pilih baris
+    sama persis dengan endpoint (`recorded_at DESC, id DESC`).
+    """
+    engine = create_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    f"SELECT r.quantity_kg FROM {table} r"
+                    " JOIN locations l ON l.id = r.location_id"
+                    " JOIN commodities c ON c.id = r.commodity_id"
+                    " WHERE l.name = :loc AND c.name = :com"
+                    " ORDER BY r.recorded_at DESC, r.id DESC LIMIT 1"
+                ),
+                {"loc": location, "com": commodity},
+            ).scalar_one_or_none()
+    finally:
+        engine.dispose()
+    return float(row) if row is not None else 0.0
+
+
 def _login(client, email: str, password: str) -> dict:
     resp = client.post(
         "/auth/login", json={"email": email, "password": password}
@@ -135,12 +161,20 @@ def test_balance_map_monitor_returns_all_demo_locations(client):
     # Koordinat dari DB (bukan karangan FE):
     assert abs(jkt["latitude"] - (-6.2088)) < 0.001
     assert abs(jkt["longitude"] - 106.8456) < 0.001
-    # Formula selaras panel snapshot: Jakarta telur supply 300, demand 1080
-    # → shortage 780 (angka yang tampil di panel demo).
-    assert jkt["supply_kg"] == 300.0
-    assert jkt["demand_kg"] == 1080.0
-    assert jkt["shortage_kg"] == 780.0
-    assert jkt["status"] == "shortage"
+    # Formula selaras panel snapshot, tapi angkanya TIDAK dipaku: acuan dihitung
+    # dari DB (baris terbaru supply & demand Jakarta/telur). Sejak deret aktual
+    # demo diperluas sampai 5 Nov, baris terbaru Jakarta/telur adalah baris demo
+    # (bukan kanonik 8 Okt: supply 300 / demand 1080 / shortage 780).
+    supply = _latest_quantity_kg("supply_records", "Jakarta", COMMODITY)
+    demand = _latest_quantity_kg("demand_records", "Jakarta", COMMODITY)
+    surplus = max(supply - demand, 0.0)
+    shortage = max(demand - supply, 0.0)
+    status = "surplus" if surplus > 0 else ("shortage" if shortage > 0 else "balanced")
+    assert jkt["supply_kg"] == pytest.approx(supply, abs=1e-6)
+    assert jkt["demand_kg"] == pytest.approx(demand, abs=1e-6)
+    assert jkt["surplus_kg"] == pytest.approx(surplus, abs=1e-6)
+    assert jkt["shortage_kg"] == pytest.approx(shortage, abs=1e-6)
+    assert jkt["status"] == status
 
 
 def test_balance_map_seed_test_data_visible(client):

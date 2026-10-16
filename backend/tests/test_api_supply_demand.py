@@ -38,12 +38,51 @@ def _db():
     return create_engine(DB_URL)
 
 
+def _ids_for(conn, location: str, commodity: str):
+    loc_id = conn.execute(
+        text("SELECT id FROM locations WHERE name = :n"), {"n": location}
+    ).scalar_one()
+    com_id = conn.execute(
+        text("SELECT id FROM commodities WHERE name = :n"), {"n": commodity}
+    ).scalar_one()
+    return loc_id, com_id
+
+
+def _latest_supply_row(conn, loc_id, com_id):
+    """Baris TERBARU di DB untuk pasangan ini, memakai urutan yang sama dengan
+    endpoint `/supply`: recorded_at DESC lalu presedensi source (mock_sap >
+    manual > sensor). Dipakai sebagai acuan angka supaya tes tidak memaku
+    snapshot kanonik 8 Okt — ujung deret AKTUAL demo kini 4 Nov 12:00."""
+    return conn.execute(
+        text(
+            "SELECT quantity_kg, source FROM supply_records "
+            "WHERE location_id = :loc AND commodity_id = :com "
+            "ORDER BY recorded_at DESC, "
+            "CASE source WHEN 'mock_sap' THEN 0 WHEN 'manual' THEN 1 "
+            "WHEN 'sensor' THEN 2 ELSE 99 END "
+            "LIMIT 1"
+        ),
+        {"loc": loc_id, "com": com_id},
+    ).one()
+
+
 def test_supply_happy_path_with_mock_header(client):
+    engine = _db()
+    try:
+        with engine.connect() as conn:
+            loc_id, com_id = _ids_for(conn, "Cianjur", "telur")
+            expected_qty, expected_source = _latest_supply_row(conn, loc_id, com_id)
+    finally:
+        engine.dispose()
+
     resp = client.get("/supply/Cianjur/telur")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["quantity_kg"] == 1400.0
-    assert body["source"] == "mock_sap"
+    # Fase 4: deret AKTUAL demo (s/d 4 Nov 12:00) yang kini terbaru, jadi angka
+    # dibandingkan dengan baris terbaru DB — bukan snapshot kanonik 1400. Baris
+    # demo tetap bersumber 'mock_sap', jadi asersi source & header di bawah tetap sah.
+    assert body["quantity_kg"] == float(expected_qty)
+    assert body["source"] == expected_source == "mock_sap"
     assert "recorded_at" in body
     assert resp.headers.get("X-Data-Source") == "MOCK"
 
@@ -52,13 +91,15 @@ def test_supply_latest_record_not_sum(client):
     """Terbaru = recorded_at maksimum, bukan penjumlahan snapshot lintas waktu."""
     engine = _db()
     try:
+        # Fase 4: cap waktu uji harus LEBIH BARU dari ujung deret AKTUAL demo
+        # (4 Nov 12:00) agar baris uji ini benar-benar 'terbaru' bagi endpoint.
         with engine.begin() as conn:
             conn.execute(
                 text(
                     "INSERT INTO supply_records (id, location_id, commodity_id, "
                     "quantity_kg, recorded_at, source) "
                     "SELECT gen_random_uuid(), l.id, c.id, 777, "
-                    "'2026-10-15T00:00:00+00'::timestamptz, 'manual' "
+                    "'2026-11-20T00:00:00+00'::timestamptz, 'manual' "
                     "FROM locations l, commodities c "
                     "WHERE l.name='Cianjur' AND c.name='telur'"
                 )
@@ -68,17 +109,24 @@ def test_supply_latest_record_not_sum(client):
         assert resp.json()["quantity_kg"] == 777.0
     finally:
         with engine.begin() as conn:
+            # Hapus HANYA baris uji ini (cap waktu + source khas tes), jangan sentuh seed/demo.
             conn.execute(
                 text(
                     "DELETE FROM supply_records WHERE source='manual' "
-                    "AND quantity_kg=777"
+                    "AND recorded_at='2026-11-20T00:00:00+00'::timestamptz"
                 )
             )
         engine.dispose()
 
 
 def test_supply_same_timestamp_source_precedence(client):
-    """Mock > manual > sensor pada timestamp sama — SATU record, bukan SUM."""
+    """Mock > manual > sensor pada timestamp sama — SATU record, bukan SUM.
+
+    Fase 4: baris uji disisipkan pada cap waktu SAMA yang lebih baru dari ujung
+    deret AKTUAL demo (4 Nov 12:00) — di sini 20 Nov 12:00 — sehingga ketiga
+    baris itulah yang jadi 'terbaru' dan presedensi source yang diuji benar-benar
+    menentukan pemenangnya.
+    """
     engine = _db()
     try:
         with engine.begin() as conn:
@@ -88,20 +136,25 @@ def test_supply_same_timestamp_source_precedence(client):
                     "quantity_kg, recorded_at, source) "
                     "SELECT gen_random_uuid(), l.id, c.id, x.q, x.ts, x.src "
                     "FROM locations l, commodities c, "
-                    "(VALUES (999, '2026-10-01T12:00:00+00'::timestamptz, 'manual'), "
-                    "        (888, '2026-10-01T12:00:00+00'::timestamptz, 'sensor')) "
+                    "(VALUES (1500, '2026-11-20T12:00:00+00'::timestamptz, 'mock_sap'), "
+                    "        (999, '2026-11-20T12:00:00+00'::timestamptz, 'manual'), "
+                    "        (888, '2026-11-20T12:00:00+00'::timestamptz, 'sensor')) "
                     "AS x(q, ts, src) "
                     "WHERE l.name='Cianjur' AND c.name='telur'"
                 )
             )
         resp = client.get("/supply/Cianjur/telur")
         assert resp.status_code == 200
-        assert resp.json()["quantity_kg"] == 1400.0
+        body = resp.json()
+        assert body["quantity_kg"] == 1500.0  # mock_sap menang
+        assert body["source"] == "mock_sap"
     finally:
         with engine.begin() as conn:
+            # Hapus HANYA baris uji (cap waktu unik milik tes ini), jangan sentuh seed/demo.
             conn.execute(
                 text(
-                    "DELETE FROM supply_records WHERE source IN ('manual','sensor')"
+                    "DELETE FROM supply_records "
+                    "WHERE recorded_at='2026-11-20T12:00:00+00'::timestamptz"
                 )
             )
         engine.dispose()
@@ -116,15 +169,13 @@ def test_supply_by_uuid(client):
     engine = _db()
     try:
         with engine.connect() as conn:
-            loc_id = conn.execute(
-                text("SELECT id FROM locations WHERE name='Cianjur'")
-            ).scalar_one()
-            com_id = conn.execute(
-                text("SELECT id FROM commodities WHERE name='telur'")
-            ).scalar_one()
+            loc_id, com_id = _ids_for(conn, "Cianjur", "telur")
+            # Fase 4: angka acuan = baris terbaru DB (deret AKTUAL demo s/d
+            # 4 Nov 12:00), bukan snapshot kanonik 1400.
+            expected_qty, _ = _latest_supply_row(conn, loc_id, com_id)
         resp = client.get(f"/supply/{loc_id}/{com_id}")
         assert resp.status_code == 200
-        assert resp.json()["quantity_kg"] == 1400.0
+        assert resp.json()["quantity_kg"] == float(expected_qty)
     finally:
         engine.dispose()
 

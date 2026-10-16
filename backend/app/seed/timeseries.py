@@ -53,8 +53,8 @@ from app.models import Decision, Location, MenuPlan, PriceSignal, SupplyRecord
 #: repo ini dihitung pada waktu ini.
 CANONICAL_REF = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
 
-#: Baris AKTUAL demo berhenti minimal 24 jam sebelum REF, sehingga jendela KPI
-#: (REF - 24 jam → REF) tetap murni kanonik.
+#: Baris AKTUAL demo berhenti minimal 24 jam sebelum REF deret aktual, sehingga
+#: batas atasnya jatuh tepat di `DEFAULT_END` (lihat `ACTUAL_REF`).
 ACTUAL_HORIZON_MARGIN = timedelta(days=1)
 
 #: Batas kewarasan rentang permintaan (tolak tanggal ngawur).
@@ -64,6 +64,18 @@ GENERATION_CEILING = datetime(2027, 1, 1, 0, 0, tzinfo=UTC)
 DEFAULT_INTERVAL_HOURS = 12
 DEFAULT_START = datetime(2026, 9, 1, 0, 0, tzinfo=UTC)
 DEFAULT_END = datetime(2026, 11, 5, 0, 0, tzinfo=UTC)
+
+#: REF deret AKTUAL demo. `CANONICAL_REF` tetap jangkar KASUS & snapshot seed — id
+#: baris memakai `stable_uuid` yang bergantung REF itu, jadi menggesernya akan
+#: menduplikasi baris — sehingga batas deret aktual dipisah ke sini.
+#:
+#: Dengan REF ini, `actual_cutoff` (REF − 1 hari) jatuh TEPAT di `DEFAULT_END`, jadi
+#: baris aktual mengisi penuh 1 Sep → 5 Nov. Sebelumnya batasnya `CANONICAL_REF`
+#: (8 Okt): 9 Okt → 5 Nov kosong, kalender menulis "tidak ada catatan", jendela KPI
+#: 24 jam / 7 hari kosong, dan grafik berhenti sembilan hari sebelum hari ini.
+#: Dilonggarkan 2026-10-17 atas permintaan pemilik. Yang TIDAK berubah: tidak ada
+#: baris aktual yang MELEWATI `DEFAULT_END`.
+ACTUAL_REF = DEFAULT_END + ACTUAL_HORIZON_MARGIN
 
 #: Sumber baris pasokan demo: feed SAP mock, sama dengan snapshot kanonik.
 SUPPLY_SOURCE = "mock_sap"
@@ -126,8 +138,8 @@ def validate_range(start: datetime, end: datetime) -> None:
         )
 
 
-def actual_cutoff(ref: datetime = CANONICAL_REF) -> datetime:
-    """Batas ATAS eksklusif untuk baris aktual demo (jaga jendela KPI)."""
+def actual_cutoff(ref: datetime = ACTUAL_REF) -> datetime:
+    """Batas ATAS eksklusif untuk baris aktual demo (= `DEFAULT_END` secara bawaan)."""
     return ref - ACTUAL_HORIZON_MARGIN
 
 
@@ -135,9 +147,9 @@ def actual_timestamps(
     start: datetime,
     end: datetime,
     interval_hours: int = DEFAULT_INTERVAL_HOURS,
-    ref: datetime = CANONICAL_REF,
+    ref: datetime = ACTUAL_REF,
 ) -> list[datetime]:
-    """Waktu baris AKTUAL: dari `start` melangkah, berhenti sebelum jendela KPI."""
+    """Waktu baris AKTUAL: dari `start` melangkah sampai `actual_cutoff(ref)`."""
     if interval_hours < 1:
         raise ValueError("interval_hours minimal 1")
     limit = min(end, actual_cutoff(ref))
@@ -276,7 +288,7 @@ def plan_all(
     start: datetime,
     end: datetime,
     interval_hours: int = DEFAULT_INTERVAL_HOURS,
-    ref: datetime = CANONICAL_REF,
+    ref: datetime = ACTUAL_REF,
 ) -> dict:
     """Seluruh rencana baris demo (murni) — dipakai API untuk pratinjau & tulis."""
     validate_range(start, end)
@@ -494,7 +506,7 @@ async def generate_timeseries(
     end: datetime = DEFAULT_END,
     *,
     interval_hours: int = DEFAULT_INTERVAL_HOURS,
-    ref: datetime = CANONICAL_REF,
+    ref: datetime = ACTUAL_REF,
     database_url: str | None = None,
 ) -> dict:
     """Tulis baris demo untuk rentang `[start, end]`. Idempoten.
@@ -552,7 +564,7 @@ async def preview_timeseries(
     end: datetime = DEFAULT_END,
     *,
     interval_hours: int = DEFAULT_INTERVAL_HOURS,
-    ref: datetime = CANONICAL_REF,
+    ref: datetime = ACTUAL_REF,
     database_url: str | None = None,
 ) -> dict:
     """Sama seperti `generate_timeseries`, TANPA menulis apa pun."""
@@ -615,7 +627,7 @@ async def pastikan_deret_demo(
     end: datetime = DEFAULT_END,
     interval_hours: int = DEFAULT_INTERVAL_HOURS,
 ) -> dict:
-    """Pulihkan deret demo kanonik bila hilang/sebagian (jaring keamanan).
+    """Pulihkan deret demo kanonik bila ADA baris yang hilang (jaring keamanan).
 
     Kenapa ada: `purge_demo_rows()` menghapus SELURUH baris `origin='demo'`.
     Bila pemanggilnya (mis. sebuah tes) gagal sebelum memulihkan, DB kerja
@@ -626,47 +638,78 @@ async def pastikan_deret_demo(
     Kontrak:
     - idempoten: bila deret sudah lengkap, TIDAK ada baris ditambah;
     - hanya baris `origin='demo'` yang disentuh, `origin='seed'` tetap utuh;
+    - kelengkapan diukur **agnostik-origin**: jumlah baris di dalam rentang yang
+      direncanakan (SEMUA origin) minimal sebanyak yang direncanakan generator.
+      Alasannya: sebagian stamp — mis. 8 Okt 12:00 — kuncinya sudah dipegang baris
+      kanonik `origin='seed'`, dan generator sengaja TIDAK menimpanya. Menuntut
+      "baris demo == rencana" membuat deret yang lengkap selalu tampak kurang 30
+      baris, lalu fungsi ini "memulihkan" selamanya;
     - ringkasan memuat `sebelum`, `sesudah`, `harapan`, `kurang`, `dipulihkan`
       supaya bisa diperiksa manusia — bukan "sudah beres" tanpa angka.
     """
     pratinjau = await preview_timeseries(
         start, end, interval_hours=interval_hours, database_url=database_url
     )
-    # `menu_plans` punya unique (location_id, plan_date): baris kanonik yang
-    # sudah ada di jendela itu DILEWATI generator, jadi tak pernah menjadi baris
-    # demo. Tanpa koreksi ini ekspektasinya selalu lebih tinggi dari yang mungkin
-    # dicapai (660 vs 590) dan fungsi ini akan "memulihkan" selamanya.
+    harapan = {
+        "supply_records": int(pratinjau["counts"]["supply"]["planned"]),
+        "price_signals": int(pratinjau["counts"]["prices"]["planned"]),
+        "menu_plans": int(pratinjau["counts"]["menu_plans"]["planned"]),
+    }
+
+    batas_aktual = min(end, actual_cutoff())
     engine = create_engine(database_url or _database_url())
     maker = create_session_maker(engine)
-    try:
-        async with maker() as session:
-            rencana_non_demo = int(
+
+    async def _nyata(session) -> dict[str, int]:
+        """Baris nyata di dalam rentang rencana, dihitung dari SEMUA origin."""
+        return {
+            "supply_records": int(
+                (
+                    await session.execute(
+                        select(func.count())
+                        .select_from(SupplyRecord)
+                        .where(
+                            SupplyRecord.recorded_at >= start,
+                            SupplyRecord.recorded_at < batas_aktual,
+                        )
+                    )
+                ).scalar()
+                or 0
+            ),
+            "price_signals": int(
+                (
+                    await session.execute(
+                        select(func.count())
+                        .select_from(PriceSignal)
+                        .where(
+                            PriceSignal.recorded_at >= start,
+                            PriceSignal.recorded_at < batas_aktual,
+                        )
+                    )
+                ).scalar()
+                or 0
+            ),
+            "menu_plans": int(
                 (
                     await session.execute(
                         select(func.count())
                         .select_from(MenuPlan)
                         .where(
-                            MenuPlan.origin != "demo",
                             MenuPlan.plan_date >= start.date(),
                             MenuPlan.plan_date <= end.date(),
                         )
                     )
                 ).scalar()
                 or 0
-            )
+            ),
+        }
+
+    try:
+        async with maker() as session:
+            sebelum = await _nyata(session)
     finally:
         await engine.dispose()
 
-    harapan = {
-        "supply_records": int(pratinjau["counts"]["supply"]["planned"]),
-        "price_signals": int(pratinjau["counts"]["prices"]["planned"]),
-        "menu_plans": max(
-            0, int(pratinjau["counts"]["menu_plans"]["planned"]) - rencana_non_demo
-        ),
-    }
-
-    status = await demo_data_status(database_url)
-    sebelum = {t: int(status["tables"][t]["demo"]) for t in harapan}
     kurang = {t: harapan[t] - sebelum[t] for t in harapan if sebelum[t] < harapan[t]}
 
     if not kurang:
@@ -681,11 +724,17 @@ async def pastikan_deret_demo(
     ringkasan = await generate_timeseries(
         start, end, interval_hours=interval_hours, database_url=database_url
     )
-    status2 = await demo_data_status(database_url)
+    engine2 = create_engine(database_url or _database_url())
+    maker2 = create_session_maker(engine2)
+    try:
+        async with maker2() as session:
+            sesudah = await _nyata(session)
+    finally:
+        await engine2.dispose()
     return {
         "dipulihkan": True,
         "sebelum": sebelum,
-        "sesudah": {t: int(status2["tables"][t]["demo"]) for t in harapan},
+        "sesudah": sesudah,
         "harapan": harapan,
         "kurang": kurang,
         "ringkasan": ringkasan,

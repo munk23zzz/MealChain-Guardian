@@ -281,7 +281,10 @@
       {"material_number": "1000", "plant": "JKRTA", "storage_location": "FG01", "batch": "BATCH-JAKARTA-TELUR", "quantity": 300, "unit": "KG"},
       {"material_number": "1001", "plant": "CIANJ", "storage_location": "FG01", "batch": "BATCH-CIANJUR-AYAM", "quantity": 500, "unit": "KG"},
       {"material_number": "1001", "plant": "JKRTA", "storage_location": "FG01", "batch": "BATCH-JAKARTA-AYAM", "quantity": 200, "unit": "KG"},
-      {"material_number": "1002", "plant": "CIANJ", "storage_location": "FG01", "batch": "BATCH-CIANJUR-WORTEL", "quantity": 900, "unit": "KG"}
+      {"material_number": "1002", "plant": "CIANJ", "storage_location": "FG01", "batch": "BATCH-CIANJUR-WORTEL", "quantity": 900, "unit": "KG"},
+      {"material_number": "1001", "plant": "BOGOR", "storage_location": "FG01", "batch": "BATCH-BOGOR-AYAM", "quantity": 250, "unit": "KG"},
+      {"material_number": "1002", "plant": "JKRTA", "storage_location": "FG01", "batch": "BATCH-JAKARTA-WORTEL", "quantity": 300, "unit": "KG"},
+      {"material_number": "1002", "plant": "BOGOR", "storage_location": "FG01", "batch": "BATCH-BOGOR-WORTEL", "quantity": 450, "unit": "KG"}
     ],
     "purchase_orders": [
       {

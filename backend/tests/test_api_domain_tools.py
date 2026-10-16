@@ -24,6 +24,31 @@ def _db():
     return create_engine(DB_URL)
 
 
+def _db_latest_reference_price(location: str, commodity: str):
+    """Harga acuan TERBARU untuk (lokasi, komoditas) — dibaca langsung dari DB.
+
+    Acuan diambil dari DB, bukan dipaku ke angka kanonik seed: deret aktual
+    (pasokan & harga) diperluas sampai 5 Nov lewat ACTUAL_REF, terpisah dari
+    CANONICAL_REF 8 Okt yang tetap jangkar kasus. Konsekuensinya 'record
+    terbaru' bukan lagi baris 8 Okt, jadi tes yang memaku 26500.0 pecah.
+    Query kecil ini meniru kontrak endpoint (source pihps_reference,
+    ORDER BY recorded_at DESC LIMIT 1) sehingga tes tetap sahih saat deret
+    diperluas lagi.
+    """
+    with _db().connect() as conn:
+        return conn.execute(
+            text(
+                "SELECT ps.price_per_kg FROM price_signals ps "
+                "JOIN locations l ON l.id = ps.location_id "
+                "JOIN commodities c ON c.id = ps.commodity_id "
+                "WHERE l.name = :loc AND c.name = :com "
+                "AND ps.source = 'pihps_reference' "
+                "ORDER BY ps.recorded_at DESC LIMIT 1"
+            ),
+            {"loc": location, "com": commodity},
+        ).scalar_one()
+
+
 def _batch_id_by_quantity(quantity: float) -> str:
     with _db().connect() as conn:
         return str(
@@ -167,10 +192,14 @@ def test_safety_missing_batch_404(client):
 
 def test_price_latest_reference(client, monitor_headers):
     # Cianjur = lokasi lain; dibaca sebagai bgn_monitor (Ruling 2026-10-14).
+    # Maksud tes: endpoint mengembalikan baris referensi TERBARU. Acuan
+    # diturunkan dari DB (baris terbaru) supaya tidak pecah saat deret aktual
+    # diperluas sampai 5 Nov — sumber baris demo tetap 'pihps_reference'.
+    expected_price = _db_latest_reference_price("Cianjur", "telur")
     resp = client.get("/price/Cianjur/telur", headers=monitor_headers)
     assert resp.status_code == 200
     body = resp.json()
-    assert body["price_per_kg"] == 26500.0
+    assert body["price_per_kg"] == float(expected_price)
     assert body["source"] == "pihps_reference"
 
 
@@ -179,13 +208,17 @@ def test_price_unknown_404(client):
 
 
 def test_price_deviation_supplier_c_flagged(client):
+    # reference_price = baris harga terbaru di DB (bukan 26500.0 kanonik 8 Okt).
+    expected_reference = _db_latest_reference_price("Cianjur", "telur")
     resp = client.post(
         "/price/deviation",
         json={"location": "Cianjur", "commodity": "telur", "supplier_price": 32000},
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["reference_price"] == 26500.0
+    assert body["reference_price"] == float(expected_reference)
+    # supplier 32000 vs acuan terbaru ≈ 26951.37 → deviasi ≈ +18.7% (≥ 15%)
+    # sehingga tetap anomalous/flagged.
     assert body["classification"] == "anomalous"
     assert body["flagged"] is True
 

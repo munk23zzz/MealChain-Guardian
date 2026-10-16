@@ -82,15 +82,35 @@ def test_acceptance_3b_delivery_window_constraint():
 
 
 def test_acceptance_4_seed_dataset_10x3_and_locked_values(national_client):
-    """Seed 10×3 dan angka Cianjur/Jakarta tepat."""
+    """Seed 10×3 dan angka kanonik Cianjur/Jakarta/Bogor tetap terkunci."""
     with create_engine(DB_URL).connect() as conn:
         n_loc = conn.execute(text("SELECT COUNT(*) FROM locations")).scalar()
         n_com = conn.execute(text("SELECT COUNT(*) FROM commodities")).scalar()
         assert n_loc == 10
         assert n_com == 3
-    assert national_client.get("/supply/Cianjur/telur").json()["quantity_kg"] == 1400.0
-    assert national_client.get("/supply/Jakarta/telur").json()["quantity_kg"] == 300.0
-    assert national_client.get("/supply/Bogor/telur").json()["quantity_kg"] == 800.0
+        # Nilai kanonik DIKUNCI pada baris seed (`origin='seed'`) dan dibaca
+        # langsung dari DB — bukan lewat endpoint: `/supply/*` mengembalikan
+        # baris TERBARU, dan sejak deret aktual demo diperluas sampai 5 Nov
+        # (`ACTUAL_REF` di app/seed/timeseries.py) baris terbaru tiap lokasi
+        # adalah baris demo 4 Nov, bukan snapshot kanonik 8 Okt.
+        locked = {
+            name: float(qty)
+            for name, qty in conn.execute(
+                text(
+                    "SELECT l.name, s.quantity_kg FROM supply_records s"
+                    " JOIN locations l ON l.id = s.location_id"
+                    " JOIN commodities c ON c.id = s.commodity_id"
+                    " WHERE c.name = 'telur' AND s.origin = 'seed'"
+                )
+            )
+        }
+    # Satu baris kanonik per lokasi (tanpa duplikat yang tertelan dict):
+    assert len(locked) == 10
+    assert locked["Cianjur"] == 1400.0
+    assert locked["Jakarta"] == 300.0
+    assert locked["Bogor"] == 800.0
+    # Endpoint tetap hidup — ia menyajikan baris terbaru, bukan angka kanonik:
+    assert national_client.get("/supply/Cianjur/telur").status_code == 200
 
 
 def test_acceptance_5_all_sprint1_endpoints_live(client, monitor_headers):
