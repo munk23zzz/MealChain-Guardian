@@ -67,9 +67,14 @@
   saat jalur pertama tiba (pin Cianjur dulu di luar bingkai peta Jakarta). Kelas DOM **`ship-route`**
   (`route-line` sudah milik signature login). Bukti: `docs/verification/fase-10.md`, skrip
   `backend/scripts/verifikasi_rute_jalan.py` (API vs SQL, jarak jalan >= lurus) exit 0. Gerbang:
-  pytest **851 lulus / 3 skip** (naik dari 806), ruff bersih, vitest **578 lulus/61 berkas** (naik dari 552/60), tsc 0, lint 0
-  (`next build` tidak dijalankan — `next dev` hidup). **Belum**: kolom jalur di tabel Pemasok
-  (lingkup baru, belum diminta) dan push commit F10.
+  pytest **851 lulus / 3 skip** (naik dari 806), ruff bersih, vitest **588 lulus/61 berkas** (naik dari 552/60: +26 peta, +10 kolom tabel), tsc 0, lint 0
+  (`next build` tidak dijalankan — `next dev` hidup). **Kolom "Jalur kirim" di tabel Pemasok**
+  menyusul hari yang sama (permintaan pemilik "yaudah deh tambahin saja"): baris utama = jalur
+  TERPENDEK yang geometrinya sudah ada, tanpa lencana warna (lencana milik kolom Status), jarak
+  lurus TIDAK diulang, dan empat keadaan dibedakan (`—` / `…` / `belum disinkronkan` / `jalur
+  tidak tersedia`); ringkasan "Jalur kiriman (jalan) N dari M". Bukti layar BGN Monitor: A Cianjur
+  `→ Cianjur · 3,2 km jalan · +3 tujuan`, B Cianjur `→ Surabaya · 730,8 km jalan`, 33 baris `—`,
+  ringkasan `5 dari 5`. Vitest **588**. Rincian: `docs/verification/fase-10.md` §8.
 - Sprint 4 IN PROGRESS — Roy yang menandai DONE, jangan ditandai agent.
 
 ## Next step (urutan eksekusi)

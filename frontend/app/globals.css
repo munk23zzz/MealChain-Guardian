@@ -2116,6 +2116,18 @@ a:focus-visible {
   color: var(--ok-ink);
   font-size: var(--text-meta);
 }
+/* Kolom "Jalur kirim" (tabel Pemasok): teks jalur JALAN apa adanya — sengaja
+   TANPA lencana warna supaya tidak terbaca sebagai status keamanan kiriman
+   (itu tugas kolom Status). */
+.route-cell {
+  min-width: 15ch;
+  white-space: nowrap;
+}
+.route-tag {
+  font-size: var(--text-meta);
+  color: var(--ink-subtle);
+  font-variant-numeric: tabular-nums;
+}
 .reach-filter {
   display: flex;
   flex-wrap: wrap;

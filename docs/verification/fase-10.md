@@ -54,7 +54,8 @@ offset harvest −36 jam (7 Okt 00:00) + 35 hari × 0,90 = 31,5 hari → **7 Nov
 | `frontend/lib/hooks/useSupplierRoutes.ts` (BARU) + `lib/api.ts` + `lib/query.ts` | Query React Query + `fetchSupplierRoutes` + kunci query |
 | `frontend/lib/hooks/...`/`next.config.js` | Rewrite proxy `/supplier-routes` (kontrak tes repo sendiri yang menuntut ini) |
 | `frontend/components/SupplyMap.tsx` | Source/layer MapLibre (garis putus-putus), warna per mutu kiriman, popup klik, sakelar "Tampilkan/Sembunyikan jalur kiriman (N)" (aktif bawaan), legenda, dan pembukaan tampilan SEKALI saat jalur pertama tiba |
-| `frontend/app/page.tsx` | Query jalur untuk peta (ikut komoditas yang dilihat) + prop `supplierRoutes` |
+| `frontend/app/page.tsx` | Query jalur untuk peta (ikut komoditas yang dilihat) + query jalur penuh untuk tabel Pemasok + prop `supplierRoutes` pada peta dan tabel |
+| `frontend/components/SupplierBoard.tsx` | Kolom **"Jalur kirim"** + baris ringkasan "Jalur kiriman (jalan) N dari M" (lihat §8) |
 | `frontend/app/globals.css` | `.map-layer-controls` (wadah kontrol agar tidak menumpuk), contoh garis legenda/popup, gaya baris popup |
 
 Catatan penamaan: kelas DOM memakai prefiks **`ship-route`**, bukan `route-line`
@@ -114,7 +115,7 @@ titik + jarak), **jarak jalan tidak pernah lebih pendek dari jarak lurus**
 |---|---|
 | `pytest` (kontainer backend) | **851 lulus / 3 skip** (sebelum Fase 10: 806 lulus / 3 skip → **+45**: 22 murni OSRM + 9 sinkronisasi + 14 endpoint) |
 | `ruff check` | bersih |
-| `vitest run` | **578 lulus / 61 berkas** (sebelumnya 552/60; +26) |
+| `vitest run` | **588 lulus / 61 berkas** (sebelumnya 552/60 → F10 peta +26, kolom tabel +10) |
 | `tsc --noEmit` | 0 |
 | `next lint` | 0 (tanpa peringatan) |
 | `next build` | TIDAK dijalankan (aturan repo: jangan build saat `next dev` hidup) |
@@ -153,6 +154,59 @@ dilonggarkan) — semuanya diberi komentar alasannya di berkas tes:
    keterangan silang.
 5. **Batas peta berubah hanya SEKALI** saat jalur pertama tiba. Setelah itu zoom
    dan geser pengguna tidak pernah disentuh lagi (aturan lama tetap berlaku).
-6. **Tabel Pemasok belum punya kolom jalur.** Data `GET /supplier-routes` sudah
-   bisa dipakai untuk itu, tapi menambah kolom tabel adalah lingkup baru yang
-   belum diminta pemilik.
+6. **Kolom tabel Pemasok menyebut jalurnya, bukan jarak lurus.** Lihat §8 —
+   angka lurus SENGAJA tidak diulang di kolom itu supaya tidak terbaca sebagai
+   hitungan ganda dengan kolom Jarak yang sudah ada.
+
+## 8. Kolom "Jalur kirim" di tabel Pemasok (lanjutan, hari yang sama)
+
+Pemilik: *"yaudah deh tambahin saja"* — melanjutkan butir 6 di §7. Tabel Pemasok
+kini punya kolom terakhir **Jalur kirim**, diisi dari `GET /supplier-routes` yang
+sama (query penuh, TIDAK disaring komoditas: tabel menampilkan semua pemasok, dan
+kalau jalurnya disaring komoditas, baris pemasok lain akan terbaca "tidak punya
+jalur" padahal jalurnya hanya tidak diminta).
+
+Aturan tampilan yang dikunci tes murni (`supplierRouteSummaries`, `routeCellLabel`,
+`routeCellTitle` di `frontend/lib/supplier-routes.ts`):
+
+| Keadaan | Sel | Judul (`title`) |
+|---|---|---|
+| Pemasok tanpa kiriman aktif | `—` | tidak ada |
+| Ada jalur, geometri sudah ada (1 tujuan) | `→ Jakarta · 110,4 km jalan` | `Jakarta 110,4 km (jarak jalan dari OSRM)` |
+| Ada beberapa tujuan | `→ Cianjur · 3,2 km jalan · +3 tujuan` | semua tujuan terurut jarak: `Cianjur 3,2 km · Bogor 62,8 km · Bandung 67,9 km · Jakarta 110,4 km (jarak jalan dari OSRM)` |
+| Jalur ada, `belum_disinkron` | `belum disinkronkan` | `… — rute jalan belum disinkronkan dari OSRM` (tanpa sufiks sumber, karena belum ada jalurnya) |
+| Jalur gagal karena alasan LAIN (mis. layanan rute mati) | `jalur tidak tersedia` | kalimat alasan dari server, tidak disamarkan jadi "belum disinkronkan" |
+| Data jalur belum dimuat | `…` | — (beda dari `—`: "belum dimuat" ≠ "tidak punya jalur") |
+
+Keputusan kecil yang diambil sengaja:
+
+- **Baris utama = jalur TERPENDEK yang geometrinya sudah ada**, bukan yang pertama
+  datang dari server — supaya "→ Cianjur · 3,2 km jalan" (kiriman terdekat) yang
+  terbaca, dan tujuan lain cukup dihitung (`+3 tujuan`) lalu dirinci di `title`.
+- **Jarak lurus tidak diulang di kolom ini.** Kolom Jarak sudah memuatnya; menulis
+  keduanya di satu baris membuat angkanya terbaca seperti hitungan ganda. Angka
+  lurus tetap muncul di popup peta, di sebelah jarak jalan, karena di sana justru
+  perbandingannya yang penting.
+- **Tanpa lencana warna.** Kolom Status sudah memakai lencana untuk keamanan
+  kiriman; kolom ini cukup teks abu-abu dengan angka tabular supaya tidak
+  bersaing.
+- Baris ringkasan menambah **"Jalur kiriman (jalan) N dari M"** sehingga pembaca
+  tahu apakah kolom itu lengkap atau ada yang belum tersinkron.
+
+Bukti layar (akun demo "BGN Monitor", tab Pemasok, 2026-10-16):
+
+```text
+header kolom ke-9          : "Jalur kirim"  (35 baris data)
+Supplier A Cianjur         : "Sedang mengirim · 4 kiriman · 2.200 kg · s/d 7 Nov 2026"
+                             → "→ Cianjur · 3,2 km jalan · +3 tujuan"
+                             title: "Cianjur 3,2 km · Bogor 62,8 km · Bandung 67,9 km · Jakarta 110,4 km (jarak jalan dari OSRM)"
+Supplier B Cianjur         : → "→ Surabaya · 730,8 km jalan"
+                             title: "Surabaya 730,8 km (jarak jalan dari OSRM)"
+33 baris lain              : "—"  (tidak punya kiriman aktif)
+ringkasan                  : "Jalur kiriman (jalan) 5 dari 5"
+```
+
+Tes baru: 7 tes murni (`tests/supplier-routes.test.ts`, kini 29 lulus) + 3 tes
+kontrak markup (`tests/supplier-board.test.tsx`, kini 15 lulus). Yang dikunci
+antara lain: pengelompokan per PEMASOK (bukan per batch), jalur tanpa geometri
+tidak dianggap 0 km, dan jarak lurus tidak bocor ke kolom ini.

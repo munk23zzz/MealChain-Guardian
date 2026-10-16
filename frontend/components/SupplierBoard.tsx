@@ -34,6 +34,12 @@ import {
   supplierDistanceReference,
   withinReachKm,
 } from "../lib/supplier-pins";
+import {
+  routeCellLabel,
+  routeCellTitle,
+  routeLayerSummary,
+  supplierRouteSummaries,
+} from "../lib/supplier-routes";
 
 /** Jarak baris ada di dalam ambang jangkauan (jarak tak diketahui = tidak diklaim dekat). */
 function jarakDalamJangkauan(
@@ -58,6 +64,7 @@ export default function SupplierBoard({
   onOpenDecision,
   onExclusionCreated,
   reachKm = null,
+  supplierRoutes = null,
 }: {
   /** Payload `GET /suppliers` (amplop atau array). `null` = belum dimuat. */
   suppliers: unknown;
@@ -73,6 +80,11 @@ export default function SupplierBoard({
   onExclusionCreated?: () => void;
   /** Ambang jangkauan (km) untuk penyaring tabel; `null` = tanpa ambang (nasional). */
   reachKm?: number | null;
+  /**
+   * Payload `GET /supplier-routes` untuk kolom "Jalur kirim". `null` = belum
+   * dimuat (ditulis "…"), BUKAN "tidak punya jalur" — dua keadaan itu berbeda.
+   */
+  supplierRoutes?: unknown;
 }) {
   const directoryDimuat = suppliers !== null && suppliers !== undefined;
   const rows = supplierDirectory(suppliers);
@@ -91,6 +103,11 @@ export default function SupplierBoard({
       : exclusions
   );
   const lowThreshold = `${Math.round(LOW_RELIABILITY * 100)}%`;
+  // Kolom "Jalur kirim": ringkasan per PEMASOK dari data jalur server. Baris
+  // pemasok tanpa kiriman aktif tidak punya jalur — selnya "—", bukan "0 km".
+  const jalurDimuat = supplierRoutes !== null && supplierRoutes !== undefined;
+  const jalurPerPemasok = supplierRouteSummaries(supplierRoutes);
+  const jalurRingkas = routeLayerSummary(supplierRoutes);
 
   return (
     <section className="board-page" aria-busy={loading || undefined}>
@@ -159,6 +176,18 @@ export default function SupplierBoard({
                       tone: metrics.outOfReach ? ("warn" as const) : ("plain" as const),
                     },
                   ]),
+              ...(jalurDimuat
+                ? [
+                    {
+                      label: "Jalur kiriman (jalan)",
+                      value: `${jalurRingkas.withRoad} dari ${jalurRingkas.routes}`,
+                      tone:
+                        jalurRingkas.routes && jalurRingkas.withRoad < jalurRingkas.routes
+                          ? ("warn" as const)
+                          : ("plain" as const),
+                    },
+                  ]
+                : []),
               {
                 label: "Pemasok dieksklusi",
                 value: String(register.length),
@@ -221,10 +250,13 @@ export default function SupplierBoard({
                       Jarak
                     </th>
                     <th scope="col">Status</th>
+                    <th scope="col">Jalur kirim</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {shownRows.map((row) => (
+                  {shownRows.map((row) => {
+                    const jalur = jalurPerPemasok.get(row.id) ?? null;
+                    return (
                     <tr key={row.id}>
                       <td>{row.name}</td>
                       <td>{row.hub}</td>
@@ -247,8 +279,21 @@ export default function SupplierBoard({
                           <span className="reach-tag">{directoryReachLabel(row, reachKm)}</span>
                         ) : null}
                       </td>
+                      <td className="route-cell">
+                        {/* Jalur = rute JALAN kiriman pemasok ini (server). Sebelum
+                            data jalur dimuat selnya "…", bukan "—": "belum dimuat"
+                            dan "tidak punya jalur" adalah dua hal berbeda. */}
+                        {jalurDimuat ? (
+                          <span className="route-tag" title={routeCellTitle(jalur) ?? undefined}>
+                            {routeCellLabel(jalur)}
+                          </span>
+                        ) : (
+                          "…"
+                        )}
+                      </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

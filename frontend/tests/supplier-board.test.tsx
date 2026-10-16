@@ -180,3 +180,61 @@ describe("SupplierBoard", () => {
     expect(html).not.toContain("Dari mana angka ini");
   });
 });
+
+const JALUR = {
+  routes: [
+    {
+      batch_id: "b-1",
+      supplier_id: "s3",
+      supplier_name: "Supplier A Cianjur",
+      origin: { latitude: -6.854, longitude: 107.1306, name: "Supplier A Cianjur" },
+      destination_id: "l-1",
+      destination_name: "Jakarta",
+      destination: { latitude: -6.2088, longitude: 106.8456, name: "Jakarta" },
+      commodity: "telur",
+      quantity_kg: 800,
+      usable_until: "2026-11-07T12:00:00+00:00",
+      safety_status: "pass",
+      straight_km: 78.35,
+      road: {
+        distance_km: 110.4,
+        duration_min: 84.3,
+        ratio_vs_straight: 1.41,
+        geometry: {
+          type: "LineString",
+          coordinates: [
+            [107.1306, -6.854],
+            [106.8456, -6.2088],
+          ],
+        },
+        source: "osrm",
+        fetched_at: "2026-10-16T00:00:00+00:00",
+      },
+      road_missing_reason: null,
+    },
+  ],
+};
+
+describe("SupplierBoard — kolom \"Jalur kirim\" (lanjutan Fase 10)", () => {
+  it("header kolom ada; jalur belum dimuat ditulis \u2026, bukan klaim 'tidak punya jalur'", () => {
+    const html = render();
+    expect(html).toContain("Jalur kirim");
+    expect(html).toContain("\u2026");
+    // Ringkasan jalur hanya muncul kalau datanya memang dimuat.
+    expect(html).not.toContain("Jalur kiriman (jalan)");
+  });
+
+  it("pemasok yang mengirim ditulis tujuan + jarak JALAN, baris lain '\u2014'", () => {
+    const html = render({ supplierRoutes: JALUR });
+    expect(html).toContain("\u2192 Jakarta \u00b7 110,4 km jalan");
+    expect(html).toContain('title="Jakarta 110,4 km (jarak jalan dari OSRM)"');
+    expect(html).toContain("\u2014");
+    expect(html).toContain("Jalur kiriman (jalan)");
+    expect(html).toContain("1 dari 1");
+  });
+
+  it("jarak LURUS tidak diduplikasi di kolom jalur (itu urusan kolom Jarak)", () => {
+    const html = render({ supplierRoutes: JALUR });
+    expect(html).not.toContain("78,35 km jalan");
+  });
+});

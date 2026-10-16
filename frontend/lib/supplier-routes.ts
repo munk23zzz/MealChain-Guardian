@@ -340,3 +340,95 @@ export function routeLegendEntries(): { tone: RouteLineTone; label: string }[] {
     { tone: "fail", label: "Jalur kiriman gagal uji" },
   ];
 }
+
+
+// --- Kolom "Jalur kirim" di tabel Pemasok (lanjutan Fase 10) ----------------
+//
+// Tabel Pemasok sudah punya kolom Jarak (jarak SPPG → pemasok, garis lurus) dan
+// kolom Status (kiriman berjalan). Kolom ini menjawab pertanyaan ketiga yang
+// muncul saat demo: "pemasok ini mengirim lewat JALUR mana, dan seberapa jauh
+// jalannya?". Angkanya tetap dari server (`GET /supplier-routes`), bukan hitungan
+// tabel; yang dihitung di sini hanya cara meringkasnya per pemasok.
+
+export type SupplierRouteSummary = {
+  /** Berapa jalur (kiriman aktif) pemasok ini. */
+  count: number;
+  /** Berapa di antaranya geometri jalannya sudah ada. */
+  withRoad: number;
+  /** Jalur terpendek yang punya geometri (fallback: baris pertama). */
+  primary: SupplierRoute;
+  /** Semua jalur, terpendek dulu; yang belum punya geometri di belakang. */
+  ordered: SupplierRoute[];
+};
+
+/** Jalur tanpa geometri ditaruh paling belakang, bukan dianggap jarak 0. */
+function urutanJarak(row: SupplierRoute): number {
+  return row.road ? row.road.distanceKm : Number.POSITIVE_INFINITY;
+}
+
+/**
+ * Kelompokkan jalur per PEMASOK (bukan per batch): satu pemasok bisa mengirim ke
+ * beberapa tujuan sekaligus, dan tabel Pemasok hanya punya satu baris untuknya.
+ */
+export function supplierRouteSummaries(raw: unknown): Map<string, SupplierRouteSummary> {
+  const peta = new Map<string, SupplierRouteSummary>();
+  for (const row of supplierRoutes(raw)) {
+    const ada = peta.get(row.supplierId);
+    if (ada) {
+      ada.count += 1;
+      ada.withRoad += row.road ? 1 : 0;
+      ada.ordered.push(row);
+    } else {
+      peta.set(row.supplierId, {
+        count: 1,
+        withRoad: row.road ? 1 : 0,
+        primary: row,
+        ordered: [row],
+      });
+    }
+  }
+  // `forEach` (bukan `for...of peta.values()`): target TS repo ini ES5, dan
+  // iterasi Map langsung butuh `downlevelIteration`.
+  peta.forEach((ringkas) => {
+    ringkas.ordered.sort(
+      (a: SupplierRoute, b: SupplierRoute) => urutanJarak(a) - urutanJarak(b)
+    );
+    ringkas.primary = ringkas.ordered[0];
+  });
+  return peta;
+}
+
+function alasanJalur(row: SupplierRoute): string {
+  const label = row.missingReason ? MISSING_REASON_LABEL[row.missingReason] : undefined;
+  return label ?? "jalur belum tersedia";
+}
+
+/**
+ * Kalimat sel tabel. `null` = pemasok tanpa kiriman aktif (bukan berarti 0 km).
+ * Jarak lurus TIDAK ditulis di sini — itu sudah ada di kolom Jarak, dan
+ * mencampur keduanya membuat kolom ini terbaca seperti hitungan ganda.
+ */
+export function routeCellLabel(ringkas: SupplierRouteSummary | null | undefined): string {
+  if (!ringkas || ringkas.count === 0) return "—";
+  const utama = ringkas.primary;
+  if (!utama.road) {
+    // Penyebabnya dibedakan: "belum disinkronkan" hanya benar untuk alasan itu.
+    return utama.missingReason === "belum_disinkron" ? "belum disinkronkan" : "jalur tidak tersedia";
+  }
+  const dasar = `→ ${utama.destinationName} · ${roadKmLabel(utama.road.distanceKm)} jalan`;
+  const lain = ringkas.count - 1;
+  return lain > 0 ? `${dasar} · +${lain} tujuan` : dasar;
+}
+
+/** Daftar lengkap tujuan jalur pemasok ini (untuk atribut `title` sel). */
+export function routeCellTitle(ringkas: SupplierRouteSummary | null | undefined): string | null {
+  if (!ringkas || ringkas.count === 0) return null;
+  const bagian = ringkas.ordered.map((row) =>
+    row.road
+      ? `${row.destinationName} ${roadKmLabel(row.road.distanceKm)}`
+      : `${row.destinationName} — ${alasanJalur(row)}`
+  );
+  // Sufiks "jarak jalan dari OSRM" hanya masuk akal kalau memang ada jalurnya.
+  const sumber = ringkas.withRoad > 0 ? " (jarak jalan dari OSRM)" : "";
+  return `${bagian.join(" · ")}${sumber}`;
+}

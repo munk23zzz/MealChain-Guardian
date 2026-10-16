@@ -141,6 +141,13 @@ Detail muncul dengan evidence → Approve → status di peta berubah
 - **Popup klik pada garis** menampilkan pemasok → tujuan, komoditas & berat, jarak jalan vs
   jarak lurus + rasio (`1,41×`), masa layak, dan status keamanan kiriman — semua dari data API,
   bukan dihitung ulang di peramban.
+- **Kolom "Jalur kirim" di tabel Pemasok** menjawab "pemasok ini mengirim lewat jalur mana?"
+  tanpa membuka peta: `→ Cianjur · 3,2 km jalan · +3 tujuan`, dengan daftar lengkap tujuan di
+  atribut `title`. Tiga aturan yang dikunci tes: baris utama = jalur **terpendek** yang
+  geometrinya sudah ada; **tanpa lencana warna** (lencana sudah milik kolom Status — dua makna
+  tidak boleh tampil dengan bahasa visual yang sama); dan **jarak lurus tidak diulang** di sini
+  (kolom Jarak sudah memuatnya). Empat keadaan dibedakan tegas: `—` (tidak punya kiriman
+  aktif), `…` (data jalur belum dimuat), `belum disinkronkan`, dan `jalur tidak tersedia`.
 - **Ambang jangkauan (relevansi, bukan scope).** Peta Overview meminta
   `GET /suppliers?commodity=…&max_distance_km=150` bila perannya SPPG
   (`supplierReachKmForRole`; `bgn_monitor` tanpa ambang = nasional). Rujukan jarak datang dari

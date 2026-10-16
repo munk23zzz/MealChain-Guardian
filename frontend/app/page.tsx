@@ -254,6 +254,10 @@ export default function Home() {
     tab,
     mapData?.commodity ?? null
   );
+  // Tabel Pemasok menampilkan SEMUA pemasok (tidak disaring komoditas), jadi
+  // jalurnya juga daftar penuh — kalau disaring komoditas, baris pemasok lain
+  // akan terbaca "tidak punya jalur" padahal jalurnya hanya tidak diminta.
+  const supplierRoutesQuery = useSupplierRoutes(token, identityScope, tab);
   // Feed (14 Okt 2026): cakupan + pencarian + urutan. Cakupan "action" =
   // keputusan yang benar-benar menunggu tindakan manusia — definisi yang sama
   // dengan lonceng top bar dan angka di sidebar. EXPIRED tetap bisa dilihat
@@ -1167,6 +1171,7 @@ export default function Home() {
               setTab("evidence");
             }}
             onExclusionCreated={() => void decisionsQuery.refetch()}
+            supplierRoutes={supplierRoutesQuery.data}
           />
         )}
 

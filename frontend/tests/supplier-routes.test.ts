@@ -21,8 +21,11 @@ import {
   routeLegendEntries,
   routeLineClass,
   routeLineTone,
+  routeCellLabel,
+  routeCellTitle,
   routePopupLines,
   routeToggleLabel,
+  supplierRouteSummaries,
   supplierRoutes,
 } from "../lib/supplier-routes";
 
@@ -246,5 +249,80 @@ describe("ringkasan layer", () => {
     const [row] = supplierRoutes({ routes: [kiriman()] });
     expect(routeToggleLabel([row], false)).toBe("Tampilkan jalur kiriman (1)");
     expect(routeToggleLabel([row], true)).toBe("Sembunyikan jalur kiriman (1)");
+  });
+});
+
+describe("Ringkasan jalur per pemasok (kolom 'Jalur kirim' di tabel Pemasok)", () => {
+  const bogor = kiriman({
+    batch_id: "b-2",
+    destination_id: "l-2",
+    destination_name: "Bogor",
+    road: {
+      distance_km: 62.8,
+      duration_min: 49.3,
+      ratio_vs_straight: 1.19,
+      geometry: { type: "LineString", coordinates: GEOMETRI },
+      source: "osrm",
+      fetched_at: "2026-10-16T00:00:00+00:00",
+    },
+  });
+
+  it("mengelompokkan jalur per pemasok (bukan per batch)", () => {
+    const peta = supplierRouteSummaries({ routes: [kiriman(), bogor, kiriman({ batch_id: "b-3", supplier_id: "s-2" })] });
+    expect(Array.from(peta.keys()).sort()).toEqual(["s-1", "s-2"]);
+    expect(peta.get("s-1")?.count).toBe(2);
+    expect(peta.get("s-2")?.count).toBe(1);
+  });
+
+  it("baris utama = jalur TERPENDEK yang geometrinya sudah ada; yang belum sinkron ditaruh belakang", () => {
+    const belumSinkron = kiriman({ batch_id: "b-4", destination_name: "Semarang", road: null, road_missing_reason: "belum_disinkron" });
+    const peta = supplierRouteSummaries({ routes: [kiriman(), belumSinkron, bogor] });
+    const ringkas = peta.get("s-1");
+    expect(ringkas?.withRoad).toBe(2);
+    expect(ringkas?.primary.destinationName).toBe("Bogor");
+    expect(ringkas?.ordered.map((row) => row.destinationName)).toEqual(["Bogor", "Jakarta", "Semarang"]);
+  });
+
+  it("pemasok tanpa kiriman aktif ditulis '—' tanpa judul", () => {
+    expect(routeCellLabel(null)).toBe("—");
+    expect(routeCellTitle(null)).toBeNull();
+  });
+
+  it("jalur yang belum disinkron dilaporkan 'belum disinkronkan', bukan 0 km", () => {
+    const peta = supplierRouteSummaries({
+      routes: [
+        kiriman({ road: null, road_missing_reason: "belum_disinkron" }),
+        kiriman({ batch_id: "b-5", destination_name: "Bogor", road: null, road_missing_reason: "belum_disinkron" }),
+      ],
+    });
+    const ringkas = peta.get("s-1") ?? null;
+    expect(routeCellLabel(ringkas)).toBe("belum disinkronkan");
+    // Urutan baris tanpa geometri = urutan server (keduanya tak berjarak), dan
+    // sufiks sumber tidak muncul karena memang belum ada jalur untuk ditulis.
+    expect(routeCellTitle(ringkas)).toBe(
+      "Jakarta — rute jalan belum disinkronkan dari OSRM · Bogor — rute jalan belum disinkronkan dari OSRM"
+    );
+  });
+
+  it("alasan gagal yang BUKAN 'belum disinkron' tidak disamarkan jadi 'belum disinkronkan'", () => {
+    const peta = supplierRouteSummaries({
+      routes: [kiriman({ road: null, road_missing_reason: "layanan_rute_tidak_terjangkau" })],
+    });
+    const ringkas = peta.get("s-1") ?? null;
+    expect(routeCellLabel(ringkas)).toBe("jalur tidak tersedia");
+    expect(routeCellTitle(ringkas)).toBe("Jakarta — layanan rute OSRM tidak terjangkau saat sinkronisasi");
+  });
+
+  it("satu jalur: tujuan + jarak JALAN (angka lurus tetap urusan kolom Jarak)", () => {
+    const peta = supplierRouteSummaries({ routes: [kiriman()] });
+    expect(routeCellLabel(peta.get("s-1") ?? null)).toBe("→ Jakarta · 110,4 km jalan");
+    expect(routeCellTitle(peta.get("s-1") ?? null)).toBe("Jakarta 110,4 km (jarak jalan dari OSRM)");
+  });
+
+  it("beberapa jalur: baris utama + jumlah tujuan lain, judul memuat semua tujuan terurut", () => {
+    const peta = supplierRouteSummaries({ routes: [kiriman(), bogor] });
+    const ringkas = peta.get("s-1") ?? null;
+    expect(routeCellLabel(ringkas)).toBe("→ Bogor · 62,8 km jalan · +1 tujuan");
+    expect(routeCellTitle(ringkas)).toBe("Bogor 62,8 km · Jakarta 110,4 km (jarak jalan dari OSRM)");
   });
 });
