@@ -169,6 +169,26 @@ export function shippingTagLabel(shipping: SupplierShipping | null): string {
 }
 
 /**
+ * Baris kedua sel "Kiriman" (Fase 12c lanjutan, 16 Okt 2026).
+ *
+ * Fase 12c memindahkan seluruh kalimat kiriman ke `title` supaya pilnya utuh satu baris,
+ * tetapi berat + batas layak pakai adalah fakta yang dipakai orang untuk memutuskan —
+ * jadi keduanya dikembalikan TERLIHAT. Isinya sengaja hanya dua fakta itu (bukan kalimat
+ * penuh): kalimat panjang itulah yang dulu membuat pil membungkus 3 baris di kolom sempit.
+ *
+ * Berat nol tidak ditulis "0 kg" (bukan informasi), dan tanpa kiriman hasilnya "—" —
+ * bukan angka yang dikarang.
+ */
+export function shippingMetaLine(shipping: SupplierShipping | null): string {
+  if (!shipping || shipping.count <= 0) return "—";
+  const parts = [
+    shipping.totalKg > 0 ? formatKg(shipping.totalKg) : null,
+    shipping.until ? `s/d ${formatDate(shipping.until)}` : null,
+  ].filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? parts.join(" · ") : "—";
+}
+
+/**
  * Normalisasi payload `GET /suppliers` (amplop `{items}` atau array langsung)
  * menjadi baris pin. Baris tanpa nama atau tanpa koordinat dibuang.
  */

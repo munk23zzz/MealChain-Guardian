@@ -320,6 +320,19 @@ describe("SupplierBoard — kerapian tabel & bentuk pil (Fase 12c)", () => {
     expect(html).not.toContain("shipping-tag-fail");
   });
 
+  it("berat + batas layak kiriman TERLIHAT di sel, bukan hanya lewat title", () => {
+    const html = render({ suppliers: SHIP });
+
+    // Bukti keterlihatan: atribut title dibuang lebih dulu, jadi yang tersisa hanya
+    // teks yang benar-benar dirender di halaman.
+    const tanpaTitle = html.replace(/title="[^"]*"/g, "");
+    expect(tanpaTitle).toContain("1.400 kg · s/d 2 Nov 2026");
+    expect(tanpaTitle).toContain("600 kg · s/d 26 Okt 2026");
+    expect(html).toContain("shipping-meta");
+    // Kalimat panjangnya tetap TIDAK kembali jadi isi pil (itu yang dulu membungkus 3 baris).
+    expect(html).not.toContain(">Sedang mengirim · 3 kiriman · 1.400 kg · s/d 2 Nov 2026<");
+  });
+
   it("kartu ringkasan selebar halaman (kelas supplier-summary)", () => {
     const html = render();
     expect(html).toContain("supplier-summary");

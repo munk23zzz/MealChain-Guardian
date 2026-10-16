@@ -14,6 +14,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  shippingMetaLine,
   SUPPLIER_LABEL_MIN_ZOOM,
   SUPPLIER_PIN_LEGEND,
   SUPPLIER_PIN_MIN_ZOOM,
@@ -579,5 +580,33 @@ describe("pemasok yang sedang mengirim", () => {
 
     expect(supplierLayerSummary(rows, SUPPLIER_REACH_KM).shipping).toBe(1);
     expect(SUPPLIER_PIN_LEGEND.map((entry) => entry.tone)).toContain("shipping");
+  });
+});
+
+describe("shippingMetaLine — berat & batas layak yang TERLIHAT di sel tabel", () => {
+  // Fase 12c memindahkan kalimat penuh kiriman ke `title` (hanya terbaca saat hover).
+  // Pemilik ingin faktanya terlihat lagi (16 Okt 2026), TANPA mengembalikan kalimat
+  // panjang yang dulu membuat pil membungkus 3 baris: yang tampil hanya berat + tanggal.
+  const dasar = { commodities: ["wortel"], safetyFailCount: 0 };
+
+  it("berat + batas layak, tanpa kata pengantar", () => {
+    expect(shippingMetaLine({ ...dasar, count: 3, totalKg: 1400, until: "2026-11-02T12:00:00+00:00" })).toBe(
+      "1.400 kg · s/d 2 Nov 2026"
+    );
+  });
+
+  it("batas layak belum dilaporkan server: hanya berat yang ditulis", () => {
+    expect(shippingMetaLine({ ...dasar, count: 1, totalKg: 600, until: null })).toBe("600 kg");
+  });
+
+  it("berat nol: jangan tulis '0 kg', cukup batas layaknya", () => {
+    expect(shippingMetaLine({ ...dasar, count: 2, totalKg: 0, until: "2026-10-26T12:00:00+00:00" })).toBe(
+      "s/d 26 Okt 2026"
+    );
+  });
+
+  it("tanpa kiriman: '—', bukan '0 kg' (jangan mengarang angka)", () => {
+    expect(shippingMetaLine(null)).toBe("—");
+    expect(shippingMetaLine({ ...dasar, count: 0, totalKg: 0, until: null })).toBe("—");
   });
 });

@@ -2358,6 +2358,19 @@ a:focus-visible {
   white-space: nowrap;
 }
 
+/* Sel "Kiriman": berat + batas layak pakai (Fase 12c lanjutan, 16 Okt 2026).
+   Fase 12c memindahkan kalimat kiriman ke `title` agar pilnya utuh satu baris — benar
+   untuk panjang kalimatnya, tetapi berat & batas layak adalah fakta keputusan, jadi
+   dikembalikan TERLIHAT sebagai baris kedua. `flex-basis: 100%` menaruhnya di barisnya
+   sendiri di dalam `.status-cell`, sehingga pil status (22 px) tidak terdorong turun. */
+.shipping-meta {
+  flex-basis: 100%;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* Kartu "Ringkasan" halaman Pemasok (Fase 12c, 16 Okt 2026).
    Sebelumnya kartu ini duduk di grid 2 kolom tanpa tetangga: terukur 466 px dari
    947 px halaman, dan 7 baris label/nilai memanjang ke bawah jadi 392 px tinggi

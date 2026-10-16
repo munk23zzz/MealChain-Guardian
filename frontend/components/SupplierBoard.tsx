@@ -33,6 +33,7 @@ import {
 } from "../lib/suppliers-board";
 import {
   LOW_RELIABILITY,
+  shippingMetaLine,
   shippingTagLabel,
   supplierDistanceReference,
   withinReachKm,
@@ -319,6 +320,12 @@ export default function SupplierBoard({
                                       {row.shipping.safetyFailCount} gagal uji
                                     </span>
                                   ) : null}
+                                  {/* Baris kedua: berat + batas layak pakai TERLIHAT
+                                      (bukan hanya di `title`) — inilah fakta yang dipakai
+                                      memutuskan, dan pemilik memintanya kembali terbaca. */}
+                                  <span className="shipping-meta" title={row.shippingLabel}>
+                                    {shippingMetaLine(row.shipping)}
+                                  </span>
                                 </>
                               )
                             : "Aktif"}
