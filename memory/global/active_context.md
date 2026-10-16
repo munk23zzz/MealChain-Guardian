@@ -279,4 +279,12 @@ Parameter `max_distance_km` + cakupan jarak di UI dijadikan fase tersendiri sete
   uji hijau**, `tsc` 0, `next lint` 0. **Live (SPPG Head):** draft September mengisi titik September sementara kartu tetap
   Oktober; klik 1 Sep → panel "Selasa, 1 September 2026" 1.217 porsi · pasokan 6 baris (cocok langkah 2); Tahun 2027 →
   0 hari bercatatan; Escape → fokus kembali ke pemicu; 0 galat JS baru. Detail: `docs/verification/kalender-pemilih-tanggal.md`.
+- **17 Okt — desain ulang "Hari Ini" selesai** (pemilik: hapus grid bulan di kartu, info tetap dipakai, redesain 1 halaman, fitur tetap).
+  Kartu "Kalender agenda" → **"Agenda harian"**: grid bulan besar tidak lagi dirender di kartu (terukur 0 `.agenda-cell`), judul = hari terpilih,
+  `‹`/`›` = **satu hari** (mati di tepi `RANGE_MIN`/`RANGE_MAX`), pil "Hari ini", ikon kalender = popup pemilih tanggal.
+  Tambah **strip ringkasan 5 tile tombol** + urutan status→pengecualian→agenda→rincian dan bento **2 kolom** untuk 4 kartu rincian.
+  Murni baru: `summaryTiles`, `updatedLabel`, `kpiPeriodLabel` (lib/today.ts), `agendaGroups`/`clampDayStep`/`dayOf` (lib/agenda.ts).
+  Gerbang: **85 uji fokus hijau**, tsc 0, next lint 0 (suite penuh 1031/1032 — 1 merah milik sesi lain di DecisionEvidence/sidebar-wiring).
+  Verifikasi hidup 1262 px: 5 tile @181 px, bento 2×465,5 px, kartu agenda 947 px, luapan 0; probe 331 px: 0 luapan.
+  Bug tertangkap saat pengukuran (bukan oleh tes): kartu agenda sempat 64 px karena `span 12` hilang → diperbaiki.
 - **Menunggu pemilik:** (a) deploy agent ke AgentCore (butuh ARN/Gateway), (b) perbaikan `.env` yang belum dieksekusi: `INFERHUB_URL` kurang suffix `/chat/completions` (25 slot 404), model id verifier `cb/gpt-6-astra` → `cx/gpt-6-astra`, supervisor `fallback_1` Bedrock `claude-sonnet-4` (Legacy/mati), serta 4 tes host-only yang merah (`test_verify_agentcore_access.py`, `test_verify_bedrock_access.py`, `test_compose_contract.py`, `test_environment_contract.py`), (c) commit/push Fase 11 & Fase 12 (belum ada commit).

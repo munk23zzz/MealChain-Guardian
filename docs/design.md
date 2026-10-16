@@ -264,7 +264,15 @@ Detail muncul dengan evidence → Approve → status di peta berubah
 
 ### 3.7 Hari Ini (di luar PRD — permintaan Roy 2026-10-11)
 Tab pertama di rail, dibuka manual (halaman setelah login tetap **Overview**).
-Lima kartu, semuanya dari API, tanpa angka karangan:
+Urutannya sengaja dari atas ke bawah — **status → pengecualian → agenda → rincian**:
+
+**Strip ringkasan** (desain ulang 2026-10-17) — lima tile tombol di bawah kepala
+halaman: *Menunggu tindakan*, *Batch <48 jam*, *Lokasi shortage*, *KPI terisi*,
+*Rantai audit*. Angkanya berasal dari fungsi yang SAMA dengan kartunya (tidak ada
+perhitungan kedua), dan mengklik tile menggulir + memfokuskan kartu tujuan
+(`#today-action`, `#today-agenda`, `#today-batches`, `#today-shortage`, `#today-kpi`,
+`#today-ledger`). Sumber yang gagal ditulis keadaan gagalnya ("tidak terbaca"),
+bukan 0. Empat kartu rincian, semuanya dari API, tanpa angka karangan:
 1. **Menunggu tindakan** — keputusan berstatus `PENDING_APPROVAL`/`NEEDS_VERIFICATION`/
    `VERIFIER_FLAGGED` dari `/decisions`, urut: yang sudah lewat tenggat dulu (paling baru
    lewat), lalu yang paling dekat jatuh tempo. Sisa waktu dihitung dari jam KLIEN
@@ -276,12 +284,29 @@ Lima kartu, semuanya dari API, tanpa angka karangan:
    tanggal tak terbaca tidak diklaim kedaluwarsa maupun aman.
 3. **Lokasi shortage** — `/balance/map` untuk komoditas aktif, urut kekurangan terbesar.
 4. **KPI 24 jam** — `/kpi` (periode 24 jam berakhir sekarang), memakai formatter yang
-   SAMA dengan tab KPI; metrik `no_data` ditulis "—".
+   SAMA dengan tab KPI; metrik `no_data` ditulis "—". Periode ditulis dari data
+   (`kpiPeriodLabel`), bukan ditebak "24 jam terakhir".
 5. **Rantai audit** — `/ledger/verify`: status rantai, jumlah blok, 10 karakter pertama
    head hash.
-Logika murni (tanpa DOM, diuji) ada di `frontend/lib/today.ts`; komponennya
-`frontend/components/TodayDashboard.tsx`. Kelas `.today-*` di `globals.css`
-memakai token yang sudah ada (tidak ada token baru).
+Empat kartu rincian duduk dalam grid **dua kolom** (`.today-detail-grid`; satu kolom
+≤1180 px) — tidak lagi bobot 7/5 yang merentangkan satu kartu setinggi tetangganya.
+
+**Agenda harian** (2026-10-17, menggantikan grid bulan besar di kartu) — kepala kartu
+memuat **hari terpilih sebagai judul** ("Sabtu, 17 Oktober 2026"), tombol `‹`/`›` yang
+bergeser **satu hari** (bukan satu bulan; mati di tepi `RANGE_MIN`/`RANGE_MAX` supaya
+tidak menampilkan hari kosong seolah "tidak ada operasi"), pil "Hari ini", dan **ikon
+kalender kecil** sebagai pemicu popup pemilih tanggal/bulan/tahun. Grid bulan tidak
+lagi dirender di kartu (terukur: 0 elemen `.agenda-cell` di kartu; gridnya hidup hanya
+di dalam popup). Info hari terpilih tetap lengkap, dikelompokkan tiga tema —
+**Rencana & pasokan**, **Limbah & kedaluwarsa**, **Keputusan agen** — dan hari tanpa
+catatan menulis "tidak ada catatan" per baris, bukan menghilang.
+
+Logika murni (tanpa DOM, diuji) ada di `frontend/lib/today.ts` (`summaryTiles`,
+`updatedLabel`, `kpiPeriodLabel`, `ledgerSummary`) dan `frontend/lib/agenda.ts`
+(`agendaGroups`, `clampDayStep`, `dayOf`); komponennya
+`frontend/components/TodayDashboard.tsx`, `TodaySummary.tsx`, `TodayAgendaCalendar.tsx`.
+Kelas `.today-*`/`.agenda-*` di `globals.css` memakai token yang sudah ada (tidak ada
+token baru).
 
 ### 3.8 Halaman sidebar acuan yang disesuaikan (Langkah 5 — permintaan Roy 2026-10-11)
 

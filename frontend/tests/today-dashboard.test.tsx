@@ -305,3 +305,68 @@ describe("jam klien belum siap", () => {
     expect(html).not.toContain("Lewat 2 jam");
   });
 });
+
+const PICKER = {
+  open: false,
+  month: { year: 2026, month: 10 },
+  years: [2026, 2027],
+  agenda: null,
+  loading: false,
+  error: null,
+  today: "2026-10-17",
+  selected: "2026-10-20",
+  onOpen: () => {},
+  onClose: () => {},
+  onShiftMonth: () => {},
+  onSetMonth: () => {},
+  onSelect: () => {},
+  onToday: () => {},
+  onRetry: () => {},
+};
+
+const denganAgenda = { agendaDate: "2026-10-20", agendaMonth: { year: 2026, month: 10 }, agendaPicker: PICKER };
+
+describe("susunan halaman setelah desain ulang (2026-10-17)", () => {
+  it("tiap kartu punya id tetap — id inilah sasaran lompatan strip ringkasan", () => {
+    const html = render(denganAgenda);
+    for (const id of ["today-action", "today-agenda", "today-batches", "today-shortage", "today-kpi", "today-ledger"]) {
+      expect(html).toContain(`id="${id}"`);
+    }
+  });
+
+  it("strip ringkasan berdiri paling atas, sebelum kartu pertama", () => {
+    // Referensi: status dulu dalam satu detik pandang, baru rincian.
+    const html = render(denganAgenda);
+    expect(html).toContain("today-summary");
+    expect(html.indexOf("today-summary")).toBeLessThan(html.indexOf('id="today-action"'));
+  });
+
+  it("daftar pengecualian lebih dulu, agenda harian menyusul", () => {
+    // Referensi (shieldthemes.com, Jul 2025): daftar pengecualian adalah bagian
+    // yang paling sering dipakai, jadi ia tidak boleh tenggelam di bawah.
+    const html = render(denganAgenda);
+    expect(html.indexOf('id="today-action"')).toBeLessThan(html.indexOf('id="today-agenda"'));
+  });
+
+  it("empat kartu rincian duduk dalam satu bento dua kolom di bawah", () => {
+    const html = render(denganAgenda);
+    expect(html).toContain("today-detail-grid");
+    const mulai = html.indexOf("today-detail-grid");
+    expect(mulai).toBeGreaterThan(html.indexOf('id="today-agenda"'));
+    for (const id of ["today-batches", "today-shortage", "today-kpi", "today-ledger"]) {
+      expect(html.indexOf(`id="${id}"`)).toBeGreaterThan(mulai);
+    }
+  });
+
+  it("agenda harian hanya dirender bila halaman mengirim state kalender", () => {
+    expect(render()).not.toContain("Agenda harian");
+    expect(render(denganAgenda)).toContain("Agenda harian");
+  });
+
+  it("kepala halaman menyebut kapan data diperbarui (memakai jam WIB)", () => {
+    const html = render(denganAgenda);
+    expect(html).toContain("Diperbarui 11.00 WIB");
+    // Jam belum siap → tidak menulis label dengan angka karangan.
+    expect(render({ ...denganAgenda, now: null })).not.toContain("Diperbarui");
+  });
+});

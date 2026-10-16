@@ -3982,7 +3982,46 @@ a:focus-visible {
    memakai warna primer (ada catatan) / abu (tidak ada). Target sentuh 44 px
    di perangkat sentuh mengikuti aturan repo yang sama. */
 .agenda-calendar {
-  margin: 0 0 14px;
+  margin: 0;
+}
+
+/* Kepala kartu agenda: judul + keterangan di kiri, pemilih tanggal & langkah
+   hari di kanan. Di 375 px keduanya membungkus (flex-wrap) alih-alih menghimpit
+   teks. */
+.agenda-head-text h2 {
+  margin: 0;
+}
+
+/* Nama hari terpilih: judul terbesar di kartu ini — inilah yang dicari pengguna
+   ("hari itu isinya apa"), bukan lagi nama bulan. */
+.agenda-day-title {
+  margin: 0 0 10px;
+  font-size: var(--fs-5);
+  letter-spacing: var(--track-tight);
+}
+
+/* Info hari itu dipisah bertema supaya bisa dipindai sendiri-sendiri; di layar
+   lebar tiga kelompok berdampingan, di layar sempit menumpuk. */
+.agenda-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px 22px;
+}
+.agenda-group-title {
+  margin: 0 0 6px;
+  font-size: var(--fs-1);
+  font-weight: 600;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+/* Langkah hari di tepi rentang data: tombolnya mati — jangan terlihat bisa
+   ditekan kalau memang tidak ada hari berikutnya di data. */
+.agenda-nav-btn:disabled,
+.agenda-today:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .agenda-head {
@@ -4393,7 +4432,7 @@ a:focus-visible {
   border: 1px solid var(--line-input);
   border-radius: 10px;
   background: var(--surface);
-  color: var(--ink);
+  color: var(--warn-ink);
   font: inherit;
   font-size: var(--fs-2);
 }
@@ -4456,7 +4495,7 @@ a:focus-visible {
   border-color: var(--warn-border);
 }
 .evidence-next-warn .evidence-next-text {
-  color: var(--warn-ink);
+  color: var(--ink);
 }
 .evidence-next-ok {
   background: var(--ok-bg);
@@ -4687,6 +4726,88 @@ a:focus-visible {
   display: grid;
   gap: 18px;
 }
+
+/* --- Desain ulang "Hari Ini" (2026-10-17): strip ringkasan status --- */
+/* Lima tile = lapis pertama hierarki (status dulu, rincian belakangan). Tiap
+   tile adalah TOMBOL karena ia jalan pintas ke kartunya: bentuknya harus terbaca
+   sebagai kontrol, lengkap dengan focus ring yang terlihat. Nada (kiri berwarna)
+   memakai token status yang sudah ada — tidak ada warna baru. */
+.today-summary {
+  margin: 0;
+}
+.today-summary-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.today-tile {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
+  transition:
+    background var(--dur-2) var(--ease-standard),
+    border-color var(--dur-2) var(--ease-standard);
+}
+.today-tile:hover {
+  background: var(--surface-sunken);
+}
+.today-tile:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.today-tile-label {
+  font-size: var(--fs-1);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.today-tile-value {
+  font-family: var(--font-data);
+  font-size: var(--fs-5);
+  line-height: var(--lh-num);
+  letter-spacing: var(--track-tight);
+}
+.today-tile-note {
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+  text-wrap: pretty;
+}
+.today-tile-ok {
+  border-left-color: var(--status-safe);
+}
+.today-tile-warn {
+  border-left-color: var(--status-warning);
+}
+.today-tile-warn .today-tile-value {
+  color: var(--warn-ink);
+}
+.today-tile-danger {
+  border-left-color: var(--status-danger);
+}
+.today-tile-danger .today-tile-value {
+  color: var(--danger-ink);
+}
+.today-tile-none {
+  border-left-color: var(--neutral-border);
+}
+@media (pointer: coarse) {
+  .today-tile {
+    min-height: 44px;
+  }
+}
 .today-grid {
   display: grid;
   /* Fase 6: bento 12 kolom — "Menunggu tindakan" jadi tile lebar kolom kiri
@@ -4696,19 +4817,31 @@ a:focus-visible {
   align-items: start;
 }
 
-.today-pending {
-  grid-column: span 7;
-  grid-row: span 2;
-}
-.today-batches {
-  grid-column: span 5;
-}
-.today-shortage {
-  grid-column: span 5;
-}
-.today-kpi,
-.today-ledger {
+/* Desain ulang 2026-10-17: "Menunggu tindakan" dan "Agenda harian" jadi baris
+   penuh (keduanya daftar panjang yang dibaca atas-turun), lalu empat kartu
+   rincian duduk berdampingan di grid dua kolom sendiri — bukan lagi bobot 7/5
+   yang membuat satu kartu direntangkan setinggi tetangganya. */
+.today-pending,
+.agenda-calendar,
+.today-detail-grid {
   grid-column: span 12;
+}
+.today-detail-grid {
+  grid-column: span 12;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.today-detail-grid > .today-card {
+  grid-column: auto;
+  grid-row: auto;
+}
+/* Sasaran lompatan strip ringkasan: sedikit ruang di atas supaya judul kartu
+   tidak menempel di tepi atas layar saat digulir. */
+.today-card,
+.agenda-calendar {
+  scroll-margin-top: 12px;
 }
 
 /* 7 metrik KPI dibaca berpasangan di lebar penuh, bukan satu kolom panjang. */
@@ -4721,10 +4854,13 @@ a:focus-visible {
 }
 
 @media (max-width: 1180px) {
-  .today-grid {
+  .today-grid,
+  .today-detail-grid {
     grid-template-columns: minmax(0, 1fr);
   }
   .today-pending,
+  .agenda-calendar,
+  .today-detail-grid,
   .today-batches,
   .today-shortage,
   .today-kpi,

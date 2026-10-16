@@ -27,6 +27,7 @@ import { useExclusions } from "../lib/hooks/useExclusions";
 import { useKpi } from "../lib/hooks/useKpi";
 import { agendaErrorText, useAgenda } from "../lib/hooks/useAgenda";
 import {
+  clampDayStep,
   gridRange,
   monthGrid,
   monthOf,
@@ -409,18 +410,22 @@ export default function Home() {
   const agenda = agendaQuery.data ?? null;
   const agendaError = agendaErrorText(agendaQuery.error);
 
-  // Pilih hari: bulan IKUT tanggal terpilih. Kalau bulan dibiarkan, memilih
-  // "Hari ini" (atau sel bulan pipi) dari bulan lain akan menyembunyikan penanda
-  // hari aktif — ditemukan saat verifikasi hidup di browser.
+  // Pilih hari: bulan IKUT tanggal terpilih supaya rentang yang diminta ke
+  // `GET /agenda` selalu memuat hari itu (rentang = grid bulan dari hari
+  // terpilih, jadi setiap hari di bulan itu pasti masuk).
   const selectAgendaDate = (iso: string) => {
     setAgendaDate(iso);
     setAgendaMonth(monthOf(iso));
   };
-  const shiftAgendaMonth = (delta: number) => {
-    const dasar = agendaBulan ?? monthOf(agendaDay ?? "2026-10-16");
-    const baru = shiftMonth(dasar.year, dasar.month, delta);
-    setAgendaMonth(baru);
-    setAgendaDate(`${baru.year}-${String(baru.month).padStart(2, "0")}-01`);
+  // Langkah HARI di kepala kartu Agenda harian (desain ulang 2026-10-17): grid
+  // bulan besar dihapus, jadi ‹ › berarti sehari. `clampDayStep` menahan langkah
+  // di tepi rentang data (lihat TodayDashboard: tombolnya jadi mati).
+  const shiftAgendaDay = (delta: number) => {
+    const dasar = agendaDay;
+    if (!dasar) return;
+    const tujuan = clampDayStep(dasar, delta, RANGE_MIN, RANGE_MAX);
+    if (!tujuan) return;
+    selectAgendaDate(tujuan);
   };
   const kpi = kpiQuery.data;
   const kpiLoading = kpiQuery.loading;
@@ -863,7 +868,7 @@ export default function Home() {
             agendaToday={now ? wibToday(now) : undefined}
             agendaMonth={agendaBulan ?? undefined}
             onAgendaSelect={selectAgendaDate}
-            onAgendaShiftMonth={shiftAgendaMonth}
+            onAgendaShiftDay={shiftAgendaDay}
             onAgendaRetry={() => void agendaQuery.refetch()}
             greetingName={roleLabel}
             batchesLoading={batchesLoading}

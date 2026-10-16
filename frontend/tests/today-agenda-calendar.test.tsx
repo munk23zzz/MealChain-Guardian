@@ -1,13 +1,16 @@
-// Kalender agenda harian di tab "Hari Ini" (permintaan pemilik 2026-10-16).
-//
-// Kontrak tampilan yang dikunci:
-// - grid bulan 42 sel (mulai Senin) + sel bulan pipi ditandai;
-// - TEPAT SATU sel bertanda `aria-current="true"` (hari terpilih) — pembaca
-//   layar butuh itu, dan tanpa penanda tegas "hari terpilih" cuma warna;
-// - tiap sel membawa `data-activity` (jumlah bagian berisi) sebagai titik
-//   penanda — inilah gunanya kalender: melihat hari mana yang ADA datanya;
-// - panel hari memakai `agendaRows`: bagian tanpa catatan menulis
-//   "tidak ada catatan", TIDAK PERNAH "0 porsi"/"0 kg" (aturan repo).
+// Agenda harian (desain ulang "Hari Ini", 2026-10-17). Grid bulan besar
+// DIHAPUS dari kartu atas permintaan pemilik — "hapus untuk kalender agenda yang
+// bukan pop up, namun untuk informasinya tetap di pakai". Jadi kontrak kartu ini
+// sekarang:
+// - TIDAK ada grid 42 sel di kartu (`role="grid"`/`data-date` hanya hidup di
+//   dalam popup pemilih tanggal) — kartu tidak lagi meminta rentang bulan penuh
+//   hanya untuk menggambar sel;
+// - kepala kartu menyisakan: ikon kecil pemilih tanggal (popup), tombol ‹ › yang
+//   memindahkan SATU HARI, dan "Hari ini";
+// - tombol langkah hari MATI di tepi rentang data (bukan membawa pengguna ke
+//   hari kosong tanpa penjelasan);
+// - panel hari memakai `agendaRows` yang dikelompokkan: bagian tanpa catatan
+//   menulis "tidak ada catatan", TIDAK PERNAH "0 porsi"/"0 kg".
 //
 // Komponen ini TIDAK memanggil API: data datang lewat props dari halaman
 // (pola React Query repo — lihat tests/agenda-wiring.test.tsx).
@@ -57,12 +60,12 @@ const PICKER = {
 function render(overrides: Record<string, unknown> = {}) {
   const props: any = {
     agenda: PAYLOAD,
-    year: 2026,
-    month: 10,
     selected: "2026-10-20",
     today: "2026-10-17",
     onSelect: () => {},
-    onShiftMonth: () => {},
+    onShiftDay: () => {},
+    prevDisabled: false,
+    nextDisabled: false,
     onRetry: () => {},
     picker: PICKER,
     ...overrides,
@@ -70,57 +73,62 @@ function render(overrides: Record<string, unknown> = {}) {
   return renderToStaticMarkup(<TodayAgendaCalendar {...props} />);
 }
 
-describe("kalender agenda — grid", () => {
-  it("merender 42 sel tanggal dan satu header bulan bahasa Indonesia", () => {
+describe("agenda harian — grid bulan sudah TIDAK ada di kartu", () => {
+  it("tidak merender satu sel pun dan tidak memakai peran grid", () => {
     const html = render();
-    expect((html.match(/data-date=/g) ?? []).length).toBe(42);
-    expect(html).toContain("Oktober 2026");
-    expect(html).toContain("agenda-calendar");
+    expect((html.match(/data-date=/g) ?? []).length).toBe(0);
+    expect(html).not.toContain('role="grid"');
+    expect(html).not.toContain("agenda-cell");
+    expect(html).not.toContain("agenda-weekday");
   });
 
-  it("menandai TEPAT SATU hari terpilih dengan aria-current", () => {
+  it("kartu menyebut dirinya agenda harian, bukan kalender bulan", () => {
     const html = render();
-    expect((html.match(/aria-current="true"/g) ?? []).length).toBe(1);
-    expect(html).toMatch(/data-date="2026-10-20"[^>]*aria-current="true"/);
+    expect(html).toContain("Agenda harian");
+    expect(html).not.toContain("Kalender agenda");
   });
 
-  it("membawa titik penanda dari `activity` dan nol untuk hari tanpa catatan", () => {
-    const html = render();
-    expect(html).toMatch(/data-date="2026-10-20"[^>]*data-activity="1"/);
-    // 20 Okt ada di payload; hari lain tak punya data → activity 0, tanpa angka karangan.
-    expect(html).toMatch(/data-date="2026-10-21"[^>]*data-activity="0"/);
-  });
-
-  it("menandai sel di luar bulan agar mata tahu batas bulan", () => {
-    const html = render();
-    expect(html).toContain("agenda-cell-outer");
+  it("bulan yang sedang dibuka tetap terbaca di kepala (tanpa perlu membuka popup)", () => {
+    expect(render()).toContain("Oktober 2026");
   });
 });
 
-describe("kalender agenda — header sebagai pemicu popup pemilih tanggal", () => {
-  it("judul bulan jadi tombol pemicu (ikon kecil + nama bulan), bukan teks mati", () => {
+describe("kepala kartu — pemilih tanggal + langkah hari", () => {
+  it("ikon kecil pemilih tanggal membuka popup, bukan teks mati", () => {
     const html = render();
     expect(html).toContain("agenda-month-btn");
     expect(html).toMatch(/aria-haspopup="dialog"/);
     expect(html).toMatch(/aria-expanded="false"/);
-    // Teks bulan tetap terlihat di header: pengguna harus tahu bulan mana yang
-    // sedang tampil tanpa membuka popup.
-    expect(html).toContain("Oktober 2026");
     expect(html).toMatch(/<svg[^>]*aria-hidden="true"/);
   });
 
-  it("tombol ‹ › dan 'Hari ini' tetap ada di samping pemicu", () => {
+  it("tombol ‹ › memindahkan SATU HARI, bukan satu bulan", () => {
     const html = render();
-    expect(html).toContain('aria-label="Bulan sebelumnya"');
-    expect(html).toContain('aria-label="Bulan berikutnya"');
-    expect(html).toContain("Hari ini");
+    expect(html).toContain('aria-label="Hari sebelumnya"');
+    expect(html).toContain('aria-label="Hari berikutnya"');
+    expect(html).not.toContain('aria-label="Bulan sebelumnya"');
+    expect(html).not.toContain('aria-label="Bulan berikutnya"');
   });
 
-  it("pemicu memakai bulan DRAFT hanya lewat popup — header tetap bulan grid", () => {
-    const html = render({ picker: { ...PICKER, open: true, month: { year: 2026, month: 3 } } });
-    // Grid & header tetap Oktober 2026; Maret hanya ada di dalam popup.
-    expect(html).toContain("Oktober 2026");
-    expect(html).toMatch(/aria-expanded="true"/);
+  it("kedua tombol langkah hari terlihat, dengan bulan tetap jadi konteks pilihan", () => {
+    const html = render();
+    const posisiTanda = html.indexOf("Hari sebelumnya");
+    const posisiPemicu = html.indexOf("agenda-month-btn");
+    const posisiTandaBerikut = html.indexOf("Hari berikutnya");
+    expect(posisiTanda).toBeLessThan(posisiPemicu);
+    expect(posisiPemicu).toBeLessThan(posisiTandaBerikut);
+  });
+
+  it("di tepi rentang data, tombolnya MATI (bukan membawa ke hari kosong)", () => {
+    const kiri = render({ prevDisabled: true });
+    expect(kiri).toMatch(/aria-label="Hari sebelumnya"[^>]*disabled/);
+    const kanan = render({ nextDisabled: true });
+    expect(kanan).toMatch(/aria-label="Hari berikutnya"[^>]*disabled/);
+  });
+
+  it("tombol 'Hari ini' tetap ada untuk kembali ke hari berjalan", () => {
+    const html = render();
+    expect(html).toContain("Hari ini");
   });
 });
 
@@ -139,6 +147,13 @@ describe("kalender agenda — panel hari terpilih", () => {
   it("menyebut hari terpilih dalam bahasa Indonesia", () => {
     const html = render();
     expect(html).toContain("Selasa, 20 Oktober 2026");
+  });
+
+  it("info hari itu dikelompokkan supaya bisa dipindai, bukan tujuh baris pipih", () => {
+    const html = render();
+    expect(html).toContain("Rencana &amp; pasokan");
+    expect(html).toContain("Limbah &amp; kedaluwarsa");
+    expect(html).toContain("Keputusan agen");
   });
 
   it("tanpa data sama sekali tetap jujur (bukan daftar nol)", () => {

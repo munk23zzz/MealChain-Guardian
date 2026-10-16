@@ -85,6 +85,38 @@ describe("wiring popup pemilih tanggal (permintaan pemilik 2026-10-17)", () => {
   });
 });
 
+describe("wiring agenda harian tanpa grid bulan (desain ulang 2026-10-17)", () => {
+  const kalenderSrc = readFileSync("components/TodayAgendaCalendar.tsx", "utf8");
+  const popupSrc = readFileSync("components/AgendaDatePicker.tsx", "utf8");
+
+  it("halaman memindahkan HARI lewat clampDayStep, bukan bulan", () => {
+    expect(pageSrc).toMatch(/const shiftAgendaDay = \(delta: number\)/);
+    expect(pageSrc).toMatch(/clampDayStep\(/);
+    expect(pageSrc).toMatch(/onAgendaShiftDay=\{shiftAgendaDay\}/);
+    expect(pageSrc).not.toMatch(/onAgendaShiftMonth/);
+  });
+
+  it("grid bulan hanya hidup di POPUP; kartu agenda tidak lagi menggambarnya", () => {
+    expect(kalenderSrc).not.toMatch(/from "\.\/AgendaMonthGrid"/);
+    expect(kalenderSrc).not.toMatch(/<AgendaMonthGrid/);
+    expect(kalenderSrc).toMatch(/agendaGroups\(/);
+    expect(popupSrc).toMatch(/<AgendaMonthGrid/);
+  });
+
+  it("kartu menerima hari terpilih + langkah hari, bukan tahun/bulan", () => {
+    expect(dashboardSrc).toMatch(/selected=\{agendaDate\}/);
+    expect(dashboardSrc).toMatch(/onShiftDay=\{onAgendaShiftDay\}/);
+    expect(dashboardSrc).not.toMatch(/onAgendaShiftMonth/);
+    expect(dashboardSrc).not.toMatch(/onShiftMonth=\{onAgendaShiftMonth\}/);
+  });
+
+  it("strip ringkasan dirakit dashboard dari fungsi murni di lib/today", () => {
+    expect(dashboardSrc).toMatch(/summaryTiles\(\{/);
+    expect(dashboardSrc).toMatch(/<TodaySummary tiles=\{tiles\}/);
+    expect(dashboardSrc).toMatch(/jumpToSection/);
+  });
+});
+
 describe("lapisan API & kunci query", () => {
   it("fetchAgenda memanggil GET /agenda dengan start & end", () => {
     expect(apiSrc).toMatch(/export async function fetchAgenda/);

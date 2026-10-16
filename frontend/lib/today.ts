@@ -12,6 +12,7 @@
 //    daripada menyesatkan.
 import { ACTIONABLE_STATUSES } from "./topbar";
 import { formatKg } from "./overview-format";
+import { ZONA_DEFAULT, zonaLabel } from "./jam";
 
 /** Ambang "segera kedaluwarsa" untuk batch (jam). */
 export const DUE_SOON_HOURS = 48;
@@ -219,4 +220,172 @@ export function ledgerSummary(ledger: unknown) {
     blocksLabel: Number.isFinite(blocks) ? `${blocks.toLocaleString("id-ID")} blok` : "—",
     headShort: typeof payload.head === "string" && payload.head ? payload.head.slice(0, 10) : "—",
   };
+}
+
+// ---------------------------------------------------------------------------
+// Desain ulang "Hari Ini" (permintaan pemilik 2026-10-17): strip ringkasan.
+//
+// Kenapa ada: halaman ini dulu menaruh lima kartu berbobot SAMA, sehingga tak
+// ada yang bisa dipastikan "normal atau tidak" dalam satu detik. Referensi
+// operasional (shieldthemes.com, "Designing operational dashboards people
+// actually use", Jul 2025) menetapkan hierarkinya: 3–5 indikator status di atas
+// → daftar pengecualian → rincian. Strip ini adalah lapis pertama itu, dan tiap
+// tile menunjuk kartunya (`target`) supaya ia jalan pintas, bukan hiasan.
+// ---------------------------------------------------------------------------
+
+/** Nada tile: aman / perlu dilihat / bahaya / belum diketahui. */
+export type TileTone = "ok" | "warn" | "danger" | "none";
+
+export type SummaryTile = {
+  key: "action" | "batches" | "shortage" | "kpi" | "ledger";
+  label: string;
+  /** Nilai siap tampil; "—" bila datanya memang belum ada (bukan 0). */
+  value: string;
+  /** Satu baris keterangan; `null` bila tidak ada yang jujur bisa dikatakan. */
+  note: string | null;
+  tone: TileTone;
+  /** id kartu tujuan di halaman — harus sama dengan id yang dipasang kartunya. */
+  target: string;
+};
+
+export type SummaryInput = {
+  pending: ReturnType<typeof pendingDecisions>;
+  batch: ReturnType<typeof batchExpiry>;
+  /** false = data batch belum termuat: nilai ditulis "—", bukan 0. */
+  batchLoaded: boolean;
+  shortage: ReturnType<typeof shortageSummary>;
+  metrics: { value?: string | null }[] | null;
+  ledger: ReturnType<typeof ledgerSummary>;
+};
+
+export function summaryTiles(input: SummaryInput): SummaryTile[] {
+  const { pending, batch, batchLoaded, shortage, metrics, ledger } = input;
+
+  const action: SummaryTile = {
+    key: "action",
+    label: "Menunggu tindakan",
+    target: "today-action",
+    value: String(pending.count),
+    tone: pending.overdueCount > 0 ? "danger" : pending.count > 0 ? "warn" : "ok",
+    note:
+      pending.count === 0
+        ? "tidak ada keputusan menunggu tindakan"
+        : pending.overdueCount > 0
+          ? `${pending.overdueCount} sudah lewat tenggat`
+          : pending.nextDueLabel !== "—"
+            ? `terdekat ${pending.nextDueLabel}`
+            : "tidak ada agenda yang belum lewat tenggat",
+  };
+
+  const expired = batch.expired.length;
+  const soon = batch.dueSoon.length;
+  const batches: SummaryTile = batchLoaded
+    ? {
+        key: "batches",
+        label: "Batch <48 jam",
+        target: "today-batches",
+        value: String(expired + soon),
+        tone: expired > 0 ? "danger" : soon > 0 ? "warn" : "ok",
+        note:
+          expired || soon
+            ? [
+                expired ? `kedaluwarsa ${expired} batch (${formatKg(batch.expiredKg)})` : null,
+                soon ? `segera ${soon} batch (${formatKg(batch.dueSoonKg)})` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            : "tidak ada batch kedaluwarsa atau <48 jam",
+      }
+    : {
+        key: "batches",
+        label: "Batch <48 jam",
+        target: "today-batches",
+        value: "—",
+        tone: "none",
+        note: null,
+      };
+
+  const shortageTile: SummaryTile = {
+    key: "shortage",
+    label: "Lokasi shortage",
+    target: "today-shortage",
+    value: String(shortage.count),
+    tone: shortage.count > 0 ? "warn" : "ok",
+    note:
+      shortage.count === 0
+        ? "tidak ada kekurangan untuk komoditas ini"
+        : shortage.totalKg === null
+          ? `${shortage.count} lokasi kekurangan (besar kekurangan belum terbaca)`
+          : `Total kekurangan ${formatKg(shortage.totalKg)}`,
+  };
+
+  const daftar = Array.isArray(metrics) ? metrics : null;
+  const terisi = daftar
+    ? daftar.filter((metric) => metric?.value !== null && metric?.value !== undefined).length
+    : 0;
+  const kpi: SummaryTile = daftar && daftar.length
+    ? {
+        key: "kpi",
+        label: "KPI terisi",
+        target: "today-kpi",
+        value: `${terisi}/${daftar.length}`,
+        tone: terisi === daftar.length ? "ok" : "warn",
+        note:
+          terisi === daftar.length
+            ? "semua metrik ada"
+            : `${daftar.length - terisi} metrik belum ada data`,
+      }
+    : {
+        key: "kpi",
+        label: "KPI terisi",
+        target: "today-kpi",
+        value: "—",
+        tone: "none",
+        note: "belum ada jawaban /kpi untuk periode ini",
+      };
+
+  const ledgerTile: SummaryTile = {
+    key: "ledger",
+    label: "Rantai audit",
+    target: "today-ledger",
+    value: ledger.statusLabel,
+    tone: ledger.ok === true ? "ok" : ledger.ok === false ? "danger" : "none",
+    note: ledger.blocksLabel !== "—" ? ledger.blocksLabel : null,
+  };
+
+  return [action, batches, shortageTile, kpi, ledgerTile];
+}
+
+const JAM_MENIT = new Intl.DateTimeFormat("id-ID", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+  timeZone: ZONA_DEFAULT,
+});
+
+/** "Diperbarui 11.05 WIB" — kapan data yang sedang dilihat diambil. */
+export function updatedLabel(now: Date): string {
+  return `Diperbarui ${JAM_MENIT.format(now)} ${zonaLabel(ZONA_DEFAULT)}`;
+}
+
+const TANGGAL_SINGKAT = new Intl.DateTimeFormat("id-ID", {
+  day: "numeric",
+  month: "short",
+  timeZone: ZONA_DEFAULT,
+});
+
+/**
+ * "Periode 16 Okt 11.05 → 17 Okt 11.05 WIB" dari `GET /kpi`, atau `null` bila
+ * salah satu ujungnya tidak ada — label periode yang setengah jadi akan
+ * membuat pembaca menyangka rentangnya lain.
+ */
+export function kpiPeriodLabel(
+  period?: { start?: string | null; end?: string | null } | null,
+): string | null {
+  const mulai = period?.start ? new Date(String(period.start)) : null;
+  const selesai = period?.end ? new Date(String(period.end)) : null;
+  if (!mulai || !selesai) return null;
+  if (!Number.isFinite(mulai.getTime()) || !Number.isFinite(selesai.getTime())) return null;
+  const teks = (d: Date) => `${TANGGAL_SINGKAT.format(d)} ${JAM_MENIT.format(d)}`;
+  return `Periode ${teks(mulai)} → ${teks(selesai)} ${zonaLabel(ZONA_DEFAULT)}`;
 }

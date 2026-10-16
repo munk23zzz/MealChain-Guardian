@@ -14,8 +14,10 @@
 
 import PageHeader from "./PageHeader";
 import TodayAgendaCalendar from "./TodayAgendaCalendar";
+import TodaySummary, { jumpToSection } from "./TodaySummary";
 import { type AgendaPickerProps } from "./AgendaDatePicker";
-import { type AgendaPayload } from "../lib/agenda";
+import { clampDayStep, type AgendaPayload } from "../lib/agenda";
+import { RANGE_MAX, RANGE_MIN } from "../lib/demo-data";
 import { fmtValue, unitLabel, STATE_LABEL } from "./KPIDashboard";
 import { DECISION_TYPE_LABELS } from "./RecommendationCard";
 import { formatKg } from "../lib/overview-format";
@@ -24,9 +26,12 @@ import {
   batchExpiry,
   dueLabel,
   freshnessLabel,
+  kpiPeriodLabel,
   ledgerSummary,
   pendingDecisions,
   shortageSummary,
+  summaryTiles,
+  updatedLabel,
   type TodayBatch,
   type TodayDecision,
   type TodayLocation,
@@ -126,7 +131,7 @@ export default function TodayDashboard({
   agendaMonth,
   agendaPicker,
   onAgendaSelect = () => {},
-  onAgendaShiftMonth = () => {},
+  onAgendaShiftDay = () => {},
   onAgendaRetry,
   onOpenDecision,
   onOpenAllDecisions,
@@ -156,7 +161,9 @@ export default function TodayDashboard({
    *  bulan itu, dan aksinya. Dirakit halaman; kalender tidak memuat data sendiri. */
   agendaPicker?: AgendaPickerProps;
   onAgendaSelect?: (date: string) => void;
-  onAgendaShiftMonth?: (delta: number) => void;
+  /** Langkah HARI (bukan bulan) di kepala kartu Agenda harian — grid bulan besar
+   *  sudah dihapus, jadi ‹ › berarti sehari. */
+  onAgendaShiftDay?: (delta: number) => void;
   onAgendaRetry?: () => void;
   onOpenDecision?: (decisionId: string) => void;
   onOpenAllDecisions?: () => void;
@@ -171,46 +178,57 @@ export default function TodayDashboard({
   const ledgerState = ledgerSummary(ledger);
   const metrics = Array.isArray(kpi?.metrics) ? kpi!.metrics! : [];
 
+  // Desain ulang 2026-10-17: status dulu (strip ringkasan) → pengecualian →
+  // rincian. Tiles dihitung di `lib/today.ts` (diuji tanpa DOM) supaya aturan
+  // "— bukan 0" tidak ditulis ulang di JSX.
+  const tiles = summaryTiles({
+    pending,
+    batch: batchState,
+    batchLoaded: batches !== null,
+    shortage,
+    metrics: metrics as { value?: string | null }[],
+    ledger: ledgerState,
+  });
+  // Tombol ‹ › agenda mati di tepi rentang data: melangkah ke luar rentang hanya
+  // menampilkan hari kosong yang tampak seperti "tidak ada operasi hari itu".
+  const hariTerpilih = agendaDate ?? null;
+  const hariKiriMati =
+    !hariTerpilih || clampDayStep(hariTerpilih, -1, RANGE_MIN, RANGE_MAX) === null;
+  const hariKananMati =
+    !hariTerpilih || clampDayStep(hariTerpilih, 1, RANGE_MIN, RANGE_MAX) === null;
+  // Periode KPI dari datanya sendiri (bukan "24 jam terakhir" yang ditebak).
+  const periodeKpi = kpiPeriodLabel(kpi?.period);
+
   return (
     <section className="today-page">
       <PageHeader
         title="Hari Ini"
         eyebrow={greeting(now, greetingName)}
-        description="Rekap operasional hari berjalan: keputusan yang menunggu tindakan, batch yang mendekati kedaluwarsa, lokasi kekurangan, KPI 24 jam, dan status rantai audit — semua dari API."
+        description="Status hari berjalan lebih dulu, lalu yang perlu tindakan, lalu rinciannya — semua dari API."
         meta={
           <span className="page-header-pills">
             <span className="commodity-pill">{todayLabel(now)}</span>
             <span className="commodity-pill">
               Komoditas {commodity ? commodity : "—"}
             </span>
+            {/* Kapan data ini diambil. Dashboard yang menampilkan angka tanpa
+                memberi tahu usianya membuat orang bertindak atas data basi. */}
+            {now ? <span className="commodity-pill">{updatedLabel(now)}</span> : null}
           </span>
         }
       />
 
-      {/* Kalender agenda (langkah 2, 2026-10-16): dimensi yang hilang dari
-          halaman ini — semua kartu di bawah dihitung dari "sekarang", kalender
-          ini menjawab "tanggal lain bagaimana?". Muncul hanya bila halaman
-          mengirim tanggal terpilih (agendaDate), supaya komponen ini tetap
-          bisa dirender tes lama tanpa state kalender. */}
-      {agendaDate && agendaMonth && agendaPicker ? (
-        <TodayAgendaCalendar
-          agenda={agenda}
-          loading={agendaLoading}
-          error={agendaError}
-          year={agendaMonth.year}
-          month={agendaMonth.month}
-          selected={agendaDate}
-          today={agendaToday}
-          picker={agendaPicker}
-          onSelect={onAgendaSelect}
-          onShiftMonth={onAgendaShiftMonth}
-          onRetry={onAgendaRetry}
-        />
-      ) : null}
+      <TodaySummary tiles={tiles} onJump={jumpToSection} />
+
+      {/* Kalender lama (grid bulan besar) DIHAPUS dari posisi ini — pemilik:
+          "hapus untuk kalender agenda yang yang bukan pop up namun untuk
+          informasinya tetap di pakai". Kartu "Agenda harian" (info hari
+          terpilih + ikon pemilih tanggal) kini berdiri setelah daftar
+          pengecualian, sesuai hierarki: status → pengecualian → agenda → rincian. */}
 
       <div className="today-grid">
         {/* 1. Keputusan yang menunggu tindakan manusia */}
-        <article className="card today-card today-pending">
+        <article className="card today-card today-pending" id="today-action" tabIndex={-1}>
           <div className="today-card-head">
             <h2>Menunggu tindakan</h2>
             <span className="today-count">{pending.count}</span>
@@ -273,8 +291,30 @@ export default function TodayDashboard({
           )}
         </article>
 
-        {/* 2. Batch yang sudah/akan kedaluwarsa */}
-        <article className="card today-card today-batches">
+        {/* 2. Agenda harian (desain ulang 2026-10-17): grid bulan besar dibuang,
+            info hari terpilih tetap — itulah yang dicari pengguna tiap hari.
+            Pindah hari lewat ‹ › ; tanggal jauh lewat popup pemilih tanggal.
+            Muncul hanya bila halaman mengirim state kalender, supaya komponen
+            ini tetap bisa dirender tes lama tanpa state kalender. */}
+        {agendaDate && agendaMonth && agendaPicker ? (
+          <TodayAgendaCalendar
+            agenda={agenda}
+            loading={agendaLoading}
+            error={agendaError}
+            selected={agendaDate}
+            today={agendaToday}
+            prevDisabled={hariKiriMati}
+            nextDisabled={hariKananMati}
+            onSelect={onAgendaSelect}
+            onShiftDay={onAgendaShiftDay}
+            onRetry={onAgendaRetry}
+            picker={agendaPicker}
+          />
+        ) : null}
+
+        <div className="today-detail-grid">
+        {/* 3. Batch yang sudah/akan kedaluwarsa */}
+        <article className="card today-card today-batches" id="today-batches" tabIndex={-1}>
           <div className="today-card-head">
             <h2>Batch mendekati kedaluwarsa</h2>
             <span className="today-count">
@@ -350,8 +390,8 @@ export default function TodayDashboard({
           )}
         </article>
 
-        {/* 3. Lokasi yang kekurangan (komoditas aktif) */}
-        <article className="card today-card today-shortage">
+        {/* 4. Lokasi yang kekurangan (komoditas aktif) */}
+        <article className="card today-card today-shortage" id="today-shortage" tabIndex={-1}>
           <div className="today-card-head">
             <h2>Lokasi shortage</h2>
             <span className="today-count">{shortage.count}</span>
@@ -393,8 +433,8 @@ export default function TodayDashboard({
           )}
         </article>
 
-        {/* 4. KPI 24 jam terakhir */}
-        <article className="card today-card today-kpi">
+        {/* 5. KPI 24 jam terakhir */}
+        <article className="card today-card today-kpi" id="today-kpi" tabIndex={-1}>
           <div className="today-card-head">
             <h2>KPI 24 jam</h2>
             <span className="today-count">
@@ -403,6 +443,7 @@ export default function TodayDashboard({
             </span>
           </div>
           <p className="today-card-note">
+            {periodeKpi ? `${periodeKpi}. ` : ""}
             {metrics.length === 0
               ? "Belum ada jawaban /kpi untuk periode ini."
               : "Metrik yang belum punya data ditulis “—” (tidak diganti 0)."}
@@ -430,8 +471,8 @@ export default function TodayDashboard({
           )}
         </article>
 
-        {/* 5. Rantai audit (Merkle ledger) */}
-        <article className="card today-card today-ledger">
+        {/* 6. Rantai audit (Merkle ledger) */}
+        <article className="card today-card today-ledger" id="today-ledger" tabIndex={-1}>
           <div className="today-card-head">
             <h2>Rantai audit</h2>
             <span className={`today-badge today-badge-${ledgerState.ok === true ? "ok" : ledgerState.ok === false ? "bad" : "unknown"}`}>
@@ -453,6 +494,7 @@ export default function TodayDashboard({
             </li>
           </ul>
         </article>
+        </div>
       </div>
     </section>
   );

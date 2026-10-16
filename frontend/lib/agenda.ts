@@ -248,3 +248,64 @@ export function agendaRows(hari: AgendaDay): AgendaRow[] {
 }
 
 export const AGENDA_NO_DATA = "tidak ada catatan";
+
+/**
+ * Geser tanggal sebanyak `delta` HARI (boleh negatif), menyeberang bulan/tahun.
+ * Dipakai kepala kartu agenda harian setelah grid bulan dihapus: ‹ › berarti
+ * "hari sebelumnya/berikutnya", bukan bulan.
+ */
+export function shiftDay(iso: string, delta: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return new Date(d.getTime() + delta * HARI_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * Hasil langkah hari yang DIBATASI rentang data (`min`..`max`).
+ * `null` = tombol ‹ › harus mati: melangkah ke luar rentang hanya akan
+ * menampilkan hari kosong yang tampak seperti "tidak ada operasi hari itu",
+ * padahal datanya memang tidak diminta ke server.
+ */
+export function clampDayStep(
+  iso: string,
+  delta: number,
+  min: string,
+  max: string,
+): string | null {
+  const tujuan = shiftDay(iso, delta);
+  return tujuan < min || tujuan > max ? null : tujuan;
+}
+
+export type AgendaGroup = { title: string; rows: AgendaRow[] };
+
+/**
+ * Kelompok bertema untuk info harian. Dulu ketujuh baris ditumpuk rata sehingga
+ * mata harus memindai semuanya; kelompok membuat "rencana/pasokan", "limbah",
+ * dan "keputusan" bisa ditemukan sendiri-sendiri.
+ */
+const AGENDA_GROUPS: { title: string; labels: string[] }[] = [
+  {
+    title: "Rencana & pasokan",
+    labels: ["Rencana menu", "Kiriman tiba", "Pasokan tercatat", "Harga tercatat"],
+  },
+  { title: "Limbah & kedaluwarsa", labels: ["Limbah dibuang", "Batch kedaluwarsa"] },
+  { title: "Keputusan agen", labels: ["Keputusan agen"] },
+];
+
+export function agendaGroups(hari: AgendaDay): AgendaGroup[] {
+  const semua = agendaRows(hari);
+  const terpakai = new Set<string>();
+  const groups: AgendaGroup[] = AGENDA_GROUPS.map((grup) => ({
+    title: grup.title,
+    rows: grup.labels.flatMap((label) => {
+      const row = semua.find((baris) => baris.label === label);
+      if (!row) return [];
+      terpakai.add(label);
+      return [row];
+    }),
+  }));
+  // Jaring pengaman: baris baru di `agendaRows` tidak boleh hilang diam-diam
+  // hanya karena daftar kelompok di atas belum diperbarui.
+  const sisa = semua.filter((baris) => !terpakai.has(baris.label));
+  if (sisa.length) groups.push({ title: "Catatan lain", rows: sisa });
+  return groups;
+}
