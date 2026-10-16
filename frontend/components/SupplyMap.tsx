@@ -45,6 +45,8 @@ import {
   supplierPinsVisible,
   supplierPopupLines,
   supplierReachNote,
+  supplierReachTag,
+  supplierToggleAction,
   supplierToggleLabel,
   suppliersForCommodity,
   type SupplierPinRow,
@@ -53,10 +55,13 @@ import {
   ROUTE_LINE_COLORS,
   routeBoundsPoints,
   routeGeoJson,
+  routeJourneyRows,
   routeLayerSummary,
+  routeLayerTag,
   routeLegendEntries,
   routeLineClass,
   routePopupLines,
+  routeToggleAction,
   routeToggleLabel,
   supplierRoutes as supplierRouteRows,
   type SupplierRoute,
@@ -65,6 +70,10 @@ import {
 /** Id source/layer MapLibre untuk garis jalur kiriman (Fase 10). */
 const ROUTE_SOURCE_ID = "supplier-routes";
 const ROUTE_LAYER_ID = "supplier-route-line";
+
+/** Id panel rincian lapisan — dipakai `aria-controls` tombol lipatnya. */
+const LAYER_INFO_PANEL_ID = "map-layer-info-panel";
+const LEGEND_PANEL_ID = "map-legend-panel";
 
 const ROUTE_LINE_WIDTH: maplibregl.ExpressionSpecification = [
   "interpolate",
@@ -277,8 +286,9 @@ export function StatusLocationList({
   );
 }
 
-/** Popup jalur kiriman: menyandingkan jarak JALAN (OSRM) dan jarak lurus, jadi
- *  klaim jarak selalu bisa ditelusuri asalnya. */
+/** Popup jalur kiriman: identitas jalur, jarak & durasi JALAN (OSRM), perjalanan
+ *  (jam berangkat + estimasi tiba dari server), masa layak, dan mutu kiriman.
+ *  Jarak lurus/rasio sengaja TIDAK lagi ditulis (arah pemilik 2026-10-16). */
 function routePopupNode(row: SupplierRoute): HTMLElement {
   const box = document.createElement("div");
   box.className = "map-popup";
@@ -396,9 +406,21 @@ export default function SupplyMap({
   // diperlihatkan di peta (keputusan 2026-10-16). Geometri datang dari server
   // (cache OSRM saat sinkronisasi) — peta tidak pernah memanggil OSRM sendiri.
   const [showRoutes, setShowRoutes] = useState(true);
+  // Rincian lapisan dilipat secara bawaan (revisi 2026-10-16): angkanya sudah
+  // terbaca sebagai tag ringkas di bilah, jadi kalimat penjelas panjang tidak
+  // perlu menahan ruang. Isinya tetap ada di DOM (tidak dihapus).
+  const [showLayerInfo, setShowLayerInfo] = useState(false);
+  const [showLegend, setShowLegend] = useState(false);
   const routePinRows = useMemo(() => supplierRouteRows(supplierRoutes), [supplierRoutes]);
   const routeFeatures = useMemo(() => routeGeoJson(supplierRoutes), [supplierRoutes]);
   const routeSummary = useMemo(() => routeLayerSummary(supplierRoutes), [supplierRoutes]);
+  // Baris perjalanan di kotak "Info map": hanya saat lapisan jalur hidup (kalau
+  // lapisannya mati, tidak ada garis yang diterangkan) dan hanya kalau server
+  // memang mengirim blok perjalanannya.
+  const journeyRows = useMemo(
+    () => (showRoutes ? routeJourneyRows(routePinRows) : []),
+    [routePinRows, showRoutes]
+  );
   const routeBounds = useMemo(() => routeBoundsPoints(supplierRoutes), [supplierRoutes]);
   const routeRowsRef = useRef<readonly SupplierRoute[]>(routePinRows);
   const routeFeaturesRef = useRef(routeFeatures);
@@ -695,98 +717,206 @@ export default function SupplyMap({
         {/* Container peta — dirender SSR, MapLibre menempel di client */}
         <div className="map-shell">
           <div ref={mapContainer} className="map-gl" />
-          <div className="map-legend-box" role="group" aria-label="Legenda status lokasi">
-            <span className="map-legend-box-title">Status lokasi:</span>
-            <span className="map-legend-box-item">
-              <i className="map-legend-box-dot map-legend-box-dot-surplus" aria-hidden="true" /> Surplus
-            </span>
-            <span className="map-legend-box-item">
-              <i className="map-legend-box-dot map-legend-box-dot-balanced" aria-hidden="true" /> Seimbang
-            </span>
-            <span className="map-legend-box-item">
-              <i className="map-legend-box-dot map-legend-box-dot-shortage" aria-hidden="true" /> Shortage
-            </span>
-          </div>
+          {/* Sakelar lapisan — SATU-SATUNYA elemen yang mengapung di kanvas peta.
+              Legenda & catatan penjelas pindah ke baris di bawah peta (Opsi 1,
+              keputusan pemilik 2026-10-16): sebelumnya panel kendali menutupi 39%
+              luas kanvas (terukur 650x262 px dari 947x460 px), tepat di atas Jawa
+              Barat tempat pin SPPG dan jalur kiriman berada. */}
           {(Boolean(suppliers) || Boolean(supplierRoutes)) && (
-            <div className="map-layer-controls">
+            <div className="map-overlay-toggles">
               {Boolean(suppliers) && (
-                <div className="map-supplier-controls">
-              <button
-                type="button"
-                className="map-layer-toggle"
-                aria-pressed={showSuppliers}
-                onClick={() => setShowSuppliers((value) => !value)}
-              >
-                {supplierToggleLabel(supplierMapRows, showSuppliers)}
-              </button>
-              <p className="map-supplier-note" role="status">
-                {supplierReachNote(
-                  supplierRows,
-                  reachKm ?? null,
-                  supplierReference?.location,
-                  hiddenByServer
-                )}
-              </p>
-              <div
-                className="map-legend-box map-legend-box-suppliers"
-                role="group"
-                aria-label="Legenda pemasok"
-              >
-                <span className="map-legend-box-title">Pemasok:</span>
-                {SUPPLIER_PIN_LEGEND.map((entry) => (
-                  <span key={entry.tone} className="map-legend-box-item">
-                    <i
-                      className={`map-legend-box-shape map-legend-box-shape-${entry.tone}`}
-                      aria-hidden="true"
-                    />{" "}
-                    {entry.label}
-                  </span>
-                ))}
-              </div>
-              {showSuppliers && zoomEnough === false && (
-                <p className="map-layer-hint" role="status">
-                  Perbesar peta untuk melihat {supplierSummary.total} pemasok — pin pemasok
-                  muncul pada zoom {SUPPLIER_PIN_MIN_ZOOM} ke atas, nama pemasok pada zoom{" "}
-                  {SUPPLIER_LABEL_MIN_ZOOM} ke atas.
-                </p>
-              )}
-                </div>
+                <button
+                  type="button"
+                  className="map-layer-toggle"
+                  aria-pressed={showSuppliers}
+                  title={supplierToggleAction(supplierMapRows, showSuppliers)}
+                  onClick={() => setShowSuppliers((value) => !value)}
+                >
+                  {supplierToggleLabel(supplierMapRows)}
+                </button>
               )}
               {Boolean(supplierRoutes) && (
-                <div className="map-route-controls">
-                  <button
-                    type="button"
-                    className="map-layer-toggle map-route-toggle"
-                    aria-pressed={showRoutes}
-                    onClick={() => setShowRoutes((value) => !value)}
-                  >
-                    {routeToggleLabel(routePinRows, showRoutes)}
-                  </button>
-                  <p className="map-supplier-note" role="status">
-                    {routeSummary.label} — jalur jalan dari OSRM (diambil saat sinkronisasi,
-                    bukan saat peta dibuka).
-                  </p>
-                  <div
-                    className="map-legend-box map-legend-box-routes"
-                    role="group"
-                    aria-label="Legenda jalur kiriman"
-                  >
-                    <span className="map-legend-box-title">Jalur kiriman:</span>
-                    {routeLegendEntries().map((entry) => (
-                      <span key={entry.tone} className="map-legend-box-item">
-                        <i
-                          className={`map-legend-line map-legend-line-${entry.tone}`}
-                          aria-hidden="true"
-                        />{" "}
-                        {entry.label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  className="map-layer-toggle map-route-toggle"
+                  aria-pressed={showRoutes}
+                  title={routeToggleAction(routePinRows, showRoutes)}
+                  onClick={() => setShowRoutes((value) => !value)}
+                >
+                  {routeToggleLabel(routePinRows)}
+                </button>
               )}
             </div>
           )}
+          {/* Info map — kotak penjelasan isi peta. Sejak revisi 16 Okt namanya
+              berganti dari "Legenda peta" (arah pemilik: "ganti menjadi info
+              map"), karena isinya bukan cuma arti warna: ada juga keadaan
+              PERJALANAN kiriman (jam berangkat → estimasi tiba, dari server).
+
+              Dua aturan penyusunan isinya:
+              1. kelompok yang lapisannya sedang MATI tidak ditampilkan —
+                 keterangan warna yang tidak ada di peta adalah informasi palsu;
+              2. entri "gagal uji" hanya muncul kalau memang ada kiriman bergaris
+                 seperti itu (lihat `routeLegendEntries`).
+
+              Kotaknya tetap DILIPAT secara bawaan supaya kanvas peta tidak
+              tertutup; angka pentingnya sudah terbaca di tag bilah rincian. */}
+          <div
+            className={`map-legend-stack${showLegend ? " map-legend-stack-open" : ""}`}
+          >
+            <button
+              type="button"
+              className="map-legend-toggle"
+              aria-expanded={showLegend}
+              aria-controls={LEGEND_PANEL_ID}
+              onClick={() => setShowLegend((value) => !value)}
+            >
+              <span className="map-legend-chevron" aria-hidden="true" />
+              Info map
+            </button>
+            <div
+              className="map-legend-boxes"
+              id={LEGEND_PANEL_ID}
+              role="group"
+              aria-label="Info map"
+            >
+              <div className="map-legend-box" role="group" aria-label="Keterangan status lokasi">
+                <span className="map-legend-box-title">Status lokasi:</span>
+                <span className="map-legend-box-item">
+                  <i className="map-legend-box-dot map-legend-box-dot-surplus" aria-hidden="true" /> Surplus
+                </span>
+                <span className="map-legend-box-item">
+                  <i className="map-legend-box-dot map-legend-box-dot-balanced" aria-hidden="true" /> Seimbang
+                </span>
+                <span className="map-legend-box-item">
+                  <i className="map-legend-box-dot map-legend-box-dot-shortage" aria-hidden="true" /> Shortage
+                </span>
+              </div>
+              {Boolean(supplierRoutes) && showRoutes && (
+                <div
+                  className="map-legend-box map-legend-box-routes"
+                  role="group"
+                  aria-label="Keterangan jalur kiriman"
+                >
+                  <span className="map-legend-box-title">Jalur kiriman:</span>
+                  {routeLegendEntries(routePinRows).map((entry) => (
+                    <span key={entry.tone} className="map-legend-box-item">
+                      <i
+                        className={`map-legend-line map-legend-line-${entry.tone}`}
+                        aria-hidden="true"
+                      />{" "}
+                      {entry.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {Boolean(suppliers) && showSuppliers && (
+                <div
+                  className="map-legend-box map-legend-box-suppliers"
+                  role="group"
+                  aria-label="Keterangan pemasok"
+                >
+                  <span className="map-legend-box-title">Pemasok:</span>
+                  {SUPPLIER_PIN_LEGEND.map((entry) => (
+                    <span key={entry.tone} className="map-legend-box-item">
+                      <i
+                        className={`map-legend-box-shape map-legend-box-shape-${entry.tone}`}
+                        aria-hidden="true"
+                      />{" "}
+                      {entry.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {Boolean(supplierRoutes) && showRoutes && journeyRows.length > 0 && (
+                <div
+                  className="map-legend-box map-journey"
+                  role="group"
+                  aria-label="Perjalanan kiriman"
+                >
+                  <span className="map-legend-box-title">Perjalanan kiriman:</span>
+                  {journeyRows.map((row) => (
+                    <span key={row.teks} className={row.kelas}>
+                      {row.teks}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+
+        {/* Bilah rincian lapisan (revisi 2026-10-16, arah pemilik): angkanya
+            SELALU terlihat sebagai tag ringkas satu baris; kalimat penjelas
+            panjangnya dilipat di balik tombol kecil. Isinya tidak dihapus dari
+            DOM — hanya dilipat — jadi angka "yang tidak dipasang" dan asal
+            geometri OSRM tetap bisa diperiksa, bukan disembunyikan. */}
+        {(Boolean(suppliers) || Boolean(supplierRoutes)) && (
+          <div className="map-layer-info">
+            <button
+              type="button"
+              className="map-layer-info-toggle"
+              aria-expanded={showLayerInfo}
+              aria-controls={LAYER_INFO_PANEL_ID}
+              onClick={() => setShowLayerInfo((value) => !value)}
+            >
+              <span className="map-layer-info-chevron" aria-hidden="true" />
+              Rincian lapisan peta
+            </button>
+            <p className="map-layer-tags" role="status">
+              {Boolean(suppliers) && (
+                <span className="map-layer-tag">
+                  {supplierReachTag(supplierRows, reachKm ?? null, hiddenByServer)}
+                </span>
+              )}
+              {Boolean(suppliers) && Boolean(supplierRoutes) && (
+                <span className="map-layer-tag-sep" aria-hidden="true">
+                  ·
+                </span>
+              )}
+              {Boolean(supplierRoutes) && (
+                <span className="map-layer-tag">
+                  {routeLayerTag(routeSummary, showRoutes ? routePinRows : [])}
+                </span>
+              )}
+            </p>
+            <div
+              id={LAYER_INFO_PANEL_ID}
+              className="map-layer-info-panel"
+              data-open={showLayerInfo}
+            >
+              <div className="map-layer-info-inner">
+                {Boolean(suppliers) && (
+                  <p className="map-supplier-note">
+                    {supplierReachNote(
+                      supplierRows,
+                      reachKm ?? null,
+                      supplierReference?.location,
+                      hiddenByServer
+                    )}
+                  </p>
+                )}
+                {Boolean(supplierRoutes) && (
+                  <p className="map-supplier-note">
+                    {routeSummary.label} — jalur jalan dari OSRM (diambil saat
+                    sinkronisasi, bukan saat peta dibuka).
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Peringatan zoom sengaja DI LUAR panel yang bisa dilipat: saat sakelar
+            pemasok dinyalakan pada zoom jauh, alasannya harus muncul seketika —
+            bukan menunggu pengguna membuka rincian. */}
+        {Boolean(suppliers) && showSuppliers && zoomEnough === false && (
+          <p className="map-layer-hint" role="status">
+            Perbesar peta untuk melihat {supplierSummary.total} pemasok — pin pemasok
+            muncul pada zoom {SUPPLIER_PIN_MIN_ZOOM} ke atas, nama pemasok pada zoom{" "}
+            {SUPPLIER_LABEL_MIN_ZOOM} ke atas.
+          </p>
+        )}
         {showStatusList && (
           <div className="map-side">
             <StatusLocationList locations={locations} />

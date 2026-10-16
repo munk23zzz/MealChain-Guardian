@@ -30,8 +30,10 @@ import {
   supplierReachKmForRole,
   supplierReachMeta,
   supplierReachNote,
+  supplierReachTag,
   withinReachKm,
   shippingLabel,
+  shippingTagLabel,
   supplierShipping,
   supplierLayerSummary,
   supplierPinClass,
@@ -40,6 +42,7 @@ import {
   supplierPopupLines,
   supplierPinsVisible,
   supplierToggleLabel,
+  supplierToggleAction,
   suppliersForCommodity,
   shouldLoadSuppliers,
 } from "../lib/supplier-pins";
@@ -221,9 +224,12 @@ describe("ringkasan layer & gerbang zoom", () => {
       ok: 2,
       unknown: 0,
     });
-    expect(supplierToggleLabel(rows, false)).toBe("Tampilkan pemasok (3)");
-    expect(supplierToggleLabel(rows, true)).toBe("Sembunyikan pemasok (3)");
-    expect(supplierToggleLabel([], false)).toBe("Tampilkan pemasok (0)");
+    // Teks yang TERLIHAT ringkas (jumlah saja); kalimat lengkap laporan
+    // tampil/sembunyi pindah ke `supplierToggleAction` (tooltip tombol).
+    expect(supplierToggleLabel(rows)).toBe("Pemasok (3)");
+    expect(supplierToggleAction(rows, false)).toBe("Tampilkan pemasok (3)");
+    expect(supplierToggleAction(rows, true)).toBe("Sembunyikan pemasok (3)");
+    expect(supplierToggleLabel([])).toBe("Pemasok (0)");
   });
 
   it("pin hanya tampil saat zoom cukup dekat", () => {
@@ -424,6 +430,16 @@ describe("jarak & jangkauan (Fase 7b)", () => {
     );
   });
 
+  it("tag ringkas memuat angka yang SAMA dengan kalimat penjelas", () => {
+    // Tag dipakai bilah lapisan yang selalu terlihat (keputusan pemilik
+    // 2026-10-16): kalimat penuh boleh dilipat, tapi angka jujurnya — termasuk
+    // pemasok yang TIDAK dipasang — harus tetap terbaca tanpa membuka apa pun.
+    const rows = supplierPinRows(PAYLOAD_JANGKAUAN);
+    expect(supplierReachTag(rows, SUPPLIER_REACH_KM, 23)).toBe("2/27 pemasok dalam 150 km");
+    expect(supplierReachTag(rows, null)).toBe("4 pemasok (nasional)");
+    expect(supplierReachTag([], SUPPLIER_REACH_KM, 0)).toBe("belum ada pemasok");
+  });
+
   it("membaca blok reach & distance_reference dari respons server", () => {
     expect(supplierReachMeta(PAYLOAD_JANGKAUAN)).toEqual({
       maxDistanceKm: 150,
@@ -517,6 +533,24 @@ describe("pemasok yang sedang mengirim", () => {
     });
 
     expect(label).toContain("1 gagal uji");
+  });
+
+  it("label pil sel tabel: SATU baris, tanpa berat & tanggal (Fase 12c)", () => {
+    const row = supplierPinRows({ items: [ITEM] })[0];
+
+    // Sel Status hanya butuh "sedang mengirim berapa" — berat & batas layak
+    // membuat pil membungkus 2–3 baris (terukur 186×63 px) sehingga bentuknya
+    // jadi yang paling besar di baris tabel.
+    expect(shippingTagLabel(row.shipping)).toBe("Mengirim 3 kiriman");
+    expect(shippingTagLabel(null)).toBe("—");
+    expect(
+      shippingTagLabel({ count: 0, totalKg: 0, until: null, commodities: [], safetyFailCount: 0 })
+    ).toBe("—");
+    // Kalimat penuhnya TIDAK dihapus — ia dipakai sebagai `title` pil, jadi tidak
+    // ada fakta (berat / batas layak / gagal uji) yang hilang dari layar.
+    expect(shippingLabel(row.shipping)).toBe(
+      "Sedang mengirim · 3 kiriman · 1.400 kg · s/d 2 Nov 2026"
+    );
   });
 
   it("pin pengirim dapat kelas sendiri tanpa mengubah warna nadanya", () => {

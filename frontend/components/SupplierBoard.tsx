@@ -25,12 +25,15 @@ import {
   directoryMetrics,
   directoryReachLabel,
   directoryReachSummary,
+  directoryReachTagLabel,
   exclusionRows,
   filterDirectoryByReach,
   supplierDirectory,
+  supplierMetaLine,
 } from "../lib/suppliers-board";
 import {
   LOW_RELIABILITY,
+  shippingTagLabel,
   supplierDistanceReference,
   withinReachKm,
 } from "../lib/supplier-pins";
@@ -137,8 +140,12 @@ export default function SupplierBoard({
         </article>
       ) : null}
 
-      <div className="board-grid board-grid-2">
-        <article className="card">
+      {/* Fase 12c (16 Okt 2026): kartu Ringkasan TIDAK lagi separuh halaman.
+          Sebelumnya ia duduk di grid 2 kolom tanpa tetangga (terukur 466 px dari
+          947 px) sehingga 7 baris fakta memanjang ke bawah; sekarang selebar
+          halaman dengan fakta disusun beberapa kolom (lihat CSS `.supplier-summary`). */}
+      <div className="board-grid">
+        <article className="card supplier-summary">
           <h2>Ringkasan</h2>
           <FactList
             rows={[
@@ -239,13 +246,11 @@ export default function SupplierBoard({
                 <thead>
                   <tr>
                     <th scope="col">Pemasok</th>
-                    <th scope="col">Hub</th>
                     <th scope="col">Komoditas</th>
                     <th scope="col" className="num">
                       Keandalan
                     </th>
                     <th scope="col">Sertifikasi</th>
-                    <th scope="col">Koordinat</th>
                     <th scope="col" className="num">
                       Jarak
                     </th>
@@ -258,26 +263,70 @@ export default function SupplierBoard({
                     const jalur = jalurPerPemasok.get(row.id) ?? null;
                     return (
                     <tr key={row.id}>
-                      <td>{row.name}</td>
-                      <td>{row.hub}</td>
+                      <td>
+                        {/* Hub & koordinat = baris sekunder di bawah nama (Fase 12c):
+                            keduanya tetap terbaca penuh, tapi tidak lagi memakan dua
+                            kolom dari sembilan. */}
+                        <span className="cell-stack">
+                          <span className="cell-name">{row.name}</span>
+                          <span className="cell-meta">{supplierMetaLine(row)}</span>
+                        </span>
+                      </td>
                       <td>{row.commodity}</td>
-                      <td className="num">{row.reliabilityLabel}</td>
+                      <td className="num">
+                        {row.reliabilityMeter ? (
+                          <span className="reliability-cell">
+                            <span className="reliability-value">{row.reliabilityLabel}</span>
+                            <span
+                              className="mini-bar"
+                              data-tone={row.reliabilityMeter.tone}
+                              role="img"
+                              aria-label={`Keandalan ${row.reliabilityLabel} dari 100`}
+                            >
+                              <span
+                                className="mini-bar-fill"
+                                aria-hidden="true"
+                                style={{ width: `${row.reliabilityMeter.pct}%` }}
+                              />
+                            </span>
+                          </span>
+                        ) : (
+                          row.reliabilityLabel
+                        )}
+                      </td>
                       <td>{row.certification}</td>
-                      <td className="num">{row.coordinates}</td>
                       <td className="num">{row.distanceLabel}</td>
                       <td>
+                        <span className="status-cell">
                         {row.excluded
                           ? `Dikecualikan di ${row.excludedScopes.join(", ")}`
                           : row.shipping
                             ? (
-                                <span className="shipping-tag" title={row.shippingLabel}>
-                                  {row.shippingLabel}
-                                </span>
+                                <>
+                                  {/* Pil ringkas (satu baris, 22 px) — kalimat penuhnya
+                                      (berat, batas layak) tetap terbaca lewat `title`.
+                                      Kiriman yang gagal uji dapat pil sendiri karena itu
+                                      fakta berbeda, bukan catatan tambahan. */}
+                                  <span className="shipping-tag" title={row.shippingLabel}>
+                                    {shippingTagLabel(row.shipping)}
+                                  </span>
+                                  {row.shipping.safetyFailCount > 0 ? (
+                                    <span
+                                      className="shipping-tag-fail"
+                                      title={`${row.shipping.safetyFailCount} kiriman pemasok ini gagal uji keamanan`}
+                                    >
+                                      {row.shipping.safetyFailCount} gagal uji
+                                    </span>
+                                  ) : null}
+                                </>
                               )
                             : "Aktif"}
                         {reachKm !== null && !jarakDalamJangkauan(row, reachKm) ? (
-                          <span className="reach-tag">{directoryReachLabel(row, reachKm)}</span>
+                          <span className="reach-tag" title={directoryReachLabel(row, reachKm)}>
+                            {directoryReachTagLabel(row, reachKm)}
+                          </span>
                         ) : null}
+                        </span>
                       </td>
                       <td className="route-cell">
                         {/* Jalur = rute JALAN kiriman pemasok ini (server). Sebelum

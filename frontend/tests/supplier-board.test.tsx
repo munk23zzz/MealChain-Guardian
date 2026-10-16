@@ -226,7 +226,7 @@ describe("SupplierBoard — kolom \"Jalur kirim\" (lanjutan Fase 10)", () => {
 
   it("pemasok yang mengirim ditulis tujuan + jarak JALAN, baris lain '\u2014'", () => {
     const html = render({ supplierRoutes: JALUR });
-    expect(html).toContain("\u2192 Jakarta \u00b7 110,4 km jalan");
+    expect(html).toContain("\u2192 Jakarta \u00b7 110,4 km");
     expect(html).toContain('title="Jakarta 110,4 km (jarak jalan dari OSRM)"');
     expect(html).toContain("\u2014");
     expect(html).toContain("Jalur kiriman (jalan)");
@@ -235,6 +235,94 @@ describe("SupplierBoard — kolom \"Jalur kirim\" (lanjutan Fase 10)", () => {
 
   it("jarak LURUS tidak diduplikasi di kolom jalur (itu urusan kolom Jarak)", () => {
     const html = render({ supplierRoutes: JALUR });
-    expect(html).not.toContain("78,35 km jalan");
+    expect(html).not.toContain("78,35");
+  });
+});
+
+// Fase 12c (16 Okt 2026) — permintaan pemilik: "anda susun supaya tampilannya
+// rapih dan enak di lihat user dan pastikan shape teks harus enak di lihat juga
+// tidak kebesaran maupun ke kecilan". Ukuran SEBELUM ada di komentar CSS.
+describe("SupplierBoard — kerapian tabel & bentuk pil (Fase 12c)", () => {
+  const SHIP = {
+    items: [
+      {
+        id: "s1",
+        name: "Wortel Lestari Cianjur",
+        location: "Cianjur",
+        commodity: "wortel",
+        certification_status: "haccp",
+        reliability_score: 0.93,
+        latitude: -6.824,
+        longitude: 107.1636,
+        excluded_at_hub: false,
+        excluded_scope_locations: [],
+        shipping: {
+          count: 3,
+          total_kg: 1400,
+          until: "2026-11-02T12:00:00+00:00",
+          commodities: ["wortel"],
+          safety_fail_count: 0,
+        },
+      },
+      {
+        id: "s2",
+        name: "Ayam Segar Subang",
+        location: "Subang",
+        commodity: "ayam",
+        certification_status: null,
+        reliability_score: 0.55,
+        latitude: -6.57,
+        longitude: 107.76,
+        excluded_at_hub: false,
+        excluded_scope_locations: [],
+        shipping: {
+          count: 1,
+          total_kg: 600,
+          until: "2026-10-26T12:00:00+00:00",
+          commodities: ["ayam"],
+          safety_fail_count: 1,
+        },
+      },
+    ],
+  };
+
+  it("kolom Hub & Koordinat dilebur jadi baris kedua sel Pemasok", () => {
+    const html = render({ suppliers: SHIP });
+
+    expect(html).not.toContain(">Hub<");
+    expect(html).not.toContain(">Koordinat<");
+    expect(html).toContain("Cianjur · -6,8240 / 107,1636");
+    expect(html).toContain("cell-name");
+    expect(html).toContain("cell-meta");
+  });
+
+  it("status kiriman jadi pil SATU baris; kalimat penuhnya pindah ke title", () => {
+    const html = render({ suppliers: SHIP });
+
+    expect(html).toContain(">Mengirim 3 kiriman<");
+    expect(html).toContain('title="Sedang mengirim · 3 kiriman · 1.400 kg · s/d 2 Nov 2026"');
+    // Kalimat panjang TIDAK lagi jadi isi pil — itulah yang membuat bentuknya
+    // membungkus 3 baris dan jadi yang paling besar di barisnya.
+    expect(html).not.toContain(">Sedang mengirim · 3 kiriman · 1.400 kg · s/d 2 Nov 2026<");
+  });
+
+  it("kiriman gagal uji dapat pil bahaya sendiri, bukan ditempel di pil hijau", () => {
+    const html = render({ suppliers: SHIP });
+
+    expect(html).toContain("shipping-tag-fail");
+    expect(html).toContain(">1 gagal uji<");
+    expect(html).toContain("gagal uji keamanan");
+  });
+
+  it("pemasok tanpa kiriman tetap 'Aktif' (tanpa pil kosong)", () => {
+    const html = render();
+    expect(html).toContain("Aktif");
+    expect(html).not.toContain("shipping-tag-fail");
+  });
+
+  it("kartu ringkasan selebar halaman (kelas supplier-summary)", () => {
+    const html = render();
+    expect(html).toContain("supplier-summary");
+    expect(html).not.toContain("board-grid board-grid-2");
   });
 });

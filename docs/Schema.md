@@ -159,6 +159,8 @@ Unit inti untuk freshness/safety check.
 | certification_status | TEXT | NOT NULL, DEFAULT 'none' — 'none'\|'hygiene'\|'haccp' |
 | freshness_score | NUMERIC(3,2) | nullable, CHECK BETWEEN 0 AND 1 — diisi oleh `/freshness/evaluate` |
 | safety_status | TEXT | NOT NULL, DEFAULT 'pending', CHECK IN ('pending','pass','fail','needs_verification') |
+| usable_until | TIMESTAMPTZ | nullable — `harvested_at + shelf_life_days × freshness_score`; batas layak pakai |
+| dispatched_at | TIMESTAMPTZ | nullable — **jam barang meninggalkan pemasok** (migrasi `015_batch_dispatch`). `NULL` = belum berangkat, jadi estimasi tiba belum bisa dihitung — bukan jam nol. CHECK `batches_dispatch_after_harvest`: `dispatched_at IS NULL OR dispatched_at >= harvested_at`. Estimasi tiba TIDAK disimpan: dihitung saat baca dari `dispatched_at` + `road_routes.duration_s` (`app/core/journey.py`) |
 
 ### Penanda asal data (`origin`) & `generated_at` — migrasi `013_origin_generated_at`
 Enam tabel deret waktu/operasional membawa penanda asal baris:

@@ -19,6 +19,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from app.core.journey import dispatch_time, validate_dispatch
 from app.db import create_engine, create_session_maker
 from app.models import (
     Batch,
@@ -175,6 +176,11 @@ def build_seed_rows(reference_time: datetime, seed_path: Path | None = None) -> 
     for b in data["batches"]:
         harvested_at = ref + timedelta(hours=float(b["harvested_at_offset_hours"]))
         score = float(b["freshness_score"])
+        # Jam berangkat kiriman: `null` di berkas seed = barang belum berangkat
+        # (NULL di DB), bukan jam nol. Urutannya divalidasi di sini supaya berkas
+        # seed yang salah tidak pernah sampai ke DB.
+        dispatched_at = dispatch_time(ref, b.get("dispatch_offset_hours"))
+        validate_dispatch(harvested_at, dispatched_at)
         # Konversi temperature_log relatif → timestamp absolut (deterministik)
         temperature_log = [
             {
@@ -194,6 +200,7 @@ def build_seed_rows(reference_time: datetime, seed_path: Path | None = None) -> 
                 "supplier": b["supplier"],
                 "quantity_kg": Decimal(str(b["quantity_kg"])),
                 "harvested_at": harvested_at,
+                "dispatched_at": dispatched_at,
                 "shelf_life_days": float(b["shelf_life_days"]),
                 "freshness_score": Decimal(str(b["freshness_score"])),
                 "freshness_status": b["freshness_status"],
@@ -463,6 +470,7 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
                         supplier_id=sup_by_name[item["supplier"]].id,
                         quantity_kg=item["quantity_kg"],
                         harvested_at=item["harvested_at"],
+                        dispatched_at=item["dispatched_at"],
                         temperature_log=item["temperature_log"],
                         certification_status=item["certification_status"],
                         freshness_score=item["freshness_score"],

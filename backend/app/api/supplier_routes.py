@@ -19,6 +19,7 @@ cakupan server selalu menang, sama seperti di `GET /suppliers`.
 """
 
 import uuid
+from collections import Counter
 from datetime import UTC, datetime
 from typing import Optional
 
@@ -28,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import get_current_user
 from app.api.dependencies import get_db
+from app.core.journey import URUTAN_KEADAAN
 from app.core.road_route import SUMBER_OSRM, build_route_payloads, route_key
 from app.models import Batch, Commodity, Location, RoadRoute, Supplier
 
@@ -114,7 +116,10 @@ async def list_supplier_routes(
 
     stmt = (
         select(
+            Batch.id.label("batch_id"),
             Batch.quantity_kg,
+            Batch.harvested_at,
+            Batch.dispatched_at,
             Batch.usable_until,
             Batch.safety_status,
             Supplier.id.label("supplier_id"),
@@ -149,7 +154,7 @@ async def list_supplier_routes(
 
     shipments = [
         {
-            "batch_id": None,
+            "batch_id": row.batch_id,
             "supplier_id": row.supplier_id,
             "supplier_name": row.supplier_name,
             "origin": {
@@ -166,6 +171,8 @@ async def list_supplier_routes(
             },
             "commodity": row.commodity,
             "quantity_kg": float(row.quantity_kg) if row.quantity_kg is not None else None,
+            "harvested_at": row.harvested_at,
+            "dispatched_at": row.dispatched_at,
             "usable_until": row.usable_until,
             "safety_status": row.safety_status,
         }
@@ -173,8 +180,12 @@ async def list_supplier_routes(
     ]
 
     cache = await _read_cache(db, _keys_for(shipments))
-    hasil = build_route_payloads(shipments, cache)
+    hasil = build_route_payloads(shipments, cache, now=now)
     routes = hasil["routes"]
+    # Keadaan perjalanan dihitung sekali di server supaya UI tidak menebak:
+    # sakelar "jalur kiriman" memakai angka ini untuk menyebut berapa kiriman
+    # sedang di jalan dan berapa yang estimasi tibanya masih di depan.
+    journeys = Counter(r["journey"]["state"] for r in routes)
 
     return {
         "routes": routes,
@@ -182,6 +193,9 @@ async def list_supplier_routes(
             "routes": len(routes),
             "with_road": sum(1 for r in routes if r["road"] is not None),
             "without_road": sum(1 for r in routes if r["road"] is None),
+            "journey_states": {
+                state: journeys.get(state, 0) for state in URUTAN_KEADAAN
+            },
             "dilewati_tanpa_koordinat": hasil["dilewati_tanpa_koordinat"],
             "active_only": True,
             "scope": scope,

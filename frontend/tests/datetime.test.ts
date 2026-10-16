@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatClockUtc, formatDate, formatDateTime } from "../lib/datetime";
+import { formatClockUtc, formatClockWib, formatDate, formatDateTime } from "../lib/datetime";
 
 describe("formatDateTime (WIB, id-ID)", () => {
   it("format acuan: tanggal + jam titik + WIB", () => {
@@ -34,6 +34,25 @@ describe("formatDate", () => {
   it("kosong atau tidak sah → —", () => {
     expect(formatDate(null)).toBe("—");
     expect(formatDate("bukan-tanggal")).toBe("—");
+  });
+});
+
+describe("formatClockWib (estimasi tiba perjalanan)", () => {
+  it("ISO UTC → jam WIB ringkas dengan titik", () => {
+    // 2026-10-16T15:54:18Z = 22.54 WIB
+    expect(formatClockWib("2026-10-16T15:54:18+00:00")).toBe("22.54");
+    expect(formatClockWib("2026-10-16T14:30:00Z")).toBe("21.30");
+  });
+
+  it("lintas hari tetap ditulis sebagai jam (tanggalnya urusan formatDateTime)", () => {
+    // 2026-10-16T18:05:00Z = 17 Okt 2026 01.05 WIB
+    expect(formatClockWib("2026-10-16T18:05:00Z")).toBe("01.05");
+  });
+
+  it("kosong atau tidak sah → —", () => {
+    expect(formatClockWib(null)).toBe("—");
+    expect(formatClockWib(undefined)).toBe("—");
+    expect(formatClockWib("bukan-tanggal")).toBe("—");
   });
 });
 

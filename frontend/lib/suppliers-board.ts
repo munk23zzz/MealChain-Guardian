@@ -31,6 +31,8 @@ export type SupplierDirectoryRow = {
   commodity: string;
   reliability: number | null;
   reliabilityLabel: string;
+  /** Bar mini kolom Keandalan (Fase 5); null = tanpa bar, dan labelnya "—". */
+  reliabilityMeter: ReliabilityMeter | null;
   certification: string;
   coordinates: string;
   /** Jarak dari rujukan server (`distance_reference`), atau null bila tidak ada rujukan. */
@@ -49,6 +51,28 @@ export function reliabilityLabel(score: unknown): string {
   const numeric = Number(score);
   if (!Number.isFinite(numeric)) return DASH;
   return `${Math.round(numeric * 100)}%`;
+}
+
+export type ReliabilityMeter = { pct: number; tone: "ok" | "warn" | "danger" };
+
+/**
+ * Lebar bar mini kolom Keandalan (0–100) + nadanya — Fase 5 redesign.
+ *
+ * Ambangnya MEMAKAI `LOW_RELIABILITY` yang sudah dipakai halaman ini, bukan
+ * angka baru: >= 0,80 "ok", >= 0,60 (LOW_RELIABILITY) "warn", di bawah itu
+ * "danger" (kelas yang di ringkasan sudah disebut "keandalan rendah").
+ * Skor yang tidak ada → null: kolomnya tetap "—" TANPA bar, karena bar kosong
+ * terbaca "keandalan 0%" — dua hal yang berbeda. Skor di luar 0..1 dijepit agar
+ * bar tidak melewati jalurnya; angkanya sendiri tetap ditulis apa adanya.
+ */
+export function reliabilityMeter(score: unknown): ReliabilityMeter | null {
+  if (score === null || score === undefined || score === "") return null;
+  const numeric = Number(score);
+  if (!Number.isFinite(numeric)) return null;
+  const pct = Math.min(100, Math.max(0, Math.round(numeric * 100)));
+  const tone: ReliabilityMeter["tone"] =
+    numeric >= 0.8 ? "ok" : numeric >= LOW_RELIABILITY ? "warn" : "danger";
+  return { pct, tone };
 }
 
 function text(value: unknown): string | null {
@@ -105,6 +129,7 @@ export function supplierDirectory(raw: unknown): SupplierDirectoryRow[] {
       commodity: text(record.commodity) ?? DASH,
       reliability,
       reliabilityLabel: reliabilityLabel(reliability),
+      reliabilityMeter: reliabilityMeter(reliability),
       certification: certificationLabel(text(record.certification_status)),
       coordinates: coordinatesLabel(latitude, longitude),
       distanceKm,
@@ -116,6 +141,22 @@ export function supplierDirectory(raw: unknown): SupplierDirectoryRow[] {
     });
   }
   return rows.sort(compareByRisk);
+}
+
+/**
+ * Baris kedua sel "Pemasok": hub · koordinat (Fase 12c, 16 Okt 2026).
+ *
+ * Dua kolom terpisah ("Hub" dan "Koordinat") memakan 178 px dari 913 px tabel
+ * sehingga sembilan kolom berdesakan dan setiap sel membungkus 3–4 baris
+ * (terukur: tinggi baris 74 px, tabel 1025 px di dalam wadah 913 px → wajib
+ * digeser ke samping). Sebagai baris sekunder di bawah NAMA, keduanya tetap
+ * terbaca penuh dan kolomnya bisa bernapas. Bagian yang tidak ada TIDAK ditulis
+ * "—": "Cianjur · —" terbaca seperti data rusak.
+ */
+export function supplierMetaLine(row: SupplierDirectoryRow): string {
+  const bagian = [row.hub !== DASH ? row.hub : null, row.coordinates !== DASH ? row.coordinates : null];
+  const ada = bagian.filter((item): item is string => Boolean(item));
+  return ada.length ? ada.join(" · ") : DASH;
 }
 
 /** Risiko dulu: dikecualikan → skor terendah → terbaik → tanpa skor → nama. */
@@ -199,6 +240,24 @@ export function directoryReachLabel(
   reachKm?: number | null
 ): string {
   return distanceReachLabel(row.distanceKm, reachKm);
+}
+
+/**
+ * Label RINGKAS pil jangkauan di sel Status tabel Pemasok (Fase 12c, 16 Okt 2026).
+ *
+ * Jarak km sudah tertulis di kolom Jarak — persis di sebelah sel Status — jadi pil
+ * cukup menyebut KEADAANNYA. Mengulang angka itu di dalam pil membuat pilnya
+ * 171 px dan mendorong tabel 7 kolom meluap dari wadahnya (terukur 960 px di dalam
+ * 913 px). Kalimat penuhnya tetap dipakai sebagai `title`. Kasus "jarak tidak
+ * diketahui" TIDAK disamarkan menjadi "di luar jangkauan": dua keadaan berbeda,
+ * sama seperti aturan `distanceReachLabel`.
+ */
+export function directoryReachTagLabel(
+  row: SupplierDirectoryRow,
+  reachKm?: number | null
+): string {
+  if (row.distanceKm === null || !Number.isFinite(row.distanceKm)) return "jarak tidak diketahui";
+  return withinReachKm(row.distanceKm, reachKm) ? "dalam jangkauan" : "di luar jangkauan";
 }
 
 /** Ringkasan jujur di atas tabel: berapa yang tampil dari berapa, dari rujukan mana. */

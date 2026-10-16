@@ -24,9 +24,11 @@ pengganti diam-diam.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any, Iterable, Optional
 
 from app.core.geo import haversine_km
+from app.core.journey import journey_payload
 
 PROFIL_DEFAULT = "driving"
 SUMBER_OSRM = "osrm"
@@ -218,7 +220,11 @@ def _titik(blok: Any) -> Optional[tuple[float, float]]:
         return None
 
 
-def build_route_payloads(shipments: Iterable[dict], cache: dict[str, dict]) -> dict:
+def build_route_payloads(
+    shipments: Iterable[dict],
+    cache: dict[str, dict],
+    now: datetime | None = None,
+) -> dict:
     """Susun payload rute untuk endpoint dari baris kiriman + cache.
 
     Kiriman yang tujuan/pemasoknya tidak punya koordinat DILEWATI (dihitung di
@@ -226,6 +232,11 @@ def build_route_payloads(shipments: Iterable[dict], cache: dict[str, dict]) -> d
     menyesatkan. Rute yang belum ada di cache tetap dikirim dengan `road = null`
     + `road_missing_reason`, supaya UI bisa bilang "belum disinkronkan" alih-alih
     menggambar garis lurus yang menyamar sebagai rute jalan.
+
+    Sejak Fase 12, tiap rute juga membawa `journey`: jam berangkat (dari DB),
+    estimasi tiba, keadaan perjalanan, dan sisa menit. Waktu tempuhnya diambil
+    dari `road.duration_s` (OSRM) — kalau rutenya belum tersinkron, estimasi tiba
+    TIDAK dibuat (lihat `app/core/journey.py`).
     """
     routes: list[dict] = []
     dilewati = 0
@@ -258,9 +269,16 @@ def build_route_payloads(shipments: Iterable[dict], cache: dict[str, dict]) -> d
             reason = None
 
         usable_until = s.get("usable_until")
+        journey = journey_payload(
+            now=now or datetime.now(UTC),
+            dispatched_at=s.get("dispatched_at"),
+            travel_s=row["duration_s"] if row else None,
+            travel_source=row.get("source") if row else None,
+            usable_until=usable_until,
+        )
         routes.append(
             {
-                "batch_id": str(s["batch_id"]),
+                "batch_id": str(s["batch_id"]) if s.get("batch_id") else None,
                 "supplier_id": str(s["supplier_id"]),
                 "supplier_name": s["supplier_name"],
                 "origin": {
@@ -277,11 +295,16 @@ def build_route_payloads(shipments: Iterable[dict], cache: dict[str, dict]) -> d
                 },
                 "commodity": s.get("commodity"),
                 "quantity_kg": s.get("quantity_kg"),
+                "harvested_at": (
+                    s["harvested_at"].isoformat() if s.get("harvested_at") else None
+                ),
                 "usable_until": usable_until.isoformat() if usable_until else None,
                 "safety_status": s.get("safety_status"),
                 "straight_km": straight_km,
+                "route_key": key,
                 "road": road,
                 "road_missing_reason": reason,
+                "journey": journey,
             }
         )
 

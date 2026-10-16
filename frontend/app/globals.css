@@ -1938,36 +1938,85 @@ a:focus-visible {
 /* Lokasi aktif dari dropdown cakupan top bar: cincin brand, ukuran sama
    supaya tidak ada pin yang "melompat" saat disorot. */
 .map-pin-active .map-pin-dot {
-  box-shadow: 0 0 0 4px rgba(9, 105, 218, 0.45), 0 1px 4px rgba(15, 23, 42, 0.35);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.45), 0 1px 4px rgba(15, 23, 42, 0.35);
 }
 
-/* Legenda peta (kiri-bawah, kotak putih seperti acuan) — warna titik SAMA
-   dengan pin di kanvas, jadi legenda ini sumber maknanya. */
+/* Kotak legenda peta (kiri-bawah) — SATU kotak berisi tiga baris: status lokasi,
+   jalur kiriman, pemasok (keputusan pemilik 2026-10-16). Urutan dari BAWAH:
+   pemasok -> jalur kiriman -> status lokasi (dari atas: status -> jalur -> pemasok).
+   Ukuran sengaja diperkecil (11px, padding 6x8, titik 7px) supaya kanvas tetap
+   lapang saat presentasi. Warna titik/garis SAMA dengan pin di kanvas, jadi
+   legenda inilah sumber maknanya. */
 .map-shell { position: relative; }
-.map-legend-box {
+/* Panggung legenda di kanvas. Sejak revisi 16 Okt yang TERLIHAT saat tertutup
+   hanya chip kecil "Legenda peta" (terukur: 300x137 px -> 118x24 px), jadi
+   kanvas tidak lagi tertutup kotak putih di atas Jawa Barat. */
+.map-legend-stack {
   position: absolute;
-  left: 12px;
-  bottom: 12px;
+  left: 10px;
+  bottom: 10px;
   z-index: 3;
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 8px 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: min(300px, calc(100% - 20px));
+  font-size: var(--fs-1);
+  line-height: 1.35;
+  color: var(--ink);
+  pointer-events: none;   /* hanya chip-nya yang menerima klik */
+}
+/* Chip pembuka legenda: memakai gaya `.map-layer-info-toggle` (satu bahasa
+   visual dengan tombol "Rincian lapisan peta" di bawah kanvas); yang ditimpa
+   hanya latar + bayangan supaya terbaca di atas peta. Ditulis dengan dua kelas
+   (`.map-legend-stack .map-legend-toggle`) karena aturan chip bersama ada
+   SESUDAH blok ini di berkas — tanpa itu latar `--surface-sunken` yang menang. */
+.map-legend-stack .map-legend-toggle {
+  pointer-events: auto;
+  background: rgba(255, 255, 255, 0.95);
+  border-color: var(--line);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14);
+}
+/* Isi legenda: TERTUTUP secara bawaan. `display: none` (bukan cuma opacity)
+   supaya ia juga keluar dari pohon aksesibilitas — yang tidak terlihat tidak
+   boleh terbaca pembaca layar. Tidak ada isi legenda yang dihapus dari DOM. */
+.map-legend-boxes {
+  display: none;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  max-width: 100%;
+  padding: 6px 8px;
   border-radius: 6px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.95);
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.16);
-  font-size: 12.5px;
-  color: var(--ink);
+}
+.map-legend-stack-open .map-legend-boxes {
+  display: flex;
+  /* Muncul sekali dengan gerak kecil saat dibuka — legenda adalah kunci
+     membaca pin, jadi ia "datang" sesudah peta, bukan menyala mendadak. */
+  animation: map-legend-in var(--dur-3) var(--ease-standard) both;
+}
+@keyframes map-legend-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+/* Satu BARIS di dalam kotak legenda: bukan kotak sendiri lagi — tanpa bingkai,
+   latar, atau bayangan; hanya deretan item yang boleh membungkus. */
+.map-legend-box {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px 8px;
   pointer-events: none;
 }
 .map-legend-box-title { color: var(--ink-muted); }
-.map-legend-box-item { display: inline-flex; align-items: center; gap: 6px; }
+.map-legend-box-item { display: inline-flex; align-items: center; gap: 4px; }
 .map-legend-box-dot {
   display: inline-block;
-  width: 9px;
-  height: 9px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex: none;
   border: 1px solid rgba(15, 23, 42, 0.18);
@@ -1976,6 +2025,42 @@ a:focus-visible {
 .map-legend-box-dot-balanced { background: var(--ink-muted); }
 .map-legend-box-dot-shortage { background: var(--status-danger); }
 
+/* Perjalanan kiriman (Fase 12) — satu baris per kiriman di kotak "Info map":
+   keadaan + estimasi tiba. Angkanya datang dari server (`journey` di
+   /supplier-routes), jadi peta dan halaman lain menyebut jam yang sama. Titik
+   warna di depan baris membawa keadaannya; barisnya sengaja kecil supaya kotak
+   Info map tidak melebar menutupi peta. */
+.map-journey {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.map-journey-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.map-journey-item::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-subtle);
+}
+.map-journey-moving::before {
+  background: var(--status-safe);
+  box-shadow: 0 0 0 2px rgba(46, 125, 50, 0.18);
+}
+.map-journey-done::before { background: var(--ink-muted); }
+.map-journey-pending::before { background: var(--warn-ink); }
+.map-journey-unknown::before {
+  background: var(--surface);
+  border: 1px dashed var(--ink-subtle);
+}
+.map-journey-more { color: var(--ink-muted); }
+.map-journey-more::before { display: none; }
+
 /* --- Layer pemasok (Fase 3, 2026-10-14) ----------------------------------
    Pemasok tampil dengan BENTUK berbeda (kotak miring) dari pin SPPG (titik
    bulat), supaya dua lapisan di peta yang sama tidak bisa tertukar walau
@@ -1983,27 +2068,57 @@ a:focus-visible {
    `--warn-ink` (keandalan rendah — dipakai, bukan --status-warning, karena
    kuning terang hanya 1,9:1 di atas peta terang), `--status-danger`
    (dikecualikan), `--ink-muted` (keandalan belum diketahui). */
-.map-supplier-controls {
+/* Sakelar lapisan: SATU-SATUNYA elemen yang mengapung di kanvas peta (keputusan
+   pemilik 2026-10-16). Dua tombol dikelompokkan dalam satu pil putih supaya
+   terbaca sebagai satu kendali, bukan dua kotak terpisah — dan sejak revisi
+   16 Okt (arah pemilik: "2 tombol di atas dibuat kecil saja") pil ini diperkecil
+   lagi supaya tidak menutupi Jawa Barat tempat pin SPPG & jalur kiriman berada.
+   Legenda pindah ke `.map-legend-stack` di kanvas; rincian penjelas ke
+   `.map-layer-info` di bawah kanvas. */
+.map-overlay-toggles {
   position: absolute;
-  top: 12px;
-  left: 12px;
+  top: 8px;
+  left: 8px;
   z-index: 4;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  max-width: calc(100% - 24px);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14);
+  max-width: calc(100% - 16px);
+}
+/* Di dalam pil, tombol tidak perlu bingkai sendiri: batas kontrol yang terlihat
+   adalah pil-nya (>= 3:1 terhadap peta). */
+.map-overlay-toggles .map-layer-toggle {
+  border: 0;
+  background: transparent;
+  border-radius: 5px;
 }
 .map-layer-toggle {
-  min-height: 44px;                 /* target sentuh (a11y) */
-  padding: 10px 14px;
+  min-height: 26px;                 /* revisi 16 Okt (arah pemilik "dibuat kecil
+                                       saja"): 34 → 26px. Ukuran huruf TIDAK ikut
+                                       turun — 12px (`--fs-1`) adalah batas bawah
+                                       teks data (docs/design.md §4). Target sentuh
+                                       44px tetap berlaku di (pointer: coarse) /
+                                       <=720px lewat aturan global LANGKAH B. */
+  padding: 2px 8px;
   border: 1px solid var(--line-input);
-  border-radius: 6px;
+  border-radius: 4px;
   background: rgba(255, 255, 255, 0.96);
   color: var(--ink);
-  font-size: 13px;
+  font-size: var(--fs-1);
   font-weight: 600;
   cursor: pointer;
+  /* Umpan balik halus: warna + dorongan tekan. Aturan global `button:active`
+     yang mempersingkat durasi ke --dur-1 saat tombol ditekan. */
+  transition: background var(--dur-2) var(--ease-standard),
+    color var(--dur-2) var(--ease-standard),
+    border-color var(--dur-2) var(--ease-standard),
+    transform var(--dur-2) var(--ease-standard);
 }
 .map-layer-toggle:hover { background: var(--surface-sunken); }
 .map-layer-toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
@@ -2012,68 +2127,143 @@ a:focus-visible {
   border-color: var(--accent-strong);
   color: var(--surface);
 }
-.map-layer-hint {
-  margin: 0;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.95);
-  color: var(--ink-muted);
-  font-size: 12px;
-  max-width: 320px;
-}
-/* Legenda pemasok ikut kendali di kiri-atas (legenda status tetap kiri-bawah),
-   jadi kotaknya tidak lagi mengapung sendiri di sudut. */
-.map-supplier-controls .map-legend-box {
-  position: static;
-  left: auto;
-  bottom: auto;
-  z-index: auto;
-  pointer-events: auto;
-}
-/* Kalimat jangkauan layer pemasok (Fase 7b): menyebut rujukan + jumlah yang
-   tidak dipasang, supaya penyaringan tidak pernah jadi penyembunyian diam-diam. */
-.map-supplier-note {
-  margin: 4px 0 0;
-  font-size: var(--text-meta);
-  color: var(--ink-subtle);
-  max-width: 46ch;
-}
-/* --- Jalur kiriman di peta (Fase 10) -------------------------------------
-   Wadah baru supaya sakelar+legenda jalur tidak menumpuk dengan kontrol layer
-   pemasok di sudut yang sama. Kontrol di dalamnya jadi static. */
-.map-layer-controls {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 4;
+/* --- Bilah rincian lapisan peta (revisi 16 Okt, arah pemilik) --------------
+   Sebelumnya dua kalimat penjelas selalu memakan dua baris penuh di bawah peta.
+   Kini: (1) angka ringkas satu baris SELALU terlihat sebagai tag, dan (2)
+   kalimat penjelas penuh dilipat di balik tombol kecil. Isi panel TIDAK dihapus
+   dari DOM, hanya dilipat — penyaringan jangkauan & asal geometri OSRM tetap
+   bisa diperiksa, jadi tidak ada penyembunyian diam-diam. */
+.map-layer-info {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  max-width: calc(100% - 24px);
-}
-.map-supplier-controls,
-.map-route-controls {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 8px;
   max-width: 100%;
 }
-.map-layer-controls .map-supplier-controls,
-.map-layer-controls .map-route-controls {
-  position: static;
-  top: auto;
-  left: auto;
-  z-index: auto;
+/* Chip lipat bersama: dipakai tombol "Rincian lapisan peta" di bawah kanvas dan
+   tombol "Legenda peta" di atas kanvas — satu bahasa visual, dua tempat. */
+.map-layer-info-toggle,
+.map-legend-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 1px 9px 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: var(--fs-1);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-2) var(--ease-standard),
+    border-color var(--dur-2) var(--ease-standard),
+    color var(--dur-2) var(--ease-standard),
+    transform var(--dur-2) var(--ease-standard);
 }
-.map-layer-controls .map-legend-box {
-  position: static;
-  left: auto;
-  bottom: auto;
-  z-index: auto;
-  pointer-events: auto;
+.map-layer-info-toggle:hover,
+.map-legend-toggle:hover {
+  background: var(--surface);
+  border-color: var(--line-input);
+  color: var(--ink);
+}
+.map-layer-info-toggle:focus-visible,
+.map-legend-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.map-layer-info-toggle[aria-expanded="true"],
+.map-legend-toggle[aria-expanded="true"] {
+  background: var(--surface);
+  border-color: var(--line-input);
+  color: var(--navy-700);
+}
+/* Chevron: segitiga CSS (bukan gambar) supaya tidak ada permintaan berkas.
+   Diputar 90° saat panel terbuka — gerak kecil yang menjelaskan ke mana
+   isinya pergi, bukan sekadar hiasan. */
+.map-layer-info-chevron,
+.map-legend-chevron {
+  flex: none;
+  width: 0;
+  height: 0;
+  border-left: 4px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  transition: transform var(--dur-2) var(--ease-standard);
+}
+.map-layer-info-toggle[aria-expanded="true"] .map-layer-info-chevron,
+.map-legend-toggle[aria-expanded="true"] .map-legend-chevron {
+  transform: rotate(90deg);
+}
+/* Tag angka: satu baris, angka rata (tabular) supaya tidak "melompat" saat
+   polling memperbarui jumlahnya. */
+.map-layer-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.map-layer-tag-sep { color: var(--line-input); }
+/* Panel lipat: tinggi dianimasikan lewat trik grid 0fr → 1fr supaya BISA dibuka
+   DAN ditutup dengan gerak yang sama (animasi tinggi `max-height` tidak bisa
+   menutup mulus). Saat tertutup isinya `visibility: hidden` — jadi hilang dari
+   pohon aksesibilitas, bukan hanya tak terlihat. */
+.map-layer-info-panel {
+  flex: 1 1 100%;
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows var(--dur-3) var(--ease-standard),
+    opacity var(--dur-2) var(--ease-standard);
+}
+.map-layer-info-panel[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.map-layer-info-inner {
+  overflow: hidden;
+  visibility: hidden;
+  transition: visibility 0s linear var(--dur-3);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 4px 18px;
+}
+.map-layer-info-panel[data-open="true"] .map-layer-info-inner {
+  visibility: visible;
+  transition-delay: 0s;
+}
+/* Kalimat jangkauan layer pemasok (Fase 7b): menyebut rujukan + jumlah yang
+   tidak dipasang, supaya penyaringan tidak pernah jadi penyembunyian diam-diam.
+   Di dalam panel: diberi batang kiri tipis supaya terbaca sebagai kutipan
+   rincian, bukan paragraf badan. */
+.map-supplier-note {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+  max-width: 52ch;
+  border-left: 2px solid var(--line);
+  padding-left: 8px;
+  line-height: 1.5;
+}
+/* Peringatan "perbesar peta" — teks polos DI BAWAH peta (bukan kotak mengapung
+   di atas kanvas) dan sengaja di luar panel lipat: saat sakelar pemasok
+   dinyalakan pada zoom jauh, alasannya harus muncul seketika. */
+.map-layer-hint {
+  margin: 6px 0 0;
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  max-width: 46ch;
+  animation: map-layer-hint-in var(--dur-2) var(--ease-standard) both;
+}
+@keyframes map-layer-hint-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: none; }
 }
 /* Contoh garis: dipakai legenda jalur, popup, dan sakelar. SENGAJA kelas
    tersendiri (`map-legend-line`/`ship-route`) — `.route-line` sudah milik
@@ -2086,36 +2276,114 @@ a:focus-visible {
   border-top: 3px dashed var(--status-safe);
   flex: none;
 }
+/* Contoh garis di dalam kotak legenda peta ikut diperkecil (keputusan pemilik
+   2026-10-16). `.ship-route` di popup dibiarkan 22px supaya tetap jelas. */
+.map-legend-stack .map-legend-line {
+  width: 16px;
+  border-top-width: 2px;
+}
 .map-legend-line-fail,
 .ship-route-fail { border-top-color: var(--status-danger); }
 .map-popup-line {
   margin: 4px 0 0;
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   color: var(--ink-subtle);
 }
-/* Kolom jarak + penyaring jangkauan halaman Pemasok (Fase 7b). */
-.reach-tag {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1px 6px;
-  border: 1px dashed var(--ink-subtle);
+/* --- Label ringkas tabel Pemasok: SATU standar bentuk (Fase 12c, 16 Okt 2026) ---
+   Sebelumnya bentuk pil mengikuti panjang kalimatnya: `.shipping-tag` memuat
+   "Sedang mengirim · 1 kiriman · 600 kg · s/d 1 Nov 2026 · 1 gagal uji" sehingga
+   membungkus 2–3 baris (terukur 186×63 px) dan menjadi bentuk PALING BESAR di
+   barisnya, sementara `.reach-tag` 13 px / 24 px. Sekarang ketiganya satu
+   standar: 12 px, padding 2px 8px, tidak pernah membungkus → tinggi 22 px, sama
+   dengan pil kepala halaman (`.commodity-pill`). Pedoman UI menaruh "compact
+   label overflow" sebagai severity tinggi: label ringkas harus utuh satu baris.
+   Kalimat penuhnya tidak hilang — ia pindah ke `title`/`aria-label` elemennya. */
+.reach-tag,
+.shipping-tag,
+.shipping-tag-fail {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 8px;
   border-radius: 999px;
-  font-size: var(--text-meta);
-  color: var(--ink-subtle);
+  font-size: var(--fs-1);
+  line-height: 1.35;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-/* Status "sedang mengirim" di tabel Pemasok (keputusan pemilik 2026-10-16).
-   Token hijau-aman: fakta positif, bukan peringatan. Teksnya memuat jumlah
-   kiriman, berat, dan batas layak, jadi sengaja dibiarkan membungkus. */
+.reach-tag {
+  border: 1px dashed var(--ink-subtle);
+  color: var(--ink-subtle);
+}
+/* Status "sedang mengirim" (keputusan pemilik 2026-10-16). Token hijau-aman:
+   fakta positif, bukan peringatan. */
 .shipping-tag {
-  display: inline-block;
-  padding: 1px 6px;
   border: 1px solid var(--ok-border);
-  border-radius: 999px;
   background: var(--ok-bg);
   color: var(--ok-ink);
-  font-size: var(--text-meta);
 }
+/* Kiriman bergagal-uji: fakta BEDA dari "sedang mengirim", jadi nadanya sendiri
+   (bahaya) dan tidak ditumpuk jadi satu kalimat panjang. */
+.shipping-tag-fail {
+  border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+}
+/* Sel "Status": pil berjajar rapi; yang membungkus adalah ANTAR-pil, bukan
+   teks di dalam pilnya. */
+.status-cell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+/* Sel "Pemasok": nama + baris sekunder hub · koordinat (Fase 12c). Sebelumnya
+   keduanya kolom sendiri-sendiri (Hub 84 px + Koordinat 94 px dari 913 px tabel)
+   sehingga sembilan kolom berdesakan dan tiap sel membungkus 3–4 baris. */
+.cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.cell-name {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cell-meta {
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Kartu "Ringkasan" halaman Pemasok (Fase 12c, 16 Okt 2026).
+   Sebelumnya kartu ini duduk di grid 2 kolom tanpa tetangga: terukur 466 px dari
+   947 px halaman, dan 7 baris label/nilai memanjang ke bawah jadi 392 px tinggi
+   dengan kolom label 45% yang menganga. Sekarang kartunya selebar halaman dan
+   tiap fakta jadi kotak kecil sendiri (2–3 kolom): label kiri, angka kanan. */
+.supplier-summary .fact-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px 12px;
+}
+.supplier-summary .fact-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-sunken);
+}
+.supplier-summary .fact-row dd {
+  text-align: right;
+}
+.supplier-summary .fact-hint {
+  grid-column: 1 / -1;
+}
+
 /* Kolom "Jalur kirim" (tabel Pemasok): teks jalur JALAN apa adanya — sengaja
    TANPA lencana warna supaya tidak terbaca sebagai status keamanan kiriman
    (itu tugas kolom Status). */
@@ -2135,15 +2403,24 @@ a:focus-visible {
   gap: var(--space-2);
   margin: 0 0 var(--space-2);
 }
+/* Kartu "Daftar pemasok" (Fase 12c): baris penyaring jangkauan tadinya hanya
+   8 px di atas baris kepala tabel sehingga catatan kecil "Menyembunyikan N
+   pemasok…" menempel ke tabel. 12 px memberi napas. Dipatok ke `.board-page`
+   supaya tumpukan legenda peta (yang memakai `.reach-filter` sama) tidak ikut
+   bergeser. */
+.board-page .reach-filter {
+  margin-bottom: var(--space-3);
+}
+
 .reach-filter-note {
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   color: var(--ink-subtle);
   max-width: 72ch;
 }
 .map-legend-box-shape {
   display: inline-block;
-  width: 9px;
-  height: 9px;
+  width: 7px;
+  height: 7px;
   flex: none;
   transform: rotate(45deg);
   border: 1px solid rgba(15, 23, 42, 0.25);
@@ -2184,22 +2461,49 @@ a:focus-visible {
 /* Titik tanpa nama: pada tampilan jaringan sepuluh label kota akan saling
    menimpa, jadi nama baru muncul setelah pengguna memperbesar peta. */
 .map-pin-supplier-compact .map-pin-label { display: none; }
-.map-popup-supplier p { margin: 2px 0 0; font-size: 12.5px; }
+.map-popup-supplier p { margin: 2px 0 0; font-size: var(--fs-2); }
 
 /* Kendali bawaan MapLibre (zoom + kompas kanan-atas, atribusi kanan-bawah). */
-.map-shell .maplibregl-ctrl-attrib { font-size: var(--text-micro); }
+.map-shell .maplibregl-ctrl-attrib { font-size: var(--fs-1); }
 .map-shell .maplibregl-ctrl-attrib a { color: var(--navy-700); }
+/* Isi popup masuk dengan gerak kecil. Animasi dipasang pada ISI popup
+   (`.map-popup`), bukan `.maplibregl-popup`: MapLibre memakai `transform` elemen
+   itu untuk memposisikan popup — menimpanya akan membuat popup mendarat di
+   tempat yang salah. */
+.map-shell .map-popup { animation: map-popup-in var(--dur-2) var(--ease-standard) both; }
+@keyframes map-popup-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Gerak peta dihormati (WCAG 2.3.3): animasi masuk & transisi dimatikan, tapi
+   UMPAN BALIK tetap ada lewat perubahan warna/cincin — bukan gerak.
+   Ketinggian panel lipat tetap benar tanpa transisi (0fr/1fr tetap berlaku). */
+@media (prefers-reduced-motion: reduce) {
+  .map-legend-stack,
+  .map-layer-hint,
+  .map-shell .map-popup { animation: none; }
+  .map-layer-info-panel,
+  .map-layer-info-panel .map-layer-info-inner,
+  .map-layer-info-chevron,
+  .map-layer-info-toggle,
+  .map-layer-toggle,
+  .map-pin-dot,
+  .map-pin-supplier-dot { transition: none; }
+  .map-pin:hover .map-pin-dot { transform: none; }
+  .map-pin-supplier:hover .map-pin-supplier-dot { transform: rotate(45deg); }
+}
 
 .map-card .map-side { margin-top: 16px; container-type: inline-size; }
 .map-card .map-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 0; }
 
 /* Kepala bagian "Status Lokasi" (judul + jumlah + legenda). */
 .map-section-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; }
-.map-section-head h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--navy-900); }
+.map-section-head h3 { margin: 0; font-size: var(--fs-4); font-weight: 600; color: var(--navy-900); }
 .map-section-head .map-legend { margin-left: auto; }
-.map-section-count { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-sunken); color: var(--ink-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.map-section-count { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-sunken); color: var(--ink-muted); font-size: var(--fs-1); font-variant-numeric: tabular-nums; }
 .map-card .map-column-label { display: none; }
-.map-card .map-legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.map-card .map-legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-2); }
 .map-card .map-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .map-card .map-dot-shortage { background: var(--status-danger); }
 /* Surplus = hijau, sama dengan badge baris dan pin di kanvas (dulu biru brand

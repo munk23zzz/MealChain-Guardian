@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import SupplyMap from "../components/SupplyMap";
+import { SUPPLIER_PIN_LEGEND } from "../lib/supplier-pins";
 
 const LOCATIONS = [
   {
@@ -92,30 +93,34 @@ describe("SupplyMap — layer pemasok", () => {
     expect(html).toContain('aria-pressed="false"');
     expect(html).toContain('type="button"');
     // 3 baris, satu di antaranya tanpa koordinat → hanya 2 yang bisa dipin.
-    expect(html).toContain("Tampilkan pemasok (2)");
+    // Teks yang terlihat ringkas; kalimat lengkapnya jadi tooltip (title).
+    expect(html).toContain(">Pemasok (2)</button>");
+    expect(html).toContain('title="Tampilkan pemasok (2)"');
   });
 
   it("label tombol mengikuti filter komoditas peta", () => {
-    expect(render({ suppliers: SUPPLIERS, commodity: "telur" })).toContain(
-      "Tampilkan pemasok (1)"
-    );
+    expect(render({ suppliers: SUPPLIERS, commodity: "telur" })).toContain(">Pemasok (1)</button>");
     expect(render({ suppliers: SUPPLIERS, commodity: "wortel" })).toContain(
-      "Tampilkan pemasok (1)"
+      ">Pemasok (1)</button>"
     );
-    expect(render({ suppliers: SUPPLIERS, commodity: "ayam" })).toContain(
-      "Tampilkan pemasok (0)"
-    );
+    expect(render({ suppliers: SUPPLIERS, commodity: "ayam" })).toContain(">Pemasok (0)</button>");
   });
 
-  it("legenda pemasok menyebut makna nada pin, bukan enum internal", () => {
+  it("keterangan pemasok hanya dirender saat lapisannya hidup", () => {
+    // Arah pemilik 2026-10-16: kotak "Info map" tidak menerangkan warna yang
+    // tidak ada di peta. Lapisan pemasok MATI secara bawaan, jadi keterangannya
+    // belum dirender di SSR; labelnya sendiri (makna nada pin) tetap diuji di
+    // sini lewat sumber datanya, dan perilakunya setelah tombol dinyalakan ada di
+    // tests/supply-map-layer.test.tsx.
     const html = render({ suppliers: SUPPLIERS });
-    expect(html).toContain("Legenda pemasok");
-    expect(html).toContain("Pemasok:");
-    expect(html).toContain("Keandalan rendah");
-    expect(html).toContain("Dikecualikan");
-    expect(html).toContain("map-legend-box-shape-ok");
-    expect(html).toContain("map-legend-box-shape-low");
-    expect(html).toContain("map-legend-box-shape-excluded");
+    expect(html).toContain(">Pemasok (2)</button>");
+    expect(html).not.toContain('aria-label="Keterangan pemasok"');
+    expect(html).not.toContain("map-legend-box-shape-excluded");
+    const label = SUPPLIER_PIN_LEGEND.map((entry) => entry.label).join(" | ");
+    expect(label).toContain("Keandalan rendah");
+    expect(label).toContain("Dikecualikan");
+    expect(label).not.toContain("haccp");
+    expect(label).not.toContain("hygiene");
     expect(html).not.toContain("haccp");
     expect(html).not.toContain("hygiene");
   });
@@ -124,7 +129,8 @@ describe("SupplyMap — layer pemasok", () => {
     const html = render({
       suppliers: { items: [SUPPLIERS.items[2]] },
     });
-    expect(html).toContain("Tampilkan pemasok (0)");
+    expect(html).toContain(">Pemasok (0)</button>");
+    expect(html).toContain('title="Tampilkan pemasok (0)"');
   });
 
   it("lapisan pemasok tidak menambah/mengubah pin SPPG atau angka peta", () => {

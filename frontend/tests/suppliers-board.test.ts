@@ -10,11 +10,15 @@ import {
   directoryMetrics,
   directoryReachLabel,
   directoryReachSummary,
+  directoryReachTagLabel,
   exclusionRows,
   filterDirectoryByReach,
   reliabilityLabel,
+  reliabilityMeter,
   supplierDirectory,
+  supplierMetaLine,
 } from "../lib/suppliers-board";
+import { LOW_RELIABILITY } from "../lib/supplier-pins";
 
 const ITEMS = {
   count: 4,
@@ -77,6 +81,33 @@ describe("reliabilityLabel", () => {
     expect(reliabilityLabel("0.65")).toBe("65%");
     expect(reliabilityLabel(null)).toBe("—");
     expect(reliabilityLabel("bukan angka")).toBe("—");
+  });
+});
+
+describe("reliabilityMeter", () => {
+  it("skor 0..1 jadi lebar bar + nada; skor tak ada jadi null, BUKAN lebar 0", () => {
+    expect(reliabilityMeter(0.93)).toEqual({ pct: 93, tone: "ok" });
+    expect(reliabilityMeter("0.65")).toEqual({ pct: 65, tone: "warn" });
+    expect(reliabilityMeter(0.38)).toEqual({ pct: 38, tone: "danger" });
+    expect(reliabilityMeter(null)).toBeNull();
+    expect(reliabilityMeter(undefined)).toBeNull();
+    expect(reliabilityMeter("")).toBeNull();
+    expect(reliabilityMeter("bukan angka")).toBeNull();
+  });
+
+  it("ambang memakai LOW_RELIABILITY yang sudah ada — bukan angka karangan baru", () => {
+    expect(LOW_RELIABILITY).toBe(0.6);
+    expect(reliabilityMeter(LOW_RELIABILITY)).toEqual({ pct: 60, tone: "warn" });
+    expect(reliabilityMeter(0.59)).toEqual({ pct: 59, tone: "danger" });
+    expect(reliabilityMeter(0.8)).toEqual({ pct: 80, tone: "ok" });
+    expect(reliabilityMeter(0.79)).toEqual({ pct: 79, tone: "warn" });
+  });
+
+  it("skor di luar 0..1: bar dijepit ke rentang, label tetap apa adanya", () => {
+    // Bar tidak boleh melewati jalurnya; angkanya sendiri ditulis apa adanya
+    // (label) supaya data aneh tetap terlihat, bukan disembunyikan.
+    expect(reliabilityMeter(1.4)).toEqual({ pct: 100, tone: "ok" });
+    expect(reliabilityMeter(-0.2)).toEqual({ pct: 0, tone: "danger" });
   });
 });
 
@@ -285,5 +316,59 @@ describe("kolom jarak & penyaring jangkauan (Fase 7b)", () => {
     expect(directoryReachSummary(rows, null)).toBe(
       "4 pemasok ditampilkan (semua, tanpa ambang jarak) · 1 tanpa jarak"
     );
+  });
+});
+
+describe("supplierMetaLine — baris kedua sel 'Pemasok' (Fase 12c)", () => {
+  const ITEM = {
+    id: "s1",
+    name: "Wortel Lestari Cianjur",
+    location: "Cianjur",
+    commodity: "wortel",
+    certification_status: "haccp",
+    reliability_score: 0.93,
+    latitude: -6.824,
+    longitude: 107.1636,
+  };
+
+  it("menggabungkan hub & koordinat supaya keduanya tidak makan kolom sendiri", () => {
+    const [row] = supplierDirectory({ items: [ITEM] });
+    expect(supplierMetaLine(row)).toBe("Cianjur · -6,8240 / 107,1636");
+  });
+
+  it("bagian yang tidak ada TIDAK ditulis '—' (tidak ada garis miring menggantung)", () => {
+    const [tanpaKoordinat] = supplierDirectory({ items: [{ ...ITEM, latitude: null, longitude: null }] });
+    expect(supplierMetaLine(tanpaKoordinat)).toBe("Cianjur");
+
+    const [tanpaHub] = supplierDirectory({ items: [{ ...ITEM, location: null }] });
+    expect(supplierMetaLine(tanpaHub)).toBe("-6,8240 / 107,1636");
+  });
+});
+
+describe("directoryReachTagLabel — pil ringkas jangkauan (Fase 12c)", () => {
+  const ITEM = {
+    id: "s1",
+    name: "Wortel Berkah Surabaya",
+    location: "Surabaya",
+    commodity: "wortel",
+    latitude: -7.2395,
+    longitude: 112.7731,
+    reliability_score: 0.7,
+    distance_km: 665,
+  };
+
+  it("pil menyebut KEADAAN, bukan mengulang km (km sudah ada di kolom Jarak)", () => {
+    const [row] = supplierDirectory({ items: [ITEM] });
+
+    expect(directoryReachTagLabel(row, 150)).toBe("di luar jangkauan");
+    // Kalimat penuhnya tetap ada — dipakai sebagai `title` pil.
+    expect(directoryReachLabel(row, 150)).toBe("di luar jangkauan (665 km)");
+  });
+
+  it("jarak tidak diketahui tidak disamarkan jadi 'di luar jangkauan'", () => {
+    const [row] = supplierDirectory({ items: [{ ...ITEM, distance_km: null }] });
+
+    expect(directoryReachTagLabel(row, 150)).toBe("jarak tidak diketahui");
+    expect(directoryReachLabel(row, 150)).toBe("jarak tidak diketahui");
   });
 });

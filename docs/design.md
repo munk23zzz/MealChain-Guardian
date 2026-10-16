@@ -90,10 +90,21 @@ Detail muncul dengan evidence → Approve → status di peta berubah
   penggelapan; tanpa API key) dengan 10 node; warna pin sesuai status:
   hijau (surplus), merah (shortage), abu (seimbang) + label mono nama/selisih;
   klik pin → popup pasokan/permintaan/gap
-- Legenda putih mengapung kiri-bawah ("Status lokasi: Surplus · Seimbang ·
-  Shortage") dengan titik berwarna SAMA seperti pin, dan kontrol bawaan
-  MapLibre: zoom + kompas kanan-atas, atribusi © OpenStreetMap contributors
-  kanan-bawah
+- Kotak penjelas peta bernama **"Info map"** (Fase 12, arah pemilik 2026-10-16: *"untuk teks
+  legenda map ganti menjadi info map"*) dan **BISA DILIPAT** — yang terlihat di kanvas
+  kiri-bawah hanya chip **"Info map"** (terukur 103×24 px). Sebelumnya kotak legenda selalu
+  terbuka **300×137 px** dan menutupi Jawa Barat tempat pin SPPG + jalur kiriman berada. Isi
+  kotak (status lokasi · jalur kiriman · perjalanan kiriman · pemasok) TIDAK dihapus dari DOM:
+  saat tertutup hanya `display: none`, sehingga ia keluar dari pohon aksesibilitas dan tetap
+  satu klik lagi untuk dibuka; tombolnya memakai gaya chip yang sama dengan "Rincian lapisan
+  peta" (`aria-expanded` + `aria-controls="map-legend-panel"`, chevron CSS diputar 90°).
+  **Susunan isinya mengikuti lapisan yang sedang HIDUP** (keputusan yang sama): status lokasi
+  selalu, jalur kiriman hanya saat sakelarnya hidup, pemasok hanya saat sakelarnya hidup —
+  keterangan warna yang tidak ada di peta adalah informasi palsu. Entri **"Jalur kiriman gagal
+  uji"** juga hanya muncul kalau memang ada kiriman bergaris bergagal-uji
+  (`routeLegendEntries(rows)`). Makna pin tetap terbaca tanpa membuka kotak karena subjudul
+  halaman sudah menulis "hijau surplus, merah shortage, abu seimbang". Kontrol bawaan MapLibre
+  tetap: zoom + kompas kanan-atas, atribusi © OpenStreetMap contributors kanan-bawah
 - Angka detail per lokasi (pasokan / permintaan / gap) tetap tampil sebagai
   daftar di samping peta + kartu **Telemetri Node** untuk lokasi yang disorot —
   peta bukan satu-satunya sumber angka
@@ -131,16 +142,51 @@ Detail muncul dengan evidence → Approve → status di peta berubah
   `frontend/lib/supplier-routes.ts` dikunci tes yang **membaca `app/globals.css`** — token
   berubah tanpa menyentuh modul itu akan memerahkan tes.
 - **Kontrol layer sejajar, tidak menumpuk.** Sakelar pemasok dan sakelar jalur duduk dalam satu
-  wadah `.map-layer-controls` (kolom, `gap: 8px`) — dua kotak yang saling menimpa di pojok kiri
-  atas pernah jadi masalah nyata; `.map-supplier-controls` di dalam wadah tidak lagi `position:
-  absolute`.
+  wadah `.map-overlay-toggles` (pil putih, `gap: 2px`) — dua kotak yang saling menimpa di pojok kiri
+  atas pernah jadi masalah nyata. Sejak revisi 16 Okt (permintaan pemilik: "2 tombol di atas dibuat
+  kecil saja") tombolnya 26 px (dari 34), padding 2×8, pil terukur 203×32 px di :3010; **teks yang
+  terlihat hanya jumlahnya** ("Pemasok (7)", "Jalur kiriman (1)") — keadaan hidup/mati dibawa
+  `aria-pressed` + warna (pola pil komoditas) dan kalimat "Tampilkan/Sembunyikan …" menjadi `title`
+  (tooltip), jadi tidak ada informasi yang hilang. Ukuran huruf tetap 12 px (lantai teks data) dan
+  target sentuh 44 px tetap berlaku di `(pointer: coarse)`/≤720 px.
+- **Rincian lapisan bisa dilipat (revisi 16 Okt).** Di bawah kanvas: `.map-layer-info` = tombol kecil
+  "Rincian lapisan peta" (`aria-expanded`/`aria-controls`, chevron CSS diputar 90° saat terbuka) +
+  tag angka yang **selalu terlihat** (`supplierReachTag` → "7/9 pemasok dalam 150 km", `routeLayerTag`
+  → "1 jalur kiriman · jalur jalan OSRM"), lalu panel lipat berisi kalimat jujurnya
+  (`supplierReachNote`, ringkasan OSRM). Panel TIDAK menghapus isi dari DOM — hanya dilipat
+  (tinggi `0fr` + `visibility: hidden` sehingga hilang dari pohon aksesibilitas), jadi angka
+  "N di luar jangkauan tidak dipasang di peta" tetap bisa diperiksa: penyaringan tidak pernah jadi
+  penyembunyian. Peringatan "perbesar peta" (`.map-layer-hint`) sengaja DI LUAR panel supaya muncul
+  seketika saat lapisan dinyalakan pada zoom jauh.
 - **Legenda jalur memakai contoh garis, bukan kotak warna**, karena yang digambar peta memang
-  garis: "Jalur kiriman (jalan)" / "Jalur kiriman gagal uji". Catatan "jalur jalan dari OSRM
-  (diambil saat sinkronisasi, bukan saat peta dibuka)" ditulis di legenda supaya angka jarak
+  garis: "Jalur kiriman (jalan)" / "Jalur kiriman gagal uji" (yang kedua hanya muncul bila ada
+  kiriman bergaris bergagal-uji). Catatan "jalur jalan dari OSRM
+  (diambil saat sinkronisasi, bukan saat peta dibuka)" ditulis di tag/panel rincian lapisan
+  (`.map-layer-info`, sejak revisi 16 Okt — dulu di legenda) supaya angka jarak
   tidak pernah dibaca sebagai hitungan aplikasi sendiri.
-- **Popup klik pada garis** menampilkan pemasok → tujuan, komoditas & berat, jarak jalan vs
-  jarak lurus + rasio (`1,41×`), masa layak, dan status keamanan kiriman — semua dari data API,
-  bukan dihitung ulang di peramban.
+- **Perjalanan kiriman + waktu estimasi sampai (Fase 12, arah pemilik 2026-10-16: "ketika
+  mengaktifkan jalur kiriman tampilkan juga waktu estimasi sampai … pastikan sinkron dengan
+  database").** Saat sakelar jalur kiriman hidup: (a) tag bilah rincian menyebut
+  `2 jalur kiriman · 1 di jalan · tiba terdekat ± 22.54`; (b) kotak "Info map" memuat blok
+  **Perjalanan kiriman** (maks 3 baris + "+N kiriman lain") seperti
+  `Jakarta · di jalan · tiba ± 22.54 (24 menit lagi)`; (c) popup garis menambah baris jam
+  berangkat, estimasi tiba, dan perbandingan dengan batas layak. **Tidak ada jam tiba yang
+  dihitung di peramban**: angkanya datang utuh dari `journey` di `GET /supplier-routes`, yang
+  dihitung server dari `batches.dispatched_at` (DB) + `road_routes.duration_s` (OSRM). Keadaan
+  yang mungkin disebut apa adanya: `di_jalan`, `sudah_tiba`, `belum_berangkat` (jam berangkat
+  NULL — estimasi TIDAK dibuat), dan `tidak_diketahui` (sudah berangkat tapi jalur jalannya
+  belum tersinkron → tidak diklaim tiba maupun di jalan).
+- **Popup klik pada garis** menampilkan pemasok → tujuan, komoditas & berat, jalur jalan (jarak
+  + durasi dari sumbernya), perjalanan (jam berangkat, estimasi tiba, sisa waktu), masa layak,
+  dan status keamanan kiriman — semua dari data API, bukan dihitung ulang di peramban.
+  **Tiga hal DIBUANG atas permintaan pemilik 2026-10-16** (*"Jarak lurus: 78,4 km, Tiba sebelum
+  batas layak (25 Okt 2026) dan ini Jalur jalan 1,41× jarak lurus (jalan berkelok, bukan garis
+  lurus) hapus saja"*): baris "Jarak lurus: …", baris rasio `1,41×`, dan kalimat penghibur
+  "Tiba sebelum batas layak (…)". `straightKm`/`ratioVsStraight` tetap dikirim server (dipakai
+  kolom tabel lain + jejak audit) dan tanggal layak pakai tetap tertulis sekali di baris
+  "Layak dipakai s/d …" — jadi menghapusnya tidak mengurangi fakta, hanya menghilangkan derajat
+  presisi yang tidak dipakai saat membaca peta. Peringatan sebaliknya
+  ("Estimasi tiba melewati batas layak pakai") TETAP ada: itu menandai masalah nyata.
 - **Kolom "Jalur kirim" di tabel Pemasok** menjawab "pemasok ini mengirim lewat jalur mana?"
   tanpa membuka peta: `→ Cianjur · 3,2 km jalan · +3 tujuan`, dengan daftar lengkap tujuan di
   atribut `title`. Tiga aturan yang dikunci tes: baris utama = jalur **terpendek** yang
@@ -248,7 +294,7 @@ dengan **data API nyata** — bukan data contoh seperti di acuan:
 |---|---|---|---|
 | Keamanan Pangan | `/compliance` | `GET /batches`: `safety_status`, `freshness_score`, `usable_until`, `quantity_kg` | papan CCP per-alat, bank sampel, jejak lot EPCIS (tidak ada endpoint) |
 | Surplus & Limbah | `/surplus` | `GET /balance/map?commodity=…`: `surplus_kg`, `shortage_kg`, `latitude`/`longitude`, `region` | pencatatan limbah/disposal (tidak ada tabel; ditulis "—" + alasan) |
-| Pemasok | `/suppliers` | **`GET /suppliers`** (35 pemasok: 14 kanonik + 21 demo — daftar, keandalan, komoditas, kapasitas, jarak/koordinat, status eksklusi) + `GET /supplier-exclusions`; pin di peta (lihat §3.1). Halaman Pemasok: kolom **Jarak** (dari `distance_km` server) + penyaring "Hanya dalam jangkauan" untuk peran SPPG; jarak tanpa rujukan ditulis "—". Kolom **Status** menulis "Sedang mengirim · N kiriman · N kg · s/d <tgl>" dari kunci `shipping` server (lencana `.shipping-tag`, token ok) bila pemasok itu punya kiriman masih layak, "Dikecualikan di …" bila ada eksklusi, selain itu "Aktif"; kartu Ringkasan memuat "Sedang mengirim barang: N dari M". Pemasok tanpa sumber profil tetap "—" (tidak dikarang) | harga/PO per pemasok (belum ada endpoint; ditulis "—") |
+| Pemasok | `/suppliers` | **`GET /suppliers`** (35 pemasok: 14 kanonik + 21 demo — daftar, keandalan, komoditas, kapasitas, jarak/koordinat, status eksklusi) + `GET /supplier-exclusions`; pin di peta (lihat §3.1). Halaman Pemasok: kolom **Jarak** (dari `distance_km` server) + penyaring "Hanya dalam jangkauan" untuk peran SPPG; jarak tanpa rujukan ditulis "—". Kolom **Status** menulis pil ringkas dari kunci `shipping` server bila pemasok itu punya kiriman masih layak (`.shipping-tag`, token ok), pil bahaya terpisah `.shipping-tag-fail` bila ada kiriman gagal uji, "Dikecualikan di …" bila ada eksklusi, selain itu "Aktif"; kartu Ringkasan memuat "Sedang mengirim barang: N dari M". **F12c (16 Okt): tabel dirapikan jadi 7 kolom** — "Hub" dan "Koordinat" tidak lagi kolom sendiri, keduanya jadi baris kedua sel **Pemasok** (`supplierMetaLine`: "Surabaya · -7,2395 / 112,7731") karena dua kolom itu memakan 178 px dari 913 px; ukur sesudahnya: tabel **913 = 913 px (tanpa geser)**, tinggi baris **54 px rata**. **Satu standar bentuk label** (dipakai `.reach-tag`, `.shipping-tag`, `.shipping-tag-fail`): 12 px, `padding: 2px 8px`, `inline-flex`, `white-space: nowrap` + `text-overflow: ellipsis`, jadi **tinggi 22 px** (setara `.commodity-pill`) — sebelum F12c pil kiriman memuat kalimat penuh dan membungkus 3 baris (186×63 px). Kalimat penuh tetap tersedia lewat `title`; pil jangkauan hanya menulis keadaan karena km-nya sudah ada di kolom **Jarak** tepat di sebelahnya. Pemasok tanpa sumber profil tetap "—" (tidak dikarang) | harga/PO per pemasok (belum ada endpoint; ditulis "—") |
 | Kualitas Agen (bagian 2 tab **KPI & Kualitas Agen**) | `/quality` (`MOCK_AGENT_RUNS` di acuan) | `GET /decisions/{id}/traces` + `verdict` pada `approval-summary` (sampel 8) | LLM-as-judge, biaya token (belum ada di repo) |
 
 Aturan yang dipegang (sama seperti halaman lain): angka yang tidak ada ditulis

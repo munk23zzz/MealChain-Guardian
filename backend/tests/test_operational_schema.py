@@ -41,7 +41,8 @@ EXPECTED_COLUMNS = {
     "batches": {
         "id", "commodity_id", "location_id", "supplier_id", "quantity_kg",
         "harvested_at", "temperature_log", "certification_status",
-        "freshness_score", "safety_status", "usable_until", "created_at",
+        "freshness_score", "safety_status", "usable_until", "dispatched_at",
+        "created_at",
     },
     "sap_mock_material_stock": {
         "id", "material_number", "plant", "storage_location", "batch",
@@ -136,6 +137,24 @@ def test_check_constraints_present(sync_engine):
 # (constraint_column_usage menunjuk kolom REFERENCED, bukan decision_id, jadi
 # guard tak pernah mendeteksi apa pun). Pengawasnya kini
 # tests/test_decision_schema.py::test_sap_purchase_order_fk_to_decisions.
+
+
+def test_batch_dispatch_after_harvest_check_present(sync_engine):
+    """Jam berangkat tidak boleh mendahului panen (migrasi 015).
+
+    Dijaga di DB, bukan hanya di kode: berkas seed yang salah harus ditolak
+    Postgres, bukan diam-diam tersimpan dan membuat cerita perjalanan terbalik.
+    """
+    with sync_engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                "WHERE conrelid = 'batches'::regclass "
+                "AND conname = 'batches_dispatch_after_harvest'"
+            )
+        ).scalars().all()
+    assert rows, "check constraint jam berangkat kiriman tidak ada"
+    assert "dispatched_at" in rows[0] and "harvested_at" in rows[0]
 
 
 def test_required_indexes_present(sync_engine):

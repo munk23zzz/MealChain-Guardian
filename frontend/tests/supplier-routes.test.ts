@@ -13,11 +13,18 @@ import { describe, expect, it } from "vitest";
 import {
   MISSING_REASON_LABEL,
   ROUTE_LINE_COLORS,
+  durationLabel,
+  journeyTone,
+  nearestEta,
   roadKmLabel,
   routeBoundsPoints,
+  routeEtaLines,
   routeGeoJson,
+  routeJourneyLine,
+  routeJourneyRows,
   routeLabel,
   routeLayerSummary,
+  routeLayerTag,
   routeLegendEntries,
   routeLineClass,
   routeLineTone,
@@ -25,6 +32,7 @@ import {
   routeCellTitle,
   routePopupLines,
   routeToggleLabel,
+  routeToggleAction,
   supplierRouteSummaries,
   supplierRoutes,
 } from "../lib/supplier-routes";
@@ -46,9 +54,27 @@ function kiriman(ubah: Record<string, unknown> = {}) {
     destination: { latitude: -6.2088, longitude: 106.8456, name: "Jakarta" },
     commodity: "telur",
     quantity_kg: 800,
+    harvested_at: "2026-10-15T00:30:00+00:00",
     usable_until: "2026-11-07T12:00:00+00:00",
     safety_status: "pass",
     straight_km: 78.35,
+    route_key: "driving:-6.854,107.1306>-6.2088,106.8456",
+    // Perjalanan kiriman (Fase 12): angka dari respons nyata — berangkat 21.30 WIB,
+    // tiba ± 22.54 WIB (84,3 menit perjalanan OSRM), 24 menit lagi saat dibaca.
+    journey: {
+      dispatched_at: "2026-10-16T14:30:00+00:00",
+      eta_at: "2026-10-16T15:54:18+00:00",
+      state: "di_jalan",
+      state_label: "Di jalan",
+      travel_s: 5058,
+      travel_min: 84.3,
+      travel_source: "osrm",
+      elapsed_min: 60,
+      remaining_min: 24.3,
+      progress: 0.712,
+      usable_until: "2026-11-07T12:00:00+00:00",
+      arrives_before_usable_until: true,
+    },
     road: {
       distance_km: 110.4,
       duration_min: 84.3,
@@ -138,11 +164,21 @@ describe("nada & kelas garis", () => {
     expect(routeLineClass(aman)).toBe("ship-route ship-route-ok");
   });
 
-  it("legenda menyebut kedua nada", () => {
-    const entri = routeLegendEntries();
-    expect(entri.map((e) => e.tone)).toEqual(["ok", "fail"]);
+  it("legenda hanya menyebut nada yang memang ada di peta", () => {
+    // "gagal uji" hanya muncul kalau ada kiriman bergaris seperti itu — legenda
+    // yang menyebut warna yang tidak dipakai membuat pembaca mencarinya.
+    const entri = routeLegendEntries(supplierRoutes({ routes: [kiriman()] }));
+    expect(entri.map((e) => e.tone)).toEqual(["ok"]);
     expect(entri[0].label).toContain("Jalur kiriman");
-    expect(entri[1].label).toContain("gagal uji");
+
+    const denganGagal = routeLegendEntries(
+      supplierRoutes({ routes: [kiriman(), kiriman({ safety_status: "fail", destination_name: "Bogor" })] })
+    );
+    expect(denganGagal.map((e) => e.tone)).toEqual(["ok", "fail"]);
+    expect(denganGagal[1].label).toContain("gagal uji");
+
+    // Tanpa data kiriman sama sekali: hanya nada dasar, tidak mengarang entri.
+    expect(routeLegendEntries().map((e) => e.tone)).toEqual(["ok"]);
   });
 });
 
@@ -194,15 +230,23 @@ describe("label & popup", () => {
     expect(routeLabel(row)).toBe("Supplier A Cianjur → Jakarta · 110,4 km jalan · 800 kg telur");
   });
 
-  it("popup menyandingkan jarak jalan dan jarak lurus + rasionya", () => {
+  it("popup jalur hanya menyebut jalur jalan — tanpa jarak lurus/rasio (arah pemilik 16 Okt)", () => {
     const [row] = supplierRoutes({ routes: [kiriman()] });
     const baris = routePopupLines(row);
     expect(baris[0]).toContain("OSRM");
     expect(baris[0]).toContain("110,4 km");
     expect(baris[0]).toContain("84 menit");
-    expect(baris[1]).toContain("78,4 km");
-    expect(baris[2]).toContain("1,41×");
-    expect(baris[3]).toContain("7 Nov 2026");
+    // Arah pemilik 2026-10-16: "Jarak lurus: 78,4 km", "Jalur jalan 1,41× jarak lurus
+    // (jalan berkelok, bukan garis lurus)" dan "Tiba sebelum batas layak" DIHAPUS dari
+    // popup jalur — pembaca peta tidak memakai derajat presisi itu, dan tanggal layak
+    // pakai tetap tertulis sekali di baris "Layak dipakai s/d ...".
+    const gabung = baris.join(" | ");
+    expect(gabung).not.toContain("Jarak lurus");
+    expect(gabung).not.toContain("jarak lurus");
+    expect(gabung).not.toContain("berkelok");
+    expect(gabung).not.toContain("Tiba sebelum batas layak");
+    expect(gabung).toContain("Layak dipakai s/d 7 Nov 2026");
+    expect(gabung).toContain("Estimasi tiba: ± 22.54 WIB · 24 menit lagi");
   });
 
   it("popup menyebut alasan bila rute belum ada, tanpa angka karangan", () => {
@@ -247,8 +291,195 @@ describe("ringkasan layer", () => {
 
   it("label sakelar memuat jumlah jalur", () => {
     const [row] = supplierRoutes({ routes: [kiriman()] });
-    expect(routeToggleLabel([row], false)).toBe("Tampilkan jalur kiriman (1)");
-    expect(routeToggleLabel([row], true)).toBe("Sembunyikan jalur kiriman (1)");
+    // Yang terlihat ringkas; kalimat lengkapnya jadi tooltip tombol.
+    expect(routeToggleLabel([row])).toBe("Jalur kiriman (1)");
+    expect(routeToggleAction([row], false)).toBe("Tampilkan jalur kiriman (1)");
+    expect(routeToggleAction([row], true)).toBe("Sembunyikan jalur kiriman (1)");
+  });
+
+  it("tag ringkas menyebut jumlah jalur + estimasi tiba terdekat", () => {
+    // Bilah lapisan memakai tag ini supaya angkanya tetap terbaca walau kalimat
+    // penjelasnya dilipat (keputusan pemilik 2026-10-16). Sejak Fase 12, saat ada
+    // kiriman yang sedang berjalan, estimasi tibanya ikut di tag — arah pemilik:
+    // "ketika mengaktifkan jalur kiriman tampilkan juga waktu estimasi sampai".
+    expect(
+      routeLayerTag(routeLayerSummary({ routes: [kiriman()] }), supplierRoutes({ routes: [kiriman()] }))
+    ).toBe("1 jalur kiriman · 1 di jalan · tiba terdekat ± 22.54");
+
+    // Tanpa kiriman berjalan: jatuh kembali ke keterangan asal geometri / jumlah
+    // yang belum disinkronkan — bukan jam yang dikarang.
+    const tiba = kiriman({
+      journey: {
+        ...(kiriman().journey as Record<string, unknown>),
+        state: "sudah_tiba",
+        eta_at: "2026-10-16T12:00:00+00:00",
+        remaining_min: -60,
+      },
+    });
+    expect(routeLayerTag(routeLayerSummary({ routes: [tiba] }), supplierRoutes({ routes: [tiba] }))).toBe(
+      "1 jalur kiriman · jalur jalan OSRM"
+    );
+
+    const tanpaRute = kiriman({
+      road: null,
+      road_missing_reason: "belum_disinkron",
+      destination_name: "Bogor",
+      journey: null,
+    });
+    expect(
+      routeLayerTag(
+        routeLayerSummary({ routes: [kiriman(), tanpaRute] }),
+        supplierRoutes({ routes: [kiriman(), tanpaRute] })
+      )
+    ).toBe("2 jalur kiriman · 1 di jalan · tiba terdekat ± 22.54");
+    expect(
+      routeLayerTag(routeLayerSummary({ routes: [tanpaRute] }), supplierRoutes({ routes: [tanpaRute] }))
+    ).toBe("1 jalur kiriman · 1 belum disinkronkan");
+
+    // Tanpa baris sama sekali: tidak ada jam, tidak ada klaim.
+    expect(routeLayerTag(routeLayerSummary({ routes: [] }))).toBe("belum ada jalur kiriman");
+  });
+});
+
+// Fase 12 (permintaan pemilik 2026-10-16): "ketika mengaktifkan jalur kiriman
+// tampilkan juga waktu estimasi sampai … pastikan sinkron dengan database".
+// Angka perjalanan datang UTUH dari server (`journey`); klien hanya menuliskannya
+// — tidak ada jam tiba yang dihitung di peramban.
+describe("perjalanan kiriman", () => {
+  it("membaca blok journey dari server apa adanya", () => {
+    const [row] = supplierRoutes({ routes: [kiriman()] });
+    expect(row.journey?.state).toBe("di_jalan");
+    expect(row.journey?.stateLabel).toBe("Di jalan");
+    expect(row.journey?.etaAt).toBe("2026-10-16T15:54:18+00:00");
+    expect(row.journey?.remainingMin).toBeCloseTo(24.3, 5);
+    expect(row.batchId).toBe("b-1");
+    expect(row.routeKey).toContain("driving:");
+    expect(row.harvestedAt).toBe("2026-10-15T00:30:00+00:00");
+  });
+
+  it("keadaan tak dikenal → journey null, bukan keadaan karangan", () => {
+    const [row] = supplierRoutes({ routes: [kiriman({ journey: { state: "entah" } })] });
+    expect(row.journey).toBeNull();
+    expect(routeJourneyRows([row])).toEqual([]);
+  });
+
+  it("nada visual mengikuti keadaan", () => {
+    expect(journeyTone("di_jalan")).toBe("moving");
+    expect(journeyTone("sudah_tiba")).toBe("done");
+    expect(journeyTone("belum_berangkat")).toBe("pending");
+    expect(journeyTone("tidak_diketahui")).toBe("unknown");
+    expect(journeyTone(null)).toBe("unknown");
+  });
+
+  it("kalimat perjalanan: jam tiba hanya saat ada, tidak dikarang", () => {
+    const [jalan] = supplierRoutes({ routes: [kiriman()] });
+    expect(routeJourneyLine(jalan)).toBe("Jakarta · di jalan · tiba ± 22.54 (24 menit lagi)");
+
+    const tiba = kiriman({
+      journey: { ...(kiriman().journey as Record<string, unknown>), state: "sudah_tiba" },
+    });
+    expect(routeJourneyLine(supplierRoutes({ routes: [tiba] })[0])).toBe("Jakarta · sudah tiba 22.54");
+
+    const belum = kiriman({
+      journey: {
+        ...(kiriman().journey as Record<string, unknown>),
+        state: "belum_berangkat",
+        dispatched_at: null,
+        eta_at: null,
+        remaining_min: null,
+        progress: null,
+      },
+    });
+    const barisBelum = routeJourneyLine(supplierRoutes({ routes: [belum] })[0]);
+    expect(barisBelum).toBe("Jakarta · belum berangkat · estimasi tiba belum ada");
+    expect(barisBelum).not.toContain("22.54");
+
+    const takDiketahui = kiriman({
+      journey: {
+        ...(kiriman().journey as Record<string, unknown>),
+        state: "tidak_diketahui",
+        eta_at: null,
+        remaining_min: null,
+      },
+    });
+    expect(routeJourneyLine(supplierRoutes({ routes: [takDiketahui] })[0])).toContain(
+      "sudah berangkat · estimasi tiba belum ada"
+    );
+  });
+
+  it("daftar perjalanan dibatasi supaya kotak Info map tetap kecil", () => {
+    const rows = supplierRoutes({
+      routes: [
+        kiriman(),
+        kiriman({ destination_name: "Bogor" }),
+        kiriman({ destination_name: "Bandung" }),
+        kiriman({ destination_name: "Surabaya" }),
+      ],
+    });
+    const tampil = routeJourneyRows(rows, 2);
+    expect(tampil).toHaveLength(3);
+    expect(tampil[2].teks).toBe("+2 kiriman lain");
+    expect(tampil[0].kelas).toContain("map-journey-moving");
+    expect(routeJourneyRows(rows).every((baris) => baris.kelas.startsWith("map-journey-item"))).toBe(true);
+  });
+
+  it("estimasi tiba paling awal dipakai untuk tag", () => {
+    const rows = supplierRoutes({
+      routes: [
+        kiriman({ destination_name: "Bogor" }),
+        kiriman({
+          destination_name: "Surabaya",
+          journey: {
+            ...(kiriman().journey as Record<string, unknown>),
+            eta_at: "2026-10-16T19:00:00+00:00",
+          },
+        }),
+      ],
+    });
+    expect(nearestEta(rows)).toBe("2026-10-16T15:54:18+00:00");
+    expect(nearestEta([])).toBeNull();
+  });
+
+  it("popup menyebut jam berangkat, estimasi tiba, dan sisa waktu", () => {
+    const [row] = supplierRoutes({ routes: [kiriman()] });
+    const baris = routeEtaLines(row).join(" | ");
+    expect(baris).toContain("Berangkat: 16 Okt 2026 21.30 WIB");
+    expect(baris).toContain("Estimasi tiba: ± 22.54 WIB · 24 menit lagi");
+    // Kalimat "Tiba sebelum batas layak (7 Nov 2026)" dibuang atas permintaan
+    // pemilik 2026-10-16: tanggalnya sudah ada di baris "Layak dipakai s/d ...",
+    // dan popup tidak perlu mengulangnya sebagai kalimat penghibur.
+    expect(baris).not.toContain("Tiba sebelum batas layak");
+    // Popup lengkap memuat semuanya, tanpa menghitung ulang apa pun.
+    expect(routePopupLines(row).join(" | ")).toContain("Estimasi tiba: ± 22.54 WIB");
+  });
+
+  it("tanpa waktu tempuh: tidak ada estimasi, keadaan tidak diklaim", () => {
+    const [row] = supplierRoutes({
+      routes: [
+        kiriman({
+          road: null,
+          road_missing_reason: "belum_disinkron",
+          journey: {
+            ...(kiriman().journey as Record<string, unknown>),
+            state: "tidak_diketahui",
+            eta_at: null,
+            travel_min: null,
+            remaining_min: null,
+            arrives_before_usable_until: null,
+          },
+        }),
+      ],
+    });
+    const baris = routeEtaLines(row).join(" | ");
+    expect(baris).toContain("Estimasi tiba: belum ada — jalur jalan belum disinkronkan");
+    expect(baris).not.toContain("Tiba sebelum batas layak");
+  });
+
+  it("label satuan durasi gaya Indonesia", () => {
+    expect(durationLabel(24.3)).toBe("24 menit");
+    expect(durationLabel(84.3)).toBe("1 jam 24 menit");
+    expect(durationLabel(120)).toBe("2 jam");
+    expect(durationLabel(null)).toBe("—");
   });
 });
 
@@ -315,14 +546,14 @@ describe("Ringkasan jalur per pemasok (kolom 'Jalur kirim' di tabel Pemasok)", (
 
   it("satu jalur: tujuan + jarak JALAN (angka lurus tetap urusan kolom Jarak)", () => {
     const peta = supplierRouteSummaries({ routes: [kiriman()] });
-    expect(routeCellLabel(peta.get("s-1") ?? null)).toBe("→ Jakarta · 110,4 km jalan");
+    expect(routeCellLabel(peta.get("s-1") ?? null)).toBe("→ Jakarta · 110,4 km");
     expect(routeCellTitle(peta.get("s-1") ?? null)).toBe("Jakarta 110,4 km (jarak jalan dari OSRM)");
   });
 
   it("beberapa jalur: baris utama + jumlah tujuan lain, judul memuat semua tujuan terurut", () => {
     const peta = supplierRouteSummaries({ routes: [kiriman(), bogor] });
     const ringkas = peta.get("s-1") ?? null;
-    expect(routeCellLabel(ringkas)).toBe("→ Bogor · 62,8 km jalan · +1 tujuan");
+    expect(routeCellLabel(ringkas)).toBe("→ Bogor · 62,8 km · +1 tujuan");
     expect(routeCellTitle(ringkas)).toBe("Bogor 62,8 km · Jakarta 110,4 km (jarak jalan dari OSRM)");
   });
 });

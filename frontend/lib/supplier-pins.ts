@@ -154,6 +154,21 @@ export function shippingLabel(shipping: SupplierShipping | null): string {
 }
 
 /**
+ * Label RINGKAS untuk pil di sel tabel (Fase 12c, 16 Okt 2026).
+ *
+ * `shippingLabel` memuat berat + batas layak + gagal uji; di dalam kolom tabel
+ * yang sempit kalimat itu membungkus 2–3 baris (terukur 186×63 px) sehingga
+ * bentuknya justru paling besar di barisnya. Pedoman UI menaruh "compact label
+ * overflow" sebagai severity tinggi: label ringkas harus utuh satu baris, dan
+ * teks penuhnya tetap bisa dibaca lewat `title`/`aria-label` — jadi tidak ada
+ * fakta yang hilang, hanya pindah tempat.
+ */
+export function shippingTagLabel(shipping: SupplierShipping | null): string {
+  if (!shipping || shipping.count <= 0) return "—";
+  return `Mengirim ${shipping.count} kiriman`;
+}
+
+/**
  * Normalisasi payload `GET /suppliers` (amplop `{items}` atau array langsung)
  * menjadi baris pin. Baris tanpa nama atau tanpa koordinat dibuang.
  */
@@ -461,8 +476,42 @@ export function supplierReachNote(
   return `${within} dari ${total} pemasok dalam jangkauan ${reachKm} km${dari}${ekor}`;
 }
 
-export function supplierToggleLabel(rows: readonly SupplierPinRow[], show: boolean): string {
+/**
+ * Teks sakelar yang TERLIHAT — ringkas, hanya jumlahnya (arah pemilik
+ * 2026-10-16: "2 tombol di atas dibuat kecil saja"). Kata "Tampilkan/
+ * Sembunyikan" tidak diperlukan di teks yang terlihat karena keadaan hidup/mati
+ * sudah dibawa `aria-pressed` + warna tombol (pola yang sama dengan pil komoditas
+ * di halaman ini); kalimat lengkapnya tetap ada sebagai tooltip (`title`).
+ */
+export function supplierToggleLabel(rows: readonly SupplierPinRow[]): string {
+  return `Pemasok (${rows.length})`;
+}
+
+/** Kalimat lengkap sakelar pemasok — dipakai sebagai tooltip/title. */
+export function supplierToggleAction(rows: readonly SupplierPinRow[], show: boolean): string {
   return `${show ? "Sembunyikan" : "Tampilkan"} pemasok (${rows.length})`;
+}
+
+/**
+ * Tag SANGAT pendek untuk bilah rincian lapisan (satu baris, selalu terlihat).
+ *
+ * Angkanya SAMA dengan `supplierReachNote` — termasuk pemasok yang dibuang
+ * server — hanya tanpa kalimat lengkapnya: bilah ini pintu masuknya, sedangkan
+ * kalimat jujur ("… tidak dipasang di peta") ada di panel yang bisa dibuka.
+ * Karena itu penyaringan jangkauan tetap tidak pernah tersembunyi diam-diam.
+ */
+export function supplierReachTag(
+  rows: readonly SupplierPinRow[],
+  reachKm?: number | null,
+  hiddenByServer = 0
+): string {
+  if (reachKm === null || reachKm === undefined || !Number.isFinite(reachKm)) {
+    return rows.length ? `${rows.length} pemasok (nasional)` : "belum ada pemasok";
+  }
+  const total = rows.length + hiddenByServer;
+  if (total === 0) return "belum ada pemasok";
+  const within = rows.filter((row) => isWithinReach(row, reachKm)).length;
+  return `${within}/${total} pemasok dalam ${reachKm} km`;
 }
 
 export function supplierPinsVisible(zoom: number): boolean {

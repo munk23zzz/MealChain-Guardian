@@ -36,6 +36,10 @@ class Batch(Base):
             name="batches_certification_check",
         ),
         CheckConstraint("origin IN ('seed','demo')", name="check_batches_origin_vocab"),
+        CheckConstraint(
+            "dispatched_at IS NULL OR dispatched_at >= harvested_at",
+            name="batches_dispatch_after_harvest",
+        ),
         Index("ix_batches_origin_harvested_at", "origin", "harvested_at"),
     )
 
@@ -68,6 +72,11 @@ class Batch(Base):
         Text, nullable=False, server_default="pending"
     )
     usable_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    #: Jam barang meninggalkan pemasok. NULL = belum berangkat (bukan jam nol);
+    #: estimasi tiba dihitung dari sini + waktu tempuh OSRM (app/core/journey.py).
+    dispatched_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     origin: Mapped[str] = mapped_column(

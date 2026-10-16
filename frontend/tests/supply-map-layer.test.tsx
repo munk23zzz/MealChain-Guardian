@@ -27,6 +27,7 @@ type FakeMarker = {
 const fake = vi.hoisted(() => {
   const markerLog: any[] = [];
   const mapLog: any[] = [];
+  const popupLog: any[] = [];
 
   class FakeMap {
     zoom = 4.5;
@@ -83,8 +84,8 @@ const fake = vi.hoisted(() => {
       const handler = args[args.length - 1];
       this.handlers[event] = (this.handlers[event] ?? []).filter((item) => item !== handler);
     }
-    fire(event: string) {
-      (this.handlers[event] ?? []).forEach((handler) => handler());
+    fire(event: string, payload?: unknown) {
+      (this.handlers[event] ?? []).forEach((handler) => (handler as (arg?: unknown) => void)(payload));
     }
     setZoom(zoom: number) {
       this.zoom = zoom;
@@ -131,13 +132,20 @@ const fake = vi.hoisted(() => {
   class FakePopup {
     node?: HTMLElement;
     constructor(public options: Record<string, unknown>) {}
+    setLngLat() {
+      return this;
+    }
     setDOMContent(node: HTMLElement) {
       this.node = node;
       return this;
     }
+    addTo() {
+      popupLog.push(this);
+      return this;
+    }
   }
 
-  return { markerLog, mapLog, FakeMap, FakeMarker, FakePopup };
+  return { markerLog, mapLog, popupLog, FakeMap, FakeMarker, FakePopup };
 });
 
 vi.mock("maplibre-gl", () => ({
@@ -152,6 +160,7 @@ vi.mock("maplibre-gl", () => ({
 
 const markerLog = fake.markerLog as FakeMarker[];
 const mapLog = fake.mapLog as any[];
+const popupLog = fake.popupLog as any[];
 
 import SupplyMap from "../components/SupplyMap";
 
@@ -230,6 +239,19 @@ function routeToggle() {
   return button;
 }
 
+/** Sakelar "Rincian lapisan peta" (bilah di bawah kanvas). */
+function infoButton() {
+  const button = host.querySelector<HTMLButtonElement>(".map-layer-info-toggle");
+  if (!button) throw new Error("tombol rincian lapisan peta tidak ada");
+  return button;
+}
+
+function infoPanel() {
+  const panel = host.querySelector<HTMLElement>(".map-layer-info-panel");
+  if (!panel) throw new Error("panel rincian lapisan peta tidak ada");
+  return panel;
+}
+
 function unmount() {
   if (!mounted) return;
   act(() => root.unmount());
@@ -259,9 +281,26 @@ const ROUTES = {
       destination: { latitude: -6.2088, longitude: 106.8456, name: "Jakarta" },
       commodity: "telur",
       quantity_kg: 800,
+      harvested_at: "2026-10-15T00:30:00+00:00",
       usable_until: "2026-11-07T12:00:00+00:00",
       safety_status: "pass",
       straight_km: 78.35,
+      route_key: "driving:-6.854,107.1306>-6.2088,106.8456",
+      // Perjalanan kiriman (Fase 12): berangkat 21.30 WIB, tiba ± 22.54 WIB.
+      journey: {
+        dispatched_at: "2026-10-16T14:30:00+00:00",
+        eta_at: "2026-10-16T15:54:18+00:00",
+        state: "di_jalan",
+        state_label: "Di jalan",
+        travel_s: 5058,
+        travel_min: 84.3,
+        travel_source: "osrm",
+        elapsed_min: 60,
+        remaining_min: 24.3,
+        progress: 0.712,
+        usable_until: "2026-11-07T12:00:00+00:00",
+        arrives_before_usable_until: true,
+      },
       road: {
         distance_km: 110.4,
         duration_min: 84.3,
@@ -279,6 +318,11 @@ const ROUTES = {
       road_missing_reason: null,
     },
   ],
+};
+
+/** Kiriman yang gagal uji — untuk menguji entri legenda nada bahaya. */
+const ROUTES_GAGAL = {
+  routes: [{ ...ROUTES.routes[0], batch_id: "b2", destination_name: "Bogor", safety_status: "fail" }],
 };
 
 const map = () => mapLog[mapLog.length - 1] as FakeMapInstance;
@@ -340,7 +384,10 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     mount();
     const button = toggle();
     expect(button.getAttribute("aria-pressed")).toBe("true");
-    expect(button.textContent).toBe("Sembunyikan pemasok (2)");
+    expect(button.textContent).toBe("Pemasok (2)");
+    // Kalimat panjang "tampilkan/sembunyikan" pindah ke tooltip (arah pemilik
+    // 2026-10-16: tombol lapisan dibuat kecil) — bukan dihapus.
+    expect(button.title).toBe("Sembunyikan pemasok (2)");
     expect(supplierMarkers()).toHaveLength(0);
     expect(host.querySelector(".map-layer-hint")?.textContent).toContain("Perbesar peta");
   });
@@ -478,7 +525,8 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     });
     expect(map().layers["supplier-route-line"]).toBeUndefined();
     expect(map().sources["supplier-routes"]).toBeUndefined();
-    expect(routeToggle().textContent).toContain("Tampilkan jalur kiriman (1)");
+    expect(routeToggle().textContent).toContain("Jalur kiriman (1)");
+    expect(routeToggle().title).toContain("Tampilkan jalur kiriman (1)");
   });
 
   it("legenda jalur menyebut asal OSRM dan jumlahnya", () => {
@@ -500,5 +548,210 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     // yang sudah ada. Yang penting: tidak ada peta kedua yang dibuat dan tidak
     // ada error saat lapisan pemasok sedang aktif.
     expect(mapLog).toHaveLength(1);
+  });
+});
+
+describe("SupplyMap — rincian lapisan peta (bisa dibuka & ditutup)", () => {
+  /** Render sewenang-wenang (jumlah lapisan berbeda per kasus). */
+  function mountEl(node: Parameters<Root["render"]>[0]) {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    mounted = true;
+    act(() => {
+      root.render(node);
+    });
+  }
+
+  it("tertutup secara bawaan: angka ringkas terlihat, kalimat penuh hanya dilipat", () => {
+    mount();
+    expect(infoButton().getAttribute("aria-expanded")).toBe("false");
+    expect(infoPanel().getAttribute("data-open")).toBe("false");
+    // Kalimat jujur TIDAK dihapus dari DOM (tidak ada penyembunyian diam-diam);
+    // hanya dilipat. Angka ringkas di bilah tetap terbaca tanpa membuka apa pun.
+    expect(infoPanel().textContent).toContain("pemasok ditampilkan (nasional");
+    expect(host.querySelector(".map-layer-tags")?.textContent).toContain("pemasok");
+  });
+
+  it("satu klik membuka, klik berikutnya menutup", () => {
+    mount();
+    act(() => infoButton().click());
+    expect(infoButton().getAttribute("aria-expanded")).toBe("true");
+    expect(infoPanel().getAttribute("data-open")).toBe("true");
+    act(() => infoButton().click());
+    expect(infoButton().getAttribute("aria-expanded")).toBe("false");
+    expect(infoPanel().getAttribute("data-open")).toBe("false");
+  });
+
+  it("panel memuat catatan pemasok & jalur saat kedua lapisan ada", () => {
+    mountEl(<SupplyMap locations={LOCATIONS} suppliers={SUPPLIERS} supplierRoutes={ROUTES} />);
+    expect(infoPanel().textContent).toContain("pemasok ditampilkan (nasional");
+    expect(infoPanel().textContent).toContain("OSRM");
+    expect(host.querySelector(".map-layer-tags")?.textContent).toContain("jalur kiriman");
+    // Sakelar lapisan tetap satu-satunya elemen yang mengapung di kanvas; bilah
+    // rincian ada DI BAWAH peta (bukan overlay yang menutupi pin).
+    expect(
+      host.querySelector(".map-overlay-toggles")?.querySelectorAll(".map-layer-toggle")
+    ).toHaveLength(2);
+  });
+
+  it("tanpa kedua lapisan: bilah rincian tidak dirender sama sekali", () => {
+    mountEl(<SupplyMap locations={LOCATIONS} />);
+    expect(host.querySelector(".map-layer-info")).toBeNull();
+    expect(host.querySelector(".map-layer-info-toggle")).toBeNull();
+  });
+});
+
+describe("SupplyMap — kotak Info map (nama, susunan isi, perjalanan kiriman)", () => {
+  /** Render sewenang-wenang (jumlah lapisan berbeda per kasus). */
+  function mountEl(node: Parameters<Root["render"]>[0]) {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    mounted = true;
+    act(() => {
+      root.render(node);
+    });
+  }
+
+  /** Tombol lipat kotak Info map (dulu "Legenda peta"). */
+  function infoMapToggle() {
+    const button = host.querySelector<HTMLButtonElement>(".map-legend-toggle");
+    if (!button) throw new Error("tombol Info map tidak ada");
+    return button;
+  }
+
+  function infoMap() {
+    const box = host.querySelector<HTMLElement>(".map-legend-boxes");
+    if (!box) throw new Error("kotak Info map tidak ada");
+    return box;
+  }
+
+  /** Sakelar lapisan pemasok (satu-satunya `.map-layer-toggle` tanpa kelas rute). */
+  function supplierToggle() {
+    const button = host.querySelector<HTMLButtonElement>(
+      ".map-layer-toggle:not(.map-route-toggle)"
+    );
+    if (!button) throw new Error("tombol lapisan pemasok tidak ada");
+    return button;
+  }
+
+  function bukaInfoMap() {
+    act(() => infoMapToggle().click());
+  }
+
+  it("namanya 'Info map', bukan 'Legenda peta'", () => {
+    mountWithRoutes();
+    expect(infoMapToggle().textContent).toContain("Info map");
+    expect(infoMapToggle().getAttribute("aria-expanded")).toBe("false");
+    expect(infoMap().getAttribute("aria-label")).toBe("Info map");
+    expect(host.textContent).not.toContain("Legenda peta");
+  });
+
+  it("kelompok keterangan hanya untuk lapisan yang hidup", () => {
+    mountEl(<SupplyMap locations={LOCATIONS} suppliers={SUPPLIERS} supplierRoutes={ROUTES} />);
+    bukaInfoMap();
+    // Bawaan: jalur hidup, pemasok mati → keterangan pemasok belum ditampilkan.
+    expect(infoMap().querySelector('[aria-label="Keterangan jalur kiriman"]')).not.toBeNull();
+    expect(infoMap().querySelector('[aria-label="Keterangan pemasok"]')).toBeNull();
+
+    act(() => supplierToggle().click());
+    const kotakPemasok = infoMap().querySelector('[aria-label="Keterangan pemasok"]');
+    expect(kotakPemasok).not.toBeNull();
+    expect(kotakPemasok?.textContent).toContain("Keandalan rendah");
+
+    // Mematikan lapisan jalur: keterangan jalur + daftar perjalanan ikut hilang,
+    // supaya tidak ada warna/jam yang diterangkan tanpa gambarnya di peta.
+    act(() => routeToggle().click());
+    expect(infoMap().querySelector('[aria-label="Keterangan jalur kiriman"]')).toBeNull();
+    expect(infoMap().querySelector('[aria-label="Perjalanan kiriman"]')).toBeNull();
+    expect(infoMap().querySelector('[aria-label="Keterangan status lokasi"]')).not.toBeNull();
+  });
+
+  it("perjalanan kiriman menyebut estimasi tiba saat lapisan jalur hidup", () => {
+    mountWithRoutes();
+    bukaInfoMap();
+    const perjalanan = infoMap().querySelector('[aria-label="Perjalanan kiriman"]');
+    expect(perjalanan).not.toBeNull();
+    expect(perjalanan?.textContent).toContain("Perjalanan kiriman:");
+    expect(perjalanan?.textContent).toContain("Jakarta · di jalan · tiba ± 22.54");
+    expect(perjalanan?.textContent).toContain("24 menit lagi");
+    // Tanpa perlu membuka kotak: tag bilah rincian sudah menyebut estimasi tiba.
+    expect(host.querySelector(".map-layer-tags")?.textContent).toContain(
+      "tiba terdekat ± 22.54"
+    );
+  });
+
+  it("entri 'gagal uji' hanya muncul kalau ada kiriman bergaris gagal", () => {
+    mountWithRoutes();
+    expect(infoMap().textContent).toContain("Jalur kiriman (jalan)");
+    expect(infoMap().textContent).not.toContain("gagal uji");
+
+    unmount();
+    mountEl(<SupplyMap locations={LOCATIONS} supplierRoutes={ROUTES_GAGAL} />);
+    expect(infoMap().textContent).toContain("Jalur kiriman gagal uji");
+  });
+
+  it("kiriman yang belum berangkat tidak diberi jam tiba", () => {
+    const belumBerangkat = {
+      routes: [
+        {
+          ...ROUTES.routes[0],
+          destination_name: "Bandung",
+          journey: {
+            ...ROUTES.routes[0].journey,
+            state: "belum_berangkat",
+            state_label: "Belum berangkat",
+            dispatched_at: null,
+            eta_at: null,
+            remaining_min: null,
+            progress: null,
+          },
+        },
+      ],
+    };
+    mountEl(<SupplyMap locations={LOCATIONS} supplierRoutes={belumBerangkat} />);
+    bukaInfoMap();
+    const perjalanan = infoMap().querySelector('[aria-label="Perjalanan kiriman"]');
+    expect(perjalanan?.textContent).toContain("belum berangkat · estimasi tiba belum ada");
+    expect(perjalanan?.textContent).not.toContain("tiba ±");
+    // Tag lapisan pun tidak mengarang jam; ia jatuh ke keterangan asal geometri.
+    expect(host.querySelector(".map-layer-tags")?.textContent).toContain("jalur jalan OSRM");
+  });
+
+  /**
+   * Arah pemilik 2026-10-16 (kutipan): "Jarak lurus: 78,4 km, Tiba sebelum batas
+   * layak (25 Okt 2026) dan ini Jalur jalan 1,41× jarak lurus (jalan berkelok,
+   * bukan garis lurus) hapus saja."
+   *
+   * Diuji di tingkat POPUP yang benar-benar dirender (bukan hanya fungsi murni),
+   * karena ketiga baris itu hanya pernah terlihat saat pengguna mengklik garis.
+   */
+  it("popup garis tidak lagi memuat jarak lurus, rasio, dan kalimat batas layak", () => {
+    mountWithRoutes();
+    const map = mapLog[mapLog.length - 1];
+    const fitur = (map.sources["supplier-routes"].data as any).features[0];
+    map.fire("click", {
+      features: [{ properties: fitur.properties }],
+      lngLat: { lng: 107.1, lat: -6.85 },
+    });
+
+    const popup = popupLog[popupLog.length - 1];
+    expect(popup).toBeTruthy();
+    const baris = Array.from((popup.node as HTMLElement).querySelectorAll(".map-popup-line")).map(
+      (p) => p.textContent ?? ""
+    );
+    const teks = baris.join(" | ");
+    // Yang tetap ada: identitas jalur, perjalanan, masa layak.
+    expect(teks).toContain("Jalur jalan (OSRM)");
+    expect(teks).toContain("Estimasi tiba: ± 22.54 WIB");
+    expect(teks).toContain("Layak dipakai s/d");
+    // Yang dibuang.
+    expect(teks).not.toContain("Jarak lurus");
+    expect(teks).not.toContain("jarak lurus");
+    expect(teks).not.toContain("berkelok");
+    expect(teks).not.toContain("Tiba sebelum batas layak");
   });
 });

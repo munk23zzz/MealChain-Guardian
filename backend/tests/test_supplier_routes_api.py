@@ -19,11 +19,16 @@ disinkronkan (lihat `docs/verification/fase-10.md`), jadi angkanya nyata —
 bukan angka karangan tes.
 """
 
+import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
+from app.db import create_engine, create_session_maker
 from app.main import app
 
 KUNCI_WAJIB = {
@@ -36,12 +41,19 @@ KUNCI_WAJIB = {
     "destination",
     "commodity",
     "quantity_kg",
+    "harvested_at",
     "usable_until",
     "safety_status",
     "straight_km",
+    "route_key",
     "road",
     "road_missing_reason",
+    "journey",
 }
+
+#: Basis data demo (container backend ↔ container postgres), pola sama seperti
+#: test_road_route_sync.py — dipakai untuk MEMBUKTIKAN angka peta = angka DB.
+DB_URL = "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
 
 
 @pytest.fixture()
@@ -139,6 +151,136 @@ def test_kontrak_json_stabil(client, auth_headers):
     assert summary["routes"] == len(data["routes"])
     assert summary["with_road"] + summary["without_road"] == summary["routes"]
     assert summary["active_only"] is True
+    # Ringkasan keadaan perjalanan harus menjumlah tepat seluruh rute.
+    assert sum(summary["journey_states"].values()) == summary["routes"]
+    assert set(summary["journey_states"]) == {
+        "belum_berangkat",
+        "di_jalan",
+        "sudah_tiba",
+        "tidak_diketahui",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Perjalanan kiriman (Fase 12): jam berangkat → estimasi tiba, dari DB.
+# ---------------------------------------------------------------------------
+
+
+@asynccontextmanager
+async def _sesi():
+    engine = create_engine(DB_URL)
+    maker = create_session_maker(engine)
+    try:
+        async with maker() as session:
+            yield session
+    finally:
+        await engine.dispose()
+
+
+async def _kiriman_aktif_db() -> dict:
+    """Baris DB untuk kiriman aktif, berkunci id batch (sumber kebenaran)."""
+    async with _sesi() as db:
+        hasil = await db.execute(
+            text(
+                "SELECT id, dispatched_at, harvested_at, usable_until "
+                "FROM batches WHERE usable_until >= now()"
+            )
+        )
+        return {str(r["id"]): dict(r) for r in hasil.mappings().all()}
+
+
+async def test_identitas_kiriman_di_peta_benar_benar_dari_baris_db(client, monitor_headers):
+    """`batch_id` tidak boleh lagi "None": tiap garis = satu baris `batches`.
+
+    Ini bukti "sinkron dengan database": himpunan id di peta sama persis dengan
+    himpunan batch aktif di DB, dan jam berangkat/hasil panen di payload sama
+    nilainya dengan yang tersimpan.
+    """
+    db_rows = await _kiriman_aktif_db()
+    data = client.get("/supplier-routes", headers=monitor_headers).json()
+    ids = [row["batch_id"] for row in data["routes"]]
+    assert all(i and i != "None" for i in ids), ids
+    assert len(set(ids)) == len(ids), "id kiriman ganda — klik garis bisa salah popup"
+    for i in ids:
+        uuid.UUID(i)  # format id nyata, bukan teks bebas
+    assert set(ids) == set(db_rows), "id di peta tidak sama dengan batch aktif di DB"
+    for row in data["routes"]:
+        dbrow = db_rows[row["batch_id"]]
+        for kolom in ("harvested_at", "usable_until"):
+            nilai = dbrow[kolom]
+            assert row[kolom] == (nilai.isoformat() if nilai else None), kolom
+        berangkat_db = dbrow["dispatched_at"]
+        assert row["journey"]["dispatched_at"] == (
+            berangkat_db.isoformat() if berangkat_db else None
+        )
+
+
+def test_jam_berangkat_dan_estimasi_tiba_konsisten_dengan_db(client, monitor_headers):
+    """Estimasi tiba = jam berangkat (DB) + waktu tempuh OSRM (cache) — titik."""
+    data = client.get("/supplier-routes", headers=monitor_headers).json()
+    ref = datetime.fromisoformat(data["summary"]["reference_time"])
+    for row in data["routes"]:
+        journey = row["journey"]
+        assert journey["state"] in {
+            "belum_berangkat",
+            "di_jalan",
+            "sudah_tiba",
+            "tidak_diketahui",
+        }
+        if row["road"] is None:
+            # Tanpa waktu tempuh, estimasi tiba TIDAK dibuat.
+            assert journey["eta_at"] is None
+            assert journey["travel_min"] is None
+            assert journey["state"] != "sudah_tiba"
+            continue
+        assert journey["travel_min"] == row["road"]["duration_min"]
+        assert journey["travel_source"] == "osrm"
+        if journey["dispatched_at"] is None:
+            assert journey["eta_at"] is None
+            assert journey["state"] == "belum_berangkat"
+            assert journey["remaining_min"] is None
+            continue
+        berangkat = datetime.fromisoformat(journey["dispatched_at"])
+        tiba = datetime.fromisoformat(journey["eta_at"])
+        assert tiba == berangkat + timedelta(seconds=journey["travel_s"])
+        # Keadaan dibaca dari waktu, bukan ditebak.
+        if ref < berangkat:
+            assert journey["state"] == "belum_berangkat"
+        elif ref >= tiba:
+            assert journey["state"] == "sudah_tiba"
+            assert journey["remaining_min"] <= 0
+        else:
+            assert journey["state"] == "di_jalan"
+            assert journey["remaining_min"] > 0
+            assert 0.0 <= journey["progress"] <= 1.0
+        assert abs((tiba - ref).total_seconds() / 60 - journey["remaining_min"]) < 0.2
+        assert journey["usable_until"] == row["usable_until"]
+        assert journey["arrives_before_usable_until"] == (tiba <= datetime.fromisoformat(row["usable_until"]))
+
+
+def test_kiriman_belum_berangkat_tidak_diberi_estimasi_karangan(client, monitor_headers):
+    """Bandung (seed) belum berangkat: jujur tanpa ETA, bukan diisi jam palsu."""
+    data = client.get("/supplier-routes", headers=monitor_headers).json()
+    baris = {row["destination_name"]: row for row in data["routes"]}
+    assert "Bandung" in baris, "kiriman Bandung harus aktif di snapshot kanonik"
+    journey = baris["Bandung"]["journey"]
+    assert journey["dispatched_at"] is None
+    assert journey["eta_at"] is None
+    assert journey["state"] == "belum_berangkat"
+    assert journey["remaining_min"] is None
+    assert journey["progress"] is None
+    # Waktu tempuh tetap dilaporkan: itu sifat JALUR, bukan sifat barang.
+    assert journey["travel_min"] == baris["Bandung"]["road"]["duration_min"]
+
+
+def test_tanpa_cache_tidak_ada_estimasi_dan_tidak_diklaim_tiba(client, auth_headers):
+    """Cache rute kosong → keadaan `tidak_diketahui`, bukan "sudah tiba"."""
+    with patch("app.api.supplier_routes._read_cache", return_value={}):
+        data = client.get("/supplier-routes", headers=auth_headers).json()
+    for row in data["routes"]:
+        assert row["journey"]["eta_at"] is None
+        assert row["journey"]["travel_min"] is None
+        assert row["journey"]["state"] in {"belum_berangkat", "tidak_diketahui"}
 
 
 def test_filter_komoditas_dihormati(client, monitor_headers):

@@ -8,19 +8,43 @@
 //   (data OSRM). Kiriman yang rutenya belum disinkronkan tetap dilaporkan
 //   (titik ujungnya ikut menentukan tampilan peta) tapi TIDAK digambar garis —
 //   garis lurus yang menyamar sebagai rute jalan akan menyesatkan.
-// - Jarak jalan (OSRM) dan jarak lurus (haversine server) ditampilkan
-//   berdampingan, termasuk rasionya: juri berhak tahu jalur jalan biasanya
-//   lebih panjang dari jarak udara, bukan angka yang sama.
+// - Jarak jalan (OSRM) yang ditulis di popup; jarak lurus & rasionya TIDAK lagi
+//   dipampang (arah pemilik 2026-10-16) — pembaca peta membaca rute yang tergambar,
+//   dan angka haversine 1,41× hanya memancing "kok beda?" tanpa mengubah keputusan.
+//   Angkanya tetap ada di payload/kolom tabel lain kalau perlu diaudit.
 // - Warna garis mengikuti MUTU kiriman (fail = nada bahaya). Cincin "sedang
 //   mengirim" di pin tetap terpisah, jadi dua fakta berbeda tidak saling
 //   menutupi (keputusan Fase 9).
 // - Alasan rute tidak ada ditulis apa adanya (`MISSING_REASON_LABEL`), bukan
 //   disembunyikan jadi "—".
 
-import { formatDate } from "./datetime";
+import { formatClockWib, formatDate, formatDateTime } from "./datetime";
 import { formatKg } from "./overview-format";
 
 export type RouteLineTone = "ok" | "fail";
+
+/** Keadaan perjalanan kiriman — kosakata SAMA dengan server (app/core/journey.py). */
+export type RouteJourneyState =
+  | "belum_berangkat"
+  | "di_jalan"
+  | "sudah_tiba"
+  | "tidak_diketahui";
+
+/** Nada visual perjalanan (kelas CSS), bukan klaim keadaan baru. */
+export type RouteJourneyTone = "moving" | "done" | "pending" | "unknown";
+
+export type RouteJourney = {
+  dispatchedAt: string | null;
+  etaAt: string | null;
+  state: RouteJourneyState;
+  stateLabel: string;
+  travelMin: number | null;
+  elapsedMin: number | null;
+  remainingMin: number | null;
+  progress: number | null;
+  usableUntil: string | null;
+  arrivesBeforeUsableUntil: boolean | null;
+};
 
 /**
  * Warna garis untuk `paint` MapLibre.
@@ -47,6 +71,7 @@ export type SupplierRouteRoad = {
 export type SupplierRoute = {
   id: string;
   batchId: string | null;
+  routeKey: string | null;
   supplierId: string;
   supplierName: string;
   originLatitude: number;
@@ -57,11 +82,13 @@ export type SupplierRoute = {
   destinationLongitude: number;
   commodity: string | null;
   quantityKg: number | null;
+  harvestedAt: string | null;
   usableUntil: string | null;
   safetyStatus: string | null;
   straightKm: number | null;
   road: SupplierRouteRoad | null;
   missingReason: string | null;
+  journey: RouteJourney | null;
 };
 
 export type RouteFeature = {
@@ -92,6 +119,169 @@ export type RouteLayerSummary = {
   missing: number;
   label: string;
 };
+
+const JOURNEY_STATES: readonly RouteJourneyState[] = [
+  "belum_berangkat",
+  "di_jalan",
+  "sudah_tiba",
+  "tidak_diketahui",
+];
+
+/**
+ * Blok `journey` dari server → bentuk yang dipakai UI.
+ *
+ * Dua aturan penting: keadaan diambil APA ADANYA (tidak diterjemahkan ulang di
+ * klien, supaya peta dan server tidak bisa berbeda cerita), dan estimasi tiba
+ * hanya ada kalau server memang mengirimnya — jam tiba tidak pernah dihitung di
+ * peramban, karena peramban tidak tahu jam berangkat barang.
+ */
+function parseJourney(raw: unknown): RouteJourney | null {
+  if (raw === null || raw === undefined || typeof raw !== "object") return null;
+  const fields = raw as Record<string, unknown>;
+  const state = text(fields.state);
+  if (!state || !JOURNEY_STATES.includes(state as RouteJourneyState)) return null;
+  return {
+    dispatchedAt: text(fields.dispatched_at),
+    etaAt: text(fields.eta_at),
+    state: state as RouteJourneyState,
+    stateLabel: text(fields.state_label) ?? state,
+    travelMin: number(fields.travel_min),
+    elapsedMin: number(fields.elapsed_min),
+    remainingMin: number(fields.remaining_min),
+    progress: number(fields.progress),
+    usableUntil: text(fields.usable_until),
+    arrivesBeforeUsableUntil:
+      typeof fields.arrives_before_usable_until === "boolean"
+        ? fields.arrives_before_usable_until
+        : null,
+  };
+}
+
+/** Nada visual keadaan perjalanan (kelas CSS `.map-journey-<nada>`). */
+export function journeyTone(state: RouteJourneyState | null): RouteJourneyTone {
+  switch (state) {
+    case "di_jalan":
+      return "moving";
+    case "sudah_tiba":
+      return "done";
+    case "belum_berangkat":
+      return "pending";
+    default:
+      return "unknown";
+  }
+}
+
+/** Menit → "24 menit" / "2 jam 15 menit" (dipakai untuk sisa perjalanan). */
+export function durationLabel(minutes: number | null): string {
+  if (minutes === null || !Number.isFinite(minutes)) return "—";
+  const total = Math.round(Math.abs(minutes));
+  if (total < 60) return `${total} menit`;
+  const jam = Math.floor(total / 60);
+  const sisa = total % 60;
+  return sisa === 0 ? `${jam} jam` : `${jam} jam ${sisa} menit`;
+}
+
+/**
+ * Kalimat keadaan perjalanan satu kiriman (baris Info map).
+ *
+ * "Belum berangkat" TIDAK diberi jam tiba: jam itu tidak ada di DB, dan menulis
+ * perkiraan di sana akan terbaca seolah barangnya sudah di jalan.
+ */
+export function routeJourneyLine(row: SupplierRoute, denganTujuan = true): string {
+  const awal = denganTujuan ? `${row.destinationName} · ` : "";
+  const journey = row.journey;
+  if (!journey) return `${awal}perjalanan belum dilaporkan server`;
+  if (journey.state === "di_jalan" && journey.etaAt) {
+    const sisa = journey.remainingMin !== null ? ` (${durationLabel(journey.remainingMin)} lagi)` : "";
+    return `${awal}di jalan · tiba ± ${formatClockWib(journey.etaAt)}${sisa}`;
+  }
+  if (journey.state === "sudah_tiba" && journey.etaAt) {
+    return `${awal}sudah tiba ${formatClockWib(journey.etaAt)}`;
+  }
+  if (journey.state === "belum_berangkat") {
+    return `${awal}belum berangkat · estimasi tiba belum ada`;
+  }
+  return `${awal}sudah berangkat · estimasi tiba belum ada`;
+}
+
+/** Kelas DOM baris perjalanan (nada dari keadaan, bukan warna bebas). */
+export function routeJourneyRowClass(row: SupplierRoute): string {
+  return `map-journey-item map-journey-${journeyTone(row.journey?.state ?? null)}`;
+}
+
+/**
+ * Baris perjalanan untuk kotak "Info map".
+ *
+ * Dibatasi `maks` baris supaya kotaknya tetap kecil (arah pemilik 2026-10-16);
+ * sisanya diringkas jadi "+N kiriman lain" — tidak dihapus diam-diam.
+ */
+export function routeJourneyRows(
+  rows: readonly SupplierRoute[],
+  maks = 3
+): { teks: string; kelas: string }[] {
+  const hasil = rows
+    .filter((row) => row.journey !== null)
+    .slice(0, maks)
+    .map((row) => ({ teks: routeJourneyLine(row), kelas: routeJourneyRowClass(row) }));
+  const sisa = rows.filter((row) => row.journey !== null).length - hasil.length;
+  if (sisa > 0) {
+    hasil.push({ teks: `+${sisa} kiriman lain`, kelas: "map-journey-item map-journey-more" });
+  }
+  return hasil;
+}
+
+/** Estimasi tiba paling awal di antara baris yang punya `eta_at`. */
+export function nearestEta(rows: readonly SupplierRoute[]): string | null {
+  let terdekat: string | null = null;
+  for (const row of rows) {
+    const eta = row.journey?.etaAt;
+    if (!eta) continue;
+    if (terdekat === null || eta < terdekat) terdekat = eta;
+  }
+  return terdekat;
+}
+
+/**
+ * Baris tambahan popup garis: jam berangkat, estimasi tiba, dan batas layak.
+ *
+ * Semuanya dari server (`journey`), jadi peta dan halaman lain menyebut angka
+ * yang sama; yang dihitung di klien hanya cara menuliskannya.
+ */
+export function routeEtaLines(row: SupplierRoute): string[] {
+  const journey = row.journey;
+  if (!journey) return [];
+  const lines: string[] = [];
+  if (journey.dispatchedAt) {
+    lines.push(`Berangkat: ${formatDateTime(journey.dispatchedAt)}`);
+  } else {
+    lines.push("Berangkat: belum berangkat (barang masih di pemasok)");
+  }
+  if (journey.etaAt) {
+    const sisa =
+      journey.state === "di_jalan" && journey.remainingMin !== null
+        ? ` · ${durationLabel(journey.remainingMin)} lagi`
+        : "";
+    lines.push(`Estimasi tiba: ± ${formatClockWib(journey.etaAt)} WIB${sisa}`);
+  } else if (journey.state === "tidak_diketahui") {
+    lines.push("Estimasi tiba: belum ada — jalur jalan belum disinkronkan");
+  } else {
+    lines.push("Estimasi tiba: belum ada — barang belum berangkat");
+  }
+  if (journey.travelMin !== null && journey.etaAt === null) {
+    // Waktu tempuh hanya diulang di sini kalau tidak ada estimasi tiba: kalau ada,
+    // baris jalur jalan di popup sudah menyebut durasinya (tidak dihitung ganda).
+    lines.push(`Waktu tempuh jalur: ± ${durationLabel(journey.travelMin)} (OSRM)`);
+  }
+  if (journey.arrivesBeforeUsableUntil === false) {
+    lines.push("Estimasi tiba melewati batas layak pakai (dilaporkan apa adanya)");
+  }
+  // Catatan: keadaan "tiba sebelum batas layak" sengaja TIDAK ditulis sebagai
+  // kalimat (arah pemilik 2026-10-16: "Tiba sebelum batas layak (...) hapus saja").
+  // Tanggalnya tetap terlihat sekali di baris "Layak dipakai s/d ..." — mengulangnya
+  // sebagai kalimat penghibur hanya memanjangkan popup. Peringatan di atas tetap ada
+  // karena itu menandai masalah nyata, bukan menenangkan pembaca.
+  return lines;
+}
 
 /** Nama alasan dari server → kalimat yang bisa dibaca pengguna. */
 export const MISSING_REASON_LABEL: Record<string, string> = {
@@ -183,6 +373,7 @@ function parseRoute(raw: unknown): SupplierRoute | null {
   return {
     id: `${text(fields.supplier_id) ?? supplierName}->${text(fields.destination_id) ?? destinationName}`,
     batchId: text(fields.batch_id),
+    routeKey: text(fields.route_key),
     supplierId: text(fields.supplier_id) ?? supplierName,
     supplierName,
     originLatitude,
@@ -193,11 +384,13 @@ function parseRoute(raw: unknown): SupplierRoute | null {
     destinationLongitude,
     commodity: text(fields.commodity),
     quantityKg: number(fields.quantity_kg),
+    harvestedAt: text(fields.harvested_at),
     usableUntil: text(fields.usable_until),
     safetyStatus: text(fields.safety_status),
     straightKm: number(fields.straight_km),
     road: parseRoad(fields.road),
     missingReason: text(fields.road_missing_reason),
+    journey: parseJourney(fields.journey),
   };
 }
 
@@ -236,8 +429,17 @@ export function routeLineClass(row: SupplierRoute): string {
   return `ship-route ship-route-${routeLineTone(row)}`;
 }
 
-/** Kalimat sakelar layer di panel peta. */
-export function routeToggleLabel(routes: readonly SupplierRoute[], show: boolean): string {
+/**
+ * Teks sakelar yang TERLIHAT — ringkas, hanya jumlah jalurnya (arah pemilik
+ * 2026-10-16: tombol lapisan dibuat kecil). Keadaan hidup/mati dibawa
+ * `aria-pressed`; kalimat lengkapnya jadi tooltip lewat `routeToggleAction`.
+ */
+export function routeToggleLabel(routes: readonly SupplierRoute[]): string {
+  return `Jalur kiriman (${routes.length})`;
+}
+
+/** Kalimat lengkap sakelar jalur kiriman — dipakai sebagai tooltip/title. */
+export function routeToggleAction(routes: readonly SupplierRoute[], show: boolean): string {
   return `${show ? "Sembunyikan" : "Tampilkan"} jalur kiriman (${routes.length})`;
 }
 
@@ -251,7 +453,7 @@ export function routeLabel(row: SupplierRoute): string {
   return parts.join(" · ");
 }
 
-/** Baris rincian untuk popup/aria: jarak jalan vs lurus, durasi, sumber, masa layak. */
+/** Baris rincian untuk popup/aria: jalur jalan, durasi, perjalanan, masa layak. */
 export function routePopupLines(row: SupplierRoute): string[] {
   const lines: string[] = [];
   if (row.road) {
@@ -264,12 +466,13 @@ export function routePopupLines(row: SupplierRoute): string[] {
     const reason = row.missingReason ? MISSING_REASON_LABEL[row.missingReason] ?? row.missingReason : "belum disinkronkan";
     lines.push(`Jalur jalan: belum ada — ${reason}`);
   }
-  lines.push(`Jarak lurus: ${roadKmLabel(row.straightKm)}`);
-  if (row.road && row.road.ratioVsStraight !== null) {
-    lines.push(
-      `Jalur jalan ${row.road.ratioVsStraight.toFixed(2).replace(".", ",")}× jarak lurus (jalan berkelok, bukan garis lurus)`
-    );
-  }
+  // Perjalanan (jam berangkat + estimasi tiba) datang dari server, bukan dari
+  // hitungan peramban — lihat `routeEtaLines`.
+  lines.push(...routeEtaLines(row));
+  // "Jarak lurus: 78,4 km" dan "Jalur jalan 1,41× jarak lurus (jalan berkelok, bukan
+  // garis lurus)" DIHAPUS atas permintaan pemilik 2026-10-16. `row.straightKm` dan
+  // `road.ratioVsStraight` tetap dikirim server (dipakai kolom/tabel lain) — hanya
+  // tidak lagi dipampang di popup peta.
   if (row.usableUntil) {
     lines.push(`Layak dipakai s/d ${formatDate(row.usableUntil)}`);
   }
@@ -333,12 +536,51 @@ export function routeLayerSummary(raw: unknown): RouteLayerSummary {
   return { routes: rows.length, withRoad, missing, label };
 }
 
-/** Entri legenda peta untuk layer jalur. */
-export function routeLegendEntries(): { tone: RouteLineTone; label: string }[] {
-  return [
+/**
+ * Tag SANGAT pendek untuk bilah rincian lapisan: jumlah jalur + keadaan
+ * perjalanannya (arah pemilik 2026-10-16: saat jalur kiriman dinyalakan, waktu
+ * estimasi sampai ikut terlihat tanpa perlu membuka apa pun).
+ *
+ * Estimasi tiba yang ditulis di sini datang dari server (`journey.eta_at`);
+ * kalau belum ada kiriman yang berjalan, tag menyebut asal geometrinya seperti
+ * sebelumnya — bukan mengarang jam.
+ */
+export function routeLayerTag(
+  summary: RouteLayerSummary,
+  rows: readonly SupplierRoute[] = []
+): string {
+  if (rows.length === 0) return "belum ada jalur kiriman";
+  const diJalan = rows.filter((row) => row.journey?.state === "di_jalan");
+  const bagian = [`${rows.length} jalur kiriman`];
+  if (diJalan.length) {
+    bagian.push(`${diJalan.length} di jalan`);
+    const terdekat = nearestEta(diJalan);
+    if (terdekat) bagian.push(`tiba terdekat ± ${formatClockWib(terdekat)}`);
+  } else if (summary.missing) {
+    bagian.push(`${summary.missing} belum disinkronkan`);
+  } else {
+    bagian.push("jalur jalan OSRM");
+  }
+  return bagian.join(" · ");
+}
+
+/**
+ * Entri legenda peta untuk layer jalur.
+ *
+ * Entri "gagal uji" hanya ditulis bila ADA kiriman bergaris seperti itu —
+ * legenda yang menyebut warna yang tidak dipakai membuat pembaca mencari-cari
+ * sesuatu yang tidak ada di peta.
+ */
+export function routeLegendEntries(
+  rows: readonly SupplierRoute[] = []
+): { tone: RouteLineTone; label: string }[] {
+  const entries: { tone: RouteLineTone; label: string }[] = [
     { tone: "ok", label: "Jalur kiriman (jalan)" },
-    { tone: "fail", label: "Jalur kiriman gagal uji" },
   ];
+  if (rows.some((row) => routeLineTone(row) === "fail")) {
+    entries.push({ tone: "fail", label: "Jalur kiriman gagal uji" });
+  }
+  return entries;
 }
 
 
@@ -407,6 +649,10 @@ function alasanJalur(row: SupplierRoute): string {
  * Kalimat sel tabel. `null` = pemasok tanpa kiriman aktif (bukan berarti 0 km).
  * Jarak lurus TIDAK ditulis di sini — itu sudah ada di kolom Jarak, dan
  * mencampur keduanya membuat kolom ini terbaca seperti hitungan ganda.
+ * Sejak Fase 12c kata "jalan" juga tidak diulang: nama kolomnya sudah
+ * "Jalur kirim", dan asalnya (OSRM = jarak jalan) tetap tertulis di atribut
+ * `title` sel — menghapusnya memberi 35 px untuk kolom Status sehingga pil
+ * status tidak lagi terpaksa membungkus ke baris kedua.
  */
 export function routeCellLabel(ringkas: SupplierRouteSummary | null | undefined): string {
   if (!ringkas || ringkas.count === 0) return "—";
@@ -415,7 +661,7 @@ export function routeCellLabel(ringkas: SupplierRouteSummary | null | undefined)
     // Penyebabnya dibedakan: "belum disinkronkan" hanya benar untuk alasan itu.
     return utama.missingReason === "belum_disinkron" ? "belum disinkronkan" : "jalur tidak tersedia";
   }
-  const dasar = `→ ${utama.destinationName} · ${roadKmLabel(utama.road.distanceKm)} jalan`;
+  const dasar = `→ ${utama.destinationName} · ${roadKmLabel(utama.road.distanceKm)}`;
   const lain = ringkas.count - 1;
   return lain > 0 ? `${dasar} · +${lain} tujuan` : dasar;
 }

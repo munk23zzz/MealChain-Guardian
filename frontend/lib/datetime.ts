@@ -44,6 +44,28 @@ export function formatClockUtc(iso: string | null | undefined): string {
   return d.toISOString().slice(11, 19);
 }
 
+/**
+ * ISO → jam WIB ringkas "22.54" (tanpa tanggal, tanpa detik).
+ *
+ * Dipakai untuk estimasi tiba perjalanan kiriman: yang dibutuhkan pembaca adalah
+ * "kapan", bukan tanggal lengkap. Tanggalnya tetap ditulis di baris popup lewat
+ * `formatDateTime` supaya kiriman yang tiba besok tidak terbaca sebagai hari ini.
+ * Nilai kosong/tidak sah → "—".
+ */
+export function formatClockWib(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d
+    .toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: TZ,
+    })
+    .replace(":", ".");
+}
+
 /** ISO → "10 Okt 2026" (tanpa jam). Nilai kosong/tidak sah → "—". */
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—";

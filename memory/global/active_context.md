@@ -118,6 +118,109 @@ Parameter `max_distance_km` + cakupan jarak di UI dijadikan fase tersendiri sete
   dan halaman kehilangan hidrasi sampai kontainer di-restart.
 
 ## Keputusan terakhir yang mengubah arah
+- 2026-10-16: **Halaman Pemasok dirapikan — F12c** (permintaan pemilik *"pada halaman pemasok anda
+  gunakan skill ui ux … shape teks harus enak di lihat juga tidak kebesaran maupun ke kecilan"*).
+  Diukur dulu (akun SPPG Head, viewport 1262 px), bukan ditebak: tabel **1025 px di wadah 913 px**, kolom
+  "Hub"+"Koordinat" 178 px, `.shipping-tag` memuat kalimat penuh → **membungkus 3 baris (186×63 px)**,
+  tinggi baris 74/79 px tak rata, kartu "Ringkasan" **466 px dari 947 px**. Sesudah: tabel **7 kolom**
+  ("Hub"+"Koordinat" jadi baris kedua sel Pemasok via `supplierMetaLine`) → **913 = 913 px, 0 geser**;
+  **satu standar pil** untuk `.reach-tag`/`.shipping-tag`/`.shipping-tag-fail` (12 px, `2px 8px`,
+  `inline-flex`, `nowrap`) → **22 px** setara pil kepala halaman, kalimat panjang pindah ke `title`;
+  pil jangkauan hanya menyebut keadaan (`directoryReachTagLabel`) karena km sudah ada di kolom Jarak
+  sebelahnya; "Ringkasan" jadi selebar halaman dengan fakta berkotak (`auto-fit minmax(240px,1fr)`);
+  `routeCellLabel` melepas `" jalan"` (nama kolom sudah "Jalur kirim") sehingga pil status dapat 35 px
+  dan berhenti turun baris. Hasil: baris **54 px (34/35)**, tabel 2386→1925 px, halaman 3669→3046 px,
+  skala teks halaman 12/13/14/20 px (**tidak ada < 12 px**). Gerbang: frontend **792 lulus / 69
+  berkas**, `tsc` 0, `lint` 0, live 0 error baru. Bukti `docs/verification/fase-12.md` §6; belum ada
+  commit/push.
+- 2026-10-16: **Peta Overview (tab Overview) — 2 sakelar lapisan diperkecil
+  panel lipat + gerak UI dirapikan** (permintaan pemilik). Strip catatan dua kalimat selalu tampil →
+  diganti bilah `.map-layer-info`: tombol kecil "Rincian lapisan peta" + tag angka SELALU terlihat
+  ("7/9 pemasok dalam 150 km", "1 jalur kiriman · jalur jalan OSRM"), kalimat jujur penuhnya masuk
+  panel lipat (isi TIDAK dihapus dari DOM → penyaringan jangkauan tidak jadi penyembunyian).
+  Peringatan "perbesar peta" tetap di luar panel. Sakelar: 34→26px, pil terukur 350×42 → 203×32 px,
+  teks yang terlihat jadi "Pemasok (7)"/"Jalur kiriman (1)" (state via `aria-pressed`, kalimat
+  "Tampilkan/Sembunyikan…" jadi tooltip); font tetap 12px & target sentuh 44px di sentuh/mobile.
+  Gerak: panel buka–tutup mulus (grid `0fr→1fr`), chevron, legenda & popup masuk, pin hover —
+  semuanya mati di `prefers-reduced-motion`. Gerbang: 699 tes / 67 berkas, tsc=0, lint=0
+  (build tidak dijalankan: `next dev` hidup). Belum ada commit/push. — `docs/design.md` §3.1/§4.
+- 2026-10-16: **Fase 9 — rail diperkecil + panah lipat dibalik + ujung atas skala font turun.**
+  Rail desktop: item 44→38px, ikon 18→16px, label 13px (batas sentuh 44px tetap dijaga di perangkat
+  sentuh & mobile). Panah tombol lipat: arah ditentukan komponen, `rotate(180deg)` di CSS dibuang
+  (itu yang membuat rail tertutup menampilkan `<`). Skala: page 22→20, metric 28→24, hero 44→36
+  (tetap 8 langkah). Koreksi: klaim Fase 8 soal penyeragaman judul halaman tidak terbukti di dua
+  selector — kini `.page-header h1`/`.overview-header-title h1`/`.settings-title` semuanya `--fs-6`.
+  Gerbang: tsc=0, 667 tes, lint=0, harness 0 luapan. Belum ada commit/push.
+- 2026-10-16: **Fase 8 — skala tipografi 8 langkah + rail dirapikan** (permintaan pemilik, dipandu
+  skill `ui-ux-pro-max`). Token `--fs-1..--fs-8` = 12/13/14/16/18/22/28/44 + `--lh-*` + `--track-*`
+  menggantikan 24 ukuran berbeda (termasuk 11px, pecahan 12,5/13,5/14,5/15,5, `0.8rem`); token lama
+  `--text-micro/--text-meta` dihapus. 243 deklarasi `font-size` kini 100% token; judul halaman
+  seragam 22px, angka metrik seragam 28px. Rail: brand 64px (= top bar), item 44px, ikon kotak tetap
+  18×18, tombol ikon 32×32; rail terlipat 68px kini benar-benar terpusat (ikon = avatar = tombol
+  lipat = 34). Dua heading yang jatuh ke bawaan peramban (21px/16,38px) dan 4 selector judul sisa
+  Fase 7 ikut diperbaiki. Gerbang: tsc + 667 tes + lint + harness responsif 0 luapan. Belum ada
+  commit/push. Bukti: `…\hermes\cache\scratch\fase7\` (SQL/skrip ukur + PNG rail).
+- 2026-10-16: **Fase 7 (responsive + audit aksesibilitas) selesai — redesign Arah 4 TUNTAS (Fase 0–7)**.
+  29 kombinasi peran×tab di 375/768/1024/1440 px: 0 luapan halaman (Pengaturan@375 dulu 10 px),
+  0 fokus tanpa cincin, temuan ● axe 123 → 0. Kunci: token `--safe-ink-tint` untuk teks di atas tint
+  hijau (4,49:1 → 5,19:1; `--status-safe` tidak diubah), satu h1 per halaman tanpa lompatan tingkat
+  (prop `level` di `PageHeader`), `contain: paint` + hint geser untuk tabel Pengaturan (WCAG 1.4.10),
+  target checkbox 295×19 → 295×44 px. Pelajaran mahal: `max-width: min(320px, 100%)` di dalam flex
+  membuat induknya meluap 236 px — batasi INDUK, bukan elemennya. Sisa terbuka (keputusan pemilik):
+  role pada 3 pin peta, favicon (F5 dilewati), plus temuan data Fase 4–6. Bukti + harness di
+  `…\hermes\cache\scratch\fase7\`; dokumen di `_qa/rencana-redesign-ui.md` + `docs/design.md`.
+- 2026-10-16: **Fase 6 redesign (Hari Ini, Demo Control, Pengaturan) selesai** — Hari Ini jadi bento
+  12 kolom (Menunggu tindakan span 7 × 2 baris; batch & shortage span 5; KPI + rantai audit baris
+  penuh), chip sisa waktu = pil + dot (lewat merah, ≤48 jam amber memakai `DUE_SOON_HOURS` yang ada,
+  jam belum siap → tanpa klaim), sapaan "Selamat …, <peran>" lewat slot `eyebrow` baru di
+  `PageHeader`, baris "kurang N kg" pindah ke kelas sendiri (`today-due-short`). Cacat ditemukan &
+  diperbaiki: media query lama `@media (min-width:1080px){.today-pending{span 2}}` menimpa bento
+  (kartu jadi 145 px) → aturan dihapus. Demo Control: empat blok jadi kartu ber-chip urutan
+  (Langkah 1–4), `OpsConsole` naik jadi kartu, pratinjau `writes:false` berlencana "pratinjau —
+  tidak menulis apa pun", baris hasil backend mono. Pengaturan: kontrol radius 10px + chip "belum
+  disimpan" pada baris yang draft-nya berbeda. Gerbang: tsc + 667 tes + lint. Fase 7 (responsive +
+  audit a11y) BELUM dikerjakan.
+- 2026-10-16: **Fase 5 redesign (Keamanan Pangan, Surplus & Limbah, Pemasok) selesai** — Keamanan
+  Pangan: 3 tile angka besar ber-tint status (tint hanya bila keadaan itu ADA — "0 gagal uji"
+  tidak diberi warna bahaya), pagar bahaya 4px di kotak blokir batch gagal, titik amber di daftar
+  batch mendesak. Surplus: neraca jadi aliran 2 angka besar + panah SVG; panah jadi netral lewat
+  `data-kosong` bila salah satu sisi tak punya angka (tidak menggambar aliran yang tak terbukti).
+  Pemasok: kolom Keandalan jadi bar mini 0–100 (`reliabilityMeter()` di lib/suppliers-board.ts,
+  TDD; ambang memakai `LOW_RELIABILITY` yang ada = 0,6; skor tak ada → "—" TANPA bar),
+  `SupplierExclusionPanel.module.css` pindah dari hex palet lama ke token tema. Gerbang: tsc +
+  663 tes + lint. Temuan data (bukan bug): `/balance/map` peran SPPG hanya lokasi sendiri →
+  rencana alokasi surplus kosong pada seed sekarang; surplus ada di Cianjur/Bogor yang hanya
+  terlihat peran global (yang tak punya tab Surplus) — keputusan demo milik pemilik.
+- 2026-10-16: **Fase 4 redesign (KPI & Kualitas Agen + Agent Log) selesai** — kartu KPI jadi angka
+  besar mono 32px + **bullet bar** dari `bulletOf()`; **target/ambang TIDAK dikarang** karena
+  envelope `/kpi` tidak mengirimnya — bar hanya untuk metrik berskala sendiri (persen) + catatan
+  arah perbaikan; nilai null/teks/negatif → tanpa bar (bukan 0%). Agent Log: chip umur langkah
+  terakhir dari `step_at` (`lib/agent-trace.ts`), titik berdenyut untuk langkah baru, **shimmer
+  hanya bila data menyatakan berjalan** (tabel `agent_traces` tak punya kolom status), durasi
+  `duration_ms` kini tampil, panel provider jadi chip (warna bukan satu-satunya pembawa makna).
+  Konsol tetap terang — permukaan gelap hanya sekali di app (kartu kepercayaan Fase 3).
+  Logika murni: `lib/kpi.ts` + `lib/agent-trace.ts`, 19 tes baru (TDD). Gerbang: tsc + 660 tes + lint.
+- 2026-10-16: **Fase 3 redesign (Recommendations + Decision & Evidence) selesai** — kartu lewat
+  tenggat diredam lewat permukaan `--surface-sunken` (bukan `opacity`: 0,7 → teks sekunder ~3:1,
+  gagal AA) + lencana "Lewat tenggat"; feed masuk bertingkat (`feed-row-in`, mati pada
+  reduced-motion); Decision & Evidence jadi bento (hero 2 kolom, tiga kartu fakta span 4,
+  baris bawah 5fr/7fr, form supplier-exclusion jadi baris penuh setelah Governance);
+  **kartu kepercayaan gelap** `.integrity-trust` (#0F172A, token `--trust-*`) khusus bukti
+  kripto — daftar pengukuran & tombol ekspor tetap terang; modal approval radius 16 + aksen
+  kiri 4px. Gating 1b/2b/3b tidak disentuh. Temuan yang diperbaiki: nilai rupiah terpecah di
+  kartu span-4 (label pindah ke atas nilai khusus `.evidence-grid`). Gerbang: tsc + 641 tes + lint.
+- 2026-10-16: **Fase 2 redesign (Overview) selesai** — strip KPI jadi bento 12 kolom berbobot
+  5/3/4 (tile hero = selisih pasokan 44px bernada + baris mini lokasi), kartu "Perlu keputusan"
+  di samping peta (sumber `notifList` yang sama dengan lonceng top bar), basemap redup lewat
+  filter kanvas (pin DOM tetap menyala), dan grafik "Pasokan per Lokasi" **pindah ke baris
+  selebar halaman** karena kolom samping peta hanya menyisakan 68px. Logika murni baru
+  `lib/overview-bento.ts` (TDD, 21 tes). Gerbang: tsc bersih + **641 tes** + lint bersih.
+  Catatan: `ResponsiveContainer` setinggi 0 bila tinggi datang dari `min-height`/`auto`.
+- 2026-10-16: arah visual dikunci **"Bento Modern" (Arah 4)** — rail & top bar jadi TERANG fros
+  (membalik "rail biru" 9 Okt), aksen biru `#2563EB`, font Fira Sans + Fira Code. Eksekusi 7
+  fase bertahap; Fase 0 (token) & Fase 1 (kerangka) selesai, gerbang tiap fase = `tsc` + 620
+  tes frontend + `next lint` + tangkapan layar. Rencana di `_qa/rencana-redesign-ui.md` (di luar
+  repo). Warna status TIDAK dicerahkan (alasan AA).
 - 2026-10-15: Fase 7 dikunci — pemasok demo dipindahkan ke klaster Jabodetabek + penyangga
   Jawa Barat; item `max_distance_km`/cakupan jarak di UI jadi fase tersendiri.
 - 2026-10-15: panel "Data & rentang waktu" ditaruh SEBELUM konsol pemicu skenario di tab
