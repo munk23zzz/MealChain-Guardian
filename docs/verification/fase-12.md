@@ -250,3 +250,38 @@ layar besar pun ikut tertangani tanpa perlu diatur satu per satu.
 petunjuk di berkas itu tidak ada di HEAD (ditambahkan pekerjaan lain yang belum di-commit),
 sehingga meng-commit-nya akan menyapu pekerjaan sesi lain. Konversinya sudah ada di working
 tree dan menyusul bersama commit pekerjaan tersebut.
+
+## 8. Langkah 6 F12c — berat + batas layak kiriman kembali terlihat (16 Okt 2026)
+
+**Masalah.** Fase 12c memindahkan seluruh kalimat kiriman ke atribut `title` supaya pilnya
+utuh satu baris. Benar untuk panjang kalimatnya, tetapi yang ikut hilang dari layar adalah
+dua fakta yang dipakai memutuskan — berat kiriman dan batas layak pakai — dan fakta yang
+hanya terbaca saat kursor melintas praktis tidak terbaca di tablet/telepon.
+
+**Perbaikan.** `shippingMetaLine()` (`lib/supplier-pins.ts`, murni) menulis hanya dua fakta:
+`1.400 kg · s/d 2 Nov 2026`. Ditempatkan sebagai baris kedua sel "Kiriman"
+(`.shipping-meta`, `flex-basis: 100%` di dalam `.status-cell`) sehingga pil status 22 px
+tidak terdorong turun; kalimat penuhnya tetap ada di `title`. Aturan jujur: berat 0 tidak
+ditulis "0 kg", tanpa kiriman hasilnya "—", dan batas layak yang belum dilaporkan server
+cukup tidak muncul (tidak dikira-kira).
+
+**Bukti terukur (live, akun SPPG Head):**
+
+| Lebar | Luapan halaman | Tabel / wadah | Geser | Petunjuk | Tinggi baris (35 baris) | Pil |
+|---|---|---|---|---|---|---|
+| 375 | 0 px | 898 / 297 | ya | tampil | 20×54, 13×63, 1×89 | 112×22 |
+| 768 | 0 px | 898 / 690 | ya | tampil | 20×54, 13×63, 1×89 | 112×22 |
+| 1262 | 0 px | 928 / 928 | tidak | tidak | **33×54**, 1×61, 1×89 | 112×22 |
+| 1440 | 0 px | 1106 / 1106 | tidak | tidak | **33×54**, 2×61 | 112×22 |
+
+Dua baris berkiriman menampilkan `600 kg · s/d 1 Nov 2026` dan `2.200 kg · s/d 7 Nov 2026`;
+diperiksa juga lewat tangkapan layar per baris — pil di baris pertama, teks abu 12 px di
+baris kedua, tanpa tumpang tindih atau pemotongan. Teks di bawah 12 px: nol di semua lebar.
+
+**Gerbang:** tsc 0 · ESLint 0 · suite frontend 902 lulus / 0 gagal.
+
+**Catatan proses.** Saat commit langkah ini, sesi lain menjalankan `git add -A` (140 berkas
+ter-stage) sehingga kunci index bentrok. Commit dibuat memakai index SEMENTARA
+(`GIT_INDEX_FILE`) dan patch content-level dari HEAD; index sesi lain tidak disentuh sama
+sekali, dan hanya berkas pekerjaan ini yang masuk.
+
