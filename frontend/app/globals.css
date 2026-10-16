@@ -4737,23 +4737,29 @@ a:focus-visible {
 }
 .today-summary-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
-  gap: 10px;
+  /* Lima kolom sama lebar di layar lebar (bukan auto-fit): bentuk tiap tile
+     jadi identik dan tidak ada tile kelima yang jatuh sendirian ke baris dua. */
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .today-tile {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   width: 100%;
   height: 100%;
-  padding: 10px 12px;
+  min-width: 0;
+  /* Padding & radius dirapatkan (dulu 10px 12px / 12px): isi tile ini tiga baris
+     pendek, jadi bentuk yang tinggi membuatnya terbaca seperti kartu, bukan
+     indikator status. */
+  padding: 8px 10px;
   text-align: left;
   cursor: pointer;
   border: 1px solid var(--line);
   border-left-width: 3px;
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--surface);
   color: var(--ink);
   box-shadow: var(--shadow-1);
@@ -4770,20 +4776,39 @@ a:focus-visible {
 }
 .today-tile-label {
   font-size: var(--fs-1);
+  line-height: 1.3;
   letter-spacing: var(--track-caps);
   text-transform: uppercase;
   color: var(--ink-muted);
+  min-width: 0;
 }
 .today-tile-value {
   font-family: var(--font-data);
-  font-size: var(--fs-5);
+  /* Turun satu langkah dari --fs-5 (18px): angka 18px di tile selebar 181px
+     terbaca seperti judul, bukan status. Bobot 600 mengganti kekuatan yang
+     hilang dari ukuran. */
+  font-size: var(--fs-4);
+  font-weight: 600;
   line-height: var(--lh-num);
   letter-spacing: var(--track-tight);
 }
 .today-tile-note {
   font-size: var(--fs-1);
+  line-height: 1.35;
   color: var(--ink-subtle);
   text-wrap: pretty;
+}
+/* Ladder kolom: 5 sejajar (≥1181px) → 3 (768-1180px) → 2 (≤767px). Bentuknya
+   ditentukan eksplisit supaya tidak bergantung pada hasil auto-fit. */
+@media (max-width: 1180px) {
+  .today-summary-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 767px) {
+  .today-summary-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .today-tile-ok {
   border-left-color: var(--status-safe);

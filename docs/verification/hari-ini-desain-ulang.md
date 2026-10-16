@@ -112,3 +112,33 @@ meluap dan tidak mengeluarkan anaknya** saat disempitkan ke 331 px, dan aturan p
 lebar itu terpenuhi secara aritmetika. Bila pemilik ingin angka 375/768/1440 px yang nyata,
 itu perlu dijalankan di browser dengan jendela yang bisa diperkecil (mis. DevTools device
 toolbar) — saya tidak bisa melakukannya dari sini.
+
+## 8. Langkah 2 — perapian strip ringkasan (keluhan pemilik, 2026-10-17)
+
+Keluhan: *"masih kurang di ukuran font bagian 5 informasi singkat di bawah judul dan
+ukuran shape nya kurang pas dan ukuran shape text terlalu besar"*.
+
+Dipandu skill `ui-ux-pro-max` (pencarian `--domain ux` "compact stat tile label value
+density" → aturan *Compact Label Overflow*: label pendek tidak boleh membungkus ke baris
+kedua, pakai `min-width: 0` + `nowrap`/ellipsis; `--domain typography` → pasangan
+"Dashboard Data" Fira Code/Fira Sans = yang sudah dipakai repo; skala tipe dashboard
+memakai label 12 px dan angka satu langkah di atasnya).
+
+Terukur SEBELUM (1262 px, SPPG Head) → SESUDAH:
+
+| Ukuran | Sebelum | Sesudah |
+|---|---|---|
+| Tinggi strip | 89 px | **70 px** (−21%) |
+| Bentuk tile | 181×89 px | **183×70 px** |
+| Padding / radius / gap | 10px 12px / 12px / 10px | **8px 10px / 10px / 8px** |
+| Angka (`.today-tile-value`) | `--fs-5` 18px | **`--fs-4` 16px, bobot 600** |
+| Label & keterangan | 12px (keterangan tile 2 membungkus 2 baris) | **12px, semua 1 baris** |
+| Kolom | `auto-fit minmax(168px,1fr)` | **5 kolom sama lebar**, ladder 5/3/2 pada ≥1181 / 768–1180 / ≤767 px |
+
+Alasan tiap angka: angka 18 px di bentuk selebar 181 px terbaca seperti judul, bukan
+status — turun satu langkah ke 16 px dan bobotnya dinaikkan 600 supaya tidak jadi lemah;
+padding/radius/gap dirapatkan karena isinya hanya tiga baris pendek; kolom dibuat
+eksplisit agar kelima bentuk identik dan tidak ada bentuk kelima yang jatuh ke baris
+kedua; label diberi `min-width: 0` + line-height 1.3 mengikuti aturan *Compact Label
+Overflow*. Luapan horizontal tetap 0 px dan tidak ada teks yang terpotong (dicek
+`scrollWidth > clientWidth` per baris keterangan: semua `false`).
