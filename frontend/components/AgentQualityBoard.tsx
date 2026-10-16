@@ -203,6 +203,7 @@ export default function AgentQualityBoard({
   return (
     <section className="board-page" aria-busy={loading || undefined}>
       <PageHeader
+        level={2}
         title="Kualitas Agen"
         description="Seberapa baik rantai agen bekerja pada keputusan terakhir cakupan Anda: langkah yang diambil, kesesuaian dengan verifikator, dan berapa yang akhirnya diubah manusia."
         meta={
@@ -215,7 +216,7 @@ export default function AgentQualityBoard({
 
       {error ? (
         <article className="card quality-error">
-          <h2>Tidak bisa memuat jejak agen</h2>
+          <h3>Tidak bisa memuat jejak agen</h3>
           <p className="evidence-note">{error}</p>
           {onRetry ? (
             <button type="button" className="button button-secondary" onClick={onRetry}>
@@ -227,7 +228,7 @@ export default function AgentQualityBoard({
 
       <section className="quality-section" aria-labelledby="quality-score-title">
         <div className="quality-section-head">
-          <h2 id="quality-score-title">Skor agregat</h2>
+          <h3 id="quality-score-title">Skor agregat</h3>
           <p className="quality-section-sub">
             {metrics.runs} run ·{" "}
             {metrics.totalSteps === null ? DASH : metrics.totalSteps} langkah tercatat
@@ -312,7 +313,7 @@ export default function AgentQualityBoard({
 
       <article className="card quality-verdict">
         <div className="card-header">
-          <h2>Putusan verifikator</h2>
+          <h3>Putusan verifikator</h3>
           <span className={`board-badge board-badge-${metrics.judged ? "ok" : "muted"}`}>
             {metrics.judged} dari {metrics.runs} run dinilai
           </span>
@@ -355,7 +356,7 @@ export default function AgentQualityBoard({
 
       <article className="card">
         <div className="card-header">
-          <h2>Rincian per run</h2>
+          <h3>Rincian per run</h3>
           {runs.length ? (
             <span className="board-badge board-badge-muted">{runs.length} baris</span>
           ) : null}

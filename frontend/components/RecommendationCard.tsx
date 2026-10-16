@@ -20,7 +20,10 @@ import { formatKg } from "../lib/overview-format";
 // `seconds_remaining ?? 0` dulu menampilkan "berlaku 0 dtk" saat backend tidak
 // mengirim sisa waktu — angka karangan, bertentangan dengan aturan anti-fabricate.
 function validityBadge(decision: { valid?: boolean; seconds_remaining?: unknown }): string {
-  if (!decision.valid) return "kedaluwarsa";
+  // "Lewat tenggat" — bukan "kedaluwarsa": yang dibaca pengguna adalah bahwa
+  // TINDAKAN tidak mungkin lagi, dan kalimatnya sama dengan lonceng top bar
+  // ("menunggu tindakan"/"lewat tenggat") supaya satu kosakata di seluruh app.
+  if (!decision.valid) return "Lewat tenggat";
   const sisa = decision.seconds_remaining;
   return typeof sisa === "number" && Number.isFinite(sisa) ? `berlaku ${sisa} dtk` : "berlaku";
 }

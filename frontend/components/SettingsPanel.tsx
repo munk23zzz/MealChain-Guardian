@@ -19,6 +19,7 @@ import {
   updateAdminUser,
 } from "../lib/api";
 import { draftUserUpdate, roleLabel } from "../lib/settings";
+import ScrollHint from "./ScrollHint";
 
 type AdminUser = {
   id: string;
@@ -121,7 +122,7 @@ export default function SettingsPanel({ token }: { token: string }) {
     <div className="settings">
       <div className="settings-head">
         <div>
-          <h2 className="settings-title">Pengaturan</h2>
+          <h1 className="settings-title">Pengaturan</h1>
           <p className="settings-sub">
             Kelola pengguna SPPG dan daftar lokasi. Perubahan berlaku untuk
             keputusan BERIKUTNYA — keputusan lama tidak diubah.
@@ -147,9 +148,9 @@ export default function SettingsPanel({ token }: { token: string }) {
       ) : (
         <>
           <section className="settings-card" aria-labelledby="settings-users">
-            <h3 id="settings-users" className="settings-card-title">
+            <h2 id="settings-users" className="settings-card-title">
               Pengguna ({users.length})
-            </h3>
+            </h2>
             <div className="settings-table-wrap">
               <table className="settings-table">
                 <thead>
@@ -172,12 +173,13 @@ export default function SettingsPanel({ token }: { token: string }) {
                 </tbody>
               </table>
             </div>
+            <ScrollHint />
           </section>
 
           <section className="settings-card" aria-labelledby="settings-locations">
-            <h3 id="settings-locations" className="settings-card-title">
+            <h2 id="settings-locations" className="settings-card-title">
               Lokasi ({locations.length})
-            </h3>
+            </h2>
             <p className="settings-sub">
               Lokasi tidak bisa dihapus: keputusan & batch historis merujuknya.
             </p>
@@ -198,6 +200,7 @@ export default function SettingsPanel({ token }: { token: string }) {
                 </tbody>
               </table>
             </div>
+            <ScrollHint />
           </section>
         </>
       )}
@@ -275,14 +278,19 @@ function UserRow({
         )}
       </td>
       <td>
-        <button
-          type="button"
-          className="settings-save"
-          disabled={!berubah}
-          onClick={() => onSave(user, role, locationId)}
-        >
-          Simpan
-        </button>
+        <div className="settings-save-cell">
+          {/* Chip ini hanya muncul kalau draft MEMANG berbeda dari yang
+              tersimpan — bukan hiasan yang selalu tampil. */}
+          {berubah ? <span className="settings-dirty">belum disimpan</span> : null}
+          <button
+            type="button"
+            className="settings-save"
+            disabled={!berubah}
+            onClick={() => onSave(user, role, locationId)}
+          >
+            Simpan
+          </button>
+        </div>
       </td>
     </tr>
   );
@@ -339,16 +347,19 @@ function LocationRow({
         {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
       </td>
       <td>
-        <button
-          type="button"
-          className="settings-save"
-          disabled={!berubah}
-          onClick={() =>
-            onSave(location, nama, wilayah, location.latitude, location.longitude)
-          }
-        >
-          Simpan
-        </button>
+        <div className="settings-save-cell">
+          {berubah ? <span className="settings-dirty">belum disimpan</span> : null}
+          <button
+            type="button"
+            className="settings-save"
+            disabled={!berubah}
+            onClick={() =>
+              onSave(location, nama, wilayah, location.latitude, location.longitude)
+            }
+          >
+            Simpan
+          </button>
+        </div>
       </td>
     </tr>
   );

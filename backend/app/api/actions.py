@@ -214,6 +214,14 @@ async def verify_action(
                 "(integritas audit trail)"
             ),
         )
+    # Ruling Owner 2026-10-16 (keputusan 2b): endpoint ini DULU tidak memeriksa
+    # kedaluwarsa sama sekali — hanya status pra-approval — sehingga verifikasi
+    # pada keputusan yang sudah lewat tenggat diterima, berbeda dari
+    # /actions/propose yang menolaknya tanpa syarat. Penjaganya disamakan.
+    # Diletakkan SETELAH penjaga status/approval supaya urutan galat yang sudah
+    # ada tidak berubah — yang berubah hanya panggilan yang dulu lolos.
+    if not is_decision_valid(_now_utc(), decision.expires_at):
+        raise HTTPException(status_code=409, detail="decision expired")
     commodity = (
         await db.execute(select(Commodity).where(Commodity.id == decision.commodity_id))
     ).scalar_one_or_none()
@@ -469,6 +477,34 @@ async def execute_action(
         },
     )
     decision.status = "executed"
+    # Trace langkah ACT (rantai PRD DETECT→…→DECIDE→ACT→LEARN). Sebelum
+    # 16 Okt 2026 TIDAK ADA penulis ACT di repo ini — whitelist trace, CHECK
+    # `agent_traces_step_name_check`, Schema.md, PRD, dan prompt supervisor
+    # semuanya memuat ACT, tetapi satu-satunya penyebutannya di kode adalah
+    # PEMBACA di `services/kpi_service.py` (metrik Decision Time) sehingga
+    # kartu KPI itu `no_data` permanen. Eksekusi = saat PO benar-benar terbit,
+    # dan itulah definisi "committed" yang dipakai metriknya: ACT ditulis di
+    # sini, bukan saat approval (approval belum berarti komitmen ke SAP).
+    # Jalur administratif (eksklusi pemasok) tidak menerbitkan PO → sengaja
+    # tidak menulis ACT.
+    db.add(
+        AgentTrace(
+            decision_id=decision.id,
+            step_name="ACT",
+            tool_called="sap_mock.create_purchase_order",
+            input_summary={
+                "decision_id": str(decision.id),
+                "supplier_id": str(supplier_id),
+                "material_number": _material_number_for(commodity),
+                "quantity_kg": str(qty),
+            },
+            output_summary={
+                "po_number": po_number,
+                "status": "submitted",
+                "data_source": "MOCK",
+            },
+        )
+    )
     # P1 Merkle ledger: eksekusi = block append-only (bukti PO terbit).
     await append_block(
         db,

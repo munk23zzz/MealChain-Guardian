@@ -608,6 +608,90 @@ async def purge_demo_rows(database_url: str | None = None) -> dict:
     return {"deleted": deleted, "total": sum(deleted.values())}
 
 
+async def pastikan_deret_demo(
+    database_url: str | None = None,
+    *,
+    start: datetime = DEFAULT_START,
+    end: datetime = DEFAULT_END,
+    interval_hours: int = DEFAULT_INTERVAL_HOURS,
+) -> dict:
+    """Pulihkan deret demo kanonik bila hilang/sebagian (jaring keamanan).
+
+    Kenapa ada: `purge_demo_rows()` menghapus SELURUH baris `origin='demo'`.
+    Bila pemanggilnya (mis. sebuah tes) gagal sebelum memulihkan, DB kerja
+    tertinggal ter-purge — dan puluhan tes lain gagal berantai, padahal kode
+    aplikasinya tidak apa-apa. Fungsi ini memulihkannya lewat generator resmi
+    yang sama (`generate_timeseries`), bukan INSERT karangan.
+
+    Kontrak:
+    - idempoten: bila deret sudah lengkap, TIDAK ada baris ditambah;
+    - hanya baris `origin='demo'` yang disentuh, `origin='seed'` tetap utuh;
+    - ringkasan memuat `sebelum`, `sesudah`, `harapan`, `kurang`, `dipulihkan`
+      supaya bisa diperiksa manusia — bukan "sudah beres" tanpa angka.
+    """
+    pratinjau = await preview_timeseries(
+        start, end, interval_hours=interval_hours, database_url=database_url
+    )
+    # `menu_plans` punya unique (location_id, plan_date): baris kanonik yang
+    # sudah ada di jendela itu DILEWATI generator, jadi tak pernah menjadi baris
+    # demo. Tanpa koreksi ini ekspektasinya selalu lebih tinggi dari yang mungkin
+    # dicapai (660 vs 590) dan fungsi ini akan "memulihkan" selamanya.
+    engine = create_engine(database_url or _database_url())
+    maker = create_session_maker(engine)
+    try:
+        async with maker() as session:
+            rencana_non_demo = int(
+                (
+                    await session.execute(
+                        select(func.count())
+                        .select_from(MenuPlan)
+                        .where(
+                            MenuPlan.origin != "demo",
+                            MenuPlan.plan_date >= start.date(),
+                            MenuPlan.plan_date <= end.date(),
+                        )
+                    )
+                ).scalar()
+                or 0
+            )
+    finally:
+        await engine.dispose()
+
+    harapan = {
+        "supply_records": int(pratinjau["counts"]["supply"]["planned"]),
+        "price_signals": int(pratinjau["counts"]["prices"]["planned"]),
+        "menu_plans": max(
+            0, int(pratinjau["counts"]["menu_plans"]["planned"]) - rencana_non_demo
+        ),
+    }
+
+    status = await demo_data_status(database_url)
+    sebelum = {t: int(status["tables"][t]["demo"]) for t in harapan}
+    kurang = {t: harapan[t] - sebelum[t] for t in harapan if sebelum[t] < harapan[t]}
+
+    if not kurang:
+        return {
+            "dipulihkan": False,
+            "sebelum": sebelum,
+            "sesudah": sebelum,
+            "harapan": harapan,
+            "kurang": {},
+        }
+
+    ringkasan = await generate_timeseries(
+        start, end, interval_hours=interval_hours, database_url=database_url
+    )
+    status2 = await demo_data_status(database_url)
+    return {
+        "dipulihkan": True,
+        "sebelum": sebelum,
+        "sesudah": {t: int(status2["tables"][t]["demo"]) for t in harapan},
+        "harapan": harapan,
+        "kurang": kurang,
+        "ringkasan": ringkasan,
+    }
+
+
 async def demo_data_status(database_url: str | None = None) -> dict:
     """Keadaan data demo SEKARANG (baca saja) — untuk panel Demo Control.
 

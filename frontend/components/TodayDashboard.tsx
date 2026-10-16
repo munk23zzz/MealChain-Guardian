@@ -13,10 +13,13 @@
 // selisih hidrasi antara HTML server dan render klien.
 
 import PageHeader from "./PageHeader";
-import { fmtValue, STATE_LABEL } from "./KPIDashboard";
+import TodayAgendaCalendar from "./TodayAgendaCalendar";
+import { type AgendaPayload } from "../lib/agenda";
+import { fmtValue, unitLabel, STATE_LABEL } from "./KPIDashboard";
 import { DECISION_TYPE_LABELS } from "./RecommendationCard";
 import { formatKg } from "../lib/overview-format";
 import {
+  DUE_SOON_HOURS,
   batchExpiry,
   dueLabel,
   freshnessLabel,
@@ -73,6 +76,35 @@ function todayLabel(now: Date | null): string {
   });
 }
 
+/** Sapaan dari jam KLIEN. null = jam belum siap → tidak menyapa (jangan menebak pagi/siang). */
+function greeting(now: Date | null, name?: string | null): string | null {
+  if (!now) return null;
+  const jam = now.getHours();
+  const waktu = jam < 11 ? "pagi" : jam < 15 ? "siang" : jam < 19 ? "sore" : "malam";
+  return `Selamat ${waktu}${name ? `, ${name}` : ""}`;
+}
+
+type DueTone = "over" | "soon" | "none";
+
+/**
+ * Nada chip sisa waktu — dari tanggal yang benar-benar ada:
+ * "over" = sudah lewat (diputuskan pemanggil, karena urutan daftar sudah
+ * memisahkan yang lewat), "soon" = ≤ DUE_SOON_HOURS (ambang 48 jam yang sudah
+ * dipakai batch di halaman ini — bukan ambang baru), "none" = masih jauh ATAU
+ * tanggalnya tidak terbaca ATAU jam klien belum siap.
+ */
+function dueTone(value: unknown, now: Date | null, over: boolean): DueTone {
+  if (over) return "over";
+  if (!now) return "none";
+  const ms = new Date(String(value ?? "")).getTime();
+  if (!Number.isFinite(ms)) return "none";
+  return ms - now.getTime() <= DUE_SOON_HOURS * 60 * 60 * 1000 ? "soon" : "none";
+}
+
+function dueClass(tone: DueTone): string {
+  return tone === "none" ? "today-due" : `today-due today-due-${tone}`;
+}
+
 export default function TodayDashboard({
   decisions,
   batches,
@@ -81,9 +113,19 @@ export default function TodayDashboard({
   kpi,
   ledger,
   now,
+  greetingName = null,
   batchesLoading = false,
   batchesError = null,
   onRetry,
+  agenda = null,
+  agendaLoading = false,
+  agendaError = null,
+  agendaDate,
+  agendaToday,
+  agendaMonth,
+  onAgendaSelect = () => {},
+  onAgendaShiftMonth = () => {},
+  onAgendaRetry,
   onOpenDecision,
   onOpenAllDecisions,
   onOpenLocation,
@@ -95,9 +137,22 @@ export default function TodayDashboard({
   kpi: KpiEnvelope;
   ledger: unknown;
   now: Date | null;
+  /** Nama peran untuk sapaan header (mis. "SPPG Operations Lead"). */
+  greetingName?: string | null;
   batchesLoading?: boolean;
   batchesError?: string | null;
   onRetry?: () => void;
+  /** Agenda harian (kalender) — data dari GET /agenda lewat hook halaman. */
+  agenda?: AgendaPayload;
+  agendaLoading?: boolean;
+  agendaError?: string | null;
+  /** Tanggal terpilih + "hari ini" menurut WIB (keduanya dari halaman). */
+  agendaDate?: string;
+  agendaToday?: string;
+  agendaMonth?: { year: number; month: number };
+  onAgendaSelect?: (date: string) => void;
+  onAgendaShiftMonth?: (delta: number) => void;
+  onAgendaRetry?: () => void;
   onOpenDecision?: (decisionId: string) => void;
   onOpenAllDecisions?: () => void;
   onOpenLocation?: (location: string) => void;
@@ -115,6 +170,7 @@ export default function TodayDashboard({
     <section className="today-page">
       <PageHeader
         title="Hari Ini"
+        eyebrow={greeting(now, greetingName)}
         description="Rekap operasional hari berjalan: keputusan yang menunggu tindakan, batch yang mendekati kedaluwarsa, lokasi kekurangan, KPI 24 jam, dan status rantai audit — semua dari API."
         meta={
           <span className="page-header-pills">
@@ -125,6 +181,26 @@ export default function TodayDashboard({
           </span>
         }
       />
+
+      {/* Kalender agenda (langkah 2, 2026-10-16): dimensi yang hilang dari
+          halaman ini — semua kartu di bawah dihitung dari "sekarang", kalender
+          ini menjawab "tanggal lain bagaimana?". Muncul hanya bila halaman
+          mengirim tanggal terpilih (agendaDate), supaya komponen ini tetap
+          bisa dirender tes lama tanpa state kalender. */}
+      {agendaDate && agendaMonth ? (
+        <TodayAgendaCalendar
+          agenda={agenda}
+          loading={agendaLoading}
+          error={agendaError}
+          year={agendaMonth.year}
+          month={agendaMonth.month}
+          selected={agendaDate}
+          today={agendaToday}
+          onSelect={onAgendaSelect}
+          onShiftMonth={onAgendaShiftMonth}
+          onRetry={onAgendaRetry}
+        />
+      ) : null}
 
       <div className="today-grid">
         {/* 1. Keputusan yang menunggu tindakan manusia */}
@@ -158,7 +234,7 @@ export default function TodayDashboard({
                         {formatKg(decision.quantity_kg as number)} · {statusLabel(decision.status)}
                       </span>
                     </div>
-                    <span className={`today-due${expired ? " today-due-over" : ""}`}>
+                    <span className={dueClass(dueTone(decision.expires_at, now, expired))}>
                       {dueLabel(decision.expires_at, clock)}
                     </span>
                     {onOpenDecision && decision.decision_id && (
@@ -257,7 +333,7 @@ export default function TodayDashboard({
                             .join(" · ")}
                         </span>
                       </div>
-                      <span className={`today-due${isExpired ? " today-due-over" : ""}`}>
+                      <span className={dueClass(dueTone(batch.usable_until, now, isExpired))}>
                         {dueLabel(batch.usable_until, clock)}
                       </span>
                     </li>
@@ -287,7 +363,10 @@ export default function TodayDashboard({
                     <span className="today-row-title">{row.location ?? "—"}</span>
                     <span className="today-row-meta">{row.region ?? "—"}</span>
                   </div>
-                  <span className="today-due today-due-over">{row.label}</span>
+                  {/* Bukan label waktu: ini besar kekurangan. Kelasnya sendiri
+                      supaya "merah" di sini berarti "kekurangan", bukan "lewat
+                      tenggat" — dan jam klien belum siap tidak mengubahnya. */}
+                  <span className="today-due today-due-short">{row.label}</span>
                   {onOpenLocation && row.location && (
                     <button
                       type="button"
@@ -336,7 +415,7 @@ export default function TodayDashboard({
                       </span>
                     </div>
                     <span className={`today-value${shown === null ? " today-value-none" : ""}`}>
-                      {shown === null ? "—" : `${shown} ${metric.unit === "IDR" ? "" : metric.unit}`}
+                      {shown === null ? "—" : `${shown} ${unitLabel(metric.unit)}`}
                     </span>
                   </li>
                 );

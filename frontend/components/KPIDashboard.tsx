@@ -12,6 +12,7 @@
 // Kontrak markup untuk test TIDAK berubah (class kpi-* dipin).
 
 import PageHeader from "./PageHeader";
+import { bulletOf, directionLabel, KPI_WINDOWS, type KpiWindowKey } from "../lib/kpi";
 
 const UNIT_FMT: Record<string, (v: string) => string> = {
   IDR: (v) =>
@@ -28,6 +29,24 @@ export function fmtValue(unit: string, value: string | null): string | null {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+/** Nama satuan untuk LAYAR. Nilai `unit` dari server tidak diubah — hanya
+ *  namanya yang diterjemahkan, supaya kontrak API tetap dan fixture tetap sah
+ *  (WS-C, QA 16 Okt: layar menampilkan "percent" berbahasa Inggris).
+ *  Satuan tak dikenal ditampilkan apa adanya — jangan mengarang nama. */
+const UNIT_LABELS: Record<string, string> = {
+  IDR: "", // nilainya sudah berawalan Rp — jangan ditulis dua kali
+  percent: "persen",
+  percentage: "persen",
+  pct: "persen",
+  minutes: "menit",
+};
+
+export function unitLabel(unit: unknown): string {
+  const key = String(unit ?? "").trim();
+  if (!key) return "";
+  return key in UNIT_LABELS ? UNIT_LABELS[key] : key;
 }
 
 /** Tanggal periode dalam bahasa manusia (acuan: "24 Sep 2026 22:08 WIB").
@@ -114,11 +133,17 @@ export default function KPIDashboard({
   loading = false,
   error = null,
   onRetry,
+  windowKey = "24h",
+  onWindowChange,
 }: {
   kpi: any | null;
   loading?: boolean;
   error?: string | null;
   onRetry?: () => void;
+  /** Jendela yang sedang diminta PARENT (halaman) — komponen tidak menyimpan
+   *  state sendiri, supaya angka di layar dan label periode tidak bisa berbeda. */
+  windowKey?: KpiWindowKey;
+  onWindowChange?: (key: KpiWindowKey) => void;
 }) {
   if (loading) {
     return (
@@ -181,11 +206,39 @@ export default function KPIDashboard({
           </span>
         }
       />
-      {/* Grid kartu metrik tiga kolom (pola halaman KPI acuan). */}
+      {/* Pemilih periode (permintaan pemilik 2026-10-16). Jendela 24 jam tetap
+          sah, tetapi dataset demo beracuan 8 Okt: tanpa pilihan ini, kartu
+          "Avoidable Food Loss" dan "Procurement Price Deviation" selalu
+          menjawab "belum ada data" padahal datanya ADA di database — hanya di
+          luar 24 jam. Kontrol ini tidak menghitung apa pun; ia memberi tahu
+          HALAMAN jendela mana yang harus dimuat (angkanya tetap dari backend). */}
+      <div className="kpi-period" role="group" aria-label="Jendela periode KPI">
+        <span className="kpi-period-label">Periode:</span>
+        {KPI_WINDOWS.map((w) => {
+          const aktif = w.key === windowKey;
+          return (
+            <button
+              key={w.key}
+              type="button"
+              className={`commodity-pill kpi-period-pill${aktif ? " is-active" : ""}`}
+              data-window={w.key}
+              aria-pressed={aktif}
+              onClick={() => onWindowChange?.(w.key)}
+            >
+              {w.label}
+            </button>
+          );
+        })}
+      </div>
+      {/* Grid kartu metrik tiga kolom (pola halaman KPI acuan).
+          Fase 4: tiap kartu = angka besar + bullet bar (hanya untuk metrik
+          yang memang punya skala, lihat lib/kpi.ts) + arah perbaikan. */}
       <div className="kpi-grid">
         {kpi.metrics.map((m: any) => {
           const shown = fmtValue(m.unit, m.value);
           const trend = trendClass(m.trend);
+          const bullet = bulletOf(m);
+          const arah = bullet ? directionLabel(bullet.direction) : null;
           return (
             <article key={m.name} className={`kpi-card card kpi-${m.state}`}>
               <div className="kpi-card-top">
@@ -195,11 +248,36 @@ export default function KPIDashboard({
               {shown !== null ? (
                 <p className="kpi-value">
                   {shown}
-                  <small> {m.unit === "IDR" ? "" : m.unit}</small>
+                  <small> {unitLabel(m.unit)}</small>
                 </p>
               ) : (
                 <p className="kpi-value kpi-value-none">—</p>
               )}
+              {bullet && bullet.pct !== null ? (
+                <div
+                  className="kpi-bullet"
+                  data-over={bullet.overMax ? "true" : undefined}
+                  role="img"
+                  aria-label={`${shown} ${unitLabel(m.unit)} dari skala 0–${bullet.max}${
+                    bullet.overMax ? " (melewati skala)" : ""
+                  }`}
+                >
+                  <span className="kpi-bullet-track" aria-hidden="true">
+                    <span
+                      className="kpi-bullet-fill"
+                      style={{ width: `${bullet.pct}%` }}
+                    />
+                  </span>
+                  <span className="kpi-bullet-scale" aria-hidden="true">
+                    <span>0</span>
+                    <span>
+                      {bullet.max}
+                      {unitLabel(m.unit) ? ` ${unitLabel(m.unit)}` : ""}
+                    </span>
+                  </span>
+                </div>
+              ) : null}
+              {arah ? <p className="kpi-direction">{arah}</p> : null}
               <p className="kpi-card-flags">
                 <span className={`kpi-state kpi-state-${m.state}`}>
                   {STATE_LABEL[m.state] ?? m.state}

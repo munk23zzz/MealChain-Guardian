@@ -19,6 +19,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.evidence_consistency import market_price_consistency
 from app.core.price import price_deviation
 from app.models import (
     Commodity,
@@ -234,29 +235,40 @@ async def run_price_anomaly_event(
     db.add(decision)
     await db.flush()
 
+    price_payload = {
+        "source_record_id": str(quote.id),
+        "source_kind": "supplier_quote",
+        "reference_record_id": str(ref.id),
+        "reference_kind": "pihps_reference",
+        "supplier_id": (
+            str(quote.supplier_id) if quote.supplier_id else None
+        ),
+        "supplier_name": supplier.name if supplier else None,
+        "quoted_price_per_kg": str(quote.price_per_kg),
+        "reference_price_per_kg": str(ref.price_per_kg),
+        "deviation_pct": str(dev_pct),
+        "classification": status,
+        "recorded_at": (
+            quote.recorded_at.isoformat() if quote.recorded_at else None
+        ),
+        "synthetic": False,
+    }
+    # Diturunkan ULANG dari baris `price_signals` yang baru dibaca + aturan
+    # 5%/15% di core/price.py (bukan disalin dari payload) → bukti yang tidak
+    # lagi cocok dengan baris harganya tercatat False, bukan True.
+    recomputed = price_deviation(quote.price_per_kg, ref.price_per_kg)
     db.add(
         DecisionEvidence(
             decision_id=decision.id,
             evidence_type="market_price",
-            payload={
-                "source_record_id": str(quote.id),
-                "source_kind": "supplier_quote",
-                "reference_record_id": str(ref.id),
-                "reference_kind": "pihps_reference",
-                "supplier_id": (
-                    str(quote.supplier_id) if quote.supplier_id else None
-                ),
-                "supplier_name": supplier.name if supplier else None,
-                "quoted_price_per_kg": str(quote.price_per_kg),
-                "reference_price_per_kg": str(ref.price_per_kg),
-                "deviation_pct": str(dev_pct),
-                "classification": status,
-                "recorded_at": (
-                    quote.recorded_at.isoformat() if quote.recorded_at else None
-                ),
-                "synthetic": False,
-            },
-            is_consistent=None,
+            payload=price_payload,
+            is_consistent=market_price_consistency(
+                price_payload,
+                quote_price=quote.price_per_kg,
+                reference_price=ref.price_per_kg,
+                deviation_pct=recomputed["deviation_pct"],
+                classification=recomputed["status"],
+            ),
         )
     )
     persist_trace_steps(

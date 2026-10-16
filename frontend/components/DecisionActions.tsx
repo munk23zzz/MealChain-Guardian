@@ -135,7 +135,7 @@ export default function DecisionActions({
       // verifikasi dan menampilkan hasil server apa adanya.
       const result = await verifyAction(decisionId, token);
       setMessage(
-        `Verifier (${result.provider ?? "tanpa provider"}): ${result.verdict ?? "UNAVAILABLE"} — keputusan siap dieksekusi setelah approval terpenuhi.`
+        `Verifier (${result.provider ?? "tanpa provider"}): ${result.verdict ?? "tidak tersedia"} — keputusan siap dieksekusi setelah approval terpenuhi.`
       );
       return null;
     } catch (err: any) {

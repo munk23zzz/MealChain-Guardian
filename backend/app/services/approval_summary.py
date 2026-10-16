@@ -28,6 +28,12 @@ from app.models import (
     User,
 )
 
+# Kelompok jenis keputusan administratif (eksklusi supplier). Diimpor, bukan
+# disalin: sebelumnya modul ini menulis ulang himpunannya sebagai literal di
+# dalam badan fungsi, dan salinan seperti itu bisa menyimpang dari yang dipakai
+# penjaga endpoint (app/api/actions.py memakai konstanta yang sama).
+from app.services import supplier_exclusion_service as exclusions
+
 
 def _verdict_of(decision: Decision) -> str:
     """Verdict tersimpan server-side; tanpa verdict → unavailable."""
@@ -45,7 +51,7 @@ def _requirement_for(decision: Decision) -> dict:
 
 async def _supplier_for(db: AsyncSession, decision: Decision) -> Supplier | None:
     """Supplier yang akan dipakai execute (logika sama, hasil parity)."""
-    if decision.decision_type in {"supplier_exclusion", "supplier_exclusion_restoration"}:
+    if decision.decision_type in exclusions.ADMIN_TYPES:
         from app.models import SupplierExclusion
 
         field = (
@@ -196,7 +202,7 @@ async def build_approval_summary(db: AsyncSession, decision: Decision) -> dict:
     safety = await _safety_view(db, decision)
     supplier_governance = None
     execution_target = "MOCK" if decision.target_location_id else None
-    if decision.decision_type in {"supplier_exclusion", "supplier_exclusion_restoration"}:
+    if decision.decision_type in exclusions.ADMIN_TYPES:
         from app.models import DecisionEvidence, SupplierExclusion
 
         field = (
@@ -231,14 +237,28 @@ async def build_approval_summary(db: AsyncSession, decision: Decision) -> dict:
 
     # Readiness aksi (kesimpulan server, bukan UI).
     unverified = not decision.verified_by
-    # can_approve: approve tambahan masih sah selama status actionable,
-    # tidak expired, belum rejected/executed (approve_action mengizinkan
-    # approval ekstra — satisfaction hanya syarat execute).
-    can_approve = (
+    # Ruling Owner 2026-10-16 (keputusan 1b + 3b): gerbang approve/reject.
+    #
+    # SATU endpoint (`approve_action`) menangani "setuju" DAN "tolak" — bedanya
+    # hanya payload (penolakan wajib beralasan). Jadi satu predikat, dua nama;
+    # menghitungnya dua kali hanya membuat keduanya bisa menyimpang.
+    #
+    # Sebelumnya blok ini menuntut `valid` untuk SEMUA jenis keputusan, padahal
+    # penjaga kedaluwarsa di /actions/approve BERSARANG di dalam blok
+    # ADMIN_TYPES. Dua lapisan menyatakan aturan berbeda: UI mematikan "Setuju"
+    # untuk keputusan kedaluwarsa jenis biasa, sementara endpoint tetap menerima
+    # approval itu. Yang dipilih owner: perilaku ENDPOINT yang benar, read model
+    # mengikuti — jenis administratif tetap dijaga, jenis biasa tidak.
+    #
+    # Catatan: /actions/execute memeriksa kedaluwarsa TANPA syarat, jadi
+    # `can_execute` dan `blocking_reasons` di bawah tidak ikut dilonggarkan.
+    approval_accepted = (
         decision.status in {"pending_approval", "verifier_flagged"}
-        and valid
+        and (valid or decision.decision_type not in exclusions.ADMIN_TYPES)
         and approval_state["rejected"] is False
     )
+    can_approve = approval_accepted
+    can_reject = approval_accepted
     blocking: list[str] = []
     if binding_error is not None:
         blocking.append(binding_error)
@@ -308,6 +328,7 @@ async def build_approval_summary(db: AsyncSession, decision: Decision) -> dict:
         "approval_state": approval_state,
         "approvals": approvals_payload,
         "can_approve": can_approve,
+        "can_reject": can_reject,
         "can_execute": can_execute,
         "blocking_reasons": blocking,
         # Disiplin approver untuk UI (read-only, bukan logika).

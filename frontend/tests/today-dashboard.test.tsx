@@ -229,7 +229,7 @@ describe("kartu KPI", () => {
   it("nilai tersedia diformat, yang belum ada ditulis '—'", () => {
     const html = render();
     expect(html).toContain("2/3");
-    expect(html).toContain("0,00 percent");
+    expect(html).toContain("0,00 persen");
     expect(html).toContain("Rp16.206.000");
     expect(html).toContain("belum ada data");
     expect(html).toContain("today-value-none");
@@ -253,6 +253,48 @@ describe("kartu rantai audit", () => {
     const html = render({ ledger: null });
     expect(html).toContain("today-badge-unknown");
     expect(html).toContain("—");
+  });
+});
+
+describe("sapaan header + nada sisa waktu (Fase 6)", () => {
+  it("sapaan memakai jam klien + nama peran; tanpa jam, tidak menyapa (tidak menebak waktu)", () => {
+    const html = render({ greetingName: "SPPG Operations Lead" });
+    expect(html).toContain("page-header-eyebrow");
+    expect(html).toMatch(/Selamat (pagi|siang|sore|malam), SPPG Operations Lead/);
+    const tanpaJam = render({ greetingName: "SPPG Operations Lead", now: null });
+    expect(tanpaJam).not.toContain("Selamat ");
+    expect(tanpaJam).not.toContain("page-header-eyebrow");
+  });
+
+  it("tanpa nama peran: sapaan tetap jujur (tanpa koma menggantung)", () => {
+    const html = render();
+    expect(html).toMatch(/Selamat (pagi|siang|sore|malam)</);
+    expect(html).not.toContain("Selamat pagi, <");
+  });
+
+  it("chip sisa waktu: lewat = merah, ≤48 jam = amber, jauh = netral", () => {
+    const html = render();
+    // d-lewat (2 jam lewat) dan batch kedaluwarsa → over; d-dekat (45 mnt) dan
+    // batch 10 jam lagi → soon (ambang 48 jam yang sudah dipakai halaman ini).
+    expect(html).toContain("today-due-over");
+    expect(html).toContain("today-due-soon");
+
+    const jauh = render({
+      decisions: [
+        { decision_id: "d-jauh", decision_type: "regional_balance", status: "pending_approval", quantity_kg: 100, expires_at: iso(72 * H) },
+      ],
+      batches: [],
+      locations: [],
+    });
+    expect(jauh).toContain("today-due");
+    expect(jauh).not.toContain("today-due-soon");
+    expect(jauh).not.toContain("today-due-over");
+  });
+
+  it("jam belum siap → tanpa amber/merah (keadaan tidak diklaim)", () => {
+    const html = render({ now: null });
+    expect(html).not.toContain("today-due-soon");
+    expect(html).not.toContain("today-due-over");
   });
 });
 

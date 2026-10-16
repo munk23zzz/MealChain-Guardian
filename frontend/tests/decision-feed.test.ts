@@ -24,6 +24,12 @@ import {
 } from "../lib/decision-feed";
 
 /** Baris keputusan seperti yang benar-benar dikirim GET /decisions. */
+// 16 Okt: `valid`/`expires_at` dulu diisi sekadar syarat (valid: false untuk
+// SEMUA baris, termasuk yang tenggatnya belum lewat). Sejak temuan QA —
+// keputusan kedaluwarsa sempat ikut dihitung "perlu tindakan" dan diurutkan
+// paling atas — fixture ini menyatakannya secara koheren: default MASIH
+// BERLAKU (tenggat setelah NOW), dan hanya approve-1/approve-2 yang
+// kedaluwarsa (`valid: false` + tenggat sudah lewat).
 function row(over: Record<string, unknown> = {}) {
   return {
     decision_id: "aaaaaaaa-1111-2222-3333-444444444444",
@@ -31,9 +37,9 @@ function row(over: Record<string, unknown> = {}) {
     status: "proposed",
     quantity_kg: 600,
     safe_delivered_cost: 16206000,
-    expires_at: "2026-10-11T17:10:15+00:00",
+    expires_at: "2026-10-15T17:10:15+00:00",
     created_at: "2026-10-11T16:40:15+00:00",
-    valid: false,
+    valid: true,
     rejection_reason: null,
     verifier_note: null,
     demo_case: null,
@@ -47,8 +53,8 @@ const DATA = [
   row({ decision_id: "id-proposed-1", status: "proposed", decision_type: "regional_balance" }),
   row({ decision_id: "id-harga-1", status: "proposed", decision_type: "price_anomaly", created_at: "2026-10-12T00:00:00+00:00" }),
   row({ decision_id: "id-aman-1", status: "proposed", decision_type: "safety_disruption", created_at: "2026-10-01T00:00:00+00:00" }),
-  row({ decision_id: "id-approve-1", status: "pending_approval", decision_type: "price_anomaly", expires_at: "2026-10-10T00:00:00+00:00" }),
-  row({ decision_id: "id-approve-2", status: "pending_approval", decision_type: "regional_balance", expires_at: "2026-10-13T00:00:00+00:00" }),
+  row({ decision_id: "id-approve-1", status: "pending_approval", decision_type: "price_anomaly", expires_at: "2026-10-10T00:00:00+00:00", valid: false }),
+  row({ decision_id: "id-approve-2", status: "pending_approval", decision_type: "regional_balance", expires_at: "2026-10-13T00:00:00+00:00", valid: false }),
   row({ decision_id: "id-flag-1", status: "verifier_flagged", decision_type: "safety_disruption", expires_at: "2026-10-15T00:00:00+00:00" }),
   row({ decision_id: "id-tolak-1", status: "rejected", decision_type: "regional_balance", rejection_reason: "Kuota SPPG Jakarta penuh" }),
 ];
@@ -58,8 +64,11 @@ describe("feedChips (label + urutan chip filter)", () => {
     const chips = feedChips(DATA);
     expect(chips[0].id).toBe("action");
     expect(chips[0].label).toBe("Perlu tindakan");
-    // 2 pending_approval + 1 verifier_flagged = 3 (proposed/rejected bukan).
-    expect(chips[0].count).toBe(3);
+    // Dulu 3 (2 pending_approval + 1 verifier_flagged). Sejak 16 Okt angkanya
+    // HANYA yang masih bisa ditindak: approve-1/approve-2 sudah lewat tenggat
+    // (`valid: false`), jadi tinggal verifier_flagged. Chip ini menjanjikan
+    // tindakan — keputusan yang tak bisa ditindak tidak boleh ikut dihitung.
+    expect(chips[0].count).toBe(1);
   });
 
   it("label status memakai bahasa manusia, bukan enum backend", () => {
@@ -94,9 +103,12 @@ describe("feedChips (label + urutan chip filter)", () => {
 });
 
 describe("feedVisible (cakupan + pencarian)", () => {
-  it("cakupan 'action' hanya keputusan yang menunggu tindakan", () => {
+  it("cakupan 'action' hanya keputusan yang menunggu tindakan DAN masih berlaku", () => {
+    // Menyaring dua kali: berstatus menunggu tindakan, lalu buang yang lewat
+    // tenggat. Cakupan inilah yang dibuka chip "Perlu tindakan", jadi isinya
+    // harus cocok dengan angka di chip itu.
     const list = feedVisible(DATA, { scope: "action", query: "" });
-    expect(list.map((d: any) => d.decision_id)).toEqual(["id-approve-1", "id-approve-2", "id-flag-1"]);
+    expect(list.map((d: any) => d.decision_id)).toEqual(["id-flag-1"]);
   });
 
   it("cakupan status menyaring satu status saja", () => {
@@ -141,9 +153,13 @@ describe("feedVisible (cakupan + pencarian)", () => {
 });
 
 describe("sortFeed (urutan yang bisa dipertanggungjawabkan)", () => {
-  it("'urgency': keputusan perlu-tindakan di paling atas, yang paling lama lewat dulu", () => {
+  it("'urgency': yang menunggu tindakan DAN masih berlaku di paling atas", () => {
+    // Dulu tier teratas = yang paling lama LEWAT tenggat, sehingga kartu-kartu
+    // teratas berisi keputusan 7–8 Okt yang sudah tidak bisa ditindak (temuan
+    // QA 16 Okt). Sekarang yang bisa dikerjakan sekarang didahulukan; yang
+    // sudah lewat tetap di daftar, hanya tidak lagi menutupi yang hidup.
     const out = sortFeed(DATA, "urgency", NOW).map((d: any) => d.decision_id);
-    expect(out.slice(0, 3)).toEqual(["id-approve-1", "id-approve-2", "id-flag-1"]);
+    expect(out.slice(0, 3)).toEqual(["id-flag-1", "id-approve-1", "id-approve-2"]);
   });
 
   it("'urgency': sisanya berurut keamanan → ketidakseimbangan → harga, terbaru dulu", () => {
@@ -152,9 +168,14 @@ describe("sortFeed (urutan yang bisa dipertanggungjawabkan)", () => {
   });
 
   it("'due': tenggat terdekat dulu, yang sudah lewat diletakkan di akhir", () => {
+    // Nama tes ini sudah lama menjanjikan "yang sudah lewat di akhir" padahal
+    // assertion-nya menaruh yang paling lewat di posisi PERTAMA (10 Okt di
+    // atas, 15 Okt di bawah). Kini keduanya sepakat: yang masih berlaku
+    // berurut tenggat terdekat, yang lewat menutup daftar — berurut tenggat,
+    // bukan diacak.
     const out = sortFeed(DATA, "due", NOW).map((d: any) => d.decision_id);
-    expect(out[0]).toBe("id-approve-1"); // 10 Okt — tenggat paling awal
-    expect(out.slice(-1)[0]).toBe("id-flag-1"); // 15 Okt — tenggat paling akhir
+    expect(out[0]).toBe("id-flag-1"); // 15 Okt — tenggat terdekat yang MASIH berlaku
+    expect(out.slice(-2)).toEqual(["id-approve-1", "id-approve-2"]); // 10 & 13 Okt — sudah lewat
   });
 
   it("'newest': dibuat terbaru dulu, tanggal tak terbaca di akhir tanpa diacak", () => {

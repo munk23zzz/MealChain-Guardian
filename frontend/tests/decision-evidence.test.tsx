@@ -234,3 +234,61 @@ describe("Decision & Evidence — jejak agen", () => {
     expect(render()).not.toContain("Buka jejak agen");
   });
 });
+
+describe("Decision & Evidence — kerapian kartu fakta (17 Okt 2026)", () => {
+  it("pemilih keputusan punya label terlihat + jumlah dari data", () => {
+    const html = render();
+    expect(html).toContain("Keputusan yang diperiksa");
+    expect(html).toContain('for="pilih-keputusan"');
+    expect(html).toContain("menunggu tindakan ·");
+    expect(html).toContain("keputusan tersedia");
+    expect(html).toContain("<optgroup");
+  });
+
+  it("baris kosong (\"—\") masuk rincian yang bisa dibuka; fakta terisi tetap tampil", () => {
+    // Tanpa rincian biaya: Harga beli / Logistik / Catatan tidak punya data,
+    // sementara biaya aman terkirim tetap ada.
+    const html = render({
+      selected: { decision_id: "d1", decision_type: "regional_balance", status: "pending_approval" },
+      summary: { ...SUMMARY, cost_breakdown: {} },
+    });
+    const posisiTampak = html.indexOf("Biaya aman terkirim");
+    const posisiRincian = html.indexOf('class="fact-more"');
+    expect(posisiTampak).toBeGreaterThanOrEqual(0);
+    expect(posisiRincian).toBeGreaterThan(posisiTampak);
+    expect(html).toContain("rincian belum ada datanya");
+    // Jangan pernah mengumumkan jumlah nol.
+    expect(html).not.toContain("0 rincian belum ada datanya");
+  });
+
+  it("rincian kosong tidak dirender kalau semua barisnya terisi", () => {
+    const html = render({
+      summary: {
+        ...SUMMARY,
+        cost_breakdown: { purchase: 15720000, logistics: 486000, note: "seed demo" },
+        verifier: { verdict: "consistent", verified_by: "verifier_agent" },
+        material_number: "MAT-TELUR",
+        execution_target: "MOCK",
+      },
+    });
+    // Kartu Biaya bersih: blok rinciannya tidak memuat label biaya apa pun.
+    const blokRincian = html.split('class="fact-more"').slice(1).join("");
+    expect(blokRincian).not.toContain("Harga beli");
+  });
+});
+
+describe("Decision & Evidence — kalimat langkah berikutnya (17 Okt 2026)", () => {
+  it("kartu ringkasan dibuka oleh satu kalimat tindakan dari data", () => {
+    const html = render();
+    expect(html).toContain("Langkah berikutnya");
+    expect(html).toContain("evidence-next");
+    // SUMMARY pada fixture: jendela berlaku sudah lewat (expiry.valid=false).
+    expect(html).toContain("Jendela berlaku keputusan sudah lewat");
+  });
+
+  it("peran pengawas: kalimatnya jujur bahwa ia tidak bisa menindaklanjuti", () => {
+    const html = render({ role: "bgn_monitor", summary: { ...SUMMARY, expiry: { valid: true } } });
+    expect(html).toContain("bersifat pengawasan");
+    expect(html).toContain("evidence-next-muted");
+  });
+});

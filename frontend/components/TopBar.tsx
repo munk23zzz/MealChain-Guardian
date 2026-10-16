@@ -8,7 +8,6 @@ import {
 } from "./NavIcon";
 import {
   ALL_LOCATIONS,
-  countActionable,
   notifList,
   scopeModel,
   type NotifDecision,
@@ -58,7 +57,6 @@ export default function TopBar({
   onOpenNotifications,
   onLogout,
 }: TopBarProps) {
-  const pending = countActionable(decisions);
   // Model cakupan lokasi (murni, teruji): hanya monitor nasional boleh memilih;
   // peran SPPG terkunci ke lokasinya; lokasi belum diketahui → fail-closed.
   const scope = scopeModel({ role, locations, ownLocation });
@@ -85,6 +83,13 @@ export default function TopBar({
   const bellRef = useRef<HTMLButtonElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const notifikasi = notifList(decisions);
+  // SATU sumber angka untuk lonceng + panel: yang benar-benar bisa ditindak.
+  // Dulu lonceng memakai countActionable sendiri sementara panel memakai
+  // notifList — dua cara menghitung hal yang sama, dan keduanya ikut menghitung
+  // keputusan yang sudah lewat tenggat (temuan QA F1). Yang lewat tenggat kini
+  // dilaporkan terpisah, bukan disembunyikan.
+  const pending = notifikasi.total;
+  const lewatTenggat = notifikasi.expired;
 
   useEffect(() => {
     if (!notifOpen) return;
@@ -158,8 +163,13 @@ export default function TopBar({
 
         {/* Jam (jam:menit:detik + zona Indonesia) */}
         {clock && (
-          <span className="top-bar-clock" aria-label={clock.aria} title={clock.aria}>
-            {clock.teks}
+          // Fase 7 (audit a11y): `aria-label` TIDAK sah pada <span> tanpa role —
+          // pembaca layar boleh mengabaikannya (temuan axe "aria-prohibited-attr").
+          // Teks lengkapnya kini ada di .sr-only, sedangkan teks yang terlihat
+          // ditandai aria-hidden supaya tidak terbaca DUA kali.
+          <span className="top-bar-clock" title={clock.aria}>
+            <span aria-hidden="true">{clock.teks}</span>
+            <span className="sr-only">{clock.aria}</span>
           </span>
         )}
       </div>
@@ -171,7 +181,11 @@ export default function TopBar({
             type="button"
             className="top-bar-bell"
             onClick={() => setNotifOpen((open) => !open)}
-            aria-label={`Notifikasi: ${pending} keputusan menunggu tindakan`}
+            aria-label={
+              lewatTenggat > 0
+                ? `Notifikasi: ${pending} keputusan menunggu tindakan · ${lewatTenggat} lewat tenggat`
+                : `Notifikasi: ${pending} keputusan menunggu tindakan`
+            }
             aria-haspopup="dialog"
             aria-expanded={notifOpen}
             aria-controls="top-bar-notif-panel"
@@ -201,6 +215,9 @@ export default function TopBar({
                     {notifikasi.total > 0
                       ? `${notifikasi.total} keputusan menunggu tindakan`
                       : "Tidak ada keputusan menunggu tindakan"}
+                    {notifikasi.expired > 0
+                      ? ` · ${notifikasi.expired} lewat tenggat`
+                      : ""}
                   </p>
                 </div>
                 <button

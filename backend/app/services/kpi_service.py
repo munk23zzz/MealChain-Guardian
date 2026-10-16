@@ -18,7 +18,11 @@ reason eksplisit; TANPA fake 0/proxy. Definisi per worksheet §10:
   dihitung bila committed (PO ada); coverage = sample/eligible.
 - Evidence Completeness: % decision dengan ≥2 distinct evidence type
   is_consistent SEBELUM approval-complete cutoff; bukti sesudah cutoff
-  tidak dihitung; dua salinan tipe sama bukan dua sumber.
+  tidak dihitung; dua salinan tipe sama bukan dua sumber. Penyebutnya =
+  keputusan yang PUNYA cutoff approval (16 Okt 2026): keputusan yang belum
+  disetujui siapa pun tidak bisa dinilai lengkap/tidak, jadi ia keluar dari
+  penyebut dan bagiannya dilaporkan `coverage`; tanpa satu pun approval
+  metriknya `no_data`, bukan 0%.
 
 Semua query period `[start, end)`. Omit location untuk SPPG difilter di
 API layer (service menerima location_id=None = global).
@@ -336,12 +340,19 @@ async def compute_kpis(
             (etype, consistent, recorded_at)
         )
     complete = 0
-    considered = 0
+    judged = 0
+    # Penyebut = keputusan yang PUNYA cutoff approval, yaitu yang bisa dinilai
+    # "bukti lengkap sebelum disetujui". Sebelum 2026-10-16 semua keputusan di
+    # jendela dihitung, sehingga keputusan yang belum disetujui siapa pun
+    # terhitung sebagai TIDAK lengkap dan kartu menampilkan 0,00% berlabel
+    # "tersedia" padahal belum ada satu pun bukti yang dinilai. Keputusan tanpa
+    # approval tidak bisa dinilai lengkap/tidak → keluar dari penyebut, dan
+    # bagiannya dilaporkan lewat `coverage`, bukan disembunyikan.
     for did, _status, first_approve in ev_rows:
+        if first_approve is None:
+            continue  # belum ada approval → belum ada cutoff untuk dibandingkan
+        judged += 1
         cutoff = first_approve  # approval-complete cutoff (konservatif: pertama)
-        considered += 1
-        if cutoff is None:
-            continue  # belum ada approval → belum bisa dinilai vs cutoff
         cutoff = cutoff if cutoff.tzinfo else cutoff.replace(tzinfo=start.tzinfo)
         distinct = set()
         for etype, consistent, recorded_at in ev_by_decision.get(str(did), []):
@@ -356,14 +367,25 @@ async def compute_kpis(
                 distinct.add(etype)
         if len(distinct) >= 2:
             complete += 1
-    if considered:
-        ev_rate = Decimal(complete) * 100 / Decimal(considered)
+    if judged:
+        ev_rate = Decimal(complete) * 100 / Decimal(judged)
         ev_metric = _metric(
             "Evidence Completeness", "percent", "available",
-            value=ev_rate, sample_count=considered, coverage=Decimal(1),
+            value=ev_rate,
+            sample_count=judged,
+            coverage=(
+                Decimal(judged) / Decimal(len(ev_rows)) if ev_rows else None
+            ),
         )
     else:
-        ev_metric = _no_data("Evidence Completeness", "percent")
+        ev_metric = _no_data(
+            "Evidence Completeness", "percent",
+            sample_count=0,
+            reason=(
+                "belum ada keputusan yang disetujui pada periode ini — "
+                "tanpa approval tidak ada cutoff untuk menilai bukti"
+            ),
+        )
     metrics.append(ev_metric)
 
     assert [m["name"] for m in metrics] == list(METRIC_NAMES)

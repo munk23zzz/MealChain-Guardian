@@ -8,7 +8,7 @@
 
 import type { ReactNode } from "react";
 
-type NavId =
+export type NavId =
   | "today"
   | "overview"
   | "kpi-kualitas"

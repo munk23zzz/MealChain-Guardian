@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.evidence_consistency import binding_consistency
 from app.models import Batch, Decision, DecisionEvidence, SupplierExclusion
 from app.services.supplier_exclusion_service import lock_supplier
 
@@ -39,15 +40,29 @@ async def persist_binding(db: AsyncSession, decision: Decision, candidate: dict)
         for b in batches
     ):
         raise HTTPException(422, "binding batch/supplier tidak cocok")
+    binding_payload = {
+        "allocation_binding": True,
+        "supplier_id": str(supplier_id),
+        "batch_ids": sorted(str(value) for value in set(batch_ids)),
+    }
     db.add(
         DecisionEvidence(
             decision_id=decision.id,
             evidence_type="human_inspection",
-            payload={
-                "allocation_binding": True,
-                "supplier_id": str(supplier_id),
-                "batch_ids": sorted(str(value) for value in set(batch_ids)),
-            },
+            payload=binding_payload,
+            # Dinilai dari baris `batches` yang baru dibaca di atas (bukan dari
+            # badan request): bukti yang tidak lagi cocok dengan DB tercatat
+            # False, dan fakta yang tidak lengkap tetap None.
+            is_consistent=binding_consistency(
+                binding_payload,
+                batch_ids=[b.id for b in batches],
+                batch_suppliers=[b.supplier_id for b in batches],
+                batch_locations=[b.location_id for b in batches],
+                batch_commodities=[b.commodity_id for b in batches],
+                supplier_id=supplier_id,
+                source_location_id=decision.source_location_id,
+                commodity_id=decision.commodity_id,
+            ),
         )
     )
 

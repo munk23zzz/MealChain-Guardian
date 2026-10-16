@@ -110,8 +110,11 @@ export default function ChaosPanel({
   return (
     <section className="chaos-panel card" aria-label="Chaos skenario Event 3">
       <div className="card-header">
-        <h4>Chaos Skenario — Event 3 (thermal excursion)</h4>
-        <StatusBadge status={result ? result.status : "proposed"} />
+        <h3>Chaos Skenario — Event 3 (thermal excursion)</h3>
+        <span className="card-header-tags">
+          <span className="demo-step">Langkah 4 · skenario</span>
+          <StatusBadge status={result ? result.status : "proposed"} />
+        </span>
       </div>
       <p className="chaos-note">
         Keputusan safety dihitung server dari temperature_log batch terpilih —

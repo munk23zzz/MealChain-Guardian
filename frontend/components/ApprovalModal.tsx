@@ -54,7 +54,10 @@ export default function ApprovalModal({
   // can_approve (approve masih sah), BUKAN can_execute — can_execute
   // selalu false sebelum approval terpenuhi → deadlock approval.
   const canApprove = summary.can_approve === true;
-  const canExecute = summary.can_execute === true;
+  // `can_execute` dulu dihitung di sini lalu TIDAK pernah dipakai, sementara
+  // tombol Eksekusi di ApprovalMenu tetap ditawarkan dan klik-nya berakhir 409.
+  // Pagar eksekusi kini di komponen yang memegang tombolnya
+  // (components/ApprovalMenu.tsx), memakai field yang sama dari read model ini.
   const administrative = ["supplier_exclusion", "supplier_exclusion_restoration"].includes(summary.decision_type);
   const governance = summary.supplier_governance;
   return (

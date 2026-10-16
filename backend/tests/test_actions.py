@@ -378,3 +378,101 @@ def test_execute_rejected_decision_blocked(client):
         assert resp.status_code == 409
     finally:
         _cleanup(decision_id, [head["email"]])
+
+
+# --- Ruling Owner 2026-10-16: penjaga kedaluwarsa per endpoint ---
+
+
+def _expire(decision_id: str, minutes: int = 1) -> None:
+    """Mundurkan tenggat keputusan supaya benar-benar kedaluwarsa."""
+    engine = _db()
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("UPDATE decisions SET expires_at = :t WHERE id = :d"),
+                {
+                    "t": datetime.now(timezone.utc) - timedelta(minutes=minutes),
+                    "d": decision_id,
+                },
+            )
+    finally:
+        engine.dispose()
+
+
+def test_verify_expired_decision_rejected(client):
+    """Keputusan 2b: /actions/verify dulu TIDAK memeriksa kedaluwarsa sama sekali —
+    hanya status pra-approval — sehingga verifikasi pada keputusan yang sudah lewat
+    tenggat diterima, berbeda dari /actions/propose yang menolaknya tanpa syarat.
+    Penjaganya sekarang disamakan dengan propose."""
+    head = _mk_user("sppg_head", "Jakarta")
+    decision_id = _mk_decision(client)
+    try:
+        client.post(
+            "/actions/propose",
+            json={"decision_id": decision_id, "material_number": "MAT-TELUR-JKT"},
+            headers=_login(client, head),
+        )
+        _expire(decision_id)
+        resp = client.post(
+            "/actions/verify", json={"decision_id": decision_id},
+            headers=_login(client, head),
+        )
+        assert resp.status_code == 409, resp.text
+        assert "expired" in resp.json()["detail"].lower()
+    finally:
+        _cleanup(decision_id, [head["email"]])
+
+
+def test_verify_valid_decision_still_accepted(client):
+    """Penjaga baru jangan sampai kebablasan: yang belum lewat tenggat tetap bisa
+    diverifikasi (verifikasi adalah penilaian, bukan persetujuan)."""
+    head = _mk_user("sppg_head", "Jakarta")
+    decision_id = _mk_decision(client)
+    try:
+        client.post(
+            "/actions/propose",
+            json={"decision_id": decision_id, "material_number": "MAT-TELUR-JKT"},
+            headers=_login(client, head),
+        )
+        resp = client.post(
+            "/actions/verify", json={"decision_id": decision_id},
+            headers=_login(client, head),
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["verdict"] in {"CONSISTENT", "FLAGGED", "UNAVAILABLE"}
+    finally:
+        _cleanup(decision_id, [head["email"]])
+
+
+def test_approve_expired_ordinary_decision_accepted(client):
+    """Keputusan 1b: read model sekarang mengikuti ENDPOINT, dan endpoint hanya
+    menjaga kedaluwarsa untuk jenis administratif. Jadi approval pada keputusan
+    kedaluwarsa jenis biasa memang diterima — sengaja, bukan kelalaian.
+
+    Batasnya diuji juga: eksekusinya TETAP ditolak, karena /actions/execute
+    memeriksa kedaluwarsa tanpa syarat. Artinya keputusan ini bisa disetujui tapi
+    tidak bisa dijalankan, dan itu memang keadaan yang dipilih owner."""
+    head = _mk_user("sppg_head", "Jakarta")
+    decision_id = _mk_decision(client)
+    try:
+        client.post(
+            "/actions/propose",
+            json={"decision_id": decision_id, "material_number": "MAT-TELUR-JKT"},
+            headers=_login(client, head),
+        )
+        _verify_decision(decision_id, "consistent")
+        _expire(decision_id)
+        resp = client.post(
+            "/actions/approve",
+            json={"decision_id": decision_id, "approved": True},
+            headers=_login(client, head),
+        )
+        assert resp.status_code == 200, resp.text
+        eksekusi = client.post(
+            "/actions/execute", json={"decision_id": decision_id},
+            headers=_login(client, head),
+        )
+        assert eksekusi.status_code == 409, eksekusi.text
+        assert "expired" in eksekusi.json()["detail"].lower()
+    finally:
+        _cleanup(decision_id, [head["email"]])

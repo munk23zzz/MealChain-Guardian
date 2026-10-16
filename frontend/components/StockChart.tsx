@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import {
   Bar,
   BarChart,
@@ -26,11 +26,8 @@ function toChartValue(value: BalanceMapLocation["shortage_kg"]): number | null {
 
 export default function StockChart({
   locations,
-  stretch = false,
 }: {
   locations: readonly BalanceMapLocation[];
-  /** Jika true, chart mengisi tinggi flex parent (pakai height="100%"). */
-  stretch?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -51,13 +48,23 @@ export default function StockChart({
         (b.Surplus ?? 0) - (a.Surplus ?? 0),
     );
 
+  // Tinggi grafik MENGIKUTI jumlah lokasi — arah pemilik 2026-10-16 ("shape
+  // besar berisi teks terlalu besar"). Tinggi tetap 380px hanya masuk akal untuk
+  // belasan lokasi; dengan SATU lokasi (data seed SPPG/Jakarta) kartunya jadi
+  // 448px berisi satu batang raksasa selebar ~980px. Rumus: 96px untuk sumbu +
+  // legenda, 34px per batang, dijepit 180..380. HARUS angka px (bukan persen):
+  // ResponsiveContainer di dalam rantai flex bisa menghitung `height: 100%`
+  // sebagai 0 dan grafiknya tidak dirender (bug nyata Fase 2).
+  const chartHeight = Math.min(380, Math.max(180, data.length * 34 + 96));
+
   // Judul bagian ini ditulis pembungkus halaman ("Pasokan per Lokasi"); h3 di
   // dalam komponen dulu membuat dua judul bertumpuk dalam satu kartu.
   if (!mounted) {
     return (
       <section
-        className={`stock-chart${stretch ? " stock-chart-stretch" : ""}`}
+        className="stock-chart"
         aria-label="Grafik stok"
+        style={{ "--chart-h": `${chartHeight}px` } as CSSProperties}
       >
         <p className="sr-only">Grafik batang: Surplus dan Shortage per lokasi.</p>
         <div className="stock-chart-placeholder" aria-hidden="true" />
@@ -67,8 +74,9 @@ export default function StockChart({
 
   return (
     <section
-      className={`stock-chart${stretch ? " stock-chart-stretch" : ""}`}
+      className="stock-chart"
       aria-label="Grafik stok"
+      style={{ "--chart-h": `${chartHeight}px` } as CSSProperties}
     >
       <div
         className="stock-chart-holder"
@@ -79,23 +87,26 @@ export default function StockChart({
                 data.reduce((t, d) => t + (Number(d.Surplus) || 0), 0)
               ).toLocaleString("id-ID")} kg dan total shortage ${Math.round(
                 data.reduce((t, d) => t + (Number(d.Shortage) || 0), 0)
-              ).toLocaleString("id-ID")} kg. Angka rinci per lokasi ada di tabel Rincian Pasokan per Lokasi.`
+              ).toLocaleString("id-ID")} kg. Angka rinci per lokasi ada di kartu Status Lokasi.`
             : "Grafik stok belum punya data."
         }
       >
-        {/* Batang HORIZONTAL: kartu ini hanya sepertiga lebar halaman, dan 10
-            label lokasi yang diputar tetap saling tumpang tindih di sana.
-            Mendatar = label terbaca penuh tanpa rotasi. */}
-        <ResponsiveContainer width="100%" height={stretch ? "100%" : 380}>
+        {/* Batang HORIZONTAL: label lokasi terbaca penuh tanpa rotasi, dan
+            urutan menurun membuat masalah terbesar langsung terlihat.
+            Tinggi dari `chartHeight` (mengikuti jumlah lokasi) — angka px tetap,
+            bukan persentase, supaya pasti dirender. `maxBarSize` menjaga batang
+            tetap ramping ketika lokasinya cuma satu-dua (tanpa itu Recharts
+            menggemukkan batang memenuhi seluruh tinggi kartu). */}
+        <ResponsiveContainer width="100%" height={chartHeight}>
           <BarChart
             data={data}
             layout="vertical"
             margin={{ top: 4, right: 16, left: 4, bottom: 4 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#DCE6E9" horizontal={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" horizontal={false} />
             <XAxis
               type="number"
-              tick={{ fontSize: 12, fill: "#555" }}
+              tick={{ fontSize: "var(--fs-1)", fill: "#64748B" }}
               tickFormatter={(value: number) => value.toLocaleString("id-ID")}
             />
             <YAxis
@@ -103,15 +114,15 @@ export default function StockChart({
               dataKey="lokasi"
               width={76}
               interval={0}
-              tick={{ fontSize: 12, fill: "#555" }}
+              tick={{ fontSize: "var(--fs-1)", fill: "#64748B" }}
             />
             <Tooltip formatter={(value) => {
               const numeric = Number(value);
               return Number.isFinite(numeric) ? `${numeric.toLocaleString("id-ID")} kg` : "—";
             }} />
             <Legend />
-            <Bar dataKey="Shortage" fill={SHORTAGE} radius={[0, 3, 3, 0]} />
-            <Bar dataKey="Surplus" fill={SURPLUS} radius={[0, 3, 3, 0]} />
+            <Bar dataKey="Shortage" fill={SHORTAGE} radius={[0, 3, 3, 0]} maxBarSize={26} />
+            <Bar dataKey="Surplus" fill={SURPLUS} radius={[0, 3, 3, 0]} maxBarSize={26} />
           </BarChart>
         </ResponsiveContainer>
       </div>

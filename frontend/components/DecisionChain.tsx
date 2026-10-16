@@ -9,7 +9,7 @@ export default function DecisionChain({ chain }: { chain: any[] }) {
   if (!chain || chain.length === 0) return null;
   return (
     <div className="decision-chain">
-      <h4>Riwayat iterasi</h4>
+      <h3>Riwayat iterasi</h3>
       <ol className="chain-list">
         {chain.map((c) => (
           <li key={c.decision_id} className={`chain-item chain-${c.status}`}>

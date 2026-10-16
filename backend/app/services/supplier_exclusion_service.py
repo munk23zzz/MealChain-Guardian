@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.evidence_consistency import administrative_consistency
 from app.core.supplier_exclusion import ExclusionRequest, validate_request
 from app.models import Batch, Decision, DecisionEvidence, Supplier, SupplierExclusion, User
 
@@ -71,7 +72,7 @@ async def propose(
 ) -> SupplierExclusion:
     require_scope(user, scope_location_id)
     validate_request(ExclusionRequest(supplier_id, scope_location_id, reason, refs))
-    await lock_supplier(db, supplier_id)
+    supplier_row = await lock_supplier(db, supplier_id)
     await validate_evidence(db, supplier_id, refs)
     active = (
         await db.execute(
@@ -136,17 +137,28 @@ async def propose(
             proposed_by=user.id,
         )
         db.add(row)
+    admin_payload = {
+        "supplier_id": str(supplier_id),
+        "scope_location_id": str(scope_location_id),
+        "reason": reason.strip(),
+        "evidence_refs": refs,
+        "administrative_action": decision.decision_type,
+    }
     db.add(
         DecisionEvidence(
             decision_id=decision.id,
             evidence_type="human_inspection",
-            payload={
-                "supplier_id": str(supplier_id),
-                "scope_location_id": str(scope_location_id),
-                "reason": reason.strip(),
-                "evidence_refs": refs,
-                "administrative_action": decision.decision_type,
-            },
+            payload=admin_payload,
+            # `supplier_row` dibaca dengan FOR UPDATE di atas dan `scope` sudah
+            # ditegakkan `require_scope`; bukti administratif tanpa alasan
+            # tertulis tetap dicatat TIDAK konsisten (eksklusi tanpa alasan
+            # tidak bisa ditinjau, lihat core/supplier_exclusion.py).
+            is_consistent=administrative_consistency(
+                admin_payload,
+                supplier_id=supplier_row.id,
+                scope_location_id=scope_location_id,
+                supplier_exists=supplier_row is not None,
+            ),
         )
     )
     await db.flush()

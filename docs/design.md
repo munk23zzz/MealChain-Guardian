@@ -338,35 +338,36 @@ Aturan yang dipegang panel ini:
 
 ## 4. Design system
 
-### Warna (design token — sinkron dengan `frontend/app/globals.css`, overhaul 2026-10-11)
-Sejak 2026-10-11 konsol memakai palet aplikasi acuan `MealchainGuardian` (versi
-biru): navy untuk teks/heading, biru brand untuk aksi & navigasi, kartu putih
-ber-border tanpa bayangan.
+### Warna (design token — sinkron dengan `frontend/app/globals.css`, Bento Modern 2026-10-16)
+Fase 0 (Bento Modern, Arah 4): netral jadi slate, brand jadi biru `#2563EB`, kartu
+putih ber-border rambut, radius 16px, bayangan ultra-halus. Warna STATUS sengaja
+TETAP gelap (AA) — kemodernan status datang dari sistem tint (`--ok/--warn/--danger`),
+bukan dari mencerahkan tinta yang akan merusak kontras teks.
 ```
---navy-900 (ink): #1F3B4D   /* teks utama & heading */
---navy-700:       #2E5266   /* aksen sekunder, item nav aktif */
---line:           #DCE6E9   /* border & permukaan netral */
---ink-muted:      #555555   /* teks sekunder, caption */
---accent-strong:  #0969DA   /* brand: tombol, link, fokus */
---accent:         #0550AE   /* hover aksi */
---bg-page:        #F5F6FA   /* latar halaman */
---status-safe:    #2E7D32   /* PASS / surplus */
---status-warning: #F9A825   /* tight / needs verification — teks badge pakai navy */
---status-danger:  #C62828   /* FAIL / shortage */
+--navy-900 (ink): #0F172A   /* teks utama & heading (slate-900) */
+--navy-700:       #334155   /* aksen sekunder (slate-700) */
+--line:           #E2E8F0   /* border rambut (slate-200) */
+--ink-muted:      #475569   /* teks sekunder (slate-600) */
+--accent-strong:  #2563EB   /* brand: tombol, link, fokus (blue-600) */
+--accent:         #1D4ED8   /* hover aksi (blue-700) */
+--bg-page:        #F8FAFC   /* latar halaman (slate-50) */
+--status-safe:    #2E7D32   /* PASS / surplus (tetap — AA) */
+--status-warning: #F9A825   /* tight — hanya tint; teks badge pakai --warn-ink */
+--status-danger:  #C62828   /* FAIL / shortage (tetap — AA) */
 ```
 
 Token tambahan hasil audit UI/UX 2026-10-11 (semua sudah diuji kontras WCAG AA
 secara terhitung, bukan dikira-kira):
 
 ```
---ink-subtle:     #5F6E77   /* teks tersier & pemisah: 5,27:1 di putih, 4,88:1 di latar */
+--ink-subtle:     #64748B   /* teks tersier & pemisah (slate-500): ~4,8:1 di putih */
 --line-input:     #7C8B9B   /* batas KONTROL interaktif (input/select/chip/tombol): >= 3:1 (WCAG 1.4.11) */
 --ok-bg/--ok-border/--ok-ink             /* #ECFDF5 / #A7F3D0 / #065F46 — lencana aman (7,3:1) */
 --warn-bg/--warn-border/--warn-ink       /* #FFFBEB / #FDE68A / #8A5A00 — lencana & TEKS peringatan (5,9:1) */
 --danger-bg/--danger-border/--danger-ink /* #FEF2F2 / #FECACA / #991B1B — lencana bahaya (7,6:1) */
 --neutral-bg/--neutral-border/--neutral-ink /* #F1F5F9 / #CBD5E1 / #475569 — lencana netral (6,9:1) */
---ink-inverse:    #FFFFFF   /* teks di atas latar berwarna (rail, top bar, tombol primer) */
---on-dark-danger: #FF8A80   /* aksi merusak di atas rail biru */
+--ink-inverse:    #FFFFFF   /* teks di atas latar berwarna (tombol primer, avatar, lencana) */
+--accent-soft:    #EFF6FF   /* tint aksen: item rail aktif, chip peran (blue-50) */
 --skeleton-base:  #E8EDF2   /* kerangka memuat */
 --dur-1/--dur-2/--dur-3     /* 90ms tekan, 160ms hover/fokus, 240ms panel */
 --ease-standard:  cubic-bezier(0.2, 0.8, 0.2, 1)
@@ -383,14 +384,30 @@ Aturan yang mengikat setelah audit (jangan dilanggar saat menambah UI):
   teks peringatan memakai `--warn-ink`. `--status-warning` tetap untuk lencana/tint.
 - Batas kontrol interaktif memakai `--line-input` (≥3:1); `--line`/`--line-strong`
   hanya untuk garis dekoratif.
-- Teks di atas rail/top bar biru minimal `rgba(255,255,255,0.92)` (4,64:1 di
-  #0969DA). Nilai 0,45–0,6 sebelumnya gagal AA (label nav 2,84:1).
+- **Fase 1 (2026-10-16): rail & top bar TIDAK lagi biru.** Keduanya permukaan kaca
+  putih; teks memakai `--ink-muted` (7,5:1 di putih) dan item aktif `--accent-strong`
+  di atas tint `--accent-soft` (~5:1). Aturan lama "teks di atas rail/top bar biru
+  minimal `rgba(255,255,255,0.92)` (4,64:1 di #0969DA)" kini berlaku HANYA untuk
+  permukaan gelap yang tersisa: panel brand login, tombol primer, avatar, lencana.
 - Ukuran teks data ≥ 12px (`--text-micro`/`--text-meta`).
+- **Fase 2 (2026-10-16): angka hero Overview 44px** — satu-satunya teks besar selain
+  `.page-header h1`; nada warnanya memakai token status versi gelap (merah 6,5:1 /
+  hijau 6,3:1 di atas putih) sehingga ukuran kecil pun tetap lolos AA. Nilai yang
+  tidak tersedia ditulis "—", bukan "0 kg", supaya pembaca layar tidak diberi angka palsu.
 - Target sentuh ≥ 44px pada `(pointer: coarse)` **atau** `(max-width: 720px)`
   untuk nav rail, chip, pil komoditas, pilih cakupan, dan tombol ikon.
 - Setiap kontrol punya umpan balik `:active` (transform 1px + peredupan, 90ms)
   dan cincin fokus `:focus-visible`; gerak dimatikan saat
   `prefers-reduced-motion: reduce` (umpan balik peredupan tetap ada).
+- **Gerak peta (revisi 16 Okt).** Perubahan keadaan di sekitar peta diberi gerak
+  pendek dari token (`--dur-1/2/3` + `--ease-standard`): panel rincian lapisan
+  membuka/menutup lewat tinggi `grid-template-rows` `0fr → 1fr` (bisa dibuka DAN
+  ditutup; `max-height` tidak bisa menutup mulus), chevron diputar 90°, legenda
+  masuk `map-legend-in`, isi popup masuk `map-popup-in` — dipasang pada `.map-popup`
+  (ISI), bukan `.maplibregl-popup`, karena MapLibre memakai `transform` elemen itu
+  untuk memposisikan popup. Pin titik bertransisi (cincin lokasi aktif, hover
+  membesar 1,28×; rotasi 45° pin pemasok dipertahankan). Semuanya mati di
+  `prefers-reduced-motion: reduce` — umpan balik warna/cincin tetap ada.
 - Keadaan memuat memakai satu pola: komponen `LoadingState` (skeleton +
   `role="status"` + `aria-busy`) — bukan teks "Memuat…" polos.
 
@@ -402,12 +419,225 @@ palet gelap kedua dan tidak ada token tambahan untuk peta.
 > terang; badge memakai label + tint warna (tanpa titik), mengikuti komponen
 > badge acuan.
 
+**Kerangka/shell (Fase 1 redesign, 2026-10-16 — membalik "rail biru" 9 Okt).**
+Rail sidebar dan top bar adalah **permukaan kaca putih** (`rgba(255,255,255,.86)`
+rail / `rgba(255,255,255,.72)` top bar, `backdrop-filter: blur`), dipisah garis
+rambut `--line`. Tinta memakai `--ink` / `--ink-muted`, **bukan** teks putih lagi.
+Item rail aktif = tint `--accent-soft` + tinta & bar kiri `--accent-strong`.
+Chip peran di top bar = pill bertint biru; jam top bar memakai Fira Code
+(`--font-data`) supaya angkanya tidak bergetar. Pilih cakupan yang terkunci
+memakai `--surface-sunken` + `--ink-muted` (≈7:1). Di lebar ≤720px rail menjadi
+satu baris mendatar yang bisa digeser (perilaku lama, hanya warnanya ikut terang).
+Tombol keluar rail memakai nada merah-terang (`--danger-bg`/`--danger-border`),
+bukan putih-di-atas-biru.
+
+**Overview bento (Fase 2 redesign, 2026-10-16).** Strip KPI Overview bukan lagi satu
+kartu berisi tiga kolom sama lebar: **tiga kartu terpisah** di grid 12 kolom dengan
+bobot **5/3/4**. Tile hero memuat SATU angka terpenting halaman — selisih pasokan
+lokasi aktif (atau Σsurplus − Σshortage jaringan saat cakupan "semua lokasi") dalam
+Fira Code 44px, diwarnai nada selisih (`is-shortage` → `--status-danger`,
+`is-surplus` → `--status-safe`, netral → `--navy-900`), dengan kaki "kurang/lebih
+N% dari kebutuhan" dan baris mini jumlah lokasi. Nilai yang tidak tersedia ditulis
+"—" (`lib/overview-bento.ts`) dan **tidak pernah 0** — sama seperti aturan jujur
+angka di halaman lain. Kartu "Perlu keputusan" di samping peta memakai `notifList`
+yang sama dengan lonceng top bar supaya kedua tempat tak pernah berbeda angka.
+Basemap peta diredupkan lewat filter pada kanvas (`.map-gl canvas`, saturate .62):
+pin adalah penanda DOM, jadi pin hijau/merah tetap menyala penuh — tidak ada tile
+atau gaya peta baru. Grafik "Pasokan per Lokasi" selebar halaman dengan tinggi
+**mengikuti jumlah lokasi** (`--chart-h` = 96 px sumbu+legenda + 34 px per batang,
+dijepit 180–380 px; `maxBarSize` 26 px). Tinggi tetap 380 px dulu membuat kartunya
+448 px padahal data seed hanya punya SATU lokasi — satu batang raksasa selebar
+~980 px di dalam kartu setinggi itu (arah pemilik 2026-10-16). Diukur sesudahnya:
+kartu 448 → **248 px**, holder 380 → **180 px**. Jangan kembalikan ke tinggi
+persentase (`ResponsiveContainer` menghitung 0 di rantai flex yang tingginya dari
+`min-height`/`auto`) dan jangan hapus `--chart-h` dari komponen: CSS `.stock-chart-
+holder` yang dulu memaku 380 px akan mengalahkan tinggi child-nya.
+
+**Aturan ukuran BENTUK, bukan teks (revisi 16 Okt lanjutan — keluhan pemilik:
+"banyak bagian shape yang berisi teks yang ukurannya terlalu besar").** Skala
+tipografi sudah dipangkas di Fase 8–9 dan terukur bersih (maks 36 px = angka hero),
+jadi yang tersisa adalah ukuran *pembungkusnya*. Tiga aturan yang berlaku app-wide:
+- **Lencana status WAJIB satu baris** — `.badge` dapat `white-space: nowrap`,
+  `flex: none`, `line-height: 1.35`. Dulu "PENDING APPROVAL" membungkus jadi dua
+  baris di kolom sempit sehingga jadi pil **120×42 px** (dan "VERIFIER FLAGGED"
+  136×42 px) untuk teks 12 px; sekarang **142×22 px**. `flex: none` tidak boleh
+  dilepas: tanpa itu badge ikut menyusut di dalam baris flex dan labelnya
+  membungkus lagi. `.node-badge` ikut 12 px (`--fs-1`, dulu 13 px) supaya satu
+  bahasa dengan `.badge`.
+- **Kartu ringkas tidak berdiri selebar halaman sendirian** — Telemetri Node
+  (237 px) + daftar Status Lokasi (203 px) kini sepasang di `.overview-pair`
+  (grid 2 kolom ≥1100 px; bertumpuk di bawahnya): 440 px → **223 px**.
+- Angka di dalam kartu ringkas dirapatkan: `.node-telemetry-body` padding 14 px,
+  `.node-gauge-list` gap 8 px, `.node-telemetry-meta` margin 4/10 px.
+
+Hasil terukur (1440 px, SPPG Head/Overview): tinggi dokumen **2256 → 1826 px**
+(−19%), kartu grafik 448 → 248 px, chip legenda menggantikan kotak 300×137 px,
+dan **0 luapan** horizontal di 375/768/1280/1440 px.
+
+**Feed & decision evidence (Fase 3 redesign, 2026-10-16).**
+- Feed Recommendations: entri yang **lewat tenggat** diredam lewat *permukaan*
+  (`--surface-sunken` + tepi netral), **bukan `opacity`** — meredupkan seluruh
+  kartu menjatuhkan teks sekunder `#64748B` ke ~3:1 dan itu gagal AA. Lencana masa
+  berlaku berbunyi **"Lewat tenggat"** (satu kosakata dengan lonceng top bar).
+  Enam kartu pertama masuk berurutan (`@keyframes feed-row-in`, 35ms bertingkat,
+  hanya `transform`/`opacity`, mati pada `prefers-reduced-motion: reduce`).
+- Decision & Evidence: ringkasan = hero 2 kolom (kartu keputusan | fakta identitas
+  & tenggat, ≥1100px); tiga kartu fakta grid 12 kolom **span 4** (≤1180px → 6,
+  ≤760px → 12); baris bawah **5fr/7fr** = Riwayat iterasi | Bukti & integritas.
+  `SupplierExclusionView` selalu baris penuh (form) tepat setelah Governance.
+- **Di kartu sempit (span 4), label fakta DITARUH DI ATAS nilai** — dengan label di
+  samping, kolom nilai hanya ~105px dan "Rp14.022.000" terpecah di tengah angka.
+- **Kartu kepercayaan gelap** (`.integrity-trust`): satu-satunya permukaan gelap di
+  tema terang, hanya untuk bukti kriptografis (Merkle + alamat konten + tanda tangan
+  ECDSA) — token `--trust-bg/-surface/-line/-ink/-ink-muted/-accent`. Daftar
+  pengukuran (ComplianceEvidencePanel) dan tombol ekspor tetap terang: itu dokumen
+  kerja, bukan bukti kripto.
+- Approval: modal radius `--radius` dengan garis aksen 4px di kiri; item menu
+  tindakan radius 10 dengan hover tint; ring fokus eksplisit pada tombol
+  modal/menu/ekspor. **Gating approval (1b/2b/3b) tidak diubah.**
+
+**Decision & Evidence — kerapian baca (2026-10-17, keluhan "tampilannya sangat kurang").**
+- **Pemilih keputusan punya label terlihat** (`.evidence-picker-label` =
+  "Keputusan yang diperiksa") + `.evidence-picker-hint` yang menyebut
+  **"N menunggu tindakan · M keputusan tersedia"**. Angkanya dari `countActionable`
+  (`lib/topbar.ts`) — **satu sumber dengan lonceng top bar**, bukan hitungan kedua.
+  Sebelum ini pemilihnya hanya `<select>` berisi "— pilih keputusan —" tanpa label.
+- **Baris fakta "—" tidak lagi menumpuk terbuka**: `FactList` menerima prop
+  `collapseEmpty`; baris dengan nilai `DASH` dipindah ke `<details class="fact-more">`
+  berlabel "N rincian belum ada datanya" (satu angka, jamak/tunggal benar, **tidak
+  pernah "0 rincian"**). Tampil dulu yang punya isi. **Aturan kosong tetap satu:
+  HANYA `"—"` (DASH) yang dianggap kosong** — "0", "Rp0", dan "Tidak" adalah jawaban
+  nyata (`hasValue`/`splitFacts` di `lib/evidence.ts`). Kartu **Governance sengaja
+  TIDAK di-collapse**: di sana "—" justru kabar baik ("tidak ada penghalang").
+- **Strip "Langkah berikutnya"** (`.evidence-next` + nada `-warn/-ok/-danger/-muted`)
+  membuka kartu Ringkasan keputusan: satu kalimat dari `nextStep()` (`lib/evidence.ts`)
+  yang menjawab "apa yang harus saya lakukan". Hanya memakai field yang ada
+  (`status`, `approvals`, `approval_requirement.min_approvals`, `blocking_reasons`,
+  `expiry.valid`, `can_execute`); peran non-penyetuju dapat kalimat "bersifat
+  pengawasan". Daftar penghalang **dipangkas 2 + "(+N lain)"** supaya tidak jadi
+  dinding teks. Cerminan `APPROVER_ROLES` ← `visibleActions()` (paritas dijaga tes).
+- Tinggi halaman halaman contoh: 2004px → 1772px (baris "—" masuk rincian).
+
+**KPI & Agent Log (Fase 4 redesign, 2026-10-16).**
+- Kartu KPI: angka **mono tabular 32px** + **bullet bar** hanya untuk metrik
+  berskala sendiri (persen 0–100, `SCALE_MAX` di `lib/kpi.ts`). **Tidak ada
+  ambang target yang dikarang**: `GET /kpi` tidak mengirim target/threshold, jadi
+  yang ditampilkan hanya skala nyata + arah perbaikan (`KPI_DIRECTION`:
+  "makin tinggi/rendah makin baik"). Bar tanpa skala (IDR, menit) tidak digambar.
+  Nilai > skala → bar penuh + `data-over`, angka di kartu tetap asli. Nilai
+  null/teks/negatif → tanpa bar, **bukan 0%**.
+- Agent Log: chip umur langkah terakhir di kepala konsol dari `step_at`
+  (`lib/agent-trace.ts`), titik berdenyut (`trace-pulse`) untuk langkah baru,
+  **shimmer** (`trace-shimmer`) hanya bila `output_summary.status` ∈
+  running/in_progress/started/pending — `agent_traces` tidak punya kolom status,
+  jadi "sedang berjalan" tidak boleh dikira-kira. Durasi per langkah
+  (`duration_ms`) kini dirender. Panel provider = chip (titik + kata status).
+- Konsol Agent Log **tetap terang**: permukaan gelap hanya dipakai sekali di app
+  ini (`.integrity-trust`), kalau dipakai dua kali efeknya hilang.
+
+**Keamanan Pangan / Surplus & Limbah / Pemasok (Fase 5 redesign, 2026-10-16).**
+- Keamanan Pangan: tile angka besar 30px mono dengan tint status; **tint = keadaan ada**,
+  jadi hitungan nol tampil netral (warna harus berarti sesuatu). Kotak blokir batch gagal
+  = pagar bahaya tepi kiri 4px. Daftar batch mendesak memakai titik amber via `::before`
+  (tanpa menambah teks). Angka tabel mono + `tabular-nums`.
+- Surplus & Limbah: `.balance-flow` — dua angka besar (surplus `--ok-ink`, kekurangan
+  `--danger-ink`) mengapit panah SVG aksen; `data-kosong="true"` membuat panah netral
+  saat salah satu sisi tidak punya angka (panah tidak boleh menggambar aliran yang tak
+  terbukti). Jarak/Jumlah mono. Bagian limbah tetap "—" + alasan.
+- Pemasok: kolom Keandalan = bar mini 6px + angka; lebar dari `reliabilityMeter()`
+  (0–100, ambang `LOW_RELIABILITY` = 0,6), `aria-label` membawa angkanya, skor kosong →
+  tanpa bar. Panel governance (`SupplierExclusionPanel.module.css`) memakai token tema.
+
+**Hari Ini / Demo Control / Pengaturan (Fase 6 redesign, 2026-10-16).**
+- Hari Ini jadi bento 12 kolom: "Menunggu tindakan" span 7 × 2 baris, batch & shortage
+  span 5 di kanan, KPI + rantai audit baris penuh (< 1180px semua menumpuk satu kolom).
+  Chip sisa waktu = pil + dot: lewat merah, ≤ `DUE_SOON_HOURS` (48) amber, netral abu;
+  jam klien belum siap → tanpa klaim. `PageHeader` dapat slot `eyebrow` (kini dipakai
+  sapaan "Selamat pagi/siang/sore/malam, <peran>"; server tidak menyapa).
+- Demo Control: empat blok = empat kartu dengan chip urutan (Langkah 1–4), `OpsConsole`
+  ikut jadi kartu putih radius 16. Pratinjau `writes:false` diberi lencana "pratinjau —
+  tidak menulis apa pun" (amber). Baris hasil/pratinjau backend = mono; prosa tetap
+  font badan. Peringatan dua langkah tidak diubah.
+- Pengaturan: kontrol radius 10px (tinggi 44 px tetap), chip "belum disimpan" hanya pada
+  baris yang draft-nya berbeda dari nilai tersimpan.
+
+**Responsive & aksesibilitas (Fase 7 redesign, 2026-10-16).** Diukur 29 kombinasi peran×tab di
+375/768/1024/1440 px + reflow 320 px (axe-core 4.10.2 + tier manual), hasil: 0 luapan halaman,
+0 fokus tanpa cincin, temuan ● 123 → 0.
+- **Kontras teks di atas tint** memakai token `--safe-ink-tint` (`#2A722E`, 5,19:1) — bukan
+  `--status-safe` (`#2E7D32` yang di atas `rgba(46,125,50,.1)` hanya 4,49:1, gagal AA dengan
+  selisih 0,01). Aturan: **warna status tetap untuk dot/teks di atas putih; teks di dalam lencana
+  ber-tint memakai varian `*-ink-tint`.** Jangan pakai `opacity` untuk meredupkan teks
+  (`.legend-count` pernah 4,00:1) — pakai token warna eksplisit.
+- **Judul:** satu `h1` per halaman (dari `PageHeader`), tanpa lompatan tingkat. `PageHeader` punya
+  prop `level` (1 = judul halaman, 2 = bagian di dalamnya) — dipakai tab "KPI & Kualitas Agen".
+  Judul kartu memakai h3 di bawah h2 halaman.
+- **Anti-luapan (WCAG 1.4.10, sampai 320 px):** kontainer scroll tabel diberi `contain: paint`
+  (Chrome memperhitungkan isi kontainer scroll pada `scrollWidth` dokumen — tanpa ini halaman bisa
+  digeser 10 px); tabel yang bisa digeser diberi `.board-scroll-hint` (muncul ≤640 px).
+  **Jangan** memakai persentase di dalam `min()` pada `max-width` elemen di dalam flex: elemen itu
+  melaporkan kontribusi intrinsik ke induk sehingga induknya meluap; batasi induknya
+  (`max-width: 100%` + `min-width: 0`) lalu beri elemen `width: 100%` + batas px.
+- **Target sentuh:** 44 px untuk kontrol; `<label>` yang membungkus checkbox dinaikkan tinggi
+  (bukan kotaknya). Pengecualian yang disengaja: kontrol bawaan MapLibre 29×29 (WCAG 2.2 = 24 px)
+  dan `.map-layer-toggle` 34 px.
+- **Teks untuk pembaca layar:** jangan pasang `aria-label` pada elemen tanpa role (mis. `<span>`);
+  pakai teks `.sr-only` di dalam elemen + tandai teks yang terlihat `aria-hidden` bila keduanya
+  akan terbaca ganda.
+
 ### Tipografi
-- Font: Inter (fallback: system-ui) — jelas terbaca di data-dense dashboard.
-  Angka & telemetri memakai monospace sistem (`ui-monospace, SFMono-Regular,
-  Menlo, Consolas`) mengikuti `tailwind.config` acuan.
-- Heading: 600 weight, Body: 400 weight, ukuran dasar 14px (text-sm) — dashboard padat
-- Teks mikro minimal 12px (text-xs); nilai di bawah itu dinaikkan 2026-10-11
+- Font: Fira Sans (fallback: Inter, system-ui) — jelas terbaca di data-dense
+  dashboard; dipasang lewat `next/font/google` sebagai `--font-fira-sans`.
+  Pasangan ini juga yang direkomendasikan skill `ui-ux-pro-max` untuk
+  "Dashboard Data" (mono + sans, Fira Code / Fira Sans).
+- Angka & telemetri memakai Fira Code (monospace, tabular) sebagai `--font-data`
+  (variabel `--font-fira-code`). Sebelumnya mono sistem.
+- **Skala 8 langkah (2026-10-16) — satu-satunya sumber ukuran teks.** Semua
+  `font-size` memakai token ini; angka mentah dilarang muncul kembali (dulu ada
+  24 ukuran berbeda, termasuk 11/11,5px dan pecahan 12,5/13,5/14,5/15,5px):
+
+  | Token | px | Peran |
+  |---|---|---|
+  | `--fs-1` | 12 | micro — label kecil, meta, lencana, keterangan tabel |
+  | `--fs-2` | 13 | dense — sel tabel, baris sekunder, label nav rail |
+  | `--fs-3` | 14 | base — badan tulisan, tombol (nilai `body`) |
+  | `--fs-4` | 16 | title — judul kartu (h3), nilai yang ditonjolkan |
+  | `--fs-5` | 18 | head — judul seksi (h2), angka di dalam kartu |
+  | `--fs-6` | 20 | page — judul halaman (h1; `PageHeader level={2}` memakai `--fs-5`) |
+  | `--fs-7` | 24 | metric — angka metrik besar (KPI/tile/neraca) |
+  | `--fs-8` | 36 | hero — angka hero, satu per halaman |
+
+  Ujung atas (20/24/36) diturunkan 2026-10-16 dari 22/28/44 atas permintaan
+  pemilik ("tidak terlalu besar"); rentang hero 36–42 mengikuti contoh skala
+  skill `ui-ux-pro-max`. Karena semua `font-size` memakai token, satu perubahan
+  token merambat ke seluruh app — dan judul halaman otomatis ikut seragam
+  (`.page-header h1`, `.overview-header-title h1`, `.settings-title` = `--fs-6`).
+
+- Tinggi baris: `--lh-num` 1.15 (angka besar), `--lh-head` 1.3 (judul),
+  `--lh-body` 1.5 (badan tulisan — batas bawah 1.5–1.75 menurut pedoman a11y).
+  Jarak huruf: `--track-tight` −0.02em (judul/angka besar), `--track-caps` 0.04em
+  (label KAPITAL kecil).
+- Lantai teks 12px dipertahankan (nilai di bawahnya dinaikkan 2026-10-11).
+- **Judul wajib punya aturan sendiri.** Heading tanpa `font-size` jatuh ke
+  bawaan peramban (h2 21px, h3 16,38px) — pernah terjadi pada `.provider-panel h2`
+  dan panel governance. Setiap selector judul baru harus menyebut token skala.
+
+### Rail (sidebar)
+- Baris brand **setinggi top bar: 64px** (`min-height`), padding 10/16px; logo,
+  avatar, dan tombol ikon semuanya **32×32**.
+- Item nav (padat): `min-height: 38px`, padding `0 10px`, `gap: 3px` antar item
+  (pitch 41px), ikon dalam **kotak tetap 16×16**, label `--fs-2` (13px) agar
+  semua label mulai di kolom yang sama; warna ikon memakai token (`--ink-subtle`),
+  bukan `opacity`. Batas sentuh 44px tetap ada lewat `@media (pointer: coarse)`
+  dan baris mobile (≤720px), jadi yang kecil hanya rail desktop.
+- **Arah panah tombol lipat ditentukan komponen, bukan CSS**: `ChevronIcon`
+  merender `<` saat terbuka dan `>` saat tertutup. Jangan menambahkan
+  `rotate(180deg)` — putaran itu membalik artinya (pernah terjadi, dan sidebar
+  tertutup jadi menampilkan `<`).
+- Rail terlipat (68px): padding samping dan `gap` **dinolkan** (label berlebar 0
+  tetap menyumbang satu `gap` sehingga ikon bergeser 5px; tombol yang menyusut
+  berlebar 0 tetap menyisakan padding+border 14px). Semua isi harus berada di
+  pusat kolom: ikon = avatar = tombol lipat = pusat rail.
 
 ### Komponen inti
 | Komponen | Fungsi |
@@ -446,3 +676,287 @@ palet gelap kedua dan tidak ada token tambahan untuk peta.
   warnanya sesuai design token di atas
 - **Real-time update**: polling sederhana (bukan WebSocket) untuk MVP — cukup untuk demo,
   lebih simpel diimplementasi dalam waktu terbatas
+
+## Kontrak halaman "Keamanan Pangan" (kepala SPPG — ditetapkan 2026-10-16)
+
+Halaman ini dipakai **kepala SPPG** (satu lokasi, satu dapur), bukan hanya
+pengawas nasional. Aturan yang dipegang:
+
+- **Cakupan dinyatakan, tidak dicampur.** Data yang ditampilkan ber-default
+  LOKASI SENDIRI; tampilan jaringan hanya lewat pemilih cakupan yang eksplisit
+  ("Lokasi saya — <nama>" / "Semua lokasi (pengawasan)") di kepala kartu tabel.
+  Warna/istilah status tetap sama di kedua cakupan.
+- **Setiap angka bisa ditelusuri ke satu endpoint.** Tiles + tabel dari
+  `GET /batches`; kartu "Pasokan masuk" dari `GET /supplier-routes`; kalimat
+  kebutuhan-vs-kiriman dari `GET /balance/map`; kartu "Keputusan keamanan" dari
+  `GET /decisions` (ber-scope server-side). Tidak ada angka yang dikarang di
+  komponen — nilai tak diketahui ditulis "—".
+- **Masa layak = keadaan, bukan hanya persen.** Chip `Kedaluwarsa` (bahaya) /
+  `≤48 jam` (peringatan) / `≤7 hari` (peringatan) muncul hanya untuk baris yang
+  perlu ditindak; baris sehat tidak ditumbuhi lencana "Aman" (bising). Warna
+  memakai token status yang sama dengan lencana/tile (kontras sudah teruji).
+- **Tindakan harus benar-benar menulis.** "Periksa kiriman" / "Uji ulang" →
+  `POST /freshness/evaluate` + `POST /safety/evaluate` (server menghitung ulang
+  dari log suhu & umur panen yang tersimpan, lalu menyimpan) dan data diambil
+  ulang sesudahnya; "Ajukan ulang" → `POST /actions/repropose`. Sesudah menulis,
+  layar menampilkan hasil dari SERVER, bukan tebakan.
+- **Tombol hanya untuk jalur yang sah.** `/actions/repropose` hanya menerima
+  status `rejected` (dengan alasan) — keputusan yang cuma kedaluwarsa TIDAK
+  mendapat tombol; kartunya menjelaskan aturan itu apa adanya.
+- **Kartu "Penerimaan barang"** menjalankan langkah terima barang: lima titik
+  periksa petugas (kemasan/suhu/bau-warna/timbang ulang/lot), pemilih batch
+  (default = kiriman yang sedang datang bila bisa dipasangkan dengan batch
+  nyata), **isian "Lainnya"**, dan tombol "Catat hasil terima & hitung ulang".
+- **Opsi "Lainnya" (permintaan pemilik 2026-10-16, migrasi `016_batch_receipts`).**
+  Petugas sering menghadapi keadaan yang tidak ada di daftar periksa, jadi ia
+  bisa menuliskannya sendiri. Aturan yang dipegang:
+  - Opsi ini **bukan titik periksa ke-6** — di luar `RECEIVING_CHECKS`, sehingga
+    kalimat "N dari 5 titik periksa" tidak berubah artinya.
+  - Catatannya **tersimpan di database** (`batch_receipts.other_note`, maks 500
+    karakter); `POST /receipts` juga menyimpan snapshot titik periksa yang
+    benar-benar dicentang (`checked`, JSONB), pencatat (`recorded_by`), dan
+    waktu server (`recorded_at`) — catatan penerimaan tanpa pencatat bukan bukti.
+  - Catatan yang hanya berisi spasi disimpan `NULL`: layar bisa membedakan
+    "tidak ada catatan" dari "ada catatan".
+  - Satu batch boleh punya banyak catatan (kiriman ulang/koreksi) — riwayat
+    terakhir dibaca dari `GET /receipts?batch_id=…&limit=5` dan ditampilkan di
+    kartu, sehingga isian itu **muncul lagi setelah halaman dimuat ulang**.
+  - Peran: mencatat = `MUTATING_ROLES` **dan** batch wajib milik lokasi pemakai
+    (`assert_in_scope`, ruling 2026-10-14 — barang diterima di dapur sendiri);
+    membaca = semua peran terautentikasi (pengawas nasional harus bisa membaca).
+- **Daftar periksa itu sendiri tetap tidak dipersistensikan sebagai "kebenaran
+  resmi"** — yang tersimpan adalah apa yang benar-benar dicentang petugas pada
+  saat itu (snapshot) plus hasil hitung ulang (`/freshness/evaluate` +
+  `/safety/evaluate`). Snapshot sengaja disimpan apa adanya: kalau daftar
+  periksa berubah nanti, baris lama tetap menggambarkan keadaan saat dicatat.
+- **"Ajukan keputusan" per baris** hanya untuk baris **GAGAL UJI**, dan
+  memanggil `POST /events/safety-disruption` (Event 3): server menilai ulang
+  dari log suhu — batch gagal → 201 keputusan `safety_disruption` + bukti +
+  jejak; batch aman → 200 `no_disruption` (layar bilang "tidak ada keputusan
+  baru", tidak mengarang keputusan). Dua aturan yang dipegang komponen:
+  `operation_key` adalah kunci idempotensi per batch (dibuat sekali, dikirim
+  ulang saat mengulang → dilayani dari catatan, bukan keputusan kembar), dan
+  `target_location_id` diambil dari `/auth/me` — WAJIB lokasi pemakai sendiri
+  (ruling 2026-10-14), bukan dari baris yang diklik; batch pemicu boleh milik
+  lokasi lain (sisi sumber).
+- **Setiap path API baru wajib didaftarkan di DUA tempat**: `frontend/lib/api.ts`
+  dan `API_ROOTS` di `frontend/next.config.js`. Tanpa itu, permintaan dari UI
+  mendarat di Next sendiri dan membalas 404 HTML (terukur:
+  "Tidak bisa memeriksa: HTTP 404: /freshness/evaluate"). Tes kontrak
+  `tests/proxy-roots.test.ts` menjaga keduanya sinkron. (`/events` sudah terdaftar
+  sejak awal, jadi Event 3 tidak menambah akar baru.)
+
+**Kelas CSS baru (aman diuji):** `.board-card-head` (kepala kartu dengan aksi di
+kanan), `.safety-scope` (baris pemilih cakupan), `.safety-state` +
+`.safety-state-{expired,urgent,watch,unknown}` (chip keadaan masa layak),
+`.safety-pick` (pemilih batch penerimaan), `.safety-checks` (daftar periksa —
+matikan `::before` titik amber bawaan `.board-list` karena titik itu berarti
+"mendesak", bukan "sudah diperiksa"), `.safety-other` (label + `<textarea>`
+isian "Lainnya"), `.safety-notes` (riwayat catatan dari database; `::before`
+dimatikan juga), `.board-subhead` (sub-judul di dalam kartu),
+`.safety-row-actions` (tombol tindakan per baris tabel). Kelas tes-sensitif
+(`.map-*`, `.side-tab*`, `.board-table-wrap`, `.commodity-pill`) tidak diubah.
+
+---
+
+## Kontrak kartu "Informasi pengiriman" (Arah A — riset 2026-10-16)
+
+Keputusan pemilik: setelah riset pembanding industri
+(`docs/research/informasi-pengiriman-industri.md`, 11 sumber), arah yang dibangun
+adalah **"Kartu Kiriman"** — bukan papan tabel (Arah B) dan bukan panel samping
+peta (Arah C). Alasan: menutup paling banyak kesenjangan tanpa satu pun field
+backend baru, karena seluruh angkanya sudah dikirim `GET /supplier-routes`.
+
+**Di mana:** tab Overview (di bawah baris peta, memakai jalur yang sekomoditas
+dengan tampilan) dan halaman Pemasok (seluruh jalur aktif). Tab Keamanan Pangan
+BELUM memakai kartu ini — di sana sudah ada kartu "Pasokan masuk" dengan aksi
+"Periksa kiriman"; menyatukannya menyentuh berkas yang sedang disunting sesi
+lain, jadi dicatat sebagai langkah berikutnya.
+
+**Empat lapis informasi** (satu kiriman = satu blok, dari paling cepat dibaca):
+1. judul `Pemasok → Tujuan` + pil status (keadaan + sisa waktu, mis.
+   `Di jalan · 20 menit lagi`);
+2. stepper empat tahap `Dipanen → Berangkat → Di jalan → Tiba` (tahap aktif
+   disorot, tahap yang tak bisa dipastikan = lingkaran putus-putus);
+3. satu baris angka kunci `110,4 km jalan · ± 1 jam 24 menit · 800 kg telur`;
+4. kalimat keputusan (`Tiba ± 14.20 WIB, masih sebelum batas layak 16 Okt 2026.`),
+   lalu rincian lengkap di balik `<details>` — isinya tetap ada di DOM saat
+   tertutup, dan panelnya bekerja tanpa JavaScript.
+
+**Aturan yang mengikat** (dikunci `tests/shipment-card.test.ts` +
+`tests/shipment-card-component.test.tsx`, 37 tes):
+- **Tidak ada angka karangan.** Geometri jalur hilang → yang ditulis adalah jarak
+  LURUS berlabel "lurus (jarak udara)" + sebab dari server (`road_missing_reason`);
+  "0,0 km" tidak pernah muncul, dan waktu tempuh tidak diklaim.
+- **"Belum ada data" ≠ "terlambat".** Tahap tak pasti memakai nada netral/putus-
+  putus; simpangan "terlambat N menit" sengaja TIDAK ditampilkan karena model kita
+  belum punya waktu tiba yang dijanjikan — angka simpangan apa pun akan karangan.
+- **Jam tiba tidak pernah dihitung di peramban**: seluruh angka waktu datang dari
+  `journey` server.
+- Pil memakai aturan `.badge`: satu baris, `flex: none`, `--fs-1` (12px) — terukur
+  111×22 px untuk `Sudah tiba 19.24`.
+- Warna memakai token status yang ada (`--accent*`, `--ok-*`, `--danger-*`,
+  `--neutral-*`); **tidak ada warna baru** dan tidak ada ukuran font baru.
+
+**Terukur (1440 px, data seed 1 kiriman):** kartu 1140×223 px saat rincian
+tertutup, 1140×401 px saat dibuka (rincian menambah 178 px); satu blok kiriman
+128 px; luapan horizontal 0 px di 375 / 768 / 1280 / 1440 px; di 375 px kartu
+menyusut ke 331 px tanpa teks terpotong.
+
+---
+
+## Tahap 2 (16 Okt 2026) — pil, lencana, dan kartu yang direntangkan
+
+Lanjutan sapuan yang sama (keluhan pemilik: bentuk lebih besar dari teksnya).
+Tiga aturan yang sekarang berlaku, semuanya terukur sebelum → sesudah:
+
+**1. `.commodity-pill` — bentuk mengikuti teks, bukan sebaliknya.**
+`padding: 2px 10px; font-size: var(--fs-1)` (dulu `5px 14px` + 13px). Pil kepala
+halaman: 32 → **22 px**. Pil penyaring komoditas (`.filter-card .commodity-pill`,
+13px): 30 → **24 px**. Pil kepala halaman adalah TEKS STATIS (span) sehingga
+`.page-header-pills > .commodity-pill` dikecualikan dari aturan target sentuh
+(`min-height: 0` + `cursor: default`) — tetap 22 px bahkan di 375 px. Sebaliknya
+kontrol yang benar-benar ditekan (penyaring komoditas, cakupan keamanan) TETAP
+44 px di `@media (pointer: coarse)` / ≤720 px — terverifikasi di 375 px.
+
+**2. `.today-badge` disamakan dengan `.badge`:** `--fs-1` + `line-height: 1.35` +
+`flex: none` + `white-space: nowrap` → 26 → **22 px** (dulu satu-satunya lencana
+13px di app ini).
+
+**3. `.board-grid { align-items: start }` — kartu tidak lagi direntangkan setinggi
+tetangganya.** Terukur: "Batch perlu segera dipakai" di Keamanan Pangan
+562×423 px dengan isi hanya 72 px (**17%**) semata karena kartu sebelahnya lebih
+tinggi → sekarang 562×**117 px** (61% berisi). Efek samping yang diinginkan:
+tabel "Rincian per run" di KPI menyusut 532 → 401 px karena lencana di dalam
+barisnya ikut ramping.
+
+**Gerbang:** tsc 0 · suite frontend **774 lulus / 69 berkas** · luapan horizontal
+0 px di 375/768/1440 px untuk 9 tab (Hari Ini, Overview, Recommendations,
+Decision & Evidence, Keamanan Pangan, Surplus & Limbah, Pemasok, Agent Log, KPI).
+
+**Keputusan pemilik (16 Okt, setelah melihat angka di atas):** tabel "Rincian
+Pasokan per Lokasi" **DIHAPUS**, kartu "Status Lokasi" **dipertahankan**. Jadi
+Overview tidak lagi punya dua penyaji angka yang sama: daftar ringkas + legenda
+warna di kartu, dan grafik batang "Pasokan per lokasi" untuk gambaran cepat.
+Berkas yang dihapus (masih ada di git bila perlu dikembalikan):
+`components/OverviewLocationBreakdown.tsx`, `.../OverviewLocationBreakdown.module.css`,
+`tests/overview-location-breakdown.test.tsx`. Teks aksesibilitas grafik ikut
+diperbaiki: dulu ia menunjuk "…di tabel Rincian Pasokan per Lokasi" (sekarang
+menunjuk "…di kartu Status Lokasi") — teks bantuan yang menunjuk elemen yang
+sudah tidak ada lebih buruk daripada tidak ada teks.
+
+**4. Orphan kata di baris terakhir daftar (Hari Ini).** `.today-row-meta` dan
+`.today-row-title` diberi `text-wrap: pretty`. Terukur sebelum: "250 kg ·
+kesegaran 0% · lolos uji" membungkus dengan baris terakhir **18 px** (hanya kata
+"uji") karena pil "Lewat N hari" di kolom kanan menyempitkan kolom teks →
+sesudah: baris terakhir **58 px** ("lolos uji" utuh). Peramban lama yang belum
+mengenal `pretty` hanya kehilangan kerapian ini, bukan keterbacaan.
+
+**5. Kartu kiriman menggantikan daftar ringkas "Pasokan masuk" (tab Keamanan
+Pangan), 16 Okt 2026.** Daftar lama menyajikan angka jalur yang sama dengan
+kartu (jarak jalan, waktu tempuh, rasio, mutu, masa layak) dan halaman itu belum
+punya TAHAP perjalanan — jadi yang dipertahankan bukan dua penyaji angka, tetapi
+satu penyaji angka + stepper. Tombol **"Periksa kiriman"** tetap ada, kini
+menempel pada kirimannya lewat prop baru `action`.
+
+Kontrak `ShipmentCard` bertambah tiga prop (semuanya opsional, perilaku lama
+tidak berubah):
+
+| Prop | Guna |
+|---|---|
+| `hanya` | Menyaring baris SEBELUM dipilih (mis. hanya kiriman menuju lokasi SPPG ini). Baris di luar cakupan TIDAK dihitung sebagai `hidden` — angka "+N lain" hanya bicara soal baris yang termasuk cakupan. |
+| `empty` | Pesan pengganti saat tidak ada kiriman. Tanpa prop ini kartu tetap tidak dirender sama sekali (aturan lama: kartu kosong lebih buruk daripada tidak ada kartu). |
+| `action` | Tindakan per kiriman, dirender di dalam blok kiriman (`.shipment-action`, rata kanan). |
+
+Penyaringnya hidup di logika murni `pickShipments(rows, maks, hanya)` — bukan di
+JSX — supaya hitungan sisa ikut tersaring dan bisa diuji tanpa DOM.
+
+**Terukur (SPPG Head, lokasi Jakarta, 1440 px):** satu kartu
+`Pasokan masuk menuju Jakarta` 1140×264 px, 1 kiriman, 4 tahap stepper, tombol
+"Periksa kiriman" ada, panel rincian ada; teks lama "… jalan · … mutu …" **0
+kemunculan**; hanya SATU judul "Pasokan masuk…" di halaman; luapan horizontal
+0 px (di 375 px kartunya 331×384 px, tombol dan stepper tetap utuh).
+
+---
+
+## Papan kiriman (Arah B riset 16 Okt 2026) — satu baris per KIRIMAN
+
+Halaman **Pemasok**. Sepuluh kolom: Pemasok · Tujuan · Muatan · Jalur · Berangkat
+· Estimasi tiba · Sisa · Masa layak · Mutu · Keadaan, dengan kontrol urutan
+"Paling mendesak" (bawaan) / "Estimasi tiba" / "Batas layak" — bentuk pil yang
+sama dengan `.kpi-period` (pill + `aria-pressed`, 44 px di perangkat sentuh).
+
+**Peran yang digantikan:** papan ini mengambil alih peran kartu ringkas Arah A
+DAN kolom teks "Jalur kirim" **di halaman ini saja** (tabel pemasok tetap punya
+kolomnya sebagai ringkasan per pemasok, grain-nya berbeda). Alasannya sama dengan
+keputusan Overview: satu halaman = satu penyaji angka yang sama. Kartu Arah A
+tetap di Overview dan Keamanan Pangan, di mana justru stepper + kalimat
+keputusan yang dicari.
+
+**Aturan jujur yang dipegang (diuji di `tests/shipment-board.test.ts`):**
+
+- Tanpa geometri jalan → sel menulis jarak lurus berlabel + sebabnya
+  (`road_missing_reason`); tanpa keduanya → "—" (dengan sebab dalam tanda kurung
+  kalau server memberikannya). Tidak pernah "0 km".
+- **Sisa waktu hanya untuk perjalanan yang SEDANG berjalan.** Kiriman yang sudah
+  tiba atau belum berangkat → "—"; kolom Keadaan di sebelahnya yang menjelaskan.
+  (Terbukti perlu: data seed sempat membawa `remaining_min = 197 jam` pada
+  kiriman berkeadaan "sudah tiba" — angka itu akan menyesatkan.)
+- **Sel waktu ringkas "8 Okt 18.00"** (tanpa tahun) dengan **tooltip waktu
+  lengkap** ("8 Okt 2026 18.00 WIB"). Tahun tidak hilang: ada di kolom Masa layak
+  dan di tooltip. Tanpa ringkasan ini sepuluh kolom tidak muat di 1440 px dan
+  kolom Mutu/Keadaan terpotong.
+- Urutan selalu menaruh baris tanpa data di **belakang** (bukan dianggap 0), dan
+  nama pemasok jadi pemutus terakhir supaya urutannya bisa diprediksi.
+
+**Terukur:** di 1440 px lebar ISI tabel = lebar pembungkus = **1106 px** → tidak
+ada gulir mendatar, kesepuluh kolom terlihat penuh; di 375 px isi 1065 px
+digulir DI DALAM pembungkusnya (`.board-table-wrap`) dan luapan halaman tetap
+**0 px**. Ukuran huruf tabel 12 px (lantai tipografi repo) — hanya tabel papan,
+bagian halaman lain tidak berubah. Tangkapan: `ui-audit/t4-papan-1440.png`.
+
+---
+
+## Riwayat kejadian per kiriman (kesenjangan #12 riset, 16 Okt 2026)
+
+Tempatnya **di dalam panel `Rincian kiriman`** yang sudah ada — bukan kartu atau
+bagian baru di halaman. Alasannya dua: panel itu memang sudah dipakai untuk angka
+rinci, dan menambah bentuk baru di halaman justru berlawanan dengan arah
+perbaikan (mengurangi pembungkus, bukan menambah).
+
+Isi: `Riwayat kiriman · N kejadian tercatat` lalu daftar **terbaru dulu**, tiap
+baris = judul (kiri) + waktu lengkap WIB (kanan, huruf data) + keterangan di
+bawahnya bila ada. Terakhir, satu catatan kaki audit yang dipisah garis.
+
+**Empat aturan jujur yang dipegang (semua diuji di
+`tests/shipment-timeline.test.ts`):**
+
+1. **Hanya kejadian yang PUNYA WAKTU di server** yang masuk daftar. Model kita
+   menyimpan `safety_status` tetapi TIDAK menyimpan waktu pemeriksaannya, jadi
+   baris "uji mutu" tidak dibuat — tanggalnya tidak boleh dikarang. Mutu tetap
+   tampil sebagai keadaan di kartu.
+2. **"Perkiraan" dipisah dari "kejadian".** Estimasi tiba ditandai `kind:
+   "rencana"` → judulnya berwarna redup + tag pil "perkiraan", supaya tidak
+   terbaca seolah barangnya sudah tiba. Kiriman yang sudah tiba menampilkan
+   kejadian "Tiba di tujuan" sebagai gantinya.
+3. **Waktu hitung jalur BUKAN kejadian**, melainkan catatan kaki audit
+   (`shipmentRouteAudit()`). Ini keputusan yang lahir dari pengukuran: waktu itu
+   adalah kapan SERVER menghitung (pada demo selalu "hari ini"), sehingga saat
+   dijadikan baris kejadian ia duduk di ATAS kejadian "Tiba" bertanggal lebih
+   awal dan garis waktunya terbaca rusak. Nilainya tetap dibuka karena bagian
+   dari jejak audit.
+4. **Waktu yang tidak terbaca tidak masuk daftar** (bukan ditulis "—"), dan bila
+   tidak ada satu pun waktu, bloknya tidak dirender sama sekali — tidak ada blok
+   kosong berisi teka-teki.
+
+**Terukur (SPPG Head, Overview, 1440 px):** tiga baris riwayat, tinggi tiap baris
+46–47 px, kartu terbuka 1140×608 px (sebelum riwayat 401 px untuk 4 baris fakta,
+jadi riwayat menambah ± 200 px HANYA saat panel dibuka). Tanpa luapan halaman
+(0 px) di 1440 maupun 375. Selisih judul-ke-waktu 784–845 px → tidak ada
+tumpang tindih.
+
+Satu bug tata letak ditemukan lewat tangkapan layar dan sudah diperbaiki: kolom
+waktu dengan lebar tetap (`minmax(0, 16ch)`) lebih sempit daripada
+"16 Okt 2026 07.00 WIB", sehingga tanggal MENABRAK judulnya. Sekarang judul dan
+waktu berada pada satu baris flex (judul kiri, waktu kanan) — tidak ada kolom
+lebar tetap yang bisa kalah dari isinya.

@@ -10,6 +10,12 @@
  * Gerbang muatnya sama dengan daftar pemasok (`shouldLoadSuppliers`): hanya tab
  * yang memang menampilkan peta/Pemasok yang memuat data ini. `staleTime` panjang
  * + tanpa polling — rute kiriman berubah hanya saat sinkronisasi baru dijalankan.
+ *
+ * `forceEnabled` (Fase 11): tab Keamanan Pangan butuh rute kiriman yang menuju
+ * lokasi sendiri supaya kartu "Pasokan masuk" berisi data nyata, padahal tab itu
+ * tidak menampilkan peta. Dipakai sebagai parameter, BUKAN dengan menambah tab
+ * ke daftar di `lib/supplier-pins.ts` — daftar itu menentukan pemuatan PIN
+ * pemasok, dan menambahnya akan mengubah perilaku peta.
  */
 import { useQuery } from "@tanstack/react-query";
 
@@ -22,12 +28,13 @@ export function useSupplierRoutes(
   scope: string,
   tab: string,
   commodity: string | null = null,
-  location: string | null = null
+  location: string | null = null,
+  forceEnabled = false
 ) {
   const query = useQuery({
     queryKey: queryKeys.supplierRoutes(scope, commodity, location),
     queryFn: () => fetchSupplierRoutes(token as string, commodity, location),
-    enabled: Boolean(token) && shouldLoadSuppliers(tab, token),
+    enabled: Boolean(token) && (forceEnabled || shouldLoadSuppliers(tab, token)),
     staleTime: SUPPLIERS_STALE_MS,
     refetchInterval: false,
   });

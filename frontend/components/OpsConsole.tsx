@@ -5,7 +5,11 @@
 //      demand nyata dari /balance/{loc}/{com}, bukan karangan);
 //   2. "Jalankan Analisis Agent" → /balance/analyze (14 kandidat,
 //      flag harga janggal) — agent bekerja di depan juri;
-//   3. role approver (sppg_head/nutritionist) mengajukan usulan →
+//   3. "Jalankan Event 1 penuh" → /demo/event1 (2026-10-16): menjalankan
+//      SELURUH alur orkestrator (DETECT→…→DECIDE→SUPERVISE) sehingga keputusan
+//      lahir bersama narasi supervisor; analisis di atas hanya menampilkan
+//      rekomendasi dan belum menulis keputusan apa pun;
+//   4. role approver (sppg_head/nutritionist) mengajukan usulan →
 //      POST /decisions → muncul di feed → approve/reject/execute.
 // bgn_monitor read-only: bisa melihat semuanya, tanpa tombol Ajukan.
 
@@ -13,7 +17,13 @@ import { useEffect, useState } from "react";
 import StatusBadge from "./StatusBadge";
 import Event2Panel from "./Event2Panel";
 import { formatIDR } from "../lib/auth";
-import { fetchBalance, runAnalysis, createDecision, proposeAction } from "../lib/api";
+import {
+  fetchBalance,
+  runAnalysis,
+  createDecision,
+  proposeAction,
+  runEvent1,
+} from "../lib/api";
 
 const APPROVER = new Set(["sppg_head", "sppg_nutritionist"]);
 const LOCATIONS = ["Jakarta", "Bogor", "Cianjur", "Bandung", "Surabaya"];
@@ -24,19 +34,26 @@ export default function OpsConsole({
   token,
   ownLocationName = null,
   onSubmitted,
+  onDecisionCreated,
   snapshot: initialSnapshot = null,
   analysis: initialAnalysis = null,
   priceQuotes: initialPriceQuotes = null,
   event2: initialEvent2 = null,
+  event1Result: initialEvent1 = null,
 }: {
   role: string;
   ownLocationName?: string | null;
   token: string | null;
   onSubmitted?: () => void;
+  /** Dipanggil setelah keputusan Event 1 dibuat — TANPA memindah tab, supaya
+   *  hasil + narasi supervisor tetap terlihat di panel ini. */
+  onDecisionCreated?: () => void;
   snapshot?: any;
   analysis?: any;
   priceQuotes?: any;
   event2?: any;
+  /** Hasil Event 1 penuh yang sudah ada (dipakai tes/SSR, mis. dari sesi lain). */
+  event1Result?: any;
 }) {
   const [location, setLocation] = useState("Jakarta");
   // Ruling 2026-10-14: kondisi lokasi lain hanya boleh dibaca bgn_monitor;
@@ -49,10 +66,13 @@ export default function OpsConsole({
   const [commodity, setCommodity] = useState("telur");
   const [snapshot, setSnapshot] = useState<any>(initialSnapshot);
   const [analysis, setAnalysis] = useState<any>(initialAnalysis);
-  const [busy, setBusy] = useState<"" | "snapshot" | "analysis" | "submit">(
-    ""
-  );
+  const [busy, setBusy] = useState<
+    "" | "snapshot" | "analysis" | "submit" | "event1"
+  >("");
   const [msg, setMsg] = useState<string | null>(null);
+  // Hasil Event 1 penuh (jalur orkestrator) — disimpan terpisah dari `analysis`
+  // supaya isi dua jalur itu tidak saling menimpa di layar.
+  const [event1, setEvent1] = useState<any>(initialEvent1);
   const canSubmit = APPROVER.has(role) && !!token;
 
   async function loadSnapshot() {
@@ -81,6 +101,34 @@ export default function OpsConsole({
       setAnalysis(data);
     } catch (e: any) {
       setMsg(String(e.message ?? e));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  // Jalur ORKESTRATOR penuh (DETECT→…→DECIDE→SUPERVISE). Berbeda dari
+  // `runAgent` di atas yang hanya meminta rekomendasi: backend di sini menulis
+  // keputusan + seluruh jejak langkah, termasuk narasi supervisor.
+  async function jalankanEvent1Penuh() {
+    if (!canSubmit) return;
+    setBusy("event1");
+    setMsg(null);
+    try {
+      const data = await runEvent1(commodity, location, token);
+      setEvent1(data);
+      setMsg(
+        `Event 1 penuh selesai — keputusan ${data.decision_id} masuk feed (menunggu persetujuan).`
+      );
+      // Sengaja `onDecisionCreated` (bukan `onSubmitted` yang memindah tab):
+      // hasil + narasi supervisor harus terbaca di panel ini dulu.
+      onDecisionCreated?.();
+    } catch (e: any) {
+      // 409 = tidak ada kandidat eligible (keadaan data), bukan kerusakan.
+      setMsg(
+        e?.status === 409
+          ? `Tidak ada kandidat eligible untuk ${commodity} → ${location}.`
+          : String(e.message ?? e)
+      );
     } finally {
       setBusy("");
     }
@@ -115,8 +163,11 @@ export default function OpsConsole({
   const sum = analysis?.summary;
 
   return (
-    <section className="ops-console" aria-label="Konsol operasi">
-      <h3>Konsol Operasi — minta agent bekerja</h3>
+    <section className="ops-console card" aria-label="Konsol operasi">
+      <div className="card-header">
+        <h3>Konsol Operasi — minta agent bekerja</h3>
+        <span className="demo-step">Langkah 3 · picu agen</span>
+      </div>
       <div className="ops-controls">
         <label className="field">
           <span>Lokasi</span>
@@ -167,7 +218,55 @@ export default function OpsConsole({
         >
           {busy === "analysis" ? "Agent bekerja…" : "Jalankan Analisis Agent"}
         </button>
+        {canSubmit && (
+          <button
+            type="button"
+            className="button ops-event1"
+            disabled={busy !== ""}
+            onClick={jalankanEvent1Penuh}
+            title="Jalankan alur Event 1 penuh (DETECT→…→SUPERVISE) lewat /demo/event1"
+          >
+            {busy === "event1"
+              ? "Event 1 berjalan…"
+              : "Jalankan Event 1 penuh"}
+          </button>
+        )}
       </div>
+
+      {event1 && (
+        <div className="card ops-event1-result" aria-label="Hasil Event 1 penuh">
+          <div className="card-header">
+            <h4>
+              Event 1 penuh — {event1.detect?.commodity} → {location}
+            </h4>
+            <StatusBadge status={event1.decision_snapshot?.status ?? "proposed"} />
+          </div>
+          <dl className="ops-facts">
+            <dt>Keputusan</dt>
+            <dd>{event1.decision_id}</dd>
+            <dt>Verifier</dt>
+            <dd>{event1.verifier?.verdict ?? "-"}</dd>
+            <dt>Forecast</dt>
+            <dd>
+              {event1.forecast?.forecast_qty_kg != null
+                ? `${event1.forecast.forecast_qty_kg} kg`
+                : "-"}
+            </dd>
+            <dt>Supervisor</dt>
+            <dd>
+              {event1.supervisor?.status ?? "-"}
+              {event1.supervisor?.provider
+                ? ` (${event1.supervisor.provider})`
+                : ""}
+            </dd>
+            <dt>Langkah</dt>
+            <dd>{(event1.trace_steps ?? []).join(" → ")}</dd>
+          </dl>
+          {event1.supervisor?.summary && (
+            <p className="ops-summary">{event1.supervisor.summary}</p>
+          )}
+        </div>
+      )}
 
       {snapshot && (
         <div className="ops-snapshot card">

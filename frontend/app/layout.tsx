@@ -1,14 +1,22 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Fira_Sans, Fira_Code } from "next/font/google";
 import "./globals.css";
 
 import Providers from "./providers";
 
-/* Tipografi DESIGN.md mockupui: Inter (naratif) + JetBrains Mono (telemetri/ledger) */
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const jetbrainsMono = JetBrains_Mono({
+/* Tipografi Bento Modern (Fase 0, 2026-10-16): Fira Sans (naratif) + Fira Code
+   (data/telemetri). Sebelumnya Inter + JetBrains Mono — JetBrains Mono dimuat
+   lewat --font-jetbrains tapi tidak pernah dipakai globals.css (mono datang dari
+   --font-data = mono sistem). Sekarang --font-data menunjuk Fira Code. */
+const firaSans = Fira_Sans({
   subsets: ["latin"],
-  variable: "--font-jetbrains",
+  variable: "--font-fira-sans",
+  weight: ["300", "400", "500", "600", "700"],
+});
+const firaCode = Fira_Code({
+  subsets: ["latin"],
+  variable: "--font-fira-code",
+  weight: ["400", "500", "600"],
 });
 
 export const metadata: Metadata = {
@@ -22,7 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="id" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    <html lang="id" className={`${firaSans.variable} ${firaCode.variable}`}>
       <body>
         <Providers>{children}</Providers>
       </body>

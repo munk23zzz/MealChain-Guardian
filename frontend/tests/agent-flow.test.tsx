@@ -189,8 +189,20 @@ describe("AgentTraceViewer (activity log aktual)", () => {
     expect(html).toContain("12:00:01");
   });
 
-  it("kosong → empty state jelas, bukan blank", () => {
+  it("belum memilih keputusan → dikatakan apa adanya, bukan 'tidak ada langkah'", () => {
+    // WS-C (QA 16 Okt): dulu satu pesan untuk DUA keadaan berbeda — sebelum
+    // pengguna memilih apa pun, layar sudah mengklaim "belum ada langkah agent
+    // yang tercatat untuk keputusan ini", padahal keputusannya belum dipilih.
+    // Pesan yang salah membuat orang mencari bug yang tidak ada.
     const html = renderToStaticMarkup(<AgentTraceViewer steps={[]} />);
+    expect(html).toContain("Pilih keputusan");
+    expect(html).not.toContain("Belum ada langkah agent");
+  });
+
+  it("keputusan dipilih tetapi kosong → empty state jelas, bukan blank", () => {
+    const html = renderToStaticMarkup(
+      <AgentTraceViewer steps={[]} decisionId="766366cf-3c19-404d-a846-cb3e4c1ac913" />
+    );
     expect(html).toContain("Belum ada langkah agent");
   });
 });

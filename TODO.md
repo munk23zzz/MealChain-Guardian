@@ -17,7 +17,7 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 | S0-03 | Migration awal Postgres (master data tables) | Setup | Done | Hermes | Commit 0176540, needs Docker test |
 | S0-04 | Verifikasi akses AWS trial (Bedrock invoke test) | Setup | In Progress | Roy | **Probe Hermes 2026-10-11 (kredensial .env)**: STS OK — akun 679583588036, `arn:aws:iam::679583588036:user/mealchain`. Katalog Bedrock 93 model TEXT / 97 inference profile. **`invoke_model` DITOLAK di lapisan IAM**: `AccessDeniedException` untuk `us.anthropic.claude-opus-4-6-v1` dan `us.meta.llama3-1-8b-instruct-v1:0` (`not authorized to perform: bedrock:InvokeModel`), sedangkan `us.anthropic.claude-3-haiku-20240307-v1:0` dan `claude-3-sonnet-20240229-v1:0` sudah EOL. Menurut taksonomi skill: ini **"akses model belum diberikan"**, BUKAN kuota habis. **Migrasi 2026-10-11 (Hermes)**: akun 679583588036 tidak dapat dimasuki lewat konsol → dependency AWS dipindah ke akun yang user kuasai, **624606539664** (user IAM `megu`); kunci di `secrets/aws-app.env` (terabaikan git) + `docker-compose.yml` `env_file` ganda. Bukti: STS dari dalam kontainer = 624606539664; invoke Bedrock **bukan lagi AccessDenied** melainkan `ThrottlingException: Too many tokens per day` — kuota *tokens per minute* Anthropic di Service Quotas masih **0.0** (adjustable); `get_use_case_for_model_access` sudah terisi. Aksi tersisa (user): Service Quotas → Amazon Bedrock → *tokens per minute* Claude Sonnet 4 + Haiku 4.5 → Request increase. `SUPERVISOR_MODEL_FALLBACK_1` kini Bedrock sonnet-4 nyata; `AGENTCORE_*` dikosongkan (ARN milik akun lama); suite 630 passed + live SAP 3 passed. Rincian + jebakan: `docs/verification/migrasi-akun-aws.md`. |
 | S0-05 | Verifikasi akses AgentCore | Setup | Done | Hermes | Probe 2026-10-11: control plane TERBUKTI dengan kredensial `.env` — `list_agent_runtimes` 1, `list_gateways` 2, `list_memories` 2 (resource sudah ada, bukan nol). Operasi Identity tersedia: `ListApiKeyCredentialProviders` (relevan untuk S4-07/S5-02). |
-| S0-06 | Strands SDK hello-world agent | Setup | Not Started | | |
+| S0-06 | Strands SDK hello-world agent | Setup | Done | Hermes | `agent/supervisor_agent.py` + `agent/prompts/supervisor_system_prompt.md` + `agent/requirements.txt` dibuat 2026-10-16. Hello-world **LIVE** ke Bedrock `us.anthropic.claude-haiku-4-5-20251001-v1:0` dalam 3,4 dtk (akun 624606539664); tes kontrak (Strands di-mock) 4 passed + ruff bersih. **Deploy ke AgentCore Runtime masih Blocked** (`AGENTCORE_RUNTIME_ARN`/`AGENTCORE_GATEWAY_URL` masih 0 char) → klaim yang sah: "agent ada + jalan ke Bedrock", bukan "jalan di AgentCore". Bukti: `docs/verification/fase-11.md`. |
 | S0-07 | `.env.example` + `.env` lokal | Setup | Done | Hermes | Created |
 
 ## Sprint 1 — Business logic inti + data
@@ -155,6 +155,62 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 > `docs/verification/sprint-4-final-gate.md`. Video fallback = waived
 > Owner. Residual: O-KPI 2 metrik menunggu kontrak data; Memory AgentCore
 > IAM (aksi Roy). Sprint tetap IN PROGRESS — Roy yang menandai DONE.
+> **Penulis data KPI (16 Okt 2026, malam).** Layar KPI kosong BUKAN karena
+> halaman rusak: tiga metrik tidak punya produsen data di backend. Ditambal
+> dengan TDD: (1) trace `ACT` kini ditulis di jalur eksekusi (`api/actions.py`)
+> → Decision Time hidup; (2) kolom `decision_evidence.is_consistent` diisi
+> empat penulis bukti lewat `core/evidence_consistency.py` (temperature,
+> market_price, binding, administrative) → Evidence Completeness terukur;
+> (3) kartu Evidence Completeness berpindah penyebut ke "keputusan yang punya
+> cutoff approval" + menampilkan sampel & coverage, jadi angkanya jujur bukan
+> 0 palsu. Bukti live (satu alur penuh, keputusan `4aa0c365`): trace ACT +
+> PO ber-`decision_id` tertulis, Decision Time 0,11 menit, Safe Delivered Cost
+> Rp15.077.905, Imbalance 7,69% (sebelumnya 0,00%). Label satuan `minutes` →
+> "menit" di `KPIDashboard`. Backend **891 passed EXIT=0** (3 skip); frontend
+> **716/716 (67 berkas)**. Laporan: `docs/verification/kpi-penulis-data.md`.
+> Residual: Avoidable Food Loss & Price Deviation tetap "belum ada data" pada
+> jendela 24 jam karena deret data demo berhenti di 8 Okt (bukan bug); Safe
+> Delivered Cost + Decision Time hanya terisi setelah ada eksekusi nyata.
+> **Pemilih periode KPI (16 Okt 2026).** Jendela halaman dulu DIPAKU 24 jam di
+> `useKpi`, jadi tiga kartu selalu kosong walau datanya ada di DB. Sekarang tab
+> KPI punya pil **24 jam / 7 hari / 30 hari** (`KPI_WINDOWS` + `kpiWindowRange`
+> di `lib/kpi.ts`; kunci jendela masuk `queryKeys.kpiLive`), jendela dimiliki
+> halaman dan diteruskan ke hook + board (dipaku `tests/kpi-wiring.test.tsx`).
+> Live: "30 hari" → **7/7 kartu tersedia** (Meal 23,72% · Food Loss 0,04% ·
+> Imbalance 2,30% · SDC Rp15.079.436 · Price Dev 1,20% · Decision Time 0,11 mnt ·
+> Evidence 22,22%). TIDAK ada baris data yang ditambah/diubah — jangkar kanonik
+> 8 Okt & snapshot ekspor tetap utuh. Frontend 69 berkas / 792 uji + tsc 0 +
+> lint 0. Data baru dari jalur nyata: keputusan `2c6ebef3` (executed, PO
+> MC-2C6EBEF348D2) → Evidence Completeness 0% → 66,67%.
+> **Kalender agenda harian — langkah 1 (16 Okt 2026).** Halaman terpilih: tab
+> **"Hari Ini"** (satu-satunya halaman yang harian tetapi tak punya pemilih hari;
+> `menu_plans` punya 10 baris rencana SETIAP hari 1 Sep–5 Nov yang tak pernah
+> tampil). Endpoint baru **`GET /agenda?start&end`** (`app/api/agenda.py` +
+> `app/services/agenda_service.py`): satu entri per hari tanpa lubang, batas hari
+> **WIB** (bukan UTC), `available: false` pada hari tanpa catatan, scope mengikuti
+> `core/scope.py` (keputusan lewat `target_location_id`, batch lintas lokasi),
+> 7 kueri agregat untuk ≤62 hari. Tes `tests/test_agenda_api.py` 8 uji RED→GREEN;
+> ruff bersih. Live 1–8 Okt: 1 rencana 1200 porsi + 1 kiriman 1200 porsi/hari,
+> limbah 4 kg (4 Okt) & 6 kg (7 Okt), 12 keputusan (7 Okt) & 44 (8 Okt).
+> **Kalender — langkah 2 SELESAI (16 Okt 2026, malam).** Kalender hidup di tab
+> "Hari Ini", tepat di bawah header: grid 42 sel mulai Senin + titik penanda
+> `activity`, panel agenda hari terpilih (rencana menu, kiriman, limbah, pasokan,
+> harga, batch kedaluwarsa, keputusan), navigasi ‹ › + tombol "Hari ini".
+> Berkas baru: `frontend/lib/agenda.ts` (fungsi murni), `lib/hooks/useAgenda.ts`,
+> `components/TodayAgendaCalendar.tsx`. Diubah: `lib/api.ts`, `lib/query.ts`,
+> `components/TodayDashboard.tsx`, `app/page.tsx`, `app/globals.css`,
+> `next.config.js` (**`API_ROOTS` wajib + "agenda"** — tanpa itu /agenda → 404
+> HTML dari Next). 15 uji baru RED→GREEN; gerbang frontend **73 berkas / 854 uji
+> hijau, tsc 0, lint 0**. Live 17 Okt: rencana 1.115 porsi · keputusan 18
+> (11 diusulkan, 3 ditolak, 3 menunggu, 1 ditandai) — cocok dengan DB. Celah UX
+> (klik "Hari ini" tak memindah bulan) ditemukan saat verifikasi hidup & sudah
+> diperbaiki.
+> Detail: docs/verification/kalender-agenda-harian.md.
+> Catatan: deret waktu kanonik sempat terhapus oleh tes `purge_demo_rows()`
+> (`GET /demo/data-status` → `demo: 0`) dan sudah dipulihkan via
+> `POST /demo/timeseries` body `{}` → total supply 2220 · price 2318 · menu 660.
+> Suite penuh belum hijau karena isolasi `tests/test_demo_timeseries_api.py`
+> (bukan regresi aplikasi; detail di docs/verification/kalender-agenda-harian.md).
 > **Overhaul visual (arah Roy 2026-10-09, "masih sangat jelek")**: latar
 > abu halus + kartu ber-depth, badge dot-status (EXPIRED tetap tampil —
 > traceable, tidak disembunyikan), **filter chip status + count live**

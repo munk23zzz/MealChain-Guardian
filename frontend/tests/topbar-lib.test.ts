@@ -7,8 +7,10 @@ import { describe, expect, it } from "vitest";
 import {
   ALL_LOCATIONS,
   countActionable,
+  countActionableBreakdown,
   defaultScope,
   initialsOf,
+  isExpired,
   isScopeChooser,
   networkState,
   notifList,
@@ -82,6 +84,8 @@ describe("top bar — cakupan lokasi", () => {
 
 describe("top bar — notifikasi tindakan", () => {
   it("menghitung status yang menunggu tindakan manusia, mengabaikan sisanya", () => {
+    // Tanpa `valid`/`expires_at` (mis. respons lama / bentuk minimal): jangan
+    // mengarang kedaluwarsa — status saja yang menentukan.
     expect(
       countActionable([
         { status: "pending_approval" },
@@ -93,6 +97,62 @@ describe("top bar — notifikasi tindakan", () => {
       ]),
     ).toBe(3);
     expect(countActionable([])).toBe(0);
+  });
+});
+
+// F1 (QA 16 Okt): lonceng dan chip melaporkan "12 menunggu tindakan" padahal 8
+// di antaranya sudah lewat tenggat 7–8 Okt dan backend MENOLAK tindakan atas
+// mereka (409). `valid` dari GET /decisions adalah sumber kebenaran kedaluwarsa
+// — sudah dipakai components/RecommendationCard.tsx:23 dan
+// lib/recommendations.ts:32 — tetapi hitungan ini dulu mengabaikannya.
+describe("top bar — hitungan menghormati kedaluwarsa", () => {
+  const LEWAT = { status: "pending_approval", valid: false };
+  const HIDUP = { status: "pending_approval", valid: true };
+
+  it("keputusan kedaluwarsa tidak dihitung sebagai menunggu tindakan", () => {
+    expect(countActionable([HIDUP, LEWAT, LEWAT, { status: "executed", valid: true }])).toBe(1);
+  });
+
+  it("tanpa `valid`, tenggat dihitung dari expires_at terhadap now", () => {
+    const now = new Date("2026-10-14T12:00:00Z");
+    expect(
+      countActionable(
+        [
+          { status: "pending_approval", expires_at: "2026-10-10T00:00:00Z" }, // lewat
+          { status: "pending_approval", expires_at: "2026-10-15T00:00:00Z" }, // belum
+        ],
+        now,
+      ),
+    ).toBe(1);
+  });
+
+  it("tanpa `valid` maupun `expires_at` tidak diklaim kedaluwarsa", () => {
+    expect(countActionable([{ status: "pending_approval" }])).toBe(1);
+  });
+
+  it("isExpired: `valid` menang, lalu jatuh ke expires_at, sisanya tidak diklaim", () => {
+    expect(isExpired({ valid: false })).toBe(true);
+    // `valid: true` menang walau `expires_at` sudah lewat — jangan menghitung
+    // ulang apa yang sudah diputuskan server.
+    expect(isExpired({ valid: true, expires_at: "2020-01-01T00:00:00Z" })).toBe(false);
+    const now = new Date("2026-10-14T12:00:00Z");
+    expect(isExpired({ expires_at: "2026-10-15T00:00:00Z" }, now)).toBe(false);
+    expect(isExpired({ expires_at: "2026-10-13T00:00:00Z" }, now)).toBe(true);
+    expect(isExpired({})).toBe(false);
+    expect(isExpired({ expires_at: "bukan-tanggal" })).toBe(false);
+    expect(isExpired(null)).toBe(false);
+  });
+
+  it("breakdown melaporkan yang hidup DAN yang lewat — yang lewat jangan disembunyikan", () => {
+    expect(
+      countActionableBreakdown([
+        HIDUP,
+        LEWAT,
+        LEWAT,
+        { status: "verifier_flagged", valid: false },
+        { status: "proposed", valid: true }, // bukan tindakan → tidak dihitung
+      ]),
+    ).toEqual({ actionable: 1, expired: 3, total: 4 });
   });
 });
 
@@ -179,9 +239,23 @@ describe("notifList", () => {
     expect(total).toBe(3);
   });
 
+  it("keputusan kedaluwarsa tidak masuk daftar, tetapi dilaporkan terpisah", () => {
+    // Notifikasi menjanjikan tindakan; keputusan yang tak bisa ditindak tidak
+    // boleh menempati slotnya. Angkanya tetap dilaporkan supaya tidak hilang
+    // diam-diam.
+    const hasil = notifList([
+      { decision_id: "hidup", status: "PENDING_APPROVAL", valid: true, created_at: "2026-10-11T08:00:00Z" },
+      { decision_id: "lewat", status: "PENDING_APPROVAL", valid: false, created_at: "2026-10-11T09:00:00Z" },
+    ]);
+    expect(hasil.total).toBe(1);
+    expect(hasil.shown.map((d) => d.decision_id)).toEqual(["hidup"]);
+    expect(hasil.expired).toBe(1);
+  });
+
   it("daftar kosong / null tidak meledak", () => {
-    expect(notifList([])).toEqual({ total: 0, shown: [], rest: 0 });
-    expect(notifList(null)).toEqual({ total: 0, shown: [], rest: 0 });
+    // `expired` ikut dilaporkan sejak perbaikan F1 (16 Okt).
+    expect(notifList([])).toEqual({ total: 0, shown: [], rest: 0, expired: 0 });
+    expect(notifList(null)).toEqual({ total: 0, shown: [], rest: 0, expired: 0 });
     expect(notifList(undefined, 5).total).toBe(0);
   });
 

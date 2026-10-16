@@ -9,7 +9,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 
-import { fetchMe } from "../api";
+import { ApiError, fetchMe } from "../api";
 import { queryKeys } from "../query";
 
 export function useMe(token: string | null, scope: string) {
@@ -20,5 +20,10 @@ export function useMe(token: string | null, scope: string) {
     retry: false,
     refetchInterval: false,
   });
-  return { me: query.data ?? null, isFetching: query.isFetching };
+  // 401 = token tersimpan sudah tidak sah (kedaluwarsa/dicabut). HANYA status ini
+  // yang boleh memaksa sesi dibuang; galat jaringan/5xx tidak boleh mengeluarkan
+  // pengguna dari sesi yang masih sah.
+  const unauthorized =
+    query.error instanceof ApiError && query.error.status === 401;
+  return { me: query.data ?? null, isFetching: query.isFetching, unauthorized };
 }

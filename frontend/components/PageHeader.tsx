@@ -13,15 +13,28 @@ export default function PageHeader({
   title,
   description,
   meta,
+  eyebrow,
+  level = 1,
 }: {
   title: string;
   description?: string;
   meta?: ReactNode;
+  /** Baris kecil di ATAS judul (mis. sapaan halaman "Hari Ini"). Opsional —
+   *  halaman lain tidak mengirimnya, jadi tampilannya tidak berubah. */
+  eyebrow?: string | null;
+  /** Tingkat heading. Default 1 (judul halaman). Dipakai `2` oleh bagian yang
+   *  BUKAN judul halaman melainkan salah satu bagian di dalamnya — tab
+   *  "KPI & Kualitas Agen" memuat dua kepala (KPI dan Kualitas Agen) dan hanya
+   *  yang pertama boleh jadi `h1`; sebelumnya keduanya `h1` (temuan audit
+   *  aksesibilitas Fase 7: satu halaman satu h1). */
+  level?: 1 | 2;
 }) {
+  const Judul = level === 2 ? "h2" : "h1";
   return (
     <header className="page-header">
       <div className="page-header-text">
-        <h1>{title}</h1>
+        {eyebrow ? <p className="page-header-eyebrow">{eyebrow}</p> : null}
+        <Judul>{title}</Judul>
         {description && <p>{description}</p>}
       </div>
       {meta && <div className="page-header-meta">{meta}</div>}

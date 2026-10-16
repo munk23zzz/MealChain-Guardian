@@ -77,6 +77,27 @@ export default function ApprovalMenu({
 
   const hasChoice = actions.approve || actions.execute || actions.repropose;
 
+  // WS-B (QA 16 Okt): pagar aksi mutasi memakai KEPUTUSAN SERVER, bukan
+  // hitungan ulang di sini. Read model yang sama sudah mengirim `can_execute`
+  // (= bukan hanya status peran: kedaluwarsa, belum terverifikasi, sudah
+  // dieksekusi, requirement approval belum terpenuhi, safety revalidation
+  // gagal). Dulu tombol Eksekusi tetap ditawarkan dan klik-nya berakhir 409
+  // "decision expired" (backend app/api/actions.py `/actions/execute`).
+  // Fail-closed, sama seperti `can_approve` di ApprovalModal (§S4-04/§S4-05).
+  const canExecute = summary?.can_execute === true;
+  // Keputusan owner 2026-10-16 (3b): "Tolak" memakai endpoint yang SAMA dengan
+  // "Setuju" (approve_action dengan approved=false), jadi kelayakannya juga
+  // milik server. Dulu UI menebaknya dari peran+status karena read model tidak
+  // punya field-nya. Sekarang server menyatakan lewat `can_reject`.
+  const canReject = summary?.can_reject === true;
+  // /actions/propose menolak keputusan kedaluwarsa tanpa syarat
+  // (actions.py:129). `valid` yang tidak ada JANGAN dianggap kedaluwarsa —
+  // jangan mengarang penghalang.
+  const belumKedaluwarsa = summary?.expiry?.valid !== false;
+  const alasanBlokir = Array.isArray(summary?.blocking_reasons)
+    ? String(summary.blocking_reasons[0] ?? "")
+    : "";
+
   return (
     <div className="approval-menu">
       <section className="approval-menu-block" aria-label="Ringkasan bukti keputusan">
@@ -93,7 +114,7 @@ export default function ApprovalMenu({
         <section className="approval-menu-block" aria-label="Pilihan tindakan lain">
           <h4 className="approval-menu-heading">Pilihan tindakan</h4>
           <ul className="action-menu">
-            {actions.approve && (
+            {actions.approve && canReject && (
               <li className="action-menu-item">
                 <div className="action-menu-text">
                   <strong>Tolak keputusan</strong>
@@ -115,7 +136,19 @@ export default function ApprovalMenu({
               </li>
             )}
 
-            {actions.execute && (
+            {actions.approve && !canReject && (
+              <li className="action-menu-item action-menu-note">
+                <div className="action-menu-text">
+                  <strong>Penolakan belum tersedia</strong>
+                  <span>
+                    Server belum mengizinkan penolakan untuk keputusan ini — statusnya sudah
+                    tidak dapat ditolak, atau keputusan administratif ini sudah lewat tenggat.
+                  </span>
+                </div>
+              </li>
+            )}
+
+            {actions.execute && belumKedaluwarsa && (
               <li className="action-menu-item">
                 <div className="action-menu-text">
                   <strong>Catat hasil verifier</strong>
@@ -136,7 +169,19 @@ export default function ApprovalMenu({
               </li>
             )}
 
-            {actions.execute && (
+            {actions.execute && !belumKedaluwarsa && (
+              <li className="action-menu-item action-menu-note">
+                <div className="action-menu-text">
+                  <strong>Catat hasil verifier</strong>
+                  <span>
+                    Belum tersedia — keputusan sudah lewat tenggat, jadi verifikasi ditolak
+                    server.
+                  </span>
+                </div>
+              </li>
+            )}
+
+            {actions.execute && canExecute && (
               <li className="action-menu-item">
                 <div className="action-menu-text">
                   <strong>Eksekusi ke SAP (mock)</strong>
@@ -158,7 +203,19 @@ export default function ApprovalMenu({
               </li>
             )}
 
-            {actions.repropose && !administrative && (
+            {actions.execute && !canExecute && (
+              <li className="action-menu-item action-menu-note">
+                <div className="action-menu-text">
+                  <strong>Eksekusi ke SAP (mock)</strong>
+                  <span>
+                    Belum tersedia — server belum mengizinkan
+                    {alasanBlokir ? `: ${alasanBlokir}` : "."}
+                  </span>
+                </div>
+              </li>
+            )}
+
+            {actions.repropose && !administrative && belumKedaluwarsa && (
               <li className="action-menu-item">
                 <div className="action-menu-text">
                   <strong>Minta re-propose</strong>
@@ -176,6 +233,18 @@ export default function ApprovalMenu({
                 >
                   {busy === "repropose" ? "Memproses…" : "Minta re-propose"}
                 </button>
+              </li>
+            )}
+
+            {actions.repropose && !administrative && !belumKedaluwarsa && (
+              <li className="action-menu-item action-menu-note">
+                <div className="action-menu-text">
+                  <strong>Minta re-propose</strong>
+                  <span>
+                    Belum tersedia — keputusan sudah lewat tenggat, jadi usulan ulang
+                    ditolak server.
+                  </span>
+                </div>
               </li>
             )}
 

@@ -7,6 +7,7 @@ from app.models.demand_records import DemandRecord
 from app.models.kpi_facts import DeliveryEvent, DisposalEvent, MenuPlan
 from app.models.locations import Location
 from app.models.price_signals import PriceSignal
+from app.models.receipts import BatchReceipt
 from app.models.road_routes import RoadRoute
 from app.models.sap_mock import SapMockMaterialStock, SapMockPurchaseOrder
 from app.models.supplier_exclusions import SupplierExclusion
@@ -25,6 +26,7 @@ __all__ = [
     "PriceSignal",
     "RoadRoute",
     "Batch",
+    "BatchReceipt",
     "SapMockMaterialStock",
     "SapMockPurchaseOrder",
     "Decision",

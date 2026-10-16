@@ -78,6 +78,9 @@ describe("wiring sidebar + map di app/page.tsx (S4-06 polish)", () => {
   it("tab Decision & Evidence memilih keputusan default (halaman tidak kosong)", () => {
     const page = readFileSync("app/page.tsx", "utf8");
     expect(page).toMatch(/defaultEvidenceId\(decisions\)/);
-    expect(page).toMatch(/n\.id === "evidence" && !selectedId/);
+    // WS-D memindahkan nav ke components/SideNav.tsx, jadi handler-nya sekarang
+    // menerima id tab (`id`), bukan item nav (`n`). Niat tesnya tetap sama:
+    // menekan tab bukti langsung memilih keputusan yang butuh tindakan.
+    expect(page).toMatch(/id === "evidence" && !selectedId/);
   });
 });

@@ -26,11 +26,13 @@ import PageHeader from "./PageHeader";
 import { SupplierExclusionView } from "./SupplierExclusionPanel";
 import { pendingDecisions, type TodayDecision } from "../lib/today";
 import { decisionGroups } from "../lib/decision-picker";
+import { countActionable } from "../lib/topbar";
 import type { SupplierContext } from "../lib/supplier-exclusions";
 import {
   approvalFacts,
   costFacts,
   decisionFacts,
+  nextStep,
   safetyFacts,
   supplierFact,
 } from "../lib/evidence";
@@ -67,6 +69,9 @@ export default function DecisionEvidence({
   onOpenTraces?: () => void;
 }) {
   const clock = now ?? new Date(0);
+  // Kalimat "apa yang harus saya lakukan" untuk keputusan yang sedang dibuka.
+  // Satu sumber logika (lib/evidence.ts), diuji di tests/evidence-summary.test.ts.
+  const langkah = nextStep({ role, status: String(selected?.status ?? ""), summary });
   // Pilihan untuk empty state: yang paling perlu tindakan lebih dulu.
   const suggestions = pendingDecisions(decisions, clock).items.slice(0, 6);
   // Kelompok dropdown dari lib/decision-picker (satu sumber dengan tab Agent Log).
@@ -78,23 +83,37 @@ export default function DecisionEvidence({
         title="Decision & Evidence"
         description="Satu keputusan, seluruh buktinya: identitas & tenggat, biaya, hasil pemeriksaan keamanan, pemasok, governance persetujuan, riwayat iterasi, lalu bukti tersimpan dengan alamat konten dan tanda tangannya — semuanya dari API."
         meta={
-          <select
-            className="page-header-select"
-            aria-label="Pilih keputusan"
-            value={selectedId ?? ""}
-            onChange={(event) => onSelect(event.target.value)}
-          >
-            <option value="">— pilih keputusan —</option>
-            {groups.map((group) => (
-              <optgroup key={group.id} label={group.label}>
-                {group.options.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+          // Pemilih keputusan: dulu tanpa label (hanya opsi "— pilih keputusan —")
+          // dan tanpa konteks jumlah, sehingga pengguna tidak tahu ada berapa
+          // keputusan dan mana yang menunggu tindakan. Label terlihat + kalimat
+          // jumlah di bawahnya menjawab itu, dan angkanya dari SATU sumber yang
+          // sama dengan lonceng notifikasi (countActionable).
+          <div className="evidence-picker">
+            <label className="evidence-picker-label" htmlFor="pilih-keputusan">
+              Keputusan yang diperiksa
+            </label>
+            <select
+              id="pilih-keputusan"
+              className="page-header-select"
+              value={selectedId ?? ""}
+              onChange={(event) => onSelect(event.target.value)}
+            >
+              <option value="">— pilih keputusan —</option>
+              {groups.map((group) => (
+                <optgroup key={group.id} label={group.label}>
+                  {group.options.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <span className="evidence-picker-hint">
+              {countActionable(decisions, now)} menunggu tindakan · {decisions.length} keputusan
+              tersedia
+            </span>
+          </div>
         }
       />
 
@@ -140,35 +159,51 @@ export default function DecisionEvidence({
         <>
           <article className="card evidence-summary">
             <h2>Ringkasan keputusan</h2>
-            {/* hint={null}: di halaman ini kartu TIDAK dibungkus tombol (tidak
-                seperti di feed), jadi ajakan "klik untuk rincian" akan jadi janji
-                kosong. Jejak agennya sendiri ada di tab Agent Log — ditautkan di
-                bawah, dan tautan itu benar-benar bisa diklik. */}
-            <RecommendationCard decision={selected} mockSourced={false} hint={null} />
-            <FactList rows={decisionFacts({ ...selected, summary }, clock)} />
-            {onOpenTraces ? (
-              <p className="evidence-traces">
-                <button type="button" className="button button-secondary" onClick={onOpenTraces}>
-                  Buka jejak agen
-                  <span aria-hidden="true"> →</span>
-                </button>
-                <span className="evidence-note">
-                  Jejak reasoning tiap langkah (model, alat, durasi) ada di tab Agent Log, untuk
-                  keputusan yang sedang dibuka ini.
-                </span>
-              </p>
-            ) : null}
+            {/* Langkah berikutnya: SATU kalimat yang menjawab "apa yang harus
+                saya lakukan" — halaman ini dulu hanya menumpahkan fakta sehingga
+                pengguna harus menyimpulkan sendiri tindakannya. */}
+            <div className={`evidence-next evidence-next-${langkah.tone}`} role="status">
+              <span className="evidence-next-label">Langkah berikutnya</span>
+              <p className="evidence-next-text">{langkah.text}</p>
+            </div>
+            {/* Bento ringkasan (Fase 3): kartu keputusan di kiri, fakta identitas
+                & tenggat di kanan — bukan satu kolom panjang yang membuat tenggat
+                tergulung jauh ke bawah layar. */}
+            <div className="evidence-summary-body">
+              <div className="evidence-summary-main">
+                {/* hint={null}: di halaman ini kartu TIDAK dibungkus tombol (tidak
+                    seperti di feed), jadi ajakan "klik untuk rincian" akan jadi janji
+                    kosong. Jejak agennya sendiri ada di tab Agent Log — ditautkan di
+                    bawah, dan tautan itu benar-benar bisa diklik. */}
+                <RecommendationCard decision={selected} mockSourced={false} hint={null} />
+                {onOpenTraces ? (
+                  <p className="evidence-traces">
+                    <button type="button" className="button button-secondary" onClick={onOpenTraces}>
+                      Buka jejak agen
+                      <span aria-hidden="true"> →</span>
+                    </button>
+                    <span className="evidence-note">
+                      Jejak reasoning tiap langkah (model, alat, durasi) ada di tab Agent Log, untuk
+                      keputusan yang sedang dibuka ini.
+                    </span>
+                  </p>
+                ) : null}
+              </div>
+              <div className="evidence-summary-facts">
+                <FactList rows={decisionFacts({ ...selected, summary }, clock)} collapseEmpty />
+              </div>
+            </div>
           </article>
 
           <div className="evidence-grid">
             <article className="card">
               <h2>Biaya</h2>
-              <FactList rows={costFacts({ ...selected, summary })} />
+              <FactList rows={costFacts({ ...selected, summary })} collapseEmpty />
             </article>
 
             <article className="card">
               <h2>Keamanan &amp; pemasok</h2>
-              <FactList rows={[...safetyFacts(summary), supplierFact(summary)]} />
+              <FactList rows={[...safetyFacts(summary), supplierFact(summary)]} collapseEmpty />
             </article>
 
             <article className="card">
@@ -184,15 +219,9 @@ export default function DecisionEvidence({
             </article>
           </div>
 
-          <article className="card">
-            <h2>Riwayat iterasi</h2>
-            {chain && chain.length > 0 ? (
-              <DecisionChain chain={chain} />
-            ) : (
-              <p className="evidence-note">Belum ada iterasi sebelumnya untuk keputusan ini.</p>
-            )}
-          </article>
-
+          {/* Form pengecualian pemasok (governance) tampil lebar penuh tepat
+              setelah kartu governance — ia form, jadi butuh lebar; baris bento
+              paling bawah menyandingkan riwayat iterasi dengan bukti kripto. */}
           {supplierContext && (
             <SupplierExclusionView
               key={selected.decision_id}
@@ -203,9 +232,20 @@ export default function DecisionEvidence({
             />
           )}
 
-          {/* Bukti tersimpan: daftar evidence + rantai Merkle + tanda tangan
-              ECDSA + tombol ekspor JSON/CSV. */}
-          <IntegrityPanel token={token ?? ""} decisionId={selected.decision_id} />
+          <div className="evidence-bottom">
+            <article className="card evidence-chain-card">
+              <h2>Riwayat iterasi</h2>
+              {chain && chain.length > 0 ? (
+                <DecisionChain chain={chain} />
+              ) : (
+                <p className="evidence-note">Belum ada iterasi sebelumnya untuk keputusan ini.</p>
+              )}
+            </article>
+
+            {/* Bukti tersimpan: daftar evidence + rantai Merkle + tanda tangan
+                ECDSA + tombol ekspor JSON/CSV. */}
+            <IntegrityPanel token={token ?? ""} decisionId={selected.decision_id} />
+          </div>
         </>
       )}
     </section>

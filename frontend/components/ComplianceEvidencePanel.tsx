@@ -1,6 +1,8 @@
 "use client";
 
 import { evidenceRowsFromDossier, type ComplianceDossier } from "../lib/evidence";
+// Satuan diterjemahkan di satu tempat (WS-C): "percent" → "persen".
+import { unitLabel } from "./KPIDashboard";
 import styles from "./ComplianceEvidencePanel.module.css";
 
 export default function ComplianceEvidencePanel({ dossier }: { dossier: ComplianceDossier }) {
@@ -23,7 +25,7 @@ export default function ComplianceEvidencePanel({ dossier }: { dossier: Complian
           {rows.map((row) => (
             <li className={styles.item} key={row.id} data-testid="compliance-evidence-row">
               <div><strong>{row.evidenceType}</strong> <span className={`${styles.status} ${styles[row.status.toLowerCase() as keyof typeof styles] ?? ""}`}>{row.status}</span></div>
-              <div>Hasil: {row.reading === null ? "Belum diukur" : String(row.reading)}{row.unit ? ` ${String(row.unit)}` : ""}</div>
+              <div>Hasil: {row.reading === null ? "Belum diukur" : String(row.reading)}{unitLabel(row.unit) ? ` ${unitLabel(row.unit)}` : ""}</div>
               <small className={styles.small}>
                 Sumber: {row.source == null ? "Tidak tersedia" : String(row.source)} · Waktu: {row.recordedAt ?? "Tidak tersedia"}
                 {row.rule ? ` · Rule: ${String(row.rule)}` : ""}

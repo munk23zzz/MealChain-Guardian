@@ -28,12 +28,14 @@ freshness 0,90). Tidak ada auto-approve — loop manusia tetap wajib.
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import require_roles
 from app.api.dependencies import get_db
+from app.core.scope import assert_in_scope
 from app.models import AgentTrace, Commodity, Decision, Location, User
 from app.seed.timeseries import (
     DEFAULT_END,
@@ -45,6 +47,7 @@ from app.seed.timeseries import (
     purge_demo_rows,
     validate_range,
 )
+from app.services.event1_orchestrator import run_event1
 
 router = APIRouter()
 
@@ -58,6 +61,19 @@ DEMO_CASES = (
 
 class SeedRequest(BaseModel):
     force: bool = False
+
+
+class Event1Request(BaseModel):
+    """Permintaan menjalankan Event 1 penuh dari panel Demo Control.
+
+    `commodity` + `target_location` memakai NAMA (bukan id) karena itu yang
+    dipakai pipeline rekomendasi deterministik; lokasinya diresolusi di sini
+    supaya cakupan peran bisa ditegakkan sebelum orchestrator jalan.
+    """
+
+    commodity: str
+    target_location: str
+    ttl_minutes: int = Field(default=30, ge=1, le=1440)
 
 
 def _loc_map(locations) -> dict:
@@ -441,3 +457,58 @@ async def refresh_to_today(
         "warning": REFRESH_WARNING,
         "message": "Snapshot kanonik disegarkan ke hari ini; 4 kasus skrip dimuat ulang.",
     }
+
+
+# ---------------------------------------------------------------------------
+# Event 1 penuh (DETECT → … → DECIDE → SUPERVISE) dari panel Demo Control.
+#
+# Kenapa di sini: sebelum endpoint ini ada, `run_event1` hanya dipanggil
+# berkas tes, sehingga langkah SUPERVISE (narasi supervisor) tidak pernah
+# muncul di `agent_traces` pada aplikasi yang dilihat juri. Tombol ini
+# menjalankan jalur NYATA (provider apa adanya, tanpa memalsukan hasil) dan
+# menulis keputusan + jejaknya lewat kode yang sudah tersertifikasi
+# (`tests/test_event1_supervisor_flow.py`).
+#
+# Batas jujur: endpoint ini TIDAK meng-approve/mengeksekusi apa pun — keputusan
+# lahir berstatus `proposed` dan tetap menunggu loop approval manusia.
+# ---------------------------------------------------------------------------
+
+
+@router.post("/demo/event1", status_code=201)
+async def run_demo_event1(
+    payload: Event1Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
+) -> dict:
+    """Jalankan Event 1 penuh untuk satu komoditas + satu lokasi tujuan.
+
+    Cakupan lokasi ditegakkan atas lokasi TUJUAN (Ruling 2026-10-14): kepala
+    SPPG hanya boleh menjalankan Event 1 untuk SPPG-nya sendiri; `bgn_monitor`
+    ditolak guard peran (read-only).
+
+    Kegagalan karena tidak ada kandidat eligible dijawab **409**, bukan 500 —
+    itu keadaan domain, bukan kerusakan server.
+    """
+    location = (
+        await db.execute(select(Location).where(Location.name == payload.target_location))
+    ).scalar_one_or_none()
+    if location is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"lokasi tujuan tidak dikenal: {payload.target_location}",
+        )
+    assert_in_scope(user, location.id, what="lokasi tujuan")
+
+    try:
+        # `run_event1` sinkron (membuka sesi + loop-nya sendiri) → dijalankan di
+        # worker thread supaya tidak menabrak event loop request.
+        return await run_in_threadpool(
+            run_event1,
+            payload.commodity,
+            payload.target_location,
+            ttl_minutes=payload.ttl_minutes,
+        )
+    except ValueError as exc:
+        # Termasuk "tidak ada kandidat eligible untuk Event 1": keadaan data,
+        # bukan kerusakan server.
+        raise HTTPException(status_code=409, detail=str(exc)) from exc

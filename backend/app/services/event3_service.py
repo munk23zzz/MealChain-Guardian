@@ -28,6 +28,7 @@ from decimal import Decimal
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.evidence_consistency import temperature_consistency
 from app.core.safety import evaluate_safety
 from app.models import (
     Batch,
@@ -249,22 +250,37 @@ async def run_safety_disruption_event(
     await persist_binding(db, decision, top["candidate"])
 
     prev_id = str(previous_decision_id) if previous_decision_id else None
+    temperature_payload = {
+        "batch_id": str(batch.id),
+        "safety_status": temp_result["safety_status"],
+        "excursion_minutes": exc_min,
+        "rule": temp_result.get("rule"),
+        "excluded_batch_ids": [str(batch.id)],
+        "previous_decision_id": prev_id,
+        "outcome_status": "revised",
+        "recommended_candidate": top["candidate"],
+        "synthetic": False,
+    }
+    # Diturunkan ULANG dari log suhu mentah batch (`batch.temperature_log`
+    # dibaca ulang dari DB sesudah commit #1) dengan ambang yang sama seperti
+    # evaluasi Event 3 — bukan disalin dari payload: bukti yang tidak lagi
+    # cocok dengan lognya tercatat False.
+    rederived = evaluate_safety(
+        batch.temperature_log or [],
+        safe_min_c=0.0,
+        safe_max_c=8.0,
+        max_excursion_minutes=30.0,
+    )
     db.add(
         DecisionEvidence(
             decision_id=decision.id,
             evidence_type="temperature",
-            payload={
-                "batch_id": str(batch.id),
-                "safety_status": temp_result["safety_status"],
-                "excursion_minutes": exc_min,
-                "rule": temp_result.get("rule"),
-                "excluded_batch_ids": [str(batch.id)],
-                "previous_decision_id": prev_id,
-                "outcome_status": "revised",
-                "recommended_candidate": top["candidate"],
-                "synthetic": False,
-            },
-            is_consistent=None,
+            payload=temperature_payload,
+            is_consistent=temperature_consistency(
+                temperature_payload,
+                safety_status=rederived["safety_status"],
+                excursion_minutes=rederived["excursion_minutes"],
+            ),
         )
     )
     persist_trace_steps(

@@ -3,10 +3,22 @@
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+/** Galat HTTP backend yang membawa status. Pemanggil bisa membedakan 401 (sesi
+ *  tidak sah → sesi perlu dibuang) dari galat lain TANPA mencocokkan teks pesan.
+ *  Pesannya tetap "HTTP <status>: <path>" seperti sebelumnya. */
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(status: number, path: string) {
+    super(`HTTP ${status}: ${path}`);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 export async function request(path: string, init: RequestInit): Promise<any> {
   const resp = await fetch(`${API_URL}${path}`, init);
   if (!resp.ok) {
-    throw new Error(`HTTP ${resp.status}: ${path}`);
+    throw new ApiError(resp.status, path);
   }
   // Backend kadang membalas HTML (proxy/error page) — pesan parse mentah
   // ("Unexpected token '<'...") jangan sampai tampil di UI.
@@ -107,6 +119,131 @@ export async function reproposeAction(decisionId: string, token: string) {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ decision_id: decisionId }),
+  });
+}
+
+// POST /safety/evaluate + /freshness/evaluate (Fase 11 — halaman Keamanan
+// Pangan). Keduanya MENGUKUR ULANG dari data yang tersimpan di server (log suhu
+// batch + umur panen) lalu MENULIS hasilnya ke DB — jadi angka di layar setelah
+// menekan tombol datang dari perhitungan server, bukan dari UI. Hanya peran
+// pemutasi (kepala SPPG / ahli gizi) yang boleh memanggilnya; BGN Monitor
+// read-only, dan itu ditegakkan di server, bukan hanya disembunyikan di layar.
+export type SafetyCheck = {
+  safety_status: string;
+  reasons: string[];
+  excursion_minutes: number;
+};
+
+export async function evaluateSafety(batchId: string, token: string): Promise<SafetyCheck> {
+  return request("/safety/evaluate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ batch_id: batchId }),
+  });
+}
+
+export type FreshnessCheck = {
+  freshness_score: number;
+  status: string;
+  usable_until: string;
+};
+
+export async function evaluateFreshness(batchId: string, token: string): Promise<FreshnessCheck> {
+  return request("/freshness/evaluate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ batch_id: batchId }),
+  });
+}
+
+// /events/safety-disruption — jalankan Event 3 untuk SATU batch dari halaman
+// Keamanan Pangan. Server menghitung ulang keamanan dari log suhu tersimpan:
+//   • batch FAIL  → 201: keputusan `safety_disruption` + bukti suhu + trace
+//                   DETECT/OPTIMIZE (decision_id terisi);
+//   • batch aman  → 200: `no_disruption`, decision_id null (tidak mengarang
+//                   keputusan);
+//   • 409: operation_key dipakai batch lain, atau tidak ada alternatif eligible.
+// `operationKey` = kunci idempotensi: kirim kunci yang SAMA untuk batch yang
+// sama saat mengulang — server melayani dari catatan, bukan membuat keputusan
+// kembar. Lokasi tujuan WAJIB lokasi SPPG pemanggil (ruling 2026-10-14), batch
+// pemicu boleh milik lokasi lain (sisi sumber).
+export type DisruptionEventResult = {
+  status: string;
+  decision_id: string | null;
+  message?: string;
+  safety_status?: string;
+  excursion_minutes?: number;
+};
+
+// POST /events/safety-disruption — pemicu Event 3 (thermal excursion).
+// Body PERSIS field yang diterima backend (SafetyDisruptionRequest memakai
+// extra="forbid"): batch_id + target_location_id + operation_key. TIDAK ada
+// field tingkat gangguan — besar gangguan dinilai server dari temperature_log
+// batch terpilih (mengirim field tambahan = 422, dan itu memang benar).
+export async function triggerSafetyDisruption(
+  batchId: string,
+  targetLocationId: string,
+  operationKey: string,
+  token: string
+): Promise<DisruptionEventResult> {
+  return request("/events/safety-disruption", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      batch_id: batchId,
+      target_location_id: targetLocationId,
+      operation_key: operationKey,
+    }),
+  });
+}
+
+// /receipts — catatan penerimaan barang (migrasi 016). Inilah rumah jujur untuk
+// isian manual petugas, termasuk opsi "Lainnya" (keadaan yang tidak ada di
+// daftar periksa). Server menyimpan snapshot titik periksa apa adanya, mencatat
+// siapa & kapan, dan MENGHITUNG sendiri jumlah titik yang benar-benar dicentang.
+export type ReceiptRow = {
+  id: string;
+  batch_id: string;
+  checked: Record<string, boolean>;
+  checked_count: number;
+  other_note: string | null;
+  recorded_by: string;
+  recorded_by_name: string | null;
+  recorded_at: string;
+};
+
+export async function recordReceipt(
+  batchId: string,
+  checked: Record<string, boolean>,
+  otherNote: string,
+  token: string
+): Promise<ReceiptRow> {
+  return request("/receipts", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ batch_id: batchId, checked, other_note: otherNote }),
+  });
+}
+
+export async function fetchReceipts(
+  batchId: string,
+  token: string,
+  limit = 5
+): Promise<{ items: ReceiptRow[] }> {
+  return request(`/receipts?batch_id=${encodeURIComponent(batchId)}&limit=${limit}`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
 }
 
@@ -221,6 +358,36 @@ export async function refreshDemoToToday(token: string) {
   return request("/demo/refresh", { method: "POST", headers: authHeaders(token) });
 }
 
+/**
+ * `POST /demo/event1` — jalankan Event 1 PENUH di backend
+ * (DETECT → VERIFY → TRACE → PREDICT → OPTIMIZE → DECIDE → SUPERVISE).
+ *
+ * Bedanya dari "Jalankan agent" (`POST /balance/analyze`): yang itu hanya
+ * meminta rekomendasi deterministik (belum menulis apa pun), sedangkan yang ini
+ * membuat keputusan berstatus `proposed` BESERTA seluruh jejak langkahnya —
+ * termasuk narasi supervisor — sehingga muncul di Recommendation Feed dan
+ * Agent Log. Tidak ada approval/eksekusi otomatis.
+ */
+export async function runEvent1(
+  commodity: string,
+  targetLocation: string,
+  token: string,
+  ttlMinutes = 30
+) {
+  return request("/demo/event1", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      commodity,
+      target_location: targetLocation,
+      ttl_minutes: ttlMinutes,
+    }),
+  });
+}
+
 // --- Ops Console (interaksi sebelum hasil — arah Roy 2026-10-07) ---
 
 export async function fetchBalance(
@@ -321,31 +488,6 @@ export async function fetchKpis(
   });
 }
 
-// POST /events/safety-disruption — pemicu Event 3 (thermal excursion).
-// Body PERSIS field yang diterima backend (SafetyDisruptionRequest memakai
-// extra="forbid"): batch_id + target_location_id + operation_key. TIDAK ada
-// field tingkat gangguan — besar gangguan dinilai server dari temperature_log
-// batch terpilih (mengirim field tambahan = 422, dan itu memang benar).
-export async function triggerSafetyDisruption(
-  batchId: string,
-  targetLocationId: string,
-  operationKey: string,
-  token: string
-) {
-  return request("/events/safety-disruption", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      batch_id: batchId,
-      target_location_id: targetLocationId,
-      operation_key: operationKey,
-    }),
-  });
-}
-
 // GET /batches — inventaris batch (lokasi, komoditas, kg, kesegaran, batas
 // pakai). Dipakai halaman "Hari Ini" untuk daftar batch yang akan kedaluwarsa.
 // Backend membalas {batches: [...]} — envelope itu dibuka di sini supaya
@@ -355,6 +497,15 @@ export async function fetchBatches(token: string) {
     headers: { Authorization: `Bearer ${token}` },
   });
   return Array.isArray(data) ? data : (data?.batches ?? []);
+}
+
+// Kalender agenda harian (langkah 2, 2026-10-16): rentang tanggal masuk query
+// string; backend membatasinya 62 hari dan menolak rentang terbalik (422).
+export async function fetchAgenda(token: string, start: string, end: string) {
+  const data = await request(`/agenda?start=${start}&end=${end}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return data ?? null;
 }
 
 // S4-06 polish (arah Roy 2026-10-08): kondisi SEMUA lokasi untuk peta +

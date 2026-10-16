@@ -24,6 +24,7 @@ const SUMMARY = {
   quantity_kg: 600,
   safe_delivered_cost: "16206000.00",
   can_approve: true,
+  can_reject: true,
   can_execute: false,
   blocking_reasons: ["approval belum memenuhi requirement"],
   verifier: { verdict: "consistent", verified_by: "verifier_agent" },
@@ -65,11 +66,85 @@ describe("ApprovalMenu (isi popup governance & persetujuan)", () => {
     expect(html).not.toContain('role="dialog"');
   });
 
-  it("pilihan tindakan lengkap untuk approver: Setuju, Tolak, Verifikasi, Eksekusi", () => {
-    const html = render();
+  it("pilihan tindakan lengkap saat server MENGIZINKAN eksekusi", () => {
+    // can_execute: true → semua tindakan tersedia (lihat tes pagar di bawah).
+    const html = render({ summary: { ...SUMMARY, can_execute: true } });
     for (const label of ["Setuju", "Tolak", "Verifikasi", "Eksekusi"]) {
       expect(html).toContain(label);
     }
+  });
+
+  // WS-B (QA 16 Okt): "Eksekusi" dulu selalu ditawarkan selama peran+status
+  // cocok, padahal server SUDAH mengirim `can_execute` di read model yang sama.
+  // Klik tombol itu berakhir 409 "decision expired" (backend app/api/actions.py
+  // `/actions/execute`). ApprovalModal sampai menghitung `canExecute` untuk
+  // maksud ini lalu tidak pernah memakainya — variabel mati.
+  it("Eksekusi TIDAK ditawarkan saat server bilang can_execute false", () => {
+    // Diperiksa dari KONTROL-nya (data-action), bukan dari kata "Eksekusi":
+    // catatan alasan di bawah tetap menyebut nama aksinya supaya orang tahu
+    // apa yang hilang dan kenapa.
+    const html = render(); // SUMMARY.can_execute = false
+    expect(html).not.toContain('data-action="execute"');
+    expect(html).toContain("server belum mengizinkan");
+  });
+
+  it("Verifikasi TIDAK ikut terkunci oleh can_execute", () => {
+    // can_execute memuat banyak penghalang sekaligus (approval belum terpenuhi,
+    // belum terverifikasi, safety gagal). Verifikasi justru LANGKAH yang
+    // menghilangkan sebagian penghalang itu, jadi ia tidak boleh ikut terkunci —
+    // pagarnya sendiri hanya kedaluwarsa (lihat tes berikutnya).
+    const html = render();
+    expect(html).toContain('data-action="verify"');
+  });
+
+  // Keputusan owner 2026-10-16 (2b): /actions/verify DULU tidak memeriksa
+  // kedaluwarsa sama sekali, jadi membiarkan tombolnya aktif itu benar. Setelah
+  // penjaganya disamakan dengan /actions/propose, menawarkan tombol ini pada
+  // keputusan kedaluwarsa kembali menjadi janji palsu → 409.
+  it("Verifikasi tidak ditawarkan saat keputusan sudah kedaluwarsa", () => {
+    const html = render({ summary: { ...SUMMARY, expiry: { valid: false } } });
+    expect(html).not.toContain('data-action="verify"');
+    expect(html).toContain("sudah lewat tenggat");
+  });
+
+  it("Verifikasi tetap ditawarkan saat belum kedaluwarsa", () => {
+    const html = render({
+      summary: { ...SUMMARY, expiry: { valid: true, seconds_remaining: 60 } },
+    });
+    expect(html).toContain('data-action="verify"');
+  });
+
+  // Keputusan owner 2026-10-16 (3b): "Tolak" memakai endpoint yang SAMA dengan
+  // approve (approve_action dengan approved=false), jadi kelayakannya juga milik
+  // server. Dulu UI menebaknya dari peran+status karena read model tidak punya
+  // field-nya; sekarang `can_reject` yang menyatakan.
+  it("Tolak tidak ditawarkan saat server bilang can_reject false", () => {
+    const html = render({ summary: { ...SUMMARY, can_reject: false } });
+    expect(html).not.toContain('data-action="reject"');
+    expect(html).toContain("Penolakan belum tersedia");
+  });
+
+  it("Tolak tetap ditawarkan saat server bilang can_reject true", () => {
+    const html = render(); // SUMMARY.can_reject = true
+    expect(html).toContain('data-action="reject"');
+  });
+
+  it("re-propose tidak ditawarkan saat keputusan sudah kedaluwarsa", () => {
+    // /actions/propose menolak keputusan kedaluwarsa tanpa syarat
+    // (actions.py:129), jadi menawarkannya hanya mengantar ke 409.
+    const html = render({
+      actions: visibleActions("sppg_head", "rejected"),
+      summary: { ...SUMMARY, status: "rejected", expiry: { valid: false } },
+    });
+    expect(html).not.toContain('data-action="repropose"');
+  });
+
+  it("re-propose tetap ditawarkan saat belum kedaluwarsa", () => {
+    const html = render({
+      actions: visibleActions("sppg_head", "rejected"),
+      summary: { ...SUMMARY, status: "rejected", expiry: { valid: true, seconds_remaining: 3600 } },
+    });
+    expect(html).toContain('data-action="repropose"');
   });
 
   it("bgn_monitor tidak melihat satu pun aksi mutasi", () => {

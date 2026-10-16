@@ -11,15 +11,21 @@
 //     angka di sidebar;
 //   - angka chip = jumlah baris yang benar-benar ada, bukan taksiran;
 //   - urutan bawaan ("urgency") bisa dipertanggungjawabkan dari data yang ada:
-//     keputusan yang menunggu tindakan manusia di paling atas (yang paling
-//     lama lewat dulu), lalu isu keamanan, ketidakseimbangan, terakhir harga;
+//     keputusan yang menunggu tindakan manusia DAN masih berlaku di paling
+//     atas, lalu yang menunggu tindakan tetapi sudah lewat tenggat, lalu isu
+//     keamanan, ketidakseimbangan, terakhir harga. Sebelum 16 Okt tier teratas
+//     justru yang PALING LAMA lewat tenggat, sehingga kartu yang sudah tidak
+//     bisa ditindak menutupi kartu yang masih hidup (temuan QA F1);
+//   - "menunggu tindakan" berarti masih BISA ditindak: keputusan yang lewat
+//     tenggat (`valid: false` dari API) tidak ikut dihitung di chip maupun di
+//     cakupan "action", karena backend menolak tindakan atasnya (409);
 //   - tanggal yang tidak terbaca diletakkan di akhir tanpa diacak;
 //   - pencarian mencocokkan kata yang benar-benar tercetak di kartu (termasuk
 //     istilah manusia), bukan hanya enum backend, supaya "harga" menemukan
 //     price_anomaly dan "ditolak" menemukan rejected.
 
 import { statusWord, typeWord } from "./decision-picker";
-import { ACTIONABLE_STATUSES } from "./topbar";
+import { ACTIONABLE_STATUSES, isExpired, isPendingAction } from "./topbar";
 
 export type FeedSort = "urgency" | "due" | "newest";
 
@@ -122,7 +128,10 @@ export function feedChips(decisions: unknown): FeedChip[] {
     {
       id: FEED_SCOPE_ACTION,
       label: "Perlu tindakan",
-      count: withStatus.filter((row) => isActionable(row.status)).length,
+      // Hanya yang masih bisa ditindak — chip ini menjanjikan tindakan, dan
+      // keputusan lewat tenggat ditolak backend (409). Angka ini harus sama
+      // dengan isi daftar saat chip diklik (lihat feedVisible).
+      count: withStatus.filter((row) => isPendingAction(row)).length,
     },
     ...ids.map((id) => ({ id, label: statusWord(id), count: counts.get(id) ?? 0 })),
   ];
@@ -158,7 +167,7 @@ export function feedVisible(decisions: unknown, filter: FeedFilter = {}): FeedRo
     .filter((row) => {
       if (scope !== FEED_SCOPE_ALL) {
         if (scope === FEED_SCOPE_ACTION) {
-          if (!isActionable(row.status)) return false;
+          if (!isPendingAction(row)) return false;
         } else if (norm(row.status) !== scope) {
           return false;
         }
@@ -171,17 +180,24 @@ export function feedVisible(decisions: unknown, filter: FeedFilter = {}): FeedRo
 /** Urutkan tanpa mengubah data; `now` null = tidak ada klaim waktu. */
 export function sortFeed(decisions: unknown, mode: FeedSort, now: Date | null): FeedRow[] {
   const rows = statusList(decisions).map((row, index) => ({ row, index }));
-  const nowMs = now instanceof Date && Number.isFinite(now.getTime()) ? now.getTime() : null;
 
-  /** Kunci urutan "urgency": tier dulu, lalu tenggat/jenis, lalu waktu buat. */
+  /**
+   * Kunci urutan "urgency": tier dulu, lalu tenggat/jenis, lalu waktu buat.
+   * Tier 0 = menunggu tindakan DAN masih berlaku (yang benar-benar bisa
+   * dikerjakan sekarang), tier 1 = menunggu tindakan tetapi sudah lewat
+   * tenggat, tier 2 = sisanya. Dulu tier 0 justru yang PALING LAMA lewat
+   * tenggat, sehingga kartu mati menutupi kartu hidup (temuan QA F1).
+   */
   const urgencyOf = (row: FeedRow): { tier: number; type: number; due: number | null } => {
     const due = timeOf(row.expires_at);
     if (isActionable(row.status)) {
-      const overdue = due !== null && nowMs !== null && due < nowMs;
-      return { tier: overdue ? 0 : 1, type: 0, due };
+      return { tier: isExpired(row, now) ? 1 : 0, type: 0, due };
     }
     return { tier: 2, type: TYPE_ORDER[norm(row.decision_type)] ?? 9, due };
   };
+
+  /** Penanda "sudah lewat tenggat" untuk mengelompokkannya di akhir. */
+  const expiredKey = (row: FeedRow): number => (isExpired(row, now) ? 1 : 0);
 
   const byTime = (
     a: number | null,
@@ -202,6 +218,10 @@ export function sortFeed(decisions: unknown, mode: FeedSort, now: Date | null): 
       return byTime(timeOf(left.row.created_at), timeOf(right.row.created_at), -1, left.index, right.index);
     }
     if (mode === "due") {
+      // Yang masih berlaku berurut tenggat terdekat; yang sudah lewat menutup
+      // daftar (juga berurut tenggat, bukan diacak) — sesuai nama tesnya.
+      const lewat = expiredKey(left.row) - expiredKey(right.row);
+      if (lewat !== 0) return lewat;
       return byTime(timeOf(left.row.expires_at), timeOf(right.row.expires_at), 1, left.index, right.index);
     }
     const a = urgencyOf(left.row);

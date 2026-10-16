@@ -188,8 +188,11 @@ export default function DemoDataPanel({
       aria-busy={busy !== null}
     >
       <div className="card-header">
-        <h4>Data &amp; rentang waktu</h4>
-        <span className="demo-data-tag">deret waktu demo</span>
+        <h3>Data &amp; rentang waktu</h3>
+        <span className="card-header-tags">
+          <span className="demo-step">Langkah 2 · bangun data</span>
+          <span className="demo-data-tag">deret waktu demo</span>
+        </span>
       </div>
       <p className="section-sub">
         Riwayat data demo (pasokan, harga, rencana menu) dibangun di sini —
@@ -335,7 +338,14 @@ export default function DemoDataPanel({
         ) : (
           <LoadingState label="Memuat status data demo" />
         )}
-        {preview && <p className="demo-data-preview-line">{previewLine(preview)}</p>}
+        {preview && (
+          <p className="demo-data-preview-line">
+            {/* Pratinjau = perhitungan, bukan penulisan. Diberi lencana sendiri
+                supaya tidak pernah terbaca sebagai hasil eksekusi. */}
+            <span className="demo-badge">pratinjau — tidak menulis apa pun</span>
+            {previewLine(preview)}
+          </p>
+        )}
       </div>
 
       <p className="demo-data-honest">{honestNote()}</p>

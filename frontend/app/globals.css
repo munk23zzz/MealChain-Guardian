@@ -1,39 +1,57 @@
-/* MealChain Guardian — SINGLE SOURCE OF TRUTH: palet acuan MealchainGuardian
-   (E:\hackathon\HackathonBil\MealchainGuardian, docs/design.md §4 versi biru).
-   Hybrid: navy #1F3B4D untuk teks/heading, brand biru #0969DA untuk aksi/navigasi,
-   canvas #F5F6FA + kartu putih ber-border #DCE6E9 tanpa bayangan, status
-   #2E7D32 / #F9A825 / #C62828 sebagai tint badge. Tipografi Inter + monospace sistem.
+/* MealChain Guardian — SINGLE SOURCE OF TRUTH: Bento Modern (Arah 4, Fase 0 2026-10-16).
+   Ink slate #0F172A, brand biru #2563EB, canvas #F8FAFC + kartu putih ber-border
+   rambut #E2E8F0, radius 16px, bayangan ultra-halus. Warna STATUS (hijau/merah/amber)
+   SENGAJA tetap gelap supaya kontras teks >= 4,5:1 (AA) — kemodernan status datang
+   dari sistem tint, bukan dari mencerahkan tinta. Tipografi Fira Sans + Fira Code.
    Kontrak class & struktur komponen TIDAK berubah (test mem-pin markup). */
 :root {
-  /* Palet acuan MealchainGuardian (docs/design.md §4 versi biru) */
-  --navy-900: #1F3B4D;          /* teks utama & heading */
-  --navy-700: #2E5266;          /* aksen sekunder */
-  --navy-100: #DCE6E9;          /* border & permukaan netral */
-  --grey-500: #555555;          /* teks sekunder, caption */
+  /* Netral & brand — Bento Modern */
+  --navy-900: #0F172A;          /* teks utama & heading (slate-900) */
+  --navy-700: #334155;          /* aksen sekunder (slate-700) */
+  --navy-100: #E2E8F0;          /* border & permukaan netral (slate-200) */
+  --grey-500: #475569;          /* teks sekunder, caption (slate-600) */
+  /* Warna STATUS sengaja TETAP gelap supaya kontras teks >= 4,5:1 (AA). */
   --status-safe: #2E7D32;       /* PASS / normal */
-  --status-warning: #F9A825;    /* tight / needs verification */
+  /* Teks hijau DI ATAS tint hijau butuh nada lebih tua: #2E7D32 di atas
+     rgba(46,125,50,.1) hanya 4,49:1 — gagal AA dengan selisih 0,01 (temuan
+     audit Fase 7, terukur di axe). Dipakai HANYA sebagai warna teks di dalam
+     lencana ber-tint; --status-safe sendiri TIDAK diubah (dipakai dot, garis
+     rute, dan teks di atas putih yang sudah lolos). */
+  --safe-ink-tint: #2A722E;     /* 5,19:1 di atas tint hijau 0,10 */
+  --status-warning: #F9A825;    /* tight / needs verification (hanya tint) */
   --status-danger: #C62828;     /* FAIL / shortage kritis */
   /* Token inti */
-  --bg-page: #F5F6FA;           /* latar halaman */
+  --bg-page: #F8FAFC;           /* latar halaman (slate-50) */
   --surface: #FFFFFF;           /* kartu */
-  --surface-sunken: #F5F6FA;    /* hover baris / container ringan */
-  --line: #DCE6E9;              /* border */
-  --line-strong: #C9D6DB;       /* border lebih tegas */
-  --ink: #1F3B4D;               /* teks utama */
-  --ink-muted: #555555;         /* teks sekunder */
-  --accent: #0550AE;            /* hover aksi primer (brand-active) */
-  --accent-strong: #0969DA;     /* aksi primer (brand) */
-  /* Acuan tidak punya panel gelap: "terminal" kini permukaan terang */
+  --surface-sunken: #F1F5F9;    /* hover baris / container ringan (slate-100) */
+  --line: #E2E8F0;              /* border rambut (slate-200) */
+  --line-strong: #CBD5E1;       /* border lebih tegas (slate-300) */
+  --ink: #0F172A;               /* teks utama (slate-900) */
+  --ink-muted: #475569;         /* teks sekunder (slate-600) */
+  --accent: #1D4ED8;            /* hover aksi primer (blue-700) */
+  --accent-strong: #2563EB;     /* aksi primer (blue-600) */
+  --accent-soft: #EFF6FF;       /* tint aksen: item rail aktif, chip peran (blue-50) */
+  /* Kartu kepercayaan (Fase 3, §5.6): SATU-SATUNYA permukaan gelap di tema
+     terang — wadah bukti kriptografis (Merkle + alamat konten + tanda tangan).
+     Kontras di atas #0F172A: --trust-ink 14,5:1 · --trust-ink-muted 7,0:1 ·
+     --trust-accent 10,8:1 (semua lolos AA, mayoritas AAA). */
+  --trust-bg: #0F172A;
+  --trust-surface: rgba(255, 255, 255, 0.06);
+  --trust-line: rgba(148, 163, 184, 0.32);
+  --trust-ink: #E2E8F0;
+  --trust-ink-muted: #94A3B8;
+  --trust-accent: #7DD3FC;
+  /* Terminal tetap permukaan terang (keputusan lama), hanya ikut token baru */
   --terminal: #FFFFFF;
-  --terminal-border: #DCE6E9;
-  --terminal-ink: #1F3B4D;
-  --terminal-accent: #0969DA;
-  --radius: 8px;                /* wrapper besar; kontrol kecil 4px */
-  /* Elevasi: kartu acuan rata (border saja); L2 hover, L3 modal tetap */
-  --shadow-1: none;
-  --shadow-2: 0 4px 6px -1px rgba(15, 23, 42, 0.07), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
-  --shadow-3: 0 10px 15px -3px rgba(15, 23, 42, 0.1), 0 4px 6px -4px rgba(15, 23, 42, 0.06);
-  --font-data: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --terminal-border: #E2E8F0;
+  --terminal-ink: #0F172A;
+  --terminal-accent: #2563EB;
+  --radius: 16px;               /* kartu bento; kontrol kecil menyesuaikan di fase berikut */
+  /* Elevasi ultra-halus ala Bento Modern: L1 rambut, L2 hover, L3 modal */
+  --shadow-1: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.03);
+  --shadow-2: 0 4px 12px rgba(15, 23, 42, 0.07), 0 2px 4px rgba(15, 23, 42, 0.04);
+  --shadow-3: 0 16px 40px rgba(15, 23, 42, 0.22), 0 4px 10px rgba(15, 23, 42, 0.06);
+  --font-data: var(--font-fira-code, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
   /* Alias token yang dipakai blok bawah */
   --border: var(--line);
   --card: var(--surface);
@@ -43,7 +61,7 @@
   /* ===== TAHAP 2 — token tambahan hasil audit UI/UX (11 Okt) =====
      Semua nilai sudah diuji kontras WCAG AA: tinta teks >= 4,5:1, batas kontrol >= 3:1. */
   /* Tinta */
-  --ink-subtle: #5F6E77;          /* teks tersier & pemisah: 5,27:1 di putih, 4,88:1 di latar */
+  --ink-subtle: #64748B;          /* teks tersier & pemisah (slate-500): ~4,8:1 di putih */
   /* Garis */
   --line-input: #7C8B9B;          /* batas kontrol interaktif (input/select/tombol): >= 3:1 */
   /* Status — latar / tepi / tinta (menggantikan hex mentah di lencana & peringatan) */
@@ -59,10 +77,26 @@
   /* Jarak 4/8px */
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px;
   --space-lg: 16px;
-  /* Ukuran teks meta (lantai 12px) */
-  --text-meta: 12.5px; --text-micro: 12px;
-  --ink-inverse: #FFFFFF;         /* teks di atas latar berwarna/gelap (rail, top bar, tombol primer) */
-  --on-dark-danger: #FF8A80;      /* aksi merusak di atas rail biru (hover keluar) */
+  /* ── Skala tipografi (8 langkah) — satu-satunya sumber ukuran teks ──────
+     Lantai 12px (jangan di bawahnya). Setiap `font-size` di app ini HARUS
+     memakai salah satu token di bawah; angka mentah dilarang muncul kembali.
+     micro 12 · dense 13 · base 14 · title 16 · head 18 · page 20 · metric 24 · hero 36 */
+  --fs-1: 12px;   /* micro  — label kecil, meta, lencana, keterangan tabel */
+  --fs-2: 13px;   /* dense  — sel tabel, baris sekunder, label nav rail */
+  --fs-3: 14px;   /* base   — badan tulisan, tombol */
+  --fs-4: 16px;   /* title  — judul kartu (h3), nilai yang ditonjolkan */
+  --fs-5: 18px;   /* head   — judul seksi (h2), angka di dalam kartu */
+  --fs-6: 20px;   /* page   — judul halaman (h1) */
+  --fs-7: 24px;   /* metric — angka metrik besar (KPI/tile) */
+  --fs-8: 36px;   /* hero   — angka hero (satu per halaman) */
+  /* Tinggi baris — dipakai berdampingan dengan token di atas */
+  --lh-num: 1.15;   /* angka besar */
+  --lh-head: 1.3;   /* judul */
+  --lh-body: 1.5;   /* badan (aturan a11y: 1.5–1.75) */
+  /* Jarak huruf */
+  --track-tight: -0.02em;  /* judul & angka besar */
+  --track-caps: 0.04em;    /* label KAPITAL kecil */
+  --ink-inverse: #FFFFFF;         /* teks di atas latar berwarna (tombol primer, avatar, lencana) */
   /* Kerangka memuat (skeleton) */
   --skeleton-base: #E8EDF2;
   --skeleton-sheen: #F6F9FB;
@@ -74,8 +108,9 @@
 
 body {
   margin: 0;
-  font-family: var(--font-inter, Inter), system-ui, sans-serif;
-  font-size: 14px;
+  font-family: var(--font-fira-sans, Inter), system-ui, sans-serif;
+  font-size: var(--fs-3);
+  line-height: var(--lh-body);
   color: var(--ink);
   background: var(--bg-page);
   -webkit-font-smoothing: antialiased;
@@ -89,15 +124,25 @@ dl dd,
   font-variant-numeric: tabular-nums;
 }
 
+/* Badge = BENTUK BERISI TEKS — ukurannya harus MENGIKUTI panjang label, bukan
+   sebaliknya. Sebelumnya label dua kata ("NEEDS VERIFICATION", "PENDING
+   APPROVAL") membungkus jadi dua baris di kolom sempit: terukur 2026-10-16
+   pil amber 120x42 px & 136x42 px untuk teks 12px — persis keluhan pemilik
+   "shape berisi teks terlalu besar". Kini satu baris (nowrap) + line-height
+   rapat: 120x22 px. `flex: none` WAJIB ikut — tanpa itu badge menyusut di
+   dalam baris flex dan labelnya membungkus lagi. */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  flex: none;
   padding: 2px 8px;
   border-radius: 999px;
   border: 1px solid var(--line);
-  font-size: 12px;
+  font-size: var(--fs-1);
   font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
   letter-spacing: 0;
   text-transform: none;
   background: var(--surface);
@@ -114,7 +159,7 @@ dl dd,
 /* Status ala Stitch: success/danger/warning tint + dot (uppercase tetap) */
 .status-safe {
   background: rgba(46, 125, 50, 0.1);
-  color: var(--status-safe);
+  color: var(--safe-ink-tint);
   border: 1px solid rgba(46, 125, 50, 0.4);
 }
 
@@ -163,7 +208,7 @@ dl dd,
   /* Judul kartu seragam apa pun tingkat heading-nya: kartu memakai h3, tetapi
      kepala kartu yang berdiri di tingkat halaman boleh memakai h2 — ukurannya
      tidak boleh ikut membesar seperti heading halaman. */
-  font-size: 14px;
+  font-size: var(--fs-3);
   font-weight: 600;
   letter-spacing: 0;
   color: var(--navy-900);
@@ -183,7 +228,7 @@ dl dd,
 }
 
 .recommendation-card dt {
-  font-size: 12px;
+  font-size: var(--fs-1);
   font-weight: 600;
   letter-spacing: 0.4px;
   text-transform: uppercase;
@@ -224,7 +269,7 @@ dl dd,
   display: flex;
   flex-wrap: wrap;
   gap: 4px 16px;
-  font-size: 12.5px;
+  font-size: var(--fs-2);
   color: var(--ink-muted);
   grid-column: 1 / -1;
 }
@@ -243,20 +288,26 @@ dl dd,
 }
 
 .filter-chip {
+  /* Fase 3: pil filter dinaikkan sedikit (padding & ukuran huruf) dan hover
+     memakai TINT aksen, bukan sekadar ganti tepi — batas kontrol tetap
+     --line-input (>= 3:1) supaya tidak jatuh di bawah ambang AA. */
   border: 1px solid var(--line-input);
   background: var(--surface);
   color: var(--ink-muted);
   border-radius: 999px;
-  padding: 4px 12px;
-  font-size: 12px;
+  padding: 5px 13px;
+  font-size: var(--fs-2);
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  transition: background var(--dur-2) var(--ease-standard),
+    color var(--dur-2) var(--ease-standard),
+    border-color var(--dur-2) var(--ease-standard);
 }
 
 .filter-chip:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+  color: var(--accent-strong);
 }
 
 /* Chip status TERPILIH: biru aksi primer (--accent-strong #0969DA) — sama
@@ -271,8 +322,10 @@ dl dd,
 }
 
 .filter-chip .legend-count {
-  font-size: 12px;
-  opacity: 0.75;
+  font-size: var(--fs-1);
+  /* Fase 7: dulu `opacity: .75` — hasil kompositnya #75808f di atas putih,
+     hanya 4,00:1 dan GAGAL AA. Sekarang warna token eksplisit (4,76:1). */
+  color: var(--ink-subtle);
   margin-left: 4px;
 }
 
@@ -298,7 +351,7 @@ dl dd,
 
 .trace-tool {
   font-family: ui-monospace, monospace;
-  font-size: 12px;
+  font-size: var(--fs-1);
   color: var(--ink-muted);
 }
 
@@ -309,8 +362,8 @@ dl dd,
   border-radius: 8px;
   padding: 8px 10px;
   font-family: var(--font-data);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--fs-1);
+  line-height: var(--lh-body);
   white-space: pre-wrap;
   margin: 6px 0 0;
 }
@@ -340,7 +393,7 @@ dl dd,
   border: 1px solid transparent;
   border-radius: 6px;
   padding: 8px 16px;
-  font-size: 14px;
+  font-size: var(--fs-3);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.18s ease;
@@ -380,22 +433,56 @@ a:focus-visible {
   border: 1px solid var(--border);
   border-radius: 8px;
 }
+/* Judul panel ini belum punya aturan sendiri — h2 tanpa aturan jatuh ke
+   bawaan peramban (21px) sehingga tampak lebih besar dari judul kartu lain. */
+.provider-panel h2 {
+  margin: 0 0 10px;
+  font-size: var(--fs-4);
+  font-weight: 600;
+  color: var(--navy-900);
+}
 .provider-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  gap: 6px;
+  /* Fase 4: status provider tampil sebagai CHIP yang bisa dipindai, bukan
+     daftar baris selebar panel. */
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .provider-row {
-  display: flex;
-  gap: 12px;
+  display: inline-flex;
+  gap: 8px;
   align-items: center;
-  font-size: 0.92em;
+  padding: 5px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: var(--fs-2);
 }
+/* Titik status: warna bahasa cepat, kata statusnya tetap ada di chip
+   (warna tidak pernah menjadi satu-satunya pembawa makna). */
+.provider-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: none;
+  background: var(--line-input);
+}
+.provider-live .provider-dot { background: var(--status-safe); }
+.provider-fallback .provider-dot { background: var(--status-warning); }
+.provider-unavailable .provider-dot { background: var(--line-input); }
+.provider-state {
+  font-size: var(--fs-1);
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.provider-live .provider-state { color: var(--status-safe); }
+.provider-fallback .provider-state { color: var(--warn-ink); }
 .provider-agent {
   font-weight: 600;
-  min-width: 90px;
+  min-width: 0;
 }
 .provider-value {
   font-family: var(--font-mono, monospace);
@@ -405,10 +492,10 @@ a:focus-visible {
 .provider-unavailable .provider-value { color: var(--muted-foreground); }
 .provider-attempts {
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: var(--fs-1);
 }
 .trace-model {
-  font-size: 12px;
+  font-size: var(--fs-1);
   color: var(--navy-700);
 }
 
@@ -446,7 +533,7 @@ a:focus-visible {
 
 .brand-eyebrow {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--fs-1);
   font-weight: 600;
   letter-spacing: 1.6px;
   text-transform: uppercase;
@@ -455,17 +542,17 @@ a:focus-visible {
 
 .brand-title {
   margin: 0;
-  font-size: clamp(28px, 4vw, 44px);
+  font-size: clamp(var(--fs-7), 4vw, var(--fs-8));
   font-weight: 700;
   letter-spacing: -0.5px;
-  line-height: 1.1;
+  line-height: var(--lh-num);
 }
 
 .brand-tagline {
   margin: 0;
   max-width: 46ch;
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: var(--fs-4);
+  line-height: var(--lh-body);
   color: rgba(255, 255, 255, 0.95);
 }
 
@@ -506,7 +593,7 @@ a:focus-visible {
 
 .route-truck {
   flex: none;
-  font-size: 14px;
+  font-size: var(--fs-3);
   line-height: 1;
   transform: translateY(-1px);
 }
@@ -515,7 +602,7 @@ a:focus-visible {
   display: flex;
   justify-content: space-between;
   margin-top: 6px;
-  font-size: 12px;
+  font-size: var(--fs-1);
   letter-spacing: 0.6px;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.95);
@@ -537,12 +624,12 @@ a:focus-visible {
 
 .brand-stats strong {
   min-width: 96px;
-  font-size: 15px;
+  font-size: var(--fs-4);
   font-variant-numeric: tabular-nums;
 }
 
 .brand-stats span {
-  font-size: 13px;
+  font-size: var(--fs-2);
   color: var(--navy-100);
   opacity: 0.9;
 }
@@ -563,20 +650,20 @@ a:focus-visible {
   gap: 14px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   padding: 28px 26px;
-  box-shadow: 0 8px 28px rgba(31, 59, 77, 0.08);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04);
 }
 
 .login-form h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: var(--fs-5);
   font-weight: 600;
 }
 
 .login-sub {
   margin: -8px 0 4px;
-  font-size: 13px;
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 
@@ -584,7 +671,7 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 13px;
+  font-size: var(--fs-2);
   font-weight: 600;
 }
 
@@ -592,39 +679,39 @@ a:focus-visible {
    (Ruling 2026-10-14) tanpa mengubah bentuk .field yang sudah dipakai luas.
    Kontras --ink-muted di atas permukaan kartu = 7,46:1 (lolos AA). */
 .field-note {
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   font-weight: 400;
   color: var(--ink-muted);
-  line-height: 1.45;
+  line-height: var(--lh-body);
 }
 
 .field input {
   border: 1px solid var(--line-input);
   border-radius: 8px;
   padding: 10px 12px;
-  font-size: 14px;
+  font-size: var(--fs-3);
   font-weight: 400;
   color: var(--navy-900);
   background: var(--surface);
 }
 
 .field input:focus {
-  outline: 2px solid var(--navy-700);
+  outline: 2px solid var(--accent-strong);
   outline-offset: 1px;
-  border-color: var(--navy-700);
+  border-color: var(--accent-strong);
 }
 
 .login-error {
   margin: 0;
   padding: 8px 12px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: var(--fs-2);
   font-style: normal;
 }
 
 .login-submit {
   padding: 11px 16px;
-  font-size: 15px;
+  font-size: var(--fs-4);
 }
 
 .login-submit:disabled {
@@ -639,7 +726,7 @@ a:focus-visible {
 
 .demo-hint {
   margin: 0 0 4px;
-  font-size: 12px;
+  font-size: var(--fs-1);
   font-weight: 600;
   letter-spacing: 0.8px;
   text-transform: uppercase;
@@ -649,7 +736,7 @@ a:focus-visible {
 /* Satu baris teks link — bukan chip/kartu */
 .demo-links {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fs-2);
   color: var(--ink-muted);
   line-height: 2.2; /* ruang klik horizontal ≥44px tinggi */
 }
@@ -702,7 +789,7 @@ a:focus-visible {
   background: rgba(198, 40, 40, 0.1);
   border-left: 3px solid var(--status-danger);
   border-radius: 4px;
-  font-size: 13px;
+  font-size: var(--fs-2);
   color: var(--status-danger);
 }
 
@@ -714,11 +801,11 @@ a:focus-visible {
   background: var(--surface);
 }
 
-.decision-chain h4 {
+.decision-chain h3 {
   margin: 0 0 10px;
-  font-size: 13px;
+  font-size: var(--fs-2);
   font-weight: 600;
-  letter-spacing: 0.4px;
+  letter-spacing: var(--track-caps);
   text-transform: uppercase;
   color: var(--ink-muted);
 }
@@ -762,7 +849,7 @@ a:focus-visible {
   display: flex;
   gap: 16px;
   margin-top: 6px;
-  font-size: 13px;
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 
@@ -786,7 +873,7 @@ a:focus-visible {
   border-radius: 8px;
   padding: 8px 10px;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--fs-3);
   resize: vertical;
 }
 
@@ -818,7 +905,7 @@ a:focus-visible {
 
 .role-hero h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-4);
   font-weight: 600;
   color: var(--navy-900);
 }
@@ -826,7 +913,7 @@ a:focus-visible {
 .role-hero p {
   margin: 0;
   max-width: 92ch;
-  font-size: 13px;
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 
@@ -837,8 +924,8 @@ a:focus-visible {
   margin: 8px 0 0;
   padding: 0;
   list-style: none;
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: var(--fs-1);
+  line-height: var(--lh-body);
   color: var(--ink-muted);
 }
 
@@ -858,15 +945,17 @@ a:focus-visible {
 .ops-console {
   margin: 0 0 18px;
   padding: 16px 18px;
+  /* Fase 6: konsol operasi jadi KARTU yang sama bahasanya dengan tiga blok
+     Demo Control lainnya; permukaan dalamnya tetap sunken. */
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface-sunken);
+  border-radius: var(--radius);
+  background: var(--surface);
 }
 
 .ops-console h3 {
   margin: 0 0 12px;
-  font-size: 15px;
-  color: var(--navy-700);
+  font-size: var(--fs-4);
+  color: var(--ink);
 }
 
 .ops-controls {
@@ -880,7 +969,7 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 12.5px;
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 
@@ -912,7 +1001,7 @@ a:focus-visible {
   grid-template-columns: max-content 1fr max-content 1fr;
   gap: 6px 14px;
   margin: 10px 0 0;
-  font-size: 13.5px;
+  font-size: var(--fs-3);
 }
 
 .ops-facts dt {
@@ -926,7 +1015,7 @@ a:focus-visible {
 
 .ops-summary {
   margin: 14px 0 10px;
-  font-size: 14px;
+  font-size: var(--fs-3);
 }
 
 .ops-candidates {
@@ -949,9 +1038,26 @@ a:focus-visible {
   background: rgba(249, 168, 37, 0.15);
 }
 
+/* Event 1 penuh (2026-10-16) — tombol pemisah dari "Jalankan Analisis Agent"
+   dan blok hasilnya. Memakai token yang sudah ada; tidak ada warna baru. */
+.ops-event1 {
+  border: 1px dashed var(--brand);
+}
+
+.ops-event1-result {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--brand);
+}
+
+.ops-event1-result h4 {
+  margin: 0;
+  font-size: var(--fs-3);
+}
+
 .case-label {
   margin: 6px 0 0;
-  font-size: 12px;
+  font-size: var(--fs-1);
   font-weight: 700;
   letter-spacing: 0.3px;
   text-transform: uppercase;
@@ -963,7 +1069,7 @@ a:focus-visible {
   display: grid;
   grid-template-columns: 1fr;   /* satu kolom penuh seperti acuan: kartu berisi
                                    narasi, bukan potongan grid 300px */
-  gap: 12px;
+  gap: 10px;
 }
 
 /* Kartu feed = satu tombol utuh (klik di mana saja membuka rincian).
@@ -1002,9 +1108,9 @@ a:focus-visible {
 
 .rec-title {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-4);
   font-weight: 600;
-  line-height: 1.35;
+  line-height: var(--lh-head);
   color: var(--navy-900);
 }
 
@@ -1014,7 +1120,7 @@ a:focus-visible {
   align-items: center;
   gap: 4px 8px;
   margin: 5px 0 0;
-  font-size: 12.5px;
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 
@@ -1046,7 +1152,7 @@ a:focus-visible {
 
 .rec-hint {
   margin-left: auto;
-  font-size: 12.5px;
+  font-size: var(--fs-2);
   font-weight: 500;
   color: var(--accent-strong);
 }
@@ -1057,8 +1163,8 @@ a:focus-visible {
   background: var(--neutral-bg);
   border: 1px solid var(--neutral-border);
   border-radius: 6px;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: var(--fs-2);
+  line-height: var(--lh-body);
   color: var(--ink);
 }
 
@@ -1072,7 +1178,7 @@ a:focus-visible {
 
 .feed-more p {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 
@@ -1104,7 +1210,7 @@ a:focus-visible {
 }
 
 .header-bar .button:hover {
-  background: rgba(9, 105, 218, 0.08);
+  background: var(--accent-soft);
 }
 
 @media (max-width: 720px) {
@@ -1138,21 +1244,23 @@ a:focus-visible {
   min-width: 0;
 }
 
-/* Sidebar mengikuti acuan: rail BIRU BRAND (var(--accent-strong)) dengan teks putih, item
-   aktif lebih gelap (var(--accent)), ikon 16px, identitas pemakai di kaki rail,
-   dan tombol lipat di baris brand. */
+/* Fase 1 Bento Modern: rail TERANG FROS — membalik "rail biru" (arah 2026-10-09/11).
+   Permukaan kaca putih tipis + garis rambut kanan, tinta ink, item aktif tint biru
+   dengan bar aksen. Kontrak class (.side-tab*) TIDAK berubah: test mem-pin markup. */
 .side-nav {
   display: flex;
   flex-direction: column;
   gap: 0;
   padding: 0;
-  background: var(--accent-strong);
-  color: var(--ink-inverse);
-  border-right: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  color: var(--ink);
+  border-right: 1px solid var(--line);
   position: sticky;
   top: 0;
   height: 100vh;
-  box-shadow: 2px 0 16px rgba(0,0,0,0.18);
+  box-shadow: none;
   overflow: hidden;
   transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
               min-width 0.28s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1163,8 +1271,12 @@ a:focus-visible {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 20px 16px 16px;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
+  /* Fase 8: tinggi brand disamakan dengan top bar (min-height 64px) supaya
+     logo rail dan isi top bar duduk di garis mendatar yang sama. Sebelumnya
+     20/16/16px membuat baris ini ~70px dan tepinya terlihat meleset. */
+  min-height: 64px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
 }
 
 /* Wrapper teks brand */
@@ -1178,16 +1290,6 @@ a:focus-visible {
   transition: opacity 0.22s ease, width 0.22s ease;
 }
 
-.side-brand-sub {
-  font-size: var(--text-micro);
-  font-weight: 400;
-  color: rgba(255, 255, 255, 0.92);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.3;
-}
-
 .side-logo {
   display: flex;
   align-items: center;
@@ -1195,18 +1297,18 @@ a:focus-visible {
   width: 32px;
   height: 32px;
   flex: none;
-  border-radius: 8px;
-  background: rgba(255,255,255,0.12);
-  color: var(--ink-inverse);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent-strong) 0%, var(--accent) 100%);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
 }
 
 .side-brand strong {
   min-width: 0;
-  font-size: 14px;
+  font-size: var(--fs-3);
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: var(--ink-inverse);
+  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1217,56 +1319,62 @@ a:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  /* Fase 8: 32px (dulu 28) — sejajar tinggi dengan tombol keluar & logo. */
+  width: 32px;
+  height: 32px;
   flex: none;
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 6px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--ink-muted);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .side-collapse svg {
-  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.side-nav-collapsed .side-collapse svg {
-  transform: rotate(180deg);
+  /* Arah panah ditentukan komponen (`ChevronIcon collapsed`): BUKA = "<",
+     TUTUP = ">". Fase 9 membuang `rotate(180deg)` — putaran itu membalik
+     arti panah sehingga sidebar yang tertutup justru menampilkan "<". */
+  transition: color 0.15s ease;
 }
 
 .side-collapse:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255,255,255,0.25);
-  color: var(--ink-inverse);
+  background: var(--surface-sunken);
+  border-color: var(--line-strong);
+  color: var(--ink);
 }
 
 /* ── Nav tabs ───────────────────────────────────────── */
 .side-tabs {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  /* Fase 9: 3px (dulu 4) — rail dikecilkan; pitch item jadi 41px. */
+  gap: 3px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 10px;
+  overscroll-behavior: contain;
+  /* 10px semua sisi: sejajar dengan padding brand & blok pemakai. */
+  padding: 10px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.12) transparent;
+  scrollbar-color: rgba(15, 23, 42, 0.18) transparent;
 }
 
 .side-tab {
   display: flex;
   align-items: center;
-  gap: 11px;
-  min-height: 40px;
+  gap: 9px;
+  /* Fase 9: 38px (dulu 44) — menu rail dikecilkan atas permintaan pemilik.
+     Batas sentuh tetap dijaga oleh `@media (pointer: coarse)` (44px) dan
+     baris mobile (44px), jadi yang mengecil hanya rail desktop. */
+  min-height: 38px;
   text-align: left;
-  padding: 8px 12px;
-  border-radius: 8px;
+  padding: 0 10px;
+  border-radius: 9px;
   border: 1px solid transparent;
   background: transparent;
-  color: rgba(255, 255, 255, 0.92); /* 4,64:1 di var(--accent-strong) */
-  font-size: 13.5px;
+  color: var(--ink-muted); /* 7,5:1 di permukaan kaca putih */
+  font-size: var(--fs-2);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease,
               padding 0.28s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1275,8 +1383,15 @@ a:focus-visible {
 
 .side-tab svg {
   flex: none;
-  opacity: 0.75;
-  transition: opacity 0.15s ease;
+  /* Kotak ikon tetap: semua label mulai di kolom yang sama (sebelumnya lebar
+     ikon berbeda-beda sehingga tepi kiri label bergoyang). Fase 9: 18 → 16px
+     (ukuran baku ikon UI; dipadankan dengan teks 13px di sebelahnya). */
+  width: 16px;
+  height: 16px;
+  /* Warna token, bukan opacity: komposit opacity di atas kaca membuat
+     kontras ikon tidak dapat diperhitungkan (pelajaran audit Fase 7). */
+  color: var(--ink-subtle);
+  transition: color 0.15s ease;
 }
 
 .side-tab-label {
@@ -1291,38 +1406,39 @@ a:focus-visible {
 }
 
 .side-tab:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--ink-inverse);
+  background: var(--surface-sunken);
+  color: var(--ink);
   transform: translateX(2px);
 }
 
 .side-tab:hover svg {
-  opacity: 1;
+  color: currentColor;
 }
 
 .side-tab-active,
 .side-tab-active:hover {
-  background: rgba(255, 255, 255, 0.13);
-  color: var(--ink-inverse);
-  border-color: rgba(255,255,255,0.1);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border-color: rgba(37, 99, 235, 0.16);
   font-weight: 600;
   transform: none;
 }
 
 .side-tab-active svg {
-  opacity: 1;
+  color: currentColor;
 }
 
-/* Bar aksen kiri pada tab aktif */
+/* Bar aksen kiri pada tab aktif — dipusatkan vertikal (dulu 20%–80%). */
 .side-tab-active::before {
   content: "";
   position: absolute;
   left: 0;
-  top: 20%;
-  height: 60%;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 20px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: rgba(255,255,255,0.85);
+  background: var(--accent-strong);
 }
 
 /* ── User section ───────────────────────────────────── */
@@ -1330,23 +1446,25 @@ a:focus-visible {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0,0,0,0.12);
+  /* 12/16px: sejajar dengan padding brand di atas dan daftar nav. */
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  background: transparent;
 }
 
 .side-avatar {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  /* 32px: satu tinggi dengan logo rail dan tombol ikon di rail ini. */
+  width: 32px;
+  height: 32px;
   flex: none;
   border-radius: 999px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.12) 100%);
-  border: 1px solid rgba(255,255,255,0.2);
-  color: var(--ink-inverse);
-  font-size: 12px;
+  background: linear-gradient(135deg, var(--accent-strong) 0%, var(--accent) 100%);
+  border: 1px solid transparent;
+  color: #FFFFFF;
+  font-size: var(--fs-1);
   font-weight: 700;
   letter-spacing: 0.02em;
 }
@@ -1361,17 +1479,17 @@ a:focus-visible {
 }
 
 .side-user-name {
-  font-size: 12.5px;
+  font-size: var(--fs-2);
   font-weight: 600;
-  color: var(--ink-inverse);
+  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .side-user-sub {
-  font-size: var(--text-micro);
-  color: rgba(255, 255, 255, 0.92);
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1381,13 +1499,14 @@ a:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  /* 32px: sama dengan tombol lipat di baris brand. */
+  width: 32px;
+  height: 32px;
   flex: none;
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 7px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--ink-muted);
   cursor: pointer;
   overflow: hidden;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease,
@@ -1395,24 +1514,24 @@ a:focus-visible {
 }
 
 .side-logout:hover {
-  background: rgba(198, 40, 40, 0.25);
-  border-color: rgba(198,40,40,0.4);
-  color: var(--on-dark-danger);
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+  color: var(--status-danger);
 }
 
 /* ── Focus ring ─────────────────────────────────────── */
 .side-nav :focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.75);
+  outline: 2px solid var(--accent-strong);
   outline-offset: 2px;
 }
 
 /* ── Actions (Muat demo) ────────────────────────────── */
 .side-actions {
-  padding: 8px 10px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  border-top: 1px solid rgba(255,255,255,0.07);
+  gap: 8px;
+  border-top: 1px solid var(--line);
 }
 
 .side-actions .button {
@@ -1420,11 +1539,12 @@ a:focus-visible {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 12.5px;
-  border-radius: 8px;
+  min-height: 36px;
+  background: var(--surface);
+  border: 1px solid var(--line-input);
+  color: var(--navy-700);
+  font-size: var(--fs-2);
+  border-radius: 10px;
   padding: 8px 12px;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
@@ -1434,9 +1554,9 @@ a:focus-visible {
 }
 
 .side-actions .button:hover {
-  background: rgba(255, 255, 255, 0.14);
-  color: var(--ink-inverse);
-  border-color: rgba(255, 255, 255, 0.35);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border-color: rgba(37, 99, 235, 0.35);
 }
 
 /* Rail ringkas (68px): label disembunyikan, ikon tetap. Hanya layar lebar —
@@ -1452,6 +1572,29 @@ a:focus-visible {
     justify-content: center;
   }
 
+  /* Rail ringkas: item jadi kotak 44px tanpa padding samping, dan GAP
+     dimatikan. Sebabnya terukur: label yang menyusut ke lebar 0 tetap
+     menyumbang satu `gap: 10px`, sehingga kelompok isinya jadi
+     [ikon 18px][10px][0] dan ikon duduk 5px di kiri titik tengah kolom
+     (pusat ikon 29 vs pusat rail 34). Perlakuan sama untuk baris brand &
+     blok pemakai. */
+  .side-nav-collapsed .side-tab,
+  .side-nav-collapsed .side-brand,
+  .side-nav-collapsed .side-user {
+    padding-left: 0;
+    padding-right: 0;
+    gap: 0;
+  }
+
+  /* Tombol keluar menyusut ke lebar 0 — tapi `width: 0` tidak cukup selama
+     padding+border-nya masih ada: dengan box-sizing border-box peramban
+     memakai padding+border sebagai lebar minimum (terukur 14px), dan sisa
+     14px itu menggeser avatar keluar dari titik tengah (27 vs 34). */
+  .side-nav-collapsed .side-logout {
+    padding: 0;
+    border-width: 0;
+  }
+
   .side-nav-collapsed .side-logo {
     display: none;
   }
@@ -1459,7 +1602,6 @@ a:focus-visible {
   /* Label & metadata: fade + width collapse (bukan display:none)
      supaya bisa di-animate smooth saat sidebar dibuka/ditutup. */
   .side-nav-collapsed .side-brand-strong,
-  .side-nav-collapsed .side-brand-sub,
   .side-nav-collapsed .side-brand-text,
   .side-nav-collapsed .side-tab-label,
   .side-nav-collapsed .side-user-meta,
@@ -1475,10 +1617,6 @@ a:focus-visible {
 
   .side-nav-collapsed .side-collapse {
     margin-left: 0;
-  }
-
-  .side-nav-collapsed .side-tab {
-    padding: 8px;
   }
 }
 
@@ -1496,10 +1634,12 @@ a:focus-visible {
   gap: 16px;
   min-height: 64px;
   padding: 8px 22px;
-  background: var(--accent-strong);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 1px 8px rgba(15, 23, 42, 0.12);
-  color: var(--ink-inverse);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(14px) saturate(180%);
+  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  border-bottom: 1px solid var(--line);
+  box-shadow: none;
+  color: var(--ink);
 }
 
 .top-bar-left,
@@ -1542,10 +1682,10 @@ a:focus-visible {
   padding: 0 10px;
   flex: 0 1 auto;
   border: 1px solid var(--line-input);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--surface);
   color: var(--ink);
-  font-size: 13px;
+  font-size: var(--fs-2);
   font-family: inherit;
   cursor: pointer;
 }
@@ -1557,11 +1697,11 @@ a:focus-visible {
 .top-bar-select:disabled,
 .top-bar-select-locked {
   padding-right: 12px;
-  /* Latar digelapkan (bukan diterangkan): teks putih di atas biru yang lebih
-     gelap memberi kontras jauh lebih tinggi daripada latar putih transparan. */
-  background: rgba(0, 0, 0, 0.18);
-  color: var(--ink-inverse);
-  border-color: rgba(255, 255, 255, 0.35);
+  /* Fase 1 (rail & top bar terang): latar sunken + tinta sekunder,
+     kontras --ink-muted di --surface-sunken ~ 7:1 (AA lolos). */
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  border-color: var(--line-strong);
   cursor: default;
   appearance: none;
   -webkit-appearance: none;
@@ -1582,23 +1722,24 @@ a:focus-visible {
 
 /* Nama SPPG di topbar kiri */
 .top-bar-sppg {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.92);
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   padding: 0 4px;
-  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-left: 1px solid var(--line);
 }
 
 /* Jam real-time (memuat detik → angka tabular supaya tidak bergetar tiap detik) */
 .top-bar-clock {
-  font-size: 13px;
+  font-size: var(--fs-2);
+  font-family: var(--font-data);
   font-variant-numeric: tabular-nums;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--ink-muted);
   white-space: nowrap;
   padding: 0 4px;
-  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-left: 1px solid var(--line);
 }
 
 .top-bar-role {
@@ -1606,15 +1747,16 @@ a:focus-visible {
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.12);
-  color: var(--ink-inverse);
-  font-size: 12.5px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: var(--fs-2);
+  font-weight: 600;
   white-space: nowrap;
 }
 
-.top-bar-role svg { flex: none; color: var(--ink-inverse); }
+.top-bar-role svg { flex: none; color: var(--accent-strong); }
 
 .top-bar-bell {
   position: relative;
@@ -1624,14 +1766,14 @@ a:focus-visible {
   width: 32px;
   height: 32px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
-  color: var(--ink-inverse);
+  color: var(--ink-muted);
   cursor: pointer;
   transition: background 0.18s ease, color 0.18s ease;
 }
 
-.top-bar-bell:hover { background: rgba(255, 255, 255, 0.15); color: var(--ink-inverse); }
+.top-bar-bell:hover { background: var(--surface-sunken); color: var(--ink); }
 
 .top-bar-bell-count {
   position: absolute;
@@ -1646,7 +1788,7 @@ a:focus-visible {
   border-radius: 999px;
   background: var(--status-danger);
   color: var(--ink-inverse);
-  font-size: var(--text-micro); line-height: 1;
+  font-size: var(--fs-1); line-height: 1;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -1674,9 +1816,9 @@ a:focus-visible {
   gap: 10px;
   background: var(--surface);
   color: var(--ink);
-  border: 1px solid var(--line-input);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.22);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
   text-align: left;
 }
 
@@ -1696,13 +1838,13 @@ a:focus-visible {
 
 .top-bar-notif-title {
   display: block;
-  font-size: 14px;
+  font-size: var(--fs-3);
   color: var(--navy-900);
 }
 
 .top-bar-notif-sub {
   margin: 2px 0 0;
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 
@@ -1720,7 +1862,7 @@ a:focus-visible {
   cursor: pointer;
 }
 
-.top-bar-notif-close:hover { background: var(--canvas); color: var(--ink); }
+.top-bar-notif-close:hover { background: var(--surface-sunken); color: var(--ink); }
 
 .top-bar-notif-list {
   margin: 0;
@@ -1752,15 +1894,15 @@ a:focus-visible {
 }
 
 .top-bar-notif-item-label {
-  font-size: 13px;
-  line-height: 1.3;
+  font-size: var(--fs-2);
+  line-height: var(--lh-head);
   color: var(--navy-900);
 }
 
 /* Meta & lencana TIDAK boleh terlipat — hanya label yang boleh 2 baris supaya
    tiap baris tetap ringkas dan mudah dipindai. */
 .top-bar-notif-item-meta {
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   color: var(--ink-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -1774,7 +1916,7 @@ a:focus-visible {
 .top-bar-notif-rest,
 .top-bar-notif-empty {
   margin: 0;
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 
@@ -1788,13 +1930,13 @@ a:focus-visible {
   border-radius: 6px;
   background: var(--surface);
   color: var(--accent-strong);
-  font-size: 13px;
+  font-size: var(--fs-2);
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
 }
 
-.top-bar-notif-open:hover { background: rgba(9, 105, 218, 0.06); }
+.top-bar-notif-open:hover { background: rgba(37, 99, 235, 0.08); }
 
 .top-bar-avatar {
   display: flex;
@@ -1804,16 +1946,16 @@ a:focus-visible {
   height: 32px;
   flex: none;
   border-radius: 999px;
-  background: var(--accent-strong);
-  color: var(--ink-inverse);
-  font-size: 12px;
+  background: linear-gradient(135deg, var(--accent-strong) 0%, var(--accent) 100%);
+  color: #FFFFFF;
+  font-size: var(--fs-1);
   font-weight: 700;
 }
 
 .top-bar-user-meta { display: flex; flex-direction: column; min-width: 0; }
 
 .top-bar-user-name {
-  font-size: 13px;
+  font-size: var(--fs-2);
   font-weight: 600;
   color: var(--navy-900);
   max-width: 180px;
@@ -1822,7 +1964,7 @@ a:focus-visible {
   text-overflow: ellipsis;
 }
 
-.top-bar-user-sub { font-size: 12px; color: var(--ink-muted); white-space: nowrap; }
+.top-bar-user-sub { font-size: var(--fs-1); color: var(--ink-muted); white-space: nowrap; }
 
 .top-bar-logout {
   display: flex;
@@ -1914,7 +2056,14 @@ a:focus-visible {
   border: 2px solid var(--surface);
   background: var(--ink-muted);
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+  /* Pin merespons: cincin sorotan lokasi aktif & naik-membesar saat disinggahi
+     kursor jadi gerak halus, bukan lompatan warna. */
+  transition: box-shadow var(--dur-2) var(--ease-standard),
+    background var(--dur-2) var(--ease-standard),
+    transform var(--dur-1) var(--ease-standard);
 }
+.map-pin { cursor: pointer; }
+.map-pin:hover .map-pin-dot { transform: scale(1.28); }
 .map-pin-surplus .map-pin-dot { background: var(--status-safe); }
 .map-pin-shortage .map-pin-dot { background: var(--status-danger); }
 .map-pin-label {
@@ -1929,7 +2078,7 @@ a:focus-visible {
   background: rgba(255, 255, 255, 0.94);
   color: var(--ink);
   font-family: var(--font-data);
-  font-size: var(--text-micro);
+  font-size: var(--fs-1);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   pointer-events: none;
@@ -2405,7 +2554,7 @@ a:focus-visible {
   white-space: nowrap;
 }
 .route-tag {
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   color: var(--ink-subtle);
   font-variant-numeric: tabular-nums;
 }
@@ -2460,7 +2609,13 @@ a:focus-visible {
   border: 2px solid var(--surface);
   background: var(--accent-strong);
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+  /* Cincin "sedang mengirim" & naik-membesar saat disinggahi kursor datang
+     dengan halus; rotasi 45° tetap dipertahankan supaya bentuknya tidak berubah. */
+  transition: box-shadow var(--dur-2) var(--ease-standard),
+    background var(--dur-2) var(--ease-standard),
+    transform var(--dur-1) var(--ease-standard);
 }
+.map-pin-supplier:hover .map-pin-supplier-dot { transform: rotate(45deg) scale(1.28); }
 .map-pin-supplier-low .map-pin-supplier-dot { background: var(--warn-ink); }
 .map-pin-supplier-excluded .map-pin-supplier-dot { background: var(--status-danger); }
 .map-pin-supplier-unknown .map-pin-supplier-dot { background: var(--ink-muted); }
@@ -2525,18 +2680,18 @@ a:focus-visible {
 .map-card .map-dot-balanced { background: var(--ink-muted); }
 .map-card .map-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; align-items: start; }
 .map-card .map-row { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 8px 10px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); }
-.map-card .map-row-name { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
-.map-card .map-row-status { font-size: 12px; padding: 3px 8px; border-radius: 4px; background: var(--bg-page); }
+.map-card .map-row-name { font-size: var(--fs-4); font-weight: 600; overflow-wrap: anywhere; }
+.map-card .map-row-status { font-size: var(--fs-1); padding: 3px 8px; border-radius: 4px; background: var(--bg-page); }
 .map-card .map-row-shortage .map-row-status { color: var(--status-danger); background: rgba(198, 40, 40, 0.1); }
-.map-card .map-row-surplus .map-row-status { color: var(--status-safe); background: rgba(46, 125, 50, 0.1); }
-.map-card .map-row-supply, .map-card .map-row-demand, .map-card .map-row-gap { grid-column: 2 / -1; font-variant-numeric: tabular-nums; font-size: 13px; overflow-wrap: anywhere; }
+.map-card .map-row-surplus .map-row-status { color: var(--safe-ink-tint); background: rgba(46, 125, 50, 0.1); }
+.map-card .map-row-supply, .map-card .map-row-demand, .map-card .map-row-gap { grid-column: 2 / -1; font-variant-numeric: tabular-nums; font-size: var(--fs-2); overflow-wrap: anywhere; }
 .map-card .map-row-gap { font-weight: 600; }
 @container (min-width: 680px) {
   .map-card .map-row { grid-template-columns: 8px minmax(90px, 1fr) auto 1fr 1fr 1.2fr; }
   .map-card .map-row-supply, .map-card .map-row-demand, .map-card .map-row-gap { grid-column: auto; text-align: right; }
 }
 
-.section-sub { color: var(--muted); font-size: 13px; max-width: 72ch; }
+.section-sub { color: var(--muted); font-size: var(--fs-2); max-width: 72ch; }
 /* Panel demo: kartu-kartunya bertumpuk dengan jarak seragam, bukan tombol
    yang mengambang di antara kepala halaman dan kartu pertama. */
 .demo-control-section {
@@ -2565,7 +2720,7 @@ a:focus-visible {
 
 .map-panel h3 {
   margin: 0 0 10px;
-  font-size: 15px;
+  font-size: var(--fs-4);
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
@@ -2603,7 +2758,7 @@ a:focus-visible {
   flex-wrap: wrap;
   gap: 14px;
   margin-top: 10px;
-  font-size: 12.5px;
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 
@@ -2616,30 +2771,19 @@ a:focus-visible {
   vertical-align: -1px;
 }
 
-.stock-chart-holder {
-  /* Diselaraskan dengan tinggi peta (420px) supaya baris atas rata. */
-  height: 380px;
-}
-
-/* Mode stretch: chart mengisi flex parent (kartu samping peta di Overview). */
-.stock-chart-stretch {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.stock-chart-stretch .stock-chart-holder,
-.stock-chart-stretch .stock-chart-placeholder {
-  flex: 1;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
+/* Holder grafik: tinggi MENGIKUTI jumlah lokasi lewat `--chart-h` yang dipasang
+   komponen (180–380 px), dengan 380px sebagai cadangan. HARUS angka px, bukan
+   persentase: persentase di dalam rantai flex (min-height/auto) dihitung Chrome
+   sebagai 0 dan grafiknya tidak pernah dirender — pernah terjadi saat grafik
+   ditaruh di kartu auto-height. Tinggi tetap 380 px dulu membuat kartu ini 448 px
+   hanya untuk satu batang saat data seed cuma punya satu lokasi (arah pemilik
+   2026-10-16: "shape terlalu besar"). */
+.stock-chart-holder,
+.stock-chart-placeholder {
+  height: var(--chart-h, 380px);
 }
 
 .stock-chart-placeholder {
-  height: 380px;
   border-radius: 8px;
   background: repeating-linear-gradient(
     45deg,
@@ -2677,14 +2821,16 @@ a:focus-visible {
     padding: 6px 8px;
     height: auto;
     border-right: 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
+    border-bottom: 1px solid var(--line);
+    box-shadow: none;
   }
 
   /* Logo tetap sebagai identitas; teks brand tidak (peran + lokasi sudah
      tampil di header) supaya ruasnya diberikan ke tab. */
   .side-brand {
     padding: 0;
+    /* Baris rail mobile tidak boleh ikut setinggi top bar. */
+    min-height: 0;
     border-bottom: 0;
     gap: 8px;
     flex: 0 0 auto;
@@ -2755,16 +2901,16 @@ a:focus-visible {
   padding: 14px 16px;
   background: var(--card);
 }
-.integrity-panel h3 { margin: 0 0 8px; font-size: 14px; }
+.integrity-panel h3 { margin: 0 0 8px; font-size: var(--fs-3); }
 .integrity-ledger, .integrity-dossier { margin-bottom: 10px; }
-.integrity-ledger strong, .integrity-dossier strong { font-size: 12px; display: block; margin-bottom: 4px; }
+.integrity-ledger strong, .integrity-dossier strong { font-size: var(--fs-1); display: block; margin-bottom: 4px; }
 .integrity-panel dl { margin: 4px 0; }
-.integrity-panel dt { font-size: 12px; color: var(--muted-foreground); }
+.integrity-panel dt { font-size: var(--fs-1); color: var(--muted-foreground); }
 /* Hash/dossier ala terminal gelap Stitch — mono di atas #0F172A */
 .integrity-panel dd {
   margin: 0 0 6px;
   font-family: var(--font-data);
-  font-size: 12px;
+  font-size: var(--fs-1);
   color: var(--terminal-accent);
   background: var(--terminal);
   border: 1px solid var(--line);
@@ -2775,7 +2921,7 @@ a:focus-visible {
 
 /* Chaos & Event 2 panel ala demo-control Stitch */
 .chaos-panel .card-header { padding-bottom: 10px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
-.chaos-panel h4, .event2-panel h4 { margin: 0; font-size: 14.5px; font-weight: 650; letter-spacing: -0.1px; }
+.chaos-panel h3, .event2-panel h3 { margin: 0; font-size: var(--fs-4); font-weight: 650; letter-spacing: -0.1px; }
 .chaos-slider input[type="range"] { accent-color: var(--accent-strong); width: 100%; }
 .chaos-result, .event2-result {
   margin-top: 12px;
@@ -2783,11 +2929,11 @@ a:focus-visible {
   border-radius: 6px;
   border: 1px solid var(--line);
   background: var(--surface-sunken);
-  font-size: 13px;
+  font-size: var(--fs-2);
 }
 .chaos-result code {
   font-family: var(--font-data);
-  font-size: 12px;
+  font-size: var(--fs-1);
   color: var(--terminal-accent);
   background: var(--terminal);
   border: 1px solid var(--terminal-border);
@@ -2803,7 +2949,7 @@ a:focus-visible {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--bg-page);
-  font-size: 13px;
+  font-size: var(--fs-2);
   font-weight: 600;
   color: var(--accent-strong);
 }
@@ -2827,8 +2973,8 @@ a:focus-visible {
 }
 .event2-quotes li label:hover { border-color: var(--line-strong); box-shadow: var(--shadow-2); }
 .event2-quotes li label:has(input:checked) { border-color: var(--accent-strong); }
-.event2-supplier { flex: 1; font-weight: 600; font-size: 13.5px; }
-.event2-price { font-family: var(--font-data); font-size: 12.5px; color: var(--accent-strong); font-weight: 600; }
+.event2-supplier { flex: 1; font-weight: 600; font-size: var(--fs-3); }
+.event2-price { font-family: var(--font-data); font-size: var(--fs-2); color: var(--accent-strong); font-weight: 600; }
 
 /* --- Restyle Stitch: Recommendations / Agent Log / Demo Control (2026-10-10) --- */
 
@@ -2872,7 +3018,7 @@ a:focus-visible {
 }
 .rec-meta { display: flex; flex-direction: column; gap: 2px; }
 .rec-meta dt {
-  font-size: 12px;
+  font-size: var(--fs-1);
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -2881,10 +3027,10 @@ a:focus-visible {
 .rec-value {
   margin: 0;
   font-weight: 700;
-  font-size: 14.5px;
+  font-size: var(--fs-4);
   font-variant-numeric: tabular-nums;
 }
-.rec-expired { color: var(--ink-muted); font-family: var(--font-data); font-size: 12px; letter-spacing: 0.04em; }
+.rec-expired { color: var(--ink-muted); font-family: var(--font-data); font-size: var(--fs-1); letter-spacing: 0.04em; }
 .recommendation-card .chain-reason { margin-top: 10px; }
 .recommendation-card .mock-badge { margin-top: 10px; }
 
@@ -2910,7 +3056,7 @@ a:focus-visible {
 .agent-console-dots { display: none; }
 .agent-console-title {
   font-family: var(--font-data);
-  font-size: 12px;
+  font-size: var(--fs-1);
   color: var(--ink-muted);
   letter-spacing: 0;
 }
@@ -2922,17 +3068,17 @@ a:focus-visible {
 }
 .agent-console .trace-step { border-left: 2px solid var(--line-strong); padding-left: 12px; margin: 0 0 14px; }
 .trace-step-head { display: flex; align-items: center; gap: 8px; }
-.trace-step-head time { margin-left: auto; font-size: 12px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.trace-step-head time { margin-left: auto; font-size: var(--fs-1); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .agent-console .trace-step-name {
   font-family: var(--font-data);
-  font-size: 12px;
+  font-size: var(--fs-1);
   font-weight: 600;
   letter-spacing: 0.03em;
   color: var(--navy-900);
 }
 .agent-console-ico { color: var(--accent-strong); flex: none; }
-.agent-console .trace-tool { font-family: var(--font-data); font-size: 12px; color: var(--ink-muted); }
-.agent-console .trace-model { font-family: var(--font-data); font-size: 12px; color: var(--navy-700); margin-top: 2px; }
+.agent-console .trace-tool { font-family: var(--font-data); font-size: var(--fs-1); color: var(--ink-muted); }
+.agent-console .trace-model { font-family: var(--font-data); font-size: var(--fs-1); color: var(--navy-700); margin-top: 2px; }
 .agent-console .trace-output {
   background: var(--surface-sunken);
   color: var(--ink);
@@ -2940,8 +3086,8 @@ a:focus-visible {
   border-radius: 6px;
   padding: 8px 10px;
   font-family: var(--font-data);
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: var(--fs-1);
+  line-height: var(--lh-body);
   margin: 6px 0 0;
 }
 
@@ -2950,7 +3096,7 @@ a:focus-visible {
   margin: 0 0 10px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--line);
-  font-size: 14.5px;
+  font-size: var(--fs-4);
   font-weight: 650;
   letter-spacing: -0.1px;
 }
@@ -2960,12 +3106,12 @@ a:focus-visible {
   border: 1px solid var(--line-input);
   border-radius: 4px;
   padding: 6px 12px;
-  font-size: 12.5px;
+  font-size: var(--fs-2);
   font-weight: 600;
   cursor: pointer;
 }
 .integrity-panel button:hover:not(:disabled) { background: var(--surface-sunken); border-color: var(--accent-strong); }
-.integrity-error { color: var(--status-danger); font-size: 12.5px; }
+.integrity-error { color: var(--status-danger); font-size: var(--fs-2); }
 
 /* Wadah dan blocks demo-control ala panel Stitch */
 .chaos-panel .field, .event2-panel .field select {
@@ -2981,7 +3127,7 @@ a:focus-visible {
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   background: var(--bg-page);
-  font-size: 12px;
+  font-size: var(--fs-1);
   font-style: normal;
 }
 
@@ -2995,11 +3141,11 @@ a:focus-visible {
 }
 .approval-modal h3 {
   margin: 0 0 10px;
-  font-size: 16px;
+  font-size: var(--fs-4);
   font-weight: 700;
   letter-spacing: -0.15px;
 }
-.approval-modal ul { margin: 0; padding: 0 0 0 18px; font-size: 13.5px; line-height: 1.65; }
+.approval-modal ul { margin: 0; padding: 0 0 0 18px; font-size: var(--fs-3); line-height: 1.65; }
 .approval-modal-blockers {
   margin-top: 10px;
   padding: 8px 10px 8px 26px;
@@ -3008,7 +3154,7 @@ a:focus-visible {
   border: 1px solid rgba(198, 40, 40, 0.4);
   border-radius: 6px;
   color: var(--status-danger);
-  font-size: 12.5px;
+  font-size: var(--fs-2);
 }
 .approval-modal-actions {
   display: flex;
@@ -3025,7 +3171,7 @@ a:focus-visible {
   color: var(--navy-700);
   border: 1px solid var(--line-input);
 }
-.button-secondary:hover:not(:disabled) { background: rgba(9, 105, 218, 0.08); }
+.button-secondary:hover:not(:disabled) { background: var(--accent-soft); }
 .button:disabled {
   background: var(--surface-sunken);
   color: var(--ink-muted);
@@ -3041,7 +3187,7 @@ a:focus-visible {
   background: rgba(198, 40, 40, 0.1);
   border-left: 3px solid var(--status-danger);
   border-radius: 4px;
-  font-size: 13px;
+  font-size: var(--fs-2);
   color: var(--status-danger);
 }
 .chain-item {
@@ -3050,7 +3196,7 @@ a:focus-visible {
 .chain-item:hover { border-color: var(--line-strong); box-shadow: var(--shadow-2); }
 .chain-version {
   font-family: var(--font-data);
-  font-size: 12.5px;
+  font-size: var(--fs-2);
   color: var(--accent-strong);
 }
 .decision-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -3089,7 +3235,9 @@ a:focus-visible {
 
 .overview-header-main h1 {
   margin: 0;
-  font-size: 20px;
+  /* Fase 9: judul halaman diseragamkan ke --fs-6 (20px) — dulu 20px di sini
+     tapi 18px di varian lain, sehingga judul halaman berbeda-beda tinggi. */
+  font-size: var(--fs-6);
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--navy-900);
@@ -3106,7 +3254,7 @@ a:focus-visible {
 }
 
 .overview-updated {
-  font-size: 12px;
+  font-size: var(--fs-1);
   color: var(--ink-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -3115,10 +3263,12 @@ a:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px;
-  border-radius: 8px;
-  background: rgba(9, 105, 218, 0.08);
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--accent-soft);
   color: var(--accent-strong);
+  flex: none;
 }
 
 .overview-header-title {
@@ -3130,14 +3280,16 @@ a:focus-visible {
 
 .overview-header-title h1 {
   margin: 0;
-  font-size: 18px;
+  /* Fase 9: ikut --fs-6 (20px) — sebelumnya 18px sehingga judul halaman
+     Overview lebih kecil dari halaman lain. */
+  font-size: var(--fs-6);
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
 .overview-header-sub {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--fs-3);
   color: var(--ink-muted);
   max-width: 72ch;
 }
@@ -3149,9 +3301,9 @@ a:focus-visible {
   padding: 2px 8px;
   border-radius: 6px;
   background: rgba(46, 125, 50, 0.1);
-  color: var(--status-safe);
+  color: var(--safe-ink-tint);
   font-family: var(--font-data);
-  font-size: 12px;
+  font-size: var(--fs-1);
   font-weight: 600;
 }
 
@@ -3168,24 +3320,38 @@ a:focus-visible {
   50% { opacity: 0.35; }
 }
 
-/* Strip KPI = SATU kartu dengan beberapa kolom (pola MetricStrip acuan):
-   label kecil + titik nada, nilai tunggal besar, keterangan di bawah.
-   Tiga kolom sama lebar — `auto-fit` menyisakan satu kolom kosong di kanan. */
+/* Strip bento (Fase 2, Arah 4): TIGA kartu terpisah dengan bobot berbeda di
+   grid 12 kolom — hero (5) jadi satu angka terpenting di halaman, pasokan (3)
+   & rekomendasi (4) mendampingi. Sebelumnya satu kartu berisi tiga kolom sama
+   lebar (pola MetricStrip acuan lama). */
 .overview-kpis {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px 24px;
-  padding: 14px 16px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.overview-kpis .kpi-card {
+  gap: 6px;
+  padding: 16px 18px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
 
-/* Layar sempit: tiga kolom jadi terlalu sempit — tumpuk satu per baris. */
+.overview-kpis .kpi-card-hero { grid-column: span 5; }
+.overview-kpis .kpi-card-pasokan { grid-column: span 3; }
+.overview-kpis .kpi-card-keputusan { grid-column: span 4; }
+
+/* Layar sedang: hero mengambil satu baris penuh, dua pendamping berdampingan. */
+@media (max-width: 1180px) {
+  .overview-kpis .kpi-card-hero { grid-column: span 12; }
+  .overview-kpis .kpi-card-pasokan,
+  .overview-kpis .kpi-card-keputusan { grid-column: span 6; }
+}
+
+/* Layar sempit: semuanya tumpuk satu per baris. */
 @media (max-width: 720px) {
-  .overview-kpis {
-    grid-template-columns: 1fr;
-  }
+  .overview-kpis .kpi-card { grid-column: span 12; }
 }
 
 .kpi-card {
@@ -3199,7 +3365,7 @@ a:focus-visible {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--fs-1);
   font-weight: 500;
   color: var(--ink-muted);
 }
@@ -3216,30 +3382,126 @@ a:focus-visible {
   opacity: 0.6;
 }
 
-.kpi-card:has(.kpi-card-safe) .kpi-card-label::before {
-  background: var(--status-safe);
-  opacity: 1;
-}
-
-.kpi-card:has(.kpi-card-danger) .kpi-card-label::before {
+/* Titik nada mengikuti arah selisih hero (kelas is-<tone> dari
+   lib/overview-bento). Warna status tetap versi gelap yang lolos AA. */
+.kpi-card:has(.is-shortage) .kpi-card-label::before {
   background: var(--status-danger);
   opacity: 1;
 }
 
+.kpi-card:has(.is-surplus) .kpi-card-label::before {
+  background: var(--status-safe);
+  opacity: 1;
+}
+
 .kpi-card-value {
-  font-size: 18px;
+  font-size: var(--fs-5);
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--navy-900);
   font-variant-numeric: tabular-nums;
 }
 
-.kpi-card-safe { color: var(--navy-900); }
-.kpi-card-danger { color: var(--navy-900); }
-
 .kpi-card-foot {
-  font-size: 12px;
+  font-size: var(--fs-1);
   color: var(--ink-muted);
+}
+
+/* Angka hero: satu angka terpenting di halaman — 44px, mono tabular supaya
+   lebar digit tidak bergeser saat polling 5 detik memperbarui nilainya. */
+.kpi-card-hero-value {
+  font-family: var(--font-data);
+  font-size: var(--fs-8);
+  line-height: var(--lh-num);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Nada hero mengikuti arah selisih. Warna status TIDAK dicerahkan (green-800 /
+   red-800): versi 600 gagal kontras AA untuk teks. */
+.kpi-card-hero-value.is-shortage { color: var(--status-danger); }
+.kpi-card-hero-value.is-surplus { color: var(--status-safe); }
+.kpi-card-hero-value.is-balanced,
+.kpi-card-hero-value.is-unknown { color: var(--navy-900); }
+
+.kpi-card-mini {
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+}
+
+/* Bar kemajuan pasokan vs kebutuhan. Lebar bar dibatasi 100% karena pasokan
+   bisa melebihi kebutuhan — angkanya sendiri tetap ditulis apa adanya. */
+.bento-bar {
+  display: block;
+  height: 6px;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.bento-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent-strong);
+}
+
+/* Antrean keputusan di samping peta (Fase 2). */
+.queue-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.queue-head-count {
+  font-family: var(--font-data);
+  font-size: var(--fs-5);
+  font-weight: 600;
+  color: var(--navy-900);
+}
+
+.queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.queue-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.queue-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.queue-item-label {
+  font-size: var(--fs-2);
+  font-weight: 500;
+  color: var(--navy-900);
+}
+
+.queue-item-meta {
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.queue-empty,
+.queue-rest {
+  margin: 8px 0 0;
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
 }
 
 /* Filter pill komoditas — pill bulat ala mockup */
@@ -3251,7 +3513,7 @@ a:focus-visible {
 }
 
 .commodity-filters-label {
-  font-size: 14px;
+  font-size: var(--fs-3);
   font-weight: 500;
   color: var(--ink-muted);
 }
@@ -3266,8 +3528,11 @@ a:focus-visible {
 
 .filter-card .commodity-pill {
   background: var(--surface);
-  font-size: 14px;
-  padding: 6px 14px;
+  font-size: var(--fs-2);
+  /* Tahap 2: pil penyaring komoditas tetap satu bahasa dengan pil lain
+     (bentuk mengikuti teks). Sebelumnya 6px 14px + 14px = 30 px; sekarang
+     13px + 2px 10px = 24 px di desktop, 44 px di perangkat sentuh. */
+  padding: 2px 10px;
 }
 
 /* Banner peringatan lokasi kritis (tint danger, teks navy terbaca). */
@@ -3280,7 +3545,7 @@ a:focus-visible {
   border: 1px solid rgba(198, 40, 40, 0.4);
   background: rgba(198, 40, 40, 0.1);
   color: var(--navy-900);
-  font-size: 14px;
+  font-size: var(--fs-3);
 }
 
 .overview-alert svg {
@@ -3298,15 +3563,34 @@ a:focus-visible {
 }
 
 .commodity-pill {
-  padding: 5px 14px;
+  /* Tahap 2 (16 Okt 2026): bentuk pil MENGIKUTI teksnya, bukan sebaliknya.
+     Sebelumnya padding 5px 14px + 13px menghasilkan pil 32 px untuk teks 12–13 px
+     — terukur di kepala halaman Hari Ini ("Jumat, 16 Oktober 2026" 173×32),
+     KPI ("Periode 15 Okt…" 240×32), Keamanan Pangan ("1 batch" 74×32). Sekarang
+     12px + padding 2px 10px → 24 px. Target sentuh TIDAK dikorbankan: aturan
+     `@media (pointer: coarse)` di bawah tetap menaikkan kontrol yang benar-benar
+     ditekan ke 44 px, jadi yang mengecil hanya bentuk desktop. */
+  padding: 2px 10px;
+  line-height: 1.35;
   border-radius: 999px;
   border: 1px solid var(--line-input);
   background: var(--surface-sunken);
   color: var(--ink);
-  font-size: 12.5px;
+  font-size: var(--fs-1);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+/* Pil di kepala halaman (`.page-header-pills`) adalah TEKS STATIS (span), bukan
+   kontrol: ia tidak boleh ikut aturan target sentuh 44 px dan tidak boleh
+   mengaku bisa ditekan (`cursor: pointer` hanya untuk pil yang benar-benar
+   tombol, mis. penyaring komoditas & cakupan keamanan). */
+.page-header-pills > .commodity-pill {
+  min-height: 0;
+  display: inline-flex;
+  align-items: center;
+  cursor: default;
 }
 
 .commodity-pill:hover {
@@ -3327,7 +3611,7 @@ a:focus-visible {
 
 .commodity-filters .map-error {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--fs-2);
 }
 
 /* ====== Aksesibilitas & status async (audit ui-ux-pro-max) ====== */
@@ -3423,63 +3707,78 @@ a:focus-visible {
   }
 }
 
+/* Basemap redup (Fase 2): peta OSM terlalu ramai dan menenggelamkan pin.
+   Filter dipasang pada KANVAS-nya saja — pin adalah penanda DOM di atas
+   kanvas, jadi pin hijau/merah tetap menyala penuh dan kontrasnya justru naik.
+   Tidak ada gaya/tile baru: nol jaringan tambahan, nol dependensi. */
+.map-gl canvas {
+  filter: saturate(0.62) brightness(1.05) contrast(0.94);
+}
+
 /* Split 2:1 seperti dashboard acuan: peta lebar, tabel Pasokan per Lokasi kanan.
    Telemetri Node ada di bawah baris split ini (bukan di kolom kanan). */
 .overview-split {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   gap: 12px;
+  /* stretch: kolom antrean keputusan ikut setinggi peta supaya tepi bawah rata */
+  align-items: stretch;
+}
+
+/* Sepasang kartu ringkas berdampingan (revisi 16 Okt, arah pemilik "shape
+   terlalu besar/kosong"): Telemetri Node dan daftar Status Lokasi dulu
+   masing-masing selebar halaman — 237 px + 203 px tinggi untuk ~10 baris teks.
+   Di >=1100px keduanya berbagi satu baris; di bawah 1100px tetap bertumpuk
+   supaya daftar lokasi tidak terpotong di ponsel. */
+.overview-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
   align-items: start;
 }
 
-/* Di bawah 1280px kolom kanan tinggal ~300px: sumbu label lokasi sendiri
-   menghabiskan hampir separuhnya, jadi grafiknya jadi sepetak. Tumpuk saja. */
-@media (max-width: 1280px) {
-  .overview-split {
-    grid-template-columns: 1fr;
-  }
-  /* Di layar sempit kolom tunggal, kartu tidak perlu tinggi 460px */
-  .overview-side .map-panel {
-    height: auto;
-  }
-  .stock-chart-stretch .stock-chart-holder,
-  .stock-chart-stretch .stock-chart-placeholder {
-    height: 380px;
-  }
+@media (max-width: 1100px) {
+  .overview-pair { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* Telemetri node (kartu terang; batang aksen brand di kiri). */
+/* Telemetri node (kartu terang; batang aksen brand di kiri). Kartu ini ringkas:
+   jarak baris dirapatkan 2026-10-16 (arah pemilik "shape berisi teks terlalu
+   besar") karena isinya cuma judul + 1 baris meta + 2 baris angka + selisih. */
 .node-telemetry { border-left: 4px solid var(--accent-strong); }
-.node-telemetry-body { padding: 0 16px 16px; }
-.node-telemetry-title { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.node-telemetry-name { font-size: 16px; font-weight: 600; color: var(--ink); }
+.node-telemetry-body { padding: 0 14px 14px; }
+.node-telemetry-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.node-telemetry-name { font-size: var(--fs-4); font-weight: 600; color: var(--ink); }
 .node-badge {
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: var(--text-meta);
+  /* 12px (`--fs-1`), sama dengan `.badge` status di seluruh app — dulu 13px
+     sehingga lencana di kartu ini satu tingkat lebih besar dari yang lain. */
+  font-size: var(--fs-1);
   font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
   border: 1px solid var(--line-strong);
   background: var(--surface-sunken);
   color: var(--ink-muted);
 }
-.node-badge-surplus { color: var(--status-safe); border-color: rgba(46, 125, 50, 0.4); background: rgba(46, 125, 50, 0.1); }
+.node-badge-surplus { color: var(--safe-ink-tint); border-color: rgba(46, 125, 50, 0.4); background: rgba(46, 125, 50, 0.1); }
 .node-badge-shortage { color: var(--status-danger); border-color: rgba(198, 40, 40, 0.35); background: rgba(198, 40, 40, 0.1); }
 .node-badge-balanced { color: var(--ink-muted); }
 .node-badge-unknown { color: var(--ink-muted); }
 .node-telemetry-meta {
-  margin: 6px 0 14px;
+  margin: 4px 0 10px;
   font-family: var(--font-data);
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
-.node-telemetry-empty { margin: 0; font-size: 13px; color: var(--ink-muted); }
-.node-gauge-list { margin: 0; display: grid; gap: 12px; }
+.node-telemetry-empty { margin: 0; font-size: var(--fs-2); color: var(--ink-muted); }
+.node-gauge-list { margin: 0; display: grid; gap: 8px; }
 .node-gauge { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; }
-.node-gauge dt { font-size: 12px; color: var(--ink-muted); }
+.node-gauge dt { font-size: var(--fs-1); color: var(--ink-muted); }
 .node-gauge dd {
   margin: 0;
   font-family: var(--font-data);
-  font-size: 12.5px;
+  font-size: var(--fs-2);
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
@@ -3497,7 +3796,7 @@ a:focus-visible {
 .node-telemetry-gap {
   margin: 14px 0 0;
   font-family: var(--font-data);
-  font-size: 12.5px;
+  font-size: var(--fs-2);
   color: var(--ink);
 }
 
@@ -3511,7 +3810,9 @@ a:focus-visible {
 @media (max-width: 720px) {
   .map-gl { height: 320px; }
   .map-pin-label { display: none; }
-  .map-legend-box { gap: 8px; padding: 6px 10px; font-size: 12px; }
+  /* Kotak legenda di ponsel: lebar penuh dikurangi margin supaya tiga barisnya
+     tidak memaksa menggeser peta. */
+  .map-legend-stack { max-width: calc(100% - 20px); }
 }
 .overview-side {
   display: flex;
@@ -3520,34 +3821,67 @@ a:focus-visible {
   min-width: 0;
 }
 
-/* Kartu samping peta: tinggi sama persis dengan peta (460px) supaya baris rata
-   dan tidak ada scroll. Chart di dalamnya mengisi sisa setelah judul h3. */
-.overview-side .map-panel {
-  height: 460px;
+/* Kartu antrean keputusan MENGISI tinggi baris peta (grid stretch) supaya tepi
+   bawahnya rata dengan peta; tunggakan dinyatakan di kaki kartu. */
+.overview-side .queue-card {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 }
 
-/* StockChart stretch mengisi sisa tinggi kartu (setelah h3 ~34px + padding 32px) */
-.overview-side .map-panel > * + * {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
+/* Tombol buka tab Recommendations didorong ke dasar kartu — supaya ruang sisa
+   tidak menggantung, dan baris yang tidak tampil tetap bisa dijangkau. */
+.overview-side .queue-foot {
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+/* Tombol tab Recommendations di kaki kartu antrean. */
+.queue-open {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-input);
+  background: var(--surface);
+  color: var(--navy-700);
+  font-size: var(--fs-2);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.queue-open:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+  color: var(--accent-strong);
+}
+
+.queue-open:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+/* Layar ≤1280px: kolom kanan tinggal ~300px — sumbu label lokasi sendiri
+   menghabiskan hampir separuhnya, jadi grafiknya jadi sepetak. Tumpuk saja. */
+@media (max-width: 1280px) {
+  .overview-split {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Tabel breakdown lokasi — ala DESIGN.md Data Tables */
 .location-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: var(--fs-2);
 }
 
 .location-table th {
   padding: 6px 8px;
   background: var(--bg-page);
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--fs-1);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -3579,7 +3913,7 @@ a:focus-visible {
   display: inline-block;
   padding: 1px 8px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: var(--fs-1);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -3587,7 +3921,7 @@ a:focus-visible {
 
 .location-status-surplus {
   background: rgba(46, 125, 50, 0.1);
-  color: var(--status-safe);
+  color: var(--safe-ink-tint);
   border: 1px solid rgba(46, 125, 50, 0.4);
 }
 
@@ -3642,12 +3976,237 @@ a:focus-visible {
 
 .kpi-dashboard .card h3 { margin: 2px 0 0; }
 
+/* Kalender agenda harian di tab "Hari Ini" (langkah 2, 2026-10-16). Memakai
+   token warna & bentuk kartu yang sudah ada supaya tidak lahir bahasa visual
+   baru: kartu `card`, pil `.agenda-nav-btn` setara pil lain, dan titik penanda
+   memakai warna primer (ada catatan) / abu (tidak ada). Target sentuh 44 px
+   di perangkat sentuh mengikuti aturan repo yang sama. */
+.agenda-calendar {
+  margin: 0 0 14px;
+}
+
+.agenda-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.agenda-sub {
+  margin: 2px 0 0;
+  font-size: var(--fs-2);
+  color: var(--slate);
+  max-width: 60ch;
+}
+
+.agenda-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agenda-month {
+  min-width: 11ch;
+  text-align: center;
+  font-weight: 600;
+}
+
+.agenda-nav-btn,
+.agenda-today,
+.agenda-retry {
+  cursor: pointer;
+  border: 1px solid var(--line, #e2e8f0);
+  background: var(--surface);
+  color: inherit;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: var(--fs-2);
+}
+
+.agenda-nav-btn {
+  min-width: 28px;
+  font-size: var(--fs-3);
+  line-height: 1.4;
+}
+
+.agenda-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger, #b42318) 8%, transparent);
+  color: var(--danger, #b42318);
+  font-size: var(--fs-2);
+}
+
+.agenda-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.agenda-weekday {
+  font-size: var(--fs-1);
+  color: var(--slate);
+  text-align: center;
+  padding-bottom: 2px;
+}
+
+.agenda-cell {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--surface);
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.agenda-cell-outer {
+  color: var(--slate);
+  opacity: 0.55;
+}
+
+.agenda-cell-today {
+  box-shadow: inset 0 0 0 1px var(--line, #e2e8f0);
+}
+
+.agenda-cell-active {
+  border-color: var(--primary, #005c55);
+  background: color-mix(in srgb, var(--primary, #005c55) 7%, transparent);
+  font-weight: 600;
+}
+
+.agenda-dots {
+  display: flex;
+  gap: 2px;
+  height: 4px;
+}
+
+.agenda-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--primary, #005c55);
+}
+
+.agenda-panel {
+  margin-top: 12px;
+  border-top: 1px solid var(--line, #e2e8f0);
+  padding-top: 10px;
+}
+
+.agenda-panel h3 {
+  margin: 0 0 8px;
+  font-size: var(--fs-3);
+}
+
+.agenda-rows {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.agenda-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px dashed var(--line, #e2e8f0);
+  padding-bottom: 4px;
+}
+
+.agenda-row dt {
+  color: var(--slate);
+  font-size: var(--fs-2);
+}
+
+.agenda-row dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.agenda-row dd.agenda-none {
+  font-weight: 400;
+  color: var(--slate);
+}
+
+.agenda-hint {
+  font-weight: 400;
+  color: var(--slate);
+}
+
+.agenda-muted {
+  margin: 0;
+  color: var(--slate);
+  font-size: var(--fs-2);
+}
+
+@media (pointer: coarse) {
+  .agenda-cell,
+  .agenda-nav-btn,
+  .agenda-today,
+  .agenda-retry {
+    min-height: 44px;
+  }
+}
+
+/* Pemilih periode KPI (2026-10-16). Sebelumnya jendela dipaku 24 jam di hook;
+   kontrol ini memberi tahu halaman rentang mana yang dimuat. Memakai bentuk pil
+   yang sudah ada (`commodity-pill`) supaya tidak lahir bahasa visual baru, dan
+   pilihan aktif ditandai warna primer + aria-pressed untuk pembaca layar. */
+.kpi-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+
+.kpi-period-label {
+  font-size: var(--fs-2);
+  color: var(--slate);
+  margin-right: 2px;
+}
+
+.kpi-period-pill {
+  cursor: pointer;
+  border: 1px solid var(--line, #e2e8f0);
+  background: var(--surface);
+  color: inherit;
+}
+
+.kpi-period-pill.is-active {
+  border-color: var(--primary, #005c55);
+  color: var(--primary, #005c55);
+  font-weight: 600;
+}
+
+/* Target sentuh tetap terjaga di perangkat sentuh (aturan repo yang sama
+   dengan pil lain: 44 px minimum saat pointer kasar). */
+@media (pointer: coarse) {
+  .kpi-period-pill {
+    min-height: 44px;
+    padding: 12px 14px;
+  }
+}
+
 .kpi-breadcrumb {
   display: flex;
   align-items: center;
   gap: 6px;
   font-family: var(--font-data);
-  font-size: 12px;
+  font-size: var(--fs-1);
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -3674,18 +4233,29 @@ a:focus-visible {
 
 .page-header h1 {
   margin: 0;
-  font-size: 20px;
+  font-size: var(--fs-6);
   font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: -0.01em;
+  line-height: var(--lh-head);
+  letter-spacing: var(--track-tight);
+  color: var(--ink);
+}
+
+/* PageHeader `level={2}`: judul BAGIAN di dalam halaman (mis. "Kualitas Agen"
+   di tab KPI, di bawah h1 tab itu sendiri) — satu langkah di bawah judul halaman. */
+.page-header h2 {
+  margin: 0;
+  font-size: var(--fs-5);
+  font-weight: 600;
+  line-height: var(--lh-head);
+  letter-spacing: var(--track-tight);
   color: var(--ink);
 }
 
 .page-header-text > p {
   margin: 4px 0 0;
   max-width: 78ch;
-  font-size: 13.5px;
-  line-height: 1.5;
+  font-size: var(--fs-3);
+  line-height: var(--lh-body);
   color: var(--ink-muted);
   /* Fase 12c: kalimat penjelas halaman (mis. di Pemasok) sering tersisa satu
      kata menggantung di baris kedua ("…usul eksklusi" / "baru"). `pretty`
@@ -3694,11 +4264,31 @@ a:focus-visible {
   text-wrap: pretty;
 }
 
+/* Fase 6: baris sapaan di atas judul halaman (dikirim hanya oleh "Hari Ini").
+   Ditulis dengan selektor anak supaya menang atas aturan .page-header-text > p. */
+.page-header-text > .page-header-eyebrow {
+  margin: 0 0 2px;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--accent-strong);
+}
+
 .page-header-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  /* Fase 7 (WCAG 1.4.10 Reflow): di viewport 320px pemilih keputusan meluap
+     22px. Persentase TIDAK boleh dipakai di max-width si select —
+     `max-width: min(320px, 100%)` membuat select melaporkan kontribusi
+     intrinsik 589px ke induk flex sehingga HALAMAN tetap meluap 236px
+     (terukur di 375px, lebih buruk dari sebelumnya). Yang benar: batasi
+     INDUKNYA (`max-width: 100%` + `min-width: 0`), lalu beri select lebar
+     definitif `width: 100%` dengan batas atas 320px. Varian ini diuji di
+     320/375/1440: select 276/320/320 — desktop & 375px tidak berubah. */
+  max-width: 100%;
+  min-width: 0;
 }
 
 .page-header-pills {
@@ -3711,18 +4301,93 @@ a:focus-visible {
 .page-header-select {
   min-height: 34px;
   max-width: 320px;
+  /* Lebar definitif: 100% dari `.page-header-meta` yang sudah dibatasi
+     `max-width: 100%`. Tanpa ini, di viewport 320px pilih ini meluap 22px
+     (lebar intrinsiknya 589px mengikuti opsi terpanjang). */
+  width: 100%;
+  min-width: 0;
   padding: 6px 10px;
   border: 1px solid var(--line-input);
-  border-radius: var(--radius);
+  border-radius: 10px;
   background: var(--surface);
   color: var(--ink);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--fs-2);
 }
 
 .page-header-select:focus-visible {
   outline: 2px solid var(--accent-strong);
   outline-offset: 2px;
+}
+
+/* Pemilih keputusan di kepala halaman Decision & Evidence (17 Okt 2026):
+   dulu hanya <select> telanjang tanpa label & tanpa jumlah, jadi pengguna tidak
+   tahu ada berapa keputusan dan mana yang menunggu tindakan. */
+.evidence-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+  max-width: 320px;
+}
+.evidence-picker-label {
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.evidence-picker-hint {
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+  line-height: 1.4;
+}
+
+/* "Langkah berikutnya" di kepala kartu Ringkasan keputusan (17 Okt 2026):
+   satu kalimat tegas yang menjawab "apa yang harus saya lakukan" — sebelum ini
+   pengguna harus menyimpulkan sendiri dari belasan baris fakta. Warna mengikuti
+   nada dari lib/evidence.ts (warn/ok/danger/muted). */
+.evidence-next {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-sunken);
+}
+.evidence-next-label {
+  font-size: var(--fs-1);
+  font-weight: 600;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+.evidence-next-text {
+  margin: 0;
+  font-size: var(--fs-3);
+  line-height: 1.45;
+  color: var(--ink);
+}
+.evidence-next-warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+.evidence-next-warn .evidence-next-text {
+  color: var(--warn-ink);
+}
+.evidence-next-ok {
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+}
+.evidence-next-ok .evidence-next-text {
+  color: var(--ok-ink);
+}
+.evidence-next-danger {
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+}
+.evidence-next-danger .evidence-next-text {
+  color: var(--danger-ink);
 }
 
 /* Filter pill periode + scope (ala date-range & commodity pill Stitch) */
@@ -3739,7 +4404,7 @@ a:focus-visible {
   gap: 5px;
   padding: 2px 10px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: var(--fs-1);
   font-weight: 500;
   background: var(--surface-sunken);
   color: var(--ink-muted);
@@ -3793,9 +4458,9 @@ a:focus-visible {
 
 .kpi-card-name {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--fs-3);
   font-weight: 600;
-  line-height: 1.35;
+  line-height: var(--lh-head);
   color: var(--ink);
 }
 
@@ -3810,22 +4475,22 @@ a:focus-visible {
 /* Nilai: angka terbesar di kartu (acuan memakai ~30px semibold). */
 .kpi-dashboard .kpi-value {
   margin: 0;
-  font-size: 30px;
+  font-size: var(--fs-7);
   font-weight: 600;
-  line-height: 1.15;
+  line-height: var(--lh-num);
   letter-spacing: -0.02em;
   color: var(--navy-900);
 }
 
 .kpi-dashboard .kpi-value small {
-  font-size: 14px;
+  font-size: var(--fs-3);
   font-weight: 500;
   letter-spacing: 0;
   color: var(--ink-muted);
 }
 
 .kpi-dashboard .kpi-value-none {
-  font-size: 24px;
+  font-size: var(--fs-7);
   letter-spacing: 0;
   color: var(--ink-muted);
 }
@@ -3854,14 +4519,14 @@ a:focus-visible {
   padding: 2px 8px;
   border-radius: 4px;
   font-family: var(--font-data);
-  font-size: 12px;
+  font-size: var(--fs-1);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 
 .kpi-state-available {
   background: rgba(46, 125, 50, 0.1);
-  color: var(--status-safe);
+  color: var(--safe-ink-tint);
   border: 1px solid rgba(46, 125, 50, 0.4);
 }
 
@@ -3879,14 +4544,14 @@ a:focus-visible {
 
 .kpi-reason {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--fs-1);
+  line-height: var(--lh-body);
   color: var(--ink-muted);
 }
 
 .kpi-meta {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--fs-1);
   color: var(--ink-muted);
 }
 
@@ -3900,13 +4565,13 @@ a:focus-visible {
   padding: 2px 8px;
   border-radius: 4px;
   font-family: var(--font-data);
-  font-size: 12px;
+  font-size: var(--fs-1);
   font-weight: 600;
 }
 
 .kpi-trend.trend-up {
   background: rgba(46, 125, 50, 0.1);
-  color: var(--status-safe);
+  color: var(--safe-ink-tint);
   border: 1px solid rgba(46, 125, 50, 0.4);
 }
 
@@ -3941,9 +4606,49 @@ a:focus-visible {
 }
 .today-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  /* Fase 6: bento 12 kolom — "Menunggu tindakan" jadi tile lebar kolom kiri
+     (2 baris), batch & shortage kecil di kanan, KPI + rantai audit baris penuh. */
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 16px;
   align-items: start;
+}
+
+.today-pending {
+  grid-column: span 7;
+  grid-row: span 2;
+}
+.today-batches {
+  grid-column: span 5;
+}
+.today-shortage {
+  grid-column: span 5;
+}
+.today-kpi,
+.today-ledger {
+  grid-column: span 12;
+}
+
+/* 7 metrik KPI dibaca berpasangan di lebar penuh, bukan satu kolom panjang. */
+@media (min-width: 900px) {
+  .today-kpi .today-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 18px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .today-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .today-pending,
+  .today-batches,
+  .today-shortage,
+  .today-kpi,
+  .today-ledger {
+    grid-column: auto;
+    grid-row: auto;
+  }
 }
 .today-card {
   display: grid;
@@ -3958,7 +4663,7 @@ a:focus-visible {
 }
 .today-card-head h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-4);
   font-weight: 600;
   color: var(--ink);
 }
@@ -3969,13 +4674,13 @@ a:focus-visible {
   border: 1px solid var(--line);
   background: var(--surface-sunken);
   font-family: var(--font-data);
-  font-size: 12px;
+  font-size: var(--fs-1);
   text-align: center;
   color: var(--ink-muted);
 }
 .today-card-note {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 .today-error {
@@ -4002,16 +4707,13 @@ a:focus-visible {
   gap: 8px;
   padding-top: 10px;
   border-top: 1px solid var(--line);
-  font-size: 12px;
+  font-size: var(--fs-1);
   color: var(--ink-muted);
 }
-/* Di layar lebar kartu keputusan menunggu tindakan dua kolom lebih lebar:
-   isinya paling panjang sehingga tidak menyisakan celah besar di sebelahnya. */
-@media (min-width: 1080px) {
-  .today-pending {
-    grid-column: span 2;
-  }
-}
+/* Fase 6: aturan `@media (min-width:1080px) { .today-pending { span 2 } }`
+   DIHAPUS — ia ditulis untuk grid auto-fit lama (yang kolomnya lebar) dan
+   menimpa penempatan bento 12 kolom karena letaknya lebih bawah di berkas.
+   Penempatan kartu sekarang HANYA dari aturan `.today-*` dekat `.today-grid`. */
 .today-row {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -4032,28 +4734,75 @@ a:focus-visible {
   min-width: 0;
 }
 .today-row-title {
-  font-size: 13.5px;
+  font-size: var(--fs-3);
   font-weight: 500;
   color: var(--ink);
 }
 .today-row-meta {
   font-family: var(--font-data);
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   color: var(--ink-muted);
+  /* Tahap 2 (16 Okt 2026): jangan tinggalkan SATU kata sendirian di baris
+     terakhir. Terukur sebelum: "250 kg · kesegaran 0% · lolos uji" membungkus
+     dengan baris terakhir hanya 18 px — kata "uji" sendirian, karena pil
+     "Lewat N hari" di kolom kanan menyempitkan kolom teks. `pretty` meminta
+     peramban memilih titik potong yang tidak menghasilkan orphan; kalau
+     peramban lama belum mendukungnya, teks tetap terbaca (hanya kurang rapi). */
+  text-wrap: pretty;
+}
+
+.today-row-title {
+  text-wrap: pretty;
 }
 .today-due {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-sunken);
   font-family: var(--font-data);
-  font-size: 12px;
+  font-size: var(--fs-1);
   white-space: nowrap;
   color: var(--ink-muted);
 }
-.today-due-over {
-  color: var(--status-danger);
+
+/* Fase 6: dot membawa makna yang sama dengan warnanya — lewat = merah,
+   ≤48 jam = amber (ambang DUE_SOON_HOURS), netral = belum mendesak. */
+.today-due::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--line-input);
+  flex: none;
+}
+
+.today-due-over,
+.today-due-short {
+  color: var(--danger-ink);
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
   font-weight: 600;
+}
+.today-due-over::before,
+.today-due-short::before {
+  background: var(--status-danger);
+}
+
+.today-due-soon {
+  color: var(--warn-ink);
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  font-weight: 600;
+}
+.today-due-soon::before {
+  background: var(--status-warning);
 }
 .today-value {
   font-family: var(--font-data);
-  font-size: 13px;
+  font-size: var(--fs-2);
   font-variant-numeric: tabular-nums;
   text-align: right;
   color: var(--ink);
@@ -4062,16 +4811,21 @@ a:focus-visible {
   color: var(--ink-muted);
 }
 .today-badge {
-  padding: 2px 9px;
+  /* Tahap 2 (16 Okt 2026): disamakan dengan `.badge` — 12px, satu baris.
+     Sebelumnya 13px/26 px, satu tingkat lebih besar dari lencana status lain. */
+  padding: 2px 8px;
   border-radius: 999px;
-  font-size: var(--text-meta);
+  font-size: var(--fs-1);
+  line-height: 1.35;
   font-weight: 600;
   border: 1px solid var(--line-strong);
   background: var(--surface-sunken);
   color: var(--ink-muted);
+  white-space: nowrap;
+  flex: none;
 }
 .today-badge-ok {
-  color: var(--status-safe);
+  color: var(--safe-ink-tint);
   border-color: rgba(46, 125, 50, 0.4);
   background: rgba(46, 125, 50, 0.1);
 }
@@ -4085,7 +4839,7 @@ a:focus-visible {
   grid-column: 2;
   justify-self: end;
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: var(--fs-1);
 }
 /* Target sentuh 44px hanya di perangkat sentuh / layar sempit (aturan global). */
 @media (pointer: coarse), (max-width: 720px) {
@@ -4110,10 +4864,46 @@ a:focus-visible {
 }
 .evidence-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  /* Fase 3: 12 kolom eksplisit, tiap kartu berbobot 4 — bobotnya tetap walau
+     lebar berubah, jadi Governance selalu sejajar dengan Biaya (auto-fit bisa
+     meninggalkan satu kartu sendirian di baris kedua). */
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 16px;
   align-items: start;
 }
+.evidence-grid > .card { grid-column: span 4; }
+@media (max-width: 1180px) {
+  .evidence-grid > .card { grid-column: span 6; }
+}
+@media (max-width: 760px) {
+  .evidence-grid > .card { grid-column: span 12; }
+}
+/* Baris bento bawah: riwayat iterasi (5) bersanding bukti kriptografis (7). */
+.evidence-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1180px) {
+  .evidence-bottom { grid-template-columns: minmax(0, 1fr); }
+}
+.evidence-bottom .integrity-panel { margin-top: 0; }
+/* Ringkasan (hero): kartu keputusan di kiri, fakta identitas & tenggat di
+   kanan pada layar lebar — tenggat tidak lagi tergulung jauh ke bawah. */
+.evidence-summary-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+@media (min-width: 1100px) {
+  .evidence-summary-body {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    align-items: start;
+  }
+}
+.evidence-summary-main { display: grid; gap: 12px; min-width: 0; }
+.evidence-summary-facts { min-width: 0; }
 .evidence-page .card {
   padding: 16px 18px;
   display: grid;
@@ -4121,13 +4911,13 @@ a:focus-visible {
 }
 .evidence-page .card > h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-4);
   font-weight: 600;
   color: var(--ink);
 }
 .evidence-note {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 /* Tautan ke jejak agen di kartu ringkasan: tombol yang benar-benar bisa diklik
@@ -4150,6 +4940,36 @@ a:focus-visible {
   display: grid;
   gap: 0;
 }
+
+/* Rincian yang belum ada datanya (baris "—"): tidak lagi menumpuk di kartu,
+   tapi TIDAK dibuang — satu klik membukanya (17 Okt 2026). Warna nilai dibikin
+   lebih redup supaya mata tidak berhenti di baris yang belum ada isinya. */
+.fact-more {
+  margin-top: 8px;
+}
+.fact-more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  cursor: pointer;
+  font-size: var(--fs-2);
+  color: var(--accent-strong);
+  border-radius: 6px;
+}
+.fact-more > summary:hover {
+  text-decoration: underline;
+}
+.fact-more > summary:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+.fact-list-empty {
+  margin-top: 6px;
+}
+.fact-list-empty .fact-value {
+  color: var(--ink-subtle);
+}
 .fact-row {
   display: grid;
   grid-template-columns: minmax(150px, 45%) 1fr;
@@ -4161,13 +4981,13 @@ a:focus-visible {
   border-top: 0;
 }
 .fact-row dt {
-  font-size: 12.5px;
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 .fact-row dd {
   margin: 0;
   font-family: var(--font-data);
-  font-size: 13px;
+  font-size: var(--fs-2);
   font-variant-numeric: tabular-nums;
   color: var(--ink);
   overflow-wrap: anywhere;
@@ -4175,7 +4995,7 @@ a:focus-visible {
 .fact-hint {
   display: block;
   margin-top: 2px;
-  font-size: var(--text-micro);
+  font-size: var(--fs-1);
   color: var(--ink-muted);
 }
 .fact-ok { color: var(--status-safe); font-weight: 600; }
@@ -4191,7 +5011,7 @@ a:focus-visible {
 }
 .evidence-empty h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--fs-4);
 }
 .evidence-suggest {
   margin: 0;
@@ -4209,18 +5029,18 @@ a:focus-visible {
   padding: 10px 12px;
 }
 .evidence-suggest-title {
-  font-size: 13.5px;
+  font-size: var(--fs-3);
   font-weight: 600;
 }
 .evidence-suggest-meta {
   font-family: var(--font-data);
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 /* Catatan kecil di feed Recommendations setelah detail pindah tab. */
 .feed-hint {
   margin: 0 0 12px;
-  font-size: 12.5px;
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 
@@ -4252,7 +5072,7 @@ a:focus-visible {
 }
 
 .feed-field label {
-  font-size: var(--text-micro);
+  font-size: var(--fs-1);
   font-weight: 600;
   color: var(--ink-muted);
 }
@@ -4264,7 +5084,7 @@ a:focus-visible {
   border-radius: 6px;
   background: var(--surface);
   color: var(--ink);
-  font-size: 13px;
+  font-size: var(--fs-2);
   padding: 7px 10px;
   min-height: 36px;
 }
@@ -4287,7 +5107,7 @@ a:focus-visible {
 
 .feed-status {
   margin: 0;
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 
@@ -4297,7 +5117,7 @@ a:focus-visible {
   color: var(--accent);
   border-radius: 6px;
   padding: 6px 12px;
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   font-weight: 600;
   cursor: pointer;
 }
@@ -4365,6 +5185,12 @@ a:focus-visible {
 .board-grid {
   display: grid;
   gap: var(--space-lg, 1rem);
+  /* Tahap 2 (16 Okt 2026): kartu TIDAK direntangkan setinggi tetangganya.
+     Terukur sebelum: di Keamanan Pangan, "Batch perlu segera dipakai" 562×423 px
+     padahal isinya hanya 72 px (17%) — semata karena kartu sebelahnya
+     ("Ringkasan pengawasan") lebih tinggi. Dengan `start`, tinggi kartu =
+     tinggi isinya (kartu kosong kembali jadi kecil). */
+  align-items: start;
 }
 
 .board-grid-2 {
@@ -4373,12 +5199,15 @@ a:focus-visible {
 
 .board-alert {
   margin: 0.75rem 0 0;
-  padding: 0.5rem 0.65rem;
-  border-radius: 6px;
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
   background: var(--danger-bg);
   border: 1px solid var(--danger-border);
+  /* Fase 5: "batch gagal diblokir" adalah aksi berbingkai bahaya — tepi kiri
+     tebal supaya terbaca sebagai pagar, bukan catatan biasa. */
+  border-left: 4px solid var(--status-danger);
   color: var(--danger-ink);
-  font-size: 0.82rem;
+  font-size: var(--fs-3);
 }
 
 .board-list {
@@ -4391,30 +5220,193 @@ a:focus-visible {
 }
 
 .board-list li {
+  position: relative;
   display: flex;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.45rem 0.55rem;
+  padding: 0.45rem 0.55rem 0.45rem 1.55rem;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 10px;
+}
+
+/* Fase 5: titik amber — daftar ini isinya batch yang mendesak (≤ 48 jam),
+   jadi statusnya dibawa titik, bukan hanya teks jam. */
+.board-list li::before {
+  content: "";
+  position: absolute;
+  left: 0.6rem;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 999px;
+  background: var(--status-warning);
 }
 
 .board-list-title {
   font-weight: 600;
-  font-size: 0.82rem;
+  font-size: var(--fs-3);
 }
 
 .board-list-meta {
   color: var(--ink-muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-2);
   text-align: right;
+}
+
+/* ── Fase 11 — Keamanan Pangan ber-cakupan (dipakai kepala SPPG) ─────────────
+   Chip keadaan masa layak + kepala kartu dengan pemilih cakupan. Warna memakai
+   token status yang sama dengan lencana/tile (sudah lolos audit kontras), dan
+   chip hanya muncul untuk keadaan yang perlu ditindak — baris normal tidak
+   ditumbuhi lencana "Aman" yang cuma menambah bising. */
+.board-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 var(--space-2, 10px);
+}
+
+.board-card-head h2 {
+  margin: 0;
+}
+
+.safety-scope {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.safety-state {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: var(--fs-1);
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.safety-state-expired {
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+  border-color: var(--danger-border);
+}
+
+.safety-state-urgent,
+.safety-state-watch {
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  border-color: var(--warn-border);
+}
+
+.safety-state-unknown {
+  background: var(--neutral-bg);
+  color: var(--ink-muted);
+  border-color: var(--line-input);
+}
+
+/* Kartu "Penerimaan barang": pemilih batch + daftar periksa petugas.
+   Titik amber bawaan `.board-list li::before` dimatikan di sini — titik itu
+   berarti "batch mendesak", bukan "sudah diperiksa". */
+.safety-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+}
+
+.safety-pick select {
+  min-height: 34px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--line-input);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.safety-checks {
+  margin-bottom: var(--space-2, 10px);
+}
+
+.safety-checks li {
+  padding: 0.2rem 0.55rem;
+}
+
+.safety-checks li::before {
+  content: none;
+}
+
+.safety-checks li label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px; /* batas sentuh dipegang LABEL, bukan kotak centangnya */
+  font-size: var(--fs-3);
+  cursor: pointer;
+}
+
+.safety-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Sub-judul di dalam kartu (mis. "Catatan penerimaan tersimpan"). */
+.board-subhead {
+  margin: var(--space-3, 14px) 0 0;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--track-caps);
+}
+
+/* Isian "Lainnya": tempat petugas menulis keadaan yang tidak ada di daftar
+   periksa. Berdiri sendiri di bawah daftar, bukan titik periksa ke-6. */
+.safety-other {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: var(--space-2, 10px) 0;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+}
+
+.safety-other textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line-input);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+
+/* Riwayat catatan: titik amber bawaan `.board-list` juga tidak berlaku di sini
+   (ia menandai "batch mendesak", bukan catatan yang sudah tersimpan). */
+.safety-notes li::before {
+  content: none;
+}
+
+.safety-notes li {
+  flex-wrap: wrap;
+  gap: 6px 8px;
 }
 
 .board-badge {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: var(--text-micro);
+  font-size: var(--fs-1);
   border: 1px solid transparent;
   white-space: nowrap;
 }
@@ -4469,6 +5461,13 @@ a:focus-visible {
 .board-table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+.board-scroll-hint {
+  display: none;
+  margin: 0.4rem 0 0;
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
 }
 
 /* Petunjuk geser ditampilkan oleh PENGUKURAN, bukan ambang lebar layar (16 Okt 2026).
@@ -4639,7 +5638,7 @@ button:active:not(:disabled),
 .state-empty {
   margin: var(--space-2) 0 0;
   color: var(--ink-muted);
-  font-size: 13px;
+  font-size: var(--fs-2);
 }
 
 /* --- Pengaturan / admin (S4-11) -------------------------------------------
@@ -4648,23 +5647,32 @@ button:active:not(:disabled),
    ikut melebar (audit overflow 0). Target sentuh control ≥44px. */
 .settings { display: flex; flex-direction: column; gap: var(--space-3, 16px); }
 .settings-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.settings-title { margin: 0; font-size: 18px; color: var(--ink); }
-.settings-sub { margin: 4px 0 0; color: var(--ink-muted); font-size: 13px; max-width: 70ch; }
+.settings-title { margin: 0; font-size: var(--fs-6); color: var(--ink); }
+.settings-sub { margin: 4px 0 0; color: var(--ink-muted); font-size: var(--fs-2); max-width: 70ch; }
 .settings-refresh, .settings-save { min-height: 44px; padding: 0 14px; border-radius: var(--radius, 10px); border: 1px solid var(--line-input); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; transition: background var(--dur-1, .12s) var(--ease-standard, ease); }
 .settings-save { min-width: 88px; }
 .settings-save:disabled { opacity: .55; cursor: not-allowed; }
 .settings-refresh:focus-visible, .settings-save:focus-visible,
 .settings-select:focus-visible, .settings-input:focus-visible { outline: 2px solid var(--focus-ring, var(--accent, #2563eb)); outline-offset: 2px; }
-.settings-notice { margin: 0; padding: 10px 12px; border-radius: var(--radius, 10px); background: var(--ok-bg); color: var(--ok-ink); font-size: 13px; }
-.settings-error { margin: 0; padding: 10px 12px; border-radius: var(--radius, 10px); background: var(--danger-bg); color: var(--danger-ink); font-size: 13px; }
+.settings-notice { margin: 0; padding: 10px 12px; border-radius: var(--radius, 10px); background: var(--ok-bg); color: var(--ok-ink); font-size: var(--fs-2); }
+.settings-error { margin: 0; padding: 10px 12px; border-radius: var(--radius, 10px); background: var(--danger-bg); color: var(--danger-ink); font-size: var(--fs-2); }
 .settings-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius, 10px); padding: 14px; }
-.settings-card-title { margin: 0 0 6px; font-size: 15px; color: var(--ink); }
-.settings-table-wrap { overflow-x: auto; }
-.settings-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.settings-card-title { margin: 0 0 6px; font-size: var(--fs-4); color: var(--ink); }
+.settings-table-wrap {
+  overflow-x: auto;
+  /* Fase 7: tabel (min-content ~610px) sah digeser di dalam kotak ini, TETAPI
+     Chrome tetap memperhitungkan isinya pada scrollWidth dokumen → halaman bisa
+     digeser 10px horizontal di 375px (terukur; penyebab diverifikasi dengan
+     menyembunyikan elemen satu per satu). `contain: paint` memotong pengaruh itu
+     pada batas kotak, sehingga halaman kembali `scrollWidth == clientWidth`
+     tanpa mengubah kemampuan geser tabelnya. */
+  contain: paint;
+}
+.settings-table { width: 100%; border-collapse: collapse; font-size: var(--fs-2); }
 .settings-table th, .settings-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 .settings-table th { color: var(--ink-muted); font-weight: 600; }
 .settings-name { display: block; color: var(--ink); }
-.settings-email { display: block; color: var(--ink-muted); font-size: 12px; }
+.settings-email { display: block; color: var(--ink-muted); font-size: var(--fs-1); }
 .settings-select, .settings-input { min-height: 44px; width: 100%; min-width: 150px; padding: 0 10px; border: 1px solid var(--line-input); border-radius: var(--radius, 10px); background: var(--surface); color: var(--ink); font: inherit; }
 .settings-coord { font-family: var(--font-data, monospace); color: var(--ink-muted); white-space: nowrap; }
 .settings-muted { color: var(--ink-muted); }
@@ -4689,8 +5697,8 @@ button:active:not(:disabled),
   justify-content: space-between;
   gap: 2px 12px;
 }
-.quality-section-head h2 { margin: 0; font-size: 15px; font-weight: 600; color: var(--navy-900); }
-.quality-section-sub { margin: 0; font-size: 12.5px; color: var(--ink-muted); }
+.quality-section-head h2, .quality-section-head h3 { margin: 0; font-size: var(--fs-4); font-weight: 600; color: var(--navy-900); }
+.quality-section-sub { margin: 0; font-size: var(--fs-2); color: var(--ink-muted); }
 
 .quality-stats {
   display: grid;
@@ -4725,7 +5733,7 @@ button:active:not(:disabled),
   gap: 10px;
 }
 .quality-stat-label {
-  font-size: 11.5px;
+  font-size: var(--fs-1);
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -4747,16 +5755,16 @@ button:active:not(:disabled),
 .quality-stat[data-tone="danger"] .quality-stat-icon { background: var(--danger-bg); color: var(--danger-ink); }
 .quality-stat-value {
   margin: 0;
-  font-size: 30px;
+  font-size: var(--fs-7);
   font-weight: 600;
-  line-height: 1.1;
+  line-height: var(--lh-num);
   letter-spacing: -0.02em;
   color: var(--navy-900);
   font-variant-numeric: tabular-nums;
 }
 .quality-stat[data-tone="warn"] .quality-stat-value { color: var(--warn-ink); }
 .quality-stat[data-tone="danger"] .quality-stat-value { color: var(--danger-ink); }
-.quality-stat-hint { margin: 0; font-size: 12px; color: var(--ink-muted); }
+.quality-stat-hint { margin: 0; font-size: var(--fs-1); color: var(--ink-muted); }
 
 .quality-meter {
   height: 8px;
@@ -4787,13 +5795,13 @@ button:active:not(:disabled),
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius);
   background: var(--surface-sunken);
-  font-size: 12.5px;
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 .quality-coverage svg { flex: none; margin-top: 1px; color: var(--navy-700); }
 
 .quality-error { border-color: var(--danger-border); background: var(--danger-bg); }
-.quality-error h2 { color: var(--danger-ink); }
+.quality-error h2, .quality-error h3 { color: var(--danger-ink); }
 .quality-error .evidence-note { color: var(--danger-ink); }
 
 /* Putusan verifikator — satu bar bertumpuk + legenda berlabel.
@@ -4830,7 +5838,7 @@ button:active:not(:disabled),
   padding: 0;
   list-style: none;
 }
-.quality-legend-item { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink); }
+.quality-legend-item { display: flex; align-items: center; gap: 7px; font-size: var(--fs-2); color: var(--ink); }
 .quality-legend-dot {
   width: 10px;
   height: 10px;
@@ -4853,7 +5861,7 @@ button:active:not(:disabled),
 }
 .quality-legend-value {
   font-family: var(--font-data);
-  font-size: 12px;
+  font-size: var(--fs-1);
   font-variant-numeric: tabular-nums;
   color: var(--ink-muted);
 }
@@ -4876,7 +5884,7 @@ button:active:not(:disabled),
   background: var(--surface-sunken);
   color: var(--ink-muted);
   font-family: var(--font-data);
-  font-size: 11.5px;
+  font-size: var(--fs-1);
   white-space: nowrap;
 }
 .quality-chip-warn {
@@ -4898,7 +5906,7 @@ button:active:not(:disabled),
 .quality-steps-bar { display: block; height: 100%; background: var(--accent-strong); }
 
 @media (max-width: 900px) {
-  .quality-stat-value { font-size: 26px; }
+  .quality-stat-value { font-size: var(--fs-7); }
   .quality-stat { padding: 12px 14px; }
 }
 @media (max-width: 720px) {
@@ -4955,7 +5963,7 @@ button:active:not(:disabled),
 }
 .popup-title {
   margin: 0;
-  font-size: 17px;
+  font-size: var(--fs-4);
   font-weight: 700;
   letter-spacing: -0.15px;
   color: var(--ink);
@@ -4981,9 +5989,9 @@ button:active:not(:disabled),
 .popup-desc {
   margin: 0;
   padding: var(--space-3) var(--space-4) 0;
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   color: var(--ink-muted);
-  line-height: 1.55;
+  line-height: var(--lh-body);
 }
 .popup-body {
   padding: var(--space-4);
@@ -5007,7 +6015,7 @@ button:active:not(:disabled),
 }
 .approval-menu-heading {
   margin: 0 0 var(--space-2);
-  font-size: var(--text-micro);
+  font-size: var(--fs-1);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -5042,13 +6050,13 @@ button:active:not(:disabled),
   transition: border-color var(--dur-1) var(--ease-standard);
 }
 .action-menu-item:hover { border-color: var(--line-strong); }
-.action-menu-note { justify-content: flex-start; font-size: var(--text-meta); color: var(--ink-muted); }
+.action-menu-note { justify-content: flex-start; font-size: var(--fs-2); color: var(--ink-muted); }
 .action-menu-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.action-menu-text strong { font-size: 13.5px; font-weight: 600; color: var(--ink); }
-.action-menu-text span { font-size: var(--text-meta); color: var(--ink-muted); line-height: 1.5; }
+.action-menu-text strong { font-size: var(--fs-3); font-weight: 600; color: var(--ink); }
+.action-menu-text span { font-size: var(--fs-2); color: var(--ink-muted); line-height: var(--lh-body); }
 .action-menu-text code {
   font-family: var(--font-data);
-  font-size: var(--text-micro);
+  font-size: var(--fs-1);
   background: var(--neutral-bg);
   border: 1px solid var(--neutral-border);
   border-radius: 4px;
@@ -5066,15 +6074,15 @@ button:active:not(:disabled),
   border-left: 3px solid var(--status-danger);
   border-radius: 6px;
   color: var(--danger-ink);
-  font-size: var(--text-meta);
-  line-height: 1.5;
+  font-size: var(--fs-2);
+  line-height: var(--lh-body);
 }
 /* Kartu Governance kini hanya memuat pemicu: tombol + satu baris keterangan. */
 .decision-actions-hint {
   flex-basis: 100%;
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   color: var(--ink-muted);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 
 @media (pointer: coarse), (max-width: 720px) {
@@ -5108,7 +6116,7 @@ button:active:not(:disabled),
    memakai tinta --warn-ink (bukan --status-warning sebagai warna teks). */
 .demo-data-panel { display: flex; flex-direction: column; gap: var(--space-3); }
 .demo-data-tag {
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   color: var(--ink-subtle);
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -5134,7 +6142,11 @@ button:active:not(:disabled),
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: var(--text-meta);
+  /* Fase 7: kotak centang 13px + teks = target setinggi 19px — di bawah ambang
+     24px (WCAG 2.5.8) dan jauh di bawah 44px yang dipakai kontrol lain di
+     baris ini. Seluruh <label> adalah area klik, jadi tingginya yang dinaikkan. */
+  min-height: 44px;
+  font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 .demo-data-result {
@@ -5145,7 +6157,7 @@ button:active:not(:disabled),
   border-radius: 6px;
   background: var(--ok-bg);
   color: var(--ok-ink);
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
 }
 .demo-data-warning {
   margin: 0;
@@ -5155,7 +6167,7 @@ button:active:not(:disabled),
   border-radius: 6px;
   background: var(--warn-bg);
   color: var(--warn-ink);
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   max-width: 92ch;
 }
 .demo-data-refresh,
@@ -5169,7 +6181,7 @@ button:active:not(:disabled),
 .demo-data-honest,
 .demo-data-readonly {
   margin: 0;
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   color: var(--ink-subtle);
   max-width: 92ch;
 }
@@ -5185,14 +6197,14 @@ button:active:not(:disabled),
   border-radius: 6px;
   background: var(--danger-bg);
   color: var(--danger-ink);
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
 }
 .demo-data-status {
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--surface-sunken);
-  font-size: var(--text-meta);
+  font-size: var(--fs-2);
   color: var(--ink);
 }
 .demo-data-status p { margin: 0; }
@@ -5202,4 +6214,939 @@ button:active:not(:disabled),
   .demo-data-actions .button,
   .demo-data-refresh .button,
   .demo-data-purge .button { width: 100%; }
+}
+
+/* ===========================================================================
+   FASE 3 REDESIGN (2026-10-16) — Recommendations + Decision & Evidence.
+   Blok ini HANYA tampilan: nama kelas, data-*, dan struktur markup yang dipin
+   tes tidak berubah. Ditaruh paling bawah supaya menang atas aturan lama
+   (spesifisitas sama → urutan file yang menentukan).
+   =========================================================================== */
+
+/* --- 1. Feed Recommendations: keterbacaan saat memindai ------------------- */
+/* Entri yang lewat tenggat diredam lewat PERMUKAAN (abu-abu + tepi netral),
+   bukan `opacity`: meredupkan seluruh kartu menjatuhkan teks sekunder
+   #64748B ke sekitar 3:1 dan itu gagal AA. Redup yang tetap lolos AA ini
+   memakai --surface-sunken; teks di atasnya tetap 15:1 / 7,2:1. */
+.rec-edge.edge-expired {
+  background: var(--surface-sunken);
+  border-color: var(--line);
+}
+.rec-edge.edge-expired:hover {
+  border-color: var(--line-strong);
+  box-shadow: none;
+}
+
+/* Kartu masuk berurutan saat feed dimuat (enam pertama saja). Hanya
+   transform+opacity (digerakkan GPU), dan dimatikan bila pengguna minta
+   gerak minimum. */
+@keyframes feed-row-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.feed > div { animation: feed-row-in var(--dur-3) var(--ease-standard) both; }
+.feed > div:nth-child(2) { animation-delay: 35ms; }
+.feed > div:nth-child(3) { animation-delay: 70ms; }
+.feed > div:nth-child(4) { animation-delay: 105ms; }
+.feed > div:nth-child(5) { animation-delay: 140ms; }
+.feed > div:nth-child(6) { animation-delay: 175ms; }
+@media (prefers-reduced-motion: reduce) {
+  .feed > div { animation: none; }
+}
+
+/* --- 2. Kartu kepercayaan: bukti kriptografis di permukaan gelap ---------- */
+.integrity-trust {
+  background: var(--trust-bg);
+  border: 1px solid var(--trust-line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 12px;
+  color: var(--trust-ink);
+}
+.integrity-trust strong { display: block; margin-bottom: 4px; font-size: var(--fs-1); color: var(--trust-ink); }
+.integrity-trust p { margin: 0; font-size: var(--fs-2); color: var(--trust-ink-muted); }
+.integrity-trust dl { margin: 6px 0 0; }
+.integrity-trust dt { font-size: var(--fs-1); color: var(--trust-ink-muted); }
+/* Alamat konten & tanda tangan: mono di atas kaca gelap — menimpa gaya
+   "terminal terang" milik panel yang sama. */
+.integrity-trust dd {
+  background: var(--trust-surface);
+  border-color: var(--trust-line);
+  color: var(--trust-accent);
+}
+.integrity-trust button {
+  background: var(--trust-surface);
+  border-color: var(--trust-line);
+  color: var(--trust-ink);
+}
+.integrity-trust button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: var(--trust-ink-muted);
+}
+.integrity-trust button:focus-visible {
+  outline: 2px solid var(--trust-accent);
+  outline-offset: 2px;
+}
+/* Tombol ekspor dossier tetap di permukaan terang (dokumen kerja). */
+.integrity-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Kartu bento sempit (span 4 ≈ 300px): label DITARUH DI ATAS nilai. Dengan
+   label di samping, kolom nilai hanya ~105px dan angka rupiah panjang
+   ("Rp14.022.000") terpecah di tengah — terlihat seperti salah ketik. Kolom
+   ringkasan yang lebih lebar (≥380px) tetap satu baris label→nilai. */
+.evidence-grid .fact-row {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  padding: 8px 0;
+}
+.evidence-grid .fact-row dt { font-size: var(--fs-1); }
+
+/* --- 3. Approval: modal & menu sebahasa dengan kartu bento ---------------- */
+.approval-modal {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+}
+.approval-modal h3 {
+  margin: 0 0 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-4);
+  font-weight: 650;
+  letter-spacing: -0.2px;
+}
+.approval-modal ul { font-size: var(--fs-3); line-height: 1.7; }
+.approval-modal-blockers { border-radius: 10px; }
+.approval-modal-actions { gap: 10px; }
+/* Ring fokus eksplisit: approve adalah aksi berdampak, fokus keyboardnya tidak
+   boleh bergantung pada gaya bawaan browser. */
+.approval-modal button:focus-visible,
+.action-menu-button:focus-visible,
+.integrity-export-actions button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.action-menu-item { border-radius: 10px; }
+.action-menu-item:hover { border-color: var(--line-strong); background: var(--accent-soft); }
+
+/* ===========================================================================
+   FASE 4 REDESIGN (2026-10-16) — KPI & Kualitas Agen + Agent Log.
+   Hanya tampilan; kelas & markup yang dipin tes tidak berubah.
+   =========================================================================== */
+
+/* --- 1. KPI: angka besar + bullet bar skala sendiri ----------------------- */
+/* Angka KPI jadi mono tabular (sejajar antar kartu) — pola yang sama dengan
+   angka hero di Overview. */
+.kpi-dashboard .kpi-value {
+  font-family: var(--font-data);
+  font-size: var(--fs-7);
+  font-variant-numeric: tabular-nums;
+}
+.kpi-bullet { display: grid; gap: 5px; margin: 2px 0 0; }
+.kpi-bullet-track {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.kpi-bullet-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-strong);
+  transition: width var(--dur-3) var(--ease-standard);
+}
+/* Nilai di atas skala (mis. >100%): bar penuh dengan tanda "lewat skala" —
+   angkanya di kartu tetap apa adanya, tidak dipotong. */
+.kpi-bullet[data-over="true"] .kpi-bullet-fill {
+  background: linear-gradient(90deg, var(--accent-strong), var(--status-warning));
+}
+.kpi-bullet-scale {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+}
+.kpi-direction {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+/* --- 2. Agent Log: jejak yang terasa hidup -------------------------------- */
+/* Kepala konsol: chip umur langkah TERAKHIR — dihitung dari step_at (fakta
+   waktu). Denyut hanya menyala saat langkah terakhir memang baru masuk. */
+.agent-console-age {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+.agent-console-age-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--line-input);
+  flex: none;
+}
+.agent-console-age[data-live="true"] { color: var(--accent-strong); }
+.agent-console-age[data-live="true"] .agent-console-age-dot {
+  background: var(--accent-strong);
+  animation: trace-pulse 1.8s var(--ease-standard) infinite;
+}
+@keyframes trace-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45); }
+  70% { box-shadow: 0 0 0 7px rgba(37, 99, 235, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+}
+/* Titik pada tulang timeline (spine) — satu per langkah. */
+.agent-console .trace-step { position: relative; }
+.trace-dot {
+  position: absolute;
+  left: -5px;
+  top: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  box-sizing: content-box;
+  border: 2px solid var(--surface);
+  background: var(--line-input);
+}
+.trace-step[data-state="selesai"] .trace-dot { background: var(--line-input); }
+.trace-step[data-state="baru"] .trace-dot {
+  background: var(--accent-strong);
+  animation: trace-pulse 2.2s var(--ease-standard) infinite;
+}
+.trace-step[data-state="berjalan"] .trace-dot {
+  background: var(--status-warning);
+  animation: trace-pulse 1.4s var(--ease-standard) infinite;
+}
+/* Chip keadaan langkah + durasi (duration_ms dari backend, dulu tak ditampilkan) */
+.trace-chip {
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  color: var(--ink-muted);
+}
+.trace-chip-new {
+  color: var(--accent-strong);
+  border-color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+.trace-chip-running {
+  color: var(--warn-ink);
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+}
+.trace-duration {
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+}
+/* Shimmer HANYA untuk langkah yang datanya menyatakan sedang berjalan. */
+@keyframes trace-shimmer {
+  from { background-position: -160% 0; }
+  to { background-position: 260% 0; }
+}
+.trace-step[data-state="berjalan"] .trace-output {
+  background-image: linear-gradient(
+    100deg,
+    rgba(37, 99, 235, 0) 30%,
+    rgba(37, 99, 235, 0.16) 50%,
+    rgba(37, 99, 235, 0) 70%
+  );
+  background-repeat: no-repeat;
+  background-size: 200% 100%;
+  animation: trace-shimmer 1.8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-console-age[data-live="true"] .agent-console-age-dot,
+  .trace-step[data-state="baru"] .trace-dot,
+  .trace-step[data-state="berjalan"] .trace-dot,
+  .trace-step[data-state="berjalan"] .trace-output {
+    animation: none;
+  }
+}
+
+/* ============================================================
+   FASE 5 REDESIGN (Arah 4 — Bento Modern) — Keamanan Pangan,
+   Surplus & Limbah, Pemasok.
+   Kelas tes-sensitif (.board-table-wrap, .location-table, .map-*,
+   .side-tab*) TIDAK diubah namanya; yang berubah hanya tampilannya.
+   ============================================================ */
+
+/* --- Tile ringkasan (Keamanan Pangan) ----------------------- */
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-sunken);
+}
+
+.stat-tile-value {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-7);
+  font-weight: 600;
+  line-height: var(--lh-num);
+  color: var(--ink);
+}
+
+.stat-tile-label {
+  font-size: var(--fs-1);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  /* Fase 7: label ini duduk DI ATAS permukaan ber-tint (danger/sunken) —
+     --ink-subtle hanya 4,34–4,35:1 di sana (gagal AA); --ink-muted 6,9:1. */
+  color: var(--ink-muted);
+}
+
+.stat-tile-note {
+  font-size: var(--fs-1);
+  color: var(--danger-ink);
+}
+
+/* Tint hanya muncul saat keadaannya memang ada — "0 gagal uji" tidak
+   diberi warna bahaya, supaya warna tetap berarti sesuatu. */
+.stat-tile-ok {
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+}
+.stat-tile-ok .stat-tile-value {
+  color: var(--ok-ink);
+}
+.stat-tile-warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+.stat-tile-warn .stat-tile-value {
+  color: var(--warn-ink);
+}
+.stat-tile-danger {
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+}
+.stat-tile-danger .stat-tile-value {
+  color: var(--danger-ink);
+}
+
+@media (max-width: 560px) {
+  .stat-tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --- Neraca surplus → kekurangan (Surplus & Limbah) ---------- */
+.balance-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin: 0 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-sunken);
+}
+
+.balance-side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.balance-side-shortage {
+  text-align: right;
+}
+
+.balance-label {
+  font-size: var(--fs-1);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  /* Fase 7: di atas --surface-sunken --ink-subtle 4,34:1 (gagal AA) → --ink-muted. */
+  color: var(--ink-muted);
+}
+
+.balance-value {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-7);
+  font-weight: 600;
+  line-height: var(--lh-num);
+}
+
+.balance-side-surplus .balance-value {
+  color: var(--ok-ink);
+}
+.balance-side-shortage .balance-value {
+  color: var(--danger-ink);
+}
+
+.balance-arrow {
+  width: 120px;
+  height: 24px;
+  color: var(--accent-strong);
+}
+
+/* Tidak ada angka di salah satu sisi → panah netral, bukan aksen. */
+.balance-flow[data-kosong="true"] .balance-arrow {
+  color: var(--line-input);
+}
+
+@media (max-width: 640px) {
+  .balance-flow {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+  .balance-side,
+  .balance-side-shortage {
+    text-align: center;
+  }
+  .balance-arrow {
+    width: 64px;
+    transform: rotate(90deg);
+  }
+}
+
+/* --- Bar mini keandalan (Pemasok) ---------------------------- */
+.reliability-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  min-width: 78px;
+}
+
+.reliability-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.mini-bar {
+  display: block;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.mini-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ink-subtle);
+}
+
+.mini-bar[data-tone="ok"] .mini-bar-fill {
+  background: var(--status-safe);
+}
+.mini-bar[data-tone="warn"] .mini-bar-fill {
+  background: var(--status-warning);
+}
+.mini-bar[data-tone="danger"] .mini-bar-fill {
+  background: var(--status-danger);
+}
+
+/* --- Angka tabel: mono + tabular (Jarak, Jumlah, Keandalan) --- */
+.location-table th.num,
+.location-table td.num {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   FASE 6 REDESIGN (Arah 4) — Demo Control + Pengaturan.
+   ============================================================ */
+
+/* Chip langkah: urutan Demo Control (siapkan → data → picu → skenario)
+   terbaca sekali lihat, bukan dari urutan kartu saja. */
+.demo-step {
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-strong);
+  border-radius: 999px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+
+.card-header-tags {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Lencana pratinjau: pratinjau TIDAK boleh terbaca sebagai hasil eksekusi. */
+.demo-badge {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  font-weight: 600;
+}
+
+/* Respons backend ditampilkan apa adanya → mono (angka tidak salah baca).
+   Catatan/peringatan yang ditulis manusia tetap font badan. */
+.demo-data-result,
+.demo-data-preview-line {
+  font-family: var(--font-data);
+}
+
+.demo-control-section .ops-console {
+  margin: 0;
+}
+
+/* --- Pengaturan (§5.12): kontrol radius 10px, chip "belum disimpan" ---- */
+.settings-select,
+.settings-input,
+.settings-refresh,
+.settings-save {
+  border-radius: 10px;
+}
+
+.settings-save-cell {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.settings-dirty {
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  color: var(--warn-ink);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: 999px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+
+/* ===== Kartu "Informasi pengiriman" (Arah A, riset 16 Okt 2026) ==============
+   Bentuk mengikuti isi: satu kiriman = satu blok dengan empat lapis informasi —
+   pil status → stepper tahap → angka kunci → kalimat keputusan, lalu rincian di
+   balik <details>. Ukuran teks memakai token (--fs-1/--fs-2 = lantai 12px) dan
+   warna memakai token status yang sudah ada: TIDAK ada warna baru di sini. */
+.shipment-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shipment-count {
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.shipment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.shipment-item {
+  display: grid;
+  gap: 7px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  transition: border-color var(--dur-2) ease;
+}
+
+.shipment-item-moving { border-left-color: var(--accent-strong); }
+.shipment-item-done { border-left-color: var(--status-safe); }
+
+.shipment-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shipment-title {
+  margin: 0;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Pil & chip: ukurannya MENGIKUTI panjang label (satu baris, `flex: none`) —
+   aturan yang sama dengan `.badge` setelah revisi 16 Okt: label pendek tidak
+   melebar, label panjang tidak membungkus jadi dua baris di dalam pil gemuk. */
+.shipment-pill,
+.shipment-chip {
+  flex: none;
+  font-size: var(--fs-1);
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--neutral-border);
+  background: var(--neutral-bg);
+  color: var(--neutral-ink);
+}
+
+.shipment-pill-moving {
+  border-color: var(--accent-strong);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.shipment-pill-done {
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+  color: var(--ok-ink);
+}
+
+.shipment-chip-fail {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+}
+
+.shipment-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+}
+
+/* Baris tengah: stepper (kiri) + kalimat keputusan (kanan). Disandingkan supaya
+   lebar kartu terpakai dan tidak ada baris setengah kosong di layar lebar; di
+   layar sempit keduanya membungkus sendiri-sendiri (flex-wrap). */
+.shipment-mid {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 14px;
+  flex-wrap: wrap;
+}
+
+.shipment-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.shipment-step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  flex: none;
+}
+
+.shipment-step-done .shipment-step-dot { background: var(--status-safe); }
+
+.shipment-step-active {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.shipment-step-active .shipment-step-dot {
+  background: var(--accent-strong);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Tahap yang belum bisa dipastikan = lingkaran berongga, BUKAN merah:
+   "belum ada data" bukan "terlambat" (pelajaran Shippeo di dokumen riset). */
+.shipment-step-unknown .shipment-step-dot {
+  background: transparent;
+  border: 2px dashed var(--line-strong);
+}
+
+.shipment-step-note {
+  color: var(--ink-subtle);
+  font-weight: 400;
+}
+
+.shipment-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 10px;
+  margin: 0;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Angka kunci pakai mono supaya satuan sejajar antar kartu. */
+.shipment-fact { font-family: var(--font-data); }
+
+/* Tindakan per kiriman (mis. "Periksa kiriman" di tab Keamanan Pangan).
+   Ditempelkan pada kirimannya, bukan pada kartu, supaya jelas tindakan itu
+   berlaku untuk blok yang mana. */
+.shipment-action {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Riwayat kejadian per kiriman (kesenjangan #12 riset): di DALAM panel rincian
+   yang sudah ada, jadi tidak menambah bentuk baru di halaman. Setiap baris
+   bertanggal; perkiraan diberi tag supaya tidak terbaca sebagai kejadian. */
+.shipment-timeline {
+  margin-top: 12px;
+}
+
+.shipment-timeline-head {
+  margin: 0 0 4px;
+  font-size: var(--fs-1);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.shipment-timeline-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+}
+
+.shipment-event {
+  display: block;
+  padding: 5px 0;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-1);
+}
+
+.shipment-timeline-list > .shipment-event:first-child {
+  border-top: 0;
+}
+
+/* Judul di kiri, waktu di kanan pada satu baris — kolom lebar tetap membuat
+   tanggal panjang ("16 Okt 2026 07.00 WIB") menabrak judulnya. */
+.shipment-event-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 10px;
+}
+
+.shipment-event-at {
+  font-family: var(--font-data);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.shipment-event-title {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.shipment-event-rencana .shipment-event-title {
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+
+.shipment-event-tag {
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  font-size: var(--fs-1);
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
+.shipment-event-detail {
+  display: block;
+  color: var(--ink-muted);
+}
+
+/* Catatan kaki audit: kapan SERVER menghitung angka jalur. Bukan kejadian di
+   lapangan, jadi tempatnya di bawah daftar, bukan sebagai baris riwayat. */
+.shipment-timeline-note {
+  margin: 8px 0 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+/* ── Papan kiriman (Arah B, 16 Okt 2026) ──────────────────────────────────────
+   Satu baris per KIRIMAN. Kontrol urutan meniru pola `.kpi-period` supaya tidak
+   lahir bahasa visual baru: pil yang sudah ada + pilihan aktif ditandai warna
+   primer + `aria-pressed`. */
+.board-sort {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+
+.board-sort-label {
+  font-size: var(--fs-2);
+  color: var(--slate);
+  margin-right: 2px;
+}
+
+.board-sort-pill {
+  cursor: pointer;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 999px;
+  background: var(--surface);
+  color: inherit;
+  padding: 2px 10px;
+  font-family: inherit;
+  font-size: var(--fs-1);
+}
+
+.board-sort-pill.is-active {
+  border-color: var(--primary, #005c55);
+  color: var(--primary, #005c55);
+  font-weight: 600;
+}
+
+@media (pointer: coarse) {
+  .board-sort-pill {
+    min-height: 44px;
+    padding: 12px 14px;
+  }
+}
+
+/* Sepuluh kolom tidak mungkin muat di 375 px: tabel digulir mendatar di dalam
+   pembungkusnya (`.board-table-wrap`), jadi sel tidak boleh membungkus sendiri —
+   baris yang membungkus membuat tinggi tabel melompat-lompat. Ukuran huruf
+   diturunkan satu tingkat (12 px, lantai tipografi repo) supaya sepuluh kolom
+   juga muat di desktop 1440 px tanpa ada kolom terpotong. */
+.shipment-table {
+  font-size: var(--fs-1);
+}
+
+.shipment-table th,
+.shipment-table td {
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.shipment-cell-name {
+  font-weight: 500;
+}
+
+.shipment-table .cell-meta {
+  display: block;
+}
+
+.cell-tone {
+  display: block;
+  font-size: var(--fs-1);
+}
+
+.cell-tone-ok {
+  color: var(--status-safe);
+}
+
+.cell-tone-danger {
+  color: var(--status-danger);
+  font-weight: 600;
+}
+
+.shipment-verdict {
+  margin: 0;
+  font-size: var(--fs-1);
+  line-height: 1.45;
+  color: var(--ink-muted);
+  /* Kalimat keputusan tidak boleh mendorong stepper: dibatasi panjang barisnya. */
+  max-width: 62ch;
+}
+
+.shipment-details {
+  border-top: 1px dashed var(--line);
+  padding-top: 6px;
+}
+
+.shipment-details > summary {
+  font-size: var(--fs-1);
+  color: var(--accent-strong);
+  cursor: pointer;
+  width: fit-content;
+}
+
+.shipment-details > summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.shipment-detail-list {
+  margin: 6px 0 0;
+  display: grid;
+  gap: 4px;
+}
+
+.shipment-detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--fs-1);
+}
+
+.shipment-detail-row dt {
+  color: var(--ink-muted);
+  flex: none;
+}
+
+.shipment-detail-row dd {
+  margin: 0;
+  color: var(--ink);
+  text-align: right;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shipment-item { transition: none; }
 }

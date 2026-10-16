@@ -71,6 +71,12 @@ export default function IntegrityPanel({
     <section className="integrity-panel card" data-testid="integrity-panel">
       <h3>Integritas Bukti</h3>
 
+      {/* Bukti kriptografis (rantai Merkle + alamat konten + tanda tangan ECDSA)
+          tampil di permukaan GELAP tipis — satu-satunya di tema terang — supaya
+          terbaca sebagai "bukti tak bisa diubah", bukan catatan biasa. Daftar
+          pengukuran (ComplianceEvidencePanel) tetap terang di bawahnya: tabel
+          pengukuran memang lebih enak dibaca di atas putih. */}
+      <div className="integrity-trust">
     <div className="integrity-ledger" data-testid="ledger-status">
       <strong>Merkle Ledger (append-only)</strong>
         {ledger === null && <p>memeriksa rantai…</p>}
@@ -122,14 +128,22 @@ export default function IntegrityPanel({
                   : `⚠️ unsigned — ${dossier.signature.reason ?? "kunci tidak diset"}`}
               </dd>
             </dl>
-            <ComplianceEvidencePanel dossier={dossier} />
-            <div className="integrity-export-actions" data-testid="dossier-export-actions">
-              <button type="button" onClick={() => downloadText(`dossier-${dossier.decision_id}.json`, dossierToJson(dossier), "application/json;charset=utf-8")}>Export JSON dossier</button>
-              <button type="button" onClick={() => downloadText(`evidence-${dossier.decision_id}.csv`, dossierToCsv(dossier), "text/csv;charset=utf-8")}>Export CSV bukti</button>
-            </div>
           </>
         )}
       </div>
+      </div>
+
+      {/* Dua blok di bawah sengaja TIDAK ikut gelap: daftar pengukuran dan
+          tombol ekspor adalah dokumen kerja, bukan bukti kripto. */}
+      {dossier !== null && (
+        <>
+          <ComplianceEvidencePanel dossier={dossier} />
+          <div className="integrity-export-actions" data-testid="dossier-export-actions">
+            <button type="button" onClick={() => downloadText(`dossier-${dossier.decision_id}.json`, dossierToJson(dossier), "application/json;charset=utf-8")}>Export JSON dossier</button>
+            <button type="button" onClick={() => downloadText(`evidence-${dossier.decision_id}.csv`, dossierToCsv(dossier), "text/csv;charset=utf-8")}>Export CSV bukti</button>
+          </div>
+        </>
+      )}
 
       {error && <p className="integrity-error">{error}</p>}
     </section>

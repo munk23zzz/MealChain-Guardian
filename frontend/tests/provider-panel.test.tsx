@@ -31,7 +31,7 @@ describe("ProviderPanel (status provider jujur)", () => {
     expect(html).toContain("Verifier");
   });
 
-  it("UNAVAILABLE → badge netral, bukan hijau (jujur)", () => {
+  it("tanpa provider → badge netral DAN label Indonesia, bukan hijau (jujur)", () => {
     const html = renderToStaticMarkup(
       <ProviderPanel
         providers={{
@@ -40,7 +40,11 @@ describe("ProviderPanel (status provider jujur)", () => {
       />
     );
     expect(html).toContain("provider-unavailable");
-    expect(html).toContain("UNAVAILABLE");
+    // Label tampilan berbahasa Indonesia (WS-C, QA 16 Okt). Nilai pembandingnya
+    // TIDAK berubah: page.tsx tetap membandingkan verdict server "UNAVAILABLE"
+    // untuk menentukan status badge — label dan nilai memang dua hal berbeda.
+    expect(html).toContain("tidak tersedia");
+    expect(html).not.toContain("UNAVAILABLE");
     expect(html).not.toContain("provider-live");
   });
 

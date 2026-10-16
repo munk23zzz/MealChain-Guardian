@@ -686,3 +686,56 @@ def test_approval_summary_parity_execute_batch_terikat_hilang(client):
         _cleanup_decision(did)
         _cleanup_batch(b1)
         _db_exec("DELETE FROM locations WHERE id = :l", {"l": src})
+
+
+# --- Ruling Owner 2026-10-16 (keputusan 1b + 3b): read model vs penjaga endpoint ---
+#
+# Sebelum ini `can_approve` menuntut `valid` untuk SEMUA jenis keputusan, tetapi
+# /actions/approve hanya menjaga kedaluwarsa DI DALAM blok ADMIN_TYPES
+# (app/api/actions.py). Dua lapisan menyatakan aturan yang berbeda: UI mematikan
+# "Setuju" untuk keputusan kedaluwarsa jenis biasa, sementara endpoint-nya tetap
+# menerima approval itu bila dipanggil langsung.
+#
+# Ruling owner: yang benar adalah perilaku ENDPOINT (jenis biasa tidak dijaga
+# kedaluwarsa di approve), jadi read model yang mengikuti. Yang TIDAK dilonggarkan:
+# /actions/execute memeriksa kedaluwarsa tanpa syarat, jadi `can_execute` dan
+# `blocking_reasons` tetap seperti sebelumnya.
+
+
+def test_approval_summary_expired_ordinary_type_matches_approve_endpoint(client):
+    """Kedaluwarsa jenis BIASA: approve/reject masih diterima endpoint → read model
+    tidak boleh mengklaim sebaliknya. Execute tetap terkunci."""
+    did = _mk_decision(_jakarta_id(), _jakarta_id(), expires_minutes=-10)
+    try:
+        summary = client.get(
+            f"/decisions/{did}/approval-summary", headers=_head_user(client)
+        ).json()
+        assert summary["expiry"]["valid"] is False
+        assert summary["can_approve"] is True, summary["can_approve"]
+        # Tolak memakai endpoint yang SAMA (approve dengan approved=false), jadi
+        # gerbangnya juga sama — inilah alasan `can_reject` ada.
+        assert summary["can_reject"] is True, summary.get("can_reject")
+        # Execute TIDAK ikut dilonggarkan: penjaganya tanpa syarat.
+        assert summary["can_execute"] is False
+        assert any("expired" in r.lower() for r in summary["blocking_reasons"])
+    finally:
+        _cleanup_decision(did)
+
+
+def test_approval_summary_expired_administrative_type_blocks_approve(client):
+    """Kedaluwarsa jenis ADMINISTRATIF: penjaga di endpoint MEMANG ada untuk jenis
+    ini, jadi read model harus tetap memblokir approve DAN reject."""
+    did = _mk_decision(_jakarta_id(), _jakarta_id(), expires_minutes=-10)
+    try:
+        _db_exec(
+            "UPDATE decisions SET decision_type='supplier_exclusion' WHERE id=:d",
+            {"d": did},
+        )
+        summary = client.get(
+            f"/decisions/{did}/approval-summary", headers=_head_user(client)
+        ).json()
+        assert summary["expiry"]["valid"] is False
+        assert summary["can_approve"] is False, summary["can_approve"]
+        assert summary["can_reject"] is False, summary.get("can_reject")
+    finally:
+        _cleanup_decision(did)

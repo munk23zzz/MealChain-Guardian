@@ -124,6 +124,122 @@ export type FactRow = {
 
 const DASH = "—";
 
+/**
+ * Apakah baris ini benar-benar punya isi? HANYA "—" yang dianggap kosong.
+ * "0", "Rp0", dan "Tidak" adalah jawaban nyata — menyembunyikannya akan
+ * mengubah arti (laporan bisa "bersih" karena sesuatu memang nol/tidak).
+ */
+export function hasValue(row: FactRow): boolean {
+  return String(row?.value ?? "").trim() !== DASH;
+}
+
+/**
+ * Pisahkan baris berisi dari baris yang belum ada datanya. Urutan asli TIDAK
+ * diubah — hanya dikelompokkan. Dipakai kartu fakta supaya tidak terbaca
+ * seperti dump database (dulu 4 dari 8 baris hanya "—"), tanpa menyembunyikan
+ * apa pun: baris kosong tetap tersedia di balik satu klik.
+ */
+export function splitFacts(rows: FactRow[]): { filled: FactRow[]; empty: FactRow[] } {
+  const filled: FactRow[] = [];
+  const empty: FactRow[] = [];
+  for (const row of rows ?? []) (hasValue(row) ? filled : empty).push(row);
+  return { filled, empty };
+}
+
+/** Label tombol rincian yang disembunyikan ("" = tidak ada yang disembunyikan). */
+export function hiddenFactsLabel(jumlah: number): string {
+  if (!Number.isFinite(jumlah) || jumlah <= 0) return "";
+  return jumlah === 1 ? "1 rincian belum ada datanya" : `${jumlah} rincian belum ada datanya`;
+}
+
+/**
+ * Peran yang boleh menyetujui/menolak/mengeksekusi — CERMINAN dari
+ * `visibleActions()` di `components/DecisionActions.tsx` (satu-satunya pemanggil
+ * API-nya). Kesamaan keduanya dijaga tes paritas di
+ * `tests/evidence-summary.test.ts`; jangan menambah peran di sini tanpa
+ * menambahnya di sana.
+ */
+const APPROVER_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
+
+/**
+ * Satu kalimat yang menjawab "apa yang harus saya lakukan sekarang?" untuk
+ * keputusan yang sedang dibuka. Halaman Decision & Evidence dulu hanya
+ * menumpahkan fakta, sehingga pengguna harus menyimpulkan sendiri tindakannya
+ * dari belasan baris label/nilai. Kalimat ini HANYA memakai data yang sudah
+ * ada di payload (status, approvals, approval_requirement, blocking_reasons,
+ * expiry, can_execute) — tidak ada kesimpulan yang dikarang.
+ */
+export function nextStep(input: {
+  role: string;
+  status: string;
+  summary: unknown;
+}): { text: string; tone: FactTone } {
+  const role = String(input?.role ?? "");
+  const status = String(input?.status ?? "");
+  const payload = (input?.summary ?? null) as Record<string, unknown> | null;
+
+  if (!APPROVER_ROLES.has(role)) {
+    return {
+      text: "Peran ini bersifat pengawasan: buktinya bisa dibaca, tetapi keputusan hanya bisa ditindaklanjuti oleh Kepala SPPG atau Ahli Gizi.",
+      tone: "muted",
+    };
+  }
+
+  const approvals = Array.isArray(payload?.approvals)
+    ? (payload!.approvals as unknown[]).length
+    : null;
+  const requirement = (payload?.approval_requirement ?? null) as Record<string, unknown> | null;
+  const minApprovals = Number(requirement?.min_approvals);
+  const blocking = Array.isArray(payload?.blocking_reasons)
+    ? ((payload!.blocking_reasons as unknown[]).map((reason) => text(reason)).filter(Boolean) as string[])
+    : [];
+  const expiry = (payload?.expiry ?? null) as Record<string, unknown> | null;
+  const lewat = expiry ? expiry.valid === false : false;
+  // Daftar penahan dipangkas: tiga alasan sekaligus membuat kalimatnya
+  // berubah jadi dinding teks dan justru tidak terbaca.
+  const penahanDaftar =
+    blocking.length > 2
+      ? `${blocking.slice(0, 2).join(" · ")} (+${blocking.length - 2} lain)`
+      : blocking.join(" · ");
+  const penahan = penahanDaftar ? ` — yang menahan: ${penahanDaftar}` : "";
+
+  if (status === "rejected") {
+    return {
+      text: "Keputusan sudah ditolak — agent dapat mengajukan iterasi baru dari keputusan ini.",
+      tone: "danger",
+    };
+  }
+  if (status === "executed") {
+    return {
+      text: "Keputusan sudah dieksekusi — tidak ada tindakan tersisa selain membaca buktinya.",
+      tone: "ok",
+    };
+  }
+  if (payload?.can_execute === true) {
+    return { text: "Semua syarat terpenuhi — keputusan siap dieksekusi.", tone: "ok" };
+  }
+  if (lewat) {
+    return {
+      text: `Jendela berlaku keputusan sudah lewat${penahan}. Mintakan keputusan baru atau ajukan iterasi ulang sebelum barang bergerak.`,
+      tone: "warn",
+    };
+  }
+  if (status === "verifier_flagged") {
+    return {
+      text: `Verifikator menandai keputusan ini${penahan}. Selesaikan verifikasi ulang sebelum minta persetujuan.`,
+      tone: "warn",
+    };
+  }
+  if (status === "pending_approval") {
+    const hitung =
+      approvals === null
+        ? ""
+        : ` (${approvals} dari ${Number.isFinite(minApprovals) ? minApprovals : "?"})`;
+    return { text: `Menunggu persetujuan${hitung}${penahan}.`, tone: "warn" };
+  }
+  return { text: "Tidak ada tindakan mendesak untuk keputusan ini.", tone: "plain" };
+}
+
 function text(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   const str = String(value).trim();

@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import KPIDashboard from "../components/KPIDashboard";
+import KPIDashboard, { unitLabel } from "../components/KPIDashboard";
 
 const ENVELOPE_AVAILABLE = {
   period: {
@@ -173,5 +173,72 @@ describe("KPIDashboard (S4-03)", () => {
     };
     const html = renderToStaticMarkup(<KPIDashboard kpi={otherScope} />);
     expect(html).toContain("loc-other");
+  });
+});
+
+// Pemilih periode (permintaan pemilik 2026-10-16). Kontrol ini TIDAK menghitung
+// apa pun: ia hanya memberi tahu parent jendela mana yang dipilih, dan PARENT
+// yang memuatnya lewat hook (Rules.md §3 — komponen tidak fetch sendiri).
+// Markup diuji di sini; perilaku kliknya diverifikasi di browser hidup.
+describe("pemilih periode KPI", () => {
+  it("merender tiga pilihan berlabel Indonesia di dalam grup ber-aria", () => {
+    const html = renderToStaticMarkup(<KPIDashboard kpi={ENVELOPE_AVAILABLE} />);
+    expect(html).toContain("kpi-period");
+    expect(html).toContain('role="group"');
+    for (const label of ["24 jam", "7 hari", "30 hari"]) {
+      expect(html).toContain(label);
+    }
+  });
+
+  it("menandai pilihan aktif dengan aria-pressed; default 24 jam", () => {
+    const html = renderToStaticMarkup(
+      <KPIDashboard kpi={ENVELOPE_AVAILABLE} />
+    );
+    expect(html).toMatch(/data-window="24h"[^>]*aria-pressed="true"/);
+    expect(html).toMatch(/data-window="30d"[^>]*aria-pressed="false"/);
+  });
+
+  it("mengikuti windowKey yang diberikan parent (bukan menyimpan sendiri)", () => {
+    const html = renderToStaticMarkup(
+      <KPIDashboard
+        kpi={ENVELOPE_AVAILABLE}
+        windowKey="30d"
+        onWindowChange={() => {}}
+      />
+    );
+    expect(html).toMatch(/data-window="30d"[^>]*aria-pressed="true"/);
+    expect(html).toMatch(/data-window="7d"[^>]*aria-pressed="false"/);
+  });
+});
+
+// WS-C (QA 16 Okt): satuan dari server ditampilkan apa adanya sehingga layar
+// menulis "percent" berbahasa Inggris di UI ber-<html lang="id">. Nilai `unit`
+// dari API TIDAK diubah (fixture tetap memakai "percent") — hanya namanya yang
+// diterjemahkan, dan satuan yang tidak dikenal dibiarkan apa adanya.
+describe("unitLabel (nama satuan untuk layar)", () => {
+  it("menerjemahkan satuan yang dikenal", () => {
+    expect(unitLabel("percent")).toBe("persen");
+    expect(unitLabel("percentage")).toBe("persen");
+    expect(unitLabel("pct")).toBe("persen");
+    // Satuan Decision Time baru muncul di layar sejak penulis trace ACT ada
+    // (16 Okt 2026) — sebelumnya kartunya selalu "—", jadi "minutes" tidak
+    // pernah terlihat. Kata Inggris di kartu lain sudah diterjemahkan ke
+    // "persen"; satuan ini menyusul dengan alasan yang sama.
+    expect(unitLabel("minutes")).toBe("menit");
+  });
+
+  it("IDR jadi kosong — nilainya sudah berawalan Rp", () => {
+    expect(unitLabel("IDR")).toBe("");
+  });
+
+  it("satuan tak dikenal dibiarkan apa adanya, bukan dikarang", () => {
+    expect(unitLabel("kg")).toBe("kg");
+    expect(unitLabel("CFU/g")).toBe("CFU/g");
+  });
+
+  it("kosong/null tidak meledak", () => {
+    expect(unitLabel(null)).toBe("");
+    expect(unitLabel(undefined)).toBe("");
+    expect(unitLabel("")).toBe("");
   });
 });

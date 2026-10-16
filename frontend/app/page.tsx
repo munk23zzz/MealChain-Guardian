@@ -11,11 +11,29 @@ import { useEffect, useMemo, useState } from "react";
 
 import { MANAGE_ROLES } from "../lib/settings";
 
-import { login, seedDemo } from "../lib/api";
+import {
+  evaluateFreshness,
+  evaluateSafety,
+  fetchReceipts,
+  login,
+  recordReceipt,
+  reproposeAction,
+  seedDemo,
+  triggerSafetyDisruption,
+} from "../lib/api";
 import { useBalanceMap } from "../lib/hooks/useBalanceMap";
 import { useDecisionDetail } from "../lib/hooks/useDecisionDetail";
 import { useExclusions } from "../lib/hooks/useExclusions";
 import { useKpi } from "../lib/hooks/useKpi";
+import { agendaErrorText, useAgenda } from "../lib/hooks/useAgenda";
+import {
+  gridRange,
+  monthGrid,
+  monthOf,
+  shiftMonth,
+  wibToday,
+} from "../lib/agenda";
+import type { KpiWindowKey } from "../lib/kpi";
 import { useMe } from "../lib/hooks/useMe";
 import { useQualitySample } from "../lib/hooks/useQualitySample";
 import { useSuppliers } from "../lib/hooks/useSuppliers";
@@ -42,23 +60,29 @@ import {
 } from "../lib/decision-feed";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatJam } from "../lib/jam";
+import { formatDateTime } from "../lib/datetime";
 import SettingsPanel from "../components/SettingsPanel";
 import TopBar from "../components/TopBar";
 import {
   ALL_LOCATIONS,
   countActionable,
+  countExpiredActionable,
   defaultScope,
   initialsOf,
+  notifList,
 } from "../lib/topbar";
 import StatusBadge from "../components/StatusBadge";
-import NavIcon, {
+import ValidatedField from "../components/ValidatedField";
+import {
   ChevronIcon,
   LogoMark,
   LogoutIcon,
   SeedIcon,
+  type NavId,
 } from "../components/NavIcon";
+import SideNav from "../components/SideNav";
 import { StatusLocationList } from "../components/SupplyMap";
-import RecommendationCard from "../components/RecommendationCard";
+import RecommendationCard, { DECISION_TYPE_LABELS } from "../components/RecommendationCard";
 import AgentTraceViewer from "../components/AgentTraceViewer";
 import ChaosPanel from "../components/ChaosPanel";
 import DemoDataPanel from "../components/DemoDataPanel";
@@ -73,8 +97,17 @@ import SupplyMap from "../components/SupplyMap";
 import NodeTelemetry from "../components/NodeTelemetry";
 import TodayDashboard from "../components/TodayDashboard";
 import StockChart from "../components/StockChart";
-import OverviewLocationBreakdown from "../components/OverviewLocationBreakdown";
-import { formatKg, sumFiniteKg } from "../lib/overview-format";
+import ShipmentCard from "../components/ShipmentCard";
+import { formatKg } from "../lib/overview-format";
+// Fase 2 bento Overview: selisih hero & pangsa terhadap kebutuhan — logika
+// murni di lib/overview-bento.ts (diuji di tests/overview-bento.test.ts).
+import {
+  demandCoveragePct,
+  formatSignedKg,
+  gapShareOfDemand,
+  heroGap,
+  networkTotals,
+} from "../lib/overview-bento";
 import { SupplierExclusionView } from "../components/SupplierExclusionPanel";
 import DecisionEvidence from "../components/DecisionEvidence";
 import FoodSafetyBoard from "../components/FoodSafetyBoard";
@@ -95,7 +128,9 @@ const EVALUATED_LIMIT = 8;
 const SURPLUS_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
 
 // Panel provider dihitung dari trace aktual (VERIFY/PREDICT/SUPERVISE);
-// tanpa karangan — agen tanpa langkah model tampil UNAVAILABLE.
+// tanpa karangan — agen tanpa langkah model tampil "tidak tersedia".
+// CATATAN: baris di bawah membandingkan verdict SERVER ("UNAVAILABLE") — itu
+// nilai kontrak, bukan label layar. Jangan disamakan dengan teks tampilan.
 function providersFromTraces(steps: any[]): Record<string, any> {
   const out: Record<string, any> = {};
   for (const s of steps ?? []) {
@@ -141,9 +176,28 @@ const ROLE_LABEL: Record<string, string> = {
 
 const COMMODITIES = ["telur", "ayam", "beras", "wortel"];
 
+/** Kunci penyimpanan token sesi di browser (keputusan pemilik 2026-10-16).
+ *  Token JWT tetap ditandatangani & diverifikasi backend — ini hanya persistensi
+ *  tampilan supaya refresh halaman tidak memaksa login ulang di tengah demo. */
+const TOKEN_STORAGE_KEY = "mealchain.token";
+
 export default function Home() {
   const [token, setToken] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  // Pulihkan sesi tersimpan SETELAH mount (bukan saat render) supaya HTML dari
+  // server identik dengan render pertama klien — tidak ada galat hidrasi.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+      if (saved) {
+        setToken(saved);
+        setRole(decodeRole(saved));
+      }
+    } catch {
+      // localStorage diblokir (mode privat / kebijakan browser): sesi jatuh ke
+      // perilaku lama (hanya di memori). Tidak ada yang gagal diam-diam.
+    }
+  }, []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -152,19 +206,7 @@ export default function Home() {
   // (login terpisah; decision detail gabung di recommendations).
   // + "today" (halaman "Hari Ini", permintaan Roy 2026-10-11). Halaman yang
   // dibuka setelah login tetap Overview — tab baru tidak mengubah alur demo.
-  const [tab, setTab] = useState<
-    | "today"
-    | "overview"
-    | "kpi-kualitas"
-    | "recommendations"
-    | "evidence"
-    | "safety"
-    | "surplus"
-    | "suppliers"
-    | "agent-log"
-    | "demo-control"
-    | "settings"
-  >("overview");
+  const [tab, setTab] = useState<NavId>("overview");
   const [mapCommodity, setMapCommodity] = useState("telur");
   // Lokasi aktif yang disorot di peta, dipilih dari dropdown top bar.
   const [activeLocation, setActiveLocation] = useState<string | null>(null);
@@ -175,7 +217,22 @@ export default function Home() {
   // identitas tidak tertukar antar akun; gagal membaca = gagal-tertutup (null),
   // bukan menampilkan semua lokasi.
   const sesiScope = token ? `sesi:${token.slice(-8)}` : "anon";
-  const me = useMe(token, sesiScope).me;
+  const meQuery = useMe(token, sesiScope);
+  const me = meQuery.me;
+
+  // Token tersimpan yang ternyata TIDAK SAH (401 dari /auth/me) dibuang di sini:
+  // sesi lama tidak boleh menyisakan dashboard setengah hidup yang semua
+  // querynya gagal. Server tetap satu-satunya penentu sah/tidaknya token.
+  useEffect(() => {
+    if (!meQuery.unauthorized) return;
+    try {
+      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+    } catch {
+      // localStorage diblokir: tidak ada yang perlu dibersihkan.
+    }
+    setToken(null);
+    setRole(null);
+  }, [meQuery.unauthorized]);
 
   // Cakupan awal: monitor nasional = semua lokasi, peran SPPG = SPPG-nya.
   useEffect(() => {
@@ -258,6 +315,55 @@ export default function Home() {
   // jalurnya juga daftar penuh — kalau disaring komoditas, baris pemasok lain
   // akan terbaca "tidak punya jalur" padahal jalurnya hanya tidak diminta.
   const supplierRoutesQuery = useSupplierRoutes(token, identityScope, tab);
+  // Fase 11 (permintaan pemilik): tab Keamanan Pangan butuh kiriman yang menuju
+  // LOKASI SENDIRI — bukan semua jalur seperti halaman Pemasok — supaya kartu
+  // "Pasokan masuk" menjawab pertanyaan dapur ini ("apa yang sedang datang ke
+  // sini?"). Query hanya berjalan saat tab itu dibuka.
+  const safetyRoutesQuery = useSupplierRoutes(
+    token,
+    identityScope,
+    tab,
+    null,
+    me?.location_name ?? null,
+    tab === "safety"
+  );
+
+  // Fase 11: dua tindakan nyata dari halaman Keamanan Pangan. Keduanya MENULIS
+  // ke backend (bukan pratinjau): /freshness/evaluate + /safety/evaluate
+  // menghitung ulang dari log suhu & umur panen yang tersimpan lalu menyimpan
+  // hasilnya, dan /actions/repropose membuat keputusan pengganti dari yang sudah
+  // kedaluwarsa. Setelah menulis, data diambil ulang dari server — layar tidak
+  // pernah menebak hasilnya sendiri.
+  const safetyRecheck = async (batchId: string) => {
+    if (!token) throw new Error("sesi tidak ada");
+    const [safety, freshness] = await Promise.all([
+      evaluateSafety(batchId, token),
+      evaluateFreshness(batchId, token),
+    ]);
+    await Promise.all([todayQuery.refetch(), mapQuery.refetch()]);
+    return { safety, freshness };
+  };
+
+  const safetyRepropose = async (decisionId: string) => {
+    if (!token) throw new Error("sesi tidak ada");
+    const hasil = await reproposeAction(decisionId, token);
+    await decisionsQuery.refetch();
+    return String(hasil?.decision_id ?? "");
+  };
+
+  // Event 3 dari satu baris tabel: batch pemicu boleh milik lokasi lain (sisi
+  // sumber), tetapi keputusan yang lahir WAJIB menyasar lokasi pemakai sendiri
+  // (ruling 2026-10-14) — karena itu target diambil dari identitas, bukan dari
+  // baris yang diklik. Kunci idempotensi dibuat pemanggil (dipakai ulang saat
+  // mengulang supaya tidak ada keputusan kembar).
+  const safetyTriggerDisruption = async (batchId: string, operationKey: string) => {
+    if (!token) throw new Error("sesi tidak ada");
+    if (!me?.location_id) throw new Error("lokasi pemakai belum diketahui");
+    const hasil = await triggerSafetyDisruption(batchId, me.location_id, operationKey, token);
+    await Promise.all([decisionsQuery.refetch(), todayQuery.refetch()]);
+    return hasil;
+  };
+
   // Feed (14 Okt 2026): cakupan + pencarian + urutan. Cakupan "action" =
   // keputusan yang benar-benar menunggu tindakan manusia — definisi yang sama
   // dengan lonceng top bar dan angka di sidebar. EXPIRED tetap bisa dilihat
@@ -271,10 +377,47 @@ export default function Home() {
 
   const isApprover = APPROVER_ROLES.has(role ?? "");
 
-  // S4-03: envelope GET /kpi lewat React Query — satu potret per sesi (periode
-  // 24 jam; scope ditentukan backend: SPPG own, monitor global). Loading dan
-  // galat dibaca dari status query; tombol "Coba lagi" memanggil refetch().
-  const kpiQuery = useKpi(token, identityScope, tab);
+  // S4-03: envelope GET /kpi lewat React Query — satu potret per sesi (scope
+  // ditentukan backend: SPPG own, monitor global). Loading dan galat dibaca dari
+  // status query; tombol "Coba lagi" memanggil refetch().
+  //
+  // Pemilih periode (2026-10-16): jendela dimiliki HALAMAN, bukan komponen —
+  // hook butuh nilainya untuk memuat rentang yang benar, dan komponen butuh
+  // nilai yang sama untuk menandai pilihan aktif. Default tetap 24 jam.
+  const [kpiWindow, setKpiWindow] = useState<KpiWindowKey>("24h");
+  const kpiQuery = useKpi(token, identityScope, tab, kpiWindow);
+
+  // Kalender agenda harian (langkah 2, 2026-10-16). Bulan & hari terpilih
+  // dimiliki HALAMAN — bukan komponen — supaya rentang yang diminta ke
+  // `GET /agenda` dan penanda "hari aktif" di layar tak pernah berbeda sumber.
+  // Keduanya `null` sampai jam klien siap (pola `now` di atas) agar HTML server
+  // dan render klien tidak berbeda; "hari ini" dihitung menurut WIB.
+  const [agendaMonth, setAgendaMonth] = useState<{ year: number; month: number } | null>(
+    null,
+  );
+  const [agendaDate, setAgendaDate] = useState<string | null>(null);
+  const agendaDay = agendaDate ?? (now ? wibToday(now) : null);
+  const agendaBulan = agendaMonth ?? (agendaDay ? monthOf(agendaDay) : null);
+  const agendaRange = agendaBulan
+    ? gridRange(monthGrid(agendaBulan.year, agendaBulan.month))
+    : { start: "", end: "" };
+  const agendaQuery = useAgenda(token, identityScope, tab, agendaRange);
+  const agenda = agendaQuery.data ?? null;
+  const agendaError = agendaErrorText(agendaQuery.error);
+
+  // Pilih hari: bulan IKUT tanggal terpilih. Kalau bulan dibiarkan, memilih
+  // "Hari ini" (atau sel bulan pipi) dari bulan lain akan menyembunyikan penanda
+  // hari aktif — ditemukan saat verifikasi hidup di browser.
+  const selectAgendaDate = (iso: string) => {
+    setAgendaDate(iso);
+    setAgendaMonth(monthOf(iso));
+  };
+  const shiftAgendaMonth = (delta: number) => {
+    const dasar = agendaBulan ?? monthOf(agendaDay ?? "2026-10-16");
+    const baru = shiftMonth(dasar.year, dasar.month, delta);
+    setAgendaMonth(baru);
+    setAgendaDate(`${baru.year}-${String(baru.month).padStart(2, "0")}-01`);
+  };
   const kpi = kpiQuery.data;
   const kpiLoading = kpiQuery.loading;
   const kpiError = kpiQuery.error;
@@ -336,6 +479,12 @@ export default function Home() {
       setToken(data.access_token);
       // Role dari JWT hanya untuk display; otorisasi tetap di backend.
       setRole(decodeRole(data.access_token));
+      // Simpan agar refresh halaman tidak memaksa login ulang (2026-10-16).
+      try {
+        window.localStorage.setItem(TOKEN_STORAGE_KEY, data.access_token);
+      } catch {
+        // localStorage diblokir: sesi tetap jalan di memori untuk tab ini.
+      }
       setLoginError(null);
     } catch (e: any) {
       setLoginError(
@@ -370,26 +519,27 @@ export default function Home() {
           <form onSubmit={onLogin} className="login-form">
             <h2>Masuk ke konsol</h2>
             <p className="login-sub">Gunakan akun SPPG atau BGN yang terdaftar.</p>
-            <label className="field">
-              <span>Email</span>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="username"
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Password</span>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                required
-              />
-            </label>
+            <ValidatedField
+              label="Email"
+              type="email"
+              value={email}
+              onChange={setEmail}
+              autoComplete="username"
+              pesan={{
+                kosong: "Isi email dulu.",
+                salahFormat: "Format email belum benar — contoh: nama@demo.local.",
+              }}
+            />
+            <ValidatedField
+              label="Password"
+              type="password"
+              value={password}
+              onChange={setPassword}
+              autoComplete="current-password"
+              // type="password" tidak punya batasan format, jadi kedua keadaan
+              // berbunyi sama — dan memang itu yang benar untuk pengguna.
+              pesan={{ kosong: "Isi password dulu.", salahFormat: "Isi password dulu." }}
+            />
             {loginError && (
               <p className="status-danger login-error" role="alert">
                 {loginError}
@@ -432,6 +582,23 @@ export default function Home() {
   const mapShortage: any[] = (mapData?.locations ?? []).filter(
     (l: any) => l.status === "shortage"
   );
+  const mapSurplus: any[] = (mapData?.locations ?? []).filter(
+    (l: any) => l.status === "surplus"
+  );
+  // Fase 2 (bento Overview): angka hero, pangsa pasokan, dan antrean keputusan.
+  // TANPA hook — di bawah early-return layar login tidak boleh ada hook baru
+  // (lihat catatan feed di bawah); semuanya fungsi murni lib/overview-bento
+  // dan lib/topbar yang nilainya kecil.
+  const hero = heroGap(mapData?.locations ?? [], activeLocation);
+  const heroShare = gapShareOfDemand(hero.gapKg, hero.demandKg);
+  const networkTotal = networkTotals(mapData?.locations ?? []);
+  const coveragePct = demandCoveragePct(
+    networkTotal.supplyKg,
+    networkTotal.demandKg
+  );
+  // Antrean keputusan memakai sumber yang SAMA dengan lonceng top bar supaya
+  // kedua tempat tidak pernah menampilkan angka berbeda.
+  const notif = notifList(decisions, 4);
   const roleLabel = ROLE_LABEL[role ?? ""] ?? (role ?? "user");
 
   // Feed traceable (arah Roy 2026-10-09): EXPIRED TIDAK disembunyikan — semua
@@ -447,7 +614,11 @@ export default function Home() {
   const feedFilterActive = hasActiveFilter(feedFilter);
   // Keputusan yang menunggu tindakan manusia — satu definisi dengan lonceng
   // notifikasi top bar (dulu dihitung sendiri di sini dari statusCounts).
+  // Hanya yang MASIH bisa ditindak (backend menolak tindakan atas keputusan
+  // lewat tenggat dengan 409); tunggakannya dilaporkan terpisah supaya angkanya
+  // jujur tanpa menyembunyikan apa pun (temuan QA F1).
   const perluKeputusan = countActionable(decisions);
+  const lewatTenggat = countExpiredActionable(decisions);
 
   // PRD 2.4: nav 5 tab (overview/kpi/recommendations/agent-log/demo-control)
   // + tab "Hari Ini" (permintaan Roy 2026-10-11) sebagai halaman pertama;
@@ -459,18 +630,7 @@ export default function Home() {
   // 2026-10-15). Halaman yang di acuan
   // dibatasi peran (Surplus & Limbah = peran SPPG) ikut dibatasi di sini.
   const navItems: {
-    id:
-      | "today"
-      | "overview"
-      | "kpi-kualitas"
-      | "recommendations"
-      | "evidence"
-      | "safety"
-      | "surplus"
-      | "suppliers"
-      | "agent-log"
-      | "demo-control"
-      | "settings";
+    id: NavId;
     label: string;
     /** Keterangan tambahan saat kursor berhenti di tab (mis. arti angkanya). */
     title?: string;
@@ -483,9 +643,13 @@ export default function Home() {
       // pernah dibuat (dulu 126 dan sulit ditafsirkan).
       id: "recommendations",
       label: `Recommendations${perluKeputusan ? ` (${perluKeputusan})` : ""}`,
+      // Angka = yang MASIH bisa ditindak; tunggakan yang lewat tenggat tetap
+      // disebut supaya tidak hilang dari pandangan (temuan QA F1).
       title: perluKeputusan
-        ? `${perluKeputusan} rekomendasi perlu tindakan`
-        : "Tidak ada rekomendasi yang perlu tindakan",
+        ? `${perluKeputusan} rekomendasi perlu tindakan${lewatTenggat ? ` · ${lewatTenggat} lewat tenggat` : ""}`
+        : lewatTenggat
+          ? `Tidak ada yang bisa ditindak · ${lewatTenggat} lewat tenggat`
+          : "Tidak ada rekomendasi yang perlu tindakan",
     },
     { id: "evidence", label: "Decision & Evidence" },
     { id: "safety", label: "Keamanan Pangan" },
@@ -504,13 +668,18 @@ export default function Home() {
 
   // Inisial avatar (rail + top bar) — satu sumber di lib/topbar.ts supaya
   // tidak ada dua cara menghitung yang bisa menyimpang.
-  const initials = initialsOf(email, roleLabel);
-  // Notifikasi top bar: keputusan yang menunggu tindakan manusia.
-  const actionable = countActionable(decisions);
+  const initials = initialsOf(me?.email ?? email, roleLabel);
 
   const onLogout = () => {
     setToken(null);
     setRole(null);
+    // Hapus sesi tersimpan: logout harus benar-benar mengakhiri sesi, bukan
+    // hanya menyembunyikannya sampai refresh berikutnya.
+    try {
+      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+    } catch {
+      // localStorage diblokir: tidak ada yang perlu dibersihkan.
+    }
     setSelectedId(null);
     setTab("overview");
     // Bersihkan data konsol: akun berikutnya tidak boleh sempat melihat angka
@@ -549,28 +718,20 @@ export default function Home() {
             <ChevronIcon collapsed={sideCollapsed} />
           </button>
         </div>
-        <nav className="side-tabs" aria-label="Bagian konsol">
-          {visibleNavItems.map((n) => (
-            <button
-              key={n.id}
-              type="button"
-              className={`side-tab${tab === n.id ? " side-tab-active" : ""}`}
-              onClick={() => {
-                setTab(n.id);
-                // Halaman bukti tidak boleh terbuka kosong: begitu tabnya ditekan,
-                // keputusan yang butuh tindakan langsung dipilih.
-                if (n.id === "evidence" && !selectedId) {
-                  const fallback = defaultEvidenceId(decisions);
-                  if (fallback) setSelectedId(fallback);
-                }
-              }}
-              title={n.title ?? (sideCollapsed ? n.label : undefined)}
-            >
-              <NavIcon id={n.id} />
-              <span className="side-tab-label">{n.label}</span>
-            </button>
-          ))}
-        </nav>
+        <SideNav
+          items={visibleNavItems}
+          active={tab}
+          collapsed={sideCollapsed}
+          onSelect={(id) => {
+            setTab(id);
+            // Halaman bukti tidak boleh terbuka kosong: begitu tabnya ditekan,
+            // keputusan yang butuh tindakan langsung dipilih.
+            if (id === "evidence" && !selectedId) {
+              const fallback = defaultEvidenceId(decisions);
+              if (fallback) setSelectedId(fallback);
+            }
+          }}
+        />
         <div className="side-actions">
           {isApprover && (
             <button
@@ -591,7 +752,7 @@ export default function Home() {
           </span>
           <span className="side-user-meta">
             <span className="side-user-name">{roleLabel}</span>
-            <span className="side-user-sub">{email || "Sesi demo"}</span>
+            <span className="side-user-sub">{me?.email || email || "Sesi demo"}</span>
           </span>
           <button
             type="button"
@@ -641,6 +802,16 @@ export default function Home() {
             kpi={kpi}
             ledger={ledger}
             now={now}
+            agenda={agenda}
+            agendaLoading={agendaQuery.isLoading}
+            agendaError={agendaError}
+            agendaDate={agendaDay ?? undefined}
+            agendaToday={now ? wibToday(now) : undefined}
+            agendaMonth={agendaBulan ?? undefined}
+            onAgendaSelect={selectAgendaDate}
+            onAgendaShiftMonth={shiftAgendaMonth}
+            onAgendaRetry={() => void agendaQuery.refetch()}
+            greetingName={roleLabel}
             batchesLoading={batchesLoading}
             batchesError={batchesError}
             onRetry={() => void todayQuery.refetch()}
@@ -689,46 +860,81 @@ export default function Home() {
 
             <RoleHero role={role ?? "sppg_head"} />
 
-            {/* Strip KPI: dihitung dari data peta real (tanpa fake 0) */}
+            {/* Strip bento (Fase 2, Arah 4): tile hero selisih pasokan + dua
+                pendamping dengan bobot berbeda. Semua angka dari data peta
+                real; yang belum tersedia ditulis "—" (lib/overview-bento),
+                bukan 0. */}
             <section
               className="overview-kpis"
               aria-label="KPI ringkas"
               aria-busy={!mapData && !mapError}
             >
-              <div className="kpi-card">
-                <span className="kpi-card-label">Volume Komoditas Aktif</span>
+              <div className="kpi-card kpi-card-hero">
+                <span className="kpi-card-label">
+                  {hero.scope === "location"
+                    ? `Selisih pasokan ${hero.name}`
+                    : "Selisih pasokan jaringan"}
+                </span>
+                <span
+                  className={`kpi-card-value kpi-card-hero-value is-${hero.tone}`}
+                >
+                  {mapData ? (
+                    formatSignedKg(hero.gapKg)
+                  ) : (
+                    <span className="skeleton skeleton-value" aria-hidden="true" />
+                  )}
+                </span>
+                <span className="kpi-card-foot">
+                  {!mapData
+                    ? "menunggu data peta"
+                    : heroShare !== null
+                      ? `${hero.gapKg !== null && hero.gapKg > 0 ? "lebih" : "kurang"} ${heroShare}% dari kebutuhan`
+                      : hero.tone === "balanced"
+                        ? "pasokan menutup kebutuhan"
+                        : "kebutuhan belum tercatat di data"}
+                </span>
+                <span className="kpi-card-mini">
+                  {mapData
+                    ? `${mapSurplus.length} lokasi surplus · ${mapShortage.length} shortage · ${(mapData.locations ?? []).length} terpetakan`
+                    : "—"}
+                </span>
+              </div>
+
+              <div className="kpi-card kpi-card-pasokan">
+                <span className="kpi-card-label">Pasokan terpantau</span>
                 <span className="kpi-card-value">
                   {mapData ? (
-                    formatKg(sumFiniteKg(mapData.locations ?? []))
+                    formatKg(networkTotal.supplyKg)
                   ) : (
                     <span className="skeleton skeleton-value" aria-hidden="true" />
                   )}
                 </span>
-                <span className="kpi-card-foot">total pasokan lokasi terpetakan</span>
+                <span className="kpi-card-foot">
+                  {coveragePct !== null && networkTotal.demandKg !== null
+                    ? `dari ${formatKg(networkTotal.demandKg)} kebutuhan jaringan · ${coveragePct}%`
+                    : "kebutuhan jaringan belum lengkap"}
+                </span>
+                <span className="bento-bar" aria-hidden="true">
+                  <span
+                    className="bento-bar-fill"
+                    style={{ width: `${Math.min(coveragePct ?? 0, 100)}%` }}
+                  />
+                </span>
               </div>
-              <div className="kpi-card">
-                <span className="kpi-card-label">Lokasi Surplus</span>
-                <span className="kpi-card-value kpi-card-safe">
-                  {mapData ? (
-                    (mapData.locations ?? []).filter(
-                      (l: any) => l.status === "surplus"
-                    ).length
-                  ) : (
-                    <span className="skeleton skeleton-value" aria-hidden="true" />
-                  )}
+
+              <div className="kpi-card kpi-card-keputusan">
+                <span className="kpi-card-label">Rekomendasi menunggu</span>
+                <span className="kpi-card-value">{notif.total}</span>
+                <span className="kpi-card-foot">
+                  {notif.expired > 0
+                    ? `${notif.expired} lewat tenggat — tetap terlihat, tidak disembunyikan`
+                    : `${decisions.length} keputusan terakhir dipantau`}
                 </span>
-                <span className="kpi-card-foot">siap jadi sumber distribusi</span>
-              </div>
-              <div className="kpi-card">
-                <span className="kpi-card-label">Lokasi Shortage</span>
-                <span className="kpi-card-value kpi-card-danger">
-                  {mapData ? (
-                    mapShortage.length
-                  ) : (
-                    <span className="skeleton skeleton-value" aria-hidden="true" />
-                  )}
+                <span className="kpi-card-mini">
+                  {notif.rest > 0
+                    ? `+${notif.rest} lain menunggu tindakan`
+                    : "semua sudah ditindaklanjuti"}
                 </span>
-                <span className="kpi-card-foot">butuh penyeimbangan</span>
               </div>
             </section>
 
@@ -810,51 +1016,126 @@ export default function Home() {
                 reachKm={supplierReachKm}
               />
               <div className="overview-side">
-                <div className="map-panel">
-                  <h3>Pasokan per Lokasi</h3>
-                  <StockChart locations={mapData?.locations ?? []} stretch />
-                </div>
+                {/* Antrean keputusan (Fase 2): 4 teratas + tunggakan dinyatakan
+                    apa adanya. Sumber sama dengan lonceng top bar
+                    (lib/topbar.notifList) supaya angkanya tidak pernah beda. */}
+                <section
+                  className="map-panel queue-card"
+                  aria-label="Perlu keputusan"
+                >
+                  <div className="queue-head">
+                    <h3>Perlu keputusan</h3>
+                    <span className="queue-head-count">{notif.total}</span>
+                  </div>
+                  {notif.shown.length === 0 ? (
+                    <p className="queue-empty">
+                      Semua keputusan sudah ditindaklanjuti. Permintaan baru
+                      muncul di sini.
+                    </p>
+                  ) : (
+                    <ul className="queue-list">
+                      {notif.shown.map((item, index) => (
+                        <li
+                          key={
+                            item.decision_id ??
+                            `${item.decision_type}-${item.created_at}-${index}`
+                          }
+                          className="queue-item"
+                        >
+                          <span className="queue-item-main">
+                            <span className="queue-item-label">
+                              {DECISION_TYPE_LABELS[item.decision_type ?? ""] ??
+                                "Rekomendasi baru"}
+                            </span>
+                            <span className="queue-item-meta">
+                              {formatKg(item.quantity_kg)} ·{" "}
+                              {formatDateTime(item.created_at)}
+                            </span>
+                          </span>
+                          {item.status && <StatusBadge status={item.status} />}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {notif.rest > 0 && (
+                    <p className="queue-rest">
+                      +{notif.rest} keputusan lain menunggu tindakan
+                    </p>
+                  )}
+                  {notif.expired > 0 && (
+                    <p className="queue-rest">
+                      +{notif.expired} lewat tenggat — tidak bisa ditindak lagi
+                    </p>
+                  )}
+                  <div className="queue-foot">
+                    <button
+                      type="button"
+                      className="queue-open"
+                      onClick={() => setTab("recommendations")}
+                    >
+                      Buka tab Recommendations
+                    </button>
+                  </div>
+                </section>
               </div>
             </section>
 
-            {/* Telemetri Node di bawah baris peta */}
-            <section aria-label="Telemetri node">
-              <NodeTelemetry
-                locations={mapData?.locations ?? []}
-                activeLocation={activeLocation}
-                loading={!mapData && !mapError}
-              />
+            {/* Informasi pengiriman (Arah A riset 16 Okt 2026): satu blok per
+                kiriman — pil status, stepper tahap, angka kunci, kalimat
+                keputusan. Datanya kiriman yang sama dengan garis di peta
+                (disaring komoditas tampilan), jadi angka di kartu dan garis di
+                peta tidak bisa berbeda cerita. */}
+            <ShipmentCard
+              routes={mapSupplierRoutesQuery.data}
+              note="Mengikuti komoditas yang sedang ditampilkan di peta. Rincian tiap kiriman ada di dalam panelnya."
+            />
+
+            {/* Grafik pasokan per lokasi (Fase 2): sebelumnya di kolom samping
+                peta — kolom itu hanya ~310px lebar sehingga grafiknya terjepit
+                ~70px dan label 10 lokasi saling bertumpuk. Kini selebar halaman
+                dengan tinggi tetap 380px, jadi batangnya benar-benar terbaca. */}
+            <section className="map-panel" aria-label="Pasokan per lokasi">
+              <h3>Pasokan per Lokasi</h3>
+              <StockChart locations={mapData?.locations ?? []} />
             </section>
 
-            {/* Status lokasi selebar halaman (tata letak acuan): baris atas
-                peta + grafik yang tingginya seimbang, daftar lokasi di bawah. */}
-            <section
-              className="map-card card status-location-list"
-              aria-label="Status lokasi"
-              aria-busy={!mapData && !mapError}
-            >
-              {mapData ? (
-                <StatusLocationList locations={mapData.locations ?? []} />
-              ) : (
-                <>
-                  <div className="map-section-head">
-                    <h3>Status Lokasi</h3>
-                  </div>
-                  <p className="sr-only" aria-live="polite">
-                    Memuat status lokasi…
-                  </p>
-                  <div className="skeleton skeleton-map" aria-hidden="true" />
-                </>
-              )}
-            </section>
+            {/* Dua kartu ringkas BERDAMPINGAN (revisi 16 Okt: "shape terlalu
+                besar/kosong"). Sebelumnya Telemetri Node (237 px) dan daftar
+                Status Lokasi (203 px) masing-masing selebar halaman padahal
+                isinya hanya beberapa baris teks — total 440 px tinggi demi
+                ~10 baris. Di >=1100px keduanya berbagi satu baris; di bawah itu
+                tetap bertumpuk (lihat `.overview-pair`). */}
+            <div className="overview-pair">
+              {/* Telemetri Node di bawah baris peta */}
+              <section aria-label="Telemetri node">
+                <NodeTelemetry
+                  locations={mapData?.locations ?? []}
+                  activeLocation={activeLocation}
+                  loading={!mapData && !mapError}
+                />
+              </section>
 
-            {/* Rincian angka per lokasi — kartu selebar halaman supaya lima
-                kolomnya tidak terpotong (di acuan, angka ini ada di kartu
-                Status lokasi). */}
-            <section className="map-panel" aria-label="Rincian pasokan per lokasi">
-              <h3>Rincian Pasokan per Lokasi</h3>
-              <OverviewLocationBreakdown locations={mapData?.locations ?? []} loading={!mapData && !mapError} />
-            </section>
+              {/* Status lokasi (tata letak acuan): daftar lokasi + statusnya. */}
+              <section
+                className="map-card card status-location-list"
+                aria-label="Status lokasi"
+                aria-busy={!mapData && !mapError}
+              >
+                {mapData ? (
+                  <StatusLocationList locations={mapData.locations ?? []} />
+                ) : (
+                  <>
+                    <div className="map-section-head">
+                      <h3>Status Lokasi</h3>
+                    </div>
+                    <p className="sr-only" aria-live="polite">
+                      Memuat status lokasi…
+                    </p>
+                    <div className="skeleton skeleton-map" aria-hidden="true" />
+                  </>
+                )}
+              </section>
+            </div>
           </div>
         )}
 
@@ -873,6 +1154,7 @@ export default function Home() {
             <section className="card demo-scenario" aria-label="Skenario demo">
               <div className="card-header">
                 <h2>Skenario 00 — muat kasus demo</h2>
+                <span className="demo-step">Langkah 1 · siapkan kasus</span>
               </div>
               <p className="section-sub">
                 Memuat ulang empat kasus demo lewat API resmi (idempotent, aman
@@ -906,6 +1188,11 @@ export default function Home() {
                 if (token) void decisionsQuery.refetch();
                 setTab("recommendations");
               }}
+              /* Event 1 penuh: segarkan feed TANPA memindah tab — narasi
+                 supervisor harus terbaca di panel ini (lihat OpsConsole). */
+              onDecisionCreated={() => {
+                if (token) void decisionsQuery.refetch();
+              }}
             />
             <ChaosPanel
               role={role ?? "sppg_head"}
@@ -930,6 +1217,11 @@ export default function Home() {
                     <span className="commodity-pill">
                       {perluKeputusan} perlu tindakan
                     </span>
+                    {lewatTenggat > 0 && (
+                      <span className="commodity-pill">
+                        {lewatTenggat} lewat tenggat
+                      </span>
+                    )}
                     <span className="commodity-pill">
                       {decisions.length} total rekomendasi
                     </span>
@@ -1129,12 +1421,23 @@ export default function Home() {
           <FoodSafetyBoard
             batches={batches}
             now={now}
-            commodity={mapCommodity}
-            commodities={COMMODITIES}
-            onChangeCommodity={setMapCommodity}
             loading={batchesLoading}
             error={batchesError}
             onRetry={() => void todayQuery.refetch()}
+            ownLocation={me?.location_name ?? null}
+            ownLocationId={me?.location_id ?? null}
+            routes={safetyRoutesQuery.data}
+            balance={mapData}
+            decisions={decisions}
+            canMutate={APPROVER_ROLES.has(role ?? "")}
+            onRecheck={safetyRecheck}
+            onRepropose={safetyRepropose}
+            onTriggerDisruption={safetyTriggerDisruption}
+            onRecordReceipt={(batchId, checked, catatan) =>
+              recordReceipt(batchId, checked, catatan, token ?? "")
+            }
+            loadReceipts={(batchId) => fetchReceipts(batchId, token ?? "")}
+            onOpenDecisions={() => setTab("evidence")}
           />
         )}
 
@@ -1185,6 +1488,8 @@ export default function Home() {
             kpiLoading={kpiLoading}
             kpiError={kpiError}
             onRetryKpi={() => void kpiQuery.refetch()}
+            windowKey={kpiWindow}
+            onWindowChange={setKpiWindow}
             runs={qualityRuns}
             evaluatedCount={evaluatedCount}
             totalDecisions={decisions.length}
@@ -1234,7 +1539,11 @@ export default function Home() {
               </p>
             )}
             <ProviderPanel providers={providersFromTraces(traces)} />
-            <AgentTraceViewer steps={traces} />
+            <AgentTraceViewer
+              steps={traces}
+              decisionId={selected?.decision_id ?? null}
+              now={now}
+            />
           </section>
         )}
         </div>

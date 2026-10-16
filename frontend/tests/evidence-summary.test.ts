@@ -14,6 +14,10 @@ import {
   approvalFacts,
   costFacts,
   decisionFacts,
+  hiddenFactsLabel,
+  nextStep,
+  hasValue,
+  splitFacts,
   defaultEvidenceId,
   dossierMeta,
   evidenceTally,
@@ -320,5 +324,103 @@ describe("defaultEvidenceId — halaman bukti tidak boleh terbuka kosong", () =>
     expect(defaultEvidenceId([])).toBe(null);
     expect(defaultEvidenceId(null)).toBe(null);
     expect(defaultEvidenceId([{ status: "proposed" } as any])).toBe(null);
+  });
+});
+
+describe("rincian yang belum ada datanya disembunyikan (progressive disclosure)", () => {
+  it("hanya nilai \"—\" yang dianggap kosong; 0 / Rp0 / Tidak tetap terisi", () => {
+    expect(hasValue({ label: "Logistik", value: "—" })).toBe(false);
+    expect(hasValue({ label: "Jumlah", value: "0" })).toBe(true);
+    expect(hasValue({ label: "Biaya", value: "Rp0" })).toBe(true);
+    expect(hasValue({ label: "Dibekai", value: "Tidak" })).toBe(true);
+  });
+
+  it("baris \"—\" tetap kosong walau ada keterangan tambahan", () => {
+    expect(hasValue({ label: "Catatan", value: "—", hint: "belum ada catatan" })).toBe(false);
+  });
+
+  it("splitFacts mengelompokkan tanpa mengubah urutan", () => {
+    const rows = [
+      { label: "Harga beli", value: "Rp14.022.000" },
+      { label: "Logistik", value: "—" },
+      { label: "Biaya aman terkirim", value: "Rp14.875.421" },
+      { label: "Catatan", value: "—" },
+    ];
+    const { filled, empty } = splitFacts(rows);
+    expect(filled.map((r) => r.label)).toEqual(["Harga beli", "Biaya aman terkirim"]);
+    expect(empty.map((r) => r.label)).toEqual(["Logistik", "Catatan"]);
+  });
+
+  it("daftar tanpa baris kosong tidak menambah apa pun", () => {
+    const { filled, empty } = splitFacts([{ label: "Jumlah", value: "492 kg" }]);
+    expect(filled).toHaveLength(1);
+    expect(empty).toHaveLength(0);
+  });
+
+  it("label ringkasan memakai bahasa manusia dan bentuk tunggal yang benar", () => {
+    expect(hiddenFactsLabel(0)).toBe("");
+    expect(hiddenFactsLabel(1)).toBe("1 rincian belum ada datanya");
+    expect(hiddenFactsLabel(4)).toBe("4 rincian belum ada datanya");
+  });
+});
+
+describe("langkah berikutnya: satu kalimat yang menjawab \"apa yang harus saya lakukan\"", () => {
+  const dasar = { role: "sppg_head", status: "pending_approval", summary: SUMMARY };
+
+  it("menunggu persetujuan: menyebut jumlah persetujuan dan yang menahan", () => {
+    const hasil = nextStep({
+      role: "sppg_head",
+      status: "pending_approval",
+      summary: { ...SUMMARY, can_execute: false, blocking_reasons: ["menunggu ahli gizi"], expiry: { valid: true } },
+    });
+    expect(hasil.text).toContain("Menunggu persetujuan (1 dari 2)");
+    expect(hasil.text).toContain("menunggu ahli gizi");
+    expect(hasil.tone).toBe("warn");
+  });
+
+  it("jendela berlaku lewat: dikatakan lewat, bukan disembunyikan", () => {
+    const hasil = nextStep({ ...dasar, summary: { ...SUMMARY, expiry: { valid: false }, can_execute: false } });
+    expect(hasil.text).toContain("sudah lewat");
+    expect(hasil.tone).toBe("warn");
+  });
+
+  it("semua syarat terpenuhi: siap dieksekusi", () => {
+    const hasil = nextStep({ ...dasar, summary: { ...SUMMARY, can_execute: true, expiry: { valid: true } } });
+    expect(hasil.text).toContain("siap dieksekusi");
+    expect(hasil.tone).toBe("ok");
+  });
+
+  it("ditolak: menjelaskan agent bisa mengajukan iterasi baru", () => {
+    const hasil = nextStep({ ...dasar, status: "rejected", summary: { ...SUMMARY, expiry: { valid: true } } });
+    expect(hasil.text).toContain("ditolak");
+    expect(hasil.tone).toBe("danger");
+  });
+
+  it("peran pengawas: tidak dijanjikan tombol yang tidak ada (paritas dengan DecisionActions)", () => {
+    const hasil = nextStep({ role: "bgn_monitor", status: "pending_approval", summary: SUMMARY });
+    expect(hasil.tone).toBe("muted");
+    expect(hasil.text.toLowerCase()).toContain("pengawasan");
+    const approver = nextStep({ role: "sppg_nutritionist", status: "pending_approval", summary: { ...SUMMARY, expiry: { valid: true } } });
+    expect(approver.tone).not.toBe("muted");
+  });
+
+  it("daftar penahan dipangkas supaya kalimatnya tetap terbaca", () => {
+    const hasil = nextStep({
+      role: "sppg_head",
+      status: "pending_approval",
+      summary: {
+        ...SUMMARY,
+        expiry: { valid: true },
+        blocking_reasons: ["alasan satu", "alasan dua", "alasan tiga", "alasan empat"],
+      },
+    });
+    expect(hasil.text).toContain("alasan satu · alasan dua");
+    expect(hasil.text).toContain("(+2 lain)");
+    expect(hasil.text).not.toContain("alasan tiga");
+  });
+  it("tanpa ringkasan (data belum tiba): tidak mengarang, tetap satu kalimat", () => {
+    const hasil = nextStep({ role: "sppg_head", status: "pending_approval", summary: null });
+    expect(hasil.text.length).toBeGreaterThan(10);
+    expect(hasil.text).not.toContain("undefined");
   });
 });

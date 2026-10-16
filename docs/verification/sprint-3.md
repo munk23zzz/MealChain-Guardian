@@ -314,3 +314,21 @@ Evidence live (ronde 3-slot, arsitektur sama — jalur E2E tersertifikasi):
   (`verified_by`, `verifier_note`).
 - **Gate**: backend 458 passed + ruff; frontend 55 passed + tsc + lint.
 
+## Catatan lintas waktu — 2026-10-16 (Hermes)
+
+Dua klaim di atas sudah tidak lagi benar dan digantikan, bukan dihapus:
+
+- Baris **"Strands Agent `agent/supervisor_agent.py` (root) — BLOCKED live"** (§S3-03+04 di atas):
+  berkasnya **sekarang ADA** (`agent/supervisor_agent.py`, 2026-10-16) dan hello-world-nya sudah
+  dibuktikan **live ke Bedrock** (`us.anthropic.claude-haiku-4-5-20251001-v1:0`, 3,4 dtk, akun
+  624606539664) + tes kontrak `backend/tests/test_supervisor_agent.py` **4 passed**. Yang **tetap
+  Blocked** hanyalah deploy ke AgentCore Runtime (`AGENTCORE_RUNTIME_ARN` & `AGENTCORE_GATEWAY_URL`
+  masih 0 char), dan orkestrator Event 1 masih berjalan **tanpa** memanggil agent Strands.
+- **Orkestrator Event 1 kini punya pemicu di aplikasi**: `POST /demo/event1`
+  (`backend/app/api/demo.py`) + tombol "Jalankan Event 1 penuh" di `frontend/components/OpsConsole.tsx`
+  (tab Demo Control). Sebelum ini `run_event1` hanya dipanggil berkas tes sehingga langkah SUPERVISE
+  tidak pernah muncul di aplikasi.
+- Catatan ID: berkas tes menyebut dirinya kontrak **S0-07**, sedangkan tabel TODO.md menaruh Strands
+  hello-world di **S0-06** dan S0-07 = berkas `.env`. Selisih penomoran ini ada di dokumen, bukan di kode.
+- Bukti lengkap + batas jujur: `docs/verification/fase-11.md`; versi dokumen ini tidak diubah.
+

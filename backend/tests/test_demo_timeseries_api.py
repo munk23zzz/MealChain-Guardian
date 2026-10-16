@@ -20,7 +20,13 @@ import pytest
 from sqlalchemy import create_engine, text
 
 from app.seed.seed_data import load_seed
-from app.seed.timeseries import CANONICAL_REF, DEFAULT_END, DEFAULT_START, purge_demo_rows
+from app.seed.timeseries import (
+    CANONICAL_REF,
+    DEFAULT_END,
+    DEFAULT_START,
+    generate_timeseries,
+    purge_demo_rows,
+)
 
 DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
 TABLES = ("supply_records", "price_signals", "menu_plans")
@@ -44,11 +50,19 @@ def _counts() -> dict[str, int]:
         engine.dispose()
 
 
-def _teardown_counts(before: dict[str, int], client, headers: dict) -> None:
-    """Kembalikan DB: ada baris demo sebelumnya → bangun ulang; kalau tidak → bersihkan."""
+def _teardown_counts(before: dict[str, int]) -> None:
+    """Kembalikan DB: ada baris demo sebelumnya → bangun ulang; kalau tidak → bersihkan.
+
+    Pemulihan memakai fungsi modul LANGSUNG, bukan HTTP. Sebelumnya ia mem-POST
+    `/demo/timeseries` memakai token dari fixture `auth_headers`; saat teardown
+    token itu bisa sudah tidak sah (401) sehingga pemulihan tak jalan — dan
+    justru kegagalan teardown inilah yang membiarkan deret kanonik terhapus lalu
+    menyeret puluhan tes lain (kejadian 2026-10-16 malam).
+    """
     if any(v for k, v in before.items() if k.endswith(":demo")):
-        r = client.post("/demo/timeseries", json={"force": False}, headers=headers)
-        assert r.status_code == 200, r.text
+        asyncio.run(
+            generate_timeseries(DEFAULT_START, DEFAULT_END, interval_hours=12)
+        )
     else:
         asyncio.run(purge_demo_rows())
 
@@ -63,7 +77,7 @@ def demo_state(auth_headers):
     before = _counts()
     with TestClient(app) as client:
         yield client
-        _teardown_counts(before, client, auth_headers)
+        _teardown_counts(before)
 
 
 def _menu_coverage() -> tuple[int, int, int]:

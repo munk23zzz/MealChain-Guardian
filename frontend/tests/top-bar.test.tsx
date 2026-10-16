@@ -190,7 +190,11 @@ describe("wiring header & rail di app/page.tsx", () => {
     const rail = pageSrc.slice(pageSrc.indexOf("side-brand"), pageSrc.indexOf("</aside>"));
     expect(rail).toContain("MealChain Guardian");
     expect(rail).toContain('aria-label="Keluar"');
-    expect(rail).toContain("side-tab");
+    // Dulu di sini diperiksa literal "side-tab" karena nav-nya ditulis inline di
+    // halaman ini. WS-D memindahkan nav ke components/SideNav.tsx (supaya bisa
+    // diuji sebagai komponen) — jadi yang diperiksa sekarang: rail memang
+    // merender SideNav. Isi tab & aria-current-nya diuji di tests/side-nav.test.tsx.
+    expect(rail).toContain("<SideNav");
   });
 
   it("aturan cakupan lokasi masih dijaga logika murninya (lib/topbar.ts)", () => {

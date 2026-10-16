@@ -41,7 +41,13 @@ export const queryKeys = {
   me: (scope: string) => ["me", scope] as const,
   balanceMap: (scope: string, commodity: string) =>
     ["balance-map", scope, commodity] as const,
-  kpiLive: (scope: string) => ["kpi-live", scope] as const,
+  kpiLive: (scope: string, windowKey: string = "24h") =>
+    ["kpi-live", scope, windowKey] as const,
+  // Kalender agenda (langkah 2, 2026-10-16): rentang grid bulan masuk kunci
+  // query supaya berpindah bulan memakai cache yang benar dan bulan yang sama
+  // tidak diambil dua kali.
+  agenda: (scope: string, start: string, end: string) =>
+    ["agenda", scope, start, end] as const,
   decisionDetail: (decisionId: string, scope: string) =>
     ["decision-detail", decisionId, scope] as const,
   qualitySample: (scope: string, sampleKey: string) =>

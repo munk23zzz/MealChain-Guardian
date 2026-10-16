@@ -253,3 +253,117 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if item.get_closest_marker("live"):
             item.add_marker(pytest.mark.skip(reason="live probe: jalankan dengan -m live"))
+
+
+# ---------------------------------------------------------------------------
+# Jaring pengaman kebersihan DB kerja.
+#
+# Banyak test membuat user LANGSUNG ke database yang sama dengan aplikasi
+# (mis. tests/test_auth.py) tanpa pembersihan. Akibatnya tabel `users` di DB
+# demo menumpuk 1206 user sampah `@test.local` dan tidak lagi mencerminkan data
+# demo (dibersihkan manual 2026-10-16). Fixture autouse di bawah menyapu sisa
+# itu di AWAL dan AKHIR setiap sesi pytest, sehingga kebersihan tidak lagi
+# bergantung pada tiap test mengurus dirinya sendiri — dan tetap jalan walau
+# ada test yang gagal.
+#
+# Akun demo memakai domain `demo.local`, jadi TIDAK PERNAH cocok dengan pola
+# `%@test.local`: sapuan ini tidak bisa menyentuh data demo.
+# ---------------------------------------------------------------------------
+
+_SISA_TEST_LIKE = "%@test.local"
+
+
+def _sapu_sisa_test() -> int:
+    """Hapus user sisa test + approval yang menahannya.
+
+    Urutan penting: `approvals.approved_by` menunjuk users dengan aturan
+    NO ACTION, jadi baris approval harus dibuang lebih dulu atau DELETE user
+    akan gagal. Mengembalikan 0 bila tidak ada sisa / DB tidak terjangkau
+    (sesi dijalankan dari host, di luar jaringan compose).
+    """
+    try:
+        engine = create_engine(
+            "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+        )
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "DELETE FROM approvals WHERE approved_by IN "
+                        "(SELECT id FROM users WHERE email LIKE :p)"
+                    ),
+                    {"p": _SISA_TEST_LIKE},
+                )
+                hasil = conn.execute(
+                    text("DELETE FROM users WHERE email LIKE :p"),
+                    {"p": _SISA_TEST_LIKE},
+                )
+            return int(hasil.rowcount or 0)
+        finally:
+            engine.dispose()
+    except Exception as exc:  # jalur host tanpa Postgres: sapuan dilewati
+        print(f"[conftest] sapu sisa test dilewati: {exc}")
+        return 0
+
+
+@pytest.fixture(scope="session", autouse=True)
+def bersihkan_sisa_test():
+    """Sapu user sisa test sebelum dan sesudah sesi (lihat catatan di atas)."""
+    _sapu_sisa_test()
+    yield
+    sisa = _sapu_sisa_test()
+    if sisa:
+        print(f"[conftest] {sisa} user sisa test dibersihkan dari DB kerja")
+
+
+# ---------------------------------------------------------------------------
+# Jaring pengaman DERET DEMO KANONIK.
+#
+# `purge_demo_rows()` — dipakai `tests/test_timeseries_db.py` dan
+# `tests/test_demo_timeseries_api.py` — menghapus SELURUH baris `origin='demo'`,
+# termasuk deret kanonik 1 Sep–5 Nov (supply 2190 · price 2274 · menu 590).
+# Ketika pemulihan di berkas tes itu gagal (dulu: teardown memakai token HTTP
+# yang sudah tidak sah → 401), DB kerja tertinggal kosong: puluhan tes lain gagal
+# berantai dan data presentasi juri lenyap (kejadian 2026-10-16 malam).
+#
+# Fixture di bawah mencatat jumlah baris demo di AWAL sesi dan memulihkannya di
+# AKHIR sesi bila berkurang, memakai generator resmi yang sama — jadi satu sesi
+# pytest tidak bisa lagi meninggalkan DB tanpa deret kanonik, walau ada tes yang
+# gagal separuh jalan.
+# ---------------------------------------------------------------------------
+
+
+def _jumlah_deret_demo() -> dict[str, int]:
+    """Jumlah baris `origin='demo'` per tabel; {} bila DB tidak terjangkau."""
+    try:
+        import asyncio
+
+        from app.seed.timeseries import demo_data_status
+
+        status = asyncio.run(demo_data_status())
+        return {nama: int(nilai["demo"]) for nama, nilai in status["tables"].items()}
+    except Exception as exc:  # jalur host tanpa Postgres: dilewati
+        print(f"[conftest] status deret demo dilewati: {exc}")
+        return {}
+
+
+@pytest.fixture(scope="session", autouse=True)
+def jaring_deret_demo():
+    """Pulihkan deret demo kanonik bila sesi ini menghabiskannya."""
+    awal = _jumlah_deret_demo()
+    yield
+    akhir = _jumlah_deret_demo()
+    if not awal or not akhir:
+        return
+    if all(akhir.get(nama, 0) >= nilai for nama, nilai in awal.items()):
+        return
+
+    import asyncio
+
+    from app.seed.timeseries import pastikan_deret_demo
+
+    hasil = asyncio.run(pastikan_deret_demo())
+    print(
+        "[conftest] deret demo kanonik dipulihkan: "
+        f"{hasil['sebelum']} -> {hasil['sesudah']} (harapan {hasil['harapan']})"
+    )

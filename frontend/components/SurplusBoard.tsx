@@ -82,19 +82,61 @@ export default function SurplusBoard({
       <div className="board-grid board-grid-2">
         <article className="card">
           <h2>Neraca hari ini</h2>
+          {/* Fase 5: neraca jadi satu aliran surplus → kekurangan. Angkanya tetap
+              dari `surplusSummary`; tidak ada angka baru yang dikarang di sini. */}
+          <div
+            className="balance-flow"
+            /* Bila salah satu sisi tidak punya angka, panahnya tidak boleh tetap
+               berwarna aksen: itu akan menggambar aliran yang tidak terbukti. */
+            data-kosong={summary.surplusKg === null || summary.shortageKg === null ? "true" : undefined}
+          >
+            <div className="balance-side balance-side-surplus">
+              <span className="balance-label">Total surplus</span>
+              <span className="balance-value">
+                {loading && !locations ? "…" : summary.surplusKg === null ? "—" : formatKg(summary.surplusKg)}
+              </span>
+            </div>
+            <svg
+              className="balance-arrow"
+              viewBox="0 0 120 24"
+              role="img"
+              aria-label="Surplus dialihkan untuk menutup kekurangan"
+              focusable="false"
+            >
+              <defs>
+                <marker
+                  id="balance-arrowhead"
+                  viewBox="0 0 10 10"
+                  refX="8"
+                  refY="5"
+                  markerWidth="6"
+                  markerHeight="6"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M 0 0 L 10 5 L 0 10 z" />
+                </marker>
+              </defs>
+              <line
+                x1="2"
+                y1="12"
+                x2="102"
+                y2="12"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeDasharray="7 6"
+                markerEnd="url(#balance-arrowhead)"
+              />
+            </svg>
+            <div className="balance-side balance-side-shortage">
+              <span className="balance-label">Total kekurangan</span>
+              <span className="balance-value">
+                {summary.shortageKg === null ? "—" : formatKg(summary.shortageKg)}
+              </span>
+            </div>
+          </div>
           <FactList
             rows={[
-              {
-                label: "Total surplus",
-                value: loading && !locations ? "…" : summary.surplusKg === null ? "—" : formatKg(summary.surplusKg),
-                tone: summary.surplusKg === null ? "plain" : "ok",
-              },
               { label: "Lokasi surplus", value: String(summary.surplusCount) },
-              {
-                label: "Total kekurangan",
-                value: summary.shortageKg === null ? "—" : formatKg(summary.shortageKg),
-                tone: summary.shortageKg === null ? "plain" : "warn",
-              },
               { label: "Lokasi kekurangan", value: String(summary.shortageCount) },
               { label: "Lokasi seimbang", value: String(summary.balancedCount) },
             ]}

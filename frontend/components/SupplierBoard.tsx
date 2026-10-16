@@ -20,6 +20,7 @@ import { useState } from "react";
 
 import PageHeader from "./PageHeader";
 import FactList from "./FactList";
+import ShipmentBoard from "./ShipmentBoard";
 import { SupplierExclusionView } from "./SupplierExclusionPanel";
 import {
   directoryMetrics,
@@ -210,6 +211,17 @@ export default function SupplierBoard({
           </p>
         </article>
       </div>
+
+      {/* Papan kiriman (Arah B riset 16 Okt 2026): satu baris per KIRIMAN —
+          pemasok, tujuan, muatan, jalur, berangkat, ETA, sisa, masa layak, mutu,
+          keadaan — dengan urutan "paling mendesak". Menggantikan kartu ringkas
+          di halaman ini (dan peran kolom teks "Jalur kirim"): papan sudah memuat
+          semua angka itu per kiriman, dan menyimpan keduanya hanya akan menjadi
+          dua penyaji data yang sama. */}
+      <ShipmentBoard
+        routes={supplierRoutes}
+        note="Satu baris per kiriman aktif di jaringan. Kolom Jalur kirim di tabel bawah meringkas jalur per pemasok."
+      />
 
       <article className="card">
         <h2>Daftar pemasok</h2>

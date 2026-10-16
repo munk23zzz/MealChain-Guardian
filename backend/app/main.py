@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.actions import router as actions_router
 from app.api.admin import router as admin_router
+from app.api.agenda import router as agenda_router
 from app.api.auth import router as auth_router
 from app.api.balance import router as balance_router
 from app.api.batches import router as batches_router
@@ -26,6 +27,7 @@ from app.api.kpi import router as kpi_router
 from app.api.ledger import router as ledger_router
 from app.api.logistics import router as logistics_router
 from app.api.price import router as price_router
+from app.api.receipts import router as receipts_router
 from app.api.safety import router as safety_router
 from app.api.supplier_exclusion_context import router as supplier_exclusion_context_router
 from app.api.supplier_exclusions import router as supplier_exclusions_router
@@ -91,6 +93,8 @@ app.include_router(price_router)
 app.include_router(logistics_router)
 app.include_router(balance_router)
 app.include_router(batches_router)
+# 016: catatan penerimaan barang ("Lainnya" dari kartu Penerimaan barang).
+app.include_router(receipts_router)
 app.include_router(cost_router)
 app.include_router(evidence_router)
 app.include_router(decisions_router)
@@ -99,6 +103,7 @@ app.include_router(auth_router)
 app.include_router(actions_router)
 app.include_router(demo_router)
 app.include_router(kpi_router)
+app.include_router(agenda_router)
 app.include_router(ledger_router)
 app.include_router(dossier_router)
 app.include_router(compliance_router)

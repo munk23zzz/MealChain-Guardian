@@ -97,7 +97,7 @@ export default function Event2Panel({
   return (
     <section className="event2-panel card" aria-label="Event 2 — anomali harga">
       <div className="card-header">
-        <h4>Event 2 — Deteksi Anomali Harga</h4>
+        <h3>Event 2 — Deteksi Anomali Harga</h3>
         <StatusBadge status={result ? result.status : "proposed"} />
       </div>
       <p className="event2-note">

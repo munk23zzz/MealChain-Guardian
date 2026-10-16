@@ -30,4 +30,25 @@ describe("wiring KPI di app/page.tsx (S4-03)", () => {
     expect(boardSrc).toContain("kpiError");
     expect(boardSrc).toContain("kpi={kpi}");
   });
+
+  // Pemilih periode (2026-10-16): jendela dimiliki HALAMAN, bukan komponen.
+  // Kalau state ini ditaruh di dalam komponen, hook tak bisa menerimanya dan
+  // pilihannya jadi kosmetik — angka di layar tetap 24 jam. Karena itu batas ini
+  // dipaku: halaman → hook (untuk fetch) DAN halaman → board → dashboard (untuk
+  // menandai pilihan aktif).
+  it("jendela KPI dimiliki halaman lalu diteruskan ke hook dan ke board", () => {
+    expect(pageSrc).toContain("kpiWindow");
+    expect(pageSrc).toMatch(/useKpi\([^)]*kpiWindow/);
+    expect(pageSrc).toMatch(/windowKey=\{kpiWindow\}/);
+    expect(pageSrc).toMatch(/onWindowChange=\{setKpiWindow\}/);
+    expect(boardSrc).toContain("windowKey");
+    expect(boardSrc).toMatch(/windowKey=\{windowKey\}/);
+    expect(boardSrc).toMatch(/onWindowChange=\{onWindowChange\}/);
+  });
+
+  it("hook memakai daftar jendela bersama (bukan angka 24 jam yang dipaku)", () => {
+    expect(hookSrc).toContain("kpiWindowRange");
+    expect(hookSrc).toMatch(/kpiLive\(scope, windowKey/);
+    expect(hookSrc).not.toContain("KPI_WINDOW_MS");
+  });
 });

@@ -21,12 +21,15 @@
 import AgentQualityBoard from "./AgentQualityBoard";
 import KPIDashboard from "./KPIDashboard";
 import type { QualityRun } from "../lib/agent-quality";
+import type { KpiWindowKey } from "../lib/kpi";
 
 export default function KpiQualityBoard({
   kpi,
   kpiLoading = false,
   kpiError = null,
   onRetryKpi,
+  windowKey,
+  onWindowChange,
   runs,
   evaluatedCount,
   totalDecisions,
@@ -40,6 +43,9 @@ export default function KpiQualityBoard({
   kpiLoading?: boolean;
   kpiError?: string | null;
   onRetryKpi?: () => void;
+  /** Jendela KPI yang sedang diminta halaman + pengubahnya (pemilih periode). */
+  windowKey?: KpiWindowKey;
+  onWindowChange?: (key: KpiWindowKey) => void;
   /** Sampel keputusan untuk penilaian mutu agen (8 terakhir dalam cakupan). */
   runs: QualityRun[];
   evaluatedCount: number;
@@ -56,6 +62,8 @@ export default function KpiQualityBoard({
         loading={kpiLoading}
         error={kpiError}
         onRetry={onRetryKpi}
+        windowKey={windowKey}
+        onWindowChange={onWindowChange}
       />
       {/* Pembatas bergaris: dua bagian panjang dalam satu gulungan tanpa
           penanda mudah terbaca sebagai satu tabel raksasa. */}
