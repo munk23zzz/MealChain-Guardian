@@ -24,12 +24,18 @@ export function useAgenda(
   scope: string,
   tab: string,
   range: { start: string; end: string },
+  /**
+   * Saklar tambahan dari halaman. Dipakai popup pemilih tanggal: rentang bulan
+   * DRAFT hanya diminta saat popup terbuka, jadi membuka tab "Hari Ini" tidak
+   * memuat dua bulan sekaligus.
+   */
+  enabled: boolean = true,
 ) {
   const aktif = shouldLoadKpi(tab);
   return useQuery({
     queryKey: queryKeys.agenda(scope, range.start, range.end),
     queryFn: () => fetchAgenda(token as string, range.start, range.end),
-    enabled: Boolean(token) && aktif && Boolean(range.start),
+    enabled: Boolean(token) && aktif && enabled && Boolean(range.start),
     // Data historis: tahan lama, tapi tetap disegarkan saat jendela fokus.
     staleTime: 5 * 60_000,
   });

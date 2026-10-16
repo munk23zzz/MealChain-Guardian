@@ -57,6 +57,34 @@ describe("hook useAgenda", () => {
   });
 });
 
+describe("wiring popup pemilih tanggal (permintaan pemilik 2026-10-17)", () => {
+  it("bulan DRAFT popup dimiliki halaman, terpisah dari bulan grid", () => {
+    expect(pageSrc).toContain("agendaPickerOpen");
+    expect(pageSrc).toContain("agendaPickerMonth");
+    expect(pageSrc).toMatch(/const agendaPickerBulan = agendaPickerMonth \?\? bulanDasar/);
+    // Bulan draft TIDAK menimpa bulan grid: kartu tetap memakai `agendaBulan`,
+    // dan state draft berdiri sendiri.
+    expect(pageSrc).toMatch(/const \[agendaPickerMonth, setAgendaPickerMonth\] = useState</);
+  });
+
+  it("rentang bulan draft dimuat lewat hook yang sama, hanya saat popup terbuka", () => {
+    expect(pageSrc).toMatch(
+      /useAgenda\(\s*token,\s*identityScope,\s*tab,\s*agendaPickerRange,\s*agendaPickerOpen\s*\)/
+    );
+  });
+
+  it("halaman menyerahkan pemilih ke TodayDashboard (satu prop, bukan belasan)", () => {
+    expect(pageSrc).toMatch(/agendaPicker=\{\{/);
+    expect(dashboardSrc).toMatch(/agendaPicker\?: AgendaPickerProps/);
+    expect(dashboardSrc).toMatch(/picker=\{agendaPicker\}/);
+    expect(dashboardSrc).not.toMatch(/fetchAgenda\(/);
+  });
+
+  it("tombol pemicu memakai ikon inline, bukan pustaka ikon baru", () => {
+    expect(dashboardSrc).toMatch(/from "\.\/AgendaDatePicker"/);
+  });
+});
+
 describe("lapisan API & kunci query", () => {
   it("fetchAgenda memanggil GET /agenda dengan start & end", () => {
     expect(apiSrc).toMatch(/export async function fetchAgenda/);

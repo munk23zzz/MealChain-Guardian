@@ -114,6 +114,30 @@ export function monthTitle(year: number, month: number): string {
   return `${AGENDA_MONTH_LABELS[month]} ${year}`;
 }
 
+/** Pilihan bulan untuk dropdown pemilih tanggal (Januari→Desember). */
+export function monthChoices(): { value: number; label: string }[] {
+  return Object.keys(AGENDA_MONTH_LABELS)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .map((value) => ({ value, label: AGENDA_MONTH_LABELS[value] }));
+}
+
+/**
+ * Tahun yang bisa dipilih di pemilih tanggal: setiap tahun yang dicakup rentang
+ * data (`fromIso`..`toIso`), DITAMBAH tahun yang sedang tampil bila di luar
+ * rentang itu — tanpa itu `<select>` bisa menampilkan nilai yang tidak ada di
+ * daftarnya sendiri (kontrol tampak kosong padahal bulan itu sedang dibuka).
+ * Tahunnya berasal dari rentang data yang didukung backend, bukan angka karangan.
+ */
+export function pickerYears(fromIso: string, toIso: string, keep?: number): number[] {
+  const dari = Number(fromIso.slice(0, 4));
+  const sampai = Number(toIso.slice(0, 4));
+  const tahun: number[] = [];
+  for (let y = Math.min(dari, sampai); y <= Math.max(dari, sampai); y += 1) tahun.push(y);
+  if (keep !== undefined && !tahun.includes(keep)) tahun.push(keep);
+  return tahun.sort((a, b) => a - b);
+}
+
 /** "Selasa, 20 Oktober 2026" — tanpa Intl, supaya stabil di server & klien. */
 export function formatDayLabel(iso: string): string {
   const d = new Date(`${iso}T00:00:00Z`);

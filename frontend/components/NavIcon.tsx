@@ -237,3 +237,15 @@ export function CloseIcon({ size = 16 }: { size?: number }) {
   );
 }
 
+/** Pemicu pemilih tanggal (permintaan pemilik 2026-10-17): ikon kecil yang
+ *  diklik untuk membuka popup bulan/tahun — kalender garis ala ikon acuan. */
+export function CalendarIcon({ size = 14 }: { size?: number }) {
+  return (
+    <Glyph size={size} strokeWidth={1.9}>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+      <path d="M3.5 10h17" />
+      <path d="M8 3v3M16 3v3" />
+    </Glyph>
+  );
+}
+

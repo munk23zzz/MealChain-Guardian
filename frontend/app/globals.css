@@ -4161,6 +4161,89 @@ a:focus-visible {
   }
 }
 
+/* Pemilih tanggal — ikon kecil di header kartu + popup bulan/tahun
+   (permintaan pemilik 2026-10-17). Memakai bentuk pil & dropdown yang sama
+   dengan kontrol lain di konsol supaya tidak lahir bahasa visual baru.
+   Sebelumnya judul bulan cuma teks mati, jadi melompat setahun = 12 klik ‹ ›. */
+.agenda-month-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  border: 1px solid var(--line, #e2e8f0);
+  background: var(--surface);
+  color: inherit;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: var(--fs-2);
+  transition: border-color var(--dur-2) var(--ease-standard),
+    color var(--dur-2) var(--ease-standard);
+}
+
+.agenda-month-btn:hover,
+.agenda-month-btn[aria-expanded="true"] {
+  border-color: var(--primary, #005c55);
+  color: var(--primary, #005c55);
+}
+
+.agenda-month-btn .agenda-month {
+  font-weight: 600;
+}
+
+.agenda-picker {
+  display: grid;
+  gap: 10px;
+}
+
+.agenda-picker-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.agenda-picker-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-2);
+  color: var(--slate);
+}
+
+.agenda-picker-field select {
+  border: 1px solid var(--line, #e2e8f0);
+  background: var(--surface);
+  color: inherit;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.agenda-grid-popup .agenda-cell {
+  padding: 5px 2px;
+}
+
+.agenda-picker-note {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--slate);
+}
+
+.agenda-picker-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (pointer: coarse) {
+  .agenda-month-btn,
+  .agenda-picker-field select,
+  .agenda-grid-popup .agenda-cell {
+    min-height: 44px;
+  }
+}
+
 /* Pemilih periode KPI (2026-10-16). Sebelumnya jendela dipaku 24 jam di hook;
    kontrol ini memberi tahu halaman rentang mana yang dimuat. Memakai bentuk pil
    yang sudah ada (`commodity-pill`) supaya tidak lahir bahasa visual baru, dan

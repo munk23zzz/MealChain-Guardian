@@ -36,15 +36,35 @@ const PAYLOAD = {
   days: [HARI],
 };
 
+const PICKER = {
+  open: false,
+  month: { year: 2026, month: 10 },
+  years: [2026, 2027],
+  agenda: PAYLOAD,
+  loading: false,
+  error: null,
+  today: "2026-10-17",
+  selected: "2026-10-20",
+  onOpen: () => {},
+  onClose: () => {},
+  onShiftMonth: () => {},
+  onSetMonth: () => {},
+  onSelect: () => {},
+  onToday: () => {},
+  onRetry: () => {},
+};
+
 function render(overrides: Record<string, unknown> = {}) {
   const props: any = {
     agenda: PAYLOAD,
     year: 2026,
     month: 10,
     selected: "2026-10-20",
+    today: "2026-10-17",
     onSelect: () => {},
     onShiftMonth: () => {},
     onRetry: () => {},
+    picker: PICKER,
     ...overrides,
   };
   return renderToStaticMarkup(<TodayAgendaCalendar {...props} />);
@@ -74,6 +94,33 @@ describe("kalender agenda — grid", () => {
   it("menandai sel di luar bulan agar mata tahu batas bulan", () => {
     const html = render();
     expect(html).toContain("agenda-cell-outer");
+  });
+});
+
+describe("kalender agenda — header sebagai pemicu popup pemilih tanggal", () => {
+  it("judul bulan jadi tombol pemicu (ikon kecil + nama bulan), bukan teks mati", () => {
+    const html = render();
+    expect(html).toContain("agenda-month-btn");
+    expect(html).toMatch(/aria-haspopup="dialog"/);
+    expect(html).toMatch(/aria-expanded="false"/);
+    // Teks bulan tetap terlihat di header: pengguna harus tahu bulan mana yang
+    // sedang tampil tanpa membuka popup.
+    expect(html).toContain("Oktober 2026");
+    expect(html).toMatch(/<svg[^>]*aria-hidden="true"/);
+  });
+
+  it("tombol ‹ › dan 'Hari ini' tetap ada di samping pemicu", () => {
+    const html = render();
+    expect(html).toContain('aria-label="Bulan sebelumnya"');
+    expect(html).toContain('aria-label="Bulan berikutnya"');
+    expect(html).toContain("Hari ini");
+  });
+
+  it("pemicu memakai bulan DRAFT hanya lewat popup — header tetap bulan grid", () => {
+    const html = render({ picker: { ...PICKER, open: true, month: { year: 2026, month: 3 } } });
+    // Grid & header tetap Oktober 2026; Maret hanya ada di dalam popup.
+    expect(html).toContain("Oktober 2026");
+    expect(html).toMatch(/aria-expanded="true"/);
   });
 });
 

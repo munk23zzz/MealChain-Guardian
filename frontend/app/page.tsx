@@ -30,9 +30,13 @@ import {
   gridRange,
   monthGrid,
   monthOf,
+  pickerYears,
   shiftMonth,
   wibToday,
 } from "../lib/agenda";
+// Rentang data yang didukung backend — sumber daftar TAHUN di pemilih tanggal
+// (bukan angka karangan): tahun pemilih = tahun yang dicakup rentang ini.
+import { RANGE_MAX, RANGE_MIN } from "../lib/demo-data";
 import type { KpiWindowKey } from "../lib/kpi";
 import { useMe } from "../lib/hooks/useMe";
 import { useQualitySample } from "../lib/hooks/useQualitySample";
@@ -430,6 +434,56 @@ export default function Home() {
     [decisions]
   );
   const qualityRuns = useMemo<QualityRun[]>(
+
+  // Popup pemilih tanggal (permintaan pemilik 2026-10-17). Kalender lama hanya
+  // punya ‹ › dan judul bulan yang mati: melompat setahun = 12 klik. Bulan DRAFT
+  // popup dimiliki HALAMAN (bukan komponen) karena rentang draft itulah yang
+  // diminta ke `GET /agenda`; memilih tanggal baru mengubah hari & bulan yang
+  // dipakai kartu. Rentang draft hanya diambil saat popup terbuka.
+  const [agendaPickerOpen, setAgendaPickerOpen] = useState(false);
+  const [agendaPickerMonth, setAgendaPickerMonth] = useState<{
+    year: number;
+    month: number;
+  } | null>(null);
+  // Jaring pengaman tipe: halaman hanya merender kalender saat bulan grid sudah
+  // diketahui, jadi cabang "belum ada jam" ini praktis tak terpakai.
+  const bulanDasar = agendaBulan ?? monthOf(agendaDay ?? "2026-10-16");
+  const agendaPickerBulan = agendaPickerMonth ?? bulanDasar;
+  const agendaPickerRange = agendaPickerBulan
+    ? gridRange(monthGrid(agendaPickerBulan.year, agendaPickerBulan.month))
+    : { start: "", end: "" };
+  const agendaPickerQuery = useAgenda(
+    token,
+    identityScope,
+    tab,
+    agendaPickerRange,
+    agendaPickerOpen
+  );
+  // Daftar TAHUN = tahun yang dicakup rentang data backend, ditambah tahun yang
+  // sedang dibuka supaya <select> tak pernah menampilkan nilai di luar daftarnya.
+  const agendaPickerYears = pickerYears(RANGE_MIN, RANGE_MAX, agendaPickerBulan.year);
+
+  const openAgendaPicker = () => {
+    setAgendaPickerMonth(null);
+    setAgendaPickerOpen(true);
+  };
+  const closeAgendaPicker = () => {
+    setAgendaPickerOpen(false);
+    setAgendaPickerMonth(null);
+  };
+  const setAgendaPickerBulan = (bulan: { year: number; month: number }) => {
+    setAgendaPickerMonth(bulan);
+  };
+  const shiftAgendaPickerMonth = (delta: number) => {
+    setAgendaPickerMonth(shiftMonth(agendaPickerBulan.year, agendaPickerBulan.month, delta));
+  };
+  /** Pilih hari dari POPUP: hari + bulan ikut pindah, lalu popup ditutup. */
+  const pickAgendaDate = (iso: string) => {
+    if (!iso) return;
+    selectAgendaDate(iso);
+    setAgendaPickerOpen(false);
+    setAgendaPickerMonth(null);
+  };
     () =>
       (sampleQuery.rows ?? []).map(({ decisionId, trace, summary }) =>
         runOf(byDecisionId.get(decisionId), trace, summary)
@@ -820,6 +874,23 @@ export default function Home() {
               setTab("recommendations");
             }}
             onOpenAllDecisions={() => setTab("recommendations")}
+            agendaPicker={{
+              open: agendaPickerOpen,
+              month: agendaPickerBulan,
+              years: agendaPickerYears,
+              agenda: agendaPickerQuery.data ?? null,
+              loading: agendaPickerQuery.isLoading,
+              error: agendaErrorText(agendaPickerQuery.error),
+              today: now ? wibToday(now) : undefined,
+              selected: agendaDay ?? "",
+              onOpen: openAgendaPicker,
+              onClose: closeAgendaPicker,
+              onShiftMonth: shiftAgendaPickerMonth,
+              onSetMonth: setAgendaPickerBulan,
+              onSelect: pickAgendaDate,
+              onToday: () => pickAgendaDate(agendaDay ?? ""),
+              onRetry: () => void agendaPickerQuery.refetch(),
+            }}
             onOpenLocation={(location) => {
               setActiveLocation(location);
               setTab("overview");

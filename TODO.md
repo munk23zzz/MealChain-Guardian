@@ -206,6 +206,32 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 > (klik "Hari ini" tak memindah bulan) ditemukan saat verifikasi hidup & sudah
 > diperbaiki.
 > Detail: docs/verification/kalender-agenda-harian.md.
+> **Kalender — langkah 3: popup pemilih tanggal (permintaan pemilik 2026-10-17).**
+> Judul bulan dulu teks MATI dan navigasinya hanya ‹ ›, jadi melompat setahun =
+> 12 klik. Sekarang judul bulan = TOMBOL dengan ikon kalender kecil yang membuka
+> popup: dropdown **Bulan** (12 nama Indonesia) + **Tahun** (2026–2027, diambil
+> dari rentang data `lib/demo-data.ts` — bukan angka karangan) + grid hari
+> berpenanda catatan, plus tombol "Hari ini"/"Tutup". Tombol ‹ › & "Hari ini" di
+> kartu TETAP; grid besar TETAP (permintaan pemilik). Berkas: baru
+> `components/AgendaDatePicker.tsx` (popup + tipe `AgendaPickerProps`) &
+> `components/AgendaMonthGrid.tsx` (grid dipakai bersama kartu & popup — bentuk
+> sel tak bisa lagi berbeda); diubah `lib/agenda.ts` (`monthChoices`,
+> `pickerYears`), `lib/hooks/useAgenda.ts` (saklar `enabled`), `TodayAgendaCalendar`,
+> `TodayDashboard` (1 prop `agendaPicker`), `app/page.tsx` (bulan DRAFT popup),
+> `components/NavIcon.tsx` (`CalendarIcon`), `app/globals.css`. TANPA dependensi
+> baru (riset: react-day-picker dkk ditolak; `input type=date` native tak bisa
+> menampilkan titik catatan). Bulan draft diminta lewat `useAgenda` yang sama
+> HANYA saat popup terbuka, dan TIDAK menimpa bulan kartu. 25 uji baru RED→GREEN
+> (15 popup jsdom + 3 grid/header + 3 daftar bulan-tahun + 4 wiring); gerbang
+> frontend **80 berkas / 945 uji hijau, tsc 0, lint 0**. Live (SPPG Head, Hari
+> Ini): popup terbuka dari ikon, dropdown Bulan=Oktober/Tahun=2026, grid 42 sel;
+> pilih September 2026 di draft → grid popup 31 Agu–11 Okt berisi titik catatan
+> September sementara KARTU tetap Oktober; klik 1 Sep → popup tertutup, kartu
+> pindah ke September 2026, panel "Selasa, 1 September 2026" rencana 1.217 porsi
+> + pasokan 6 baris (cocok dengan catatan langkah 2); Tahun=2027 → grid 30 Agu–10
+> Okt 2027 tanpa satu pun hari bercatatan (jujur, bukan nol karangan); Escape →
+> popup tertutup & fokus KEMBALI ke tombol pemicu. 0 galat JS baru di konsol.
+> Detail: docs/verification/kalender-pemilih-tanggal.md.
 > Catatan: deret waktu kanonik sempat terhapus oleh tes `purge_demo_rows()`
 > (`GET /demo/data-status` → `demo: 0`) dan sudah dipulihkan via
 > `POST /demo/timeseries` body `{}` → total supply 2220 · price 2318 · menu 660.

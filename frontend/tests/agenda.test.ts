@@ -11,7 +11,9 @@ import {
   AGENDA_MONTH_LABELS,
   agendaRows,
   gridRange,
+  monthChoices,
   monthGrid,
+  pickerYears,
   shiftMonth,
   wibToday,
 } from "../lib/agenda";
@@ -115,5 +117,27 @@ describe("kalender agenda — baris ringkasan hari", () => {
     expect(byLabel["Kiriman tiba"]).toBe("1.200 porsi");
     expect(byLabel["Limbah dibuang"]).toBe("4 kg");
     expect(byLabel["Keputusan agen"]).toBe("12 (12 menunggu persetujuan)");
+  });
+});
+
+describe("kalender agenda — daftar pilihan bulan & tahun (popup pemilih tanggal)", () => {
+  it("menawarkan 12 bulan bahasa Indonesia, urut Januari→Desember", () => {
+    const bulan = monthChoices();
+    expect(bulan).toHaveLength(12);
+    expect(bulan[0]).toEqual({ value: 1, label: "Januari" });
+    expect(bulan[9]).toEqual({ value: 10, label: "Oktober" });
+    expect(bulan[11]).toEqual({ value: 12, label: "Desember" });
+  });
+
+  it("daftar tahun = tahun yang dicakup rentang data, urut menaik", () => {
+    expect(pickerYears("2026-01-01", "2027-01-01")).toEqual([2026, 2027]);
+    expect(pickerYears("2026-01-01", "2026-12-31")).toEqual([2026]);
+  });
+
+  it("tahun yang sedang tampil selalu ikut ke daftar", () => {
+    // Kalau tidak, `<select>` bisa menampilkan nilai yang tidak ada di daftarnya
+    // sendiri — kontrol yang tampak kosong padahal bulan itu sedang dibuka.
+    expect(pickerYears("2026-01-01", "2027-01-01", 2025)).toEqual([2025, 2026, 2027]);
+    expect(pickerYears("2026-01-01", "2026-12-31", 2027)).toEqual([2026, 2027]);
   });
 });

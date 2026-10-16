@@ -14,6 +14,7 @@
 
 import PageHeader from "./PageHeader";
 import TodayAgendaCalendar from "./TodayAgendaCalendar";
+import { type AgendaPickerProps } from "./AgendaDatePicker";
 import { type AgendaPayload } from "../lib/agenda";
 import { fmtValue, unitLabel, STATE_LABEL } from "./KPIDashboard";
 import { DECISION_TYPE_LABELS } from "./RecommendationCard";
@@ -123,6 +124,7 @@ export default function TodayDashboard({
   agendaDate,
   agendaToday,
   agendaMonth,
+  agendaPicker,
   onAgendaSelect = () => {},
   onAgendaShiftMonth = () => {},
   onAgendaRetry,
@@ -150,6 +152,9 @@ export default function TodayDashboard({
   agendaDate?: string;
   agendaToday?: string;
   agendaMonth?: { year: number; month: number };
+  /** Popup pemilih tanggal (permintaan pemilik 2026-10-17) — bulan draft, data
+   *  bulan itu, dan aksinya. Dirakit halaman; kalender tidak memuat data sendiri. */
+  agendaPicker?: AgendaPickerProps;
   onAgendaSelect?: (date: string) => void;
   onAgendaShiftMonth?: (delta: number) => void;
   onAgendaRetry?: () => void;
@@ -187,7 +192,7 @@ export default function TodayDashboard({
           ini menjawab "tanggal lain bagaimana?". Muncul hanya bila halaman
           mengirim tanggal terpilih (agendaDate), supaya komponen ini tetap
           bisa dirender tes lama tanpa state kalender. */}
-      {agendaDate && agendaMonth ? (
+      {agendaDate && agendaMonth && agendaPicker ? (
         <TodayAgendaCalendar
           agenda={agenda}
           loading={agendaLoading}
@@ -196,6 +201,7 @@ export default function TodayDashboard({
           month={agendaMonth.month}
           selected={agendaDate}
           today={agendaToday}
+          picker={agendaPicker}
           onSelect={onAgendaSelect}
           onShiftMonth={onAgendaShiftMonth}
           onRetry={onAgendaRetry}

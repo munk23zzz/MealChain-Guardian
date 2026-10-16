@@ -1,11 +1,18 @@
 "use client";
 
-// Kalender agenda harian (langkah 2, permintaan pemilik 2026-10-16).
+// Kalender agenda harian (langkah 2, permintaan pemilik 2026-10-16; popup
+// pemilih tanggal 2026-10-17).
 //
 // Kenapa kalender ini ada: tab "Hari Ini" adalah halaman harian tanpa pemilih
 // hari — seluruh kartunya dihitung dari "sekarang". Kalender ini memberi dimensi
 // yang hilang: pilih tanggal → lihat rencana menu, kiriman, limbah, pasokan,
 // harga, batch kedaluwarsa, dan keputusan hari itu (sumber: GET /agenda).
+//
+// Kepala kalender (2026-10-17): judul bulan bukan lagi teks mati, melainkan
+// TOMBOL dengan ikon kalender kecil yang membuka popup pemilih tanggal (dropdown
+// Bulan + Tahun + grid hari). Tombol ‹ › dan "Hari ini" tetap ada untuk langkah
+// cepat. Bulan DRAFT popup dimiliki halaman, bukan komponen: rentang draft
+// itulah yang diminta ke server.
 //
 // Komponen ini TIDAK memanggil API dan tidak menyimpan bulan/hari terpilih:
 // keduanya milik halaman (lib/hooks/useAgenda.ts). Kalau state disimpan di sini,
@@ -15,18 +22,24 @@
 // Aturan tampilan yang dipegang: bagian tanpa catatan menulis "tidak ada
 // catatan", TIDAK PERNAH "0 porsi"/"0 kg" — angka nol yang tampak terukur padahal
 // tidak ada datanya adalah hal yang dilarang di repo ini.
+//
+// Grid hari dipakai bersama popup lewat `AgendaMonthGrid`, jadi bentuk sel
+// (42 sel mulai Senin, `data-date`/`data-activity`, aria-label bertanggal
+// lengkap) tidak bisa berbeda antara kartu dan popup.
+
+import { useRef } from "react";
 
 import {
   AGENDA_NO_DATA,
-  AGENDA_WEEKDAY_HEADERS,
-  activityOf,
   agendaRows,
   dayOf,
   formatDayLabel,
-  monthGrid,
   monthTitle,
   type AgendaPayload,
 } from "../lib/agenda";
+import AgendaDatePicker, { type AgendaPickerProps } from "./AgendaDatePicker";
+import AgendaMonthGrid from "./AgendaMonthGrid";
+import { CalendarIcon } from "./NavIcon";
 
 type Props = {
   agenda: AgendaPayload;
@@ -41,6 +54,8 @@ type Props = {
   /** Tanggal "hari ini" menurut WIB (dari halaman) — dihindari dihitung di sini
    *  supaya HTML server dan render klien tidak berbeda. */
   today?: string;
+  /** Popup pemilih tanggal: bulan draft, datanya, dan aksinya (dari halaman). */
+  picker: AgendaPickerProps;
 };
 
 export default function TodayAgendaCalendar({
@@ -54,10 +69,14 @@ export default function TodayAgendaCalendar({
   onShiftMonth,
   onRetry,
   today,
+  picker,
 }: Props) {
-  const cells = monthGrid(year, month);
   const hari = dayOf(agenda, selected);
   const rows = hari ? agendaRows(hari) : [];
+  // Fokus dikembalikan ke tombol pemicu saat popup ditutup. Popup butuh ref
+  // eksplisit: peramban yang tidak memfokuskan tombol saat diklik tidak bisa
+  // diandalkan lewat document.activeElement.
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   return (
     <article className="card agenda-calendar">
@@ -78,7 +97,19 @@ export default function TodayAgendaCalendar({
           >
             ‹
           </button>
-          <span className="agenda-month">{monthTitle(year, month)}</span>
+          <button
+            ref={triggerRef}
+            type="button"
+            className="agenda-month-btn"
+            aria-haspopup="dialog"
+            aria-expanded={picker.open}
+            aria-label={`Pilih bulan dan tahun — sekarang ${monthTitle(year, month)}`}
+            title="Pilih bulan & tahun"
+            onClick={picker.onOpen}
+          >
+            <CalendarIcon />
+            <span className="agenda-month">{monthTitle(year, month)}</span>
+          </button>
           <button
             type="button"
             className="agenda-nav-btn"
@@ -110,47 +141,15 @@ export default function TodayAgendaCalendar({
         </div>
       ) : null}
 
-      <div className="agenda-grid" role="grid" aria-label="Kalender agenda harian">
-        {AGENDA_WEEKDAY_HEADERS.map((nama) => (
-          <span key={nama} className="agenda-weekday" aria-hidden="true">
-            {nama}
-          </span>
-        ))}
-        {cells.map((sel) => {
-          const activity = activityOf(agenda, sel.date);
-          const aktif = sel.date === selected;
-          const kelas = [
-            "agenda-cell",
-            sel.inMonth ? "" : "agenda-cell-outer",
-            aktif ? "agenda-cell-active" : "",
-            sel.date === today ? "agenda-cell-today" : "",
-          ]
-            .filter(Boolean)
-            .join(" ");
-          return (
-            <button
-              key={sel.date}
-              type="button"
-              role="gridcell"
-              className={kelas}
-              data-date={sel.date}
-              data-activity={activity}
-              aria-current={aktif}
-              aria-label={`${formatDayLabel(sel.date)}${
-                activity ? `, ${activity} catatan` : ", tidak ada catatan"
-              }`}
-              onClick={() => onSelect(sel.date)}
-            >
-              <span className="agenda-day">{sel.day}</span>
-              <span className="agenda-dots" aria-hidden="true">
-                {Array.from({ length: Math.min(activity, 4) }, (_, i) => (
-                  <i key={i} className="agenda-dot" />
-                ))}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      <AgendaMonthGrid
+        agenda={agenda}
+        year={year}
+        month={month}
+        selected={selected}
+        today={today}
+        onSelect={onSelect}
+        ariaLabel="Kalender agenda harian"
+      />
 
       <section className="agenda-panel">
         <h3>{formatDayLabel(selected)}</h3>
@@ -172,6 +171,24 @@ export default function TodayAgendaCalendar({
           </dl>
         )}
       </section>
+
+      <AgendaDatePicker
+        open={picker.open}
+        month={picker.month}
+        years={picker.years}
+        agenda={picker.agenda}
+        loading={picker.loading}
+        error={picker.error}
+        today={picker.today}
+        selected={picker.selected}
+        onClose={picker.onClose}
+        onShiftMonth={picker.onShiftMonth}
+        onSetMonth={picker.onSetMonth}
+        onSelect={picker.onSelect}
+        onToday={picker.onToday}
+        onRetry={picker.onRetry}
+        returnFocusRef={triggerRef}
+      />
     </article>
   );
 }
