@@ -3455,6 +3455,17 @@ a:focus-visible {
 .overview-kpis .kpi-card-foot,
 .overview-kpis .kpi-card-mini { grid-column: 1 / -1; }
 
+/* Di layar sempit nilai hero (44 px, "-765,8 kg" ±208 px) menghabiskan hampir
+   seluruh lebar kartu sehingga kolom label tinggal ±52 px dan label pecah jadi
+   TIGA baris (terukur di 375 px). Di bawah 560 px nilai karena itu turun ke
+   barisnya sendiri — tetap rata kanan, label kembali selebar kartu (satu baris). */
+@media (max-width: 560px) {
+  .overview-kpis .kpi-card-value {
+    grid-column: 1 / -1;
+    text-align: right;
+  }
+}
+
 /* Bar kemajuan pasokan vs kebutuhan. Lebar bar dibatasi 100% karena pasokan
    bisa melebihi kebutuhan — angkanya sendiri tetap ditulis apa adanya. */
 .bento-bar {

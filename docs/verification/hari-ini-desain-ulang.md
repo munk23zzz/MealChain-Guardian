@@ -246,3 +246,44 @@ Catatan: baris "Selisih: kurang 765,8 kg" di kartu **Telemetri Node** dan **Stat
 bertanda dari kartu KPI), sedangkan baris itu berbunyi "kurang 765,8 kg". Bila pemilik
 memang memaksudkan baris itu, perubahannya satu baris lagi (label kiri, nilai kanan seperti
 baris `.node-gauge` di atasnya).
+
+## 12. Batas pengukuran TERTUTUP — responsif 375 / 768 / 1440 px terukur
+
+Sampai §11, catatan ini jujur menyebut bahwa lebar 375/768/1440 px **belum** bisa diukur:
+jendela browser otomasi menolak `window.resizeTo`, dan probe iframe sebelumnya tidak
+menghidrasi React. Cara yang akhirnya BERHASIL (tanpa dependensi baru, tanpa mengubah kode
+aplikasi): **iframe same-origin selebar X px di dalam halaman konsol** — viewport iframe
+mengikuti lebarnya, jadi media query benar-benar dievaluasi pada lebar itu, dan sesi login
+ikut karena origin sama. Catatan: `clientWidth` iframe = lebar − 6 px (garis 3 px kiri-kanan),
+jadi angka di bawah adalah lebar viewport sebenarnya.
+
+### 12.1 Strip "Hari Ini"
+
+| Viewport | Tile per baris | Ukuran tile | Tinggi strip | Luapan horizontal |
+|---|---|---|---|---|
+| 369 px | 2, 2, 1 | 151x86-103 px | 275 px | 0 |
+| 762 px | 2, 2, 1 | 348x70 px | 227 px | 0 |
+| 1434 px | 5 (satu baris) | 217x86 px | 86 px | 0 |
+
+Tidak ada teks terpotong (`scrollWidth - clientWidth` = 0 pada kelima tile dan kelima
+keterangan). Di 369 px hanya label "MENUNGGU TINDAKAN" yang membungkus dua baris — wajar
+untuk lebar 151 px dan tetap terbaca (nilai + keterangan tidak terpotong).
+
+### 12.2 Cacat yang DITEMUKAN pengukuran ini (dan diperbaiki)
+
+Kartu KPI Overview di 375 px: nilai hero "-765,8 kg" (44 px, ±208 px) memakan hampir seluruh
+lebar kartu sehingga kolom label tinggal ±52 px dan label **pecah menjadi TIGA baris**.
+Perbaikan: `@media (max-width: 560px)` menurunkan nilai ke barisnya sendiri
+(`grid-column: 1 / -1`, tetap `text-align: right`).
+
+Terukur sesudah:
+
+| Viewport | Baris label | Nilai | Tinggi kartu |
+|---|---|---|---|
+| 369 px | 1 | baris sendiri, rata kanan, 19 px dari tepi | 135 px |
+| 474 px | 1 | baris sendiri, 19 px dari tepi | 135 px |
+| 554 px | 1 | baris sendiri, 19 px dari tepi | 135 px |
+| 762 px | 1 | sebaris dengan label, 19 px dari tepi | 115 px |
+| 1434 px | 1 | sebaris dengan label, 19 px dari tepi | 115 px |
+
+Luapan horizontal 0 px di semua lebar; jarak nilai ke tepi kanan kartu tetap 19 px.
