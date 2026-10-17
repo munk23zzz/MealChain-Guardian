@@ -460,10 +460,21 @@ async def refresh_to_today(
     Akun demo TIDAK disentuh (password tidak direset) dan baris deret waktu
     demo TIDAK dihapus — keduanya punya tombol sendiri di panel.
     """
+    from app.seed.demo_activity import (
+        seed_demo_activity,
+        seed_demo_completed_decisions,
+    )
     from app.seed.seed_data import load_seed
 
     now = datetime.now(timezone.utc)
     rows = await load_seed(now)
+    # Kiriman demo di SELURUH lokasi (origin='demo'): membuat peta, papan kiriman,
+    # dan pemilih kiriman punya bahan nyata untuk dicoba di semua peran. Idempoten,
+    # jadi menekan tombol dua kali tidak menggandakan kiriman.
+    aktivitas = await seed_demo_activity(db, now)
+    # Keputusan selesai + limbah HARI INI: tanpa ini empat kartu KPI menjawab
+    # "belum ada data" pada periode hari-ini (seed kanonik berhenti di 8 Okt).
+    selesai = await seed_demo_completed_decisions(db, now)
     # Rute jalan ikut disinkronkan: seeder memindahkan tanggal kiriman ke hari
     # ini, dan pasangan pemasok→tujuan yang BELUM ada di cache hanya punya garis
     # kalau disinkronkan di sini. Tanpa langkah ini tombol "Segarkan ke hari ini"
@@ -476,6 +487,7 @@ async def refresh_to_today(
         "reference_time": now.isoformat(),
         "rows": rows,
         "cases": cases,
+        "activity": {**aktivitas, **selesai},
         "routes": routes,
         "route_error": route_error,
         "warning": REFRESH_WARNING,

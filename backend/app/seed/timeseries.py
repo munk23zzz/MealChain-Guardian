@@ -47,6 +47,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.db import create_engine, create_session_maker
 from app.models import (
+    Batch,
     Decision,
     DeliveryEvent,
     DisposalEvent,
@@ -99,7 +100,11 @@ QUOTE_INTERVAL_DAYS = 7
 
 #: Tabel yang dibersihkan `purge_demo_rows()`. Urutannya penting: baris anak
 #: (kiriman) dibuang sebelum induknya (`menu_plans`) supaya tidak bergantung CASCADE.
-PURGE_MODELS = (DeliveryEvent, DisposalEvent, SupplyRecord, PriceSignal, MenuPlan)
+#: `Batch` ikut di-purge sejak kegiatan demo (2026-10-17): tombol "Bersihkan
+#: data demo" yang meninggalkan 40 kiriman demo akan membuat peta tetap ramai
+#: padahal operator sudah meminta data demo dibuang. Anak FK-nya
+#: (`batch_receipts`) memakai ON DELETE CASCADE.
+PURGE_MODELS = (DeliveryEvent, DisposalEvent, SupplyRecord, PriceSignal, MenuPlan, Batch)
 
 #: Hari rencana pertama yang BELUM punya kiriman/limbah kanonik. Kanonik:
 #: `delivery_events` 1–7 Okt, `disposal_events` 4–7 Okt. Mulai 8 Okt generator

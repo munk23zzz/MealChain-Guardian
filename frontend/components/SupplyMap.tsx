@@ -43,6 +43,7 @@ import {
 // Baris legenda ringkas di bawah kanvas (C2, langkah 7b-2): aturan isinya
 // (status selalu ada, keterangan ikut sakelar lapisan) hidup di lib murni.
 import { compactLegendItems, legendMarkClass } from "../lib/map-legend-compact";
+import { penandaPeta, ringkasPenanda } from "../lib/map-a11y";
 // Ikon di dalam penanda (bukan emoji/teks): siluet bangunan untuk SPPG dan
 // truk untuk pemasok — dua lapisan penanda jadi bisa dibedakan dari bentuknya.
 import { buildPinGlyph } from "../lib/map-pin-glyphs";
@@ -569,6 +570,8 @@ export default function SupplyMap({
       }),
     [routePinRows, showRoutes, showSuppliers]
   );
+  // K3: padanan teks penanda — dihitung dari data yang SAMA dengan pin peta.
+  const penanda = useMemo(() => penandaPeta(locations), [locations]);
   const routeBounds = useMemo(() => routeBoundsPoints(supplierRoutes), [supplierRoutes]);
   const routeRowsRef = useRef<readonly SupplierRoute[]>(routePinRows);
   const routeFeaturesRef = useRef(routeFeatures);
@@ -1273,6 +1276,28 @@ export default function SupplyMap({
             );
           })}
         </div>
+
+        {/* K3 — padanan TEKS untuk isi peta. Selalu dirender, termasuk saat daftar
+            status lokasi dimatikan di Overview: penanda peta tidak masuk urutan
+            Tab, jadi tanpa baris ini pembaca layar tidak punya jalan masuk.
+            Bentuknya satu baris (nama + selisih) — BUKAN tabel pasokan/kebutuhan
+            yang sudah dihapus pemilik. Kalimat penuh ada di daftar sr-only. */}
+        {penanda.length > 0 && (
+          <p
+            className="map-marker-line"
+            title={penanda.map((butir) => butir.aria).join(" · ")}
+          >
+            <span className="map-marker-line-title">Penanda:</span>{" "}
+            {ringkasPenanda(penanda)}
+          </p>
+        )}
+        {penanda.length > 0 && (
+          <ul className="sr-only" aria-label="Daftar penanda peta">
+            {penanda.map((butir) => (
+              <li key={butir.nama}>{butir.aria}</li>
+            ))}
+          </ul>
+        )}
 
         {/* Pemilih kiriman untuk disorot (Arah C). Hanya dirender kalau pemanggil
             mengendalikan pilihannya — di tab yang tidak punya kartu kiriman,

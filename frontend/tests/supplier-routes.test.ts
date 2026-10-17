@@ -287,7 +287,9 @@ describe("label & popup", () => {
     expect(gabung).not.toContain("berkelok");
     expect(gabung).not.toContain("Tiba sebelum batas layak");
     expect(gabung).toContain("Layak dipakai s/d 7 Nov 2026");
-    expect(gabung).toContain("Estimasi tiba: ± 22.54 WIB · 24 menit lagi");
+    // K4 (17 Okt 2026): dua baris jam digabung jadi SATU baris — popup 240×176 px
+    // dengan dua baris jam adalah 2 dari 5 baris untuk satu fakta yang sama.
+    expect(gabung).toContain("tiba ± 22.54 WIB · 24 menit lagi");
   });
 
   it("popup menyebut alasan bila rute belum ada, tanpa angka karangan", () => {
@@ -484,14 +486,15 @@ describe("perjalanan kiriman", () => {
   it("popup menyebut jam berangkat, estimasi tiba, dan sisa waktu", () => {
     const [row] = supplierRoutes({ routes: [kiriman()] });
     const baris = routeEtaLines(row).join(" | ");
-    expect(baris).toContain("Berangkat: 16 Okt 2026 21.30 WIB");
-    expect(baris).toContain("Estimasi tiba: ± 22.54 WIB · 24 menit lagi");
+    expect(routeEtaLines(row)).toHaveLength(1);
+    expect(baris).toContain("Berangkat 16 Okt 2026 21.30 WIB");
+    expect(baris).toContain("tiba ± 22.54 WIB · 24 menit lagi");
     // Kalimat "Tiba sebelum batas layak (7 Nov 2026)" dibuang atas permintaan
     // pemilik 2026-10-16: tanggalnya sudah ada di baris "Layak dipakai s/d ...",
     // dan popup tidak perlu mengulangnya sebagai kalimat penghibur.
     expect(baris).not.toContain("Tiba sebelum batas layak");
     // Popup lengkap memuat semuanya, tanpa menghitung ulang apa pun.
-    expect(routePopupLines(row).join(" | ")).toContain("Estimasi tiba: ± 22.54 WIB");
+    expect(routePopupLines(row).join(" | ")).toContain("tiba ± 22.54 WIB");
   });
 
   it("tanpa waktu tempuh: tidak ada estimasi, keadaan tidak diklaim", () => {
@@ -512,7 +515,7 @@ describe("perjalanan kiriman", () => {
       ],
     });
     const baris = routeEtaLines(row).join(" | ");
-    expect(baris).toContain("Estimasi tiba: belum ada — jalur jalan belum disinkronkan");
+    expect(baris).toContain("tiba belum ada — jalur jalan belum disinkronkan");
     expect(baris).not.toContain("Tiba sebelum batas layak");
   });
 

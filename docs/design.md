@@ -1367,3 +1367,112 @@ Dua bug yang ketemu saat memverifikasi dan diperbaiki (keduanya memblokir tombol
    kiriman tetap memakai cache → tombol "Segarkan ke hari ini" terasa tidak bekerja sampai halaman dimuat
    ulang. Perbaikan: `mapQuery.refetch()` + `mapSupplierRoutesQuery.refetch()`.
 
+### 7b-3 — K1: satu arti untuk bentuk garis (selesai 17 Okt 2026)
+
+Berkas: `frontend/lib/route-line-split.ts` (`journeyLineParts`) + `frontend/lib/supplier-routes.ts`
+(`routeGeoJson` kini mengirim DUA fitur per kiriman, properti `kind`; `routeLegendEntries` membawa `gaya`) +
+`frontend/components/SupplyMap.tsx` (satu source, dua layer: `supplier-route-line-done` padat,
+`supplier-route-line-todo` putus-putus, klik popup terpasang di KEDUANYA) + `frontend/lib/map-legend-compact.ts`
+(`gaya` ikut kelas tanda) + `frontend/app/globals.css` (`.map-legend-line-padat` / `-putus`). Tes: 6 murni
+(`journeyLineParts`) + 3 kontrak GeoJSON + 1 legenda + asersi layer di `supply-map-layer.test.tsx`.
+
+Masalahnya: legenda menulis "Sisa perjalanan" putus-putus, tetapi LAYER menggambar SEMUA kiriman
+putus-putus — termasuk yang "Sudah tiba 19.24". Sekarang bentuk garis ditentukan keadaan perjalanan dari
+server:
+
+| Keadaan | Bentuk garis |
+|---|---|
+| `sudah_tiba` | seluruhnya padat (walau `progress` tidak dikirim — keadaan tidak ambigu) |
+| `di_jalan` + `progress` | padat sampai titik tempuh, putus-putus sisanya |
+| `belum_berangkat` | seluruhnya putus-putus |
+| perjalanan tidak dilaporkan / `progress` null | putus-putus (garis itu perkiraan) |
+
+Catatan teknis: `line-dasharray` MapLibre **tidak bisa data-driven** (hanya konstanta/zoom), jadi pemisahan
+dilakukan lewat dua layer dengan filter `kind` pada satu source. Klik popup dipasang di kedua layer — kalau
+hanya di layer putus-putus, kiriman yang sudah tiba kehilangan popup karena garisnya padat semua.
+
+Terukur di aplikasi hidup (1440 px, setelah "Segarkan ke hari ini"): legenda ringkas menulis "Sudah ditempuh ·
+Sisa perjalanan (perkiraan)" dengan `border-top-style` **solid** dan **dashed**; analisis komponen piksel
+kanvas menemukan **komponen hijau terbesar 780 px menyambung** (tidak mungkin dari garis putus-putus) di
+samping **40 komponen <20 px** — dua gaya garis memang tergambar bersamaan. Garis Supplier Bogor-1 (sudah
+tiba) tampak menyambung penuh Jakarta→Bogor, sementara jalur Cianjur putus-putus.
+
+## 8. Data hidup: satu tulis menyegarkan SEMUA panel (selesai 17 Okt 2026)
+
+Permintaan pemilik: "saya akan mencoba semua fitur di setiap role, jadi semua bagian yang menampilkan
+informasi itu juga datanya realtime dengan DB — ketika saya melakukan sesuatu, pastikan semuanya berjalan
+sesuai."
+
+**Temuan audit (bukan dugaan):** repo ini **tidak punya satu pun `useMutation` atau `invalidateQueries`**.
+Setiap aksi hanya me-refresh query yang diingat komponennya. Akibatnya kelas bug yang sama muncul berkali-kali
+(peta tidak menyegar setelah "Segarkan", Pemasok/KPI tetap memakai cache 5 menit). Tiga hook bahkan tidak
+punya polling (`useSuppliers`, `useSupplierRoutes`, `useExclusions`) dengan `staleTime` 5–10 menit.
+
+**Aturan yang sekarang berlaku** (`frontend/lib/refresh.ts`, dipanggil `lib/api.ts` + `lib/supplier-exclusions.ts`
+dan didaftarkan di `app/providers.tsx`):
+
+| Metode | Sesudah respons sukses |
+|---|---|
+| GET/HEAD | tidak menyegarkan apa pun |
+| POST/PUT/PATCH/DELETE | `queryClient.invalidateQueries()` — SELURUH cache |
+
+Konsekuensi yang diinginkan: panel yang sedang tampil langsung mengambil ulang; panel yang belum terbuka
+ditandai basi sehingga mengambil ulang saat dibuka, **walau `staleTime` 5 menit**. Modul yang punya pembungkus
+`fetch` sendiri (`supplier-exclusions.ts`, dibuat supaya pesan `detail` validasi tidak hilang) wajib memanggil
+aturan yang sama — kalau tidak, ia menjadi satu-satunya jalur tulis yang meninggalkan panel lain basi.
+
+Terukur di aplikasi hidup: satu `POST /demo/refresh` → **8 endpoint** diambil ulang dalam 26 permintaan, semua
+**200**; tab Pemasok & KPI (keduanya tanpa polling) tetap memanggil `/suppliers` dan `/kpi` saat dibuka sesudah
+aksi itu (`suppliers_dipanggil=true`, `kpi_dipanggil=true`).
+
+## 9. Kegiatan demo: aplikasi tidak boleh tampak kosong (selesai 17 Okt 2026)
+
+Permintaan pemilik: "buat data mock yang lumayan banyak supaya terlihat aktiv website ini."
+
+`backend/app/seed/demo_activity.py` menambah dua kelompok baris **`origin='demo'`** yang idempoten
+(UUID5 deterministik) dan ikut terhapus oleh "Bersihkan data demo":
+
+1. **Kiriman** — 4 per lokasi × 10 lokasi = **40 batch** (4 komoditas bergilir, tiga keadaan perjalanan),
+   supaya peta, papan kiriman, dan pemilih kiriman punya bahan nyata. Rute jalan disinkronkan OSRM:
+   **47 pasangan diperiksa, 37 diambil, 0 gagal**.
+2. **Keputusan selesai + limbah** — 3 keputusan (Jakarta/Bandung/Surabaya) dengan jejak `DETECT..ACT`,
+   dua bukti konsisten SEBELUM approval, approval manusia, `safe_delivered_cost`, dan PO mock hari ini;
+   plus 2 kejadian limbah hari ini. Ini bukan hiasan: empat kartu KPI membaca baris-baris inilah.
+
+Hasil pada periode **24 jam** (SPPG Head, 17 Okt): **7/7 metrik `tersedia`** — Meal Continuity 100,00%,
+Avoidable Food Loss 0,53% (2 sampel), Imbalance 4,41% (68), Safe Delivered Cost Rp15.079.436 (3),
+Price Deviation 0,98% (4), Decision Time 6,74 menit (3), Evidence Completeness 75,00% (4). Tile "KPI terisi"
+di Hari Ini berubah dari `6/7 · 1 metrik belum ada data` menjadi **`7/7 · semua metrik ada`**.
+
+**Batas jujur yang TIDAK diisi dengan data karangan:** Agent Log tetap menulis "belum ada langkah agent yang
+tercatat" untuk keputusan non-demo karena `AGENTCORE_RUNTIME_ARN` kosong (tidak ada eksekusi nyata), dan
+Surplus & Limbah tetap menulis "belum ada data mitra pengolahan" karena kolomnya tidak ada di skema.
+
+## 10. K3 — padanan TEKS untuk isi peta (selesai 17 Okt 2026)
+
+Masalah: penanda peta tidak masuk urutan Tab dan daftar teks lokasi dimatikan di Overview
+(`showStatusList={false}`) — pembaca layar tidak punya satu pun jalan masuk ke isi peta.
+
+Yang ditambahkan: `frontend/lib/map-a11y.ts` (`penandaPeta`, `ringkasPenanda`) + di `SupplyMap.tsx` satu baris
+`Penanda: …` (selalu dirender, juga saat daftar status dimatikan) dan `<ul class="sr-only" aria-label="Daftar
+penanda peta">` berisi satu butir per lokasi dengan **status disebut sebagai kata**, bukan warna.
+
+Batas yang dijaga: bentuknya **satu baris**, bukan tabel. Tabel "Rincian Pasokan per Lokasi" sudah dihapus atas
+permintaan pemilik; tes `supply-map-marker-line` menolak `<table>` dan kata "Kebutuhan" di blok ini.
+
+Terukur di aplikasi hidup: cakupan Jakarta → `Penanda: Jakarta kurang 765,8 kg`, `title` memuat kalimat penuh,
+1 butir sr-only, tinggi baris **18 px**, tanpa tabel. Cakupan nasional (BGN Monitor, 10 lokasi) →
+`Penanda: Jakarta kurang 765,8 kg · Surabaya kurang 11,48 kg · Semarang kurang 10,68 kg · +7 lokasi lain`,
+**10 butir sr-only**, tinggi tetap **18 px**, `scrollWidth` tidak melebihi `clientWidth` (dipotong elipsis,
+peta tidak terdorong ke bawah).
+
+## 11. K4 — popup jalur: dua baris jam digabung (selesai 17 Okt 2026)
+
+Popup terukur 240×176 px berisi 5 baris; dua di antaranya hanya jam untuk satu fakta yang sama. Kini satu baris:
+
+    Berangkat 17 Okt 2026 17.33 WIB → tiba ± 18.21 WIB · 30 menit lagi
+    Belum berangkat (barang masih di pemasok) → tiba belum ada — barang belum berangkat
+
+Tidak ada fakta yang dipangkas: baris jalur jalan, masa layak, peringatan "melewati batas layak", dan
+"Waktu tempuh jalur" (hanya saat estimasi tiba belum ada) tetap seperti sebelumnya
+

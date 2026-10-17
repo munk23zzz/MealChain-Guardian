@@ -2426,6 +2426,23 @@ a:focus-visible {
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
+/* K3 (17 Okt 2026): satu baris padanan teks untuk penanda peta. Dipotong
+   dengan elipsis, BUKAN dibungkus — kalau dibungkus ia mendorong kanvas ke
+   bawah dan mengubah tinggi peta di setiap tab. Teks lengkap ada di `title`
+   dan di daftar sr-only tepat sesudahnya. */
+.map-marker-line {
+  margin: 6px 0 0;
+  font-size: var(--fs-1);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.map-marker-line-title {
+  color: var(--ink-muted);
+  font-weight: 600;
+}
 .map-legend-compact-title {
   color: var(--ink-muted);
   font-weight: 600;

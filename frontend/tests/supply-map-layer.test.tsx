@@ -856,7 +856,7 @@ describe("SupplyMap — kotak Info map (nama, susunan isi, perjalanan kiriman)",
     const teks = baris.join(" | ");
     // Yang tetap ada: identitas jalur, perjalanan, masa layak.
     expect(teks).toContain("Jalur jalan (OSRM)");
-    expect(teks).toContain("Estimasi tiba: ± 22.54 WIB");
+    expect(teks).toContain("tiba ± 22.54 WIB");
     expect(teks).toContain("Layak dipakai s/d");
     // Yang dibuang.
     expect(teks).not.toContain("Jarak lurus");

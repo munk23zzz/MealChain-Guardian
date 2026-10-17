@@ -1,3 +1,5 @@
+import { metodeMenulis, segarkanSetelahTulis } from "./refresh";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 // Keep backend validation details visible; generic api.request drops them.
@@ -12,8 +14,15 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
     } catch { /* Non-JSON proxy errors use the HTTP fallback. */ }
     throw new Error(detail ? `HTTP ${response.status}: ${detail}` : `HTTP ${response.status}: Usulan tidak dapat diproses. Muat ulang konteks dan coba kembali.`);
   }
-  try { return JSON.parse(text); }
-  catch { throw new Error("Respons server bukan JSON. Muat ulang konteks sebelum mencoba kembali."); }
+  try {
+    const hasil = JSON.parse(text) as T;
+    // Modul ini memakai pembungkus fetch sendiri (supaya `detail` validasi
+    // backend tidak hilang), jadi ia WAJIB ikut aturan penyegaran terpusat —
+    // kalau tidak, satu-satunya jalur tulis yang melewati `lib/api.ts` akan
+    // meninggalkan panel lain basi.
+    if (metodeMenulis(init.method)) segarkanSetelahTulis();
+    return hasil;
+  } catch { throw new Error("Respons server bukan JSON. Muat ulang konteks sebelum mencoba kembali."); }
 }
 
 export type EvidenceRef = { type: "batch" | "incident" | "decision"; id: string };

@@ -273,23 +273,26 @@ export function nearestEta(rows: readonly SupplierRoute[]): string | null {
 export function routeEtaLines(row: SupplierRoute): string[] {
   const journey = row.journey;
   if (!journey) return [];
-  const lines: string[] = [];
-  if (journey.dispatchedAt) {
-    lines.push(`Berangkat: ${formatDateTime(journey.dispatchedAt)}`);
-  } else {
-    lines.push("Berangkat: belum berangkat (barang masih di pemasok)");
-  }
+  // K4 (17 Okt 2026): jam berangkat + estimasi tiba digabung jadi SATU baris.
+  // Popup terukur 240×176 px berisi 5 baris; dua di antaranya hanya jam, untuk
+  // satu fakta yang sama ("kapan berangkat → kapan sampai"). Digabung, popup
+  // tetap memuat semua fakta tanpa memangkas apa pun.
+  const berangkat = journey.dispatchedAt
+    ? `Berangkat ${formatDateTime(journey.dispatchedAt)}`
+    : "Belum berangkat (barang masih di pemasok)";
+  let tiba: string;
   if (journey.etaAt) {
     const sisa =
       journey.state === "di_jalan" && journey.remainingMin !== null
         ? ` · ${durationLabel(journey.remainingMin)} lagi`
         : "";
-    lines.push(`Estimasi tiba: ± ${formatClockWib(journey.etaAt)} WIB${sisa}`);
+    tiba = `tiba ± ${formatClockWib(journey.etaAt)} WIB${sisa}`;
   } else if (journey.state === "tidak_diketahui") {
-    lines.push("Estimasi tiba: belum ada — jalur jalan belum disinkronkan");
+    tiba = "tiba belum ada — jalur jalan belum disinkronkan";
   } else {
-    lines.push("Estimasi tiba: belum ada — barang belum berangkat");
+    tiba = "tiba belum ada — barang belum berangkat";
   }
+  const lines: string[] = [`${berangkat} → ${tiba}`];
   if (journey.travelMin !== null && journey.etaAt === null) {
     // Waktu tempuh hanya diulang di sini kalau tidak ada estimasi tiba: kalau ada,
     // baris jalur jalan di popup sudah menyebut durasinya (tidak dihitung ganda).

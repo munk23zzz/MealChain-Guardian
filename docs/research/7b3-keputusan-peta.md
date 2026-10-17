@@ -219,6 +219,26 @@ Dua cacat yang baru terlihat setelah dicoba di aplikasi hidup (bukan dari membac
 Pelajaran: dua dari tiga masalah di sini hanya muncul saat tombolnya benar-benar diklik. Membaca komponen
 sudah memberi keyakinan yang salah.
 
+## 10. K1 dikerjakan: satu arti untuk bentuk garis (17 Okt 2026)
+
+Legenda menulis "Sisa perjalanan" putus-putus, sementara LAYER menggambar SEMUA kiriman putus-putus —
+termasuk yang sudah tiba. Sekarang bentuk garis mengikuti keadaan perjalanan dari server:
+
+| Keadaan | Bentuk |
+|---|---|
+| sudah tiba | padat seluruhnya |
+| di jalan + progress | padat sampai titik tempuh, putus-putus sisanya |
+| belum berangkat | putus-putus seluruhnya |
+| perjalanan tidak dilaporkan | putus-putus (perkiraan) |
+
+Kendala teknis yang menentukan bentuk implementasi: `line-dasharray` di MapLibre **tidak bisa data-driven**,
+jadi satu source menghasilkan dua fitur per kiriman (`kind: done|todo`) dan dua layer dengan filter. Klik
+popup dipasang di kedua layer; kalau tidak, kiriman yang sudah tiba kehilangan popup karena garisnya padat.
+
+Bukti terukur di aplikasi hidup: legenda `solid` vs `dashed` pada dua butirnya, dan analisis komponen piksel
+menemukan komponen hijau menyambung **780 px** di samping **40 komponen <20 px** — dua gaya garis tergambar
+bersamaan, bukan klaim dari kode.
+
 ## Sources
 
 [1] https://www.esri.com/arcgis-blog/products/arcgis-pro/mapping/cartographic-conventions — Esri — Cartographic conventions (Heather Smith, 17 Jan 2024)

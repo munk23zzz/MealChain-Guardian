@@ -1,0 +1,290 @@
+"""Kegiatan demo: banyak kiriman berjalan di seluruh lokasi (permintaan pemilik).
+
+Latar: pemilik ingin aplikasi "terlihat aktif" saat mencoba semua fitur di setiap
+peran. Seed kanonik hanya memuat 9 batch (Jakarta), sehingga peta, papan kiriman,
+dan pemilih kiriman terasa kosong walau angkanya benar.
+
+Aturan yang dipegang:
+1. Semua baris di sini ber-``origin='demo'`` — snapshot kanonik (origin='seed')
+   tidak berubah, sehingga tes yang memaku seed tetap sah.
+2. Id DETERMINISTIK (UUID5 dari lokasi+pemasok+komoditas) sehingga menyegarkan
+   dua kali tidak menggandakan kiriman.
+3. Tiga keadaan perjalanan tersedia merata: belum berangkat, di jalan, sudah tiba —
+   supaya garis peta (padat/putus-putus) dan kartu kiriman punya bahan nyata.
+4. Tidak ada angka karangan di UI: seluruh kolom diisi dari data yang memang
+   dipakai server (jam panen/berangkat, masa layak, mutu, sertifikasi).
+"""
+
+import uuid
+from datetime import datetime, timedelta
+from decimal import Decimal
+
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import Batch, Commodity, Location, Supplier
+
+DEMO_TAG = "demo-aktivitas"
+
+#: Umur simpan per komoditas (hari) — dipakai menghitung `usable_until`.
+SHELF_LIFE_HARI = {"telur": 28, "ayam": 5, "beras": 180, "wortel": 21}
+
+#: Empat keadaan rotasi: 0 = di jalan, 1 = sudah tiba, 2 = belum berangkat,
+#: 3 = di jalan (variasi jam) — supaya tiap lokasi punya campuran.
+ROTASI = (
+    {"state": "di_jalan", "berangkat_menit": -35, "panen_jam": -26},
+    {"state": "sudah_tiba", "berangkat_menit": -300, "panen_jam": -34},
+    {"state": "belum_berangkat", "berangkat_menit": None, "panen_jam": -5},
+    {"state": "di_jalan", "berangkat_menit": -12, "panen_jam": -20},
+)
+
+MUTU = ("pass", "pass", "pending", "needs_verification")
+SERTIFIKASI = ("haccp", "hygiene", "none")
+
+
+def demo_batch_id(lokasi: str, pemasok: str, komoditas: str) -> uuid.UUID:
+    """Id deterministik: menyegarkan dua kali tidak menggandakan kiriman."""
+    return uuid.uuid5(uuid.NAMESPACE_URL, f"mcg:{DEMO_TAG}:{lokasi}:{pemasok}:{komoditas}")
+
+
+def _slot(nama_lokasi: str, index_lokasi: int, semua_pemasok: list[Supplier]):
+    """Empat pemasok bergilir per lokasi — cukup beragam, tanpa penugasan acak."""
+    awal = (index_lokasi * 4) % max(1, len(semua_pemasok))
+    return [semua_pemasok[(awal + i) % len(semua_pemasok)] for i in range(4)]
+
+
+async def seed_demo_activity(session: AsyncSession, now: datetime) -> dict:
+    """Buat/perbarui kiriman demo untuk SEMUA lokasi. Idempoten."""
+    lokasi = list((await session.execute(select(Location).order_by(Location.name))).scalars())
+    pemasok = list((await session.execute(select(Supplier).order_by(Supplier.name))).scalars())
+    komoditas = {
+        c.name: c.id for c in (await session.execute(select(Commodity))).scalars()
+    }
+    tersedia = [nama for nama in SHELF_LIFE_HARI if nama in komoditas]
+    if not lokasi or not pemasok or not tersedia:
+        return {"batch_demo": 0, "dilewati": "data dasar belum ada"}
+
+    dibuat = 0
+    dihapus = 0
+    id_dipakai: list[uuid.UUID] = []
+    for i, loc in enumerate(lokasi):
+        for j, sup in enumerate(_slot(loc.name, i, pemasok)):
+            nama_komoditas = tersedia[(i + j) % len(tersedia)]
+            rotasi = ROTASI[(i + j) % len(ROTASI)]
+            id_batch = demo_batch_id(loc.name, sup.name, nama_komoditas)
+            id_dipakai.append(id_batch)
+            panen = now + timedelta(hours=rotasi["panen_jam"])
+            berangkat = (
+                None
+                if rotasi["berangkat_menit"] is None
+                else now + timedelta(minutes=rotasi["berangkat_menit"])
+            )
+            if berangkat is not None and berangkat < panen:
+                berangkat = panen + timedelta(minutes=30)
+            nilai = {
+                "id": id_batch,
+                "commodity_id": komoditas[nama_komoditas],
+                "location_id": loc.id,
+                "supplier_id": sup.id,
+                "quantity_kg": Decimal(200 + ((i * 7 + j * 13) % 9) * 100),
+                "harvested_at": panen,
+                "temperature_log": [],
+                "certification_status": SERTIFIKASI[(i + j) % len(SERTIFIKASI)],
+                "freshness_score": Decimal("0.82"),
+                "safety_status": MUTU[(i + j) % len(MUTU)],
+                "usable_until": panen + timedelta(days=SHELF_LIFE_HARI[nama_komoditas]),
+                "dispatched_at": berangkat,
+                "origin": "demo",
+                "generated_at": now,
+            }
+            ada = await session.get(Batch, id_batch)
+            if ada is None:
+                session.add(Batch(**nilai))
+                dibuat += 1
+            else:
+                for k, v in nilai.items():
+                    setattr(ada, k, v)
+    # Buang kiriman demo yang tidak lagi punya slot (mis. lokasi/pemasok berubah).
+    usang = delete(Batch).where(
+        Batch.origin == "demo", Batch.id.notin_(id_dipakai)
+    )
+    hasil_usang = await session.execute(usang)
+    dihapus = hasil_usang.rowcount or 0
+    await session.flush()
+    return {"batch_demo": dibuat, "diperbarui": len(id_dipakai) - dibuat, "dibuang": dihapus}
+
+# --------------------------------------------------------------------------
+# Keputusan demo yang SUDAH SELESAI + limbah hari ini
+# --------------------------------------------------------------------------
+# Kenapa: panel KPI menjawab "belum ada data" untuk 4 dari 7 metrik ketika
+# periode = HARI INI, karena seed kanonik berhenti di 8 Okt. Yang dibutuhkan
+# bukan angka karangan di klien, melainkan baris yang MEMANG dipakai server:
+#   - Avoidable Food Loss  : disposal_events hari ini (dibagi supply hari ini)
+#   - Safe Delivered Cost  : PO mock hari ini + decisions.safe_delivered_cost
+#   - Decision Time        : trace DETECT..ACT hari ini + PO committed
+#   - Evidence Completeness: keputusan hari ini, approval hari ini, >=2 jenis
+#                            bukti konsisten SEBELUM approval
+# Semua baris demo, id deterministik (idempoten), dan ikut terhapus saat
+# "Bersihkan data demo" (CASCADE dari decisions).
+
+from app.models import (  # noqa: E402  (impor di bawah agar blok ini mandiri)
+    AgentTrace,
+    Approval,
+    Decision,
+    DecisionEvidence,
+    DisposalEvent,
+    SapMockPurchaseOrder,
+    User,
+)
+
+#: Tiga kota cukup untuk memperagakan metrik lintas-lokasi tanpa membanjiri UI.
+KOTA_DEMO = ("Jakarta", "Bandung", "Surabaya")
+#: Menit relatif awal keputusan untuk satu jalur agent yang lengkap.
+JALUR_KEPUTUSAN = (("DETECT", 0), ("VERIFY", 4), ("DECIDE", 10), ("ACT", 20))
+#: Bukti harus TEREKAM SEBELUM approval (menit 12) agar dihitung "lengkap".
+BUKTI_SEBELUM_APPROVAL = (("market_price", 6), ("gps", 8))
+
+
+def demo_decision_id(lokasi: str, komoditas: str) -> uuid.UUID:
+    return uuid.uuid5(uuid.NAMESPACE_URL, f"mcg:{DEMO_TAG}:keputusan:{lokasi}:{komoditas}")
+
+
+async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict:
+    """Lengkapi KPI "hari ini": keputusan selesai + limbah. Idempoten."""
+    lokasi = {
+        loc.name: loc
+        for loc in (await db.execute(select(Location))).scalars()
+        if loc.name in KOTA_DEMO
+    }
+    komoditas = {c.name: c.id for c in (await db.execute(select(Commodity))).scalars()}
+    pemasok = list((await db.execute(select(Supplier).order_by(Supplier.name))).scalars())
+    kepala = (
+        await db.execute(
+            select(User).where(User.role == "sppg_head").order_by(User.email)
+        )
+    ).scalars().first()
+    if not lokasi or not komoditas or not pemasok or kepala is None:
+        return {"keputusan_demo": 0, "limbah_demo": 0, "dilewati": "data dasar belum ada"}
+
+    #: Komoditas yang BENAR-BENAR ada di DB, urut stabil. Daftar tetap berisi
+    #: "beras" pernah membuat Jakarta tidak kebagian keputusan (beras tidak ada),
+    #: sehingga KPI ber-scope Jakarta tetap kosong walau baris lain terbuat.
+    urut_komoditas = [nama for nama in ("telur", "ayam", "wortel") if nama in komoditas]
+    if not urut_komoditas:
+        return {"keputusan_demo": 0, "limbah_demo": 0, "dilewati": "komoditas kosong"}
+
+    dibuat = 0
+    for i, (nama_kota, loc) in enumerate(sorted(lokasi.items())):
+        nama_komoditas = urut_komoditas[i % len(urut_komoditas)]
+        sup = pemasok[i % len(pemasok)]
+        did = demo_decision_id(nama_kota, nama_komoditas)
+        mulai = now - timedelta(minutes=44)
+        nilai = {
+            "id": did,
+            "decision_type": "regional_balance",
+            "status": "executed",
+            "proposed_by": "supervisor_agent",
+            "verified_by": "verifier_agent",
+            "verifier_note": "Bukti silang konsisten: harga pasar dan GPS sepakat.",
+            "iteration": 1,
+            "demo_case": None,
+            "source_location_id": loc.id,
+            "target_location_id": loc.id,
+            "commodity_id": komoditas[nama_komoditas],
+            "quantity_kg": Decimal(600),
+            "safe_delivered_cost": Decimal("15079436.39"),
+            "expires_at": now + timedelta(hours=2),
+            "origin": "demo",
+            "generated_at": now,
+            "created_at": mulai,
+        }
+        ada = await db.get(Decision, did)
+        if ada is None:
+            db.add(Decision(**nilai))
+            dibuat += 1
+        else:
+            for k, v in nilai.items():
+                setattr(ada, k, v)
+
+        for etype, menit in BUKTI_SEBELUM_APPROVAL:
+            bukti_id = uuid.uuid5(did, f"bukti:{etype}")
+            if await db.get(DecisionEvidence, bukti_id) is None:
+                db.add(
+                    DecisionEvidence(
+                        id=bukti_id,
+                        decision_id=did,
+                        evidence_type=etype,
+                        payload={"demo": True, "kota": nama_kota},
+                        is_consistent=True,
+                        recorded_at=mulai + timedelta(minutes=menit),
+                    )
+                )
+
+        acc_id = uuid.uuid5(did, "approval")
+        if await db.get(Approval, acc_id) is None:
+            db.add(
+                Approval(
+                    id=acc_id,
+                    decision_id=did,
+                    approved_by=kepala.id,
+                    approved=True,
+                    comment="Disetujui untuk demo lintas lokasi.",
+                    approved_at=mulai + timedelta(minutes=12),
+                )
+            )
+
+        for step, menit in JALUR_KEPUTUSAN:
+            trace_id = uuid.uuid5(did, f"trace:{step}")
+            if await db.get(AgentTrace, trace_id) is None:
+                db.add(
+                    AgentTrace(
+                        id=trace_id,
+                        decision_id=did,
+                        step_name=step,
+                        tool_called=f"demo.{step.lower()}",
+                        input_summary={"demo": True},
+                        output_summary={"ok": True},
+                        duration_ms=800 + menit * 40,
+                        step_at=mulai + timedelta(minutes=menit),
+                    )
+                )
+
+        po_id = uuid.uuid5(did, "po")
+        if await db.get(SapMockPurchaseOrder, po_id) is None:
+            db.add(
+                SapMockPurchaseOrder(
+                    id=po_id,
+                    po_number=f"DEMO-PO-{nama_kota.upper()[:4]}-{nama_komoditas.upper()[:4]}",
+                    supplier_id=sup.id,
+                    material_number=f"MAT-{nama_komoditas.upper()[:4]}",
+                    ordered_quantity=Decimal(600),
+                    price=Decimal("25132.39"),
+                    decision_id=did,
+                    status="confirmed",
+                    created_at=now - timedelta(minutes=18),
+                )
+            )
+
+    # Limbah hari ini: dua kejadian kecil di Jakarta (alasan dari data kanonik).
+    limbah = 0
+    jakarta = lokasi.get("Jakarta")
+    if jakarta is not None and "telur" in komoditas:
+        for n, (menit, kg) in enumerate(((-150, Decimal("12.5")), (-90, Decimal("8")))):
+            dis_id = uuid.uuid5(uuid.NAMESPACE_URL, f"mcg:{DEMO_TAG}:limbah:jakarta:{n}")
+            if await db.get(DisposalEvent, dis_id) is None:
+                db.add(
+                    DisposalEvent(
+                        id=dis_id,
+                        location_id=jakarta.id,
+                        commodity_id=komoditas["telur"],
+                        quantity_kg=kg,
+                        reason="spoilage_cold_chain",
+                        origin="demo",
+                        generated_at=now,
+                        disposed_at=now + timedelta(minutes=menit),
+                    )
+                )
+                limbah += 1
+    await db.flush()
+    return {"keputusan_demo": dibuat, "limbah_demo": limbah}
+

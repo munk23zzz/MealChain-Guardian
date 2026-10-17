@@ -1,6 +1,8 @@
 // API client MealChain Guardian — kontrak backend aktual (S3-12).
 // Tanpa karangan: hanya endpoint yang benar-benar ada di backend.
 
+import { metodeMenulis, segarkanSetelahTulis } from "./refresh";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 /** Galat HTTP backend yang membawa status. Pemanggil bisa membedakan 401 (sesi
@@ -24,7 +26,13 @@ export async function request(path: string, init: RequestInit): Promise<any> {
   // ("Unexpected token '<'...") jangan sampai tampil di UI.
   const text = await resp.text();
   try {
-    return JSON.parse(text);
+    const hasil = JSON.parse(text);
+    // Satu-satunya tempat semua tulis lewat: begitu server menerima perubahan,
+    // SELURUH cache data disegarkan (lihat `lib/refresh.ts`). Tanpa ini, tiap
+    // komponen harus ingat me-refetch query-nya sendiri — dan yang lupa akan
+    // menampilkan angka lama.
+    if (metodeMenulis(init.method)) segarkanSetelahTulis();
+    return hasil;
   } catch {
     throw new Error(`Respons bukan JSON dari ${path} (HTTP ${resp.status})`);
   }
