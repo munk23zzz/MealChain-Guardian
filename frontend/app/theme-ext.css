@@ -1,0 +1,65 @@
+/* ============================================================
+   theme-ext.css — tambahan UI per halaman (17 Okt 2026)
+
+   Sengaja DIPISAH dari globals.css: sesi lain aktif menyunting
+   peta/legenda di berkas itu. Pekerjaan halaman berikutnya cukup
+   menambah blok di sini, jadi tidak ada dua penulis di satu berkas.
+   Dimuat setelah globals.css (lihat app/layout.tsx) supaya bisa
+   menimpa aturan dasar tanpa !important.
+   ============================================================ */
+
+/* ---------- Keamanan Pangan: tabel batch ----------
+   Sumber semantik (bukan karangan): lib/food-safety.ts
+   safetyTone(): pass=ok, fail=danger, needs_verification=warn, pending=muted
+   expiryState(): expired / urgent / watch
+   Sebelumnya "urgent" dan "watch" sama-sama amber → tingkat berat dan
+   sedang tidak bisa dibedakan. Sekarang tiga tingkat punya tinta sendiri. */
+.safety-state-watch {
+  background: var(--sev-medium-bg);
+  color: var(--sev-medium-ink);
+  border-color: var(--sev-medium-line);
+}
+.safety-state-urgent {
+  background: var(--sev-hard-bg);
+  color: var(--sev-hard-ink);
+  border-color: var(--sev-hard-line);
+}
+.safety-state-expired {
+  background: var(--sev-critical-bg);
+  color: var(--sev-critical-ink);
+  border-color: var(--sev-critical-line);
+}
+
+/* Baris: zebra tipis + aksen tepi kiri sesuai status keamanan.
+   Badge tetap membawa teksnya, jadi warna bukan satu-satunya penanda. */
+.board-page .location-table tbody tr:nth-child(even) {
+  background: #FAFBFC;
+}
+.board-page .location-table tbody tr:hover {
+  background: var(--cat-blue-bg);
+}
+.board-page .location-table tbody tr:has(.board-badge-danger) {
+  box-shadow: inset 3px 0 0 var(--sev-critical-solid);
+}
+.board-page .location-table tbody tr:has(.board-badge-warn) {
+  box-shadow: inset 3px 0 0 var(--sev-medium-solid);
+}
+
+/* Kolom sempit: badge tidak boleh pecah dua baris. */
+.board-page .location-table .board-badge {
+  white-space: nowrap;
+}
+.board-page .location-table td:first-child {
+  font-weight: 500;
+}
+
+/* 375 px: "3 kiriman · +4 lain" tidak boleh mendorong halaman melebar.
+   Diukur: header kartu 286 px, teks 317 px (nowrap) → luapan 43 px. */
+@media (max-width: 720px) {
+  .board-page .card-header {
+    flex-wrap: wrap;
+  }
+  .board-page .shipment-count {
+    white-space: normal;
+  }
+}

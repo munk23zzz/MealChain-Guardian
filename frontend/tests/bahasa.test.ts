@@ -76,11 +76,14 @@ describe("blockingReasons — daftar penghalang siap baca", () => {
 });
 
 describe("safetyLabel — status keamanan jadi kata", () => {
-  it("PASS/FAIL/NEEDS_VERIFICATION", () => {
+  it("PASS/FAIL/NEEDS_VERIFICATION/PENDING", () => {
     expect(safetyLabel("PASS")).toBe("Lolos");
     expect(safetyLabel("pass")).toBe("Lolos");
     expect(safetyLabel("FAIL")).toBe("Gagal");
     expect(safetyLabel("NEEDS_VERIFICATION")).toBe("Perlu verifikasi");
+    // "pending" = belum diuji (bukan "gagal", bukan "aman"); dipakai kolom
+    // "Mutu" di papan kiriman supaya enum mentah tidak tampil di layar.
+    expect(safetyLabel("pending")).toBe("Belum diuji");
   });
 
   it("nilai tak dikenal dikembalikan apa adanya", () => {

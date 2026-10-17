@@ -15,6 +15,7 @@
  * 3. "Belum ada data" ≠ "terlambat": nada netral, bukan merah.
  */
 import { formatClockWib, formatDate, formatDateTime } from "./datetime";
+import { safetyLabel } from "./bahasa";
 import { formatKg } from "./overview-format";
 import { shipmentUrgency } from "./shipment-card";
 import {
@@ -149,7 +150,9 @@ export function boardMutu(row: SupplierRoute): string {
   if (!status) return DASH;
   if (status === "fail") return "Gagal uji";
   if (status === "pass") return "Lolos uji";
-  return String(status);
+  // Enum lain (needs_verification, pending, …) memakai label manusia yang sama
+  // dengan halaman Keamanan Pangan; nilai tak dikenal tetap apa adanya.
+  return safetyLabel(status) ?? DASH;
 }
 
 export type BoardState = { label: string; tone: RouteJourneyTone };

@@ -80,6 +80,7 @@ const SAFETY_ID: Record<string, string> = {
   pass: "Lolos",
   fail: "Gagal",
   needs_verification: "Perlu verifikasi",
+  pending: "Belum diuji",
   unavailable: "Tidak dapat dievaluasi",
 };
 

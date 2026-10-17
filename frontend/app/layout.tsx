@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./theme-ext.css";
 
 import Providers from "./providers";
 

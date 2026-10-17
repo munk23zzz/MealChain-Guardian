@@ -175,6 +175,12 @@ describe("papan kiriman — isi sel (tanpa angka karangan)", () => {
     expect(boardMutu(route())).toBe("Lolos uji");
     expect(boardMutu(route({ safetyStatus: "fail" }))).toBe("Gagal uji");
     expect(boardMutu(route({ safetyStatus: null }))).toBe("—");
+    // Enum mentah tidak boleh tampil di UI: "Mutu" adalah status keamanan,
+    // jadi pakai label manusia yang sama dengan halaman Keamanan Pangan.
+    expect(boardMutu(route({ safetyStatus: "needs_verification" }))).toBe("Perlu verifikasi");
+    expect(boardMutu(route({ safetyStatus: "pending" }))).toBe("Belum diuji");
+    // Nilai yang belum dikenal tetap apa adanya — jangan dikarang.
+    expect(boardMutu(route({ safetyStatus: "kustom_status" }))).toBe("kustom_status");
   });
 
   it("keadaan: label dari server + nada untuk warna", () => {
