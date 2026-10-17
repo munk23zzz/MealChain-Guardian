@@ -12,6 +12,8 @@ import {
   executionTargetLabel,
   humanizeBlocker,
   safetyLabel,
+  statusLabel,
+  toolLabel,
 } from "../lib/bahasa";
 
 describe("humanizeBlocker — sebab tertahan dari server", () => {
@@ -101,8 +103,8 @@ describe("agentLabel — nama teknis agen", () => {
 
 describe("executionTargetLabel — target eksekusi", () => {
   it("MOCK adalah simulasi, dan dikatakan", () => {
-    expect(executionTargetLabel("MOCK")).toBe("Simulasi (mock)");
-    expect(executionTargetLabel("mock")).toBe("Simulasi (mock)");
+    expect(executionTargetLabel("MOCK")).toBe("Simulasi");
+    expect(executionTargetLabel("mock")).toBe("Simulasi");
   });
 
   it("LOCAL = tindakan administratif lokal tanpa PO", () => {
@@ -112,5 +114,47 @@ describe("executionTargetLabel — target eksekusi", () => {
   it("target lain dikembalikan apa adanya", () => {
     expect(executionTargetLabel("SAP")).toBe("SAP");
     expect(executionTargetLabel(null)).toBeNull();
+  });
+});
+
+// Lencana status dulu menampilkan enum mentah ("PENDING APPROVAL", 23 kali di
+// feed Recommendation) di UI berbahasa Indonesia. Pemetaan tinggal di sini, dan
+// StatusBadge memakainya — satu tempat, bukan peta kedua di komponen.
+describe("statusLabel — lencana status ke bahasa Indonesia", () => {
+  it("memetakan status yang benar-benar muncul di layar", () => {
+    expect(statusLabel("PENDING_APPROVAL")).toBe("Menunggu persetujuan");
+    expect(statusLabel("pending_approval")).toBe("Menunggu persetujuan");
+    expect(statusLabel("VERIFIER_FLAGGED")).toBe("Ditandai verifikator");
+    expect(statusLabel("NEEDS_VERIFICATION")).toBe("Perlu verifikasi");
+    expect(statusLabel("PROPOSED")).toBe("Diusulkan");
+    expect(statusLabel("APPROVED")).toBe("Disetujui");
+    expect(statusLabel("REJECTED")).toBe("Ditolak");
+    expect(statusLabel("EXECUTED")).toBe("Dieksekusi");
+    expect(statusLabel("PASS")).toBe("Lolos");
+    expect(statusLabel("FAIL")).toBe("Gagal");
+  });
+
+  it("status tak dikenal TIDAK diterjemahkan, hanya garis bawahnya dibuang", () => {
+    expect(statusLabel("CUSTOM_STATE")).toBe("CUSTOM STATE");
+    expect(statusLabel(null)).toBeNull();
+    expect(statusLabel("  ")).toBeNull();
+  });
+});
+
+// Nama alat internal ("supply_balance.propose") pernah tampil apa adanya di
+// kartu kualitas agen. Yang dikenal diberi sebutan, yang tidak dikenal tetap
+// tampil apa adanya (bukti, jangan disembunyikan).
+describe("toolLabel — nama alat agen", () => {
+  it("menerjemahkan alat yang dikenal", () => {
+    expect(toolLabel("supply_balance.propose")).toBe("Neraca pasokan · usulkan");
+    expect(toolLabel("rejection_loop.repropose")).toBe("Usulan ulang setelah penolakan");
+    expect(toolLabel("demand.snapshot")).toBe("Potret permintaan");
+    expect(toolLabel("logistics.reroute")).toBe("Alih rute kiriman");
+    expect(toolLabel("POST /decisions")).toBe("Buat keputusan");
+  });
+
+  it("alat lain dibiarkan apa adanya", () => {
+    expect(toolLabel("price_anomaly.detect")).toBe("price_anomaly.detect");
+    expect(toolLabel(null)).toBeNull();
   });
 });

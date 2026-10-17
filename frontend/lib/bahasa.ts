@@ -90,6 +90,65 @@ export function safetyLabel(status: unknown): string | null {
   return SAFETY_ID[asli.toLowerCase()] ?? asli;
 }
 
+// Lencana status (components/StatusBadge) dulu menampilkan enum mentah berbahasa
+// Inggris: "PENDING APPROVAL" 23x di feed Recommendation, "NEEDS VERIFICATION",
+// "PROPOSED" di Demo Control (temuan QA 17 Okt 2026). Pemetaan tinggal di sini
+// supaya satu status tidak punya dua nama di dua halaman.
+const STATUS_ID: Record<string, string> = {
+  PASS: "Lolos",
+  FAIL: "Gagal",
+  NEEDS_VERIFICATION: "Perlu verifikasi",
+  PROPOSED: "Diusulkan",
+  VERIFIER_FLAGGED: "Ditandai verifikator",
+  PENDING_APPROVAL: "Menunggu persetujuan",
+  APPROVED: "Disetujui",
+  REJECTED: "Ditolak",
+  EXECUTED: "Dieksekusi",
+  SURPLUS: "Surplus",
+  SHORTAGE: "Shortage",
+  TIGHT: "Ketat",
+};
+
+/**
+ * Status enum → kata di layar. Nilai yang belum pernah dilihat TIDAK dikarang:
+ * hanya garis bawahnya dibuang supaya tetap terbaca ("CUSTOM_STATE" → "CUSTOM STATE").
+ */
+export function statusLabel(status: unknown): string | null {
+  const asli = teks(status);
+  if (!asli) return null;
+  const kunci = asli.toUpperCase().replace(/\s+/g, "_");
+  return STATUS_ID[kunci] ?? kunci.replace(/_/g, " ");
+}
+
+// Nama alat internal agen (kolom "alat" di kartu kualitas agen). Yang dikenal
+// diberi sebutan manusia; sisanya tampil apa adanya — itu bukti, bukan hiasan.
+const TOOL_ID: Record<string, string> = {
+  "supply_balance.propose": "Neraca pasokan · usulkan",
+  "rejection_loop.repropose": "Usulan ulang setelah penolakan",
+  "demand.snapshot": "Potret permintaan",
+  "price.signal": "Sinyal harga",
+  "evidence.crosscheck": "Pemeriksaan silang bukti",
+  "forecast.daily": "Perkiraan harian",
+  "forecast.provider": "Penyedia perkiraan",
+  "logistics.reroute": "Alih rute kiriman",
+  "logistics.status": "Status kiriman",
+  "supply.get+demand.get": "Ambil pasokan & permintaan",
+  "verifier.rest": "Layanan verifikator",
+  "balance.recommend": "Saran neraca pasokan",
+  "post /decisions": "Buat keputusan",
+  evaluate_safety: "Periksa keamanan",
+  build_recommendations: "Susun rekomendasi",
+  evaluate_balance: "Periksa neraca",
+  build_evidence: "Susun bukti",
+};
+
+/** Nama alat → sebutan; alat lain dikembalikan apa adanya. */
+export function toolLabel(tool: unknown): string | null {
+  const asli = teks(tool);
+  if (!asli) return null;
+  return TOOL_ID[asli.toLowerCase()] ?? asli;
+}
+
 const AGENT_ID: Record<string, string> = {
   supervisor_agent: "Agen supervisor",
   verifier_agent: "Agen verifikator",
@@ -105,7 +164,7 @@ export function agentLabel(agent: unknown): string | null {
 // Target eksekusi dari approval_summary.py: "MOCK" (lokasi tujuan ada) dan
 // "LOCAL" (tata kelola pemasok — tindakan administratif lokal, tanpa PO).
 const TARGET_ID: Record<string, string> = {
-  mock: "Simulasi (mock)",
+  mock: "Simulasi",
   local: "Lokal (tanpa PO)",
 };
 

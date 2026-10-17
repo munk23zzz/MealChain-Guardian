@@ -206,8 +206,8 @@ export default function SupplierBoard({
             ]}
           />
           <p className="evidence-note">
-            Eksklusi bukan pelabelan hiasan: pemasok berstatus excluded tidak dipilih lagi untuk
-            purchase order oleh backend.
+            Eksklusi bukan pelabelan hiasan: pemasok yang dikecualikan tidak dipilih lagi saat
+            sistem menyusun pesanan pembelian.
           </p>
         </article>
       </div>

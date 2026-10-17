@@ -102,8 +102,7 @@ export default function Event2Panel({
       </div>
       <p className="event2-note">
         Bandingkan penawaran supplier dengan referensi PIHPS. Deviasi dihitung
-        deterministik oleh backend; hasilnya adalah deteksi untuk ditelaah
-        manusia.
+        otomatis oleh sistem; hasilnya adalah deteksi untuk ditelaah manusia.
       </p>
       <div className="ops-controls">
         <label className="field">

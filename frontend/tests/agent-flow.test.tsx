@@ -150,7 +150,7 @@ describe("RecommendationCard", () => {
       <RecommendationCard decision={decision} mockSourced />
     );
     expect(html).toContain("Rp16.206.000");
-    expect(html).toContain("PENDING APPROVAL");
+    expect(html).toContain("Menunggu persetujuan");
     expect(html).toContain("Data Simulasi");
     expect(html).toContain("600");
   });

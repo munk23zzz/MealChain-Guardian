@@ -53,7 +53,11 @@ describe("IntegrationStatusPanel", () => {
     expect(html).toContain("artefak siap");
     expect(html).toContain("belum dimulai");
     expect(html).toContain("Bukti: env SAP_AI_CORE_CLIENT_ID terisi");
-    expect(html).toContain("Sumber: agent/README-deploy.md");
+    // Path berkas internal TIDAK lagi jadi teks yang dibaca pengguna (temuan QA
+    // 17 Okt 2026); ia tetap ada sebagai `title` — bukti masih bisa ditelusuri
+    // dengan mengarahkan penunjuk, tanpa mengotori layar.
+    expect(html).not.toContain("Sumber: agent/README-deploy.md");
+    expect(html).toContain('title="agent/README-deploy.md"');
   });
 
   it("tanpa probe: tidak ada satu pun baris hijau", () => {

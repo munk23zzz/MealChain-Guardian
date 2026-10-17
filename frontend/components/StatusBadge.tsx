@@ -1,4 +1,9 @@
 // StatusBadge — status TIDAK boleh ambigu (design.md §1.2).
+//
+// Label memakai `statusLabel` (lib/bahasa.ts): enum mentah berbahasa Inggris
+// ("PENDING APPROVAL" 23x di feed Recommendation) dulu tampil apa adanya di UI
+// berbahasa Indonesia. `data-status` tetap menyimpan nilai mentah — kontrak CSS.
+import { statusLabel } from "../lib/bahasa";
 
 const COLORS: Record<string, string> = {
   PASS: "status-safe",
@@ -18,7 +23,7 @@ const COLORS: Record<string, string> = {
 export default function StatusBadge({ status }: { status: string }) {
   const upper = (status ?? "").toUpperCase();
   const cls = COLORS[upper] ?? "status-neutral";
-  const label = upper.replace(/_/g, " ");
+  const label = statusLabel(status) ?? "";
   return (
     <span className={`badge ${cls}`} data-status={upper}>
       {label}

@@ -54,8 +54,8 @@ describe("DecisionChain (timeline iterasi)", () => {
   });
 
   it("status tiap iterasi pakai badge", () => {
-    expect(html).toContain("REJECTED");
-    expect(html).toContain("PENDING APPROVAL");
+    expect(html).toContain("Ditolak");
+    expect(html).toContain("Menunggu persetujuan");
   });
 
   it("chain kosong tidak merender apa pun", () => {

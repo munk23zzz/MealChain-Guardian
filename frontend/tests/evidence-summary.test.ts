@@ -225,7 +225,7 @@ describe("safetyFacts — keamanan & pemasok", () => {
     expect(find(rows, "Diblokir keamanan").value).toBe("Tidak");
     expect(find(rows, "Verifikator").value).toBe("tidak dapat dievaluasi · Agen verifikator");
     expect(find(rows, "Nomor material").value).toBe("MAT-TELUR");
-    expect(find(rows, "Target eksekusi").value).toBe("Simulasi (mock)");
+    expect(find(rows, "Target eksekusi").value).toBe("Simulasi");
   });
 
   it("aman → nada ok; gagal/blokir → nada bahaya", () => {

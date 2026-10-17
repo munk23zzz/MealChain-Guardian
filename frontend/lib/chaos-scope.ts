@@ -14,6 +14,8 @@
  * milik SPPG pemakai. Logika murni di modul ini supaya bisa diuji tanpa DOM.
  */
 
+import { safetyLabel } from "./bahasa";
+
 export const MISSING_LOCATION_REASON =
   "Lokasi SPPG Anda belum terbaca dari identitas server (/auth/me). " +
   "Muat ulang halaman setelah login — Event 3 butuh lokasi tujuan yang jelas.";
@@ -42,7 +44,15 @@ export function blockedReason(ownLocationId?: string | null): string | null {
  * SPPG lain tetap boleh dipilih, jadi TIDAK ada penanda "tidak bisa dipicu".
  */
 export function batchLabel(batch: BatchLike): string {
-  return [batch.commodity, batch.location, `${batch.quantity_kg} kg`, batch.safety_status]
+  return [
+    batch.commodity,
+    batch.location,
+    `${batch.quantity_kg} kg`,
+    // Status keamanan batch dulu tampil "pass"/"fail" (enum Inggris) di opsi
+    // pilihan skenario. safetyLabel = modul terjemahan yang sama dengan halaman
+    // keamanan pangan, jadi satu status tidak punya dua nama.
+    safetyLabel(batch.safety_status),
+  ]
     .filter((part) => part !== undefined && part !== null && part !== "")
     .join(" · ");
 }

@@ -97,8 +97,16 @@ export default function IntegrationStatusPanel({
                 <span className={`integration-badge integration-badge-${tone}`}>
                   {item.category_label || item.category}
                 </span>
-                {item.evidence && <span className="integration-evidence">Bukti: {item.evidence}</span>}
-                {item.artifact && <span className="integration-artifact">Sumber: {item.artifact}</span>}
+                {item.evidence && (
+                  <span className="integration-evidence" title={item.artifact ?? undefined}>
+                    Bukti: {item.evidence}
+                  </span>
+                )}
+                {item.artifact && !item.evidence && (
+                  <span className="integration-evidence" title={item.artifact}>
+                    Bukti: dokumen teknis tersimpan
+                  </span>
+                )}
                 {item.note && <span className="integration-note">{item.note}</span>}
               </li>
             );

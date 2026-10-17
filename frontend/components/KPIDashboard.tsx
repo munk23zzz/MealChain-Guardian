@@ -13,6 +13,7 @@
 
 import PageHeader from "./PageHeader";
 import { bulletOf, directionLabel, KPI_WINDOWS, type KpiWindowKey } from "../lib/kpi";
+import { roleLabel } from "../lib/settings";
 
 const UNIT_FMT: Record<string, (v: string) => string> = {
   IDR: (v) =>
@@ -60,12 +61,6 @@ function fmtPeriodDate(iso?: string | null): string {
     month: "short",
     year: "numeric",
   });
-}
-
-/** UUID panjang dipotong supaya pill tetap ringkas tapi masih bisa dilacak. */
-function shortId(id?: string | null): string {
-  if (!id) return "global";
-  return id.length > 10 ? `${id.slice(0, 8)}…` : id;
 }
 
 /** Keadaan metrik dari backend (kata apa adanya, tidak dikarang). Diekspor
@@ -200,8 +195,8 @@ export default function KPIDashboard({
             <span className="commodity-pill">
               Periode {fmtPeriodDate(kpi.period?.start)} – {fmtPeriodDate(kpi.period?.end)}
             </span>
-            <span className="commodity-pill">
-              scope {shortId(kpi.scope?.location_id)} ({kpi.scope?.role ?? "-"})
+            <span className="commodity-pill" title={kpi.scope?.location_id ?? undefined}>
+              Cakupan: {kpi.scope?.role ? roleLabel(kpi.scope.role) : "—"}
             </span>
           </span>
         }

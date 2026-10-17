@@ -23,6 +23,7 @@ import {
 } from "../lib/agent-quality";
 import { LoadingState } from "./LoadingState";
 import ScrollHint from "./ScrollHint";
+import { toolLabel } from "../lib/bahasa";
 
 const DASH = "—";
 
@@ -435,8 +436,8 @@ export default function AgentQualityBoard({
                         {run.tools.length ? (
                           <ul className="quality-tools">
                             {run.tools.map((tool) => (
-                              <li key={tool} className="quality-chip">
-                                {tool}
+                              <li key={tool} className="quality-chip" title={tool}>
+                                {toolLabel(tool) ?? tool}
                               </li>
                             ))}
                           </ul>
@@ -445,7 +446,7 @@ export default function AgentQualityBoard({
                         )}
                         {run.fallbackSteps > 0 ? (
                           <span className="quality-chip quality-chip-warn">
-                            fallback ×{run.fallbackSteps}
+                            langkah cadangan ×{run.fallbackSteps}
                           </span>
                         ) : null}
                       </td>

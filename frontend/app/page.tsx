@@ -1271,7 +1271,7 @@ export default function Home() {
           <section className="demo-control-section">
             <PageHeader
               title="Demo Control Panel"
-              description="Skenario deterministik untuk demo day — dijalankan lewat API resmi (tanpa mock): muat kasus, picu Event 2 (price anomaly) &amp; Event 3 (thermal excursion) dari konsol, lalu lihat hasilnya di tab Recommendations &amp; Agent Log."
+              description="Skenario uji untuk hari demo — semuanya lewat layanan aplikasi yang sebenarnya (bukan tiruan): muat kasus, picu Event 2 (harga melonjak) &amp; Event 3 (suhu kiriman menyimpang) dari konsol, lalu lihat hasilnya di tab Recommendations &amp; Agent Log."
             />
             <section className="card demo-scenario" aria-label="Skenario demo">
               <div className="card-header">

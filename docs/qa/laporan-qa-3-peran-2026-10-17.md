@@ -151,3 +151,32 @@ Positif yang perlu dipertahankan: tombol ikon (`Keluar`, `‹`/`›`, ikon kalen
 - Audit klik otomatis hanya untuk tombol berteks; tombol ikon (Keluar, ‹ ›, ikon kalender) diperiksa lewat **nama aksesibilitas** — pelajaran dari sesi ini: tombol ber-`aria-label` tidak tertangkap pencarian teks, dan kegagalan "tidak ada perubahan" pada awalnya **bukan** bukti tombol mati (terbukti Keluar bekerja).
 - Angka pengulangan bisa memuat positif palsu (mis. `SPPG Operations Lead` 2× karena top bar + sidebar); temuan #6–#10 hanya memuat baris yang isinya memang informasi, bukan nama peran.
 - Angka nominal pada laporan ini adalah cuplikan saat pengujian; data demo dibangun ulang oleh sesi lain sehingga nilai bisa bergeser (mis. `765,8 kg` → `801,02 kg`) — **pola pengulangannya** yang jadi temuan, bukan angkanya.
+
+---
+
+## 8. Perbaikan ronde 1 (dikerjakan setelah laporan ini)
+
+Yang dikerjakan — temuan **#2 (teks teknis & enum mentah)** dan bagian mekanismenya:
+
+| Sebelum (di layar) | Sesudah | Di mana |
+|---|---|---|
+| `PENDING APPROVAL` (23× di feed), `NEEDS VERIFICATION`, `PROPOSED`, `VERIFIER_FLAGGED`, `APPROVED/REJECTED/EXECUTED` | `Menunggu persetujuan`, `Perlu verifikasi`, `Diusulkan`, `Ditandai verifikator`, `Disetujui/Ditolak/Dieksekusi` | `components/StatusBadge.tsx` + `statusLabel()` di `lib/bahasa.ts` (satu modul, bukan peta kedua) |
+| `scope 23e6e766… (sppg_head)` | `Cakupan: Kepala SPPG` (UUID dipindah ke `title`) | `components/KPIDashboard.tsx` |
+| `supply_balance.propose`, `demand.snapshot`, `POST /decisions`, `fallback ×2` | `Neraca pasokan · usulkan`, `Potret permintaan`, `Buat keputusan`, `langkah cadangan ×2` (aslinya tetap di `title`) | `components/AgentQualityBoard.tsx` + `toolLabel()` di `lib/bahasa.ts` |
+| `Sumber: backend/app/sap_integration/mock_service.py` (dan path lain) | path **hilang dari layar**, tetap ada sebagai `title` pada "Bukti: …" | `components/IntegrationStatusPanel.tsx` |
+| "…tidak dipilih lagi untuk purchase order oleh **backend**" | "…tidak dipilih lagi saat sistem menyusun pesanan pembelian" | `components/SupplierBoard.tsx` |
+| "Deviasi dihitung deterministik oleh **backend**" | "Deviasi dihitung otomatis oleh sistem" | `components/Event2Panel.tsx` |
+| "target Simulasi (**mock**)" | "Simulasi" | `executionTargetLabel()` di `lib/bahasa.ts` |
+| `telur · Surabaya · 600 kg · fail` | `telur · Surabaya · 600 kg · Gagal` | `batchLabel()` di `lib/chaos-scope.ts` (memakai `safetyLabel`) |
+| "Skenario deterministik… API resmi (tanpa mock)… price anomaly… thermal excursion" | "Skenario uji untuk hari demo — semuanya lewat layanan aplikasi yang sebenarnya (bukan tiruan)… harga melonjak… suhu kiriman menyimpang" | deskripsi Demo Control (`app/page.tsx`) |
+| "Chaos Skenario — Event 3 (thermal excursion)" | "Skenario uji — Event 3 (suhu kiriman menyimpang)" | `components/ChaosPanel.tsx` |
+
+Bukti:
+- TDD: `statusLabel`/`toolLabel` + `tests/status-badge.test.tsx` (baru) ditulis dan dijalankan **merah** lebih dulu (`statusLabel is not a function`), lalu hijau. Tes lama yang memaku teks Inggris dibalik dengan **niat tes yang sama** (`agent-flow`, `decision-loop`, `chaos-scope`, `evidence-summary`, `integration-status`).
+- `integration-status`: assertion diubah menjadi "path TIDAK lagi sebagai teks" + "path masih ada di `title`" — bukti tidak dihapus, hanya tidak mengotori layar.
+- Verifikasi di peramban, **ketiga peran**: SPPG Head 10 tab, Nutritionist (Overview/Recommendations/KPI), BGN Monitor (Overview/Recommendations/KPI/Pengaturan) — token `PENDING APPROVAL`/`NEEDS VERIFICATION`/`PROPOSED`/`Proposed` = **0**, lencana terbaca `Menunggu persetujuan` / `Ditandai verifikator`.
+- Gerbang: seluruh suite lulus; `tsc` 0 error **di berkas yang disentuh** (2 error yang muncul di `tests/supply-map-layer.test.tsx` milik sesi paralel, bukan dari perubahan ini — dihitung terpisah: `error_berkas_saya=0`); `next lint` bersih.
+
+Masih terbuka (bukan frontend): beberapa kalimat teknis di Demo Control **datang dari server** ("Seeder relatif… tes backend yang memaku 8 Okt 12.00", "Snapshot kanonik: 362 baris…"), jadi perbaikannya di backend, bukan di komponen. Begitu juga "Bukti: layanan mock-sap + tes kontrak PO" (teks `evidence` dari API).
+
+Sisa temuan #1, #3–#18 belum dikerjakan.

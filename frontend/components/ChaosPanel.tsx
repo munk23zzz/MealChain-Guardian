@@ -108,9 +108,9 @@ export default function ChaosPanel({
   }
 
   return (
-    <section className="chaos-panel card" aria-label="Chaos skenario Event 3">
+    <section className="chaos-panel card" aria-label="Skenario uji Event 3">
       <div className="card-header">
-        <h3>Chaos Skenario — Event 3 (thermal excursion)</h3>
+        <h3>Skenario uji — Event 3 (suhu kiriman menyimpang)</h3>
         <span className="card-header-tags">
           <span className="demo-step">Langkah 4 · skenario</span>
           <StatusBadge status={result ? result.status : "proposed"} />

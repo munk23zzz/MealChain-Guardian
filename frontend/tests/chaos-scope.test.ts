@@ -55,7 +55,9 @@ describe("blockedReason", () => {
 describe("batchLabel", () => {
   it("menulis lokasi batch apa adanya tanpa penanda larangan", () => {
     const label = batchLabel(surabayaBatch);
-    expect(label).toBe("telur · Surabaya · 600 kg · fail");
+    // Status keamanan dulu "· fail" (enum Inggris) di opsi skenario — temuan QA
+    // 17 Okt 2026. Niat tes tetap: status keamanan batch HARUS ikut terbaca.
+    expect(label).toBe("telur · Surabaya · 600 kg · Gagal");
     expect(label).not.toContain("SPPG lain");
   });
 });
