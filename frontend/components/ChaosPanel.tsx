@@ -33,6 +33,17 @@ import StatusBadge from "./StatusBadge";
 
 const MUTATING = new Set(["sppg_head"]);
 
+/** Empat tingkat penanda skenario (tampilan saja — slider tidak dikirim ke server). */
+const TINGKAT = [
+  { max: 24, key: "safe", label: "Aman" },
+  { max: 49, key: "medium", label: "Sedang" },
+  { max: 74, key: "hard", label: "Berat" },
+  { max: 100, key: "critical", label: "Kritis" },
+] as const;
+
+function tingkatDari(nilai: number) {
+  return TINGKAT.find((t) => nilai <= t.max) ?? TINGKAT[TINGKAT.length - 1];
+}
 export default function ChaosPanel({
   role,
   token,
@@ -122,7 +133,12 @@ export default function ChaosPanel({
         slider hanya penanda skenario dan TIDAK dikirim ke server.
       </p>
       <label className="field chaos-slider">
-        <span>Penanda tingkat gangguan (tidak memengaruhi hasil): {severity}%</span>
+        <span>
+          Penanda tingkat gangguan (tidak memengaruhi hasil): {severity}%
+          <span className={`sev-pill sev-${tingkatDari(severity).key}`}>
+            {tingkatDari(severity).label}
+          </span>
+        </span>
         <input
           type="range"
           min={0}

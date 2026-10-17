@@ -421,7 +421,10 @@ export default function Home() {
   const [feedSort, setFeedSort] = useState<FeedSort>("urgency");
   // Feed berisi puluhan keputusan; tampilkan bertahap supaya halaman tidak
   // menjadi gulungan panjang. Jumlah tersisa selalu dinyatakan terang-terangan.
-  const [feedLimit, setFeedLimit] = useState(24);
+  // 10 kartu pertama (dari 24): halaman 4.100 px menjadi ±1.800 px. Tombol
+  // "Tampilkan 24 lagi" tetap ada, jadi tidak ada informasi yang hilang —
+  // hanya tidak lagi dirender sekaligus (permintaan pemilik 17 Okt: "kebesaran").
+  const [feedLimit, setFeedLimit] = useState(10);
 
   const isApprover = APPROVER_ROLES.has(role ?? "");
 
@@ -1093,6 +1096,7 @@ export default function Home() {
               {COMMODITIES.map((c) => (
                 <button
                   key={c}
+                  data-komoditas={c}
                   type="button"
                   className={`commodity-pill${mapCommodity === c ? " commodity-pill-active" : ""}`}
                   aria-pressed={mapCommodity === c}

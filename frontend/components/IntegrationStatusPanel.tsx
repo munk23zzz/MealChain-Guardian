@@ -91,23 +91,29 @@ export default function IntegrationStatusPanel({
         <ul className="integration-list">
           {komponen.map((item) => {
             const tone = categoryTone(item.category);
+            // Satu baris per komponen; bukti & catatan dilipat (17 Okt) supaya
+            // 10 komponen tidak menjadi 777 px. Nama + jenis bukti tetap terlihat.
             return (
               <li key={item.id} className={`integration-row integration-tone-${tone}`}>
-                <span className="integration-name">{item.name}</span>
-                <span className={`integration-badge integration-badge-${tone}`}>
-                  {item.category_label || item.category}
-                </span>
-                {item.evidence && (
-                  <span className="integration-evidence" title={item.artifact ?? undefined}>
-                    Bukti: {item.evidence}
-                  </span>
-                )}
-                {item.artifact && !item.evidence && (
-                  <span className="integration-evidence" title={item.artifact}>
-                    Bukti: dokumen teknis tersimpan
-                  </span>
-                )}
-                {item.note && <span className="integration-note">{item.note}</span>}
+                <details className="integration-more">
+                  <summary className="integration-summary">
+                    <span className="integration-name">{item.name}</span>
+                    <span className={`integration-badge integration-badge-${tone}`}>
+                      {item.category_label || item.category}
+                    </span>
+                  </summary>
+                  {item.evidence && (
+                    <span className="integration-evidence" title={item.artifact ?? undefined}>
+                      Bukti: {item.evidence}
+                    </span>
+                  )}
+                  {item.artifact && !item.evidence && (
+                    <span className="integration-evidence" title={item.artifact}>
+                      Bukti: dokumen teknis tersimpan
+                    </span>
+                  )}
+                  {item.note && <span className="integration-note">{item.note}</span>}
+                </details>
               </li>
             );
           })}

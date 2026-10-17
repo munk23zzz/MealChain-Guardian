@@ -28,9 +28,12 @@ import { toolLabel } from "../lib/bahasa";
 const DASH = "—";
 
 /** Kata status dari backend apa adanya → tone lencana. Kata statusnya tidak diubah. */
-function statusTone(status: string): "ok" | "warn" | "danger" | "muted" {
+function statusTone(status: string): "ok" | "warn" | "hard" | "danger" | "muted" {
   const s = status.toLowerCase();
-  if (s.includes("reject") || s.includes("flagged") || s.includes("fail")) return "danger";
+  // Empat tingkat (17 Okt): ditolak/gagal = kritis (merah), "flagged" = berat
+  // (oranye) — sebelumnya keduanya merah sehingga berat tak terbedakan.
+  if (s.includes("reject") || s.includes("fail")) return "danger";
+  if (s.includes("flagged")) return "hard";
   if (s.includes("pending") || s.includes("proposed") || s.includes("await")) return "warn";
   if (
     s.includes("approv") ||

@@ -1,23 +1,13 @@
 import type { Metadata } from "next";
-import { Fira_Sans, Fira_Code } from "next/font/google";
 import "./globals.css";
 
 import Providers from "./providers";
 
 /* Tipografi Bento Modern (Fase 0, 2026-10-16): Fira Sans (naratif) + Fira Code
-   (data/telemetri). Sebelumnya Inter + JetBrains Mono — JetBrains Mono dimuat
-   lewat --font-jetbrains tapi tidak pernah dipakai globals.css (mono datang dari
-   --font-data = mono sistem). Sekarang --font-data menunjuk Fira Code. */
-const firaSans = Fira_Sans({
-  subsets: ["latin"],
-  variable: "--font-fira-sans",
-  weight: ["300", "400", "500", "600", "700"],
-});
-const firaCode = Fira_Code({
-  subsets: ["latin"],
-  variable: "--font-fira-code",
-  weight: ["400", "500", "600"],
-});
+   (data/telemetri). FONT SELF-HOST (17 Okt 2026): @font-face ada di globals.css
+   dan berkas woff2 di /public/fonts. next/font/google TIDAK dipakai lagi karena
+   build tanpa jaringan hanya menghasilkan fallback Arial — terukur di
+   .next/static/css: tidak ada __Fira_Sans_<hash>, hanya __Fira_*_Fallback_*. */
 
 export const metadata: Metadata = {
   title: "MealChain Guardian",
@@ -30,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="id" className={`${firaSans.variable} ${firaCode.variable}`}>
+    <html lang="id">
       <body>
         <Providers>{children}</Providers>
       </body>

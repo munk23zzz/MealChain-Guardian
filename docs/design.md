@@ -720,13 +720,63 @@ diganti; **strukturnya** yang diperbaiki.
   pakai teks `.sr-only` di dalam elemen + tandai teks yang terlihat `aria-hidden` bila keduanya
   akan terbaca ganda.
 
+### Palet warna (2026-10-17)
+
+Permintaan pemilik: *"banyak hal yang harus berwarna supaya menyampaikan hal namun malah
+tidak berwarna; tampilan terasa membosankan"*. Prinsipnya: **warna = makna**, bukan hiasan.
+Status tetap memakai token lama (ok/warn/danger); ditambah **palet identitas** untuk entitas
+yang berulang (komoditas, agen, kategori integrasi). Semua pasangan tinta/latar di bawah
+lolos WCAG AA (rasio diukur, bukan dikira):
+
+| Keluarga | Latar | Garis | Tinta | Solid (putih di atasnya) | Rasio tinta/latar |
+|---|---|---|---|---|---|
+| Biru — informasi, beras, supervisor | `#EFF6FF` | `#BFDBFE` | `#1D4ED8` | `#1D4ED8` | 6,16:1 |
+| Amber — peringatan, telur | `#FFFBEB` | `#FCD34D` | `#92400E` | `#92400E` | 6,84:1 |
+| Rose — risiko, ayam | `#FFF1F2` | `#FECDD3` | `#9F1239` | `#9F1239` | 7,30:1 |
+| Teal — terverifikasi, agen verifier, jangkauan | `#F0FDFA` | `#99F6E4` | `#115E59` | `#115E59` | 7,27:1 |
+| Violet — manusia/wortel | `#F5F3FF` | `#DDD6FE` | `#5B21B6` | `#5B21B6` | 8,19:1 |
+
+#### Skala keparahan 4 tingkat (aman · medium · hard · critical)
+
+Dua tingkat lama (warn & danger) tidak cukup membedakan "berat" dari "kritis".
+Ditambahkan satu tingkat oranye di antaranya; semua tetap didampingi label:
+
+| Tingkat | Latar | Garis | Tinta | Titik/solid | Rasio | Dipakai untuk |
+|---|---|---|---|---|---|---|
+| aman | `#ECFDF5` | `#A7F3D0` | `#065F46` | `#2E7D32` | 7,29:1 | approved / tersedia / lolos |
+| medium | `#FFFBEB` | `#FDE68A` | `#8A5A00` | `#B45309` | 5,72:1 | pending / perlu verifikasi |
+| hard | `#FFF7ED` | `#FED7AA` | `#9A3412` | `#EA580C` | 6,88:1 | verifier flagged / berat |
+| critical | `#FEF2F2` | `#FECACA` | `#991B1B` | `#C62828` | 7,60:1 | rejected / failed / kedaluwarsa |
+
+Utilitas: `.sev-pill` + `.sev-safe|medium|hard|critical` (titik 6 px + label).
+Lencana tabel: `.board-badge-hard`. `statusTone()` di `AgentQualityBoard`
+memisahkan `flagged → hard` dari `reject/fail → danger`. Slider Demo Control
+memakai band 0–24 / 25–49 / 50–74 / 75–100 **sebagai penanda tampilan saja**
+(slider tidak pernah dikirim ke server — bukan ambang kebijakan).
+Penerapan (semua bentuk kecil):
+
+| Permukaan | Sebelum | Sesudah |
+|---|---|---|
+| Pil komoditas peta (telur/ayam/beras/wortel) | abu-abu seragam | tint + titik 7 px per komoditas; aktif = solid gelap + teks putih |
+| Tile "Hari Ini" (ok/warn/danger) | putih + garis kiri | wash gradien 72% + label berwarna |
+| Kartu KPI Overview | putih semua | wash merah (shortage) / biru (pasokan) / amber (menunggu) + pita 3 px |
+| Kartu KPI & Kualitas | tanpa penanda status | pita atas 3 px hijau/amber/merah |
+| Tag rute & jangkauan di tabel Pemasok | teks abu | chip biru / teal |
+| Chip jumlah ("3 kiriman") | abu | tint biru + angka tabular |
+| Titik identitas judul kartu | tidak ada | kotak 6 px biru di kiri judul |
+| Lencana integrasi "warn" | tanpa warna teks | tinta amber |
+
+Aturan yang dijaga: warna tidak pernah satu-satunya pembawa makna (selalu ada teks/label),
+angka hero tetap tinta netral (hanya wash yang berwarna), dan peta/legenda tidak diubah.
 ### Tipografi
-- Font: Fira Sans (fallback: Inter, system-ui) — jelas terbaca di data-dense
-  dashboard; dipasang lewat `next/font/google` sebagai `--font-fira-sans`.
-  Pasangan ini juga yang direkomendasikan skill `ui-ux-pro-max` untuk
-  "Dashboard Data" (mono + sans, Fira Code / Fira Sans).
-- Angka & telemetri memakai Fira Code (monospace, tabular) sebagai `--font-data`
-  (variabel `--font-fira-code`). Sebelumnya mono sistem.
+- Font: **Fira Sans di-self-host** — berkas `frontend/public/fonts/*.woff2`
+  (400/500/600/700) + `@font-face` di `globals.css`. Sejak 17 Okt 2026
+  `next/font/google` DIBUANG: build tanpa jaringan hanya menghasilkan
+  `__Fira_*_Fallback_*` (Arial) — terbukti di `.next/static/css`, sehingga
+  seluruh app tampil dengan font sistem, bukan Fira. Pasangan Fira Sans +
+  Fira Code juga rekomendasi `ui-ux-pro-max` ("Dashboard Data", mono + sans).
+- Angka & telemetri memakai Fira Code (monospace, tabular) lewat `--font-data`
+  (400/500/600, self-host, `font-variant-numeric: tabular-nums`).
 - **Skala 8 langkah (2026-10-16) — satu-satunya sumber ukuran teks.** Semua
   `font-size` memakai token ini; angka mentah dilarang muncul kembali (dulu ada
   24 ukuran berbeda, termasuk 11/11,5px dan pecahan 12,5/13,5/14,5/15,5px):
@@ -740,8 +790,14 @@ diganti; **strukturnya** yang diperbaiki.
   | `--fs-5` | 18 | head — judul seksi (h2), angka di dalam kartu |
   | `--fs-6` | 20 | page — judul halaman (h1; `PageHeader level={2}` memakai `--fs-5`) |
   | `--fs-7` | 24 | metric — angka metrik besar (KPI/tile/neraca) |
-  | `--fs-8` | 36 | hero — angka hero, satu per halaman |
+  | `--fs-8` | 32 | hero — angka hero, satu per halaman (36 → 32, 17 Okt) |
 
+  **Lantai 12 px dijaga:** `<small>` bawaan browser (0,833em → 11,67 px) dipatok ke
+  `--fs-1` (`.agenda-hint`); audit 10 tab = 0 elemen di bawah 12 px.
+
+  **Mobile (≤720 px):** `--fs-2` 14 · `--fs-3` 15 · `--fs-4` 17, dan
+  `input/select/textarea` 16 px supaya iOS tidak memperbesar halaman saat fokus.
+  Terukur di iframe 375 px: badan 15 px, luapan horizontal 0.
   Ujung atas (20/24/36) diturunkan 2026-10-16 dari 22/28/44 atas permintaan
   pemilik ("tidak terlalu besar"); rentang hero 36–42 mengikuti contoh skala
   skill `ui-ux-pro-max`. Karena semua `font-size` memakai token, satu perubahan
@@ -757,6 +813,40 @@ diganti; **strukturnya** yang diperbaiki.
   bawaan peramban (h2 21px, h3 16,38px) — pernah terjadi pada `.provider-panel h2`
   dan panel governance. Setiap selector judul baru harus menyebut token skala.
 
+### Lapisan densitas (2026-10-17)
+
+Permintaan pemilik: *"banyak hal yang terlalu besar ... tampilannya jangan kebesaran"*.
+Yang dikecilkan **hanya bentuk** dan penekanan angka; lantai teks 12 px dan target sentuh 44 px
+di `(pointer: coarse)`/≤720 px tidak disentuh.
+
+| Yang berubah | Sebelum | Sesudah |
+|---|---|---|
+| `--radius` (kartu) | 16 px | **12 px** |
+| `--fs-8` (angka hero) | 36 px | **32 px** |
+| Padding `.card` | 16 px | **14 px** |
+| Jarak blok halaman (`.today-page`, `.evidence-page`, `.board-page`, `.overview-page`, `.demo-control-section`) | 14–18 px | **12–13 px** |
+| Margin bawah `.page-header` | 20 px | **12 px** |
+| Padding kartu KPI (`.kpi-dashboard .kpi-card`) | 20 px | **14 px** |
+| Angka metrik (`.kpi-value`, `.stat-tile-value`, `.balance-value`) | 24 px (`--fs-7`) | **20 px** (`--fs-6`) |
+| Tinggi kanvas `.map-gl` (desktop) | 460 px | **400 px** (breakpoint 900/720 px tetap 380/320) |
+| Jumlah kartu feed awal | 24 | **10** (tombol "Tampilkan 24 lagi" tetap) |
+
+Terukur pada viewport 1262×568, 10 tab: total tinggi halaman **23.996 → 21.208 px (−11,6%)**;
+Recommendations **4.105 → 1.868 px (−54,5%)**; Overview **2.630 → 2.524 px**; KPI **2.386 → 2.270 px**.
+Bukti angka: `_qa/ui-kompaksi/sebelum.json` & `sesudah.json`. Luapan horizontal 1440/375 px = 0.
+
+#### Step 2 — blok penjelas dilipat (angka & tag tetap terlihat)
+
+| Yang berubah | Sebelum | Sesudah |
+|---|---|---|
+| Baris daftar `.today-row` | 83–84 px (tombol "Buka" jatuh ke baris kedua karena `grid-column: 2` bertabrakan dengan pil tenggat) | **55–56 px** — grid `1fr auto auto`, tombol di kolom 3; ≤720 px kembali 2 kolom |
+| `.role-hero` (panduan peran, tampil di 3 tab) | 140 px | **72 px** — misi + langkah masuk `<details>` "Panduan peran" |
+| Baris `.integration-row` (Agent Log) | ±70 px, kartu 777 px | **46 px**, kartu **497 px** — bukti & catatan per komponen di `<details>` |
+| Kartu feed awal | 24 kartu | **10 kartu** ("Tampilkan 24 lagi" tetap) |
+
+Total 10 tab: **23.996 → 20.714 px (−13,7%)**. Isi `<details>` tetap di DOM, jadi pembaca layar
+dan tes tetap menemukannya; yang hilang hanya tinggi saat tertutup. Batas jujur: sisa blok tinggi
+di KPI (11 tile × 212 px, isi 148 px + padding) dan tabel Pemasok (35 baris × ±56 px) adalah **isi**, bukan chrome.
 ### Rail (sidebar)
 - Baris brand **setinggi top bar: 64px** (`min-height`), padding 10/16px; logo,
   avatar, dan tombol ikon semuanya **32×32**.

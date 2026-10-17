@@ -93,7 +93,9 @@ describe("AgentQualityBoard", () => {
   it("status & putusan jadi lencana bertone, kata statusnya tetap apa adanya", () => {
     const html = render();
     expect(html).toContain("data-status-tone=\"warn\""); // pending_approval
-    expect(html).toContain("data-status-tone=\"danger\""); // verifier_flagged
+    // 17 Okt: "flagged" dipisah dari "rejected" — flagged = hard (oranye),
+    // rejected/failed = danger (merah kritis). Empat tingkat, bukan tiga.
+    expect(html).toContain('data-status-tone="hard"'); // verifier_flagged
     expect(html).toContain("pending approval");
     expect(html).toContain("verifier flagged");
   });

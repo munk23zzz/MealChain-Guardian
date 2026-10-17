@@ -51,15 +51,21 @@ export default function RoleHero({ role }: { role: string }) {
     <section className="role-hero" aria-label={p.title}>
       <div className="role-hero-text">
         <h2>{p.title}</h2>
-        <p className="role-mission">{p.mission}</p>
+        {/* Misi + langkah peran dilipat (17 Okt): blok ini tampil di SETIAP tab
+            dan hanya dibaca sekali. Judul tetap terlihat; panduan satu klik lagi.
+            Isi tetap ada di DOM, jadi pembaca layar & tes tetap menemukannya. */}
+        <details className="role-hero-more">
+          <summary>Panduan peran</summary>
+          <p className="role-mission">{p.mission}</p>
+          {p.steps.length > 0 && (
+            <ol className="role-steps">
+              {p.steps.map((s, i) => (
+                <li key={i}>{s}</li>
+              ))}
+            </ol>
+          )}
+        </details>
       </div>
-      {p.steps.length > 0 && (
-        <ol className="role-steps">
-          {p.steps.map((s, i) => (
-            <li key={i}>{s}</li>
-          ))}
-        </ol>
-      )}
     </section>
   );
 }
