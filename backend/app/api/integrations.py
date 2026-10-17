@@ -69,7 +69,11 @@ def _komponen() -> list[dict]:
             "id": "sap_ai_core",
             "name": "SAP AI Core (SAP-RPT-1.6)",
             "category": "contract_tested" if sap_siap else "unavailable",
-            "evidence": "env SAP_AI_CORE_CLIENT_ID terisi" if sap_siap else "env SAP_AI_CORE_CLIENT_ID kosong",
+            "evidence": (
+                "env SAP_AI_CORE_CLIENT_ID terisi"
+                if sap_siap
+                else "env SAP_AI_CORE_CLIENT_ID kosong"
+            ),
             "artifact": "docs/verification/fase-12.md",
             "note": "Peramal deret resmi; kontrak pemanggil diuji di backend/tests.",
         },
@@ -103,7 +107,11 @@ def _komponen() -> list[dict]:
             "category": "configured" if gateway_siap else "not_started",
             "evidence": "env AGENTCORE_GATEWAY_URL" + (" terisi" if gateway_siap else " kosong"),
             "artifact": "docs/Roadmap.md",
-            "note": "Belum ada gateway yang dibuat untuk alur ini." if not gateway_siap else "URL gateway terisi.",
+            "note": (
+                "Belum ada gateway yang dibuat untuk alur ini."
+                if not gateway_siap
+                else "URL gateway terisi."
+            ),
         },
         {
             "id": "agentcore_memory",

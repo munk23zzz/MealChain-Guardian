@@ -57,7 +57,16 @@ def test_setiap_komponen_membawa_bukti_dan_waktu(client, monitor_headers):
     payload = _payload(client, monitor_headers)
     assert payload["components"], "papan tidak boleh kosong"
     for item in payload["components"]:
-        for kunci in ("id", "name", "category", "category_label", "evidence", "artifact", "checked_at"):
+        wajib = (
+            "id",
+            "name",
+            "category",
+            "category_label",
+            "evidence",
+            "artifact",
+            "checked_at",
+        )
+        for kunci in wajib:
             assert item.get(kunci), f"{item.get('id')}: kolom {kunci} kosong"
         assert item["category"] in ALLOWED, item["category"]
         # checked_at harus ISO yang bisa diurai
@@ -80,14 +89,17 @@ def test_agentcore_runtime_mengikuti_env_arn(client, monitor_headers, monkeypatc
     assert kosong["category"] == "artifacts_ready"
     assert "kosong" in kosong["evidence"]
 
-    monkeypatch.setenv("AGENTCORE_RUNTIME_ARN", "arn:aws:bedrock-agentcore:ap-southeast-1:1:runtime/x")
+    monkeypatch.setenv(
+        "AGENTCORE_RUNTIME_ARN", "arn:aws:bedrock-agentcore:ap-southeast-1:1:runtime/x"
+    )
     terisi = _komponen(_payload(client, monitor_headers), "agentcore_runtime")
     assert terisi["category"] == "configured"
 
 
 def test_agentcore_memory_mengikuti_env(client, monitor_headers, monkeypatch):
     monkeypatch.delenv("AGENTCORE_MEMORY_ID", raising=False)
-    assert _komponen(_payload(client, monitor_headers), "agentcore_memory")["category"] == "unavailable"
+    mem = _komponen(_payload(client, monitor_headers), "agentcore_memory")
+    assert mem["category"] == "unavailable"
 
     monkeypatch.setenv("AGENTCORE_MEMORY_ID", "mem-0123456789abcdef")
     memory = _komponen(_payload(client, monitor_headers), "agentcore_memory")
@@ -101,7 +113,8 @@ def test_sap_ai_core_mengikuti_env(client, monitor_headers, monkeypatch):
     assert _komponen(_payload(client, monitor_headers), "sap_ai_core")["category"] == "unavailable"
 
     monkeypatch.setenv("SAP_AI_CORE_CLIENT_ID", "client-id-demo")
-    assert _komponen(_payload(client, monitor_headers), "sap_ai_core")["category"] == "contract_tested"
+    sap = _komponen(_payload(client, monitor_headers), "sap_ai_core")
+    assert sap["category"] == "contract_tested"
 
 
 def test_komponen_tanpa_implementasi_berbunyi_belum_dimulai(client, monitor_headers):
