@@ -213,3 +213,36 @@ supaya label dan keterangan tidak ikut bergeser). Terukur sesudah: jarak nilai k
 kanan bentuk **19 px** di kelima tile (15, 2, 1, 5/7, Rantai utuh) — seragam dan tidak
 menempel tepi, tetapi masih terbaca sebagai satu kolom angka di sisi kanan. Label tetap
 satu baris, bentuk tetap 183x70 px, tinggi strip 70 px, luapan horizontal 0 px.
+
+## 11. Nilai kartu KPI Overview juga dipindah ke kanan (permintaan pemilik)
+
+Permintaan: *"bagian ini '-765,8 kg' di halaman overview tolong di buat di sebelah kanan
+juga"* lalu diperjelas *"di Selisih pasokan Jakarta"*.
+
+Sasaran tepat: kartu KPI pertama di blok `.overview-kpis` halaman Overview — label
+"Selisih pasokan Jakarta" (`app/page.tsx` baris 960-990), nilainya `formatSignedKg(hero.gapKg)`
+= "-765,8 kg" pada 44 px.
+
+Perubahan: blok `.overview-kpis .kpi-card` memakai grid `minmax(0,1fr) auto` — label di
+kolom 1, nilai `grid-column: 2; text-align: right`, dan `kpi-card-foot`/`kpi-card-mini`
+selebar kartu di baris bawah. **Dibatasi ke `.overview-kpis`** karena `.kpi-card` juga
+dipakai halaman KPI (KPIDashboard: `.kpi-card-top`/`.kpi-card-name`/`.kpi-card-flags`)
+yang susunannya berbeda — aturan global akan merusak halaman itu.
+
+Terukur sesudah (1262 px, SPPG Head):
+
+| Kartu | Label (kiri) | Nilai (kanan) |
+|---|---|---|
+| Selisih pasokan Jakarta | 130 px, mulai 19 px dari tepi kiri | "-765,8 kg", tepi kanan 19 px dari tepi kartu |
+| Pasokan terpantau | 108 px | "314,2 kg", tepi kanan 19 px |
+| Rekomendasi menunggu | 248 px | "4", tepi kanan 19 px |
+
+Jarak nilai ke tepi kartu (19 px = padding kartu) **sama dengan** jarak yang sudah
+disetujui pada strip "Hari Ini" (§10.1), jadi kedua halaman konsisten. Tinggi kartu tetap
+121 px, `foot`/`mini` tetap selebar kartu, luapan horizontal 0 px.
+
+Catatan: baris "Selisih: kurang 765,8 kg" di kartu **Telemetri Node** dan **Status Lokasi**
+(di bawah peta) TIDAK diubah — teks yang diminta pemilik berbunyi "-765,8 kg" (bentuk angka
+bertanda dari kartu KPI), sedangkan baris itu berbunyi "kurang 765,8 kg". Bila pemilik
+memang memaksudkan baris itu, perubahannya satu baris lagi (label kiri, nilai kanan seperti
+baris `.node-gauge` di atasnya).

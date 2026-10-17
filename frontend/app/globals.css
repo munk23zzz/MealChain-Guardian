@@ -3429,6 +3429,32 @@ a:focus-visible {
   color: var(--ink-subtle);
 }
 
+/* Nilai di sisi KANAN (permintaan pemilik 2026-10-17: "bagian ini '−765,8 kg' di
+   halaman overview tolong di buat di sebelah kanan juga — di Selisih pasokan
+   Jakarta"): label di kiri, NILAI rata kanan pada baris yang sama, keterangan
+   (foot/mini) di bawah selebar kartu — pola yang sama dengan strip "Hari Ini".
+
+   Dibatasi ke `.overview-kpis`: kelas `.kpi-card` juga dipakai halaman KPI
+   (KPIDashboard) dengan susunan berbeda (.kpi-card-top/.kpi-card-name/.kpi-card-flags),
+   sehingga aturan grid di sini tidak boleh berlaku global. */
+.overview-kpis .kpi-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 2px;
+}
+
+.overview-kpis .kpi-card-label { grid-column: 1; }
+
+.overview-kpis .kpi-card-value {
+  grid-column: 2;
+  text-align: right;
+}
+
+.overview-kpis .kpi-card-foot,
+.overview-kpis .kpi-card-mini { grid-column: 1 / -1; }
+
 /* Bar kemajuan pasokan vs kebutuhan. Lebar bar dibatasi 100% karena pasokan
    bisa melebihi kebutuhan — angkanya sendiri tetap ditulis apa adanya. */
 .bento-bar {
