@@ -58,7 +58,10 @@ def _db():
 def _mk_user(role: str, location_name: str | None = None) -> dict:
     engine = _db()
     user_id = str(uuid.uuid4())
-    email = f"{role}-{uuid.uuid4().hex[:8]}@test.local"
+    # Domain `@uji-peran.local`, BUKAN `@test.local`: suite sesi lain memakai
+    # fixture autouse yang menyapu `%@test.local` di DB bersama, sehingga user
+    # tes ini bisa terhapus di tengah run dan tokennya jadi 401 "token tidak valid".
+    email = f"{role}-{uuid.uuid4().hex[:8]}@uji-peran.local"
     digest = bcrypt.hashpw(PW.encode(), bcrypt.gensalt()).decode()
     try:
         with engine.begin() as conn:
