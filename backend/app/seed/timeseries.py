@@ -37,6 +37,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import os
+import uuid
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
@@ -45,7 +46,15 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.db import create_engine, create_session_maker
-from app.models import Decision, Location, MenuPlan, PriceSignal, SupplyRecord
+from app.models import (
+    Decision,
+    DeliveryEvent,
+    DisposalEvent,
+    Location,
+    MenuPlan,
+    PriceSignal,
+    SupplyRecord,
+)
 
 # --------------------------------------------------------------------- batas
 
@@ -88,8 +97,18 @@ PRICE_NOISE_SPREAD = Decimal("0.03")
 #: Kutipan pemasok tidak perlu serapat referensi harga.
 QUOTE_INTERVAL_DAYS = 7
 
-#: Tabel yang dibersihkan `purge_demo_rows` (urut FK: anak dulu).
-PURGE_MODELS = (SupplyRecord, PriceSignal, MenuPlan)
+#: Tabel yang dibersihkan `purge_demo_rows()`. Urutannya penting: baris anak
+#: (kiriman) dibuang sebelum induknya (`menu_plans`) supaya tidak bergantung CASCADE.
+PURGE_MODELS = (DeliveryEvent, DisposalEvent, SupplyRecord, PriceSignal, MenuPlan)
+
+#: Hari rencana pertama yang BELUM punya kiriman/limbah kanonik. Kanonik:
+#: `delivery_events` 1–7 Okt, `disposal_events` 4–7 Okt. Mulai 8 Okt generator
+#: boleh menulis baris demo — dengan begitu jangkar agenda 2 Okt (1.200 porsi
+#: terkirim) tidak pernah tersentuh, sementara jendela KPI 7 hari tetap terisi.
+EVENT_DEMO_START = datetime(2026, 10, 8, tzinfo=UTC)
+
+#: Alasan limbah yang dipakai data kanonik — demo tidak mengarang alasan baru.
+DISPOSAL_REASONS = ("spoilage_cold_chain", "expired_transport")
 
 _TWO_PLACES = Decimal("0.01")
 
@@ -279,6 +298,108 @@ def plan_menu_plan_rows(
     return rows
 
 
+def _event_id(kind: str, location_id, day: date) -> uuid.UUID:
+    """Id deterministik untuk baris kiriman/limbah demo.
+
+    Dipakai supaya generator idempoten tanpa perlu SELECT dulu: id yang sama
+    muncul lagi pada panggilan berikutnya, lalu `ON CONFLICT (id) DO NOTHING`
+    membuangnya. Tanpa ini, "dua kali jalan tidak menggandakan" hanya bisa
+    dicapai lewat kueri-cek yang balapan.
+    """
+    return uuid.uuid5(uuid.NAMESPACE_URL, f"mealchain:{kind}:{location_id}:{day}")
+
+
+def _at(day: date, hour: int) -> datetime:
+    """Pukul `hour` UTC pada tanggal rencana (14:00 = 21:00 WIB hari yang sama)."""
+    return datetime(day.year, day.month, day.day, hour, tzinfo=UTC)
+
+
+def plan_delivery_rows(menu_rows: list[dict]) -> list[dict]:
+    """Rencana kiriman demo: satu kiriman per rencana pada/ setelah 8 Okt.
+
+    Porsi terkirim 80–100% dari rencana (85% hari penuh, 10% kurang sedikit, 5%
+    kurang lebih banyak). Kalau semuanya 100%, "Meal Continuity Rate" hanya bisa
+    100% dan deretnya tidak informatif — padahal justru angka itulah yang dibaca
+    juri di panel KPI.
+    """
+    batas = EVENT_DEMO_START.date()
+    rows: list[dict] = []
+    for item in menu_rows:
+        if item["plan_date"] < batas:
+            continue
+        kunci = f"kirim|{item['location_id']}|{item['plan_date']}"
+        u = _unit(kunci)
+        if u < Decimal("0.85"):
+            faktor = Decimal("1.00")
+        elif u < Decimal("0.95"):
+            faktor = Decimal("0.92")
+        else:
+            faktor = Decimal("0.80")
+        porsi = int(
+            (Decimal(item["planned_portions"]) * faktor).to_integral_value(
+                rounding=ROUND_HALF_UP
+            )
+        )
+        rows.append(
+            {
+                "id": _event_id("kirim", item["location_id"], item["plan_date"]),
+                "menu_plan_id": item["menu_plan_id"],
+                "delivered_portions": max(1, porsi),
+                "status": "delivered",
+                "delivered_at": _at(item["plan_date"], 14),
+                "origin": "demo",
+            }
+        )
+    return rows
+
+
+def plan_disposal_rows(
+    menu_rows: list[dict], commodities_by_location: dict
+) -> list[dict]:
+    """Dua catatan limbah per hari rencana (8 Okt ke atas), 3–13 kg.
+
+    Lokasi bergilir tiap hari (posisi `n` dan `n+3` dari daftar terurut), jadi
+    seluruh lokasi kebagian tanpa RNG yang bergantung urutan pemrosesan.
+    Komoditas diambil dari pasokan lokasi itu — limbah selalu punya material.
+    """
+    batas = EVENT_DEMO_START.date()
+    per_hari: dict[date, list[dict]] = {}
+    for item in menu_rows:
+        if item["plan_date"] < batas:
+            continue
+        per_hari.setdefault(item["plan_date"], []).append(item)
+
+    rows: list[dict] = []
+    for urutan, hari in enumerate(sorted(per_hari)):
+        rencana = sorted(per_hari[hari], key=lambda r: str(r["location_id"]))
+        jumlah = len(rencana)
+        if jumlah == 0:
+            continue
+        for posisi in sorted({urutan % jumlah, (urutan + 3) % jumlah}):
+            item = rencana[posisi]
+            komoditas = commodities_by_location.get(item["location_id"]) or []
+            if not komoditas:
+                continue
+            u = _unit(f"limbah|{item['location_id']}|{hari}")
+            kg = (Decimal(3) + u * Decimal(10)).quantize(
+                _TWO_PLACES, rounding=ROUND_HALF_UP
+            )
+            rows.append(
+                {
+                    "id": _event_id("limbah", item["location_id"], hari),
+                    "location_id": item["location_id"],
+                    "commodity_id": sorted(komoditas, key=str)[0],
+                    "quantity_kg": kg,
+                    "reason": DISPOSAL_REASONS[0]
+                    if u < Decimal("0.5")
+                    else DISPOSAL_REASONS[1],
+                    "disposed_at": _at(hari, 12),
+                    "origin": "demo",
+                }
+            )
+    return rows
+
+
 def plan_all(
     *,
     supply_pairs: list[tuple[str, Any, Any, Decimal]],
@@ -294,11 +415,25 @@ def plan_all(
     validate_range(start, end)
     stamps = actual_timestamps(start, end, interval_hours, ref)
     actual_end = min(end, actual_cutoff(ref))
+    menu_rows = plan_menu_plan_rows(menu_bases, start, end)
+    #: Berapa baris kiriman/limbah yang SEHARUSNYA ada: satu kiriman per rencana
+    #: sejak 8 Okt, dua catatan limbah per hari rencana. Angka inilah yang dipakai
+    #: laporan pratinjau dan jaring `pastikan_deret_demo` — bukan tebakan selisih.
+    hari_berevent = {
+        r["plan_date"] for r in menu_rows if r["plan_date"] >= EVENT_DEMO_START.date()
+    }
+    event_plan = {
+        "deliveries": sum(
+            1 for r in menu_rows if r["plan_date"] >= EVENT_DEMO_START.date()
+        ),
+        "disposals": len(hari_berevent) * 2,
+    }
     return {
         "supply": plan_supply_rows(supply_pairs, stamps),
         "prices": plan_reference_price_rows(reference_pairs, stamps)
         + plan_quote_price_rows(quotes, start, actual_end),
-        "menu_plans": plan_menu_plan_rows(menu_bases, start, end),
+        "menu_plans": menu_rows,
+        "event_plan": event_plan,
         "actual_timestamps": len(stamps),
         "range": {
             "start": start.isoformat(),
@@ -490,6 +625,96 @@ async def _insert_menu_plans(session, rows: list[dict], now: datetime) -> None:
     await session.execute(stmt)
 
 
+def _komoditas_per_lokasi(baselines: dict) -> dict:
+    """Peta lokasi → komoditas yang dipasoknya (dasar komoditas catatan limbah).
+
+    Limbah selalu punya material; komoditasnya diambil dari pasokan lokasi itu
+    supaya `commodity_id` bukan karangan.
+    """
+    peta: dict = {}
+    for _key, location_id, commodity_id, _base in baselines["supply_pairs"]:
+        daftar = peta.setdefault(location_id, [])
+        if commodity_id not in daftar:
+            daftar.append(commodity_id)
+    return peta
+
+
+async def _insert_events(
+    session,
+    end: datetime,
+    now: datetime,
+    commodities_by_location: dict,
+) -> None:
+    """Tulis kiriman + limbah demo untuk rencana 8 Okt..ujung rencana.
+
+    Idempoten lewat id deterministik (`_event_id`) + `ON CONFLICT (id) DO NOTHING`.
+    Kiriman hanya dibuat untuk rencana yang BELUM punya kiriman APA PUN, sehingga:
+
+    - hari kanonik (1–7 Okt) yang sudah punya kiriman tidak pernah tertimpa;
+    - panggilan kedua tidak menambah baris.
+
+    `menu_plan_id` baru diketahui setelah menu ditulis, karena itu fungsi ini
+    membaca ulang rencana dari DB (bukan dari `plan_menu_plan_rows`, yang belum
+    punya id).
+    """
+    batas = EVENT_DEMO_START.date()
+    baris = (
+        await session.execute(
+            select(
+                MenuPlan.id,
+                MenuPlan.location_id,
+                MenuPlan.plan_date,
+                MenuPlan.planned_portions,
+            ).where(
+                MenuPlan.plan_date >= batas,
+                MenuPlan.plan_date <= end.date(),
+            )
+        )
+    ).all()
+    if not baris:
+        return
+
+    rencana = [
+        {
+            "menu_plan_id": r[0],
+            "location_id": r[1],
+            "plan_date": r[2],
+            "planned_portions": int(r[3]),
+        }
+        for r in baris
+    ]
+    sudah_punya = set(
+        (
+            await session.execute(
+                select(DeliveryEvent.menu_plan_id).where(
+                    DeliveryEvent.menu_plan_id.in_(
+                        [r["menu_plan_id"] for r in rencana]
+                    )
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    kiriman = [
+        r for r in plan_delivery_rows(rencana) if r["menu_plan_id"] not in sudah_punya
+    ]
+    limbah = plan_disposal_rows(rencana, commodities_by_location)
+
+    if kiriman:
+        await session.execute(
+            pg_insert(DeliveryEvent)
+            .values([{**row, "generated_at": now} for row in kiriman])
+            .on_conflict_do_nothing(index_elements=["id"])
+        )
+    if limbah:
+        await session.execute(
+            pg_insert(DisposalEvent)
+            .values([{**row, "generated_at": now} for row in limbah])
+            .on_conflict_do_nothing(index_elements=["id"])
+        )
+
+
 async def _count_origin(session, model, origin: str) -> int:
     return int(
         (
@@ -526,16 +751,22 @@ async def generate_timeseries(
                 "supply": await _count_origin(session, SupplyRecord, "demo"),
                 "prices": await _count_origin(session, PriceSignal, "demo"),
                 "menu_plans": await _count_origin(session, MenuPlan, "demo"),
+                "deliveries": await _count_origin(session, DeliveryEvent, "demo"),
+                "disposals": await _count_origin(session, DisposalEvent, "demo"),
             }
             now = datetime.now(UTC)
             await _upsert_supply(session, plan["supply"], now)
             await _upsert_prices(session, plan["prices"], now)
             await _insert_menu_plans(session, plan["menu_plans"], now)
+            # Kiriman & limbah menunjuk `menu_plan_id` → ditulis SETELAH menu ada.
+            await _insert_events(session, end, now, _komoditas_per_lokasi(baselines))
             await session.commit()
             after = {
                 "supply": await _count_origin(session, SupplyRecord, "demo"),
                 "prices": await _count_origin(session, PriceSignal, "demo"),
                 "menu_plans": await _count_origin(session, MenuPlan, "demo"),
+                "deliveries": await _count_origin(session, DeliveryEvent, "demo"),
+                "disposals": await _count_origin(session, DisposalEvent, "demo"),
             }
     finally:
         await engine.dispose()
@@ -548,6 +779,14 @@ async def generate_timeseries(
         }
         for name in ("supply", "prices", "menu_plans")
     }
+    # Kiriman/limbah: `planned` datang dari `event_plan` (dihitung per hari rencana
+    # sejak 8 Okt), bukan `len(plan[...])` — rencananya memang bukan daftar baris.
+    for name in ("deliveries", "disposals"):
+        counts[name] = {
+            "planned": plan["event_plan"][name],
+            "added": after[name] - before[name],
+            "in_db": after[name],
+        }
     return {
         "range": plan["range"],
         "counts": counts,
@@ -595,6 +834,8 @@ async def preview_timeseries(
                 "planned": len(plan["menu_plans"]),
                 "existing_rows": existing_menu,
             },
+            "deliveries": {"planned": plan["event_plan"]["deliveries"]},
+            "disposals": {"planned": plan["event_plan"]["disposals"]},
         },
         "actual_timestamps": plan["actual_timestamps"],
         "interval_hours": interval_hours,
@@ -654,6 +895,10 @@ async def pastikan_deret_demo(
         "supply_records": int(pratinjau["counts"]["supply"]["planned"]),
         "price_signals": int(pratinjau["counts"]["prices"]["planned"]),
         "menu_plans": int(pratinjau["counts"]["menu_plans"]["planned"]),
+        # Kiriman & limbah ikut dijaga: keduanya kini punya `origin` (migrasi 017),
+        # jadi bisa hilang tanpa jejak bila purge dijalankan lalu run-nya mati.
+        "deliveries": int(pratinjau["counts"]["deliveries"]["planned"]),
+        "disposals": int(pratinjau["counts"]["disposals"]["planned"]),
     }
 
     batas_aktual = min(end, actual_cutoff())
@@ -697,6 +942,37 @@ async def pastikan_deret_demo(
                         .where(
                             MenuPlan.plan_date >= start.date(),
                             MenuPlan.plan_date <= end.date(),
+                        )
+                    )
+                ).scalar()
+                or 0
+            ),
+            # Kiriman dihitung lewat tanggal RENCANA (bukan delivered_at), sebab
+            # kiriman hari terakhir jatuh 14:00 — di luar `end` yang pukul 00:00.
+            "deliveries": int(
+                (
+                    await session.execute(
+                        select(func.count())
+                        .select_from(DeliveryEvent)
+                        .join(MenuPlan, MenuPlan.id == DeliveryEvent.menu_plan_id)
+                        .where(
+                            MenuPlan.plan_date >= EVENT_DEMO_START.date(),
+                            MenuPlan.plan_date <= end.date(),
+                        )
+                    )
+                ).scalar()
+                or 0
+            ),
+            # Limbah: seluruh hari rencana terakhir ikut (disposed_at 12:00), jadi
+            # batas atasnya `end + 1 hari`, bukan `end`.
+            "disposals": int(
+                (
+                    await session.execute(
+                        select(func.count())
+                        .select_from(DisposalEvent)
+                        .where(
+                            DisposalEvent.disposed_at >= EVENT_DEMO_START,
+                            DisposalEvent.disposed_at < end + timedelta(days=1),
                         )
                     )
                 ).scalar()

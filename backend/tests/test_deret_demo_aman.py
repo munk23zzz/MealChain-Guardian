@@ -32,7 +32,13 @@ from app.seed.timeseries import (
 )
 
 DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
-TABEL = ("supply_records", "price_signals", "menu_plans")
+TABEL = (
+    "supply_records",
+    "price_signals",
+    "menu_plans",
+    "delivery_events",
+    "disposal_events",
+)
 
 
 def _jumlah(origin: str) -> dict[str, int]:
@@ -54,14 +60,50 @@ def _jumlah(origin: str) -> dict[str, int]:
 
 def _status() -> dict[str, int]:
     status = asyncio.run(demo_data_status())
-    return {t: status["tables"][t]["demo"] for t in TABEL}
+    tables = status["tables"]
+    # `demo_data_status` melaporkan tiga tabel deret; kiriman/limbah dibaca
+    # langsung supaya berkas ini tetap bisa membandingkan kelima tabel.
+    demo = _jumlah("demo")
+    return {t: int(tables[t]["demo"]) if t in tables else demo[t] for t in TABEL}
+
+
+def _kanonik() -> dict[str, int]:
+    """Jangkar kanonik menurut JENDELANYA, bukan seluruh origin='seed'.
+
+    Tes lain sah menambah baris ber-origin 'seed' (mis. harga lewat POST), jadi
+    membandingkan seluruh origin akan gagal karena pekerjaan tes lain. Yang
+    dijaga di sini: supply/harga pada stamp 8 Okt 12:00, rencana 1–7 Okt,
+    kiriman & limbah 1–7 Okt.
+    """
+    engine = create_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            baris = conn.execute(
+                text(
+                    "SELECT 'supply', count(*) FROM supply_records WHERE origin='seed' "
+                    "AND recorded_at = TIMESTAMP '2026-10-08 12:00:00+00' "
+                    "UNION ALL SELECT 'price', count(*) FROM price_signals "
+                    "WHERE origin='seed' AND recorded_at = TIMESTAMP '2026-10-08 12:00:00+00' "
+                    "UNION ALL SELECT 'menu', count(*) FROM menu_plans "
+                    "WHERE origin='seed' AND plan_date BETWEEN DATE '2026-10-01' AND DATE '2026-10-07' "
+                    "UNION ALL SELECT 'kiriman', count(*) FROM delivery_events de "
+                    "JOIN menu_plans mp ON mp.id = de.menu_plan_id WHERE de.origin='seed' "
+                    "AND mp.plan_date BETWEEN DATE '2026-10-01' AND DATE '2026-10-07' "
+                    "UNION ALL SELECT 'limbah', count(*) FROM disposal_events "
+                    "WHERE origin='seed' AND disposed_at >= TIMESTAMP '2026-10-04 00:00:00+00' "
+                    "AND disposed_at < TIMESTAMP '2026-10-08 00:00:00+00'"
+                )
+            ).all()
+            return {kunci: int(nilai) for kunci, nilai in baris}
+    finally:
+        engine.dispose()
 
 
 def test_pulihkan_deret_kanonik_yang_terhapus():
     """Purge habis → `pastikan_deret_demo` memulihkan PERSIS seperti semula."""
     sebelum = _status()
     assert sebelum["supply_records"] > 0, "prasyarat: deret kanonik harus ada"
-    seed_sebelum = _jumlah("seed")
+    kanonik_sebelum = _kanonik()
 
     asyncio.run(purge_demo_rows())
     assert _status()["supply_records"] == 0, "panggung harus bersih dulu"
@@ -70,7 +112,7 @@ def test_pulihkan_deret_kanonik_yang_terhapus():
 
     assert hasil["dipulihkan"] is True
     assert _status() == sebelum, "deret kanonik tidak kembali ke bentuk semula"
-    assert _jumlah("seed") == seed_sebelum, "baris seed tidak boleh tersentuh"
+    assert _kanonik() == kanonik_sebelum, "jangkar kanonik tidak boleh tersentuh"
 
 
 def test_idempoten_saat_deret_sudah_lengkap():
@@ -99,4 +141,10 @@ def test_melaporkan_kekurangan_sebagai_data_bukan_tebakan():
     # purge pun masih ada baris kanonik (30 baris supply 8 Okt 12:00, 44 harga).
     assert hasil["sebelum"]["supply_records"] < hasil["harapan"]["supply_records"]
     assert hasil["sesudah"]["supply_records"] >= hasil["harapan"]["supply_records"]
-    assert set(hasil["sebelum"]) == set(TABEL)
+    assert set(hasil["sebelum"]) == {
+        "supply_records",
+        "price_signals",
+        "menu_plans",
+        "deliveries",
+        "disposals",
+    }

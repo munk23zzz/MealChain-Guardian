@@ -188,18 +188,21 @@ def test_hari_tanpa_catatan_menulis_available_false(client, sppg_head):
         assert d[bagian]["rows"] == 0
 
 
-def test_hari_dalam_rencana_tanpa_kiriman_limbah(client, sppg_head):
-    """Di dalam rentang: pasokan/harga/rencana ada, kiriman & limbah TIDAK dikarang."""
-    r = _get(client, sppg_head["token"], HARI_RENCANA_SAJA, HARI_RENCANA_SAJA)
+def test_hari_dalam_rencana_terisi_kiriman_dan_limbah(client, monitor):
+    """Di dalam rentang: kiriman & limbah ikut terisi (perluasan 8 Okt–5 Nov).
+
+    Sebelum perluasan, tes ini membuktikan sebaliknya — hari rencana TANPA
+    kiriman tidak dikarang. Setelah `delivery_events`/`disposal_events`
+    diperluas, premis itu tidak berlaku: sekarang setiap hari rencana punya
+    catatan, dan "tidak ada data" hanya benar di luar rentang (lihat
+    `test_hari_tanpa_catatan_menulis_available_false`).
+    """
+    r = _get(client, monitor["token"], HARI_RENCANA_SAJA, HARI_RENCANA_SAJA)
     assert r.status_code == 200, r.text
     d = _hari(r.json(), HARI_RENCANA_SAJA)
-    for bagian in ("delivery", "disposal"):
-        assert d[bagian]["available"] is False, f"{bagian} harus available=false"
-        assert d[bagian]["rows"] == 0
-    for bagian in ("supply", "price", "menu"):
+    for bagian in ("delivery", "disposal", "supply", "price", "menu"):
         assert d[bagian]["available"] is True, f"{bagian} harus available=true"
-        assert d[bagian]["rows"] > 0
-    assert d["supply"]["available"] is True
+        assert d[bagian]["rows"] > 0, f"{bagian} harus punya baris"
 
 
 def test_batas_hari_pakai_wib_bukan_utc(client, monitor):
@@ -208,6 +211,18 @@ def test_batas_hari_pakai_wib_bukan_utc(client, monitor):
     2026-10-08T17:30Z = 9 Okt 00:30 WIB → harus terhitung di 9 Okt.
     """
     from sqlalchemy import text
+
+    # Basis: sejak perluasan, setiap hari rencana SUDAH punya kiriman demo. Jadi
+    # yang dibuktikan adalah SELISIH hari itu, bukan angka absolut — angka absolut
+    # berubah tiap kali pola demo diubah.
+    awal_9 = _hari(
+        _get(client, monitor["token"], "2026-10-09", "2026-10-09").json(),
+        "2026-10-09",
+    )["delivery"]["delivered_portions"]
+    awal_8 = _hari(
+        _get(client, monitor["token"], "2026-10-08", "2026-10-08").json(),
+        "2026-10-08",
+    )["delivery"]["delivered_portions"]
 
     eng = _engine()
     with eng.begin() as conn:
@@ -229,13 +244,12 @@ def test_batas_hari_pakai_wib_bukan_utc(client, monitor):
         r = _get(client, monitor["token"], "2026-10-09", "2026-10-09")
         assert r.status_code == 200, r.text
         d = _hari(r.json(), "2026-10-09")
-        assert d["delivery"]["rows"] == 1
-        assert d["delivery"]["delivered_portions"] == 7
+        assert d["delivery"]["delivered_portions"] == awal_9 + 7
 
         # Kalau memakai hari UTC, baris ini akan bocor ke 8 Okt.
         r8 = _get(client, monitor["token"], "2026-10-08", "2026-10-08")
         d8 = _hari(r8.json(), "2026-10-08")
-        assert d8["delivery"]["delivered_portions"] == 0
+        assert d8["delivery"]["delivered_portions"] == awal_8
     finally:
         with eng.begin() as conn:
             conn.execute(

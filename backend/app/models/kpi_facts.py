@@ -62,6 +62,10 @@ class DeliveryEvent(Base):
     __tablename__ = "delivery_events"
     __table_args__ = (
         CheckConstraint("delivered_portions >= 0", name="delivery_portions_check"),
+        CheckConstraint(
+            "origin IN ('seed','demo')", name="check_delivery_events_origin_vocab"
+        ),
+        Index("ix_delivery_events_origin_delivered_at", "origin", "delivered_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -72,6 +76,14 @@ class DeliveryEvent(Base):
     )
     delivered_portions: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="delivered")
+    #: `origin`/`generated_at` (migrasi 017) — penanda asal, pola sama dengan
+    #: tabel deret waktu lain. Default 'seed' berarti baris lama otomatis benar
+    #: dan baris baru yang lupa mengisi dianggap kanonik (salahnya ke arah
+    #: "data tetap ada", bukan "data demo menghapus data kanonik").
+    origin: Mapped[str] = mapped_column(Text, nullable=False, server_default="seed")
+    generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     delivered_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -81,6 +93,10 @@ class DisposalEvent(Base):
     __tablename__ = "disposal_events"
     __table_args__ = (
         CheckConstraint("quantity_kg >= 0", name="disposal_qty_check"),
+        CheckConstraint(
+            "origin IN ('seed','demo')", name="check_disposal_events_origin_vocab"
+        ),
+        Index("ix_disposal_events_origin_disposed_at", "origin", "disposed_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -94,6 +110,11 @@ class DisposalEvent(Base):
     )
     quantity_kg: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
+    #: Lihat catatan di `DeliveryEvent.origin` (migrasi 017).
+    origin: Mapped[str] = mapped_column(Text, nullable=False, server_default="seed")
+    generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     disposed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -175,6 +175,8 @@ def test_membangun_deret_tidak_menggeser_jangkar(demo_state, auth_headers, monit
         "supply_records",
         "price_signals",
         "menu_plans",
+        "delivery_events",
+        "disposal_events",
     }
 
     # Jangkar sisi SUMBER: baris KANONIK Cianjur telur tetap 1.400 kg. Record TERBARU

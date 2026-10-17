@@ -323,7 +323,8 @@ def bersihkan_sisa_test():
 # `tests/test_demo_timeseries_api.py` — menghapus SELURUH baris `origin='demo'`,
 # termasuk deret kanonik 1 Sep–5 Nov (rencana 3.900 baris supply · 4.040 harga ·
 # 660 rencana menu; terisi sebagai 3.870/4.010/590 baris demo karena stamp
-# 8 Okt 12:00 dipegang baris kanonik).
+# 8 Okt 12:00 dipegang baris kanonik) DAN peristiwa 8 Okt–5 Nov (290 kiriman ·
+# 58 catatan limbah; kanonik 70/20 di 1–7 Okt tidak ikut dihitung).
 # Ketika pemulihan di berkas tes itu gagal (dulu: teardown memakai token HTTP
 # yang sudah tidak sah → 401), DB kerja tertinggal kosong: puluhan tes lain gagal
 # berantai dan data presentasi juri lenyap (kejadian 2026-10-16 malam).

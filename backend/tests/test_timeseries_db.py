@@ -30,7 +30,13 @@ DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain
 
 WINDOW_START = CANONICAL_REF - timedelta(days=1)  # 7 Okt 12:00 UTC
 
-TABLES = ("supply_records", "price_signals", "menu_plans")
+TABLES = (
+    "supply_records",
+    "price_signals",
+    "menu_plans",
+    "delivery_events",
+    "disposal_events",
+)
 
 
 def _engine():
