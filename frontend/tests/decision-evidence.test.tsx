@@ -438,3 +438,24 @@ describe("Decision & Evidence — struktur catatan keputusan", () => {
     expect(html).toContain('id="zona-keputusan"');
   });
 });
+
+// Keputusan owner 17 Okt: pemilih tidak menawarkan keputusan yang sudah lewat
+// tenggat. Yang dipilih juri dari daftar "Lewat 2 jam…" berakhir tanpa tombol
+// Eksekusi (backend 409 "decision expired") dan itu terbaca sebagai kerusakan.
+describe("Pemilih keputusan — yang lewat tenggat disembunyikan", () => {
+  it("opsi kedaluwarsa tidak ditawarkan dan jumlahnya disebut di sakelar", () => {
+    const html = render({ selected: null, selectedId: null, summary: null, chain: [] });
+    // d1 lewat 13 menit pada NOW, d2 masih 6,5 jam.
+    expect(html).not.toContain('value="d1"');
+    expect(html).toContain('value="d2"');
+    expect(html).toContain("Tampilkan yang lewat tenggat (1)");
+    expect(html).toContain("lewat tenggat disembunyikan");
+  });
+
+  it("keputusan yang sedang dipilih tetap bisa dibuka walau sudah lewat", () => {
+    // Tautan bersama ke keputusan lama harus tetap menampilkan pilihannya —
+    // kalau tidak, <select> tampak kosong dan halaman terbaca rusak.
+    const html = render({ selectedId: "d1" });
+    expect(html).toContain('value="d1"');
+  });
+});

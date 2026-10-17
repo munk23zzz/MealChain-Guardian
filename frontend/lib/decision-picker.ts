@@ -23,12 +23,28 @@ import { DECISION_TYPE_LABELS } from "../components/RecommendationCard";
 import { shortId } from "./agent-quality";
 import { formatDateTime } from "./datetime";
 import { dueLabel, pendingDecisions, type TodayDecision } from "./today";
+import { isExpiredAction } from "./topbar";
 
 export type PickerOption = { value: string; label: string };
 export type PickerGroup = {
   id: "action" | "proposed" | "rest";
   label: string;
   options: PickerOption[];
+};
+
+export type PickerOptions = {
+  /**
+   * `false` = jangan tawarkan keputusan yang sudah lewat tenggat. Default
+   * `true` supaya pemanggil lama berperilaku sama (lihat Agent Log, yang
+   * memang dipakai menelusuri jejak keputusan lama).
+   */
+  includeExpired?: boolean;
+  /**
+   * id yang sedang dipilih. Selalu disertakan walau tersaring — kalau tidak,
+   * tautan bersama ke keputusan kedaluwarsa menghasilkan <select> tanpa opsi
+   * yang cocok dan halamannya tampak rusak.
+   */
+  keep?: string | null;
 };
 
 /** Status backend → bahasa manusia. Tak dikenal jatuh ke bentuk apa adanya. */
@@ -95,11 +111,22 @@ function timePart(label: string): string[] {
  * Susun kelompok opsi untuk <select>. `now` boleh null (jam klien belum siap):
  * kalau null, tidak ada klaim sisa waktu sama sekali.
  */
-export function decisionGroups(decisions: unknown, now: Date | null): PickerGroup[] {
+export function decisionGroups(
+  decisions: unknown,
+  now: Date | null,
+  options: PickerOptions = {}
+): PickerGroup[] {
+  const includeExpired = options.includeExpired ?? true;
+  const keep = options.keep ?? null;
   const list = (Array.isArray(decisions) ? decisions : []).filter(
     (row): row is TodayDecision =>
       typeof (row as TodayDecision | null)?.decision_id === "string" &&
       Boolean((row as TodayDecision).decision_id)
+  ).filter(
+    // Keputusan yang menunggu tindakan tetapi jendelanya sudah lewat tidak
+    // ditawarkan sebagai pilihan baru (backend menolak tindakannya), kecuali
+    // ia yang SEDANG dipilih. Keputusan yang sudah diputus tetap tampil.
+    (row) => includeExpired || row.decision_id === keep || !isExpiredAction(row, now)
   );
 
   const actionable = pendingDecisions(list, now ?? new Date(0)).items;

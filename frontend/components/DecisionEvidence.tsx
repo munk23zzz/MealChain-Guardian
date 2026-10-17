@@ -30,7 +30,7 @@ import PageHeader from "./PageHeader";
 import { SupplierExclusionView } from "./SupplierExclusionPanel";
 import { dueLabel, pendingDecisions, type TodayDecision } from "../lib/today";
 import { decisionGroups, statusWord } from "../lib/decision-picker";
-import { countActionable } from "../lib/topbar";
+import { countActionable, countExpiredActionable } from "../lib/topbar";
 import { shortId } from "../lib/agent-quality";
 import type { SupplierContext } from "../lib/supplier-exclusions";
 import {
@@ -149,8 +149,16 @@ export default function DecisionEvidence({
   const statusKey = String(selected?.status ?? "").toLowerCase();
   // Pilihan untuk empty state: yang paling perlu tindakan lebih dulu.
   const suggestions = pendingDecisions(decisions, clock).items.slice(0, 6);
+  // Keputusan owner 17 Okt: yang lewat tenggat TIDAK ditawarkan sebagai pilihan
+  // baru (backend menolak tindakannya). Semua baris lama tetap bisa dibuka lewat
+  // tautan bersama karena `keep` menyertakan yang sedang dipilih.
+  const [showExpired, setShowExpired] = useState(false);
+  const expiredCount = countExpiredActionable(decisions as any, now);
   // Kelompok dropdown dari lib/decision-picker (satu sumber dengan tab Agent Log).
-  const groups = decisionGroups(decisions, now);
+  const groups = decisionGroups(decisions, now, {
+    includeExpired: showExpired,
+    keep: selectedId,
+  });
 
   return (
     <section className="evidence-page">
@@ -184,9 +192,24 @@ export default function DecisionEvidence({
                 </optgroup>
               ))}
             </select>
+            {expiredCount > 0 && (
+              <label className="evidence-picker-toggle">
+                <input
+                  type="checkbox"
+                  checked={showExpired}
+                  onChange={(event) => setShowExpired(event.target.checked)}
+                />
+                Tampilkan yang lewat tenggat ({expiredCount})
+              </label>
+            )}
             <span className="evidence-picker-hint">
-              {countActionable(decisions, now)} menunggu tindakan · {decisions.length} keputusan
-              tersedia
+              {countActionable(decisions, now)} menunggu tindakan
+              {expiredCount > 0
+                ? showExpired
+                  ? ` · ${expiredCount} lewat tenggat ditampilkan`
+                  : ` · ${expiredCount} lewat tenggat disembunyikan`
+                : ""}{" "}
+              · {decisions.length} keputusan tersedia
             </span>
           </div>
         }

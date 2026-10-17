@@ -130,3 +130,78 @@ describe("decisionGroups — label memakai bahasa manusia", () => {
     expect(groups[0].options[0].label).toContain("sesuatu baru");
   });
 });
+
+// Keputusan owner 17 Okt: pemilih TIDAK menawarkan keputusan yang sudah lewat
+// tenggat secara default. Alasannya terukur: dari 304 opsi, mayoritas berlabel
+// "Lewat 2 jam…" dan yang dipilih juri berakhir tanpa tombol Eksekusi (backend
+// menolak dengan 409 "decision expired") — terbaca seperti aplikasi rusak.
+describe("decisionGroups — sembunyikan yang lewat tenggat", () => {
+  it("default tetap memuat yang lewat (kompatibel dengan pemanggil lama)", () => {
+    const ids = optionsOf(decisionGroups(DECISIONS, NOW));
+    expect(ids).toContain(ID_A); // lewat 13 mnt
+  });
+
+  it("includeExpired=false membuang yang lewat, menyisakan yang masih berlaku", () => {
+    const groups = decisionGroups(DECISIONS, NOW, { includeExpired: false });
+    const ids = optionsOf(groups);
+    expect(ids).not.toContain(ID_A);
+    // yang masih hidup tetap ada, termasuk yang tenggatnya tak terbaca
+    expect(ids).toContain(ID_B);
+    expect(ids).toContain(ID_C);
+    expect(groups[0].label).toBe("Menunggu tindakan (2)");
+  });
+
+  it("keputusan yang sedang dipilih tetap ditampilkan walau sudah lewat", () => {
+    // Tanpa ini, tautan bersama ke keputusan lama membuat <select> tanpa opsi
+    // yang cocok → nilainya tampak kosong dan halaman terlihat rusak.
+    const groups = decisionGroups(DECISIONS, NOW, {
+      includeExpired: false,
+      keep: ID_A,
+    });
+    const ids = optionsOf(groups);
+    expect(ids).toContain(ID_A);
+    expect(ids.filter((id) => id === ID_A)).toHaveLength(1);
+  });
+
+  it("keep yang sudah termasuk daftar tidak diduplikasi", () => {
+    const groups = decisionGroups(DECISIONS, NOW, {
+      includeExpired: false,
+      keep: ID_B,
+    });
+    const ids = optionsOf(groups);
+    expect(ids.filter((id) => id === ID_B)).toHaveLength(1);
+  });
+
+  it("status proposed tidak ikut disaring (belum punya tenggat tindakan)", () => {
+    const ids = optionsOf(decisionGroups(DECISIONS, NOW, { includeExpired: false }));
+    expect(ids).toContain(ID_D);
+  });
+
+  it("keputusan yang sudah diputus tetap tampil walau tenggatnya lewat", () => {
+    // Menyembunyikan riwayat karena tanggalnya lewat akan memutus jalan ke
+    // bukti & re-propose. Yang disaring HANYA yang masih menunggu tindakan.
+    const groups = decisionGroups(
+      [
+        {
+          decision_id: "r1",
+          decision_type: "regional_balance",
+          status: "rejected",
+          expires_at: "2026-10-01T00:00:00Z",
+          created_at: "2026-09-30T00:00:00Z",
+        },
+        {
+          decision_id: "x1",
+          decision_type: "regional_balance",
+          status: "pending_approval",
+          expires_at: "2026-10-01T00:00:00Z",
+          created_at: "2026-09-30T00:00:00Z",
+        },
+      ],
+      NOW,
+      { includeExpired: false }
+    );
+    const ids = optionsOf(groups);
+    expect(ids).toContain("r1");
+    expect(ids).not.toContain("x1");
+  });
+});

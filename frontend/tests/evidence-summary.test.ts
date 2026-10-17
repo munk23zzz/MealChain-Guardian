@@ -319,6 +319,28 @@ describe("defaultEvidenceId — halaman bukti tidak boleh terbuka kosong", () =>
     expect(defaultEvidenceId(list)).toBe("d-pending-dekat");
   });
 
+  it("utamakan yang MASIH BERLAKU, bukan yang paling lama lewat", () => {
+    // Keadaan nyata 17 Okt: default lama memilih keputusan pending yang
+    // kedaluwarsa 9 hari lalu (sortir tenggat menaik), lalu juri membuka
+    // keputusan tanpa tombol Eksekusi. Yang masih hidup didahulukan.
+    const NOW2 = new Date("2026-10-11T06:00:00Z");
+    const list = [
+      { decision_id: "d-mati", status: "pending_approval", expires_at: "2026-10-10T00:00:00Z", valid: false },
+      { decision_id: "d-hidup-jauh", status: "pending_approval", expires_at: "2026-10-12T00:00:00Z", valid: true },
+      { decision_id: "d-hidup-dekat", status: "verifier_flagged", expires_at: "2026-10-11T12:00:00Z", valid: true },
+    ];
+    expect(defaultEvidenceId(list, NOW2)).toBe("d-hidup-dekat");
+  });
+
+  it("kalau semua sudah lewat, tetap memilih yang butuh tindakan (tidak kosong)", () => {
+    const NOW2 = new Date("2026-10-20T00:00:00Z");
+    const list = [
+      { decision_id: "d-mati-dekat", status: "pending_approval", expires_at: "2026-10-19T00:00:00Z", valid: false },
+      { decision_id: "d-mati-lama", status: "pending_approval", expires_at: "2026-10-10T00:00:00Z", valid: false },
+    ];
+    expect(defaultEvidenceId(list, NOW2)).toBe("d-mati-lama");
+  });
+
   it("tanpa yang butuh tindakan: ambil yang paling baru", () => {
     const list = [
       { decision_id: "lama", status: "executed", created_at: "2026-10-10T01:00:00Z" },

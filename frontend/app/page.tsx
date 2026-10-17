@@ -832,7 +832,7 @@ export default function Home() {
             // Halaman bukti tidak boleh terbuka kosong: begitu tabnya ditekan,
             // keputusan yang butuh tindakan langsung dipilih.
             if (id === "evidence" && !selectedId) {
-              const fallback = defaultEvidenceId(decisions);
+              const fallback = defaultEvidenceId(decisions, now);
               if (fallback) setSelectedId(fallback);
             }
           }}

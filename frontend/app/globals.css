@@ -4768,6 +4768,23 @@ a:focus-visible {
   line-height: 1.4;
 }
 
+/* Sakelar "Tampilkan yang lewat tenggat" (17 Okt 2026): pemilih menyembunyikan
+   keputusan kedaluwarsa secara default supaya yang terpilih tidak berakhir
+   tanpa tombol Eksekusi; baris lama tetap bisa muncul lewat sakelar ini. */
+.evidence-picker-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+  cursor: pointer;
+}
+.evidence-picker-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent, currentColor);
+}
+
 /* "Langkah berikutnya" di kepala kartu Ringkasan keputusan (17 Okt 2026):
    satu kalimat tegas yang menjawab "apa yang harus saya lakukan" — sebelum ini
    pengguna harus menyimpulkan sendiri dari belasan baris fakta. Warna mengikuti

@@ -116,6 +116,17 @@ export function isPendingAction(row: ExpiryRow | null | undefined, now?: Date | 
   return !isExpired(row, now);
 }
 
+/**
+ * Menunggu tindakan tetapi JENDELANYA sudah lewat — backend menolak tindakan
+ * atasnya (409 "decision expired"), jadi baris seperti ini tidak boleh
+ * ditawarkan sebagai pilihan baru. Keputusan yang sudah diputus (ditolak,
+ * dieksekusi) TIDAK termasuk: tenggatnya tidak lagi menghalangi pembacaan.
+ */
+export function isExpiredAction(row: ExpiryRow | null | undefined, now?: Date | null): boolean {
+  if (!ACTIONABLE_SET.has(String(row?.status ?? "").toUpperCase())) return false;
+  return isExpired(row, now);
+}
+
 export type ActionableCounts = {
   /** Menunggu tindakan DAN masih berlaku — yang benar-benar bisa dikerjakan. */
   actionable: number;

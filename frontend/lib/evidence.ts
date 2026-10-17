@@ -2,6 +2,7 @@ import { dueLabel } from "./today";
 import { formatDateTime } from "./datetime";
 import { roleLabel } from "./settings";
 import { statusWord } from "./decision-picker";
+import { isPendingAction } from "./topbar";
 import {
   agentLabel,
   blockingReasons,
@@ -26,7 +27,14 @@ const REQUIREMENT_VERDICT_ID: Record<string, string> = {
 const NEEDS_ACTION = ["pending_approval", "verifier_flagged", "verified", "proposed"];
 
 export function defaultEvidenceId(
-  decisions: Array<{ decision_id?: string; status?: string; created_at?: string; expires_at?: string }> | null | undefined
+  decisions: Array<{
+    decision_id?: string;
+    status?: string;
+    created_at?: string;
+    expires_at?: string;
+    valid?: boolean | null;
+  }> | null | undefined,
+  now?: Date | null
 ): string | null {
   const list = (decisions ?? []).filter((d) => typeof d?.decision_id === "string" && d.decision_id);
   if (!list.length) return null;
@@ -34,6 +42,15 @@ export function defaultEvidenceId(
     const t = Date.parse(String(d?.expires_at ?? d?.created_at ?? ""));
     return Number.isFinite(t) ? t : 0;
   };
+  // 1) Menunggu tindakan DAN jendelanya masih terbuka — jatuh tempo terdekat
+  //    dulu. Sebelum ini yang dipilih justru keputusan pending paling lama
+  //    kedaluwarsa, sehingga halaman terbuka pada keputusan tanpa tombol
+  //    Eksekusi (laporan owner 17 Okt).
+  const hidup = list
+    .filter((d) => isPendingAction(d as { status?: string; valid?: boolean | null; expires_at?: string }, now))
+    .sort((a, b) => time(a) - time(b));
+  if (hidup.length) return hidup[0].decision_id!;
+  // 2) Semua sudah lewat: perilaku lama — status yang butuh tindakan lebih dulu.
   for (const status of NEEDS_ACTION) {
     const kandidat = list.filter((d) => String(d.status) === status).sort((a, b) => time(a) - time(b));
     if (kandidat.length) return kandidat[0].decision_id!;
