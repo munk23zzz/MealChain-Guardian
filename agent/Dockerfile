@@ -18,6 +18,7 @@ COPY requirements-runtime.txt ./requirements-runtime.txt
 RUN pip install --no-cache-dir -r requirements.txt -r requirements-runtime.txt
 
 COPY supervisor_agent.py ./supervisor_agent.py
+COPY tools.py ./tools.py
 COPY runtime_server.py ./runtime_server.py
 COPY prompts/ ./prompts/
 

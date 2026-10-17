@@ -11,7 +11,8 @@ di sini adalah kontrak S0-06: agent bisa dibangun dan hello-world dijalankan.
 
 Kontrak modul (dipakai `backend/tests/test_supervisor_agent.py`, host-only):
 - `load_system_prompt()` — prompt dari `prompts/supervisor_system_prompt.md`
-- `build_agent(model_id)` — BedrockModel + Agent TANPA tool (hello-world)
+- `build_tools()` — 4 tool baca (lihat `tools.py`) dibungkus decorator Strands
+- `build_agent(model_id)` — BedrockModel + Agent dengan 4 tool baca
 - `run_hello_world()` — butuh `SUPERVISOR_MODEL_PRIMARY`; kosong → RuntimeError
   berisi `missing_config`
 
@@ -21,8 +22,12 @@ Bedrock, agent menjawab mengikuti system prompt (JSON `{"ringkasan": ...}`),
 bukan echo token itu — jadi jangan memakai echo literal sebagai bukti jalur live.
 Yang dibuktikan jalur live: agent terbangun, model dipanggil, prompt dipatuhi.
 
+Tool memanggil API backend (bukan menghitung ulang). Kredensial dibaca dari
+`MEALCHAIN_API_URL` + `MEALCHAIN_API_TOKEN`; tanpa token tool menolak dengan
+`missing_config`, bukan mengarang angka.
+
 Catatan penting soal `strands`: atribut dipakai lewat modul (`strands.Agent`,
-`strands.models.BedrockModel`) supaya bisa di-mock dengan
+`strands.models.BedrockModel`, `strands.tool`) supaya bisa di-mock dengan
 `patch("strands.Agent")` / `patch("strands.models.BedrockModel")`.
 """
 
@@ -33,6 +38,12 @@ from pathlib import Path
 
 import strands
 import strands.models
+from tools import (
+    get_cost_eligibility,
+    get_evidence_digest,
+    get_safety_freshness,
+    get_supply_demand,
+)
 
 PROMPT_RELATIVE_PATH = Path("prompts") / "supervisor_system_prompt.md"
 HELLO_WORLD_PROMPT = "Balas tepat: MEALCHAIN_STRANDS_OK"
@@ -40,6 +51,13 @@ HELLO_WORLD_EXPECTED = "MEALCHAIN_STRANDS_OK"
 
 ENV_MODEL_ID = "SUPERVISOR_MODEL_PRIMARY"
 ENV_REGION = "AWS_REGION"
+
+TOOL_FUNCTIONS = (
+    get_supply_demand,
+    get_safety_freshness,
+    get_cost_eligibility,
+    get_evidence_digest,
+)
 
 
 def load_system_prompt() -> str:
@@ -49,8 +67,13 @@ def load_system_prompt() -> str:
     )
 
 
+def build_tools() -> list:
+    """Empat tool baca, dibungkus decorator Strands (schema dari docstring)."""
+    return [strands.tool(fn) for fn in TOOL_FUNCTIONS]
+
+
 def build_agent(model_id: str):
-    """Bangun agent Strands minimal (satu model, tanpa tool) untuk hello-world."""
+    """Bangun agent Strands dengan 4 tool baca ke API MealChain."""
     model_kwargs: dict[str, object] = {"model_id": model_id}
     region = (os.environ.get(ENV_REGION) or "").strip()
     if region:
@@ -58,7 +81,7 @@ def build_agent(model_id: str):
     model = strands.models.BedrockModel(**model_kwargs)
     return strands.Agent(
         model=model,
-        tools=[],
+        tools=build_tools(),
         system_prompt=load_system_prompt(),
     )
 

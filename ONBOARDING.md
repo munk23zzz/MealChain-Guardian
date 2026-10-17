@@ -146,8 +146,10 @@ di stack lokal, bukan proposal.
   (`AwsMcpSapProvider` masih stub).
 - **AgentCore**: runtime **belum dibuat** (0 runtime, `AGENTCORE_RUNTIME_ARN` kosong).
   Artefak (Dockerfile, runtime server, deploy script, role IAM) sudah siap.
-- **Supervisor**: Strands Agent masih hello-world tanpa tool. Angka keputusan dihitung
-  pipeline deterministik di `backend/app/core/`, bukan oleh LLM.
+- **Supervisor**: Strands Agent memegang **4 tool baca** (`get_supply_demand`,
+  `get_safety_freshness`, `get_cost_eligibility`, `get_evidence_digest`) yang memanggil
+  API backend. Ini bukan 7 agen otonom; angka keputusan tetap dihitung pipeline
+  deterministik di `backend/app/core/`.
 - **Bukti**: ledger hash chain PostgreSQL (Merkle + tanda tangan ECDSA), bisa diverifikasi
   di tab Decision & Evidence → Integritas Bukti.
 - **KPI**: 7 indikator; yang belum bisa dihitung menulis alasan "belum ada data",

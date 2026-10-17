@@ -128,10 +128,16 @@ Semua baris harus `allowed`.
 Setelah itu sisanya otomatis (dijalankan agen, ±5–10 menit):
 
 ```bash
+export MEALCHAIN_API_URL="https://<backend-publik-anda>"
+export MEALCHAIN_API_TOKEN="<token-baca>"   # [REDACTED] jangan ditulis ke repo
 python agent/deploy_agentcore.py \
   --role-arn arn:aws:iam::624606539664:role/BedrockAgentCoreRuntimeRole --write-env
 docker compose up -d backend
 ```
+
+Dua variabel `MEALCHAIN_API_*` diteruskan skrip ke environment runtime. Tanpa itu
+supervisor tetap hidup, tetapi keempat tool balas `missing_config` (jujur), bukan
+mengarang angka. Backend harus dapat dijangkau dari runtime (bukan `localhost`).
 
 Skrip itu: membuat repo ECR → build image (linux/arm64) → push → `CreateAgentRuntime` →
 menunggu status `READY` → menulis `AGENTCORE_RUNTIME_ARN` ke `.env`. Lalu agen memverifikasi dengan

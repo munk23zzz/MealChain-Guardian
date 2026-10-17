@@ -236,6 +236,17 @@ def main() -> int:
 
     print("\n== 4/5 CreateAgentRuntime ==")
     ctrl = boto3.client("bedrock-agentcore-control", region_name=region)
+    env_vars = {
+        "SUPERVISOR_AGENT_MODEL": os.environ.get(
+            "SUPERVISOR_AGENT_MODEL", "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+        )
+    }
+    # Tool supervisor memanggil API MealChain. Tanpa dua variabel ini tool
+    # menolak dengan missing_config (jujur), bukan mengarang angka.
+    for nama in ("MEALCHAIN_API_URL", "MEALCHAIN_API_TOKEN"):
+        nilai = (os.environ.get(nama) or "").strip()
+        if nilai:
+            env_vars[nama] = nilai
     try:
         dibuat = ctrl.create_agent_runtime(
             agentRuntimeName=args.name,
@@ -244,11 +255,7 @@ def main() -> int:
             networkConfiguration={"networkMode": "PUBLIC"},
             protocolConfiguration={"serverProtocol": "HTTP"},
             description="Supervisor Agent MealChain Guardian (Strands SDK + Bedrock)",
-            environmentVariables={
-                "SUPERVISOR_AGENT_MODEL": os.environ.get(
-                    "SUPERVISOR_AGENT_MODEL", "us.anthropic.claude-haiku-4-5-20251001-v1:0"
-                )
-            },
+            environmentVariables=env_vars,
         )
         runtime_id = dibuat["agentRuntimeId"]
         arn = dibuat["agentRuntimeArn"]
