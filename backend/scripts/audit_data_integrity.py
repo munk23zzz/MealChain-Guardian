@@ -272,6 +272,12 @@ def audit() -> dict:
         laporan["ledger"] = {"valid": None, "error": f"{type(exc).__name__}: {exc}"}
 
     # ── selisih baseline ────────────────────────────────────────────────────
+    # Aturan pembanding berbeda menurut origin, dan itu bukan kelonggaran:
+    # * `seed`  → HARUS persis. Seed kanonik adalah kontrak; kelebihan berarti
+    #   generasi seed ganda (sisa refresh) dan kekurangan berarti data hilang.
+    # * `demo`  → minimal. Deret demo memang bertambah setiap kali aktivitas
+    #   "hari ini" disemai (mis. 2 limbah/hari) atau "Segarkan ke hari ini"
+    #   menulis snapshot baru; yang salah adalah bila KURANG dari baseline.
     selisih = []
     for tabel, harapan in BASELINE.items():
         nyata = laporan["origin"].get(tabel, {})
@@ -279,7 +285,17 @@ def audit() -> dict:
             if nilai is None:
                 continue
             dapat = nyata.get(origin, 0)
-            if dapat != nilai:
+            if origin == "demo":
+                if dapat < nilai:
+                    selisih.append(
+                        {
+                            "tabel": tabel,
+                            "origin": origin,
+                            "harapan": f">= {nilai}",
+                            "nyata": dapat,
+                        }
+                    )
+            elif dapat != nilai:
                 selisih.append(
                     {"tabel": tabel, "origin": origin, "harapan": nilai, "nyata": dapat}
                 )
@@ -311,7 +327,11 @@ def cetak(laporan: dict) -> None:
         for origin, n in isi.items():
             tanda = ""
             if origin in harap and harap[origin] is not None:
-                tanda = " ok" if harap[origin] == n else f" (harap {harap[origin]})"
+                cocok = n >= harap[origin] if origin == "demo" else n == harap[origin]
+                tanda = " ok" if cocok else (
+                    f" (harap >= {harap[origin]})" if origin == "demo"
+                    else f" (harap {harap[origin]})"
+                )
             bagian.append(f"{origin}={n}{tanda}")
         print(f"  {tabel:18} " + ", ".join(bagian))
 

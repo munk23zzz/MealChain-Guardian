@@ -35,7 +35,7 @@ menunjuk folder `scripts/`.
 | # | Lapisan | Cara diperiksa | Arti bila merah |
 |---|---|---|---|
 | 1 | Skema | `alembic_version` di DB vs kepala `alembic/versions` | migrasi belum dijalankan / DB tertinggal |
-| 2 | Hitungan per origin | `GROUP BY origin` untuk supply/price/demand/menu/kiriman/limbah, dibanding baseline kanonik | ada generasi seed dobel atau deret demo hilang |
+| 2 | Hitungan per origin | `GROUP BY origin` untuk supply/price/demand/menu/kiriman/limbah. **`seed` harus persis** baseline (kontrak kanonik); **`demo` minimal** baseline, karena deret demo memang bertambah tiap hari aktivitas disemai | ada generasi seed dobel (seed > kanonik) atau deret demo hilang (demo < kanonik) |
 | 3 | **Baris yatim** | **setiap** foreign key di skema publik diuji generik `child.col NOT NULL AND NOT EXISTS parent` | data menunjuk baris yang tidak ada lagi |
 | 4 | Natural key ganda | `users.email`, `locations.name`, `commodities.name`, `(suppliers.name, location_id)` | seed dobel / baris duplikat |
 | 5 | Residu | keputusan non-demo, PO `MC-*` tanpa keputusan, user `@test.local`/`@uji-peran.local` | sisa run tes |
@@ -58,7 +58,7 @@ ditambahkan migrasi berikutnya otomatis ikut diperiksa.
   menu_plans         demo=590 ok, seed=70 ok
   batches            seed=9
   delivery_events    demo=290 ok, seed=70 ok
-  disposal_events    demo=58 ok, seed=20 ok
+  disposal_events    demo=60 ok, seed=20 ok      <- 58 kanonik + 2 limbah "hari ini"
 == 3. BARIS YATIM (semua FK) ==      tidak ada
 == 4. NATURAL KEY GANDA ==           tidak ada
 == 5. RESIDU ==
@@ -73,7 +73,7 @@ ditambahkan migrasi berikutnya otomatis ikut diperiksa.
   siap ditindak sekarang: 4 · lewat tenggat: 0
 == 6. RANTAI BUKTI & DEMOGRAFI ==
   ledger valid: True (6369 blok) · users 3 · locations 10 · commodities 3
-  suppliers 35 · decisions 10 · approvals 0 · agent_traces 27
+  suppliers 35 · decisions 10 · approvals 3 · agent_traces 27
 == 7. SELISIH BASELINE ==            tidak ada
 VERDICT: BERSIH
 ```
@@ -91,6 +91,44 @@ Yang dibaca dari angka itu:
 - **Rantai bukti** 6.369 blok valid. Ledger bersifat *append-only*: keputusan yang
   dihapus kemarin tidak memangkas blok, dan itu memang perilaku yang benar —
   memangkasnya akan menghapus bukti, bukan merapikan data.
+
+## 4b. Temuan semantik yang audit struktural TIDAK bisa tutup (perlu keputusan Anda)
+
+Tiga keputusan `executed` (untuk mengisi KPI "hari ini") **lolos semua pemeriksaan
+struktural** — tidak yatim, tidak duplikat, ledgernya sah — tetapi ringkasan
+persetujuannya, saat dibuka satu per satu, memuat alasan penghalang yang
+seharusnya tidak ada pada keputusan yang sudah dieksekusi:
+
+```
+supplier_unknown: keputusan lama perlu binding batch eksplisit
+decision sudah dieksekusi
+approval belum memenuhi requirement (missing/rejected)
+safety revalidation gagal: tidak ada batch sumber
+```
+
+Sebabnya terukur: baris itu dibuat oleh penyemai KPI (`seed_demo_completed_decisions`),
+bukan oleh alur sungguhan. Penyemai hanya menulis **1 approval** (kepala SPPG),
+padahal matriks `dua_role_wajib` menuntut dua role; dan tidak ada `batches` untuk
+pasangan (lokasi sumber, komoditas) itu, sehingga binding supplier gagal dan
+revalidasi keamanan tidak menemukan batch sumber. Satu kali penyemai dijalankan
+ulang hari ini, approval yang hilang kembali (0 → 3), tetapi tiga alasan lain
+tetap ada karena memang tidak pernah ada datanya.
+
+Dua jalan keluar, keduanya jujur — pilih satu sebelum presentasi:
+
+1. **Lengkapi** (data jadi konsisten penuh): tambahkan batch sumber untuk ketiga
+   pasangan (lokasi, komoditas), lalu approval kedua oleh nutritionist. Efek
+   samping: `batches` naik dari 9 dan tes yang memaku angka batch perlu ditinjau.
+2. **Buang** (paling murah dan paling kuat untuk demo): hapus 3 keputusan
+   sintetis itu, biarkan KPI "hari ini" kosong sampai Anda mengeksekusi kasus
+   demo sungguhan di depan juri. Eksekusi langsung itulah yang menghasilkan
+   keputusan `executed` + PO `MC-*` yang seluruh syaratnya terpenuhi.
+   Efek samping: 3 `DEMO-PO-*` ikut kehilangan tautan → panel PO kosong lagi
+   untuk kepala SPPG sampai eksekusi pertama.
+
+Belum saya kerjakan salah satunya: keduanya mengubah cerita demo (dan opsi 1
+menyentuh angka batch yang dipakai tes), jadi ini keputusan pemilik, bukan
+keputusan perapian data.
 
 ## 5. Dua hal yang memang bergerak sendiri (jangan dibaca sebagai kerusakan)
 
