@@ -61,25 +61,38 @@ def test_dossier_endpoint(auth_headers):
         "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
     )
     try:
-        with eng.begin() as conn:
-            row = conn.execute(
-                text("SELECT id FROM decisions ORDER BY created_at LIMIT 1")
-            ).fetchone()
+        with TestClient(app) as c:
+            # Keputusan terpilih HARUS berada dalam cakupan user fixture.
+            # Dulu tes ini mengambil keputusan TERTUA di seluruh tabel, sehingga
+            # ia bergantung pada isi DB: begitu ada keputusan demo yang lebih tua
+            # milik SPPG lain (penyemai KPI membuat Bandung/Surabaya lebih dulu),
+            # endpoint menjawab 403 dan tes merah padahal kontraknya sehat.
+            me = c.get("/auth/me", headers=auth_headers).json()
+            loc_id = me.get("location_id")
+            if not loc_id:
+                pytest.skip("user fixture tidak punya lokasi; cakupan tidak dapat diuji")
+            with eng.begin() as conn:
+                row = conn.execute(
+                    text(
+                        "SELECT id FROM decisions WHERE target_location_id = :loc "
+                        "ORDER BY created_at LIMIT 1"
+                    ),
+                    {"loc": loc_id},
+                ).fetchone()
+            if not row:
+                pytest.skip("tidak ada decision dalam cakupan user")
+            r = c.get(f"/decisions/{row[0]}/dossier", headers=auth_headers)
+            assert r.status_code == 200, r.text
+            data = r.json()
+            assert data["content_address"].startswith("mc1-")
+            assert data["signature"]["state"] in ("signed", "unsigned")
+            if data["signature"]["state"] == "signed":
+                assert data["verify"] is True
+            # address stabil untuk konten sama
+            r2 = c.get(f"/decisions/{row[0]}/dossier", headers=auth_headers)
+            assert r2.json()["content_address"] == data["content_address"]
     finally:
         eng.dispose()
-    if not row:
-        pytest.skip("tidak ada decision")
-    with TestClient(app) as c:
-        r = c.get(f"/decisions/{row[0]}/dossier", headers=auth_headers)
-        assert r.status_code == 200, r.text
-        data = r.json()
-        assert data["content_address"].startswith("mc1-")
-        assert data["signature"]["state"] in ("signed", "unsigned")
-        if data["signature"]["state"] == "signed":
-            assert data["verify"] is True
-        # address stabil untuk konten sama
-        r2 = c.get(f"/decisions/{row[0]}/dossier", headers=auth_headers)
-        assert r2.json()["content_address"] == data["content_address"]
 
 
 def test_dossier_404(auth_headers):
