@@ -176,6 +176,10 @@ def test_membangun_deret_tidak_menggeser_jangkar(demo_state, auth_headers, monit
         "price_signals",
         "menu_plans",
         "delivery_events",
+        # `batches` masuk daftar PURGE_MODELS saat peta mulai membaca tabel
+        # batches (commit 3f24ae3); tanpa baris ini tes menolak kontrak yang
+        # memang benar.
+        "batches",
         "disposal_events",
     }
 
@@ -420,6 +424,24 @@ def _origin_counts() -> dict[str, dict[str, int]]:
         engine.dispose()
 
 
+def _jumlah_kasus_demo() -> int:
+    """Jumlah kasus skrip yang terpasang sekarang (`demo_case` terisi)."""
+    engine = create_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            return int(
+                conn.execute(
+                    text(
+                        "SELECT count(DISTINCT demo_case) FROM decisions "
+                        "WHERE demo_case IS NOT NULL"
+                    )
+                ).scalar()
+                or 0
+            )
+    finally:
+        engine.dispose()
+
+
 def test_data_status_membaca_db(demo_state, auth_headers):
     demo_state.post(
         "/demo/timeseries",
@@ -659,7 +681,18 @@ def test_refresh_hari_ini_bergeser_dan_bisa_dikembalikan(
         _delete_ids(added)
         _kembalikan_baseline()
 
-    assert _origin_counts() == before_counts
+    # `/demo/refresh` juga memuat ulang 4 kasus skrip. Kalau tes lain lebih dulu
+    # mem-purge baris demo, refresh MENAMBAH ulang keputusan demo (7 → 10) — itu
+    # perilaku yang benar, bukan kegagalan rollback. Jadi yang dibandingkan
+    # ketat hanyalah tabel deret waktu; keputusan demo diperiksa terpisah:
+    # jumlahnya tidak boleh menyusut dan keempat kasus tetap lengkap.
+    sesudah_counts = _origin_counts()
+    sebelum_keputusan = before_counts.pop("decisions", None)
+    sesudah_keputusan = sesudah_counts.pop("decisions", None)
+    assert sesudah_counts == before_counts
+    if sebelum_keputusan and sesudah_keputusan:
+        assert sesudah_keputusan["demo"] >= sebelum_keputusan["demo"]
+        assert _jumlah_kasus_demo() == 4
     kembali = demo_state.get("/supply/Cianjur/telur", headers=monitor_headers).json()
     assert kembali["recorded_at"] == awal["recorded_at"]
     assert _seed_supply_terbaru()[1] == 1400.0

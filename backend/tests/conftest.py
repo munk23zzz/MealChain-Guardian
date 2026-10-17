@@ -102,6 +102,24 @@ def _isolate_model_env(monkeypatch, request):
 _LEGACY_RBAC_EMAIL = "pytest-legacy-rbac@test.local"
 
 
+def _hapus_user(conn, email: str) -> None:
+    """Hapus user uji beserta approval miliknya.
+
+    `approvals.approved_by` memakai aturan NO ACTION, jadi `DELETE FROM users`
+    gagal begitu ada satu tes yang menyetujui keputusan sebagai user tersebut.
+    Gejalanya khas: sederet `ERROR at setup` di suite penuh, padahal berkas yang
+    sama lulus saat dijalankan sendiri.
+    """
+    conn.execute(
+        text(
+            "DELETE FROM approvals WHERE approved_by IN "
+            "(SELECT id FROM users WHERE email = :e)"
+        ),
+        {"e": email},
+    )
+    conn.execute(text("DELETE FROM users WHERE email = :e"), {"e": email})
+
+
 @pytest.fixture()
 def auth_headers():
     engine = create_engine(
@@ -112,9 +130,7 @@ def auth_headers():
     try:
         with engine.begin() as conn:
             # Idempoten: bersihkan sisa run sebelumnya bila ada.
-            conn.execute(
-                text("DELETE FROM users WHERE email = :e"), {"e": _LEGACY_RBAC_EMAIL}
-            )
+            _hapus_user(conn, _LEGACY_RBAC_EMAIL)
             loc_id = conn.execute(
                 text("SELECT id FROM locations WHERE name = 'Jakarta'")
             ).scalar_one()
@@ -138,9 +154,7 @@ def auth_headers():
         yield {"Authorization": f"Bearer {token}"}
     finally:
         with engine.begin() as conn:
-            conn.execute(
-                text("DELETE FROM users WHERE email = :e"), {"e": _LEGACY_RBAC_EMAIL}
-            )
+            _hapus_user(conn, _LEGACY_RBAC_EMAIL)
         engine.dispose()
 
 
@@ -167,9 +181,7 @@ def monitor_headers():
     digest = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
     try:
         with engine.begin() as conn:
-            conn.execute(
-                text("DELETE FROM users WHERE email = :e"), {"e": _MONITOR_EMAIL}
-            )
+            _hapus_user(conn, _MONITOR_EMAIL)
             conn.execute(
                 text(
                     "INSERT INTO users (id, name, email, password_hash, role, location_id) "
@@ -191,9 +203,7 @@ def monitor_headers():
         yield {"Authorization": f"Bearer {token}"}
     finally:
         with engine.begin() as conn:
-            conn.execute(
-                text("DELETE FROM users WHERE email = :e"), {"e": _MONITOR_EMAIL}
-            )
+            _hapus_user(conn, _MONITOR_EMAIL)
         engine.dispose()
 
 
@@ -216,9 +226,7 @@ def far_nutritionist_headers():
     digest = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
     try:
         with engine.begin() as conn:
-            conn.execute(
-                text("DELETE FROM users WHERE email = :e"), {"e": _FAR_NUT_EMAIL}
-            )
+            _hapus_user(conn, _FAR_NUT_EMAIL)
             conn.execute(
                 text(
                     "INSERT INTO users (id, name, email, password_hash, role, location_id) "
@@ -240,9 +248,7 @@ def far_nutritionist_headers():
         yield {"Authorization": f"Bearer {token}"}
     finally:
         with engine.begin() as conn:
-            conn.execute(
-                text("DELETE FROM users WHERE email = :e"), {"e": _FAR_NUT_EMAIL}
-            )
+            _hapus_user(conn, _FAR_NUT_EMAIL)
         engine.dispose()
 
 
