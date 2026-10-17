@@ -73,6 +73,24 @@ describe("ApprovalModal (summary kanonik S4-04)", () => {
     expect(html).toContain("disabled");
   });
 
+  it("approved_by_me=true → Setuju nonaktif + menyebut role yang ditunggu", () => {
+    // Keputusan owner 17 Okt: user yang approval-nya sudah tercatat tidak lagi
+    // ditawari "Setuju" (klik = 409 "approval sudah tercatat"). Fixture lama
+    // tanpa field ini berperilaku sama seperti sebelumnya (undefined ≠ true).
+    const mine = {
+      ...CANONICAL,
+      approved_by_me: true,
+      approval_state: { satisfied: false, missing: [["sppg_nutritionist"]] },
+    };
+    const html = renderToStaticMarkup(
+      <ApprovalModal summary={mine} onConfirm={() => {}} />
+    );
+    expect(html).toContain("Sudah Anda setujui");
+    expect(html).toContain("disabled");
+    expect(html).toContain("menunggu role lain");
+    expect(html).toContain("sppg_nutritionist");
+  });
+
   it("can_approve=true meski can_execute=false → Setuju aktif (approval ≠ eksekusi)", () => {
     const html = renderToStaticMarkup(
       <ApprovalModal summary={CANONICAL} onConfirm={() => {}} />

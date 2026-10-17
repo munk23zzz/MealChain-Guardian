@@ -93,6 +93,65 @@ Bukti: `backend/tests/test_peran_lanjutan_head_only.py` — 11 tes. Nutritionist
 201 untuk `/decisions`); `/demo/seed` tetap lolos untuk nutritionist. Gerbang mutasi memakai trik
 body-salah-tipe (403 = diblokir, 422 = lolos), sehingga tidak ada data demo yang berubah.
 
+---
+
+## Diagnosis 17 Okt: "approve di role SPPG dan Nutrisi tidak bisa"
+
+Gejala yang dilaporkan owner: menekan **Setuju** sebagai Kepala SPPG maupun Ahli Gizi tidak
+menghasilkan apa-apa. Yang diukur saat itu (DB + probe API, bukan dugaan):
+
+1. `decisions`: 32 keputusan berstatus `pending_approval`/`verifier_flagged`, **29 di antaranya
+   sudah lewat tenggat** (`expires_at <= now()`). Approve pada keputusan biasa yang lewat tenggat
+   memang masih diterima backend (Keputusan owner 1b), tetapi **eksekusinya** selalu `409
+   "decision expired"` — jadi alurnya tetap terasa "tidak bisa".
+2. **Approval kepala sudah tercatat sejak seed.** Contoh terukur: keputusan `1aee6446` dibuat
+   07 Okt 16:47:15 dan baris `approvals` untuk `sppg.head@demo.local` masuk 16:47:16 (data seed,
+   bukan klik owner). Saat kepala menekan "Setuju" lagi, endpoint menjawab `409 "approval sudah
+   tercatat"` — benar secara aturan, tetapi **UI tetap menawarkan tombol "Setuju"** karena read
+   model tidak memberi tahu bahwa *user ini* sudah menyetujui. Itulah yang terbaca sebagai
+   "tombol rusak".
+3. Kasus demo yang memang masih berlaku hanya 3 (`rejection-loop-kuota`, `gangguan-logistik`,
+   `supplier-janggal`), semuanya **belum punya approval** sehingga butuh dua peran berurutan.
+
+### Perbaikan di kode
+
+- `backend/app/services/approval_summary.py` — `build_approval_summary(..., viewer_id=None)`
+  kini mengirim `approved_by_me` (dihitung dari baris `approvals` milik user yang MEMBACA, bukan
+  dari role). Kontrak lama tidak berubah: `can_approve` tetap `true` untuk kedua role, penjaga
+  409 tetap di endpoint.
+- `backend/app/api/decisions.py` — endpoint summary meneruskan `viewer_id=user.id`.
+- `frontend/components/ApprovalModal.tsx` — bila `approved_by_me`, tombol menjadi **"Sudah Anda
+  setujui"** (nonaktif) + catatan "Approval Anda sudah tercatat. Keputusan ini menunggu role lain
+  (`sppg_nutritionist`) — bukan tombol yang rusak."
+- Tes: `backend/tests/test_approval_summary.py::test_summary_approved_by_me_hanya_untuk_user_yang_sudah_menyetujui`,
+  `frontend/tests/approval-summary.test.tsx` (kasus `approved_by_me`).
+
+### Bukti hidup (dua peran, urutan terbalik, lalu eksekusi)
+
+Probe di dalam kontainer pada `rejection-loop-kuota` (`f8cd1043`, valid + `verified_by`):
+
+| Langkah | Hasil |
+|---|---|
+| summary sebagai Kepala | `approved_by_me=false`, `can_approve=true`, `satisfied=false`, `missing=[head, nutritionist]` |
+| **approve Nutritionist lebih dulu** | **200** — `missing` jadi `[head]` |
+| **approve Kepala** | **200** — `satisfied=true`, `can_execute=true`, `blocking=[]` |
+| approve Kepala kedua kali | **409 "approval sudah tercatat"** |
+| **execute oleh Kepala** | **200** — `po_number=MC-F8CD1043434C`, status `executed` |
+
+Lewat UI (browser, akun demo asli), pada `gangguan-logistik` (`44a99f93`, valid 4 jam):
+
+1. Nutrisi: "Setuju" aktif → klik → pesan **"Approval tercatat"**, langkah "Persetujuan 1 dari 2 ·
+   berikutnya: Kepala SPPG".
+2. Kepala: tombol berubah **"Sudah Anda setujui"** setelah approval-nya masuk; "Eksekusi" aktif →
+   klik → **"PO MC-44A99F93125E dibuat (mock)"**, langkah "Persetujuan 2 dari 2" + "Eksekusi ✓".
+
+### Yang perlu dilakukan sebelum demo (data, bukan kode)
+
+Data demo berumur pendek: keputusan lama tetap ada dan lewat tenggat. Sebelum presentasi, klik
+**"Segarkan ke hari ini"** (`POST /demo/refresh`, Head) atau **"Jalankan Event 1 penuh"** supaya
+keputusan baru lahir dengan TTL panjang (480/300 menit) dan `verified_by` terisi. Tanpa itu,
+approve tetap tercatat tetapi eksekusi ditolak `decision expired` — dan itu bukan bug.
+
 ## Cara memverifikasi ulang
 
 ```bash

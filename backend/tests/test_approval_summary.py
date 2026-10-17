@@ -814,3 +814,37 @@ def test_approval_summary_expired_administrative_type_blocks_approve(client):
         assert summary["can_reject"] is False, summary.get("can_reject")
     finally:
         _cleanup_decision(did)
+
+
+def test_summary_approved_by_me_hanya_untuk_user_yang_sudah_menyetujui(client):
+    """`approved_by_me` = user INI sudah punya baris approval (bukan role-nya).
+
+    Keputusan owner 17 Okt: penyebab "approve tidak bisa" yang dilaporkan adalah
+    kepala SPPG menekan "Setuju" pada keputusan yang approval kepala-nya SUDAH
+    tercatat (data seed), lalu menerima 409 "approval sudah tercatat" yang
+    terbaca seperti tombol rusak. Read model kini menyatakan hal itu lebih dulu
+    (`approved_by_me`) supaya UI bisa menampilkan "sudah Anda setujui" alih-alih
+    menawarkan tombol yang pasti ditolak.
+
+    Kontrak lama TIDAK berubah: `can_approve` tetap True untuk kedua pembaca —
+    penjaga 409 ada di endpoint, bukan di read model.
+    """
+    did = _mk_decision(_jakarta_id(), _jakarta_id())
+    try:
+        head = _head_user(client)
+        nut = _nut_user(client)
+        ok = client.post(
+            "/actions/approve", json={"decision_id": did, "approved": True}, headers=head
+        )
+        assert ok.status_code == 200, ok.text
+
+        s_head = client.get(f"/decisions/{did}/approval-summary", headers=head).json()
+        s_nut = client.get(f"/decisions/{did}/approval-summary", headers=nut).json()
+        assert s_head["approved_by_me"] is True, s_head.get("approval_state")
+        assert s_nut["approved_by_me"] is False, s_nut.get("approval_state")
+        # gate lama tetap: keputusan masih bisa di-approve role lain.
+        assert s_head["can_approve"] is True
+        assert s_nut["can_approve"] is True
+        assert s_nut["approval_state"]["satisfied"] is False
+    finally:
+        _cleanup_decision(did)

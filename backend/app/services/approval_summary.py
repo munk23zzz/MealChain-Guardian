@@ -11,6 +11,7 @@ sama dengan revalidasi transfer. Binding tidak valid memblokir readiness;
 supplier tidak pernah ditebak dari lokasi atau quote.
 """
 
+import uuid
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
@@ -134,8 +135,16 @@ async def _safety_view(db: AsyncSession, decision: Decision) -> dict:
     }
 
 
-async def build_approval_summary(db: AsyncSession, decision: Decision) -> dict:
-    """Susun read model kanonik dari DB — tanpa call provider, tanpa write."""
+async def build_approval_summary(
+    db: AsyncSession, decision: Decision, viewer_id: uuid.UUID | None = None
+) -> dict:
+    """Susun read model kanonik dari DB — tanpa call provider, tanpa write.
+
+    `viewer_id` (opsional) dipakai untuk `approved_by_me`: apakah user yang
+    MEMBACA sudah punya baris approval. UI memakainya supaya tidak menawarkan
+    "Setuju" kepada orang yang approval-nya sudah tercatat — klik seperti itu
+    selalu berakhir 409 "approval sudah tercatat" (laporan owner 17 Okt).
+    """
 
     # Konteks lokasi/komoditas (nama manusiawi untuk UI).
     async def _loc_name(loc_id):
@@ -196,6 +205,13 @@ async def build_approval_summary(db: AsyncSession, decision: Decision) -> dict:
     approval_state = evaluate_approvals(
         req,
         [{"role": a["role"], "approved": a["approved"]} for a in approvals_payload],
+    )
+    # Apakah PEMBACA sudah menyetujui? Dihitung dari baris approval user itu
+    # sendiri (bukan dari role), karena "approval sudah tercatat" diperiksa per
+    # user di /actions/approve.
+    approved_by_me = bool(
+        viewer_id is not None
+        and any(a.approved_by == viewer_id and a.approved for a in approval_rows)
     )
 
     # Expiry + safety revalidation view.
@@ -329,6 +345,7 @@ async def build_approval_summary(db: AsyncSession, decision: Decision) -> dict:
         },
         "approval_requirement": req,
         "approval_state": approval_state,
+        "approved_by_me": approved_by_me,
         "approvals": approvals_payload,
         "can_approve": can_approve,
         "can_reject": can_reject,

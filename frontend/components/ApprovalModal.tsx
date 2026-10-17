@@ -55,6 +55,12 @@ export default function ApprovalModal({
   // can_approve (approve masih sah), BUKAN can_execute — can_execute
   // selalu false sebelum approval terpenuhi → deadlock approval.
   const canApprove = summary.can_approve === true;
+  // Keputusan owner 17 Okt: `approved_by_me` datang dari server (baris approval
+  // user yang sedang login). Tanpa ini, kepala SPPG menekan "Setuju" pada
+  // keputusan yang approval-nya sudah tercatat sejak seed → 409
+  // "approval sudah tercatat" yang terbaca seperti tombol rusak.
+  const alreadyApproved = summary.approved_by_me === true;
+  const nextRole = missingRoles ? missingRoles : "";
   // `can_execute` dulu dihitung di sini lalu TIDAK pernah dipakai, sementara
   // tombol Eksekusi di ApprovalMenu tetap ditawarkan dan klik-nya berakhir 409.
   // Pagar eksekusi kini di komponen yang memegang tombolnya
@@ -133,15 +139,29 @@ export default function ApprovalModal({
             type="button"
             className="button"
             onClick={onConfirm}
-            disabled={!canApprove || (administrative && !governance) || busy}
+            disabled={
+              !canApprove || alreadyApproved || (administrative && !governance) || busy
+            }
             title={
-              canApprove
-                ? undefined
-                : "Approve tidak tersedia untuk keputusan ini (expired/rejected)"
+              alreadyApproved
+                ? "Anda sudah menyetujui keputusan ini — menunggu approval role lain"
+                : canApprove
+                  ? undefined
+                  : "Approve tidak tersedia untuk keputusan ini (expired/rejected)"
             }
           >
-            {busy ? "Memproses…" : "Setuju"}
+            {alreadyApproved
+              ? "Sudah Anda setujui"
+              : busy
+                ? "Memproses…"
+                : "Setuju"}
           </button>
+          {alreadyApproved && (
+            <p className="approval-modal-note" role="status">
+              Approval Anda sudah tercatat. Keputusan ini menunggu role lain
+              {nextRole ? ` (${nextRole})` : ""} — bukan tombol yang rusak.
+            </p>
+          )}
           <button
             type="button"
             className="button-secondary button"

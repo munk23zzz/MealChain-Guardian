@@ -338,7 +338,7 @@ async def get_approval_summary(
     if row is None:
         raise HTTPException(status_code=404, detail="decision tidak ditemukan")
     await _assert_decision_readable(db, user, row)
-    return await build_approval_summary(db, row)
+    return await build_approval_summary(db, row, viewer_id=user.id)
 
 
 @router.get("/decisions/{decision_id}")
