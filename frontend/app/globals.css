@@ -4797,6 +4797,11 @@ a:focus-visible {
 .today-tile-value {
   grid-column: 2;
   text-align: right;
+  /* "Sedikit ke kiri" (permintaan pemilik 2026-10-17): nilai yang menempel tepi
+     (11 px = padding 10 + garis 1) terlalu mepet; digeser 8 px ke dalam sehingga
+     jaraknya 19 px — masih terbaca sebagai kolom angka di sisi kanan, tanpa
+     menempel tepi bentuk. */
+  margin-right: 8px;
   font-family: var(--font-data);
   /* Turun satu langkah dari --fs-5 (18px): angka 18px di tile selebar 181px
      terbaca seperti judul, bukan status. Bobot 600 mengganti kekuatan yang

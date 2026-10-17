@@ -202,3 +202,14 @@ Terukur sesudah (1262 px, SPPG Head):
 Nilai kini sejajar sebagai satu kolom angka di tepi kanan kelima bentuk — sejalan dengan
 pola Overview yang diminta pemilik, dan label tetap utuh tanpa pemotongan (`ellipsis`)
 maupun pembungkusan.
+
+### 10.1 Penyesuaian lanjutan — "sedikit ke kiri" (permintaan pemilik)
+
+Permintaan susulan: *"sedikit ke kiri"*.
+
+Nilai sebelumnya menempel tepi bentuk (11 px = padding 10 px + garis 1 px). Digeser
+**8 px** ke dalam lewat `margin-right` pada `.today-tile-value` (bukan `padding` bentuk,
+supaya label dan keterangan tidak ikut bergeser). Terukur sesudah: jarak nilai ke tepi
+kanan bentuk **19 px** di kelima tile (15, 2, 1, 5/7, Rantai utuh) — seragam dan tidak
+menempel tepi, tetapi masih terbaca sebagai satu kolom angka di sisi kanan. Label tetap
+satu baris, bentuk tetap 183x70 px, tinggi strip 70 px, luapan horizontal 0 px.
