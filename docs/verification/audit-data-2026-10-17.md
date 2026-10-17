@@ -56,7 +56,7 @@ ditambahkan migrasi berikutnya otomatis ikut diperiksa.
   price_signals      demo=4010 ok, seed=44 ok
   demand_records     seed=168 ok
   menu_plans         demo=590 ok, seed=70 ok
-  batches            seed=9
+  batches            demo=2, seed=9
   delivery_events    demo=290 ok, seed=70 ok
   disposal_events    demo=60 ok, seed=20 ok      <- 58 kanonik + 2 limbah "hari ini"
 == 3. BARIS YATIM (semua FK) ==      tidak ada
@@ -72,8 +72,8 @@ ditambahkan migrasi berikutnya otomatis ikut diperiksa.
   (3 keputusan 'rejected' dari kasus loop kuota — riwayat, bukan utang)
   siap ditindak sekarang: 4 · lewat tenggat: 0
 == 6. RANTAI BUKTI & DEMOGRAFI ==
-  ledger valid: True (6369 blok) · users 3 · locations 10 · commodities 3
-  suppliers 35 · decisions 10 · approvals 3 · agent_traces 27
+  ledger valid: True (6381 blok) · users 3 · locations 10 · commodities 3
+  suppliers 35 · decisions 10 · approvals 6 · agent_traces 27
 == 7. SELISIH BASELINE ==            tidak ada
 VERDICT: BERSIH
 ```
@@ -88,16 +88,15 @@ Yang dibaca dari angka itu:
 - **4 PO**: 3 `DEMO-PO-*` tertaut keputusan + 1 `4500000001` yang **memang**
   di-seed tanpa keputusan (`mock_sap.purchase_orders` di seed JSON). Karena itu
   pemeriksaan residu hanya menghitung `MC-*` — baris adapter bukan cacat.
-- **Rantai bukti** 6.369 blok valid. Ledger bersifat *append-only*: keputusan yang
+- **Rantai bukti** 6.381 blok valid. Ledger bersifat *append-only*: keputusan yang
   dihapus kemarin tidak memangkas blok, dan itu memang perilaku yang benar —
   memangkasnya akan menghapus bukti, bukan merapikan data.
 
-## 4b. Temuan semantik yang audit struktural TIDAK bisa tutup (perlu keputusan Anda)
+## 4b. Temuan semantik — SUDAH DIPERBAIKI di akarnya (bukan tambal data)
 
-Tiga keputusan `executed` (untuk mengisi KPI "hari ini") **lolos semua pemeriksaan
+Awalnya tiga keputusan `executed` (pengisi KPI "hari ini") **lolos semua pemeriksaan
 struktural** — tidak yatim, tidak duplikat, ledgernya sah — tetapi ringkasan
-persetujuannya, saat dibuka satu per satu, memuat alasan penghalang yang
-seharusnya tidak ada pada keputusan yang sudah dieksekusi:
+persetujuannya memuat penghalang yang mustahil pada keputusan yang sudah dieksekusi:
 
 ```
 supplier_unknown: keputusan lama perlu binding batch eksplisit
@@ -106,29 +105,38 @@ approval belum memenuhi requirement (missing/rejected)
 safety revalidation gagal: tidak ada batch sumber
 ```
 
-Sebabnya terukur: baris itu dibuat oleh penyemai KPI (`seed_demo_completed_decisions`),
-bukan oleh alur sungguhan. Penyemai hanya menulis **1 approval** (kepala SPPG),
-padahal matriks `dua_role_wajib` menuntut dua role; dan tidak ada `batches` untuk
-pasangan (lokasi sumber, komoditas) itu, sehingga binding supplier gagal dan
-revalidasi keamanan tidak menemukan batch sumber. Satu kali penyemai dijalankan
-ulang hari ini, approval yang hilang kembali (0 → 3), tetapi tiga alasan lain
-tetap ada karena memang tidak pernah ada datanya.
+Akar masalahnya bukan datanya, melainkan **penyemainya** (`seed_demo_completed_decisions`).
+Memperbaiki baris DB saja akan hilang pada tombol "Segarkan ke hari ini" berikutnya,
+jadi yang diperbaiki penyemainya, dan kesiapannya dikunci tes.
 
-Dua jalan keluar, keduanya jujur — pilih satu sebelum presentasi:
+| Cacat di penyemai | Perbaikan | Bukti |
+|---|---|---|
+| hanya **1 approval** (kepala), padahal `regional_balance` operasional wajib dua role | menulis approval kedua (ahli gizi) dengan jam setelah approval kepala | `approvals: 2` per keputusan |
+| tidak ada `allocation_binding` | menulis `decision_evidence` bertipe `human_inspection` (tipe yang dipakai jalur produksi; tipe lain ditolak CHECK constraint) berisi `supplier_id` + `batch_ids` | `supplier` terbaca: Supplier A Cianjur / Ayam Segar Serang / Prima Ayam Sejahtera Bogor |
+| tidak ada batch sumber untuk pasangan (lokasi, komoditas) | memakai batch yang **sudah ada** lebih dulu; hanya pasangan kosong yang diberi batch baru `origin='demo'` | `safety: pass, blocked=False, batches_checked=1` |
+| `verifier_note` diisi kalimat naratif | kolom itu **adalah** verdict yang dibaca read model (`_verdict_of`), jadi diisi `"consistent"` | layar: `aturan persetujuan: konsisten` (dulu "tidak dapat dievaluasi") |
+| `expires_at` hanya +2 jam untuk baris `executed` | +30 hari — riwayat yang sudah tutup tidak boleh tampak "decision expired" dua jam kemudian | `Alasan tertahan` tinggal satu |
 
-1. **Lengkapi** (data jadi konsisten penuh): tambahkan batch sumber untuk ketiga
-   pasangan (lokasi, komoditas), lalu approval kedua oleh nutritionist. Efek
-   samping: `batches` naik dari 9 dan tes yang memaku angka batch perlu ditinjau.
-2. **Buang** (paling murah dan paling kuat untuk demo): hapus 3 keputusan
-   sintetis itu, biarkan KPI "hari ini" kosong sampai Anda mengeksekusi kasus
-   demo sungguhan di depan juri. Eksekusi langsung itulah yang menghasilkan
-   keputusan `executed` + PO `MC-*` yang seluruh syaratnya terpenuhi.
-   Efek samping: 3 `DEMO-PO-*` ikut kehilangan tautan → panel PO kosong lagi
-   untuk kepala SPPG sampai eksekusi pertama.
+Hasil sesudah perbaikan, diukur dari API (bukan dari layar saja) untuk ketiga keputusan:
 
-Belum saya kerjakan salah satunya: keduanya mengubah cerita demo (dan opsi 1
-menyentuh angka batch yang dipakai tes), jadi ini keputusan pemilik, bukan
-keputusan perapian data.
+```
+supplier: terisi · approvals: 2 · safety: pass, blocked=False
+blocking_reasons: ['decision sudah dieksekusi']      <-- satu-satunya alasan, dan itu fakta
+```
+
+Dikunci `backend/tests/test_demo_completed_decisions_konsisten.py` (4 tes). Bukti RED→GREEN:
+dengan kode lama 3 tes gagal dan pesannya persis daftar penghalang di atas; dengan kode
+baru 4 lulus.
+
+### Cacat isolasi yang ikut ketahuan
+
+`test_demo_activity.py` menghapus keputusan selesai + `DEMO-PO-*` yang ia buat, lalu
+**tidak memulihkannya**. Karena suite berbagi DB dengan aplikasi, akibatnya: menjalankan
+`pytest tests/test_demo_activity.py` diikuti `tests/test_sap_orders_api.py` membuat tes
+kedua gagal (`StopIteration` pada "seed punya PO Jakarta") — bukan karena kode, tetapi
+karena urutan berkas — dan membuka aplikasi sesudah pytest memperlihatkan panel PO kosong.
+Sekarang tes itu menyemai ulang di akhir, jadi keadaan demo utuh kembali.
+
 
 ## 5. Dua hal yang memang bergerak sendiri (jangan dibaca sebagai kerusakan)
 

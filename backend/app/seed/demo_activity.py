@@ -163,8 +163,22 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
             select(User).where(User.role == "sppg_head").order_by(User.email)
         )
     ).scalars().first()
-    if not lokasi or not komoditas or not pemasok or kepala is None:
-        return {"keputusan_demo": 0, "limbah_demo": 0, "dilewati": "data dasar belum ada"}
+    #: Regional_balance operasional wajib DUA role (`dua_role_wajib`), jadi
+    #: penyemai harus punya keduanya. Tanpa akun ahli gizi, riwayat yang
+    #: dihasilkan akan tampil "approval belum memenuhi requirement" pada
+    #: keputusan yang statusnya sudah `executed` — lebih baik tidak menyemai.
+    nutrisi = (
+        await db.execute(
+            select(User).where(User.role == "sppg_nutritionist").order_by(User.email)
+        )
+    ).scalars().first()
+    if not lokasi or not komoditas or not pemasok or kepala is None or nutrisi is None:
+        return {
+            "keputusan_demo": 0,
+            "limbah_demo": 0,
+            "dilewati": "data dasar belum ada (butuh lokasi, komoditas, pemasok, "
+            "user sppg_head dan sppg_nutritionist)",
+        }
 
     #: Komoditas yang BENAR-BENAR ada di DB, urut stabil. Daftar tetap berisi
     #: "beras" pernah membuat Jakarta tidak kebagian keputusan (beras tidak ada),
@@ -185,7 +199,12 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
             "status": "executed",
             "proposed_by": "supervisor_agent",
             "verified_by": "verifier_agent",
-            "verifier_note": "Bukti silang konsisten: harga pasar dan GPS sepakat.",
+            # `verifier_note` BUKAN kalimat bebas: read model membacanya sebagai
+            # verdict (`_verdict_of` di approval_summary). Kalimat naratif di sini
+            # membuat verdict jatuh ke "unavailable", sehingga layar menulis
+            # "aturan persetujuan: tidak dapat dievaluasi" untuk keputusan yang
+            # buktinya sendiri tercatat konsisten.
+            "verifier_note": "consistent",
             "iteration": 1,
             "demo_case": None,
             "source_location_id": loc.id,
@@ -193,7 +212,10 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
             "commodity_id": komoditas[nama_komoditas],
             "quantity_kg": Decimal(600),
             "safe_delivered_cost": Decimal("15079436.39"),
-            "expires_at": now + timedelta(hours=2),
+            #: Baris ini RIWAYAT yang sudah dieksekusi, bukan pekerjaan tertunda.
+            #: Tenggat 2 jam dulu membuatnya tampil "decision expired" dua jam
+            #: setelah disemai — penghalang palsu pada keputusan yang sudah tutup.
+            "expires_at": now + timedelta(days=30),
             "origin": "demo",
             "generated_at": now,
             "created_at": mulai,
@@ -205,6 +227,44 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
         else:
             for k, v in nilai.items():
                 setattr(ada, k, v)
+
+        # Batch sumber untuk pasangan (lokasi, komoditas) ini. Tanpa baris ini
+        # `revalidate_transfer` melaporkan "tidak ada batch sumber" dan
+        # `resolve_binding` tidak bisa memastikan pemasok — dua penghalang yang
+        # tidak masuk akal pada keputusan yang statusnya sudah `executed`.
+        # Batch yang SUDAH ada dipakai lebih dulu (jangan menambah kiriman yang
+        # tidak perlu); batch baru hanya dibuat untuk pasangan yang kosong, dan
+        # id-nya memakai `demo_batch_id` yang sama dengan penyemai kiriman demo.
+        batch_sumber = (
+            await db.execute(
+                select(Batch)
+                .where(
+                    Batch.location_id == loc.id,
+                    Batch.commodity_id == komoditas[nama_komoditas],
+                )
+                .order_by(Batch.id)
+            )
+        ).scalars().first()
+        if batch_sumber is None:
+            panen = mulai - timedelta(hours=26)
+            batch_sumber = Batch(
+                id=demo_batch_id(nama_kota, sup.name, nama_komoditas),
+                commodity_id=komoditas[nama_komoditas],
+                location_id=loc.id,
+                supplier_id=sup.id,
+                quantity_kg=Decimal(800),
+                harvested_at=panen,
+                dispatched_at=panen + timedelta(hours=6),
+                usable_until=panen
+                + timedelta(days=SHELF_LIFE_HARI.get(nama_komoditas, 7)),
+                safety_status="pass",
+                certification_status="haccp",
+                freshness_score=Decimal("0.92"),
+                origin="demo",
+                generated_at=now,
+                temperature_log=[],
+            )
+            db.add(batch_sumber)
 
         for etype, menit in BUKTI_SEBELUM_APPROVAL:
             bukti_id = uuid.uuid5(did, f"bukti:{etype}")
@@ -220,6 +280,29 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
                     )
                 )
 
+        # Binding eksplisit: menyebut pemasok DAN batch yang dipakai. Tanpa ini
+        # `resolve_binding` harus menyimpulkan dari seluruh batch pasangan itu,
+        # dan pada pasangan dengan lebih dari satu pemasok hasilnya
+        # "supplier_unknown" (409) — layar lalu menampilkan alasan itu untuk
+        # keputusan yang sudah dieksekusi.
+        bind_id = uuid.uuid5(did, "bukti:allocation_binding")
+        if await db.get(DecisionEvidence, bind_id) is None:
+            db.add(
+                DecisionEvidence(
+                    id=bind_id,
+                    decision_id=did,
+                    evidence_type="human_inspection",
+                    payload={
+                        "allocation_binding": True,
+                        "supplier_id": str(batch_sumber.supplier_id),
+                        "batch_ids": [str(batch_sumber.id)],
+                        "demo": True,
+                    },
+                    is_consistent=True,
+                    recorded_at=mulai + timedelta(minutes=9),
+                )
+            )
+
         acc_id = uuid.uuid5(did, "approval")
         if await db.get(Approval, acc_id) is None:
             db.add(
@@ -230,6 +313,22 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
                     approved=True,
                     comment="Disetujui untuk demo lintas lokasi.",
                     approved_at=mulai + timedelta(minutes=12),
+                )
+            )
+
+        # Approval kedua: ahli gizi. `regional_balance` operasional wajib dua
+        # role berbeda (`dua_role_wajib`), jadi satu approval saja membuat
+        # riwayat "diekskusi" ini melanggar matriksnya sendiri.
+        acc2_id = uuid.uuid5(did, "approval:nutrisi")
+        if await db.get(Approval, acc2_id) is None:
+            db.add(
+                Approval(
+                    id=acc2_id,
+                    decision_id=did,
+                    approved_by=nutrisi.id,
+                    approved=True,
+                    comment="Disetujui ahli gizi untuk demo lintas lokasi.",
+                    approved_at=mulai + timedelta(minutes=14),
                 )
             )
 

@@ -73,8 +73,16 @@ def test_idempoten_dan_tiga_keadaan() -> None:
 
             # Tiga keadaan perjalanan nyata (bukan hanya satu jenis data).
             belum = [b for b in baris2 if b.dispatched_at is None]
-            jalan = [b for b in baris2 if b.dispatched_at and b.dispatched_at > NOW - timedelta(hours=2)]
-            tiba = [b for b in baris2 if b.dispatched_at and b.dispatched_at <= NOW - timedelta(hours=3)]
+            jalan = [
+                b
+                for b in baris2
+                if b.dispatched_at and b.dispatched_at > NOW - timedelta(hours=2)
+            ]
+            tiba = [
+                b
+                for b in baris2
+                if b.dispatched_at and b.dispatched_at <= NOW - timedelta(hours=3)
+            ]
             assert belum and jalan and tiba, (len(belum), len(jalan), len(tiba))
 
             # Kolom bermakna + penanda demo.
@@ -247,6 +255,16 @@ def test_keputusan_selesai_memenuhi_empat_metrik_kpi() -> None:
                     )
                 )
                 await s.execute(delete(Decision).where(Decision.id.in_(dipakai)))
+                await s.commit()
+
+            # Kembalikan keadaan demo sesudah membersihkan: suite ini berbagi DB
+            # dengan aplikasi. Keputusan selesai + PO `DEMO-PO-*` dipakai tab KPI
+            # dan panel PO; menghapusnya tanpa memulihkan membuat berkas tes LAIN
+            # gagal hanya karena urutan (mis. `test_sap_orders_api` memaku
+            # "seed punya PO Jakarta") dan membuka aplikasi sesudah pytest
+            # memperlihatkan panel kosong.
+            async with maker() as s:
+                await seed_demo_completed_decisions(s, datetime.now(UTC))
                 await s.commit()
         finally:
             await engine.dispose()
