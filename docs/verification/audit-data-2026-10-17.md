@@ -88,7 +88,8 @@ Yang dibaca dari angka itu:
 - **4 PO**: 3 `DEMO-PO-*` tertaut keputusan + 1 `4500000001` yang **memang**
   di-seed tanpa keputusan (`mock_sap.purchase_orders` di seed JSON). Karena itu
   pemeriksaan residu hanya menghitung `MC-*` — baris adapter bukan cacat.
-- **Rantai bukti** 6.381 blok valid. Ledger bersifat *append-only*: keputusan yang
+- **Rantai bukti** valid (6.381 blok saat audit ini; angkanya bergerak karena ledger
+  *append-only* — setiap eksekusi/penyemaian menambah blok). Keputusan yang
   dihapus kemarin tidak memangkas blok, dan itu memang perilaku yang benar —
   memangkasnya akan menghapus bukti, bukan merapikan data.
 
@@ -129,13 +130,35 @@ dengan kode lama 3 tes gagal dan pesannya persis daftar penghalang di atas; deng
 baru 4 lulus.
 
 ### Cacat isolasi yang ikut ketahuan
-
 `test_demo_activity.py` menghapus keputusan selesai + `DEMO-PO-*` yang ia buat, lalu
 **tidak memulihkannya**. Karena suite berbagi DB dengan aplikasi, akibatnya: menjalankan
 `pytest tests/test_demo_activity.py` diikuti `tests/test_sap_orders_api.py` membuat tes
 kedua gagal (`StopIteration` pada "seed punya PO Jakarta") — bukan karena kode, tetapi
 karena urutan berkas — dan membuka aplikasi sesudah pytest memperlihatkan panel PO kosong.
 Sekarang tes itu menyemai ulang di akhir, jadi keadaan demo utuh kembali.
+
+### Putaran kedua: binding yang menunjuk batch yang sudah hilang
+
+Sesudah suite penuh dijalankan, layar menampilkan penghalang baru pada keputusan yang
+sama: `binding batch/supplier berubah`. Sebabnya bukan tes baru itu, melainkan
+siklus hidup data demo:
+
+- `purge_demo_rows()` (dipakai tes deret waktu dan tombol "Bersihkan data demo")
+  menghapus SELURUH baris `origin='demo'`, **termasuk `batches`**;
+- keputusan, evidence, dan PO demo tidak ikut terhapus (origin sama, tetapi bukan
+  anggota himpunan yang dipurge), sehingga binding menunjuk batch yang lenyap;
+- penyemai dulu menulis binding **sekali** (`if evidence is None`), jadi penyemaian
+  ulang tidak pernah memperbaikinya.
+
+Perbaikan: penyemai **menulis ulang** payload binding setiap kali dijalankan
+(deterministik, id tetap, jadi idempoten), dan keadaannya sekarang ikut diperiksa
+audit — `binding->batch hilang` harus 0. Dikunci
+`test_menyemai_ulang_menyembuhkan_binding_yang_menunjuk_batch_hilang`.
+
+Aturan operasional: **sesudah suite penuh, semai ulang aktivitas demo** (jalankan
+`seed_demo_completed_decisions`, atau tombol "Muat kasus demo"/"Segarkan ke hari ini"),
+lalu jalankan audit. Tanpa itu, DB sah secara struktural tetapi aktivitas KPI-nya
+menunjuk batch yang sudah dibersihkan — persis yang dilaporkan audit sebagai merah.
 
 
 ## 5. Dua hal yang memang bergerak sendiri (jangan dibaca sebagai kerusakan)
