@@ -116,7 +116,9 @@ def test_verify_memakai_chain_server_side(client, fake_verifier):
         body = resp.json()
         assert body["verdict"] == "CONSISTENT"
         assert body["provider"] == "test_provider"
-        assert body["approval_requirement"]["min_approvals"] == 1
+        # Transfer = keputusan OPERASIONAL → matriks S3-01 `dua_role_wajib`
+        # menuntut dua approval (head + nutritionist) meski verdict CONSISTENT.
+        assert body["approval_requirement"]["min_approvals"] == 2
         _v, note, _s = _verifier_row(decision_id)
         assert note == "consistent"
     finally:

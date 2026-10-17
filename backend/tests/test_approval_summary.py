@@ -297,6 +297,21 @@ def test_approval_summary_canonical_fields(client):
     """Field kanonik tampil dari DB; verifier UNAVAILABLE → AND matrix."""
     did = _mk_decision(_jakarta_id(), _jakarta_id())
     try:
+        # Kanonik 8 Okt punya TIGA batch telur → Jakarta (Supplier A, Bogor-1, D Cianjur),
+        # jadi pemasok memang TIDAK boleh ditebak dari data sumber — aturan produk
+        # menuntut "satu pemasok ATAU binding eksplisit". Keputusan kanonik ini
+        # diikat eksplisit ke batch Supplier A supaya pemasoknya terdefinisi tanpa
+        # menebak (dan `supplier_unknown` tetap tidak muncul).
+        baris = _db_all(
+            "SELECT b.id, b.supplier_id FROM batches b "
+            "JOIN suppliers s ON s.id=b.supplier_id "
+            "JOIN commodities c ON c.id=b.commodity_id "
+            "JOIN locations l ON l.id=b.location_id "
+            "WHERE s.name='Supplier A Cianjur' AND c.name='telur' "
+            "AND l.name='Jakarta' LIMIT 1"
+        )
+        assert baris, "batch kanonik Supplier A → Jakarta (telur) tidak ada"
+        _ikat_batch(did, str(baris[0][1]), [str(baris[0][0])])
         # Verifikasi server-side (test env tanpa provider → UNAVAILABLE).
         rv = client.post(
             "/actions/verify", headers=_head_user(client), json={"decision_id": did}

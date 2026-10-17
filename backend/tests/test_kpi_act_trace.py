@@ -84,10 +84,16 @@ def _act_rows(decision_id: str) -> list[tuple]:
         engine.dispose()
 
 
-def _run_execute_flow(client, head) -> tuple[str, str]:
-    """Event 1 → propose → verify CONSISTENT → approve → execute.
+def _run_execute_flow(client, head) -> tuple[str, str, str]:
+    """Event 1 → propose → verify CONSISTENT → 2 approval → execute.
 
-    Mengembalikan (decision_id, po_number).
+    Keputusan OPERASIONAL (transfer) wajib DUA approval dari dua role berbeda
+    (matriks S3-01 `dua_role_wajib`), apa pun verdict verifier-nya. Tes ini dulu
+    hanya approve sebagai `sppg_head` lalu menabrak 409 "approval belum
+    memenuhi requirement" — alur tes yang ketinggalan aturan, bukan bug produk.
+
+    Mengembalikan (decision_id, po_number, email ahli gizi): email itu harus
+    ikut dibersihkan pemanggil bersama email head.
     """
     decision_id = _event1_decision_id()
     client.post(
@@ -103,11 +109,18 @@ def _run_execute_flow(client, head) -> tuple[str, str]:
         json={"decision_id": decision_id, "approved": True},
         headers=_login(client, head),
     )
+    gizi = _mk_user("sppg_nutritionist", "Jakarta")
+    resp = client.post(
+        "/actions/approve",
+        json={"decision_id": decision_id, "approved": True},
+        headers=_login(client, gizi),
+    )
+    assert resp.status_code in (200, 201), resp.text
     resp = client.post(
         "/actions/execute", json={"decision_id": decision_id}, headers=_login(client, head)
     )
     assert resp.status_code == 200, resp.text
-    return decision_id, resp.json()["po_number"]
+    return decision_id, resp.json()["po_number"], gizi["email"]
 
 
 def _kpi_metric(client, headers, name: str) -> dict:
@@ -127,8 +140,10 @@ def test_eksekusi_menulis_trace_act_dengan_nomor_po(client):
     """Eksekusi yang berhasil = satu baris ACT, dan PO-nya disebut di bukti."""
     head = _mk_user("sppg_head", "Jakarta")
     restore = _force_server_verdict("CONSISTENT")
+    decision_id: str | None = None
+    gizi_email: str | None = None
     try:
-        decision_id, po_number = _run_execute_flow(client, head)
+        decision_id, po_number, gizi_email = _run_execute_flow(client, head)
         rows = _act_rows(decision_id)
         assert len(rows) == 1, rows
         step_name, tool_called, output_summary, _step_at = rows[0]
@@ -142,7 +157,9 @@ def test_eksekusi_menulis_trace_act_dengan_nomor_po(client):
         assert summary["status"] == "submitted"
     finally:
         restore()
-        _cleanup(decision_id, [head["email"]])
+        _cleanup(
+            decision_id, [head["email"], *([gizi_email] if gizi_email else [])]
+        )
 
 
 def test_eksekusi_yang_ditolak_tidak_menulis_act(client):
@@ -175,6 +192,7 @@ def test_decision_time_tersedia_setelah_eksekusi(client, monitor_headers):
     head = _mk_user("sppg_head", "Jakarta")
     restore = _force_server_verdict("CONSISTENT")
     decision_id: str | None = None
+    gizi_email: str | None = None
     try:
         before = _kpi_metric(client, monitor_headers, "Decision Time")
         # JANGAN mengandaikan DB kosong. DB kerja adalah DB DEMO yang dipakai
@@ -183,7 +201,7 @@ def test_decision_time_tersedia_setelah_eksekusi(client, monitor_headers):
         # tes ini jalan. Yang diuji adalah TRANSISI: keputusan yang baru
         # dieksekusi ikut terhitung.
         sebelum_sampel = int(before.get("sample_count") or 0)
-        decision_id, _po = _run_execute_flow(client, head)
+        decision_id, _po, gizi_email = _run_execute_flow(client, head)
         after = _kpi_metric(client, monitor_headers, "Decision Time")
         assert after["state"] == "available", after
         assert after["value"] is not None
@@ -191,4 +209,6 @@ def test_decision_time_tersedia_setelah_eksekusi(client, monitor_headers):
         assert float(after["value"]) >= 0
     finally:
         restore()
-        _cleanup(decision_id, [head["email"]])
+        _cleanup(
+            decision_id, [head["email"], *([gizi_email] if gizi_email else [])]
+        )

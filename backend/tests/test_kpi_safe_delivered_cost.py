@@ -80,6 +80,9 @@ def test_safe_delivered_cost_tersedia_setelah_eksekusi(client, monitor_headers):
     from app.services.event1_orchestrator import run_event1
 
     head = _mk_user("sppg_head", "Jakarta")
+    # Keputusan operasional (transfer) wajib DUA approval dari dua role berbeda
+    # (matriks S3-01 `dua_role_wajib`); satu approval head menyisakan 409.
+    gizi = _mk_user("sppg_nutritionist", "Jakarta")
     restore = _force_server_verdict()
     decision_id = run_event1(commodity="telur", target_location="Jakarta")["decision_id"]
     try:
@@ -99,6 +102,12 @@ def test_safe_delivered_cost_tersedia_setelah_eksekusi(client, monitor_headers):
                 f"/actions/{path}", json=payload, headers=_login(client, head)
             )
             assert resp.status_code in (200, 201), resp.text
+        resp = client.post(
+            "/actions/approve",
+            json={"decision_id": decision_id, "approved": True},
+            headers=_login(client, gizi),
+        )
+        assert resp.status_code in (200, 201), resp.text
         resp = client.post(
             "/actions/execute",
             json={"decision_id": decision_id},
@@ -134,7 +143,7 @@ def test_safe_delivered_cost_tersedia_setelah_eksekusi(client, monitor_headers):
         assert round(float(sdc_value), 2) in [float(v) for v in sampel_jendela[0]]
     finally:
         restore()
-        _cleanup(decision_id, [head["email"]])
+        _cleanup(decision_id, [head["email"], gizi["email"]])
 
 
 def test_po_seed_tetap_tanpa_decision_id(client):

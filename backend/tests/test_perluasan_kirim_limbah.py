@@ -150,10 +150,16 @@ def _kanonik_kiriman() -> int:
 
 
 def _kanonik_limbah() -> int:
-    """Limbah kanonik 4–7 Okt (rentang asli `disposal_events` seed)."""
+    """Limbah kanonik: SELURUH baris seed sebelum deret demo (8 Okt).
+
+    Dulu jendelanya dipaku "4–7 Okt". Tanggal limbah kanonik mengikuti
+    `reference_time` seeder (2 sampel/hari pada dua hari: 3 dan 6 Okt untuk
+    REF 8 Okt 12:00), jadi jendela tanggal tetap membuat tes merah hanya karena
+    generasi kanonik dibangun ulang — padahal jumlahnya tetap 20. Batas yang
+    benar adalah batas deret demo, bukan tanggal yang ditebak.
+    """
     baris = _q(
         "SELECT count(*) FROM disposal_events WHERE origin = 'seed' "
-        "AND disposed_at >= TIMESTAMP '2026-10-04 00:00:00+00' "
         "AND disposed_at < TIMESTAMP '2026-10-08 00:00:00+00'"
     )
     return int(baris[0][0])

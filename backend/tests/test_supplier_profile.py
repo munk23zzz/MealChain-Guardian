@@ -178,10 +178,21 @@ def test_seed_kanonik_mengisi_profil_dari_batch() -> None:
 
 
 def test_seed_pemasok_tanpa_batch_tetap_kosong() -> None:
-    """11 pemasok kanonik tanpa batch tidak boleh mendapat nilai tebakan."""
-    rows = _canonical_suppliers()
+    """Pemasok kanonik tanpa batch tidak boleh mendapat nilai tebakan.
 
-    for name in ("Supplier D Cianjur", "Supplier Medan-1", "Supplier Jakarta-1"):
+    Daftarnya DITURUNKAN dari data kanonik, bukan dipaku: sejak Fase 10 Supplier
+    D Cianjur punya batch telur → Jakarta, jadi menyebutnya "tanpa batch" membuat
+    tes merah padahal seed-nya benar. Yang diuji adalah aturannya: bila sebuah
+    pemasok tidak punya batch, profilnya tidak diisi tebakan.
+    """
+    rows = _canonical_suppliers()
+    punya_batch = {
+        batch["supplier"] for batch in build_seed_rows(CANONICAL_REF)["batches"]
+    }
+    tanpa_batch = [name for name in rows if name not in punya_batch]
+    assert tanpa_batch, "seed harus punya pemasok tanpa batch untuk menguji aturan ini"
+
+    for name in tanpa_batch:
         assert rows[name]["commodity"] is None, name
         assert rows[name]["certification_status"] is None, name
 

@@ -501,6 +501,99 @@ def _terbaru_semua(lokasi: str = "Cianjur", komoditas: str = "telur") -> str:
     return row.isoformat()
 
 
+def _menu_duplikat() -> int:
+    """Jumlah (lokasi, tanggal) yang punya lebih dari satu rencana menu.
+
+    Invariant setelah "Segarkan ke hari ini": rencana untuk tanggal yang sudah
+    ada dipakai ulang, bukan digandakan.
+    """
+    engine = create_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            return int(
+                conn.execute(
+                    text(
+                        "SELECT count(*) FROM ("
+                        "  SELECT location_id, plan_date FROM menu_plans"
+                        "  GROUP BY 1, 2 HAVING count(*) > 1"
+                        ") dup"
+                    )
+                ).scalar()
+                or 0
+            )
+    finally:
+        engine.dispose()
+
+
+def _kembalikan_baseline() -> None:
+    """Pulihkan DB kerja ke baseline kanonik setelah menguji "Segarkan ke hari ini".
+
+    Refresh mengubah data lewat tiga jalur yang tidak bisa dibalik dengan
+    menghapus "id baru" saja:
+      1. menulis generasi seed baru (id baru) untuk tanggal HARI INI,
+      2. MENGADOPSI rencana menu demo (origin `demo` → `seed`, id tetap),
+      3. memperbarui baris yang id-nya tidak bergantung ref — limbah per
+         "hari ke-N" — sehingga tanggalnya ikut pindah.
+    Karena itu rollback memakai jalur resmi yang terbukti menghasilkan baseline
+    kanonik: purge demo → buang generasi seed di luar kanonik → seeder kanonik →
+    generator deret (3870/4010/590 baris demo, 30/44/70 kanonik, 70 kiriman +
+    20 limbah kanonik).
+    """
+    from app.seed.seed_data import build_seed_rows
+
+    kanonik = build_seed_rows(CANONICAL_REF)
+    asyncio.run(purge_demo_rows())
+    tanggal = {
+        "delivery_events": sorted(
+            {row["delivered_at"].date().isoformat() for row in kanonik["delivery_events"]}
+        ),
+        "disposal_events": sorted(
+            {row["disposed_at"].date().isoformat() for row in kanonik["disposal_events"]}
+        ),
+    }
+    engine = create_engine(DB_URL)
+    try:
+        with engine.begin() as conn:
+            # Peristiwa kanonik di-*update di tempat* oleh refresh (id tidak
+            # mengandung ref), jadi tanggalnya bisa pindah ke hari ini. Buang
+            # baris seed yang tanggalnya di luar jendela kanonik, lalu seeder
+            # menulis ulang 70 kiriman (1–7 Okt) + 20 limbah (4–7 Okt).
+            conn.execute(
+                text(
+                    "DELETE FROM delivery_events WHERE origin='seed' "
+                    "AND NOT (delivered_at::date = ANY(CAST(:t AS date[])))"
+                ),
+                {"t": tanggal["delivery_events"]},
+            )
+            conn.execute(
+                text(
+                    "DELETE FROM disposal_events WHERE origin='seed' "
+                    "AND NOT (disposed_at::date = ANY(CAST(:t AS date[])))"
+                ),
+                {"t": tanggal["disposal_events"]},
+            )
+            for tabel, kunci in (
+                ("delivery_events", "delivery_events"),
+                ("disposal_events", "disposal_events"),
+                ("menu_plans", "menu_plans"),
+                ("supply_records", "supply"),
+                ("demand_records", "demand"),
+                ("price_signals", "price_signals"),
+            ):
+                ids = [str(row["id"]) for row in kanonik[kunci]]
+                conn.execute(
+                    text(
+                        f"DELETE FROM {tabel} WHERE origin='seed' "
+                        "AND NOT (id = ANY(CAST(:ids AS uuid[])))"
+                    ),
+                    {"ids": ids},
+                )
+    finally:
+        engine.dispose()
+    asyncio.run(load_seed(CANONICAL_REF))
+    asyncio.run(generate_timeseries(DEFAULT_START, DEFAULT_END))
+
+
 def test_refresh_hari_ini_bergeser_dan_bisa_dikembalikan(
     demo_state, auth_headers, monitor_headers
 ):
@@ -536,7 +629,10 @@ def test_refresh_hari_ini_bergeser_dan_bisa_dikembalikan(
 
         added = {t: _snapshot_ids()[t] - before_ids[t] for t in before_ids}
         assert len(added["supply_records"]) == 30, "snapshot REF baru = 30 baris pasokan"
-        assert len(added["menu_plans"]) > 0
+        # Rencana menu TIDAK digandakan: untuk tanggal yang sudah punya rencana
+        # (deret demo menutup 8 Okt–5 Nov), seeder memakai rencana yang ada. Menu
+        # boleh 0 baris baru — yang wajib bertambah adalah snapshot pasokan.
+        assert _menu_duplikat() == 0, "refresh menggandakan rencana menu (lokasi, tanggal)"
         sesudah_counts = _origin_counts()
         # Batch memakai id yang TIDAK bergantung waktu referensi → ia di-UPDATE di
         # tempat (tanggal panen ikut pindah), bukan ditambah. Menambah baris di sini
@@ -561,8 +657,7 @@ def test_refresh_hari_ini_bergeser_dan_bisa_dikembalikan(
         # (2.140 alih-alih 2.120).
         added = {t: _snapshot_ids()[t] - before_ids[t] for t in before_ids}
         _delete_ids(added)
-        asyncio.run(load_seed(CANONICAL_REF))
-        demo_state.post("/demo/timeseries", json={"force": False}, headers=auth_headers)
+        _kembalikan_baseline()
 
     assert _origin_counts() == before_counts
     kembali = demo_state.get("/supply/Cianjur/telur", headers=monitor_headers).json()
@@ -595,13 +690,19 @@ def test_refresh_menyinkronkan_rute_kiriman(
 
     monkeypatch.setattr(seed_data, "sync_routes_after_seed", palsu)
 
-    r = demo_state.post("/demo/refresh", headers=auth_headers)
-    assert r.status_code == 200, r.text
-    body = r.json()
+    try:
+        r = demo_state.post("/demo/refresh", headers=auth_headers)
+        assert r.status_code == 200, r.text
+        body = r.json()
 
-    assert body["routes"]["diambil"] == 2, "laporan sinkronisasi rute harus dibawa"
-    assert body["route_error"] is None
-    assert dipanggil["ref"].tzinfo is not None, "waktu referensi wajib tz-aware"
+        assert body["routes"]["diambil"] == 2, "laporan sinkronisasi rute harus dibawa"
+        assert body["route_error"] is None
+        assert dipanggil["ref"].tzinfo is not None, "waktu referensi wajib tz-aware"
+    finally:
+        # Tombol demo MENULIS generasi snapshot baru untuk hari ini dan mengadopsi
+        # rencana menu demo. Tanpa rollback, generasi ini tertinggal (supply seed
+        # 60 vs 30, menu 140 vs 70) dan meracuni tes berikutnya dalam satu run.
+        _kembalikan_baseline()
 
 
 def test_refresh_tetap_berhasil_bila_osrm_tidak_terjangkau(
@@ -615,8 +716,12 @@ def test_refresh_tetap_berhasil_bila_osrm_tidak_terjangkau(
 
     monkeypatch.setattr(seed_data, "sync_routes_after_seed", meledak)
 
-    r = demo_state.post("/demo/refresh", headers=auth_headers)
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert body["routes"] == {}
-    assert "OSRM tidak terjangkau" in body["route_error"]
+    try:
+        r = demo_state.post("/demo/refresh", headers=auth_headers)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["routes"] == {}
+        assert "OSRM tidak terjangkau" in body["route_error"]
+    finally:
+        # Sama seperti tes rute di atas: refresh menulis snapshot hari ini.
+        _kembalikan_baseline()

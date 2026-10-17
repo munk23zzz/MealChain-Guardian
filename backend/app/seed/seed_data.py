@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.core.journey import dispatch_time, validate_dispatch
@@ -525,6 +525,16 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
                         counts.get("sap_mock_purchase_orders", 0) + 1
                     )
             await _load_p6_facts(session, rows, loc_by_name, com_by_name, counts)
+            # Laporkan baris deret yang DITULIS, bukan hanya entitas baru.
+            # Sebelumnya `rows` kosong walau 242 baris masuk, sehingga pemanggil
+            # (mis. tombol refresh di panel) tidak bisa membedakan "tidak ada
+            # yang perlu ditulis" dari "berhasil menulis".
+            counts["supply_records"] = len(rows["supply"])
+            counts["demand_records"] = len(rows["demand"])
+            counts["price_signals"] = len(rows["price_signals"])
+            counts["menu_plans"] = len(rows["menu_plans"])
+            counts["delivery_events"] = len(rows["delivery_events"])
+            counts["disposal_events"] = len(rows["disposal_events"])
             await session.commit()
     finally:
         await engine.dispose()
@@ -534,7 +544,7 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
 async def _load_p6_facts(session, rows: dict, loc_by_name, com_by_name,
                          counts: dict) -> None:
     """P6: muat facts KPI (menu plan / delivery / disposal) — idempoten merge."""
-    from sqlalchemy import select as _select, update
+    from sqlalchemy import select as _select
 
     from app.models import DeliveryEvent, DisposalEvent, MenuPlan
 
