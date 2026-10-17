@@ -174,6 +174,23 @@ def _residu(conn) -> dict:
                 )
             ).scalar_one()
         ),
+        "binding_batch_hilang": int(
+            conn.execute(
+                text(
+                    # Binding eksplisit yang menunjuk batch yang sudah tidak ada:
+                    # `resolve_binding` lalu menjawab 409 "binding batch/supplier
+                    # berubah", sehingga keputusan `executed` tampil terhalang oleh
+                    # penyebab yang bukan kenyataan. Keadaan ini muncul bila batch
+                    # demo dibersihkan tanpa menyemai ulang keputusannya.
+                    "SELECT count(*) FROM decision_evidence e "
+                    "WHERE e.payload->>'allocation_binding' = 'true' "
+                    "AND EXISTS ("
+                    "  SELECT 1 FROM jsonb_array_elements_text(e.payload->'batch_ids') AS b "
+                    "  WHERE NOT EXISTS (SELECT 1 FROM batches x WHERE x.id::text = b)"
+                    ")"
+                )
+            ).scalar_one()
+        ),
         "user_tes": int(
             conn.execute(
                 text(
@@ -308,6 +325,7 @@ def audit() -> dict:
         or not laporan["skema"]["cocok"]
         or laporan["ledger"].get("valid") is not True
         or laporan["residu"]["user_tes"] > 0
+        or laporan["residu"]["binding_batch_hilang"] > 0
     )
     laporan["perlu_perhatian"] = perlu
     return laporan
@@ -355,6 +373,7 @@ def cetak(laporan: dict) -> None:
     print("\n== 5. RESIDU ==")
     print(f"  keputusan non-demo  : {r['keputusan_tanpa_demo_case_dan_bukan_demo']}")
     print(f"  PO tanpa keputusan  : {r['po_tanpa_keputusan']}")
+    print(f"  binding->batch hilang: {r['binding_batch_hilang']}")
     print(f"  user tes tersisa    : {r['user_tes']}")
     print(f"  kasus demo terpasang: {r['kasus_demo']} (harap 4)")
     print("\n== 5b. KESIAPAN KASUS DEMO (TTL bergulir) ==")

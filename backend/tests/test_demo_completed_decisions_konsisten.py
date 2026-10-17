@@ -30,7 +30,7 @@ dipakai layar demo.
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.core.config import settings
 from app.db import create_engine, create_session_maker
@@ -162,6 +162,58 @@ async def test_binding_menunjuk_batch_sumber_yang_benar_benar_ada() -> None:
                         f"batch sumber {b.id} berstatus {b.safety_status}; "
                         "keputusan selesai tidak boleh bersandar pada batch gagal"
                     )
+    finally:
+        await engine.dispose()
+
+
+async def test_menyemai_ulang_menyembuhkan_binding_yang_menunjuk_batch_hilang() -> None:
+    """Batch demo bisa hilang (Bersihkan data demo / tes yang membersihkan kiriman).
+
+    Binding yang tetap menunjuk baris yang sudah tidak ada membuat resolusi gagal
+    ("binding batch/supplier berubah") pada keputusan yang statusnya `executed`.
+    Menyemai ulang harus MENULIS ULANG payload-nya, bukan melewatinya karena id-nya
+    sudah ada.
+    """
+    _, keputusan, _ = await _jalankan()
+    assert keputusan, "penyemai tidak membuat keputusan selesai"
+    target = keputusan[0]
+
+    engine = create_engine(settings.database_url)
+    maker = create_session_maker(engine)
+    try:
+        async with maker() as sesi:
+            bukti = list(
+                (
+                    await sesi.execute(
+                        select(DecisionEvidence).where(
+                            DecisionEvidence.decision_id == target.id
+                        )
+                    )
+                ).scalars()
+            )
+            ids = [
+                uuid.UUID(b)
+                for e in bukti
+                if (e.payload or {}).get("allocation_binding") is True
+                for b in e.payload["batch_ids"]
+            ]
+            await sesi.execute(delete(Batch).where(Batch.id.in_(ids)))
+            await sesi.commit()
+
+        # Semai ulang: harus menyembuhkan, bukan melempar atau membiarkan rusak.
+        async with maker() as sesi:
+            await seed_demo_completed_decisions(sesi, datetime.now(UTC))
+            await sesi.commit()
+
+        async with maker() as sesi:
+            d = await sesi.get(Decision, target.id)
+            r = await build_approval_summary(sesi, d)
+        assert r["supplier"] is not None, (
+            f"pemasok masih tidak terbaca: {r['blocking_reasons']}"
+        )
+        assert r["blocking_reasons"] == ["decision sudah dieksekusi"], (
+            f"penghalang sisa setelah penyemaian ulang: {r['blocking_reasons']}"
+        )
     finally:
         await engine.dispose()
 

@@ -286,22 +286,32 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
         # "supplier_unknown" (409) — layar lalu menampilkan alasan itu untuk
         # keputusan yang sudah dieksekusi.
         bind_id = uuid.uuid5(did, "bukti:allocation_binding")
-        if await db.get(DecisionEvidence, bind_id) is None:
+        binding_payload = {
+            "allocation_binding": True,
+            "supplier_id": str(batch_sumber.supplier_id),
+            "batch_ids": [str(batch_sumber.id)],
+            "demo": True,
+        }
+        bukti_binding = await db.get(DecisionEvidence, bind_id)
+        if bukti_binding is None:
             db.add(
                 DecisionEvidence(
                     id=bind_id,
                     decision_id=did,
                     evidence_type="human_inspection",
-                    payload={
-                        "allocation_binding": True,
-                        "supplier_id": str(batch_sumber.supplier_id),
-                        "batch_ids": [str(batch_sumber.id)],
-                        "demo": True,
-                    },
+                    payload=binding_payload,
                     is_consistent=True,
                     recorded_at=mulai + timedelta(minutes=9),
                 )
             )
+        else:
+            # DITULIS ULANG, bukan sekali tulis. Batch demo bisa hilang oleh
+            # "Bersihkan data demo" atau oleh tes yang membersihkan kiriman;
+            # binding yang menunjuk batch hilang membuat resolusi gagal
+            # ("binding batch/supplier berubah") untuk keputusan yang sudah
+            # dieksekusi. Menyemai ulang harus menyembuhkannya.
+            bukti_binding.payload = binding_payload
+            bukti_binding.is_consistent = True
 
         acc_id = uuid.uuid5(did, "approval")
         if await db.get(Approval, acc_id) is None:
