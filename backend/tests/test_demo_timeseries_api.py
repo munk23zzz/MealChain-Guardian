@@ -475,6 +475,32 @@ def _seed_supply_terbaru(
     return row[0].isoformat(), float(row[1])
 
 
+def _terbaru_semua(lokasi: str = "Cianjur", komoditas: str = "telur") -> str:
+    """`recorded_at` terbaru satu pasangan dari SEMUA origin (ISO).
+
+    Dipakai untuk menguji kontrak endpoint `/supply/<lokasi>/<komoditas>`
+    ("kembalikan yang terbaru") tanpa memaku tanggal. Tanggal terbaru bisa
+    berpindah karena fitur "Segarkan ke hari ini" — yang tidak boleh berubah
+    hanyalah: endpoint selalu mengembalikan baris paling baru yang ada.
+    """
+    engine = create_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT max(s.recorded_at) FROM supply_records s "
+                    "JOIN locations l ON l.id = s.location_id "
+                    "JOIN commodities c ON c.id = s.commodity_id "
+                    "WHERE l.name = :lok AND c.name = :kom"
+                ),
+                {"lok": lokasi, "kom": komoditas},
+            ).scalar_one()
+    finally:
+        engine.dispose()
+    assert row is not None, "tidak ada baris supply untuk pasangan itu"
+    return row.isoformat()
+
+
 def test_refresh_hari_ini_bergeser_dan_bisa_dikembalikan(
     demo_state, auth_headers, monitor_headers
 ):
@@ -489,9 +515,10 @@ def test_refresh_hari_ini_bergeser_dan_bisa_dikembalikan(
     before_ids = _snapshot_ids()
     before_counts = _origin_counts()
     awal = demo_state.get("/supply/Cianjur/telur", headers=monitor_headers).json()
-    # Deret AKTUAL kini berjalan sampai ujung rencana, jadi record TERBARU adalah
-    # 4 Nov 12:00 (stamp terakhir), bukan lagi baris kanonik 8 Okt 12:00.
-    assert awal["recorded_at"].startswith("2026-11-04T12:00:00")
+    # Kontrak endpoint, bukan tanggal: kembalikan baris TERBARU dari origin mana pun.
+    # Tanggalnya tidak dipaku karena "Segarkan ke hari ini" memang memindahkan baris
+    # kanonik ke hari ini — memakunya membuat tes merah hanya karena fitur itu dipakai.
+    assert awal["recorded_at"] == _terbaru_semua()
 
     # Record kanonik terbaru ikut pindah ke HARI INI, nilai kanonik tidak berubah.
     # (Record terbaru keseluruhan berasal dari deret demo — 4 Nov 12:00 — karena itu
