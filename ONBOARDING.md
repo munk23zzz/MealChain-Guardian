@@ -134,3 +134,29 @@ Koordinasi: jangan kerjakan task yang sama dengan Roy tanpa kompak di TODO.md (k
   frontend `npm run test` + `npm run lint` + `npm run build` harus hijau.
 - Commit message: bahasa Indonesia, pola `feat:/fix:/docs:/chore: <ringkas>`.
 - Jangan commit di `master` langsung; jangan force-push.
+
+## 9. Mode demo — apa yang nyata dan apa yang belum (17 Okt 2026)
+
+Bagian ini supaya tidak ada yang salah klaim saat presentasi. Sumbernya pengukuran langsung
+di stack lokal, bukan proposal.
+
+- **Data**: sintetis terkalibrasi (10 lokasi × 3 komoditas). Bukan transaksi SPPG nyata.
+- **SAP**: masih **mock** (`mock-sap` di :8001). PO yang "dibuat" tersimpan di tabel
+  `sap_mock_purchase_orders`; belum ada koneksi SAP asli maupun AWS for SAP MCP
+  (`AwsMcpSapProvider` masih stub).
+- **AgentCore**: runtime **belum dibuat** (0 runtime, `AGENTCORE_RUNTIME_ARN` kosong).
+  Artefak (Dockerfile, runtime server, deploy script, role IAM) sudah siap.
+- **Supervisor**: Strands Agent masih hello-world tanpa tool. Angka keputusan dihitung
+  pipeline deterministik di `backend/app/core/`, bukan oleh LLM.
+- **Bukti**: ledger hash chain PostgreSQL (Merkle + tanda tangan ECDSA), bisa diverifikasi
+  di tab Decision & Evidence → Integritas Bukti.
+- **KPI**: 7 indikator; yang belum bisa dihitung menulis alasan "belum ada data",
+  bukan diisi nol.
+- **Status integrasi terlihat di aplikasi**: tab **Agent Log → Bukti integrasi per komponen**
+  (SAP AI Core, Mock SAP, AgentCore Runtime/Gateway/Memory, Observability, AWS for SAP MCP).
+
+Saat demo, hindari tombol **Bersihkan data demo** dan **Bangun ulang dari nol** kecuali
+memang ingin membangun ulang dataset. Tombol **Muat kasus demo** idempotent dan aman diulang.
+
+Jangan mengubah label `mock` / `belum` / `tidak tersedia` menjadi klaim sukses tanpa artefak
+yang bisa ditunjuk.
