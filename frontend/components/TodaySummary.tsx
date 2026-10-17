@@ -18,6 +18,7 @@
 // diuji tanpa DOM) supaya aturan "—" jangan sampai ditulis ulang di JSX.
 
 import type { SummaryTile } from "../lib/today";
+import { nilaiAngka } from "../lib/today";
 
 /**
  * Gulir ke kartu ber-id `target` lalu pindahkan fokus ke kartu itu.
@@ -60,7 +61,13 @@ export default function TodaySummary({
               onClick={() => onJump(tile.target)}
             >
               <span className="today-tile-label">{tile.label}</span>
-              <span className="today-tile-value">{tile.value}</span>
+              <span
+                className={`today-tile-value${
+                  nilaiAngka(tile.value) ? "" : " today-tile-value--teks"
+                }`}
+              >
+                {tile.value}
+              </span>
               {tile.note ? <span className="today-tile-note">{tile.note}</span> : null}
             </button>
           </li>

@@ -13,8 +13,25 @@
 //   diklaim 0 (aturan repo: angka yang tampak terukur padahal tak ada data).
 import { describe, expect, it } from "vitest";
 
-import { batchExpiry, kpiPeriodLabel, ledgerSummary, pendingDecisions, shortageSummary, summaryTiles, updatedLabel } from "../lib/today";
+import { batchExpiry, kpiPeriodLabel, ledgerSummary, nilaiAngka, pendingDecisions, shortageSummary, summaryTiles, updatedLabel } from "../lib/today";
 import { ZONA_DEFAULT, zonaLabel } from "../lib/jam";
+
+describe("nilai tile: angka vs frasa (perapian tampilan 2026-10-17)", () => {
+  // Angka dirender dengan font data (Fira Code) supaya digit sejajar; frasa
+  // seperti "Rantai utuh" TIDAK boleh memakai font kode — di dalam bentuk
+  // selebar 183 px ia terbaca seperti potongan kode, bukan status.
+  it("nilai angka/kuantitas dikenali sebagai angka", () => {
+    for (const v of ["15", "2", "5/7", "3.748", "450", "0", "—", "1.115"]) {
+      expect(nilaiAngka(v), v).toBe(true);
+    }
+  });
+
+  it("nilai berupa frasa tidak dianggap angka", () => {
+    for (const v of ["Rantai utuh", "rantai tidak utuh", "tidak terbaca"]) {
+      expect(nilaiAngka(v), v).toBe(false);
+    }
+  });
+});
 
 const NOW = new Date("2026-10-17T04:00:00Z");
 const H = 3600000;

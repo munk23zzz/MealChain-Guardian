@@ -4791,6 +4791,15 @@ a:focus-visible {
   font-weight: 600;
   line-height: var(--lh-num);
   letter-spacing: var(--track-tight);
+  /* Digit sejajar antar tile (jam di top bar memakai aturan yang sama). */
+  font-variant-numeric: tabular-nums;
+}
+/* Nilai berupa FRASA (mis. "Rantai utuh") memakai font UI, bukan font data:
+   di bentuk 183 px, kata dalam Fira Code terbaca seperti potongan kode dan
+   membuat satu tile terlihat beda dari empat lainnya. */
+.today-tile-value--teks {
+  font-family: var(--font-fira-sans, Inter), system-ui, sans-serif;
+  letter-spacing: normal;
 }
 .today-tile-note {
   font-size: var(--fs-1);
@@ -4816,14 +4825,13 @@ a:focus-visible {
 .today-tile-warn {
   border-left-color: var(--status-warning);
 }
-.today-tile-warn .today-tile-value {
-  color: var(--warn-ink);
-}
+/* Nada TIDAK diwarnakan pada angkanya lagi (perapian 2026-10-17): dulu dua tile
+   merah + dua kuning + satu hitam dalam satu baris, sehingga barisnya terbaca
+   gelisah dan warna yang sama muncul dua kali (garis kiri + angka). Nada kini
+   hanya di garis kiri — label, catatan, dan teksnya sudah menyebut keadaannya,
+   jadi tidak ada informasi yang bergantung pada warna saja. */
 .today-tile-danger {
   border-left-color: var(--status-danger);
-}
-.today-tile-danger .today-tile-value {
-  color: var(--danger-ink);
 }
 .today-tile-none {
   border-left-color: var(--neutral-border);
@@ -5001,13 +5009,18 @@ a:focus-visible {
 .today-due {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
+  gap: 5px;
+  /* Bentuk pil mengikuti standar label repo (docs/design.md §3.8: 12px,
+     padding 2px 8px, tinggi ±22px) — dulu 3px 10px/26px sehingga pil "Lewat …"
+     memakan lebar 176px dan mendominasi barisnya. */
+  padding: 2px 8px;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--surface-sunken);
-  font-family: var(--font-data);
+  /* Frasa, bukan kode: font UI (Fira Sans) + angka tabular. Mono membuat
+     "Lewat 6 hari 11 jam" tampak seperti keluaran konsol dan lebih lebar. */
   font-size: var(--fs-1);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   color: var(--ink-muted);
 }

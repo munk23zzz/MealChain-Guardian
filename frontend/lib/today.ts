@@ -258,6 +258,20 @@ export type SummaryInput = {
   ledger: ReturnType<typeof ledgerSummary>;
 };
 
+/**
+ * Apakah nilai tile boleh dirender dengan font DATA (Fira Code)?
+ *
+ * Aturan tampilan (perapian 2026-10-17): angka memakai font data supaya digit
+ * sejajar (`tabular-nums`), sedangkan FRASA seperti "Rantai utuh" memakai font
+ * UI — di bentuk selebar 183 px, frasa dalam font kode terbaca seperti potongan
+ * kode dan membuat bentuk itu terlihat berbeda dari empat lainnya.
+ * Definisi sengaja sederhana dan bisa diperiksa: nilai dianggap angka bila
+ * tidak memuat huruf sama sekali ("15", "5/7", "3.748", "—").
+ */
+export function nilaiAngka(nilai: string): boolean {
+  return !/[A-Za-z]/.test(nilai ?? "");
+}
+
 export function summaryTiles(input: SummaryInput): SummaryTile[] {
   const { pending, batch, batchLoaded, shortage, metrics, ledger } = input;
 

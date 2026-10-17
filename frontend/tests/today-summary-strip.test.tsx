@@ -81,6 +81,20 @@ describe("strip ringkasan — markup", () => {
     expect(rantai.className).toContain("today-tile-ok");
   });
 
+  it("nilai berupa frasa memakai kelas teks (font UI), angka tetap font data", () => {
+    mount();
+    const rantai = host.querySelector(
+      'button[data-today-target="today-ledger"] .today-tile-value',
+    )!;
+    expect(rantai.textContent).toBe("Rantai utuh");
+    expect(rantai.className).toContain("today-tile-value--teks");
+    const angka = host.querySelector(
+      'button[data-today-target="today-kpi"] .today-tile-value',
+    )!;
+    expect(angka.textContent).toBe("5/7");
+    expect(angka.className).not.toContain("today-tile-value--teks");
+  });
+
   it("tidak ada nilai karangan: tile '—' tetap tampil apa adanya", () => {
     mount([{ key: "batches", label: "Batch <48 jam", value: "—", note: null, tone: "none", target: "today-batches" }]);
     const tombol = host.querySelector("button.today-tile")!;

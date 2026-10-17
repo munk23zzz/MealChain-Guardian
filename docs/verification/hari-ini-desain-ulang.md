@@ -142,3 +142,30 @@ eksplisit agar kelima bentuk identik dan tidak ada bentuk kelima yang jatuh ke b
 kedua; label diberi `min-width: 0` + line-height 1.3 mengikuti aturan *Compact Label
 Overflow*. Luapan horizontal tetap 0 px dan tidak ada teks yang terpotong (dicek
 `scrollWidth > clientWidth` per baris keterangan: semua `false`).
+
+## 9. Langkah 3 — nilai 5 tile & lencana "Lewat …" (keluhan pemilik, 2026-10-17)
+
+Keluhan: *"untuk bagian 15, 2, 1, 5/7, dan rantai utuh menurut saya itu masih kurang pass
+dilihat tampilannya dan bagian informasi 'lewat jam/hari' itu masih terlalu kebesaran"*.
+
+Diperiksa dulu di browser dengan strip dizoom 3× supaya tipografinya benar-benar terlihat.
+Temuan: (a) nilai "Rantai utuh" dirender dengan font DATA (Fira Code) — frasa dalam font kode
+di bentuk 183 px terbaca seperti potongan kode dan menjadikan satu tile berbeda dari empat
+lainnya; (b) warnanya campur — dua tile merah + dua kuning + satu hitam, sementara nada yang
+sama sudah dibawa garis kiri, jadi barisnya terbaca gelisah; (c) lencana `.today-due`
+terukur **176×26 px** (mono 12px + padding 3px 10px) sehingga satu lencana memakan hampir
+seperlima lebar baris dan tampak lebih penting daripada judul keputusannya.
+
+| Ukuran | Sebelum | Sesudah |
+|---|---|---|
+| Font nilai angka | Fira Code 16px | Fira Code 16px + `font-variant-numeric: tabular-nums` |
+| Font nilai frasa ("Rantai utuh") | Fira Code | **Fira Sans** (kelas `.today-tile-value--teks`), 1 baris |
+| Warna nilai | 2×`--danger-ink`, 2×`--warn-ink`, 1×`--ink` | **seragam `--ink`**; nada hanya di garis kiri |
+| Lencana `.today-due` | 176×26 px, mono, padding 3px 10px | **131–138×24 px**, Fira Sans, padding 2px 8px |
+
+Keputusan "angka vs frasa" tidak ditulis di JSX sebagai `if` ad-hoc, melainkan sebagai fungsi
+murni `nilaiAngka()` di `lib/today.ts` (nilai dianggap angka bila tidak memuat huruf sama
+sekali) dengan dua uji murni + satu uji markup. Urutannya TDD: tiga uji ditulis lebih dulu,
+dijalankan **RED** (`nilaiAngka is not a function`, kelas `--teks` belum ada), baru
+implementasi. Lencana mengikuti standar label repo yang sudah ada (docs/design.md §3.8:
+12 px, padding 2px 8px, tinggi ±22 px). Tinggi strip tetap 70 px, luapan horizontal 0 px.
