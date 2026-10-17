@@ -63,3 +63,63 @@
     white-space: normal;
   }
 }
+
+/* ---------- Decision & Evidence: metrik bukti + lini masa ----------
+   Metrik diberi identitas per label (data-metrik dari DecisionEvidence).
+   Warna = kategori, bukan status; label & angkanya tetap ada. */
+.evidence-metric {
+  box-shadow: inset 0 3px 0 var(--metrik-line, transparent);
+}
+.evidence-metric dt {
+  color: var(--metrik-ink, var(--ink-subtle));
+}
+.evidence-metric dt::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: var(--metrik-ink, var(--ink-subtle));
+  vertical-align: 1px;
+}
+.evidence-metric[data-metrik^="kuantitas"] {
+  --metrik-bg: var(--cat-blue-bg);
+  --metrik-line: var(--cat-blue-line);
+  --metrik-ink: var(--cat-blue-ink);
+}
+.evidence-metric[data-metrik^="biaya"] {
+  --metrik-bg: var(--cat-violet-bg);
+  --metrik-line: var(--cat-violet-line);
+  --metrik-ink: var(--cat-violet-ink);
+}
+.evidence-metric[data-metrik^="selisih"] {
+  --metrik-bg: var(--cat-amber-bg);
+  --metrik-line: var(--cat-amber-line);
+  --metrik-ink: var(--cat-amber-ink);
+}
+.evidence-metric[data-metrik^="tujuan"],
+.evidence-metric[data-metrik^="lokasi"] {
+  --metrik-bg: var(--cat-teal-bg);
+  --metrik-line: var(--cat-teal-line);
+  --metrik-ink: var(--cat-teal-ink);
+}
+
+/* Lini masa: tone "warn"/"muted" sebelumnya jatuh ke abu-abu yang sama.
+   Sekarang tiap nada punya tinta sendiri + rel tepi untuk danger/warn. */
+.audit-warn .audit-mark {
+  border-color: var(--sev-medium-line);
+  background: var(--sev-medium-bg);
+  color: var(--sev-medium-ink);
+}
+.audit-muted .audit-mark {
+  border-color: var(--neutral-border);
+  background: var(--neutral-bg);
+  color: var(--neutral-ink);
+}
+.audit-item.audit-danger {
+  box-shadow: inset 3px 0 0 var(--sev-critical-solid);
+}
+.audit-item.audit-warn {
+  box-shadow: inset 3px 0 0 var(--sev-medium-solid);
+}

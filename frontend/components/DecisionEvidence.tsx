@@ -306,7 +306,7 @@ export default function DecisionEvidence({
             {metrik.length > 0 && (
               <dl className="evidence-metrics">
                 {metrik.map((item) => (
-                  <div className="evidence-metric" key={item.label}>
+                  <div className="evidence-metric" data-metrik={item.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")} key={item.label}>
                     <dt>{item.label}</dt>
                     <dd>{item.value}</dd>
                   </div>
