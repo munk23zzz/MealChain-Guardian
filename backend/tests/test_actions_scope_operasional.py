@@ -149,8 +149,8 @@ def _expire_decision(decision_id: str) -> None:
         engine.dispose()
 
 
-def _insert_foreign_approval(decision_id: str, user_id: str) -> None:
-    """Tiru baris approval LAMA dari approver SPPG lain (mis. data sebelum ruling)."""
+def _insert_approval(decision_id: str, user_id: str) -> None:
+    """Tulis satu baris approval langsung di DB (tanpa lewat HTTP)."""
     engine = _db()
     try:
         with engine.begin() as conn:
@@ -163,6 +163,11 @@ def _insert_foreign_approval(decision_id: str, user_id: str) -> None:
             )
     finally:
         engine.dispose()
+
+
+def _insert_foreign_approval(decision_id: str, user_id: str) -> None:
+    """Tiru baris approval LAMA dari approver SPPG lain (mis. data sebelum ruling)."""
+    _insert_approval(decision_id, user_id)
 
 
 def _cleanup(decision_id: str | None, emails: list[str]) -> None:
@@ -384,6 +389,10 @@ def test_matriks_abaikan_approval_lokasi_lain_409(client):
 def test_execute_lokasi_sendiri_lolos_sampai_provider(client):
     """Kontrol positif: approver lokasi target tetap bisa menembus gerbang scope."""
     jakarta = _mk_user("sppg_head", "Jakarta")
+    # PLAN.md §13.3: transfer operasional butuh DUA approval (Head + Nutritionist
+    # di lokasi target). Approval kedua ditulis langsung supaya tes ini tetap
+    # menguji CAKUPAN, bukan alur approval.
+    nutrisi = _mk_user("sppg_nutritionist", "Jakarta")
     decision_id = _mk_decision(client, jakarta)
     try:
         _propose(client, decision_id, jakarta)
@@ -393,6 +402,7 @@ def test_execute_lokasi_sendiri_lolos_sampai_provider(client):
             json={"decision_id": decision_id, "approved": True},
             headers=_login(client, jakarta),
         )
+        _insert_approval(decision_id, nutrisi["id"])
         resp = client.post(
             "/actions/execute",
             json={"decision_id": decision_id},
@@ -403,4 +413,4 @@ def test_execute_lokasi_sendiri_lolos_sampai_provider(client):
         assert resp.status_code == 200, resp.text
         assert resp.json()["data_source"] == "MOCK"
     finally:
-        _cleanup(decision_id, [jakarta["email"]])
+        _cleanup(decision_id, [jakarta["email"], nutrisi["email"]])

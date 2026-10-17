@@ -1560,6 +1560,7 @@ export default function Home() {
             balance={mapData}
             decisions={decisions}
             canMutate={APPROVER_ROLES.has(role ?? "")}
+            canPropose={role === "sppg_head"}
             onRecheck={safetyRecheck}
             onRepropose={safetyRepropose}
             onTriggerDisruption={safetyTriggerDisruption}

@@ -108,6 +108,21 @@ describe("OpsConsole — interaksi sebelum hasil (arah Roy)", () => {
     );
     expect(html).not.toContain("Ajukan");
   });
+
+  it("sppg_nutritionist: tanpa tombol usul/Event 1, tetap diberi catatan baca", () => {
+    const html = renderToStaticMarkup(
+      <OpsConsole
+        role="sppg_nutritionist"
+        token="demo-token"
+        snapshot={SNAPSHOT}
+        analysis={ANALYSIS}
+      />
+    );
+    // PLAN.md §13.3: usul & Event 1 hanya Kepala SPPG.
+    expect(html).not.toContain("Ajukan usulan");
+    expect(html).not.toContain("Jalankan Event 1 penuh");
+    expect(html).toContain("hanya untuk Kepala SPPG");
+  });
 });
 
 describe("RoleHero — konsol tiap role tidak polos", () => {

@@ -77,7 +77,7 @@
 | Head-only execute transfer (§13.3) | **SELESAI 17 Okt** — `execute` dijaga `PROPOSER_ROLES` |
 | Dua approval user berbeda sebagai syarat transfer (§13.3) | **SELESAI 17 Okt** — `dua_role_wajib=True` untuk tipe operasional |
 | Supplier exclusion diusulkan Head saja (§13.2) | **SELESAI 17 Okt** — proposals Head-only; `restore` masih kedua role (administratif) |
-| Kebijakan final mutasi demo (mana yang Head saja) (§13.3A) | **Terbuka** — kedua role SPPG masih boleh |
+| Kebijakan final mutasi demo (mana yang Head saja) (§13.3A) | **SELESAI 17 Okt** — usul keputusan (`/decisions`, `/events/*`, `/demo/event1`) Head saja; alat data demo tetap dua role |
 | Modul Settings/Admin resmi (PLAN-015) | Sengaja di luar scope — tetapi kemampuan adminnya sudah hidup di jalur `bgn_monitor` |
 | SAP AI Core & AWS for SAP MCP (PLAN-011/013) | Bukan soal role; tetap belum siap (caller unimplemented / provider stub) |
 
@@ -106,8 +106,8 @@ Catatan: tabel §6 PLAN.md menandai `PLAN-021` "Done (policy gate)" dan `PLAN-02
 | Verifikasi | bagian alur | boleh | SAMA |
 | Approval kedua setelah verifikasi | wajib | wajib (dua role, dua user berbeda) | SAMA |
 | Safety/freshness: tidak boleh override | dilarang | tidak ada jalur override | SAMA |
-| Mutasi demo | tidak disebut | boleh | LEBIH/belum diputuskan |
-| Supplier exclusion | review/approve | usul: Head saja (403 utk Nutritionist); restore: kedua role | SAMA/nuansa |
+| Mutasi demo | tidak disebut | usul (Event 1-3, draf keputusan) Head saja; seed/generator data dua role | SAMA (17 Okt) |
+| Supplier exclusion | review/approve | usul & restore: Head saja (403 utk Nutritionist) | SAMA |
 | Admin user & lokasi | tidak disebut | 403 | SAMA |
 
 ### `bgn_monitor`

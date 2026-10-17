@@ -502,7 +502,9 @@ async def refresh_to_today(
 async def run_demo_event1(
     payload: Event1Request,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
+    # Event 1 penuh membuat keputusan operasional → usul, jadi Head saja
+    # (PLAN.md §13.3, keputusan owner 2026-10-17).
+    user: User = Depends(require_roles("sppg_head")),
 ) -> dict:
     """Jalankan Event 1 penuh untuk satu komoditas + satu lokasi tujuan.
 

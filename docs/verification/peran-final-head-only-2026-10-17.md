@@ -66,13 +66,32 @@ ada proses pytest lain di kontainer yang sama.
 3. **Approval lintas SPPG** tetap tidak dihitung: approver harus se-lokasi dengan lokasi target
    (`actions.py`, ruling 2026-10-14 §3).
 
-## Yang masih terbuka (perlu keputusan owner)
+## Lanjutan 17 Okt: usul, pemicu event, dan pemulihan (tiga butir terbuka DITUTUP)
 
-1. `POST /decisions` (membuat draf keputusan) masih terbuka untuk kedua role SPPG. Bila "mengusulkan"
-   dimaknai sampai pembuatan draf, endpoint ini juga perlu Head-only.
-2. Kebijakan mutasi demo (`/demo/*`, `/events/*`) belum dibedakan Head vs Nutritionist; sekarang
-   keduanya boleh, monitor 403.
-3. `restore` supplier exclusion masih untuk kedua role SPPG (dianggap tindakan administratif).
+Keputusan owner: "kerjakan saja". Yang berlaku sekarang:
+
+| Endpoint / aksi | Sebelum | Sesudah |
+|---|---|---|
+| `POST /decisions` (draf keputusan operasional) | Head + Nutritionist | **Head saja** (`DECISION_MUTATING_ROLES`) |
+| `POST /events/safety-disruption`, `POST /events/price-anomaly` | kedua role SPPG | **Head saja** |
+| `POST /demo/event1` (Event 1 penuh) | kedua role SPPG | **Head saja** |
+| `POST /supplier-exclusions/{id}/restore` | kedua role SPPG | **Head saja** |
+| `POST /demo/seed`, `/demo/timeseries`, `/demo/timeseries/purge`, `/demo/refresh` | kedua role SPPG | **tetap dua role** — penyiapan data demo, bukan usul keputusan |
+
+Alasan pemisahan: yang ditutup adalah aksi yang **melahirkan keputusan operasional** (usul); alat
+data demo hanya menyiapkan bahan. `bgn_monitor` tetap 403 di semua endpoint di atas.
+
+Sisi UI ikut diselaraskan supaya tombol tidak menawarkan hal yang akan ditolak 403:
+`OpsConsole` (usul rekomendasi + "Jalankan Event 1 penuh"), `ChaosPanel` (Event 3),
+`Event2Panel` (Event 2), dan tombol "Ajukan keputusan" di `FoodSafetyBoard` (prop baru
+`canPropose`, terpisah dari `canMutate` supaya "Uji ulang" dan catat terima tetap untuk kedua role).
+Ahli gizi melihat catatan "Mode baca — pengajuan & Event 1 hanya untuk Kepala SPPG" dan tetap
+bisa memberi approval di feed.
+
+Bukti: `backend/tests/test_peran_lanjutan_head_only.py` — 11 tes. Nutritionist 403 di
+`/decisions`, `/events/*`, `/demo/event1`, `restore`; Head lolos gerbang (422 dari validasi body,
+201 untuk `/decisions`); `/demo/seed` tetap lolos untuk nutritionist. Gerbang mutasi memakai trik
+body-salah-tipe (403 = diblokir, 422 = lolos), sehingga tidak ada data demo yang berubah.
 
 ## Cara memverifikasi ulang
 

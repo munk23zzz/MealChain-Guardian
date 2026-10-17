@@ -41,8 +41,9 @@ export default function Event2Panel({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const canRun =
-    token !== null && (role === "sppg_head" || role === "sppg_nutritionist");
+  // Pemicu Event 2 membuat keputusan operasional → usul, jadi hanya Kepala
+  // SPPG (PLAN.md §13.3). Ahli gizi tetap bisa approve di feed.
+  const canRun = token !== null && role === "sppg_head";
   // Ruling 2026-10-14: penawaran hanya boleh dibaca untuk SPPG sendiri, jadi
   // pilihan lokasi dikunci untuk peran SPPG (hanya bgn_monitor lintas lokasi).
   const canChooseLocation = role === "bgn_monitor";

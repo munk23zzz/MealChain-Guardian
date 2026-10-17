@@ -72,6 +72,7 @@ export default function FoodSafetyBoard({
   balance = null,
   decisions = null,
   canMutate = false,
+  canPropose = false,
   onRecheck,
   onRepropose,
   onTriggerDisruption,
@@ -96,6 +97,8 @@ export default function FoodSafetyBoard({
   decisions?: unknown[] | null;
   /** sppg_head / sppg_nutritionist — BGN Monitor read-only. */
   canMutate?: boolean;
+  /** Hanya Kepala SPPG: mengajukan keputusan Event 3 = usul (PLAN.md §13.3). */
+  canPropose?: boolean;
   onRecheck?: (batchId: string) => Promise<RecheckResult>;
   onRepropose?: (decisionId: string) => Promise<string>;
   /** Event 3 untuk satu batch (kunci idempotensi dibuat & dipegang komponen ini). */
@@ -736,7 +739,7 @@ export default function FoodSafetyBoard({
                                   {sibuk === row.id ? "Menguji…" : "Uji ulang"}
                                 </button>
                               ) : null}
-                              {row.id && onTriggerDisruption && row.tone === "danger" ? (
+                              {row.id && onTriggerDisruption && canPropose && row.tone === "danger" ? (
                                 <button
                                   type="button"
                                   className="button button-secondary"

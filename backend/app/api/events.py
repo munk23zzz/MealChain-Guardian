@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import MUTATING_ROLES, require_roles
+from app.api.auth import require_roles
 from app.api.dependencies import get_db
 from app.core.scope import assert_in_scope
 from app.models import User
@@ -34,7 +34,9 @@ class PriceAnomalyRequest(BaseModel):
 @router.post("/events/price-anomaly", status_code=201)
 async def trigger_price_anomaly(
     payload: PriceAnomalyRequest,
-    user: User = Depends(require_roles(*MUTATING_ROLES)),
+    # Pemicu ini MEMBUAT keputusan operasional → usul, jadi Head saja
+    # (PLAN.md §13.3, keputusan owner 2026-10-17).
+    user: User = Depends(require_roles("sppg_head")),
     db: AsyncSession = Depends(get_db),
     response: Response = None,
 ):
@@ -94,7 +96,8 @@ class SafetyDisruptionRequest(BaseModel):
 @router.post("/events/safety-disruption", status_code=201)
 async def trigger_safety_disruption(
     payload: SafetyDisruptionRequest,
-    user: User = Depends(require_roles(*MUTATING_ROLES)),
+    # Pemicu ini MEMBUAT keputusan operasional → usul, jadi Head saja.
+    user: User = Depends(require_roles("sppg_head")),
     db: AsyncSession = Depends(get_db),
     response: Response = None,
 ):

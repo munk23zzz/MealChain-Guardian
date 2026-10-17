@@ -26,7 +26,10 @@ router = APIRouter()
 DEFAULT_TTL_MINUTES = 30
 
 # bgn_monitor read-only (PRD §77): tidak boleh membuat/mengubah keputusan.
-DECISION_MUTATING_ROLES = ("sppg_head", "sppg_nutritionist")
+# PLAN.md §13.1/§13.3 (keputusan owner 2026-10-17): membuat draf keputusan
+# operasional = mengusulkan, jadi Head saja. Nutritionist tetap boleh
+# memverifikasi dan memberi approval pada keputusan yang sudah ada.
+DECISION_MUTATING_ROLES = ("sppg_head",)
 
 
 class DecisionCreate(BaseModel):

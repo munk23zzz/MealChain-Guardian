@@ -73,7 +73,9 @@ export default function OpsConsole({
   // Hasil Event 1 penuh (jalur orkestrator) — disimpan terpisah dari `analysis`
   // supaya isi dua jalur itu tidak saling menimpa di layar.
   const [event1, setEvent1] = useState<any>(initialEvent1);
-  const canSubmit = APPROVER.has(role) && !!token;
+  // PLAN.md §13.3: pengajuan rekomendasi & Event 1 penuh = usul keputusan
+  // operasional → hanya Kepala SPPG. Ahli gizi tetap bisa approve di feed.
+  const canSubmit = role === "sppg_head" && !!token;
 
   async function loadSnapshot() {
     if (!token) return setMsg("Login diperlukan");
@@ -230,6 +232,12 @@ export default function OpsConsole({
               ? "Event 1 berjalan…"
               : "Jalankan Event 1 penuh"}
           </button>
+        )}
+        {!canSubmit && APPROVER.has(role) && (
+          <p className="ops-readonly">
+            Mode baca — pengajuan & Event 1 hanya untuk Kepala SPPG; Anda tetap
+            bisa memberi approval di feed.
+          </p>
         )}
       </div>
 

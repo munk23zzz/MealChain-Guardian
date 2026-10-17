@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
-from app.api.auth import MUTATING_ROLES, get_current_user, require_roles
+from app.api.auth import get_current_user, require_roles
 from app.api.dependencies import get_db
 from app.core.scope import assert_in_scope, is_national_scope
 from app.models import SupplierExclusion
@@ -56,7 +56,9 @@ async def propose(
 async def restore(
     exclusion_id: uuid.UUID,
     payload: ReasonRequest,
-    user=Depends(require_roles(*MUTATING_ROLES)),
+    # Pemulihan = tindakan tata kelola, konsisten dengan usul eksklusi yang
+    # kini Head-only (PLAN.md §13.2, keputusan owner 2026-10-17).
+    user=Depends(require_roles("sppg_head")),
     db=Depends(get_db),
 ):
     row = await db.get(SupplierExclusion, exclusion_id)

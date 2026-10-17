@@ -31,7 +31,7 @@ import {
 
 import StatusBadge from "./StatusBadge";
 
-const MUTATING = new Set(["sppg_head", "sppg_nutritionist"]);
+const MUTATING = new Set(["sppg_head"]);
 
 export default function ChaosPanel({
   role,
@@ -174,7 +174,7 @@ export default function ChaosPanel({
       )}
       {msg && <p className="action-message">{msg}</p>}
       {!canRun && (
-        <p className="chaos-readonly">Mode baca — Event 3 dijalankan approver.</p>
+        <p className="chaos-readonly">Mode baca — Event 3 dijalankan Kepala SPPG.</p>
       )}
     </section>
   );

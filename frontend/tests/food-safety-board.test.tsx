@@ -263,14 +263,15 @@ describe("FoodSafetyBoard — cakupan lokasi sendiri", () => {
     expect(html).not.toContain("Catat hasil terima");
   });
 
-  it("tombol Ajukan keputusan hanya untuk baris GAGAL UJI", () => {
-    const ajukan = (batch: Record<string, unknown>) =>
+  it("tombol Ajukan keputusan hanya untuk baris GAGAL UJI (dan hanya Kepala SPPG)", () => {
+    const ajukan = (batch: Record<string, unknown>, canPropose = true) =>
       renderToStaticMarkup(
         <FoodSafetyBoard
           batches={[batch]}
           now={NOW}
           ownLocation="Jakarta"
           canMutate
+          canPropose={canPropose}
           onTriggerDisruption={async () => ({ status: "disruption", decision_id: "d1" })}
         />
       );
@@ -284,6 +285,21 @@ describe("FoodSafetyBoard — cakupan lokasi sendiri", () => {
       usable_until: "2026-10-20T12:00:00Z",
     });
     expect(gagal).toContain("Ajukan keputusan");
+    // Ahli gizi (canMutate true, canPropose false) tidak melihat tombol usul.
+    expect(
+      ajukan(
+        {
+          id: "f2",
+          location: "Jakarta",
+          commodity: "ayam",
+          quantity_kg: 100,
+          safety_status: "fail",
+          freshness_score: 0.5,
+          usable_until: "2026-10-20T12:00:00Z",
+        },
+        false
+      )
+    ).not.toContain("Ajukan keputusan");
     const aman = ajukan({
       id: "a1",
       location: "Jakarta",
