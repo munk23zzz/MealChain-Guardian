@@ -45,6 +45,9 @@ const API_ROOTS = [
   // W-3 (2026-10-17): papan status integrasi per komponen. Tanpa akar ini
   // panel di tab Agent Log menerima 404 HTML dari router Next sendiri.
   "integrations",
+  // W-5 (2026-10-17): purchase order mock SAP (baca saja). Tanpa akar ini panel
+  // PO di tab Decision & Evidence menerima 404 HTML dari router Next sendiri.
+  "sap",
 ];
 
 const nextConfig = {

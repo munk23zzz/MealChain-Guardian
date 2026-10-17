@@ -8462,3 +8462,41 @@ p, li, dd { text-wrap: pretty; }
   border-color: var(--sev-hard-line);
   color: var(--sev-hard-ink);
 }
+
+/* ── W-5 (2026-10-17): Purchase order mock SAP ─────────────────────────────
+   Sisi baca yang sebelumnya tidak ada. Ditempatkan di tab Decision & Evidence,
+   di bawah kartu keputusan, supaya PO yang terbit bisa ditunjuk langsung.
+   Aturan visual: status memakai lencana netral-biru (PO bukan peringatan),
+   dan kalimat sumber selalu terlihat (bukan tooltip) karena itu batas sistem. */
+.po-panel {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  display: grid;
+  gap: 12px;
+}
+.po-panel-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.po-panel-head h3 { margin: 0; font-size: var(--fs-3); }
+.po-panel-sub { margin: 4px 0 0; font-size: var(--fs-1); color: var(--muted); max-width: 68ch; }
+.po-panel-error { margin: 0; font-size: var(--fs-2); color: var(--status-danger); }
+.po-panel-loading { margin: 0; font-size: var(--fs-2); color: var(--ink-muted); }
+.po-summary { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.po-chip { font-size: var(--fs-1); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-sunken); white-space: nowrap; }
+.po-chip-confirmed { border-color: rgba(46, 125, 50, 0.35); background: rgba(46, 125, 50, 0.1); }
+.po-total { font-size: var(--fs-1); color: var(--ink-muted); margin-left: auto; }
+.po-total b { font-family: var(--font-data); color: var(--ink); }
+.po-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.po-row { padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-sunken); display: grid; gap: 4px; }
+.po-row-main { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.po-number { font-family: var(--font-data); font-size: var(--fs-2); font-weight: 600; overflow-wrap: anywhere; }
+.po-status { font-size: var(--fs-1); padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line-strong, var(--line)); }
+.po-status-confirmed { border-color: rgba(46, 125, 50, 0.35); background: rgba(46, 125, 50, 0.1); }
+.po-status-draft { color: var(--ink-muted); }
+.po-row-meta { font-size: var(--fs-1); color: var(--muted); overflow-wrap: anywhere; }
+.po-row-foot { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-size: var(--fs-1); }
+.po-value { font-family: var(--font-data); color: var(--ink); }
+.po-link { color: var(--accent-strong); text-underline-offset: 2px; }
+.po-note { color: var(--ink-subtle); }
+.trace-po { margin-top: 2px; font-size: var(--fs-1); color: var(--accent-strong); font-family: var(--font-data); }

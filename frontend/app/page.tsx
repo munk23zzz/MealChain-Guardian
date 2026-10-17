@@ -27,6 +27,7 @@ import { readDecisionLink, withDecisionLink } from "../lib/decision-link";
 import { useExclusions } from "../lib/hooks/useExclusions";
 import { useKpi } from "../lib/hooks/useKpi";
 import { useIntegrationStatus } from "../lib/hooks/useIntegrationStatus";
+import { usePurchaseOrders } from "../lib/hooks/usePurchaseOrders";
 import { agendaErrorText, useAgenda } from "../lib/hooks/useAgenda";
 import {
   clampDayStep,
@@ -70,6 +71,7 @@ import { formatJam } from "../lib/jam";
 import { formatDateTime } from "../lib/datetime";
 import SettingsPanel from "../components/SettingsPanel";
 import IntegrationStatusPanel from "../components/IntegrationStatusPanel";
+import PurchaseOrderList from "../components/PurchaseOrderList";
 import TopBar from "../components/TopBar";
 import {
   ALL_LOCATIONS,
@@ -268,6 +270,9 @@ export default function Home() {
   // Papan status integrasi (W-3): dipakai panel di tab Agent Log; isinya env +
   // artefak, jadi tidak di-poll.
   const integrationStatus = useIntegrationStatus(token);
+  // Purchase order mock SAP (W-5): sisi baca yang selama ini tidak ada. Kunci
+  // query memakai `identityScope` karena isinya berbeda per peran.
+  const purchaseOrders = usePurchaseOrders(token, identityScope);
   const mapData = mapQuery.data;
   const mapError = mapQuery.error;
   const mapUpdatedAt = mapQuery.updatedAt;
@@ -1525,6 +1530,7 @@ export default function Home() {
             — halaman ke-3 di sidebar acuan, sebelumnya menempel di bawah feed
             Recommendations. Semua angka dari API; yang tidak ada ditulis "—". */}
         {tab === "evidence" && (
+          <>
           <DecisionEvidence
             decisions={decisions}
             selected={selected}
@@ -1544,6 +1550,18 @@ export default function Home() {
             onOpenRecommendations={() => setTab("recommendations")}
             onOpenTraces={() => setTab("agent-log")}
           />
+          {/* W-5: purchase order yang benar-benar terbit setelah eksekusi.
+              Dulu hanya toast sesaat, sehingga klaim "PO terbit di SAP" tidak
+              bisa ditunjukkan. Panel ini membaca tabel mock SAP dan menyebut
+              sumbernya apa adanya. */}
+          <PurchaseOrderList
+            data={purchaseOrders.data}
+            summary={purchaseOrders.summary}
+            loading={purchaseOrders.isFetching}
+            error={purchaseOrders.error}
+            onRetry={purchaseOrders.refetch}
+          />
+          </>
         )}
 
         {/* Langkah 5 (permintaan Roy 2026-10-11): halaman sidebar ACUAN

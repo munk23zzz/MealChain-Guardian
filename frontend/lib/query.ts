@@ -53,6 +53,13 @@ export const queryKeys = {
   // Papan status integrasi (W-3, 2026-10-17): isinya env + artefak, bukan angka
   // live — tanpa scope karena sama untuk semua peran yang sah.
   integrationStatus: () => ["integration-status"] as const,
+  // Purchase order mock SAP (W-5, 2026-10-17). Kuncinya memuat `scope` karena
+  // isinya BERBEDA per peran: kepala/ahli gizi hanya PO lokasinya, monitor
+  // nasional. Tanpa scope di kunci, dua peran di satu browser akan saling
+  // menimpa cache dan menampilkan PO yang bukan haknya.
+  purchaseOrders: (scope: string, saring = "all") =>
+    ["purchase-orders", scope, saring] as const,
+  purchaseOrderSummary: (scope: string) => ["purchase-order-summary", scope] as const,
   qualitySample: (scope: string, sampleKey: string) =>
     ["quality-sample", scope, sampleKey] as const,
   supplierContext: (decisionId: string) => ["supplier-context", decisionId] as const,

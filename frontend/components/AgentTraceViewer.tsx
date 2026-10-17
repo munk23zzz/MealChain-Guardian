@@ -98,6 +98,14 @@ export default function AgentTraceViewer({
                 <time>{formatClockUtc(s.step_at)} UTC</time>
               </div>
               <div className="trace-tool">{s.tool_called ?? "-"}</div>
+              {/* W-5: nomor PO yang diterbitkan langkah ACT. Sebelumnya hanya
+                  nama tool yang tampil, sehingga PO yang terbit tidak bisa
+                  ditunjukkan dari jejak agent. */}
+              {s.step_name === "ACT" && s.output_summary?.po_number ? (
+                <div className="trace-po">
+                  PO {s.output_summary.po_number} diterbitkan (mock SAP)
+                </div>
+              ) : null}
               {s.step_name === "SUPERVISE" &&
                 s.output_summary?.provider && (
                   <div className="trace-model">

@@ -65,6 +65,30 @@ export function fetchIntegrationStatus(token: string): Promise<any> {
   });
 }
 
+// /sap/purchase-orders — sisi BACA purchase order mock SAP (W-5, 2026-10-17).
+// PO-nya sendiri ditulis `actions.py` saat eksekusi; endpoint ini hanya membaca
+// tabel `sap_mock_purchase_orders`. Balasan selalu membawa `source`, dan UI
+// wajib menyebutnya apa adanya: ini tabel mock di DB demo, bukan SAP S/4HANA.
+export function fetchPurchaseOrders(
+  token: string,
+  opts: { status?: string; decisionId?: string; limit?: number } = {}
+): Promise<any> {
+  const qs = new URLSearchParams();
+  if (opts.status) qs.set("status", opts.status);
+  if (opts.decisionId) qs.set("decision_id", opts.decisionId);
+  if (opts.limit) qs.set("limit", String(opts.limit));
+  const akhiran = qs.toString() ? `?${qs.toString()}` : "";
+  return request(`/sap/purchase-orders${akhiran}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function fetchPurchaseOrderSummary(token: string): Promise<any> {
+  return request("/sap/purchase-orders/summary", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export function fetchComplianceDossier(decisionId: string, token: string): Promise<any> {
   return request(`/decisions/${encodeURIComponent(decisionId)}/compliance`, {
     headers: { Authorization: `Bearer ${token}` },

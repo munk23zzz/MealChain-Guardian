@@ -30,6 +30,7 @@ from app.api.logistics import router as logistics_router
 from app.api.price import router as price_router
 from app.api.receipts import router as receipts_router
 from app.api.safety import router as safety_router
+from app.api.sap_orders import router as sap_orders_router
 from app.api.supplier_exclusion_context import router as supplier_exclusion_context_router
 from app.api.supplier_exclusions import router as supplier_exclusions_router
 from app.api.supplier_routes import router as supplier_routes_router
@@ -102,6 +103,10 @@ app.include_router(decisions_router)
 app.include_router(events_router)
 app.include_router(auth_router)
 app.include_router(actions_router)
+# W-5 (2026-10-17): sisi BACA purchase order mock SAP. Selama ini tabel
+# `sap_mock_purchase_orders` hanya ditulis `actions.py` dan dibaca agregat KPI,
+# sehingga PO yang terbit setelah eksekusi tidak bisa ditunjukkan di layar.
+app.include_router(sap_orders_router)
 app.include_router(demo_router)
 app.include_router(kpi_router)
 app.include_router(agenda_router)
