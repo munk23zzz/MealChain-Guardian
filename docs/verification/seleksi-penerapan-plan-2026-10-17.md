@@ -44,7 +44,7 @@ Metode seleksi: satu item hanya masuk daftar terapan bila (a) menutup risiko nya
 | PLAN-015 | Settings/Admin | **SUDAH** | Tab `Pengaturan` (khusus `bgn_monitor`), `api/admin.py`; S4-11 `Done` 11 Okt. Bertentangan dengan PLAN.md yang menyebutnya "out of scope" |
 | PLAN-016–019 | Bangun ulang 8 modul + rekonstruksi seluruh UI | **TOLAK — USANG** | PLAN.md merujuk `components/AgentRunSummary.tsx`, `OverviewLocationBreakdown.tsx`, `KpiTargets.tsx`, `lib/trace-normalizer.ts`; keempatnya **tidak ada** di repo ini maupun di klon demo. UI sekarang 11 tab, 887 tes frontend lulus. Menerapkannya = membongkar UI hidup untuk memenuhi dokumen mati |
 | PLAN-020 | Audit 10 lokasi | **SUDAH** | 10 lokasi × 3 komoditas di DB; scope per peran terverifikasi live |
-| PLAN-021 | Head-only propose/purpose/execute | **KONFLIK KEBIJAKAN** | `VERIFIER_ROLES` masih dipakai (`api/actions.py:30`, baris 111/185/264/352/545). Sementara `docs/ruling-2026-10-14-scope-lokasi.md` §3 (ruling pemilik yang berlaku) hanya mengunci matriks AND **di dalam satu SPPG** — tidak mensyaratkan Head-only, dan justru membahas kelayakan demonya. Dua dokumen kebijakan bertabrakan → §5 |
+| PLAN-021 | Head-only propose/purpose/execute | **SUDAH DITERAPKAN** | `PROPOSER_ROLES = ("sppg_head",)` (`api/actions.py:35`) dipakai di propose/repropose/execute (baris 137/392/589); verify & approve memakai `VERIFIER_ROLES` (Head + Nutritionist, baris 213/294). Dikunci `tests/test_peran_final_head_only.py` → **10 passed**. Implementasinya masuk lewat sesi paralel (bukan sesi ini); dokumen ini sempat salah membaca `VERIFIER_ROLES` sebagai penjaga propose → dikoreksi di §5 |
 | PLAN-022 | Scope single-SPPG di SETIAP boundary | **BELUM pada jalur tulis** | `require_scope(user, target_location_id)` hanya dipanggil di cabang `exclusions.ADMIN_TYPES` (`api/actions.py:203, 273, 358, 397`). Untuk keputusan **transfer**, `approve`/`execute` tidak memeriksa lokasi approver dan matriksnya tidak difilter lokasi → §4 W-1 |
 | PLAN-023 | Semantik Location Network + penyajian nol | **BELUM (data), SUDAH (peta)** | Peta/lokasi sudah benar; yang belum: pemisahan makna data → §4 W-2 |
 | §13.4 | "Record bernilai nol tetap `0`; data hilang/gagal tidak boleh diam-diam jadi nol" | **BELUM** | `api/balance.py:92-101` dan `:216-225` masih mengisi baris supply/demand yang **tidak ada** dengan `Decimal("0")`, dan payload tidak membawa penanda apa pun (`grep data_state/partial/source` = kosong) |
@@ -118,12 +118,17 @@ Empat rujukan artefaknya hilang (AgentRunSummary, OverviewLocationBreakdown, Kpi
 
 ## 5. SATU keputusan pemilik (bukan pekerjaan teknis)
 
-**`PLAN-021`: Head-only propose/purpose/execute vs ruling repo.**
+**`PLAN-021`: Head-only propose/purpose/execute.**
 
 - PLAN.md §13.1/§13.3 menuntut: hanya Kepala SPPG yang propose, menentukan purpose, dan execute; Ahli Gizi hanya memberi approval kedua.
-- `docs/ruling-2026-10-14-scope-lokasi.md` (ruling yang berlaku di repo) mengunci matriks AND **di dalam satu SPPG** dan tidak menyebut Head-only; kode memakai `VERIFIER_ROLES` untuk propose/verify/approve/execute.
+- **Status setelah diperiksa ulang (17 Okt, 12:2x): sudah diterapkan.** `api/actions.py:31-35` memisahkan dua konstanta:
+  `VERIFIER_ROLES = ("sppg_head", "sppg_nutritionist")` untuk verify + approve, dan
+  `PROPOSER_ROLES = ("sppg_head",)` untuk propose + repropose + execute (baris 137/392/589), dengan komentar yang merujuk "PLAN.md §13.1/§13.3 (keputusan owner)".
+  Penegakannya dikunci `tests/test_peran_final_head_only.py` → **10 passed** (Nutritionist 403 saat propose/repropose/execute, tetap boleh verify/approve; keputusan operasional wajib dua role; tipe administrasi ikut verdict verifier).
 
-**Rekomendasi saya: pertahankan kebijakan repo.** Alasannya: (1) sudah diimplementasikan dan diuji; (2) ruling itu disusun dengan mempertimbangkan kelayakan demo; (3) menerapkan Head-only = perubahan hak akses tiga peran sekaligus, yang justru menaikkan risiko menjelang penjurian. Konsekuensinya: **jangan** mengklaim "hanya Kepala SPPG yang mengeksekusi" di materi presentasi. Bila pemilik tetap ingin Head-only, kerjakan sebagai fase tersendiri dengan TDD dan matriks izin yang diperbarui — bukan disisipkan.
+**Koreksi dokumen ini.** Analisis awal (baris tabel `PLAN-021` versi sebelumnya, dan rekomendasi di bawah) **salah**: saya membaca `require_roles(*VERIFIER_ROLES)` sebagai penjaga propose, padahal penjaga propose adalah `PROPOSER_ROLES`. Ruling `scope-lokasi` tidak bertentangan dengan Head-only: ia mengatur **cakupan lokasi** (satu SPPG), bukan pembagian peran.
+
+**Yang masih boleh diklaim di materi presentasi:** "Kepala SPPG yang mengusulkan dan mengeksekusi; eksekusi terkunci sampai dua peran di SPPG yang sama menyetujui (Kepala + Ahli Gizi)". Yang **tidak** boleh: menyebut Ahli Gizi juga bisa mengusulkan/mengeksekusi.
 
 ---
 
@@ -149,7 +154,7 @@ Empat rujukan artefaknya hilang (AgentRunSummary, OverviewLocationBreakdown, Kpi
 2. **W-1** (scope jalur tulis) — TDD, risiko rendah, menutup lubang pemisahan tugas.
 3. **W-2** (semantik nol vs data hilang) — setelah W-4/W-1 hijau, karena menyentuh kontrak API + UI.
 4. **W-3** (papan status integrasi) — paling akhir, karena sifatnya permukaan informasi.
-5. **Keputusan §5** diparalel: cukup satu jawaban; tanpa itu, `W-1`/`W-2` tetap bisa jalan tapi klaim izin di materi harus ditahan.
+5. **§5** sudah terjawab oleh keadaan repo (Head-only propose/execute sudah berlaku dan diuji) — tidak ada pekerjaan lanjutan; cukup jaga klaim materi tetap sesuai (Kepala mengusulkan & mengeksekusi, dua peran menyetujui).
 
 Prasyarat sebelum mulai: bersihkan residu 16 user `%@test.local` di DB demo, dan konfirmasi bahwa tidak ada sesi lain yang sedang menyunting repo (mtime menunjukkan aktivitas < 20 menit sebelum pemeriksaan).
 
@@ -295,4 +300,4 @@ Karena itu **tidak ada kode tes yang diubah** untuk "menstabilkan" sesuatu yang 
 | W-2 · Nol terukur vs data hilang | **selesai** | penanda asal nilai; Bandung/Cianjur tak lagi "surplus"; 935/0 + 1127/0 |
 | W-3 · Papan status integrasi | **selesai** | `GET /integrations/status` (7 komponen, `probes_run=0`) + panel Agent Log; 1127/0 |
 | W-4 · Determinisme + bukti gerbang | **selesai** | `gerbang-2026-10-17.md`; klaim flaky dibatalkan lewat bukti |
-| §5 · Head-only vs kebijakan repo | **menunggu keputusan pemilik** | rekomendasi: pertahankan kebijakan repo (jangan klaim "hanya Kepala SPPG") |
+| §5 · Head-only propose/execute | **sudah berlaku** (bukan keputusan terbuka) | `PROPOSER_ROLES = ("sppg_head",)` di propose/repropose/execute; `tests/test_peran_final_head_only.py` 10 passed |
