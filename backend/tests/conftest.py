@@ -102,7 +102,7 @@ def _isolate_model_env(monkeypatch, request):
 _LEGACY_RBAC_EMAIL = "pytest-legacy-rbac@test.local"
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture()
 def auth_headers():
     engine = create_engine(
         "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
@@ -158,7 +158,7 @@ def auth_headers():
 _MONITOR_EMAIL = "pytest-monitor-national@test.local"
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture()
 def monitor_headers():
     engine = create_engine(
         "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
@@ -200,7 +200,7 @@ def monitor_headers():
 _FAR_NUT_EMAIL = "pytest-far-nutritionist@test.local"
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture()
 def far_nutritionist_headers():
     """Ahli gizi di SPPG LAIN (Bogor) — untuk menguji aturan cakupan.
 
