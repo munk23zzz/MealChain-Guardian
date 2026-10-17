@@ -169,3 +169,36 @@ sekali) dengan dua uji murni + satu uji markup. Urutannya TDD: tiga uji ditulis 
 dijalankan **RED** (`nilaiAngka is not a function`, kelas `--teks` belum ada), baru
 implementasi. Lencana mengikuti standar label repo yang sudah ada (docs/design.md §3.8:
 12 px, padding 2px 8px, tinggi ±22 px). Tinggi strip tetap 70 px, luapan horizontal 0 px.
+
+## 10. Langkah 4 — nilai tile dipindah ke KANAN (permintaan pemilik, 2026-10-17)
+
+Permintaan: *"atau bagian ini taruh di kanan saja 15, 2, 1, 5/7, dan rantai utuh — ini
+−765,8 kg pada halaman overview"*.
+
+Acuan diambil dari halaman **Overview** yang sudah dipakai pemilik: baris `.node-gauge`
+(label di kiri, nilai di kolom kanan pada tepi baris — terukur label 12px `--ink-muted`,
+nilai 13px Fira Code, `gap: 2px 10px`).
+
+Dua percobaan, dan yang PERTAMA gagal (dicatat supaya tidak diulang):
+
+1. **Label dan nilai berbagi satu baris** (`grid-template-columns: minmax(0,1fr) auto`).
+   Terukur: kolom label menyusut jadi **126 px** sedangkan "MENUNGGU TINDAKAN" butuh
+   **143 px** (dan "RANTAI AUDIT" butuh 88 px di kolom 65 px karena nilai "Rantai utuh"
+   84 px) → **dua label membungkus jadi dua baris** dan baseline nilai tidak lagi sebaris
+   dengan baris pertama label. Ditolak.
+2. **Label selebar bentuk, nilai menempati barisnya sendiri rata kanan.** Ini yang
+   dipakai: label `grid-column: 1 / -1`, nilai `grid-column: 2; text-align: right`,
+   keterangan `grid-column: 1 / -1` di baris bawah.
+
+Terukur sesudah (1262 px, SPPG Head):
+
+| Ukuran | Hasil |
+|---|---|
+| Kelima label | **satu baris** (lebar 159 px, tidak ada yang membungkus) |
+| Nilai | rata kanan, jarak ke tepi kanan bentuk **11 px** (= padding 10 px + garis 1 px) di kelima tile, sebaris sempurna (`top` 26 px, `bottom` 44 px untuk semuanya) |
+| Keterangan | baris bawah, selebar bentuk (159 px) |
+| Bentuk | 183×70 px (tidak berubah), tinggi strip 70 px, luapan horizontal 0 px |
+
+Nilai kini sejajar sebagai satu kolom angka di tepi kanan kelima bentuk — sejalan dengan
+pola Overview yang diminta pemilik, dan label tetap utuh tanpa pemotongan (`ellipsis`)
+maupun pembungkusan.

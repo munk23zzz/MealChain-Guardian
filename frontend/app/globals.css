@@ -4746,12 +4746,19 @@ a:focus-visible {
   list-style: none;
 }
 .today-tile {
+  /* Bentuk dua kolom seperti baris `.node-gauge` di Overview (permintaan pemilik:
+     "taruh di kanan saja"): label di kiri, NILAI di kanan, keterangan di bawah
+     selebar bentuk. Nilai yang rata kanan membuat lima bentuk itu bisa dipindai
+     seperti satu kolom angka, bukan tiga baris teks bertumpuk. */
   display: grid;
-  gap: 1px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: 10px;
+  row-gap: 1px;
   width: 100%;
   height: 100%;
   min-width: 0;
-  /* Padding & radius dirapatkan (dulu 10px 12px / 12px): isi tile ini tiga baris
+  /* Padding & radius dirapatkan (dulu 10px 12px / 12px): isi tile ini dua baris
      pendek, jadi bentuk yang tinggi membuatnya terbaca seperti kartu, bukan
      indikator status. */
   padding: 8px 10px;
@@ -4775,6 +4782,11 @@ a:focus-visible {
   outline-offset: 2px;
 }
 .today-tile-label {
+  /* Label selebar bentuk (tidak berbagi baris dengan nilai): di bentuk 183 px,
+     "MENUNGGU TINDAKAN" butuh 143 px sedangkan sisa kolom hanya 126 px sehingga
+     label membungkus dua baris. Nilai karena itu menempati barisnya sendiri
+     (rata kanan) — lihat `.today-tile-value`. */
+  grid-column: 1 / -1;
   font-size: var(--fs-1);
   line-height: 1.3;
   letter-spacing: var(--track-caps);
@@ -4783,6 +4795,8 @@ a:focus-visible {
   min-width: 0;
 }
 .today-tile-value {
+  grid-column: 2;
+  text-align: right;
   font-family: var(--font-data);
   /* Turun satu langkah dari --fs-5 (18px): angka 18px di tile selebar 181px
      terbaca seperti judul, bukan status. Bobot 600 mengganti kekuatan yang
@@ -4802,6 +4816,8 @@ a:focus-visible {
   letter-spacing: normal;
 }
 .today-tile-note {
+  /* Keterangan tetap di baris bawah, selebar bentuk — ia kalimat, bukan angka. */
+  grid-column: 1 / -1;
   font-size: var(--fs-1);
   line-height: 1.35;
   color: var(--ink-subtle);
