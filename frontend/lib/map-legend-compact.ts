@@ -36,11 +36,13 @@ export type LegendItem = {
   jenis: LegendJenis;
   nada: string;
   label: string;
+  /** Hanya untuk garis: `padat` = sudah ditempuh, `putus` = sisa/perkiraan (K1). */
+  gaya?: "padat" | "putus";
 };
 
 export type CompactLegendInput = {
   /** Nada jalur kiriman, atau `null`/`[]` kalau lapisannya mati/tidak ada. */
-  jalur: readonly { tone: string; label: string }[] | null;
+  jalur: readonly { tone: string; label: string; gaya?: "padat" | "putus" }[] | null;
   /** Nada pin pemasok, atau `null`/`[]` kalau lapisannya mati/tidak ada. */
   pemasok: readonly { tone: string; label: string }[] | null;
 };
@@ -54,13 +56,16 @@ function rapi(label: string): string | null {
 function butir(
   asal: string,
   jenis: LegendJenis,
-  entri: readonly { tone: string; label: string }[]
+  entri: readonly { tone: string; label: string; gaya?: "padat" | "putus" }[]
 ): LegendItem[] {
   const hasil: LegendItem[] = [];
-  for (const { tone, label } of entri) {
+  for (const { tone, label, gaya } of entri) {
     const teks = rapi(label);
     if (teks === null) continue;
-    hasil.push({ id: `${asal}:${tone}`, jenis, nada: tone, label: teks });
+    // Gaya ikut masuk id: dua butir bernada sama (padat/putus) tidak boleh
+    // bertabrakan sebagai React key.
+    const id = gaya ? `${asal}:${tone}:${gaya}` : `${asal}:${tone}`;
+    hasil.push({ id, jenis, nada: tone, label: teks, ...(gaya ? { gaya } : {}) });
   }
   return hasil;
 }
@@ -82,9 +87,14 @@ export function compactLegendItems(input: CompactLegendInput): LegendItem[] {
 }
 
 /** Kelas tanda (dot/garis/bentuk) — memakai kelas kotak Info map yang sama. */
-export function legendMarkClass(item: LegendItem): [string, string] {
+export function legendMarkClass(item: LegendItem): [string, string] | [string, string, string] {
   switch (item.jenis) {
     case "garis":
+      // Gaya (padat/putus) adalah KELAS KETIGA: nada tetap menentukan warna,
+      // gaya menentukan bentuk garis — sama seperti di peta.
+      if (item.gaya) {
+        return ["map-legend-line", `map-legend-line-${item.nada}`, `map-legend-line-${item.gaya}`];
+      }
       return ["map-legend-line", `map-legend-line-${item.nada}`];
     case "bentuk":
       return ["map-legend-box-shape", `map-legend-box-shape-${item.nada}`];

@@ -100,6 +100,26 @@ describe("legendMarkClass — kelas tanda legenda", () => {
     ]);
   });
 
+  it("jalur menyebut ARTINYA, bukan cuma warnanya — padat vs putus-putus (K1)", () => {
+    const jalur = compactLegendItems({
+      jalur: [
+        { tone: "ok", label: "Sudah ditempuh", gaya: "padat" as const },
+        { tone: "ok", label: "Sisa perjalanan (perkiraan)", gaya: "putus" as const },
+      ],
+      pemasok: null,
+    }).filter((butir) => butir.jenis === "garis");
+
+    expect(jalur.map((butir) => butir.gaya)).toEqual(["padat", "putus"]);
+    expect(legendMarkClass(jalur[0])).toEqual([
+      "map-legend-line",
+      "map-legend-line-ok",
+      "map-legend-line-padat",
+    ]);
+    expect(legendMarkClass(jalur[1])).toContain("map-legend-line-putus");
+    // Id stabil ikut menyebut gaya supaya dua butir bernada sama tidak bertabrakan.
+    expect(jalur[0].id).not.toBe(jalur[1].id);
+  });
+
   it("garis & bentuk memakai kelas yang sudah ada untuk nada masing-masing", () => {
     expect(legendMarkClass({ id: "jalur:todo", jenis: "garis", nada: "todo", label: "x" })).toEqual([
       "map-legend-line",

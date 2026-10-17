@@ -61,6 +61,18 @@ const fake = vi.hoisted(() => {
     getLayer(id: string) {
       return this.layers[id];
     }
+    /** MapLibre asli menulis properti paint pada layer yang sudah ada; tiruan
+     *  melakukan hal yang sama supaya efek visual (mis. meredupkan garis saat
+     *  satu jalur disorot) bisa diperiksa hasilnya, bukan hanya "dipanggil". */
+    setPaintProperty(id: string, prop: string, value: unknown) {
+      const layer = this.layers[id];
+      if (!layer) return;
+      const paint = (layer.paint ?? {}) as Record<string, unknown>;
+      paint[prop] = value;
+      layer.paint = paint;
+      this.paintLog.push([id, prop, value]);
+    }
+    paintLog: [string, string, unknown][] = [];
     addSource(id: string, spec: { data: unknown }) {
       const sumber = {
         data: spec.data,
@@ -520,18 +532,89 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     mountWithRoutes();
     const peta = map();
     expect(peta.sources["supplier-routes"]).toBeDefined();
-    const layer = peta.layers["supplier-route-line"];
-    expect(layer).toBeDefined();
-    expect(layer.type).toBe("line");
+    // K1: dua layer dari satu source — padat (sudah ditempuh) dan putus-putus
+    // (sisa/perkiraan). `line-dasharray` tidak bisa data-driven di MapLibre,
+    // jadi pemisahan dilakukan lewat filter `kind` pada fitur.
+    const done = peta.layers["supplier-route-line-done"];
+    const todo = peta.layers["supplier-route-line-todo"];
+    expect(done).toBeDefined();
+    expect(todo).toBeDefined();
+    expect(done.type).toBe("line");
+    expect(done.filter).toEqual(["==", ["get", "kind"], "done"]);
+    expect(todo.filter).toEqual(["==", ["get", "kind"], "todo"]);
+    const cat = (layer: { paint?: unknown }) => (layer.paint ?? {}) as Record<string, unknown>;
+    expect(cat(done)["line-dasharray"]).toBeUndefined();
+    expect(cat(todo)["line-dasharray"]).toEqual([4, 3]);
     // Geometrinya dari server (cache OSRM) — bukan garis lurus buatan UI.
     const data = peta.sources["supplier-routes"].data as {
-      features: { geometry: { coordinates: number[][] } }[];
+      features: { properties: { kind: string }; geometry: { coordinates: number[][] } }[];
     };
-    expect(data.features).toHaveLength(1);
-    expect(data.features[0].geometry.coordinates).toEqual([
-      [107.1306, -6.854],
-      [106.8456, -6.2088],
-    ]);
+    expect(data.features.map((fitur) => fitur.properties.kind)).toEqual(["done", "todo"]);
+    expect(data.features[0].geometry.coordinates[0]).toEqual([107.1306, -6.854]);
+    expect(data.features[1].geometry.coordinates.slice(-1)[0]).toEqual([106.8456, -6.2088]);
+  });
+
+  it("jalur yang belum ditempuh memakai warna berbeda dari yang sudah (bukan hijau yang sama)", () => {
+    mountWithRoutes();
+    const peta = map();
+    const warna = (id: string) =>
+      (peta.layers[id].paint as Record<string, unknown>)["line-color"] as unknown[];
+    // Bentuk ekspresi: ["match", ["get","tone"], "fail", <merah>, <warna dasar>].
+    const done = warna("supplier-route-line-done");
+    const todo = warna("supplier-route-line-todo");
+    expect(done[3]).toBe("#C62828");
+    expect(done[4]).toBe("#2E7D32");
+    expect(todo[3]).toBe("#C62828");
+    // Sisa perjalanan = perkiraan, bukan fakta terkirim → nada berbeda (biru aksi UI).
+    expect(todo[4]).toBe("#2563EB");
+    expect(todo[4]).not.toBe(done[4]);
+  });
+
+  it("penanda memakai ikon: bangunan untuk SPPG, truk untuk pemasok", () => {
+    mount();
+    const lokasi = locationMarkers()[0];
+    // Pin SPPG = kepala bulat + ekor segitiga (koordinat di ujung ekor).
+    expect(lokasi.element.querySelector("svg.map-pin-icon-sppg")).not.toBeNull();
+    expect(lokasi.element.querySelector(".map-pin-tip")).not.toBeNull();
+    // Lapisan pemasok mati secara bawaan (keputusan Fase 3) dan pin baru muncul
+    // setelah peta diperbesar — hidupkan keduanya dulu.
+    toggle();
+    zoomTo(9);
+    const pemasok = supplierMarkers()[0];
+    expect(pemasok.element.querySelector("svg.map-pin-icon-supplier")).not.toBeNull();
+    // Ikon hiasan: maknanya sudah ada di aria-label penanda.
+    pemasok.element
+      .querySelectorAll("svg.map-pin-icon")
+      .forEach((ikon) => expect(ikon.getAttribute("aria-hidden")).toBe("true"));
+  });
+
+  it("memberi alas putih (casing) di bawah garis jalur supaya terbaca di basemap terang", () => {
+    mountWithRoutes();
+    const peta = map();
+    const casingDone = peta.layers["supplier-route-casing-done"];
+    const casingTodo = peta.layers["supplier-route-casing-todo"];
+    expect(casingDone).toBeDefined();
+    expect(casingTodo).toBeDefined();
+    // Alas memakai source + filter yang sama; kalau tidak, bentuknya bisa beda
+    // dengan garis yang dialasinnya.
+    expect(casingDone.source).toBe("supplier-routes");
+    expect(casingTodo.filter).toEqual(["==", ["get", "kind"], "todo"]);
+    const paint = (layer: { paint?: unknown }) => (layer.paint ?? {}) as Record<string, unknown>;
+    expect(paint(casingDone)["line-color"]).toBe("#FFFFFF");
+    // Bagian putus-putus: alas ikut putus, supaya tidak terbaca sebagai jalan solid.
+    expect(paint(casingTodo)["line-dasharray"]).toEqual([4, 3]);
+    // Urutan render: alas HARUS ditambahkan sebelum garis (di bawahnya).
+    const urutan = Object.keys(peta.layers);
+    expect(urutan.indexOf("supplier-route-casing-done")).toBeLessThan(
+      urutan.indexOf("supplier-route-line-done")
+    );
+    expect(urutan.indexOf("supplier-route-casing-todo")).toBeLessThan(
+      urutan.indexOf("supplier-route-line-todo")
+    );
+    // Lebih lebar dari garis: tanpa selisih, alasnya tidak terlihat sama sekali.
+    const lebarAlas = paint(casingDone)["line-width"] as unknown[];
+    const lebarGaris = paint(peta.layers["supplier-route-line-done"])["line-width"] as unknown[];
+    expect(Number(lebarAlas[4])).toBeGreaterThan(Number(lebarGaris[4]));
   });
 
   it("tanpa data jalur: tidak ada source sama sekali (bukan garis kosong)", () => {
@@ -542,11 +625,13 @@ describe("SupplyMap — perilaku layer pemasok", () => {
 
   it("sakelar jalur dimatikan membuang layer dan source", () => {
     mountWithRoutes();
-    expect(map().layers["supplier-route-line"]).toBeDefined();
+    expect(map().layers["supplier-route-line-done"]).toBeDefined();
+    expect(map().layers["supplier-route-line-todo"]).toBeDefined();
     act(() => {
       routeToggle().click();
     });
-    expect(map().layers["supplier-route-line"]).toBeUndefined();
+    expect(map().layers["supplier-route-line-done"]).toBeUndefined();
+    expect(map().layers["supplier-route-line-todo"]).toBeUndefined();
     expect(map().sources["supplier-routes"]).toBeUndefined();
     expect(routeToggle().textContent).toContain("Jalur kiriman (1)");
     expect(routeToggle().title).toContain("Tampilkan jalur kiriman (1)");
@@ -555,7 +640,8 @@ describe("SupplyMap — perilaku layer pemasok", () => {
   it("legenda jalur menyebut asal OSRM dan jumlahnya", () => {
     mountWithRoutes();
     expect(host.textContent).toContain("Jalur kiriman:");
-    expect(host.textContent).toContain("Jalur kiriman (jalan)");
+    expect(host.textContent).toContain("Sudah ditempuh");
+    expect(host.textContent).toContain("Sisa perjalanan (perkiraan)");
     expect(host.textContent).toContain("1 jalur kiriman");
     expect(host.textContent).toContain("OSRM");
   });
@@ -709,7 +795,8 @@ describe("SupplyMap — kotak Info map (nama, susunan isi, perjalanan kiriman)",
 
   it("entri 'gagal uji' hanya muncul kalau ada kiriman bergaris gagal", () => {
     mountWithRoutes();
-    expect(infoMap().textContent).toContain("Jalur kiriman (jalan)");
+    expect(infoMap().textContent).toContain("Sudah ditempuh");
+    expect(infoMap().textContent).toContain("Sisa perjalanan (perkiraan)");
     expect(infoMap().textContent).not.toContain("gagal uji");
 
     unmount();
@@ -818,7 +905,28 @@ describe("SupplyMap — sorotan kiriman di peta (Arah C)", () => {
     };
     expect(data.features.map((f) => f.properties.kind)).toEqual(["done", "todo"]);
     // Garis dasar TETAP ada — sorotan menambah, bukan menggantikan.
-    expect(map().layers["supplier-route-line"]).toBeTruthy();
+    expect(map().layers["supplier-route-line-done"]).toBeTruthy();
+  });
+
+  it("sorotan meredupkan garis dasar, dan warna normal kembali saat dilepas", () => {
+    mountFocus("s1->l1");
+    const opasitas = () =>
+      (map().layers["supplier-route-line-done"].paint as Record<string, unknown>)[
+        "line-opacity"
+      ];
+    // Garis lain tidak dihapus (konteks jaringan tetap ada), hanya diredupkan.
+    expect(opasitas()).toBeLessThan(0.5);
+    act(() => {
+      root.render(
+        <SupplyMap
+          locations={LOCATIONS}
+          supplierRoutes={ROUTES}
+          focusedRouteId={null}
+          onFocusRoute={() => {}}
+        />
+      );
+    });
+    expect(opasitas()).toBeGreaterThan(0.8);
   });
 
   it("melepas sorotan membuang layer + source-nya (tidak ada garis tersisa)", () => {
@@ -945,9 +1053,11 @@ describe("SupplyMap — baris legenda ringkas selalu terlihat (C2, langkah 7b-2)
     mountWithRoutes();
     // Labelnya dari `routeLegendEntries` — legenda menyebut makna yang BENAR
     // dipakai garis di peta, bukan karangan teks di tes.
-    expect(baris().textContent).toContain("Jalur kiriman (jalan)");
+    expect(baris().textContent).toContain("Sudah ditempuh");
+    expect(baris().textContent).toContain("Sisa perjalanan (perkiraan)");
     act(() => routeToggle().click());
-    expect(baris().textContent).not.toContain("Jalur kiriman (jalan)");
+    expect(baris().textContent).not.toContain("Sudah ditempuh");
+    expect(baris().textContent).not.toContain("Sisa perjalanan (perkiraan)");
     expect(baris().textContent).toContain("Surplus");
   });
 

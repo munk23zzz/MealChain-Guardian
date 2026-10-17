@@ -47,6 +47,38 @@ function koordinatValid(coords: readonly LngLat[] | null | undefined): coords is
   );
 }
 
+/** Keadaan perjalanan yang dipakai untuk menentukan bentuk garis (K1). */
+export type JourneyLike = {
+  state: string | null;
+  progress: number | null;
+} | null;
+
+/**
+ * Bagian garis menurut keadaan perjalanan dari SERVER (K1, 7b-3).
+ *
+ * Aturan (satu arti untuk seluruh peta — padat = sudah ditempuh, putus-putus =
+ * sisa perjalanan atau perkiraan):
+ * 1. `sudah_tiba` → seluruh garis padat, walau `progress` tidak dikirim. Keadaan
+ *    dari server sudah tidak ambigu; menebak 0% akan menggambar perjalanan yang
+ *    SUDAH SELESAI sebagai "belum ditempuh".
+ * 2. `belum_berangkat` → seluruh garis putus-putus; belum ada yang ditempuh.
+ * 3. `di_jalan` + `progress` → dipotong di titik tempuh (`lineSplit`).
+ * 4. `di_jalan` tanpa `progress`, atau perjalanan tidak dilaporkan → putus-putus
+ *    semua. Garis itu PERKIRAAN, dan bentuknya harus jujur soal itu.
+ */
+export function journeyLineParts(
+  coords: readonly LngLat[] | null | undefined,
+  journey: JourneyLike
+): { done: LngLat[]; todo: LngLat[] } | null {
+  if (!koordinatValid(coords)) return null;
+  const utuh = [...coords];
+  if (journey?.state === "sudah_tiba") return { done: utuh, todo: [] };
+  if (journey?.state === "belum_berangkat") return { done: [], todo: utuh };
+  const potong = journey ? lineSplit(utuh, journey.progress) : null;
+  if (!potong) return { done: [], todo: utuh };
+  return { done: potong.done, todo: potong.todo };
+}
+
 export function lineSplit(
   coords: readonly LngLat[] | null | undefined,
   progress: number | null | undefined

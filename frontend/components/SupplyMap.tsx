@@ -43,6 +43,9 @@ import {
 // Baris legenda ringkas di bawah kanvas (C2, langkah 7b-2): aturan isinya
 // (status selalu ada, keterangan ikut sakelar lapisan) hidup di lib murni.
 import { compactLegendItems, legendMarkClass } from "../lib/map-legend-compact";
+// Ikon di dalam penanda (bukan emoji/teks): siluet bangunan untuk SPPG dan
+// truk untuk pemasok — dua lapisan penanda jadi bisa dibedakan dari bentuknya.
+import { buildPinGlyph } from "../lib/map-pin-glyphs";
 import {
   SUPPLIER_LABEL_MIN_ZOOM,
   SUPPLIER_PIN_LEGEND,
@@ -66,6 +69,7 @@ import {
 } from "../lib/supplier-pins";
 import {
   ROUTE_LINE_COLORS,
+  ROUTE_TODO_COLORS,
   routeBoundsPoints,
   routeGeoJson,
   routeJourneyRows,
@@ -91,7 +95,16 @@ import RouteFocusPicker from "./RouteFocusPicker";
 
 /** Id source/layer MapLibre untuk garis jalur kiriman (Fase 10). */
 const ROUTE_SOURCE_ID = "supplier-routes";
-const ROUTE_LAYER_ID = "supplier-route-line";
+// K1 (7b-3): satu source, DUA layer — padat = sudah ditempuh, putus-putus =
+// sisa perjalanan atau perkiraan. `line-dasharray` tidak bisa data-driven di
+// MapLibre, jadi bentuk garis dipisah lewat filter `kind` per fitur.
+const ROUTE_DONE_LAYER_ID = "supplier-route-line-done";
+const ROUTE_TODO_LAYER_ID = "supplier-route-line-todo";
+// Alas putih (casing) di bawah garis jalur. Basemap OSM terang + banyak hijau
+// membuat garis hijau 2-4 px sulit ditemukan mata; alas ini hanya alat
+// keterbacaan, bukan informasi baru — karena itu tidak masuk legenda.
+const ROUTE_CASING_DONE_LAYER_ID = "supplier-route-casing-done";
+const ROUTE_CASING_TODO_LAYER_ID = "supplier-route-casing-todo";
 // Garis SOROTAN (Arah C): satu source berisi sampai dua potong — padat = sudah
 // ditempuh, putus-putus = belum. Dipisah dari layer dasar supaya aturan warna
 // layer dasar tidak perlu diubah sama sekali.
@@ -118,9 +131,42 @@ const ROUTE_LINE_WIDTH: maplibregl.ExpressionSpecification = [
   ["linear"],
   ["zoom"],
   5,
-  2,
+  2.6,
   10,
-  4,
+  4.4,
+];
+
+/** Alas: +2,2 px dari garis di setiap tingkat zoom (cukup untuk halo tipis). */
+const ROUTE_CASING_WIDTH: maplibregl.ExpressionSpecification = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  5,
+  4.8,
+  10,
+  6.6,
+];
+
+/** Sisa perjalanan digambar LEBIH TIPIS: itu estimasi, bukan fakta terkirim. */
+const ROUTE_TODO_WIDTH: maplibregl.ExpressionSpecification = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  5,
+  2.2,
+  10,
+  3.6,
+];
+
+/** Alas potongan "belum ditempuh" — selalu +2 px dari garisnya. */
+const ROUTE_TODO_CASING_WIDTH: maplibregl.ExpressionSpecification = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  5,
+  4.2,
+  10,
+  5.6,
 ];
 
 // Garis sorotan (Arah C) lebih tebal 2 px pada tiap tingkat zoom. Ditulis sebagai
@@ -194,13 +240,19 @@ function createPin(map: maplibregl.Map, location: BalanceMapLocation, active: bo
   const dot = document.createElement("span");
   dot.className = "map-pin-dot";
   dot.setAttribute("aria-hidden", "true");
+  dot.append(buildPinGlyph("sppg"));
+  // Ekor penunjuk: koordinat lokasi jatuh di UJUNG ekor (anchor "bottom"),
+  // bukan di tengah kepala — supaya pin tidak menutupi titik aslinya.
+  const tip = document.createElement("span");
+  tip.className = "map-pin-tip";
+  tip.setAttribute("aria-hidden", "true");
   const label = document.createElement("span");
   label.className = "map-pin-label";
   label.textContent = pinLabel(location);
-  el.append(dot, label);
-  const marker = new maplibregl.Marker({ element: el })
+  el.append(dot, tip, label);
+  const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
     .setLngLat([Number(location.longitude), Number(location.latitude)])
-    .setPopup(new maplibregl.Popup({ offset: 14 }).setDOMContent(popupNode(location)))
+    .setPopup(new maplibregl.Popup({ offset: 32 }).setDOMContent(popupNode(location)))
     .addTo(map);
   // Keterangan aksesibilitas dipasang SETELAH marker dibuat: MapLibre 4.7
   // menulis aria-label="Map marker" pada elemen saat konstruksi, menimpa teks
@@ -264,13 +316,14 @@ function createSupplierPin(
   const dot = document.createElement("span");
   dot.className = "map-pin-supplier-dot";
   dot.setAttribute("aria-hidden", "true");
+  dot.append(buildPinGlyph("supplier"));
   const label = document.createElement("span");
   label.className = "map-pin-label";
   label.textContent = row.name;
   el.append(dot, label);
   const marker = new maplibregl.Marker({ element: el })
     .setLngLat([row.longitude, row.latitude])
-    .setPopup(new maplibregl.Popup({ offset: 14 }).setDOMContent(supplierPopupNode(row, reachKm)))
+    .setPopup(new maplibregl.Popup({ offset: 18 }).setDOMContent(supplierPopupNode(row, reachKm)))
     .addTo(map);
   // Sama seperti pin SPPG: MapLibre menimpa aria-label saat konstruksi.
   el.title = accessible;
@@ -529,6 +582,9 @@ export default function SupplyMap({
   );
   const focusLines = useMemo(() => focusLineFeatures(focusRow), [focusRow]);
   const focusLinesRef = useRef(focusLines);
+  // Apakah satu kiriman sedang disorot — dipakai saat layer dasar DIBANGUN ULANG
+  // (ganti komoditas) supaya opasitas redup tidak hilang begitu saja.
+  const routeFokusRef = useRef(false);
   const onFocusRouteRef = useRef(onFocusRoute);
   // Peta dibuka ulang SEKALI saat jalur pertama tiba: ujung asal (mis. Cianjur)
   // berada di luar cakupan peta SPPG tujuan, jadi tanpa ini garisnya tak terlihat.
@@ -582,7 +638,10 @@ export default function SupplyMap({
     if (!aktif) {
       // Dimatikan / tidak ada data: bersihkan sepenuhnya, jangan tinggalkan
       // setengah lapisan yang tampak "masih ada jalur".
-      if (map.getLayer(ROUTE_LAYER_ID)) map.removeLayer(ROUTE_LAYER_ID);
+      if (map.getLayer(ROUTE_DONE_LAYER_ID)) map.removeLayer(ROUTE_DONE_LAYER_ID);
+      if (map.getLayer(ROUTE_TODO_LAYER_ID)) map.removeLayer(ROUTE_TODO_LAYER_ID);
+      if (map.getLayer(ROUTE_CASING_DONE_LAYER_ID)) map.removeLayer(ROUTE_CASING_DONE_LAYER_ID);
+      if (map.getLayer(ROUTE_CASING_TODO_LAYER_ID)) map.removeLayer(ROUTE_CASING_TODO_LAYER_ID);
       if (source) map.removeSource(ROUTE_SOURCE_ID);
       return;
     }
@@ -592,25 +651,80 @@ export default function SupplyMap({
     }
     if (!map.isStyleLoaded()) return;
     map.addSource(ROUTE_SOURCE_ID, { type: "geojson", data: routeFeaturesRef.current });
+    const warnaGaris = [
+      "match",
+      ["get", "tone"],
+      "fail",
+      ROUTE_LINE_COLORS.fail,
+      ROUTE_LINE_COLORS.ok,
+    ] as maplibregl.ExpressionSpecification;
+    // Alas dulu (render paling bawah), baru garis di atasnya.
     map.addLayer({
-      id: ROUTE_LAYER_ID,
+      id: ROUTE_CASING_DONE_LAYER_ID,
       type: "line",
       source: ROUTE_SOURCE_ID,
+      filter: ["==", ["get", "kind"], "done"],
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
+        "line-color": "#FFFFFF",
+        "line-width": ROUTE_CASING_WIDTH,
+        "line-opacity": routeFokusRef.current ? 0.15 : 0.85,
+      },
+    });
+    map.addLayer({
+      id: ROUTE_CASING_TODO_LAYER_ID,
+      type: "line",
+      source: ROUTE_SOURCE_ID,
+      filter: ["==", ["get", "kind"], "todo"],
+      layout: { "line-cap": "butt", "line-join": "round" },
+      paint: {
+        "line-color": "#FFFFFF",
+        "line-width": ROUTE_TODO_CASING_WIDTH,
+        // Alas ikut putus dengan pola yang sama, supaya sisa perjalanan tidak
+        // terbaca sebagai jalan solid.
+        "line-dasharray": [4, 3],
+        "line-opacity": routeFokusRef.current ? 0.15 : 0.5,
+      },
+    });
+    map.addLayer({
+      id: ROUTE_DONE_LAYER_ID,
+      type: "line",
+      source: ROUTE_SOURCE_ID,
+      filter: ["==", ["get", "kind"], "done"],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": warnaGaris,
+        "line-width": ROUTE_LINE_WIDTH,
+        "line-opacity": routeFokusRef.current ? 0.22 : 0.9,
+      },
+    });
+    map.addLayer({
+      id: ROUTE_TODO_LAYER_ID,
+      type: "line",
+      source: ROUTE_SOURCE_ID,
+      filter: ["==", ["get", "kind"], "todo"],
+      layout: { "line-cap": "butt", "line-join": "round" },
+      paint: {
+        // Sisa perjalanan = perkiraan, jadi warnanya BUKAN hijau yang sudah
+        // ditempuh. Dua warna berbeda membuat "sudah dikirim" dan "masih jalan"
+        // terbaca tanpa membuka legenda.
         "line-color": [
           "match",
           ["get", "tone"],
           "fail",
-          ROUTE_LINE_COLORS.fail,
-          ROUTE_LINE_COLORS.ok,
-        ],
-        "line-width": ROUTE_LINE_WIDTH,
-        "line-dasharray": [2, 1.2],
-        "line-opacity": 0.9,
+          ROUTE_TODO_COLORS.fail,
+          ROUTE_TODO_COLORS.ok,
+        ] as maplibregl.ExpressionSpecification,
+        "line-width": ROUTE_TODO_WIDTH,
+        // Celah lebih lebar dari garis (4 vs 3): pola putus harus terbaca
+        // sebagai "belum", bukan sebagai garis padat yang terputus-putus.
+        "line-dasharray": [4, 3],
+        "line-opacity": routeFokusRef.current ? 0.26 : 0.62,
       },
     });
-    map.on("click", ROUTE_LAYER_ID, (event) => {
+    // Klik berlaku di KEDUA lapisan: kalau hanya lapisan putus-putus yang bisa
+    // diklik, kiriman yang sudah tiba (garisnya padat semua) kehilangan popup.
+    const bukaPopupJalur = (event: maplibregl.MapLayerMouseEvent) => {
       const id = (event.features?.[0]?.properties as { id?: string } | undefined)?.id;
       const row = routeRowsRef.current.find((item) => item.id === id);
       if (!row) return;
@@ -622,7 +736,28 @@ export default function SupplyMap({
         .setLngLat(event.lngLat)
         .setDOMContent(routePopupNode(row))
         .addTo(map);
-    });
+    };
+    map.on("click", ROUTE_DONE_LAYER_ID, bukaPopupJalur);
+    map.on("click", ROUTE_TODO_LAYER_ID, bukaPopupJalur);
+  }, []);
+
+  /** Redupkan garis jalur dasar saat satu kiriman disorot.
+   *
+   *  Tanpa ini, tiga (atau 21, di tampilan BGN) garis dengan koridor yang sama
+   *  menumpuk dan sorotan tetap tenggelam di keramaian. Garis yang tidak dipilih
+   *  tidak dihapus — hanya diturunkan opasitasnya — supaya konteks jaringan tetap
+   *  terlihat dan tidak ada informasi yang hilang. */
+  const dimBaseRoutes = useCallback((redup: boolean) => {
+    const map = mapRef.current;
+    routeFokusRef.current = redup;
+    if (!map) return;
+    const atur = (id: string, nilai: number) => {
+      if (map.getLayer(id)) map.setPaintProperty(id, "line-opacity", nilai);
+    };
+    atur(ROUTE_DONE_LAYER_ID, redup ? 0.22 : 0.9);
+    atur(ROUTE_TODO_LAYER_ID, redup ? 0.26 : 0.62);
+    atur(ROUTE_CASING_DONE_LAYER_ID, redup ? 0.15 : 0.85);
+    atur(ROUTE_CASING_TODO_LAYER_ID, redup ? 0.12 : 0.5);
   }, []);
 
   /** Sinkronkan garis SOROTAN (Arah C).
@@ -635,6 +770,8 @@ export default function SupplyMap({
     if (!map) return;
     const data = focusLinesRef.current;
     const aktif = showRoutesRef.current && data.features.length > 0;
+    // Sorotan hidup → garis dasar diredupkan; sorotan dilepas → warna normal.
+    dimBaseRoutes(aktif);
     const source = map.getSource(ROUTE_FOCUS_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
     if (!aktif) {
       if (map.getLayer(ROUTE_FOCUS_DONE_LAYER_ID)) map.removeLayer(ROUTE_FOCUS_DONE_LAYER_ID);
@@ -668,13 +805,19 @@ export default function SupplyMap({
       filter: ["==", ["get", "kind"], "todo"],
       layout: { "line-cap": "butt", "line-join": "round" },
       paint: {
-        "line-color": ["match", ["get", "tone"], "fail", ROUTE_LINE_COLORS.fail, ROUTE_LINE_COLORS.ok],
+        "line-color": [
+          "match",
+          ["get", "tone"],
+          "fail",
+          ROUTE_TODO_COLORS.fail,
+          ROUTE_TODO_COLORS.ok,
+        ] as maplibregl.ExpressionSpecification,
         "line-width": ROUTE_FOCUS_WIDTH,
-        "line-dasharray": [2, 1.2],
-        "line-opacity": 0.75,
+        "line-dasharray": [4, 3],
+        "line-opacity": 0.95,
       },
     });
-  }, []);
+  }, [dimBaseRoutes]);
 
   /** Sinkronkan penanda PEMASOK: hanya saat lapisan dinyalakan DAN zoom cukup
    *  dekat. Semua penanda dibuang saat lapisan dimatikan atau zoom dijauhkan —
@@ -1065,9 +1208,9 @@ export default function SupplyMap({
                 >
                   <span className="map-legend-box-title">Jalur kiriman:</span>
                   {routeLegendEntries(routePinRows).map((entry) => (
-                    <span key={entry.tone} className="map-legend-box-item">
+                    <span key={`${entry.tone}-${entry.gaya}`} className="map-legend-box-item">
                       <i
-                        className={`map-legend-line map-legend-line-${entry.tone}`}
+                        className={`map-legend-line map-legend-line-${entry.tone} map-legend-line-${entry.gaya}`}
                         aria-hidden="true"
                       />{" "}
                       {entry.label}
@@ -1120,10 +1263,11 @@ export default function SupplyMap({
         <div className="map-legend-compact" role="group" aria-label="Legenda peta">
           <span className="map-legend-compact-title">Legenda:</span>
           {legendCompact.map((butir) => {
-            const [kelasDasar, kelasNada] = legendMarkClass(butir);
+            // SEMUA kelas dipakai: nada (warna) + gaya (padat/putus) untuk garis.
+            const kelas = legendMarkClass(butir).join(" ");
             return (
               <span key={butir.id} className="map-legend-compact-item">
-                <i className={`${kelasDasar} ${kelasNada}`} aria-hidden="true" />{" "}
+                <i className={kelas} aria-hidden="true" />{" "}
                 {butir.label}
               </span>
             );

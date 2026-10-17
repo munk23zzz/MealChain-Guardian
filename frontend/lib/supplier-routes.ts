@@ -19,6 +19,7 @@
 //   disembunyikan jadi "—".
 
 import { formatClockWib, formatDate, formatDateTime } from "./datetime";
+import { journeyLineParts } from "./route-line-split";
 import { formatKg } from "./overview-format";
 
 export type RouteLineTone = "ok" | "fail";
@@ -59,6 +60,23 @@ export const ROUTE_LINE_COLORS: Record<RouteLineTone, string> = {
   fail: "#C62828",
 };
 
+/**
+ * Warna untuk potongan yang BELUM ditempuh (masih perkiraan).
+ *
+ * Bukan hijau yang sama dengan bagian yang sudah ditempuh: kalau warnanya sama,
+ * mata membaca "dua garis hijau" dan pengguna tidak bisa tahu mana yang fakta
+ * terkirim dan mana yang estimasi. Dipakai warna AKSI aplikasi
+ * (`--accent-strong` #2563EB, tombol/tautan) — biru juga konvensi peta untuk
+ * "rute berjalan", dan ia tidak menabrak merah (gagal uji) maupun hijau (tiba).
+ */
+export const ROUTE_TODO_COLORS: Record<RouteLineTone, string> = {
+  ok: "#2563EB",
+  fail: "#C62828",
+};
+
+/** Nada legenda jalur: nada garis + satu nada tampilan untuk "sisa perjalanan". */
+export type RouteLegendTone = RouteLineTone | "sisa";
+
 export type SupplierRouteRoad = {
   distanceKm: number;
   durationMin: number;
@@ -91,11 +109,16 @@ export type SupplierRoute = {
   journey: RouteJourney | null;
 };
 
+/** Dua bagian garis jalur (K1). Dipakai sebagai filter layer di peta. */
+export type RouteLineKind = "done" | "todo";
+
 export type RouteFeature = {
   type: "Feature";
   geometry: { type: "LineString"; coordinates: [number, number][] };
   properties: {
     id: string;
+    /** Bagian garis (K1): `done` = sudah ditempuh (padat), `todo` = sisa (putus-putus). */
+    kind: RouteLineKind;
     tone: RouteLineTone;
     label: string;
     supplierName: string;
@@ -489,22 +512,33 @@ export function routeGeoJson(raw: unknown): RouteFeatureCollection {
   const features: RouteFeature[] = [];
   for (const row of supplierRoutes(raw)) {
     if (!row.road) continue;
-    features.push({
-      type: "Feature",
-      geometry: { type: "LineString", coordinates: row.road.coordinates },
-      properties: {
-        id: row.id,
-        tone: routeLineTone(row),
-        label: routeLabel(row),
-        supplierName: row.supplierName,
-        destinationName: row.destinationName,
-        commodity: row.commodity,
-        quantityKg: row.quantityKg,
-        roadKm: row.road.distanceKm,
-        durationMin: row.road.durationMin,
-        safetyStatus: row.safetyStatus,
-      },
-    });
+    const bagian = journeyLineParts(row.road.coordinates, row.journey);
+    if (!bagian) continue;
+    const properti = {
+      id: row.id,
+      tone: routeLineTone(row),
+      label: routeLabel(row),
+      supplierName: row.supplierName,
+      destinationName: row.destinationName,
+      commodity: row.commodity,
+      quantityKg: row.quantityKg,
+      roadKm: row.road.distanceKm,
+      durationMin: row.road.durationMin,
+      safetyStatus: row.safetyStatus,
+    };
+    // Satu kiriman bisa menyumbang DUA fitur (ditempuh + sisa). Geometri < 2 titik
+    // tidak digambar — bagian kosong dilewati, bukan dibuat jadi garis nol panjang.
+    for (const [kind, coords] of [
+      ["done", bagian.done],
+      ["todo", bagian.todo],
+    ] as const) {
+      if (coords.length < 2) continue;
+      features.push({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: coords },
+        properties: { ...properti, kind },
+      });
+    }
   }
   return { type: "FeatureCollection", features };
 }
@@ -573,12 +607,19 @@ export function routeLayerTag(
  */
 export function routeLegendEntries(
   rows: readonly SupplierRoute[] = []
-): { tone: RouteLineTone; label: string }[] {
-  const entries: { tone: RouteLineTone; label: string }[] = [
-    { tone: "ok", label: "Jalur kiriman (jalan)" },
+): { tone: RouteLegendTone; label: string; gaya: "padat" | "putus" }[] {
+  // K1 (7b-3): legenda tidak lagi menulis "Jalur kiriman (jalan)" untuk semua
+  // garis. Satu arti: padat = sudah ditempuh, putus-putus = sisa atau perkiraan.
+  // Sebelum ini legenda menulis "Sisa perjalanan" putus-putus sementara LAYER
+  // menggambar semua kiriman putus-putus — termasuk yang sudah tiba.
+  // Nada "sisa" = warna amber di legenda, SAMA dengan warna layer `todo` di peta;
+  // legenda yang memakai hijau untuk estimasi akan menyesatkan.
+  const entries: { tone: RouteLegendTone; label: string; gaya: "padat" | "putus" }[] = [
+    { tone: "ok", label: "Sudah ditempuh", gaya: "padat" },
+    { tone: "sisa", label: "Sisa perjalanan (perkiraan)", gaya: "putus" },
   ];
   if (rows.some((row) => routeLineTone(row) === "fail")) {
-    entries.push({ tone: "fail", label: "Jalur kiriman gagal uji" });
+    entries.push({ tone: "fail", label: "Jalur kiriman gagal uji", gaya: "putus" });
   }
   return entries;
 }

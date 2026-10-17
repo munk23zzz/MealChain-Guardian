@@ -2106,30 +2106,56 @@ a:focus-visible {
    aplikasi — sama dengan badge di daftar lokasi. */
 .map-pin {
   position: relative;
-  width: 14px;
-  height: 14px;
+  width: 26px;
+  height: 34px;
+  /* Warna pin: satu variabel per nada, dipakai kepala DAN ekor sekaligus. */
+  --pin-ink: var(--ink-muted);
 }
 .map-pin-dot {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 1px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
   border-radius: 50%;
-  border: 2px solid var(--surface);
-  background: var(--ink-muted);
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
-  /* Pin merespons: cincin sorotan lokasi aktif & naik-membesar saat disinggahi
-     kursor jadi gerak halus, bukan lompatan warna. */
+  background: var(--pin-ink);
+  color: var(--surface);
+  /* Cincin putih lewat box-shadow (bukan border) supaya ekor di bawahnya bisa
+     menempel persis tanpa celah garis. */
+  box-shadow: 0 0 0 2px var(--surface), 0 2px 6px rgba(15, 23, 42, 0.35);
   transition: box-shadow var(--dur-2) var(--ease-standard),
     background var(--dur-2) var(--ease-standard),
     transform var(--dur-1) var(--ease-standard);
 }
+.map-pin-icon {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+/* Ekor penunjuk: segitiga menghadap ke bawah; ujungnya = koordinat lokasi. */
+.map-pin-tip {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  width: 12px;
+  height: 10px;
+  transform: translateX(-50%);
+  background: var(--pin-ink);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
 .map-pin { cursor: pointer; }
-.map-pin:hover .map-pin-dot { transform: scale(1.28); }
-.map-pin-surplus .map-pin-dot { background: var(--status-safe); }
-.map-pin-shortage .map-pin-dot { background: var(--status-danger); }
+.map-pin:hover .map-pin-dot {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 2px var(--surface), 0 3px 9px rgba(15, 23, 42, 0.42);
+}
+.map-pin-surplus { --pin-ink: var(--status-safe); }
+.map-pin-shortage { --pin-ink: var(--status-danger); }
 .map-pin-label {
   position: absolute;
   left: 100%;
-  top: 50%;
+  top: 12px;
   transform: translateY(-50%);
   margin-left: 7px;
   padding: 1px 6px;
@@ -2147,7 +2173,8 @@ a:focus-visible {
 /* Lokasi aktif dari dropdown cakupan top bar: cincin brand, ukuran sama
    supaya tidak ada pin yang "melompat" saat disorot. */
 .map-pin-active .map-pin-dot {
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.45), 0 1px 4px rgba(15, 23, 42, 0.35);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.45), 0 0 0 2px var(--surface),
+    0 2px 6px rgba(15, 23, 42, 0.35);
 }
 
 /* Kotak legenda peta (kiri-bawah) — SATU kotak berisi tiga baris: status lokasi,
@@ -2567,6 +2594,14 @@ a:focus-visible {
 }
 .map-legend-line-fail,
 .ship-route-fail { border-top-color: var(--status-danger); }
+/* K1 (7b-3): bentuk garis di legenda mengikuti arti di peta — padat = sudah
+   ditempuh, putus-putus = sisa perjalanan atau perkiraan. Dasar `.map-legend-line`
+   tetap putus-putus supaya legenda lama (jalur tanpa gaya) tidak berubah arti. */
+.map-legend-line-padat { border-top-style: solid; }
+.map-legend-line-putus { border-top-style: dashed; }
+/* Nada "sisa": estimasi yang belum ditempuh. Biru aksi aplikasi (--accent-strong),
+   BUKAN hijau — sama dengan warna layer `todo` di kanvas (ROUTE_TODO_COLORS.ok). */
+.map-legend-line-sisa { border-top-color: var(--accent-strong); }
 .map-popup-line {
   margin: 4px 0 0;
   font-size: var(--fs-2);
@@ -2733,32 +2768,41 @@ a:focus-visible {
    jangkauannya. Warna memakai token, tanpa hex mentah (design.md §4). */
 .map-legend-box-shape-shipping { background: var(--surface); border: 2px solid var(--status-safe); }
 .map-pin-supplier-shipping .map-pin-supplier-dot {
-  box-shadow: 0 0 0 2px var(--status-safe), 0 1px 4px rgba(15, 23, 42, 0.35);
+  box-shadow: 0 0 0 2px var(--status-safe), 0 1px 5px rgba(15, 23, 42, 0.35);
 }
-.map-pin-supplier { width: 12px; height: 12px; }
+/* Pemasok: kotak membulat + ikon truk. Bentuk sengaja BUKAN bulat — pin SPPG
+   bulat, jadi dua lapisan penanda tidak bisa tertukar meski bertumpuk. */
+.map-pin-supplier {
+  width: 24px;
+  height: 24px;
+  --pin-ink: var(--accent-strong);
+}
 .map-pin-supplier-dot {
   position: absolute;
   inset: 0;
-  transform: rotate(45deg);
-  border: 2px solid var(--surface);
-  background: var(--accent-strong);
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
-  /* Cincin "sedang mengirim" & naik-membesar saat disinggahi kursor datang
-     dengan halus; rotasi 45° tetap dipertahankan supaya bentuknya tidak berubah. */
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--pin-ink);
+  color: var(--surface);
+  box-shadow: 0 0 0 2px var(--surface), 0 1px 5px rgba(15, 23, 42, 0.35);
   transition: box-shadow var(--dur-2) var(--ease-standard),
     background var(--dur-2) var(--ease-standard),
     transform var(--dur-1) var(--ease-standard);
 }
-.map-pin-supplier:hover .map-pin-supplier-dot { transform: rotate(45deg) scale(1.28); }
-.map-pin-supplier-low .map-pin-supplier-dot { background: var(--warn-ink); }
-.map-pin-supplier-excluded .map-pin-supplier-dot { background: var(--status-danger); }
-.map-pin-supplier-unknown .map-pin-supplier-dot { background: var(--ink-muted); }
-/* Di luar jangkauan (Fase 7b): titik kosong bergaris putus-putus — beda dari
+.map-pin-supplier .map-pin-icon { width: 14px; height: 14px; }
+.map-pin-supplier:hover .map-pin-supplier-dot { transform: scale(1.12); }
+.map-pin-supplier-low { --pin-ink: var(--warn-ink); }
+.map-pin-supplier-excluded { --pin-ink: var(--status-danger); }
+.map-pin-supplier-unknown { --pin-ink: var(--ink-muted); }
+/* Di luar jangkauan (Fase 7b): kotak kosong bergaris putus-putus — beda dari
    pemasok terdekat (penuh) dan dari "dikecualikan" (merah penuh). */
+.map-pin-supplier-far { --pin-ink: var(--ink-subtle); }
 .map-pin-supplier-far .map-pin-supplier-dot {
   background: var(--surface);
-  border-color: var(--ink-subtle);
-  border-style: dashed;
+  color: var(--pin-ink);
+  box-shadow: 0 0 0 2px var(--surface), 0 1px 4px rgba(15, 23, 42, 0.2);
+  border: 2px dashed var(--pin-ink);
 }
 /* Titik tanpa nama: pada tampilan jaringan sepuluh label kota akan saling
    menimpa, jadi nama baru muncul setelah pengguna memperbesar peta. */
@@ -2847,7 +2891,7 @@ a:focus-visible {
   .map-pin-dot,
   .map-pin-supplier-dot { transition: none; }
   .map-pin:hover .map-pin-dot { transform: none; }
-  .map-pin-supplier:hover .map-pin-supplier-dot { transform: rotate(45deg); }
+  .map-pin-supplier:hover .map-pin-supplier-dot { transform: none; }
 }
 
 .map-card .map-side { margin-top: 16px; container-type: inline-size; }

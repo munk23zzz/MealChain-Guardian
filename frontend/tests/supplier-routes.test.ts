@@ -168,17 +168,20 @@ describe("nada & kelas garis", () => {
     // "gagal uji" hanya muncul kalau ada kiriman bergaris seperti itu — legenda
     // yang menyebut warna yang tidak dipakai membuat pembaca mencarinya.
     const entri = routeLegendEntries(supplierRoutes({ routes: [kiriman()] }));
-    expect(entri.map((e) => e.tone)).toEqual(["ok"]);
-    expect(entri[0].label).toContain("Jalur kiriman");
+    // K1: dua butir untuk satu nada — padat (sudah ditempuh) & putus (sisa).
+    expect(entri.map((e) => e.tone)).toEqual(["ok", "sisa"]);
+    expect(entri.map((e) => e.gaya)).toEqual(["padat", "putus"]);
+    expect(entri[0].label).toContain("Sudah ditempuh");
+    expect(entri[1].label).toContain("Sisa perjalanan");
 
     const denganGagal = routeLegendEntries(
       supplierRoutes({ routes: [kiriman(), kiriman({ safety_status: "fail", destination_name: "Bogor" })] })
     );
-    expect(denganGagal.map((e) => e.tone)).toEqual(["ok", "fail"]);
-    expect(denganGagal[1].label).toContain("gagal uji");
+    expect(denganGagal.map((e) => e.tone)).toEqual(["ok", "sisa", "fail"]);
+    expect(denganGagal[2].label).toContain("gagal uji");
 
-    // Tanpa data kiriman sama sekali: hanya nada dasar, tidak mengarang entri.
-    expect(routeLegendEntries().map((e) => e.tone)).toEqual(["ok"]);
+    // Tanpa data kiriman sama sekali: hanya butir dasar, tidak mengarang entri.
+    expect(routeLegendEntries().map((e) => e.tone)).toEqual(["ok", "sisa"]);
   });
 });
 
@@ -191,9 +194,47 @@ describe("layer GeoJSON", () => {
     });
     const fc = routeGeoJson({ routes: [kiriman(), tanpaRute] });
     expect(fc.type).toBe("FeatureCollection");
-    expect(fc.features).toHaveLength(1);
-    expect(fc.features[0].geometry.type).toBe("LineString");
-    expect(fc.features[0].geometry.coordinates).toEqual(GEOMETRI);
+    // K1: satu kiriman "di jalan" menghasilkan DUA fitur — bagian ditempuh
+    // (padat) dan bagian sisa (putus-putus). Kiriman tanpa geometri tidak ikut.
+    expect(fc.features).toHaveLength(2);
+    expect(fc.features.map((f) => f.properties.kind)).toEqual(["done", "todo"]);
+    for (const fitur of fc.features) expect(fitur.geometry.type).toBe("LineString");
+  });
+
+  it("keadaan perjalanan menentukan bentuk garis (K1: padat = ditempuh)", () => {
+    const dengan = (ubah: Record<string, unknown>) => {
+      const dasar = kiriman();
+      return { ...dasar, journey: { ...dasar.journey, ...ubah } };
+    };
+
+    // Sudah tiba → satu garis padat penuh, tanpa bagian putus-putus.
+    const tiba = routeGeoJson({ routes: [dengan({ state: "sudah_tiba", progress: null })] });
+    expect(tiba.features).toHaveLength(1);
+    expect(tiba.features[0].properties.kind).toBe("done");
+    expect(tiba.features[0].geometry.coordinates).toEqual(GEOMETRI);
+
+    // Belum berangkat → satu garis putus-putus penuh (belum ada yang ditempuh).
+    const belum = routeGeoJson({ routes: [dengan({ state: "belum_berangkat", progress: null })] });
+    expect(belum.features).toHaveLength(1);
+    expect(belum.features[0].properties.kind).toBe("todo");
+    expect(belum.features[0].geometry.coordinates).toEqual(GEOMETRI);
+
+    // Perjalanan tidak dilaporkan → putus-putus (perkiraan), bukan padat palsu.
+    const tanpaJourney = routeGeoJson({ routes: [{ ...kiriman(), journey: null }] });
+    expect(tanpaJourney.features.map((f) => f.properties.kind)).toEqual(["todo"]);
+  });
+
+  it("bagian garis yang ditempuh dimulai di asal, sisanya berakhir di tujuan", () => {
+    const fc = routeGeoJson({ routes: [kiriman()] });
+    const [done, todo] = fc.features;
+    expect(done.geometry.coordinates[0]).toEqual(GEOMETRI[0]);
+    expect(todo.geometry.coordinates[todo.geometry.coordinates.length - 1]).toEqual(
+      GEOMETRI[GEOMETRI.length - 1]
+    );
+    // Titik potong sama untuk kedua bagian — tidak ada celah atau tumpang tindih.
+    expect(done.geometry.coordinates[done.geometry.coordinates.length - 1]).toEqual(
+      todo.geometry.coordinates[0]
+    );
   });
 
   it("properti fitur cukup untuk label & popup", () => {
