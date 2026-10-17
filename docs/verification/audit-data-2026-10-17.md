@@ -1,0 +1,114 @@
+# Audit integritas data — cara memastikan data demo "terstruktur", bukan cuma terlihat rapi
+
+Tanggal: 17 Okt 2026 · Skrip: `backend/scripts/audit_data_integrity.py` (read-only)
+Hasil sekarang: **VERDICT: BERSIH** (exit 0) · cadangan DB sebelum perapian:
+`C:\Users\User\AppData\Local\hermes\cache\scratch\db-demo-20261017-2130.sql` (5,7 MB, data-only)
+
+## 1. Kenapa audit, bukan lagi hapus manual
+
+Merapikan sekali (dokumen `data-demo-rapi-2026-10-17.md`) menghilangkan residu hari
+ini, tetapi tidak menjawab "apakah datanya **secara struktur** sehat". Kerusakan
+yang paling mahal di repo ini bukan error, melainkan keadaan yang tampak normal:
+baris yatim, natural key ganda, deret yang kurang separuh, atau kasus demo yang
+sudah lewat tenggat — semuanya tampil sebagai layar kosong atau angka aneh,
+bukan sebagai kegagalan. Karena itu perapian berikutnya harus **diukur**, dan
+pengukurannya harus bisa diulang siapa pun.
+
+## 2. Cara pakai
+
+```bash
+# laporan manusia (bawaan)
+docker compose exec -T -e PYTHONPATH=/app backend python scripts/audit_data_integrity.py
+
+# untuk dibaca mesin / disimpan ke artefak
+... scripts/audit_data_integrity.py --json
+
+# dipakai sebagai gerbang: keluar 2 bila ada temuan
+... scripts/audit_data_integrity.py --strict
+```
+
+`PYTHONPATH=/app` wajib — tanpa itu `import app…` gagal karena `sys.path[0]`
+menunjuk folder `scripts/`.
+
+## 3. Tujuh lapisan yang diperiksa
+
+| # | Lapisan | Cara diperiksa | Arti bila merah |
+|---|---|---|---|
+| 1 | Skema | `alembic_version` di DB vs kepala `alembic/versions` | migrasi belum dijalankan / DB tertinggal |
+| 2 | Hitungan per origin | `GROUP BY origin` untuk supply/price/demand/menu/kiriman/limbah, dibanding baseline kanonik | ada generasi seed dobel atau deret demo hilang |
+| 3 | **Baris yatim** | **setiap** foreign key di skema publik diuji generik `child.col NOT NULL AND NOT EXISTS parent` | data menunjuk baris yang tidak ada lagi |
+| 4 | Natural key ganda | `users.email`, `locations.name`, `commodities.name`, `(suppliers.name, location_id)` | seed dobel / baris duplikat |
+| 5 | Residu | keputusan non-demo, PO `MC-*` tanpa keputusan, user `@test.local`/`@uji-peran.local` | sisa run tes |
+| 5b | Kesiapan demo | per kasus: status, sisa TTL (menit), jumlah trace, jumlah approval | kasus sudah lewat tenggat / jejak tidak lengkap |
+| 6 | Rantai bukti | `verify_chain()` dari `app.services.ledger_service` (fungsi aplikasi, bukan SQL tandingan) | blok ledger putus |
+| 7 | Selisih baseline | angka nyata vs baseline terdokumentasi | keadaan DB bukan kanonik |
+
+Catatan penting pada #3: pemeriksaan yatim **tidak** memakai daftar FK yang
+diingat manusia. Daftar FK dibaca dari `information_schema`, jadi FK baru yang
+ditambahkan migrasi berikutnya otomatis ikut diperiksa.
+
+## 4. Hasil hari ini
+
+```
+== 1. SKEMA ==                       alembic DB 017_event_origin = kepala repo: cocok
+== 2. HITUNGAN PER ORIGIN ==
+  supply_records     demo=3870 ok, seed=30 ok
+  price_signals      demo=4010 ok, seed=44 ok
+  demand_records     seed=168 ok
+  menu_plans         demo=590 ok, seed=70 ok
+  batches            seed=9
+  delivery_events    demo=290 ok, seed=70 ok
+  disposal_events    demo=58 ok, seed=20 ok
+== 3. BARIS YATIM (semua FK) ==      tidak ada
+== 4. NATURAL KEY GANDA ==           tidak ada
+== 5. RESIDU ==
+  keputusan non-demo  : 0      PO tanpa keputusan: 0
+  user tes tersisa    : 0      kasus demo terpasang: 4
+== 5b. KESIAPAN KASUS DEMO ==
+  gangguan-logistik     pending_approval  sisa 276 mnt  2 trace  0 approval
+  rejection-loop-kuota  pending_approval  sisa 456 mnt  2 trace  0 approval
+  shortage-darurat      pending_approval  sisa  96 mnt  3 trace  0 approval
+  supplier-janggal      verifier_flagged  sisa 456 mnt  2 trace  0 approval
+  (3 keputusan 'rejected' dari kasus loop kuota — riwayat, bukan utang)
+  siap ditindak sekarang: 4 · lewat tenggat: 0
+== 6. RANTAI BUKTI & DEMOGRAFI ==
+  ledger valid: True (6369 blok) · users 3 · locations 10 · commodities 3
+  suppliers 35 · decisions 10 · approvals 0 · agent_traces 27
+== 7. SELISIH BASELINE ==            tidak ada
+VERDICT: BERSIH
+```
+
+Yang dibaca dari angka itu:
+
+- **Data kanonik utuh**: 30 supply + 3.870 demo, 44 price + 4.010, 70 menu + 590,
+  70 kiriman + 290, 20 limbah + 58, 168 demand — persis baseline terdokumentasi.
+- **Tidak ada satu pun baris yatim** di seluruh skema (bukan hanya tabel yang biasa diperiksa).
+- **10 keputusan** = 4 kasus demo (7 keputusan) + 3 keputusan selesai untuk KPI.
+  Nol keputusan sisa tes.
+- **4 PO**: 3 `DEMO-PO-*` tertaut keputusan + 1 `4500000001` yang **memang**
+  di-seed tanpa keputusan (`mock_sap.purchase_orders` di seed JSON). Karena itu
+  pemeriksaan residu hanya menghitung `MC-*` — baris adapter bukan cacat.
+- **Rantai bukti** 6.369 blok valid. Ledger bersifat *append-only*: keputusan yang
+  dihapus kemarin tidak memangkas blok, dan itu memang perilaku yang benar —
+  memangkasnya akan menghapus bukti, bukan merapikan data.
+
+## 5. Dua hal yang memang bergerak sendiri (jangan dibaca sebagai kerusakan)
+
+1. **TTL kasus demo.** Hari ini jendelanya 96 menit (kasus `shortage-darurat`
+   paling cepat). Kalau audit dijalankan besok, kolom `sisa` akan negatif dan
+   `siap ditindak` jadi 0 — itu **waktu**, bukan data rusak. Tindakannya:
+   `POST /demo/refresh` (tombol "Segarkan ke hari ini") tepat sebelum presentasi.
+   Perhatikan konsekuensinya: refresh menulis generasi seed hari itu, sehingga
+   `seed` di bagian #2 bisa menjadi 60/88/140 — sesudah presentasi, pulihkan
+   baseline dengan `scripts/pulihkan-baseline-demo.py` sebelum menjalankan pytest.
+2. **Residu pytest.** Setiap `pytest` menulis keputusan baru ke DB yang sama.
+   Jalankan audit lagi sesudahnya; kalau `keputusan non-demo` > 0, itu sisa tes,
+   bukan data demo yang hilang.
+
+## 6. Batas skrip
+
+- Read-only: tidak pernah menulis, tidak pernah "memperbaiki" sendiri.
+- Baseline dipaku untuk data seed/deret; `batches` hanya dilaporkan (9) karena
+  jumlahnya bergantung pada seed yang dipakai.
+- Tidak memeriksa isi semantik (mis. apakah angka surplus masuk akal) — itu
+  wilayah `docs/verification/` yang lain dan tes masing-masing endpoint.
