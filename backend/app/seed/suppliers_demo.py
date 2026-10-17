@@ -2,7 +2,7 @@
 
 Latar: permintaan pemilik proyek (2026-10-14) agar pemasok bisa ditampilkan di
 peta, lalu (2026-10-15) agar pemasok contoh untuk SPPG Jakarta benar-benar
-terjangkau dari Jakarta — bukan perusahaan di Medan/Malang yang berjarak
+terjangkau dari Jakarta — bukan perusahaan di Medan/Makassar yang berjarak
 ratusan kilometer. Data 14 pemasok kanonik tidak cukup (dan tidak punya
 koordinat/kapasitas), jadi ditambah 21 pemasok demo dari
 `data/seed/suppliers_demo.json`:

@@ -31,7 +31,7 @@ describe("peta acuan — pin", () => {
     expect(pinLabel(BOGOR)).toBe("Bogor seimbang");
     // Angka tidak tersedia → jangan menulis 0 atau tebakan.
     expect(pinLabel({ location: "Medan", status: "surplus" })).toBe("Medan");
-    expect(pinLabel({ location: "Malang", status: "entah" })).toBe("Malang");
+    expect(pinLabel({ location: "Makassar", status: "entah" })).toBe("Makassar");
   });
 });
 
@@ -41,7 +41,7 @@ describe("peta acuan — bar telemetri node", () => {
       supply: { value: 1000, share: 100 },
       demand: { value: 800, share: 80 },
     });
-    expect(nodeGauges({ location: "Malang", status: "shortage", supply_kg: 250, demand_kg: 1000 })).toEqual({
+    expect(nodeGauges({ location: "Makassar", status: "shortage", supply_kg: 250, demand_kg: 1000 })).toEqual({
       supply: { value: 250, share: 25 },
       demand: { value: 1000, share: 100 },
     });

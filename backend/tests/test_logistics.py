@@ -8,7 +8,7 @@ from app.core.logistics import DISTANCE_KM, LOCATIONS, estimate_logistics
 def test_locations_exactly_ten_seed_locations():
     assert LOCATIONS == (
         "Jakarta", "Bogor", "Cianjur", "Bandung", "Semarang",
-        "Yogyakarta", "Surabaya", "Malang", "Palembang", "Medan",
+        "Yogyakarta", "Surabaya", "Makassar", "Palembang", "Medan",
     )
 
 

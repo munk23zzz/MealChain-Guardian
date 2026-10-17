@@ -221,14 +221,14 @@
       "offset_index": 1
     },
     {
-      "name": "Wortel Nongkojajar",
-      "location": "Malang",
+      "name": "Wortel Malino",
+      "location": "Makassar",
       "commodity": "wortel",
       "reliability_score": 0.95,
       "capacity_kg_per_week": 2500,
       "certification_status": "haccp",
       "contact_name": "Suharto Adi",
-      "address": "Desa Nongkojajar, Tutur, Pasuruan",
+      "address": "Malino, Gowa, Sulawesi Selatan",
       "offset_index": 2
     },
     {

@@ -18,7 +18,7 @@ EXPECTED_LOCATIONS = (
     "Semarang",
     "Yogyakarta",
     "Surabaya",
-    "Malang",
+    "Makassar",
     "Palembang",
     "Medan",
 )

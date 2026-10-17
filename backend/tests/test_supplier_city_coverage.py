@@ -19,7 +19,7 @@ TEN_CITIES = {
     "Semarang",
     "Yogyakarta",
     "Surabaya",
-    "Malang",
+    "Makassar",
     "Palembang",
     "Medan",
 }

@@ -1,13 +1,14 @@
 """Logistics matrix dan feasibility (Task 5) — deterministik, seluruh pasangan seed.
 
-Matriks jarak darat (km) antar 10 lokasi seed. Nilai Cianjur–Jakarta 120 km
-terkunci dari demo docs/Skill.md §8. Pasangan lain adalah nilai sintetis
-deterministik untuk seed — bukan data survei.
+Matriks jarak setara darat/laut (km) antar 10 lokasi seed. Nilai Cianjur–Jakarta
+120 km terkunci dari demo docs/Skill.md §8. Pasangan lain adalah nilai sintetis
+deterministik untuk seed — bukan data survei. Makassar (Sulawesi Selatan)
+memakai perkiraan rute laut, sehingga jaraknya lebih jauh daripada kota Jawa.
 """
 
 LOCATIONS: tuple[str, ...] = (
     "Jakarta", "Bogor", "Cianjur", "Bandung", "Semarang",
-    "Yogyakarta", "Surabaya", "Malang", "Palembang", "Medan",
+    "Yogyakarta", "Surabaya", "Makassar", "Palembang", "Medan",
 )
 
 _DIST = {
@@ -17,7 +18,7 @@ _DIST = {
     ("Jakarta", "Semarang"): 450,
     ("Jakarta", "Yogyakarta"): 560,
     ("Jakarta", "Surabaya"): 780,
-    ("Jakarta", "Malang"): 850,
+    ("Jakarta", "Makassar"): 1400,
     ("Jakarta", "Palembang"): 540,
     ("Jakarta", "Medan"): 1900,
     ("Bogor", "Cianjur"): 70,
@@ -25,36 +26,36 @@ _DIST = {
     ("Bogor", "Semarang"): 430,
     ("Bogor", "Yogyakarta"): 540,
     ("Bogor", "Surabaya"): 760,
-    ("Bogor", "Malang"): 830,
+    ("Bogor", "Makassar"): 1420,
     ("Bogor", "Palembang"): 560,
     ("Bogor", "Medan"): 1920,
     ("Cianjur", "Bandung"): 65,
     ("Cianjur", "Semarang"): 480,
     ("Cianjur", "Yogyakarta"): 590,
     ("Cianjur", "Surabaya"): 810,
-    ("Cianjur", "Malang"): 880,
+    ("Cianjur", "Makassar"): 1450,
     ("Cianjur", "Palembang"): 580,
     ("Cianjur", "Medan"): 1940,
     ("Bandung", "Semarang"): 420,
     ("Bandung", "Yogyakarta"): 530,
     ("Bandung", "Surabaya"): 750,
-    ("Bandung", "Malang"): 820,
+    ("Bandung", "Makassar"): 1380,
     ("Bandung", "Palembang"): 550,
     ("Bandung", "Medan"): 1910,
     ("Semarang", "Yogyakarta"): 110,
     ("Semarang", "Surabaya"): 330,
-    ("Semarang", "Malang"): 400,
+    ("Semarang", "Makassar"): 1000,
     ("Semarang", "Palembang"): 850,
     ("Semarang", "Medan"): 2100,
     ("Yogyakarta", "Surabaya"): 300,
-    ("Yogyakarta", "Malang"): 370,
+    ("Yogyakarta", "Makassar"): 1050,
     ("Yogyakarta", "Palembang"): 900,
     ("Yogyakarta", "Medan"): 2200,
-    ("Surabaya", "Malang"): 90,
+    ("Surabaya", "Makassar"): 780,
     ("Surabaya", "Palembang"): 1050,
     ("Surabaya", "Medan"): 2350,
-    ("Malang", "Palembang"): 1100,
-    ("Malang", "Medan"): 2400,
+    ("Makassar", "Palembang"): 1300,
+    ("Makassar", "Medan"): 2900,
     ("Palembang", "Medan"): 1400,
 }
 
