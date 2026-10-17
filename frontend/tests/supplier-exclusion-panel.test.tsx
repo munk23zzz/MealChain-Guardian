@@ -41,10 +41,10 @@ function input(label: string, value: string) {
 afterEach(() => { act(() => root?.unmount()); host?.remove(); vi.unstubAllGlobals(); });
 
 describe("SupplierExclusionView", () => {
-  it.each(["bgn_monitor", "admin", "nutritionist"])("keeps %s read-only and preserves FAIL", role => {
+  it.each(["bgn_monitor", "admin", "nutritionist"])("keeps %s read-only and preserves the failure warning", role => {
     mount(context, role);
     expect(host.querySelector("form")).toBeNull();
-    expect(host.textContent).toContain("FAIL");
+    expect(host.textContent).toContain("Gagal");
     expect(host.textContent).toContain("Supplier A");
   });
   it.each([false, true])("requires both server permission and a receiving scope (permission=%s)", allowed => {
@@ -118,13 +118,13 @@ describe("SupplierExclusionView", () => {
     expect(button("Ajukan pemulihan").disabled).toBe(true);
     const check = host.querySelector('input[type="checkbox"]');
     expect(check).not.toBeNull();
-    expect(host.textContent).toContain("FAIL");
+    expect(host.textContent).toContain("Gagal");
     act(() => { if (check instanceof HTMLInputElement) check.click(); });
     await act(async () => button("Ajukan pemulihan").click());
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ reason: "New inspection reviewed", evidence_refs: [{ type: "batch", id: "new" }] });
     expect(onCreated).toHaveBeenCalledWith("restore-new");
     expect(host.textContent).toContain("approval baru");
-    expect(host.textContent).toContain("FAIL");
+    expect(host.textContent).toContain("Gagal");
   });
 });

@@ -541,3 +541,55 @@ def test_refresh_hari_ini_bergeser_dan_bisa_dikembalikan(
     kembali = demo_state.get("/supply/Cianjur/telur", headers=monitor_headers).json()
     assert kembali["recorded_at"] == awal["recorded_at"]
     assert _seed_supply_terbaru()[1] == 1400.0
+
+
+# ---------------------------------------------------------------------------
+# "Segarkan ke hari ini" juga menyinkronkan rute jalan.
+#
+# Alasannya nyata (temuan 17 Okt 2026): seeder memindahkan tanggal kiriman ke
+# hari ini, tetapi pasangan pemasok→tujuan yang BELUM ada di cache `road_routes`
+# hanya punya geometri kalau disinkronkan. Sebelum perbaikan ini, kiriman baru
+# punya data tetapi tidak punya garis — peta menulis "belum disinkronkan"
+# padahal jalannya bisa diambil. Dua tes di bawah mengunci kontraknya tanpa
+# menyentuh jaringan: sinkronisasi dipalsukan.
+# ---------------------------------------------------------------------------
+
+
+def test_refresh_menyinkronkan_rute_kiriman(
+    demo_state, auth_headers, monkeypatch
+) -> None:
+    import app.seed.seed_data as seed_data
+
+    dipanggil: dict = {}
+
+    async def palsu(reference_time):
+        dipanggil["ref"] = reference_time
+        return {"diambil": 2, "sudah_ada": 3, "gagal": 0, "alasan_gagal": {}}
+
+    monkeypatch.setattr(seed_data, "sync_routes_after_seed", palsu)
+
+    r = demo_state.post("/demo/refresh", headers=auth_headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+
+    assert body["routes"]["diambil"] == 2, "laporan sinkronisasi rute harus dibawa"
+    assert body["route_error"] is None
+    assert dipanggil["ref"].tzinfo is not None, "waktu referensi wajib tz-aware"
+
+
+def test_refresh_tetap_berhasil_bila_osrm_tidak_terjangkau(
+    demo_state, auth_headers, monkeypatch
+) -> None:
+    """Jaringan mati TIDAK boleh menggagalkan tombol demo — dilaporkan, bukan disembunyikan."""
+    import app.seed.seed_data as seed_data
+
+    async def meledak(reference_time):
+        raise RuntimeError("OSRM tidak terjangkau")
+
+    monkeypatch.setattr(seed_data, "sync_routes_after_seed", meledak)
+
+    r = demo_state.post("/demo/refresh", headers=auth_headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["routes"] == {}
+    assert "OSRM tidak terjangkau" in body["route_error"]

@@ -14,6 +14,9 @@ export type TopBarLocation = {
   location: string;
   region?: string | null;
   status?: string | null;
+  /** Asal nilai pasokan (PLAN-023): `tidak_ada_baris` = 0 hasil pengisian. */
+  supply_state?: string | null;
+  demand_state?: string | null;
 };
 
 export type ScopeOption = { value: string; label: string };
@@ -245,7 +248,11 @@ export function networkState(
   locations: readonly TopBarLocation[] | null | undefined
 ): { tone: "safe" | "warning"; label: string } {
   const rows = locations ?? [];
-  const shortage = rows.filter((row) => row?.status === "shortage").length;
+  // Kekurangan hanya dihitung bila PASOKANNYA tercatat (PLAN-023): tanpa itu,
+  // "kekurangan" hanyalah selisih terhadap 0 yang diisi engine.
+  const shortage = rows.filter(
+    (row) => row?.status === "shortage" && row?.supply_state !== "tidak_ada_baris"
+  ).length;
   if (shortage > 0) {
     return { tone: "warning", label: `${shortage} lokasi shortage (${rows.length} terpantau)` };
   }

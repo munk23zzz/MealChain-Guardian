@@ -6,8 +6,7 @@ menyimpannya) dan waktu hitung jalur ditaruh sebagai catatan kaki audit. **Arah 
 Kiriman") SUDAH dibangun** — Overview + tab Keamanan Pangan
 (di Keamanan Pangan ia menggantikan daftar ringkas "Pasokan masuk" supaya tidak ada dua
 penyaji angka yang sama). **Arah B ("Papan Kiriman") SUDAH dibangun** di halaman Pemasok:
-tabel 10 kolom, satu baris per kiriman, dengan urutan "paling mendesak". Arah C (panel
-samping peta) masih usul. Lihat `docs/design.md` bagian "Kontrak kartu Informasi
+tabel 10 kolom, satu baris per kiriman, dengan urutan "paling mendesak". **Arah C (memilih kiriman di peta → garis disorot padat/putus-putus + kartu kiriman menyaring ke kiriman itu) SUDAH dibangun** — lewat tombol pemilih di bawah kanvas (jalur setara keyboard) DAN klik garis di peta. Lihat `docs/design.md` bagian "Kontrak kartu Informasi
 pengiriman" dan "Papan kiriman (Arah B)".
 Disusun 16 Okt 2026 atas permintaan pemilik proyek ("informasi pengirimannya harus
 diriset: info apa saja yang diberikan dan UI-nya bagaimana supaya enak dibaca").

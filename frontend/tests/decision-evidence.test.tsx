@@ -42,6 +42,7 @@ const SELECTED = {
   status: "pending_approval",
   quantity_kg: 600,
   safe_delivered_cost: 16206000,
+  created_at: "2026-10-07T02:16:47Z",
   expires_at: "2026-10-11T02:16:47.973521+00:00",
 };
 
@@ -108,7 +109,7 @@ describe("Decision & Evidence — dengan keputusan", () => {
     expect(html).toContain("Biaya");
     expect(html).toContain("Keamanan &amp; pemasok");
     expect(html).toContain("Governance &amp; persetujuan");
-    expect(html).toContain("Riwayat iterasi");
+    expect(html).toContain("Jejak &amp; riwayat");
   });
 
   it("mengisi fakta nyata: rute, komoditas, biaya, keamanan, pemasok", () => {
@@ -117,7 +118,7 @@ describe("Decision & Evidence — dengan keputusan", () => {
     expect(html).toContain("telur");
     expect(html).toContain("Rp15.720.000");
     expect(html).toContain("Rp16.206.000");
-    expect(html).toContain("PASS");
+    expect(html).toContain("Lolos");
     expect(html).toContain("Supplier A Cianjur");
     expect(html).toContain("keandalan 80%");
     expect(html).toContain("1 dari 2");
@@ -130,12 +131,90 @@ describe("Decision & Evidence — dengan keputusan", () => {
   it("riwayat iterasi memuat alasan penolakan (bahan belajar agen)", () => {
     const html = render();
     expect(html).toContain("v1");
-    expect(html).toContain("Ditolak: Kuota penuh");
+    expect(html).toContain("alasan: Kuota penuh");
+    expect(html).toContain("v1 diajukan");
+  });
+
+  it("selama daftar dimuat: keadaan memuat, bukan tuduhan 'tidak ada di cakupan'", () => {
+    const html = render({ selected: null, selectedId: "id-tidak-ada", loading: true });
+    expect(html).toContain("Memuat keputusan…");
+    expect(html).not.toContain("tidak ada di cakupan");
+  });
+
+  it("tautan yang menunjuk keputusan di luar cakupan dikatakan, bukan disembunyikan", () => {
+    const html = render({ selected: null, selectedId: "id-tidak-ada" });
+    expect(html).toContain("Keputusan itu tidak ada di cakupan akun ini");
+    // id dipotong seperti di seluruh halaman (shortId), bukan dikarang-kurangi.
+    expect(html).toContain("id-tidak");
+    // Tanpa tautan: keadaan kosong yang biasa, tanpa tuduhan cakupan.
+    expect(render({ selected: null, selectedId: null })).toContain("Belum ada keputusan dipilih");
+  });
+
+  it("badge kasus demo ikut terbawa ke kepala keputusan (dulu dari kartu feed)", () => {
+    const denganKasus = render({ selected: { ...SELECTED, demo_case: "gangguan-logistik" } });
+    expect(denganKasus).toContain("Kasus: Gangguan Logistik");
+    expect(render()).not.toContain("rec-case");
+  });
+
+  it("umur jendela ditulis sebagai persen terpakai, bukan jam mentah", () => {
+    const html = render();
+    // NOW = 11 Okt 02.30Z; jendela habis 02.16Z → lewat.
+    expect(html).toContain('data-state="lewat"');
+    expect(html).toContain("Jendela lewat");
+    const aman = render({
+      selected: {
+        ...SELECTED,
+        created_at: "2026-10-07T02:16:47Z",
+        expires_at: "2026-10-12T02:16:47Z",
+      },
+    });
+    // 4 dari 5 hari terpakai.
+    expect(aman).toContain("Jendela terpakai 80%");
+    expect(aman).toContain('data-state="aman"');
+  });
+
+  it("ekspor bukti satu tombol di kepala halaman, mati tanpa token", () => {
+    const html = render();
+    expect(html).toContain("Unduh bukti (JSON)");
+    expect(html).toContain("evidence-export");
+    expect(html).toContain("evidence-hero-actions");
+    expect(render({ token: null })).toContain("disabled");
+  });
+
+  it("lini masa audit: cerita satu keputusan, waktu tidak dikarang", () => {
+    const html = render();
+    expect(html).toContain('class="audit-list"');
+    // Daftar diberi nama: pembaca layar mengumumkan "Jejak keputusan, daftar".
+    expect(html).toContain('aria-label="Jejak keputusan"');
+    expect(html).toContain("v1 diajukan");
+    expect(html).toContain("ditolak · alasan: Kuota penuh");
+    // Verifikasi tidak punya kolom jam di DB → dikatakan apa adanya.
+    expect(html).toContain("waktu tidak tercatat");
+    // Baris approval tanpa nilai true/false BUKAN penolakan (klaim palsu).
+    expect(html).not.toContain(">Ditolak</strong>");
+
+    const denganKeputusan = render({
+      summary: {
+        ...SUMMARY,
+        approvals: [
+          { approver: "u1", role: "sppg_head", approved: true, approved_at: "2026-10-08T03:00:00Z" },
+          { approver: "u2", role: "bgn_monitor", approved: false, approved_at: "2026-10-09T01:00:00Z", comment: "Data penerima belum lengkap" },
+        ],
+      },
+    });
+    // Peran backend diterjemahkan ke label manusia, bukan enum mentah.
+    expect(denganKeputusan).toContain("Kepala SPPG");
+    expect(denganKeputusan).toContain("Disetujui");
+    expect(denganKeputusan).toContain("8 Okt 2026");
+    expect(denganKeputusan).toContain("Data penerima belum lengkap");
+    expect(denganKeputusan).toContain("audit-danger");
   });
 
   it("tanpa iterasi sebelumnya: dikatakan, bukan dibiarkan kosong", () => {
     const html = render({ chain: [] });
-    expect(html).toContain("Belum ada iterasi sebelumnya untuk keputusan ini.");
+    expect(html).toContain("v3 diajukan");
+    // Tidak ada iterasi lama yang dikarang ketika riwayatnya kosong.
+    expect(html).not.toContain("v1 diajukan");
   });
 
   it("panel bukti & integritas terpasang (isi muncul setelah data diambil)", () => {
@@ -163,7 +242,8 @@ describe("Decision & Evidence — dengan keputusan", () => {
     expect(html).toContain("Lewat 13 mnt");
     // Riwayat iterasi tidak ikut hilang.
     expect(html).toContain("v1");
-    expect(html).toContain("Ditolak: Kuota penuh");
+    expect(html).toContain("alasan: Kuota penuh");
+    expect(html).toContain("v1 diajukan");
   });
 });
 
@@ -290,5 +370,71 @@ describe("Decision & Evidence — kalimat langkah berikutnya (17 Okt 2026)", () 
     const html = render({ role: "bgn_monitor", summary: { ...SUMMARY, expiry: { valid: true } } });
     expect(html).toContain("bersifat pengawasan");
     expect(html).toContain("evidence-next-muted");
+  });
+});
+
+// ── Desain baru (17 Okt 2026): struktur "catatan keputusan" ───────────────
+// Urutan region = urutan pengambilan keputusan manusia, bukan urutan tabel.
+describe("Decision & Evidence — struktur catatan keputusan", () => {
+  it("kepala keputusan: aksi + angka kunci dalam bahasa manusia", () => {
+    const html = render();
+    expect(html).toContain("evidence-hero-title");
+    expect(html).toContain("Alihkan 600 kg telur: Cianjur → Jakarta");
+    expect(html).toContain("Kuantitas");
+    expect(html).toContain("600 kg");
+    expect(html).toContain("Rp16.206.000");
+    expect(html).toContain("+Rp486.000");
+    expect(html).toContain("Tujuan");
+    // Status ditulis sebagai kata, bukan enum mentah (copy hygiene).
+    expect(html).toContain(">menunggu persetujuan<");
+    expect(html).not.toContain(">PENDING_APPROVAL<");
+  });
+
+  it("flag triase hanya yang benar-benar perlu diperhatikan", () => {
+    const html = render();
+    expect(html).toContain("Perlu diperhatikan (1)");
+    expect(html).toContain("Jendela berlaku habis");
+    // Fixture punya verified_by + safety pass → tidak ada alarm palsu.
+    expect(html).not.toContain("Belum diverifikasi");
+  });
+
+  it("konsekuensi tiap pilihan disebut, termasuk nomor iterasi berikutnya", () => {
+    const html = render();
+    expect(html).toContain("Kalau disetujui");
+    expect(html).toContain("Belum bisa dieksekusi: Kuota SPPG Jakarta penuh minggu ini.");
+    expect(html).toContain("Kalau ditolak");
+    expect(html).toContain("v4");
+  });
+
+  it("jalur persetujuan: empat langkah berurutan dengan keadaan yang dibaca", () => {
+    const html = render();
+    // Empat langkah, berurutan (kelas langkah, bukan wadah "steps").
+    expect(html.split('class="evidence-route-step ').length - 1).toBe(4);
+    const label = ["Diajukan", "Verifikasi agent", "Persetujuan", "Eksekusi"].map((teks) =>
+      html.indexOf(`>${teks}<`)
+    );
+    expect(label.every((pos) => pos >= 0)).toBe(true);
+    expect(label[0]).toBeLessThan(label[1]);
+    expect(label[1]).toBeLessThan(label[2]);
+    expect(label[2]).toBeLessThan(label[3]);
+    expect(html).toContain("Agen supervisor");
+    expect(html).toContain("Keadaan langkah:");
+    expect(html).toContain("evidence-route-waiting");
+  });
+
+  it("urutan region: kepala → rute → zona keputusan → bukti → jejak", () => {
+    const html = render();
+    const urut = ["evidence-hero", "evidence-route", "evidence-decide", "evidence-grid", "evidence-bottom"].map(
+      (kelas) => html.indexOf(kelas)
+    );
+    for (let i = 1; i < urut.length; i += 1) {
+      expect(urut[i]).toBeGreaterThan(urut[i - 1]);
+    }
+  });
+
+  it("ada jalan pintas ke zona keputusan (dan id-nya benar-benar ada)", () => {
+    const html = render();
+    expect(html).toContain('href="#zona-keputusan"');
+    expect(html).toContain('id="zona-keputusan"');
   });
 });

@@ -99,6 +99,11 @@ async def update_user(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     user = await _ambil_user(db, user_id)
+    # Pagar tata kelola (keputusan owner 2026-10-17): bgn_monitor memegang
+    # pengelolaan pengguna/lokasi, tetapi TIDAK boleh mengubah perannya sendiri
+    # (mencegah eskalasi hak akses lewat akunnya sendiri).
+    if payload.role is not None and user.id == _admin.id:
+        raise HTTPException(status_code=422, detail="tidak boleh mengubah peran sendiri")
     kirim_lokasi = "location_id" in payload.model_fields_set
     lokasi_id = payload.location_id if kirim_lokasi else UNSET
 

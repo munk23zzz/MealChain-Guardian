@@ -35,7 +35,7 @@ class ProposalRequest(ReasonRequest):
 
 @router.post("/supplier-exclusions/proposals", status_code=201)
 async def propose(
-    payload: ProposalRequest, user=Depends(require_roles(*MUTATING_ROLES)), db=Depends(get_db)
+    payload: ProposalRequest, user=Depends(require_roles("sppg_head")), db=Depends(get_db)
 ):
     try:
         row = await service.propose(

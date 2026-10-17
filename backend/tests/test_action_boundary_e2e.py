@@ -164,9 +164,10 @@ def test_actions_verify_rejects_unknown_verdict(client):
         _cleanup(decision_id, [head["email"]])
 
 
-def test_e2e_event1_to_mock_sap_single_approval_consistent(client):
-    """CONSISTENT: 1 approval (head ATAU nutritionist) cukup → PO mock."""
+def test_e2e_event1_to_mock_sap_dua_approval_untuk_transfer(client):
+    """Transfer operasional: dua approval (Head lalu Nutritionist) wajib → PO mock."""
     head = _mk_user("sppg_head", "Jakarta")
+    nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
     decision_id = _event1_decision_id()
     restore = _force_server_verdict("CONSISTENT")
     try:
@@ -185,12 +186,25 @@ def test_e2e_event1_to_mock_sap_single_approval_consistent(client):
             headers=_login(client, head),
         )
         assert resp.status_code == 200, resp.text
-        assert resp.json()["approval_requirement"]["min_approvals"] == 1
-        # approve HANYA head → requirement CONSISTENT terpenuhi
+        assert resp.json()["approval_requirement"]["min_approvals"] == 2
+        # approve Head saja → belum cukup
         resp = client.post(
             "/actions/approve",
             json={"decision_id": decision_id, "approved": True},
             headers=_login(client, head),
+        )
+        assert resp.status_code == 200, resp.text
+        resp = client.post(
+            "/actions/execute",
+            json={"decision_id": decision_id},
+            headers=_login(client, head),
+        )
+        assert resp.status_code == 409, "approval Nutritionist belum ada"
+        # approval kedua: Nutritionist
+        resp = client.post(
+            "/actions/approve",
+            json={"decision_id": decision_id, "approved": True},
+            headers=_login(client, nutritionist),
         )
         assert resp.status_code == 200, resp.text
         # execute → PO mock
@@ -216,13 +230,15 @@ def test_e2e_event1_to_mock_sap_single_approval_consistent(client):
         assert po == 1
     finally:
         restore()
-        _cleanup(decision_id, [head["email"]])
+        _cleanup(decision_id, [head["email"], nutritionist["email"]])
 
 
 def test_e2e_unavailable_requires_both_approvers(client):
     """UNAVAILABLE: dua approval (head DAN nutritionist) wajib."""
     head = _mk_user("sppg_head", "Jakarta")
-    nutritionist = _mk_user("sppg_nutritionist", "Bogor")
+    # Ruling 2026-10-14 §3: approver kedua wajib satu SPPG dengan target
+    # (dulu "Bogor" — lolos hanya karena jalur tulis belum ber-cakupan).
+    nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
     decision_id = _event1_decision_id()
     restore = _force_server_verdict("UNAVAILABLE")
     try:

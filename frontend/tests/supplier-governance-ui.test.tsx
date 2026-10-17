@@ -39,14 +39,15 @@ describe("Approval administratif supplier", () => {
     expect(html).not.toContain("Jumlah:");
   });
 
-  it("restoration mempertahankan peringatan safety FAIL", () => {
+  it("restoration mempertahankan peringatan keamanan gagal", () => {
     const html = renderToStaticMarkup(<ApprovalModal summary={{ ...summary,
       decision_type: "supplier_exclusion_restoration", supplier_governance: {
         ...summary.supplier_governance, action: "restore",
       },
     }} />);
     expect(html).toContain("Pemulihan supplier");
-    expect(html).toContain("FAIL");
+    // Peringatannya tetap ada, dalam bahasa manusia (dulu "Batch FAIL ...").
+    expect(html).toContain("gagal pemeriksaan");
     expect(html).not.toContain("PO mock");
   });
 

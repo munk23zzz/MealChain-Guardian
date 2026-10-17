@@ -219,9 +219,9 @@ def _verify_decision(decision_id: str, verdict: str) -> None:
         engine.dispose()
 
 
-def test_execute_success_consistent_needs_one_approval_writes_mock_po(client):
+def test_execute_success_operasional_butuh_dua_approval_writes_mock_po(client):
     head = _mk_user("sppg_head", "Jakarta")
-    nutritionist = _mk_user("sppg_nutritionist", "Bogor")
+    nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
     decision_id = _mk_decision(client)
     try:
         client.post(
@@ -236,11 +236,23 @@ def test_execute_success_consistent_needs_one_approval_writes_mock_po(client):
             headers=_login(client, head),
         )
         assert resp.status_code == 409
-        # 1 approval sppg_head cukup untuk CONSISTENT
+        # PLAN.md §13.3: transfer butuh DUA approval (Head lalu Nutritionist),
+        # meski verdict verifier CONSISTENT.
         resp = client.post(
             "/actions/approve",
             json={"decision_id": decision_id, "approved": True},
             headers=_login(client, head),
+        )
+        assert resp.status_code == 200, resp.text
+        resp = client.post(
+            "/actions/execute", json={"decision_id": decision_id},
+            headers=_login(client, head),
+        )
+        assert resp.status_code == 409, "approval Nutritionist belum ada"
+        resp = client.post(
+            "/actions/approve",
+            json={"decision_id": decision_id, "approved": True},
+            headers=_login(client, nutritionist),
         )
         assert resp.status_code == 200, resp.text
         resp = client.post(
@@ -280,7 +292,12 @@ def test_execute_success_consistent_needs_one_approval_writes_mock_po(client):
 
 def test_execute_flagged_requires_both_roles(client):
     head = _mk_user("sppg_head", "Jakarta")
-    nutritionist = _mk_user("sppg_nutritionist", "Bogor")
+    # Ruling 2026-10-14 §3: approver kedua wajib berasal dari SPPG yang SAMA
+    # dengan lokasi target. Ahli gizi di Bogor tidak lagi boleh menyetujui
+    # keputusan yang menyasar Jakarta — aturan itu baru ditegakkan di jalur
+    # tulis /actions/* pada 2026-10-17, jadi fixture di sini (dulu Bogor)
+    # dipindah ke Jakarta supaya yang diuji tetap "dua role", bukan cakupan.
+    nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
     decision_id = _mk_decision(client)
     try:
         client.post(

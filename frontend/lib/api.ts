@@ -47,6 +47,16 @@ export async function fetchMe(token: string) {
   });
 }
 
+// GET /integrations/status — papan status integrasi per komponen (read-only).
+// Status = JENIS BUKTI (env/artefak/kontrak), bukan klaim operasional: backend
+// tidak menjalankan probe apa pun, jadi tidak ada label hijau tanpa bukti
+// (PLAN-012). Butuh akar "integrations" di next.config.js (API_ROOTS).
+export function fetchIntegrationStatus(token: string): Promise<any> {
+  return request("/integrations/status", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export function fetchComplianceDossier(decisionId: string, token: string): Promise<any> {
   return request(`/decisions/${encodeURIComponent(decisionId)}/compliance`, {
     headers: { Authorization: `Bearer ${token}` },

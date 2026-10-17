@@ -60,7 +60,12 @@ describe("wiring sidebar + map di app/page.tsx (S4-06 polish)", () => {
     // Halaman bukti keputusan kini tab tersendiri (sidebar acuan halaman 3):
     expect(pageSrc).toMatch(/<DecisionEvidence/);
     expect(evidenceSrc).toMatch(/<DecisionActions/);
-    expect(evidenceSrc).toMatch(/<RecommendationCard/);
+    // Desain baru halaman bukti (17 Okt 2026) mengganti kartu ala feed dengan
+    // hero "catatan keputusan" + lini masa audit; yang dipin sekarang: tindakan
+    // keputusan, lini masa, integritas bukti — dan badge kasus demo tetap
+    // diambil dari sumber yang sama (caseLabelOf di RecommendationCard).
+    expect(evidenceSrc).toMatch(/<DecisionAudit/);
+    expect(evidenceSrc).toMatch(/caseLabelOf/);
     expect(evidenceSrc).toMatch(/<IntegrityPanel/);
     expect(pageSrc).toMatch(/Recommendation Feed/);
     expect(pageSrc).toMatch(/Agent Activity Log/);

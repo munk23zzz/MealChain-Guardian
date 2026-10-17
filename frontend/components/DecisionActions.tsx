@@ -18,6 +18,7 @@
 import { useRef, useState } from "react";
 import { approveAction, executeAction, reproposeAction, verifyAction } from "../lib/api";
 import ApprovalMenu from "./ApprovalMenu";
+import { humanizeBlocker } from "../lib/bahasa";
 import Popup from "./Popup";
 
 const APPROVER_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
@@ -35,13 +36,16 @@ export function visibleActions(
   if (!APPROVER_ROLES.has(role)) {
     return { approve: false, execute: false, repropose: false, readOnly: true };
   }
+  // PLAN.md §13.1/§13.3: approve milik Head DAN Nutritionist (dua approval
+  // berbeda user), tetapi eksekusi & ajukan ulang hanya milik Head.
+  const headOnly = role === "sppg_head";
   const actionable =
     status === "pending_approval" || status === "verifier_flagged";
   return {
     approve: actionable,
-    execute: actionable,
+    execute: actionable && headOnly,
     // Rejection loop: keputusan ditolak → agent minta iterasi baru.
-    repropose: status === "rejected",
+    repropose: status === "rejected" && headOnly,
     readOnly: false,
   };
 }
@@ -162,7 +166,7 @@ export default function DecisionActions({
       </span>
       {message && (
         <p className="action-message" role="status">
-          {message}
+          {humanizeBlocker(message) ?? message}
         </p>
       )}
       <Popup

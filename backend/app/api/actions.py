@@ -21,6 +21,7 @@ from app.api.auth import require_roles
 from app.api.dependencies import get_db
 from app.core.approval_matrix import approval_requirement, evaluate_approvals
 from app.core.decision_validity import is_decision_valid
+from app.core.scope import assert_in_scope
 from app.models import AgentTrace, Approval, Batch, Commodity, Decision, User
 from app.services import supplier_exclusion_service as exclusions
 from app.services.ledger_service import append_block
@@ -28,6 +29,10 @@ from app.services.ledger_service import append_block
 router = APIRouter()
 
 VERIFIER_ROLES = ("sppg_head", "sppg_nutritionist")
+# PLAN.md §13.1/§13.3 (keputusan owner): hanya Head yang boleh mengusulkan,
+# menentukan purpose operasional, dan mengeksekusi transfer. Nutritionist
+# tetap boleh verify dan memberi approval kedua (lihat VERIFIER_ROLES).
+PROPOSER_ROLES = ("sppg_head",)
 
 
 class ProposeRequest(BaseModel):
@@ -61,11 +66,32 @@ async def _load_decision(db: AsyncSession, decision_id: uuid.UUID) -> Decision:
     return row
 
 
+def _require_decision_scope(user: User, decision: Decision) -> None:
+    """Cakupan lokasi pada JALUR TULIS keputusan (Ruling 2026-10-14 §3).
+
+    "Keputusan yang menyasar SPPG X hanya bisa disetujui oleh approver dari
+    SPPG X (kepala + ahli gizi X). Verifier kedua tidak lagi boleh berasal dari
+    SPPG lain."
+
+    Sebelum 2026-10-17 penjaga ini hanya dipasang di cabang `ADMIN_TYPES`
+    (supplier_exclusion*), sehingga propose/verify/approve/execute keputusan
+    operasional (`regional_balance`, `safety_disruption`, `price_anomaly`)
+    masih bisa dijalankan peran SPPG dari lokasi lain. Aturan ditegakkan lewat
+    helper kanonik `app/core/scope.assert_in_scope` — satu sumber pesan/aturan
+    dengan endpoint baca (mis. `/decisions/{id}`), bukan salinan aturan baru.
+    """
+    assert_in_scope(user, decision.target_location_id, what="keputusan")
+
+
 def _requirement_for(row: Decision) -> dict:
     verdict = (row.verifier_note or "unavailable").strip().lower()
     if verdict not in {"consistent", "flagged", "unavailable"}:
         verdict = "unavailable"
-    return approval_requirement(verdict)
+    # Keputusan operasional (transfer) wajib dua approval dari dua role —
+    # Head lalu Nutritionist — apa pun verdict verifier-nya (PLAN.md §13.3).
+    # Tipe administrasi (supplier exclusion/restoration) tetap ikut verdict.
+    operasional = row.decision_type not in exclusions.ADMIN_TYPES
+    return approval_requirement(verdict, dua_role_wajib=operasional)
 
 
 def _verifier_unverified(row: Decision) -> bool:
@@ -108,7 +134,7 @@ def _now_utc() -> datetime:
 @router.post("/actions/propose", status_code=201)
 async def propose_action(
     payload: ProposeRequest,
-    user: User = Depends(require_roles(*VERIFIER_ROLES)),
+    user: User = Depends(require_roles(*PROPOSER_ROLES)),
     db: AsyncSession = Depends(get_db),
 ):
     decision = await _load_decision(db, payload.decision_id)
@@ -119,6 +145,8 @@ async def propose_action(
         )
     if decision.decision_type in exclusions.ADMIN_TYPES:
         raise HTTPException(409, "gunakan endpoint proposal supplier-exclusions")
+    # Ruling 2026-10-14 §3: proposal keputusan operasional ikut terkunci lokasi.
+    _require_decision_scope(user, decision)
     # Kunci nilai snapshot utk PO: commodity/supplier/lokasi.
     commodity = (
         await db.execute(select(Commodity).where(Commodity.id == decision.commodity_id))
@@ -199,8 +227,10 @@ async def verify_action(
             status_code=409,
             detail=("verify hanya untuk decision pra-approval " f"(status kini {decision.status})"),
         )
-    if decision.decision_type in exclusions.ADMIN_TYPES:
-        exclusions.require_scope(user, decision.target_location_id)
+    # Ruling 2026-10-14 §3: verifikasi pun terkunci lokasi. Sebelum ini penjaga
+    # itu hanya berlaku untuk tipe administrasi, sehingga verifier dari SPPG
+    # lain masih bisa memverifikasi keputusan operasional.
+    _require_decision_scope(user, decision)
     existing_approvals = (
         (await db.execute(select(Approval).where(Approval.decision_id == decision.id)))
         .scalars()
@@ -269,19 +299,29 @@ async def approve_action(
         raise HTTPException(
             status_code=409, detail=f"decision status {decision.status} tidak dapat di-approve"
         )
-    if decision.decision_type in exclusions.ADMIN_TYPES:
-        exclusions.require_scope(user, decision.target_location_id)
-        if not is_decision_valid(_now_utc(), decision.expires_at):
-            raise HTTPException(409, "decision expired")
-        existing = (
-            await db.execute(
-                select(Approval.id).where(
-                    Approval.decision_id == decision.id, Approval.approved_by == user.id
-                )
+    # Ruling 2026-10-14 §3 + integritas jejak approval. Kedua penjaga ini DULU
+    # berada di dalam cabang `ADMIN_TYPES`, sehingga keputusan operasional bisa
+    # di-approve oleh peran SPPG dari lokasi lain dan di-approve dua kali oleh
+    # satu orang.
+    _require_decision_scope(user, decision)
+    if decision.decision_type in exclusions.ADMIN_TYPES and not is_decision_valid(
+        _now_utc(), decision.expires_at
+    ):
+        # Kedaluwarsa pada APPROVE sengaja hanya dijaga untuk keputusan
+        # administratif — Keputusan owner 1b, dipaku
+        # `test_approve_expired_ordinary_decision_accepted`: keputusan biasa
+        # yang lewat tenggat masih boleh disetujui, tetapi tetap tidak bisa
+        # dieksekusi karena /actions/execute memeriksa kedaluwarsa tanpa syarat.
+        raise HTTPException(409, "decision expired")
+    existing = (
+        await db.execute(
+            select(Approval.id).where(
+                Approval.decision_id == decision.id, Approval.approved_by == user.id
             )
-        ).first()
-        if existing:
-            raise HTTPException(409, "approval sudah tercatat")
+        )
+    ).first()
+    if existing:
+        raise HTTPException(409, "approval sudah tercatat")
     # Penolakan WAJIB beralasan — alasan inilah bahan learning agent
     # (rejection loop, permintaan Roy 2026-10-07). Tanpa alasan = 422.
     if not payload.approved and not (payload.comment or "").strip():
@@ -349,13 +389,14 @@ async def _approval_users(db: AsyncSession, approvals):
 @router.post("/actions/execute", status_code=200)
 async def execute_action(
     payload: ExecuteRequest,
-    user: User = Depends(require_roles(*VERIFIER_ROLES)),
+    user: User = Depends(require_roles(*PROPOSER_ROLES)),
     db: AsyncSession = Depends(get_db),
 ):
     decision = await _load_decision(db, payload.decision_id)
+    # Ruling 2026-10-14 §3: eksekusi terkunci ke lokasi target (semua tipe).
+    _require_decision_scope(user, decision)
     if decision.status == "executed":
         if decision.decision_type in exclusions.ADMIN_TYPES:
-            exclusions.require_scope(user, decision.target_location_id)
             return {
                 "decision_id": str(decision.id),
                 "status": "executed",
@@ -380,11 +421,12 @@ async def execute_action(
         .scalars()
         .all()
     )
+    approvers = await _approval_users(db, rows)
     evaluation = evaluate_approvals(
         _requirement_for(decision),
         [
             {"role": u.role, "approved": a.approved}
-            for a, u in zip(rows, await _approval_users(db, rows))
+            for a, u in zip(rows, approvers)
         ],
     )
     if not evaluation["satisfied"]:
@@ -392,20 +434,22 @@ async def execute_action(
             status_code=409,
             detail="approval belum memenuhi requirement (missing/rejected)",
         )
+    # Ruling 2026-10-14 §3: hanya approval dari lokasi TARGET yang dihitung.
+    # Filter ini dulu hanya dipakai untuk tipe administrasi, sehingga approval
+    # approver SPPG lain (mis. baris lama sebelum ruling) ikut memenuhi matriks
+    # keputusan operasional.
+    scoped = evaluate_approvals(
+        _requirement_for(decision),
+        [
+            {"role": u.role, "approved": a.approved}
+            for a, u in zip(rows, approvers)
+            if u.location_id == decision.target_location_id
+        ],
+    )
+    if not scoped["satisfied"]:
+        raise HTTPException(409, "approval scope tidak memenuhi requirement")
 
     if decision.decision_type in exclusions.ADMIN_TYPES:
-        exclusions.require_scope(user, decision.target_location_id)
-        approvers = await _approval_users(db, rows)
-        scoped = evaluate_approvals(
-            _requirement_for(decision),
-            [
-                {"role": u.role, "approved": a.approved}
-                for a, u in zip(rows, approvers)
-                if u.location_id == decision.target_location_id
-            ],
-        )
-        if not scoped["satisfied"]:
-            raise HTTPException(409, "approval scope tidak memenuhi requirement")
         exclusion = await exclusions.execute(db, decision, user)
         decision.status = "executed"
         await append_block(
@@ -542,7 +586,7 @@ class ReproposeRequest(BaseModel):
 async def repropose_action(
     payload: ReproposeRequest,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_roles(*VERIFIER_ROLES)),
+    user: User = Depends(require_roles(*PROPOSER_ROLES)),
 ):
     """Agent merespons penolakan: iterasi baru + langkah LEARN.
 

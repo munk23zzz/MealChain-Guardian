@@ -50,6 +50,33 @@ async def _resolve_commodity(db, value: str) -> Commodity:
     return com
 
 
+def _asal_nilai(row) -> str:
+    """Asal sebuah angka: `terukur` (baris ada) atau `tidak_ada_baris`.
+
+    Angka `0` TETAP dikirim supaya aturan tampilan tidak berubah (`0 kg` tetap
+    `0 kg`), tetapi konsumen harus bisa memisahkan "nol terukur" dari "tidak ada
+    catatan" — tanpa penanda ini, lokasi tanpa baris permintaan (nyata: Bandung
+    & Cianjur untuk telur) tampak punya surplus ratusan kilo (PLAN-023).
+    """
+    return "terukur" if row is not None else "tidak_ada_baris"
+
+
+def _data_state(s_row, d_row) -> str:
+    """Ringkasan per lokasi: `terukur` | `sebagian` | `tidak_ada_baris`."""
+    if s_row is not None and d_row is not None:
+        return "terukur"
+    if s_row is None and d_row is None:
+        return "tidak_ada_baris"
+    return "sebagian"
+
+
+def _waktu(row) -> str | None:
+    """Stempel waktu baris yang benar-benar dipakai (= asal nilai); None = tak ada."""
+    if row is None or row.recorded_at is None:
+        return None
+    return row.recorded_at.isoformat()
+
+
 @router.get("/balance/{location}/{commodity}")
 async def get_balance(
     location: str,
@@ -108,6 +135,12 @@ async def get_balance(
         "surplus_kg": float(gap.surplus_kg),
         "shortage_kg": float(gap.shortage_kg),
         "status": gap.status,
+        # Asal nilai per sisi (PLAN-023): angka 0 tidak lagi ambigu.
+        "supply_state": _asal_nilai(row_supply),
+        "demand_state": _asal_nilai(row_demand),
+        "data_state": _data_state(row_supply, row_demand),
+        "supply_recorded_at": _waktu(row_supply),
+        "demand_recorded_at": _waktu(row_demand),
     }
 
 
@@ -235,6 +268,13 @@ async def get_balance_map(
                 "surplus_kg": float(gap.surplus_kg),
                 "shortage_kg": float(gap.shortage_kg),
                 "status": gap.status,
+                # Asal nilai per sisi (PLAN-023): lokasi tanpa baris permintaan
+                # tidak lagi tampak "surplus" tanpa bisa dibedakan.
+                "supply_state": _asal_nilai(s_row),
+                "demand_state": _asal_nilai(d_row),
+                "data_state": _data_state(s_row, d_row),
+                "supply_recorded_at": _waktu(s_row),
+                "demand_recorded_at": _waktu(d_row),
             }
         )
     return {"commodity": com.name, "locations": items}

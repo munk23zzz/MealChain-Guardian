@@ -46,7 +46,10 @@ def _verdict_of(decision: Decision) -> str:
 def _requirement_for(decision: Decision) -> dict:
     from app.core.approval_matrix import approval_requirement
 
-    return approval_requirement(_verdict_of(decision))
+    # Harus parity dengan api/actions.py: transfer operasional wajib dua role
+    # (PLAN.md §13.3); tipe administrasi (supplier exclusion) ikut verdict.
+    operasional = decision.decision_type not in exclusions.ADMIN_TYPES
+    return approval_requirement(_verdict_of(decision), dua_role_wajib=operasional)
 
 
 async def _supplier_for(db: AsyncSession, decision: Decision) -> Supplier | None:

@@ -12,6 +12,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   approvalFacts,
+  auditTimeline,
+  windowUsage,
+  approvalRoute,
+  attentionFlags,
+  consequences,
+  decisionHeadline,
+  decisionMetrics,
   costFacts,
   decisionFacts,
   hiddenFactsLabel,
@@ -121,7 +128,7 @@ describe("decisionFacts — identitas keputusan", () => {
     expect(find(rows, "Jumlah").value).toBe("600 kg");
     expect(find(rows, "Iterasi").value).toBe("3");
     expect(find(rows, "Menggantikan").value).toBe("0267f818");
-    expect(find(rows, "Diusulkan oleh").value).toBe("supervisor_agent");
+    expect(find(rows, "Diusulkan oleh").value).toBe("Agen supervisor");
   });
 
   it("tenggat ditulis sebagai sisa waktu manusiawi (dari expiry bersarang)", () => {
@@ -213,12 +220,12 @@ describe("costFacts — biaya", () => {
 describe("safetyFacts — keamanan & pemasok", () => {
   it("status terburuk, batch diperiksa, pemblokiran, verifikator, material, target", () => {
     const rows = safetyFacts(SUMMARY);
-    expect(find(rows, "Status keamanan terburuk").value).toBe("PASS");
+    expect(find(rows, "Status keamanan terburuk").value).toBe("Lolos");
     expect(find(rows, "Batch diperiksa").value).toBe("1");
     expect(find(rows, "Diblokir keamanan").value).toBe("Tidak");
-    expect(find(rows, "Verifikator").value).toBe("unavailable · verifier_agent");
+    expect(find(rows, "Verifikator").value).toBe("tidak dapat dievaluasi · Agen verifikator");
     expect(find(rows, "Nomor material").value).toBe("MAT-TELUR");
-    expect(find(rows, "Target eksekusi").value).toBe("MOCK");
+    expect(find(rows, "Target eksekusi").value).toBe("Simulasi (mock)");
   });
 
   it("aman → nada ok; gagal/blokir → nada bahaya", () => {
@@ -255,7 +262,7 @@ describe("approvalFacts — governance", () => {
     expect(find(rows, "Alasan tertahan").value).toBe(
       "Kuota SPPG Jakarta penuh minggu ini · Verifikator belum tersedia"
     );
-    expect(find(rows, "Peran penyetuju").value).toBe("sppg_head · sppg_nutritionist");
+    expect(find(rows, "Peran penyetuju").value).toBe("Kepala SPPG · Ahli Gizi SPPG");
   });
 
   it("tanpa kalimat syarat: ambang ditulis, verdict jadi petunjuk", () => {
@@ -264,7 +271,7 @@ describe("approvalFacts — governance", () => {
       approval_requirement: { verdict: "unavailable", min_approvals: 2 },
     });
     expect(find(rows, "Syarat persetujuan").value).toBe("minimal 2 persetujuan");
-    expect(find(rows, "Syarat persetujuan").hint).toBe("putusan aturan: tidak dapat dievaluasi");
+    expect(find(rows, "Syarat persetujuan").hint).toBe("aturan persetujuan: tidak dapat dievaluasi");
   });
 
   it("verdict ok tidak ditampilkan sebagai petunjuk (tidak ada yang tertahan)", () => {
@@ -287,18 +294,18 @@ describe("approvalFacts — governance", () => {
     expect(find(rows, "Boleh dieksekusi").value).toBe("—");
   });
 
-  it("putusan aturan dibaca manusia, nilai asing tetap apa adanya", () => {
+  it("aturan persetujuan dibaca manusia, nilai asing tetap apa adanya", () => {
     const rows = (verdict: string) =>
       approvalFacts({
         approvals: [],
         approval_requirement: { verdict, min_approvals: 2, required_roles: [["sppg_head"], ["sppg_nutritionist"]] },
       });
     expect(find(rows("unavailable"), "Syarat persetujuan").value).toBe("minimal 2 persetujuan");
-    expect(find(rows("unavailable"), "Syarat persetujuan").hint).toBe("putusan aturan: tidak dapat dievaluasi");
-    expect(find(rows("flagged"), "Syarat persetujuan").hint).toBe("putusan aturan: terindikasi");
-    expect(find(rows("consistent"), "Syarat persetujuan").hint).toBe("putusan aturan: konsisten");
+    expect(find(rows("unavailable"), "Syarat persetujuan").hint).toBe("aturan persetujuan: tidak dapat dievaluasi");
+    expect(find(rows("flagged"), "Syarat persetujuan").hint).toBe("aturan persetujuan: terindikasi");
+    expect(find(rows("consistent"), "Syarat persetujuan").hint).toBe("aturan persetujuan: konsisten");
     expect(find(rows("ok"), "Syarat persetujuan").hint).toBe(null);
-    expect(find(rows("aneh-sekali"), "Syarat persetujuan").hint).toBe("putusan aturan: aneh-sekali");
+    expect(find(rows("aneh-sekali"), "Syarat persetujuan").hint).toBe("aturan persetujuan: aneh-sekali");
   });
 });
 
@@ -422,5 +429,257 @@ describe("langkah berikutnya: satu kalimat yang menjawab \"apa yang harus saya l
     const hasil = nextStep({ role: "sppg_head", status: "pending_approval", summary: null });
     expect(hasil.text.length).toBeGreaterThan(10);
     expect(hasil.text).not.toContain("undefined");
+  });
+});
+
+// ── Desain baru halaman bukti (17 Okt 2026) ────────────────────────────────
+// Struktur "catatan keputusan": apa yang diminta → seberapa besar → siapa
+// memegang → saya harus apa → bukti. Riset: _qa/rencana-decision-evidence-v2.md.
+describe("kepala keputusan: satu kalimat aksi + angka kunci", () => {
+  it("judul menyebut aksi, jumlah, komoditas, dan rute", () => {
+    expect(decisionHeadline({ decision_type: "regional_balance", quantity_kg: 600 }, SUMMARY)).toBe(
+      "Alihkan 600 kg telur: Cianjur → Jakarta"
+    );
+  });
+
+  it("tanpa nama lokasi: rute tidak dikarang, sisanya tetap", () => {
+    const hasil = decisionHeadline({ decision_type: "regional_balance", quantity_kg: 600 }, { commodity: "telur" });
+    expect(hasil).toBe("Alihkan 600 kg telur");
+    expect(hasil).not.toContain("→");
+    expect(hasil).not.toContain("null");
+  });
+
+  it("jenis tak dikenal memakai kata manusia dari peta yang ada, bukan istilah mentah", () => {
+    const hasil = decisionHeadline({ decision_type: "regional_balance" }, { quantity_kg: 1, commodity: "beras" });
+    expect(hasil.startsWith("Alihkan")).toBe(true);
+    const asing = decisionHeadline({ decision_type: "sesuatu_baru" }, {});
+    expect(asing).not.toContain("_");
+  });
+
+  it("metrik kunci: kuantitas, biaya aman, selisih — hanya yang benar-benar ada", () => {
+    const rows = decisionMetrics({ quantity_kg: 600 }, SUMMARY);
+    const pick = (label: string) => rows.find((r) => r.label === label)?.value;
+    expect(pick("Kuantitas")).toBe("600 kg");
+    expect(pick("Biaya aman terkirim")).toBe("Rp16.206.000");
+    expect(pick("Selisih dari harga beli")).toBe("+Rp486.000");
+    expect(decisionMetrics({}, {})).toEqual([]);
+  });
+});
+
+describe("flag triase: yang perlu diperhatikan, bersumber data", () => {
+  it("jendela lewat + belum diverifikasi muncul sebagai flag", () => {
+    const flags = attentionFlags({
+      decision: { status: "pending_approval" },
+      summary: { ...SUMMARY, verifier: { verdict: null, verified_by: null } },
+    });
+    const ids = flags.map((f) => f.id);
+    expect(ids).toContain("expiry");
+    expect(ids).toContain("verifier");
+    expect(flags.every((f) => f.text.length > 10)).toBe(true);
+  });
+
+  it("safety diblokir memakai alasan dari server, bukan karangan UI", () => {
+    const flags = attentionFlags({
+      decision: { status: "pending_approval" },
+      summary: {
+        ...SUMMARY,
+        safety: { worst_status: "fail", blocked: true, reason: "safety revalidation gagal: batch sumber kini FAIL" },
+      },
+    });
+    const safety = flags.find((f) => f.id === "safety");
+    expect(safety?.tone).toBe("danger");
+    expect(safety?.text).toContain("batch sumber kini FAIL");
+  });
+
+  it("keputusan sehat tidak menandai apa pun (tidak ada alarm palsu)", () => {
+    const flags = attentionFlags({
+      decision: { status: "pending_approval" },
+      summary: {
+        ...SUMMARY,
+        expiry: { valid: true, expires_at: "2026-10-25T06:59:00+00:00" },
+        verifier: { verdict: "flagged", verified_by: "verifier_agent" },
+        safety: { worst_status: "pass", blocked: false },
+      },
+    });
+    expect(flags).toEqual([]);
+  });
+});
+
+describe("jalur persetujuan: siapa memegang, siapa berikutnya", () => {
+  const ringkas = {
+    ...SUMMARY,
+    approval_requirement: { verdict: "flagged", min_approvals: 2, required_roles: [["sppg_head"], ["sppg_nutritionist"]] },
+    approval_state: { satisfied: false, rejected: false, missing: [["sppg_nutritionist"]], approved_roles: ["sppg_head"] },
+  };
+
+  it("empat langkah tetap, urut, dengan keadaan dan rincian", () => {
+    const steps = approvalRoute({ decision: { status: "pending_approval", created_at: "2026-10-07T23:47:00+07:00", proposed_by: "supervisor_agent" }, summary: ringkas, now: new Date(0) });
+    expect(steps.map((s) => s.id)).toEqual(["proposed", "verify", "approve", "execute"]);
+    expect(steps[0].state).toBe("done");
+    expect(steps[0].detail).toContain("Agen supervisor");
+    expect(steps[2].state).toBe("current");
+    expect(steps[2].detail).toContain("1 dari 2");
+    expect(steps[2].detail).toContain("Ahli Gizi SPPG");
+    expect(steps[3].state).toBe("waiting");
+  });
+
+  it("sudah tidak ada yang kurang: langkah persetujuan selesai", () => {
+    const steps = approvalRoute({
+      decision: { status: "approved" },
+      summary: { ...ringkas, approval_state: { satisfied: true, rejected: false, missing: [], approved_roles: ["sppg_head", "sppg_nutritionist"] } },
+      now: null,
+    });
+    expect(steps[2].state).toBe("done");
+    expect(steps[2].detail).toContain("2 dari 2");
+  });
+
+  it("ditolak: langkah persetujuan jadi terhalang, bukan diam-diam selesai", () => {
+    const steps = approvalRoute({ decision: { status: "rejected" }, summary: ringkas, now: null });
+    expect(steps[2].state).toBe("blocked");
+  });
+});
+
+describe("konsekuensi: akibat tiap pilihan, dari data", () => {
+  it("bisa dieksekusi di target MOCK: dikatakan bahwa tidak ada pesanan nyata", () => {
+    const hasil = consequences({ decision: { status: "pending_approval" }, summary: { ...SUMMARY, can_execute: true } });
+    expect(hasil.approve).toContain("simulasi (mock)");
+    expect(hasil.approve).toContain("tidak ada pesanan nyata");
+  });
+
+  it("terhalang: sebabnya disebut dari blocking_reasons, dipangkas", () => {
+    const hasil = consequences({
+      decision: { status: "pending_approval" },
+      summary: { ...SUMMARY, can_execute: false, blocking_reasons: ["a satu", "b dua", "c tiga", "d empat"] },
+    });
+    expect(hasil.approve).toContain("a satu · b dua");
+    expect(hasil.approve).toContain("(+2 lain)");
+    expect(hasil.approve).not.toContain("c tiga");
+  });
+
+  it("ditolak: agent bisa mengajukan iterasi berikutnya", () => {
+    const hasil = consequences({ decision: { status: "rejected", iteration: 3 }, summary: SUMMARY });
+    expect(hasil.reject.toLowerCase()).toContain("ditola");
+    const belum = consequences({ decision: { status: "pending_approval", iteration: 3 }, summary: SUMMARY });
+    expect(belum.reject).toContain("v4");
+  });
+});
+
+// ── Langkah 2 (17 Okt 2026): lini masa audit + umur jendela ───────────────
+describe("lini masa audit: siapa, kapan, versi mana", () => {
+  const CHAIN = [
+    { decision_id: "v1", iteration: 1, status: "rejected", rejection_reason: "Kuota penuh", created_at: "2026-10-07T13:47:00+07:00" },
+    { decision_id: "v2", iteration: 2, status: "rejected", rejection_reason: "Harga belum turun", created_at: "2026-10-08T08:10:00+07:00" },
+  ];
+  const SEKARANG = {
+    decision_id: "v3",
+    decision_type: "regional_balance",
+    status: "pending_approval",
+    iteration: 3,
+    proposed_by: "supervisor_agent",
+    created_at: "2026-10-09T09:00:00+07:00",
+    rejection_reason: null,
+  };
+  const RINGKAS = {
+    ...SUMMARY,
+    verifier: { verdict: "flagged", verified_by: "verifier_agent" },
+    approvals: [
+      { role: "sppg_head", approved: true, comment: "Setuju, satu kali", approved_at: "2026-10-09T10:15:00+07:00" },
+    ],
+  };
+
+  it("urutannya bercerita: iterasi lama → diajukan → verifikasi → keputusan orang", () => {
+    const events = auditTimeline({ decision: SEKARANG, summary: RINGKAS, chain: CHAIN });
+    expect(events.map((e) => e.title)).toEqual([
+      "v1 diajukan",
+      "v2 diajukan",
+      "v3 diajukan",
+      "Diverifikasi",
+      "Disetujui",
+    ]);
+    expect(events[0].detail).toContain("Kuota penuh");
+    expect(events[0].tone).toBe("danger");
+    expect(events[2].actor).toBe("Agen supervisor");
+    // Peran diterjemahkan ke bahasa manusia, bukan enum backend.
+    expect(events[4].actor).toBe("Kepala SPPG");
+    expect(events[4].detail).toContain("Setuju, satu kali");
+  });
+
+  it("waktu yang tidak ada ditulis null, bukan dikarang", () => {
+    const events = auditTimeline({ decision: SEKARANG, summary: RINGKAS, chain: CHAIN });
+    const verifikasi = events.find((e) => e.title === "Diverifikasi");
+    expect(verifikasi?.at).toBeNull();
+    expect(verifikasi?.actor).toBe("Agen verifikator");
+    expect(verifikasi?.detail).toContain("terindikasi");
+  });
+
+  it("penolakan tanpa baris approval tetap tercatat dengan alasan", () => {
+    const events = auditTimeline({
+      decision: { ...SEKARANG, status: "rejected", rejection_reason: "Stok gudang belum siap" },
+      summary: { ...RINGKAS, approvals: [] },
+      chain: CHAIN,
+    });
+    const tolak = events.find((e) => e.title === "Ditolak");
+    expect(tolak?.detail).toBe("Stok gudang belum siap");
+    expect(tolak?.tone).toBe("danger");
+  });
+
+  it("tanpa riwayat keluarga: hanya jejak keputusan ini", () => {
+    const events = auditTimeline({ decision: SEKARANG, summary: RINGKAS, chain: [] });
+    expect(events.map((e) => e.title)).toEqual(["v3 diajukan", "Diverifikasi", "Disetujui"]);
+  });
+});
+
+describe("auditTimeline — detail verifier tidak mengulang putusan", () => {
+  it("catatan yang cuma salinan verdict mentah tidak diulang", () => {
+    const events = auditTimeline({
+      decision: { decision_id: "x", status: "verified", verified_by: "verifier_agent" },
+      summary: { verifier: { verdict: "consistent", verified_by: "verifier_agent" } },
+      chain: [],
+    });
+    const verifikasi = events.find((e) => e.id === "verifikasi");
+    expect(verifikasi?.detail).toBe("konsisten");
+  });
+
+  it("catatan yang benar-benar berbeda tetap ditampilkan", () => {
+    const events = auditTimeline({
+      decision: {
+        decision_id: "x",
+        status: "verified",
+        verified_by: "verifier_agent",
+        verifier_note: "foto batch cocok",
+      },
+      summary: { verifier: { verdict: "consistent", verified_by: "verifier_agent" } },
+      chain: [],
+    });
+    const verifikasi = events.find((e) => e.id === "verifikasi");
+    expect(verifikasi?.detail).toBe("konsisten · foto batch cocok");
+  });
+});
+
+describe("umur jendela berlaku: dipakai apa adanya, tanpa ambang karangan", () => {
+  it("menghitung persen jendela yang sudah terpakai", () => {
+    const hasil = windowUsage({
+      created_at: "2026-10-07T00:00:00Z",
+      expires_at: "2026-10-11T00:00:00Z",
+      now: new Date("2026-10-09T12:00:00Z"),
+    });
+    expect(hasil.persen).toBe(63);
+    expect(hasil.state).toBe("aman");
+    expect(hasil.label).toBe("Jendela terpakai 63%");
+  });
+
+  it("jendela lewat: dikatakan lewat dan penuh, bukan menebak sisa", () => {
+    const hasil = windowUsage({
+      created_at: "2026-10-07T00:00:00Z",
+      expires_at: "2026-10-11T00:00:00Z",
+      now: new Date("2026-10-12T00:00:00Z"),
+    });
+    expect(hasil.state).toBe("lewat");
+    expect(hasil.persen).toBe(100);
+  });
+
+  it("jam klien belum siap / tanggal tak terbaca: jujur tidak tahu", () => {
+    expect(windowUsage({ created_at: "2026-10-07T00:00:00Z", expires_at: "2026-10-11T00:00:00Z", now: null }).state).toBe("tidak diketahui");
+    expect(windowUsage({ created_at: null, expires_at: null, now: new Date(0) }).state).toBe("tidak diketahui");
   });
 });

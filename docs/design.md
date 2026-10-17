@@ -543,6 +543,116 @@ dan **0 luapan** horizontal di 375/768/1280/1440 px.
   dinding teks. Cerminan `APPROVER_ROLES` ← `visibleActions()` (paritas dijaga tes).
 - Tinggi halaman halaman contoh: 2004px → 1772px (baris "—" masuk rincian).
 
+**Decision & Evidence — DESAIN BARU "catatan keputusan" (2026-10-17, riset pola).**
+Permintaan user: "perbaiki ui ux halaman Decision & Evidence, tapi riset dulu dan cari
+referensi, lalu pakai skill desain". Riset lengkap + rujukan ada di
+`_qa/rencana-decision-evidence-v2.md`; ringkasnya: pola **approval workflow**
+(UX Patterns Guide — "routed request record": ringkasan, penyetuju, status rute, tenggat,
+kontrol keputusan, riwayat), **aturan 3 detik** + "kuning bukan merah" + hierarki
+aksi→skala→konteks→akibat (AgentInterface), **"review screen is the entire product"** +
+ember umur + konfirmasi yang menyebut objek (Skopx), dan **triage lewat flag** +
+"tunjukkan konsekuensi, bukan niat" (Code and Proof). DB `ui-ux-pro-max` untuk
+"decision evidence approval audit console" mengembalikan **Minimalism & Swiss** dengan
+palet navy/`#2563EB`/`#F8FAFC` — nyaris sama dengan token Arah 4, jadi bahasa visual tidak
+diganti; **strukturnya** yang diperbaiki.
+- Urutan region BARU (dari urutan tabel → urutan keputusan manusia):
+  `evidence-hero` (kepala keputusan) → `evidence-route` (jalur persetujuan) →
+  `evidence-decide` (`#zona-keputusan`) → `evidence-grid` (bukti) → `evidence-bottom` (jejak).
+- **Kepala keputusan** = lencana status berupa KATA ("menunggu persetujuan", bukan
+  "PENDING_APPROVAL") + jendela berlaku (`dueLabel`) + id/iterasi + jalan pintas
+  "Ke zona keputusan"; judul **aksinya** dari `decisionHeadline()`
+  ("Alihkan 492 kg telur: Bogor → Jakarta"); strip metrik (`decisionMetrics`) —
+  kuantitas, biaya aman terkirim, selisih dari harga beli, tujuan; blok
+  **"Perlu diperhatikan (N)"** (`attentionFlags` — triase, bukan alarm: keputusan sehat
+  = daftar kosong); strip "Langkah berikutnya" (`nextStep`, kini BIRU accent-soft karena
+  instruksi ≠ bahaya); blok **"Kalau disetujui / Kalau ditolak"** (`consequences`,
+  deterministik dari `can_execute`, `blocking_reasons`, `execution_target`, `iteration`).
+- **Jalur persetujuan** (`approvalRoute`): empat langkah tetap Diajukan → Verifikasi agent
+  → Persetujuan → Eksekusi, tiap langkah membawa "siapa/waktu/apa berikutnya"
+  (mis. "1 dari 2 · berikutnya: Ahli Gizi SPPG"); keadaan langkah **selalu ada teksnya**
+  (`.sr-only` "Keadaan langkah: …") — warna/bentuk bukan satu-satunya pembawa arti.
+- **Zona keputusan naik** ke posisi 3 (urutan Tab kanonik: ringkasan → rute → kontrol
+  keputusan → bukti → riwayat); isinya tetap `approvalFacts` + `DecisionActions` yang sama
+  — **gating 1b/2b/3b tidak diubah**.
+- Kartu keempat `evidence-grid` menjadi "Identitas & tenggat" (fakta `decisionFacts`
+  dipindah dari ringkasan lama). `RecommendationCard` dilepas dari halaman ini karena
+  kepala keputusan sudah menjadi kartu keputusan (kartu itu tetap dipakai di feed).
+- Semua logika baru **murni + ber-tes** di `lib/evidence.ts` (13 tes baru);
+  markupnya dijaga 6 tes baru di `tests/decision-evidence.test.tsx` (termasuk tes
+  URUTAN region). Ukuran judul 24px (`--fs-7`), metrik mono tabular.
+- **Langkah 2 (17 Okt 2026) — "jejak bercerita, umur jujur, satu tombol ekspor":**
+  - Kartu "Riwayat iterasi" (chip v1/v2/v3 yang terpisah dari fakta governance) DIGANTI
+    **"Jejak & riwayat"** = SATU lini masa (`auditTimeline()` → `components/DecisionAudit.tsx`):
+    iterasi keluarga dari `/decisions/{id}/chain` → pengajuan iterasi kini (+`proposed_by`)
+    → verifikasi (`verdict` + catatan) → tiap baris `/approval-summary`
+    ("Disetujui/Ditolak · label peran manusia · waktu · komentar"). Urutan BERCERITA
+    (bukan diurut ulang menurut jam: verifikasi tidak punya kolom waktu, jadi diurut
+    kronologis ia akan salah tempat). Waktu yang tidak ada ditulis "waktu tidak tercatat".
+  - Baris approval tanpa nilai `approved: true|false` **tidak lagi** dirender "Ditolak"
+    (klaim palsu yang sempat bocor); `rejection_reason` muncul sebagai kejadian "Ditolak"
+    hanya bila tidak ada baris penolakan. Catatan verifier yang cuma salinan huruf kecil
+    dari putusan mentah ("consistent" vs "konsisten") tidak diulang (`catatanUnik`).
+  - **Umur jendela** `windowUsage()` → chip "Jendela terpakai N%" / "Jendela lewat" di
+    kepala keputusan. SENGAJA tanpa ember fresh/aging/breached ala Skopx: target
+    waktu-ke-keputusan per jenis permintaan tidak ada di data repo — mengarang ambang =
+    mengarang kebijakan. Hanya dua fakta: persen terpakai & lewat/tidak.
+  - **Ekspor bukti satu tombol** di kepala keputusan: `downloadDossier()` +
+    `dossierFileName()` (lib/export.ts, nama berkas satu tempat) memanggil
+    `/decisions/{id}/dossier` yang sama dengan panel Bukti tersimpan, dengan umpan balik
+    jujur ("Bukti terunduh sebagai …" / kalimat gagal yang menunjuk panel bawah).
+    `IntegrityPanel` tetap apa adanya.
+  - **Badge kasus demo kembali** ke kepala keputusan lewat `caseLabelOf()` yang kini
+    DIEKSPOR dari `RecommendationCard` (kelas `.rec-case` dipakai ulang, bukan palet
+    kedua) — penanda itu dulu datang dari kartu feed yang kini digantikan hero.
+  - Tes: `evidence-summary.test.ts` + tes murni (auditTimeline, windowUsage, catatanUnik);
+    markup `decision-evidence.test.tsx` +5 (umur, ekspor, lini masa, badge kasus).
+  - Kontrak komposisi di `tests/sidebar-wiring.test.tsx` disesuaikan ke desain baru
+    (`<DecisionAudit` + `caseLabelOf` menggantikan `<RecommendationCard`).
+
+**Decision & Evidence — LANGKAH 3 "bahasa, tautan, sentuh" (2026-10-17).**
+- **Lapisan bahasa** `frontend/lib/bahasa.ts` (murni, 13 tes di `tests/bahasa.test.ts`):
+  `humanizeBlocker` menerjemahkan kalimat yang BENAR-BENAR dikirim server
+  (`decision expired`, `decision belum terverifikasi`, `decision ditolak`,
+  `decision sudah dieksekusi`, `approval belum memenuhi requirement (missing/rejected)`,
+  `status X tidak dapat dieksekusi`, `batch sumber FAIL`, `safety revalidation gagal`)
+  dan menerjemahkan juga saat kalimat itu dibungkus pesan galat
+  ("Gagal menyetujui: …"); string yang tidak dikenal dikembalikan APA ADANYA (tanpa tebakan).
+  `safetyLabel` (PASS→Lolos, FAIL→Gagal, NEEDS_VERIFICATION→Perlu verifikasi),
+  `agentLabel` (supervisor_agent→Agen supervisor, verifier_agent→Agen verifikator; agen lain
+  dibiarkan), `executionTargetLabel` (MOCK→Simulasi (mock)), `roleList` (sppg_head→Kepala SPPG),
+  `blockingReasons`.
+  Dipakai di: `nextStep`, `consequences`, `approvalFacts` ("Alasan tertahan", "Peran penyetuju"),
+  `safetyFacts` (status keamanan, "Verifikator", "Target eksekusi"), `decisionFacts`
+  ("Diusulkan oleh"), `approvalRoute` + `auditTimeline` (pelaku), dan pesan dialog
+  `DecisionActions` (sebelumnya menampilkan pesan server mentah).
+  Label hint "putusan aturan:" → "aturan persetujuan:".
+- **Deep link** `?keputusan=<id>` (`frontend/lib/decision-link.ts`, 9 tes):
+  dibuka sekali saat mount → tab Decision & Evidence + keputusan itu; pilihan berikutnya
+  menulis URL lewat `history.replaceState`; pindah tab melepas param supaya tautan tidak
+  menunjuk keputusan yang tidak sedang dilihat. Nilai bukan-id (spasi/terlalu panjang) → null.
+  Tautan yang menunjuk keputusan di luar cakupan peran diberi keadaan sendiri:
+  "Keputusan itu tidak ada di cakupan akun ini" (bukan "belum ada keputusan dipilih"),
+  dan selama daftar masih diambil muncul "Memuat keputusan…" — jangan menuduh sebelum data tiba.
+- **Sentuh & pembaca layar (375px terukur)**: tautan "Ke zona keputusan" dinaikkan ke
+  `min-height:24px` (WCAG 2.2 AA 2.5.8; 44px di `@media (pointer: coarse)`), lini masa diberi
+  `aria-label="Jejak keputusan"`. Hasil ukur di iframe 375px (viewport 356): luapan horizontal
+  **0px**, tombol Unduh 138×44px, tautan 121×24px, kepala keputusan membungkus rapi 134px,
+  4 tile metrik selebar kolom (272px), `.audit-item` 63px, tidak ada elemen melewati tepi.
+- **Sisa kebocoran yang ikut dibersihkan saat verifikasi layar**:
+  `approvalRoute` ("target MOCK") dan `consequences` → `executionTargetLabel`;
+  `ComplianceEvidencePanel` ("PASS n · FAIL n · NEEDS_VERIFICATION n") → `safetyLabel`;
+  `SupplierExclusionPanel` : "LOCAL · SPPG" → "Lingkup lokal · SPPG", UUID mentah
+  "Scope SPPG penerima: 23e6e766-…" → "SPPG penerima: #23e6e766", dan kalimat
+  "Batch FAIL tetap tidak eligible" → "Batch yang gagal pemeriksaan tetap tidak bisa dipakai".
+  `ApprovalModal` ("Batch FAIL tetap diblokir", "EXCLUDED (FAIL)", `worst_status` mentah, dan
+  `target LOCAL`) → "gagal pemeriksaan"/"dikecualikan", `safetyLabel`, dan
+  `executionTargetLabel` (LOCAL = "Lokal (tanpa PO)").
+  Pemindaian teks layar sesudahnya: `missing/rejected`, `requirement`, `sppg_head`,
+  `supervisor_agent`, `verifier_agent`, `unavailable`, `consistent`, `PASS`, `MOCK`,
+  `NEEDS_VERIFICATION` = **0 kemunculan** di halaman bukti.
+- Catatan jujur: `aria-sort` TIDAK dipasang karena halaman ini tidak punya tabel bukti, dan
+  pintasan papan tulis (j/k/a/r) bukan milik halaman ini — keduanya tetap di daftar halaman lain.
+
 **KPI & Agent Log (Fase 4 redesign, 2026-10-16).**
 - Kartu KPI: angka **mono tabular 32px** + **bullet bar** hanya untuk metrik
   berskala sendiri (persen 0–100, `SCALE_MAX` di `lib/kpi.ts`). **Tidak ada
@@ -985,3 +1095,152 @@ waktu dengan lebar tetap (`minmax(0, 16ch)`) lebih sempit daripada
 "16 Okt 2026 07.00 WIB", sehingga tanggal MENABRAK judulnya. Sekarang judul dan
 waktu berada pada satu baris flex (judul kiri, waktu kanan) — tidak ada kolom
 lebar tetap yang bisa kalah dari isinya.
+
+---
+
+## Sorotan kiriman di peta — Arah C (16 Okt 2026)
+
+Riset §6: *"Pilih jalur di peta → panel berisi stepper + rincian + riwayat; garis
+jalur disorot, segmen yang belum ditempuh digambar putus-putus."*
+
+**Yang dibangun.** Di kartu peta Overview, di bawah kanvas, ada baris
+`Pilih kiriman: [Semua (N)] [Pemasok → Tujuan · keadaan]` (`.route-focus`).
+Memilih satu kiriman: (1) garisnya di peta ditarik **padat** untuk bagian yang
+sudah ditempuh dan **putus-putus** untuk sisanya, (2) kartu `Informasi
+pengiriman` di bawah baris peta **menyaring ke kiriman itu** dan menuliskan
+`Menampilkan kiriman terpilih di peta: … (N kiriman lain disembunyikan)`.
+Kembali ke semua: tekan `Semua (N)`.
+
+**Kenapa ada TOMBOL pemilih, bukan hanya klik di peta.** Garis di kanvas
+MapLibre tidak bisa difokus keyboard dan tidak ada di pohon aksesibilitas.
+Klik garis di peta TETAP menyorot kiriman yang sama (dan popup jalur yang sudah
+ada tetap muncul seperti sebelumnya — pemilik pernah memangkasnya sendiri di
+Fase 12b, jadi tidak dihapus tanpa izin), tetapi tombol inilah jalur setaranya.
+
+**Satu nilai untuk dua tampilan.** `focusedRoute` di `app/page.tsx` dikirim ke
+PETA dan ke KARTU sekaligus; tidak ada salinan keadaan di dua tempat, sehingga
+garis yang menyala dan angka di kartu tidak bisa berbeda cerita.
+
+**Aturan jujur yang dipegang (diuji):**
+- **Gagal-tertutup**: id tak dikenal/kosong/kosong-string = tampilan SEMUA
+  (bukan tebakan "kiriman pertama") — pola yang sama dengan `activeLocation`.
+- **Sudah tiba → seluruh garis padat**, walau `progress` tidak dikirim. Keadaan
+  itu datang dari server dan artinya tidak ambigu; menebak 0% akan menggambar
+  perjalanan yang sudah selesai sebagai "belum ditempuh".
+- **Tanpa `progress` (dan belum tiba) → garis utuh putus-putus**, sama dengan
+  garis dasar. Tidak ada klaim sudah berjalan, dan tidak ada garis lurus palsu
+  ketika geometri jalan tidak ada (tidak ada yang digambar sama sekali).
+- **Potongan mengikuti PANJANG tiap segmen**, bukan jumlah titik; titik sambung
+  dihitung presisi penuh (haversine meter) — pembulatan `haversineKm` (km bulat)
+  akan salah memotong segmen pendek.
+- Saat sorotan dilepas, layer DAN source-nya dibuang — tidak boleh ada garis
+  sorotan tertinggal untuk kiriman yang sudah dilepas (diuji di DOM tiruan peta).
+
+**Terukur (SPPG Head, Overview):** pemilih 22 px satu baris di 1440, 94 px
+terbungkus di 375 (target sentuh 44 px terjaga), luapan halaman 0 px di kedua
+lebar. Bukti grafis sorotan diukur dengan **beda piksel**, bukan mata: baseline
+peta stabil (beda antar dua tangkapan tanpa aksi = 45 px), saat disorot muncul
+**28.584 px** berbeda, dan citra bedanya persis mengikuti jalur Cianjur →
+Jakarta; setelah dilepas, beda di area jalur hilang (yang tersisa 27.797 px ada
+di bilah tombol lapisan — teks angka yang berdenyut karena polling 5 detik,
+bukan garis). Alat: `cek-pixel-arah-c2.py` (pillow) + `ui-audit/c3-beda-*.png`.
+
+**Catatan kontras yang BELUM diubah (minta keputusan pemilik).** Garis dasar di
+peta digambar **putus-putus untuk semua kiriman** (`line-dasharray: [2, 1.2]`),
+padahal riset menetapkan putus-putus = "belum ditempuh". Sesudah Arah C,
+perbedaannya mulai terlihat: garis yang disorot padat, sisanya putus-putus.
+Mengubahnya bukan keputusan UI kecil (garis dasar muncul di setiap tangkapan
+layar demo), jadi dibiarkan dan dilaporkan.
+
+**Berkas:** `frontend/lib/route-focus.ts` (murni) + `frontend/lib/route-line-split.ts`
+(murni) + `frontend/components/RouteFocusPicker.tsx` + perubahan di
+`frontend/components/SupplyMap.tsx` dan `frontend/app/page.tsx`.
+Tes: `tests/route-focus.test.ts` (8), `tests/route-line-split.test.ts` (10),
+`tests/route-focus-line.test.ts` (6), `tests/route-focus-picker.test.tsx` (4),
+`tests/supply-map-layer.test.tsx` (+6).
+
+## Peta operasional — arah desain dari riset (Langkah 7a, BELUM dikerjakan)
+
+Acuan yang dipilih (detail, kutipan verbatim, dan celah lengkap: `docs/research/peta-ui-industri.md`):
+
+- Peta adalah konten utama, bukan pelengkap; hierarki visual harus disengaja ("squint test")
+  — Axis Maps Cartography Guide [21], ArcGIS *application layouts* [15].
+- Kontrol peta dibagi tiga kategori — Informational (kredit, **skala**), Viewport (**tombol reset tampilan**),
+  Visualization (toggle lapisan) — Google Maps [4]. Dua yang bercetak tebal belum kita punya.
+- Setiap toggle lapisan dipasangkan legenda; legenda harus terlihat **tanpa klik tambahan** dan
+  menyebut sumber/umur data — Bathyl [8].
+- Target sentuh kontrol ≥ 44 px, kontras teks di atas peta ≥ 4.5:1, dan setiap aksi peta harus
+  punya padanan di panel (peta raster tak bisa difokus keyboard) — Admiralty [16], W3C/NSGIC [5][6].
+- Garis putus-putus berarti "belum pasti / belum jadi / belum ditempuh" — ISOM 2000 [17], USGS [18].
+  Ini konfirmasi konvensi untuk aturan Arah C (sisa perjalanan = putus-putus).
+- Tooltip di peta untuk info singkat; cerita panjang di panel tetap — Axis Maps [22], NN/g [13].
+
+Keadaan terukur sekarang (SPPG Head, Overview, seed default; `ui-audit/p0-inventaris.json`):
+kartu peta 752×528 px @1440 / 331×502 px @375; kontrol MapLibre 29×29 px; toggle lapisan 26 px;
+legenda ("Info map") dan "Rincian lapisan peta" 24 px; **tidak ada** kontrol skala maupun tombol
+kembali ke tampilan awal; angka operasional "−780 kg" menempel di baris attribution.
+
+Urutan kerja: **7b-1 SELESAI 17 Okt** → **7b-2 SELESAI 17 Okt** (legenda terlihat tanpa klik, satu zona
+"Info peta", chip penanda filter aktif, cooperative gestures di perangkat sentuh) → 7b-3 (butuh keputusan
+pemilik: arti garis, lebar peta, daftar pin bernama, popup jalur dipangkas bukan dihapus, seed dengan
+kiriman di jalan).
+
+### 7b-1 — kontrol peta (selesai 17 Okt 2026)
+
+Berkas: `frontend/lib/map-view.ts` (baru, murni) + `frontend/components/SupplyMap.tsx` +
+`frontend/app/globals.css` (gaya `.map-reset-view` & `.maplibregl-ctrl-scale`, dan blok kontrol peta di
+`@media (pointer: coarse), (max-width: 720px)`). Tes: `tests/map-view.test.ts` (6 murni) +
+`tests/supply-map-layer.test.tsx` (+5 kontrak).
+
+Angka terukur (SPPG Head, Overview): bilah **skala "30 km"** (sebelumnya tidak ada; ditaruh kanan-bawah di
+langkah ini, lalu **dipindah ke kiri-bawah di 7b-2** setelah legenda turun dari kanvas);
+tombol **"Tampilkan semua"** (`.map-reset-view`, `<button>` asli, ikon empat sudut, `aria-label` tetap +
+`title` "Kembalikan tampilan ke semua N lokasi[ dan jalur kiriman]") — 29 px desktop, **44 px** di 375 px;
+grup MapLibre 29×29 → **44×44** di 375 px; chip toggle lapisan / "Info map" / "Rincian lapisan peta"
+26/24 px → **44 px** di 375 px; luapan halaman 0 px; **tanpa tumpang tindih** kontrol (diperiksa berpasangan).
+Audit kontras: terendah **4,55:1** (tag bilah lapisan) — lulus 4,5:1; atribusi peta tidak diubah karena
+memang hanya berisi kredit.
+
+Pelajaran yang ditulis ke kode: `.map-layer-toggle` dkk. sempat 26/24 px di ponsel karena `min-height`
+kelas MENANG atas `button { min-height: 44px }` — jadi target sentuh 44 px harus ditulis eksplisit pada
+media query, bukan diwariskan dari aturan `button` global.
+
+**Jebakan MapLibre yang wajib diingat:** sudut kontrol MapLibre memakai `pointer-events: none` dan
+mewariskannya ke anak. Kontrol bawaan diselamatkan kelas `.maplibregl-ctrl { pointer-events: auto }` yang
+ditambahkan MapLibre sendiri — **kontrol buatan sendiri TIDAK dapat kelas itu**, jadi wajib menulis
+`pointer-events: auto` pada gayanya. Tanpa itu kontrolnya terlihat tapi mati. Dijaga oleh
+`tests/map-controls-css.test.ts` (bersama kontrak 44 px). Tombol reset juga dibuktikan bekerja dengan
+klik sungguhan di browser: pin `[614,741]` → digeser `[201,485]` → setelah tombol diklik `[633,731]`.
+
+### 7b-2 — satu zona kendali & legenda tanpa klik (selesai 17 Okt 2026)
+
+Berkas: `frontend/lib/map-legend-compact.ts` (baru, murni) + `frontend/lib/route-focus.ts` (chip saringan) +
+`frontend/lib/map-view.ts` (gestur kooperatif + pesan Indonesia) + `frontend/components/SupplyMap.tsx` +
+`frontend/app/globals.css`. Tes: 35 baru (8 murni legenda, 3 murni saringan, 6 murni gestur, 16 kontrak peta,
+2 kontrak CSS).
+
+Empat perubahan yang terlihat:
+
+1. **Baris legenda ringkas di bawah kanvas** (`.map-legend-compact`) — makna titik/garis terbaca TANPA satu
+   klik: 752×18 px @1440, 331×40 px @375 (2 baris), 4 tanda. Status lokasi selalu ada (pin SPPG tidak punya
+   sakelar); butir jalur/pemasok hanya muncul saat lapisannya hidup — keterangan warna tanpa lapisan =
+   informasi palsu. Tandanya memakai kelas `.map-legend-box-*` yang sama dengan kotak Info map.
+2. **Satu elemen mengapung di kanvas.** Chip "Info map" masuk ke pil kendali kiri-atas; isinya turun ke
+   bawah kanvas (`.map-legend-detail`, ikut alur). Terukur: elemen kendali aplikasi yang mengapung SENDIRI di
+   kanvas **2 → 1** (tombol "Tampilkan semua" & skala tidak dihitung — keduanya di sudut kontrol MapLibre
+   bersama tombol zoom, tempat yang memang benar untuk kontrol peta); membuka Info map menambah tinggi kartu
+   (554 → 649 px) tanpa menyentuh tinggi kanvas (460 px).
+   Panggung absolut lama `.map-legend-stack` DIHAPUS — bukan dipakai ulang dengan penimpa posisi.
+3. **Chip saringan aktif di atas kanvas** (`.map-filter`, ikut alur): "Menyaring: Supplier A Cianjur →
+   Jakarta" + tombol "Lepas" yang mengirim `FOCUS_ALL`. Nama kirimannya dari `focusLabel` yang sama dengan
+   pil pemilih & kartu. Alur diuji hidup: 554 → 590 px saat menyaring, kembali 554 px setelah "Lepas".
+4. **Gestur kooperatif hanya untuk perangkat sentuh** (`pointer: coarse`): satu jari menggulir halaman
+   (scrollY 0 → 2579), dua jari menggeser peta (pin 160,186 → 10,36 = 300 px; halaman diam). Desktop tetap
+   roda tetikus = zoom. Pesan layar MapLibre (Inggris) diganti bahasa Indonesia dan latarnya dipergelap
+   `rgba(15,23,42,.66)` (bawaan `rgba(0,0,0,.4)` hanya ±2,8:1 dengan teks putih).
+
+Tiga keputusan yang diambil saat mengerjakan: isi "Info map" tetap LENGKAP (duplikasi 3–5 butir dengan baris
+ringkas disengaja — ringkas untuk makna sekejap, kotak untuk rincian perjalanan/asal geometri); skala
+dipindah ke kiri-bawah (posisi bawaan MapLibre, bukan zona atas seperti usul riset, karena acuan industri
+menaruh skala di sudut bawah); gestur kooperatif TIDAK berlaku di desktop (mode MapLibre mengubah desktop
+juga, dan keluhan yang diperbaiki hanya gulir halaman di ponsel).

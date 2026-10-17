@@ -7,7 +7,7 @@
 // Konsol operasi & analisis HANYA untuk role approver (bgn_monitor
 // read-only: tab analisis tidak ditampilkan).
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { MANAGE_ROLES } from "../lib/settings";
 
@@ -23,8 +23,10 @@ import {
 } from "../lib/api";
 import { useBalanceMap } from "../lib/hooks/useBalanceMap";
 import { useDecisionDetail } from "../lib/hooks/useDecisionDetail";
+import { readDecisionLink, withDecisionLink } from "../lib/decision-link";
 import { useExclusions } from "../lib/hooks/useExclusions";
 import { useKpi } from "../lib/hooks/useKpi";
+import { useIntegrationStatus } from "../lib/hooks/useIntegrationStatus";
 import { agendaErrorText, useAgenda } from "../lib/hooks/useAgenda";
 import {
   clampDayStep,
@@ -67,6 +69,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { formatJam } from "../lib/jam";
 import { formatDateTime } from "../lib/datetime";
 import SettingsPanel from "../components/SettingsPanel";
+import IntegrationStatusPanel from "../components/IntegrationStatusPanel";
 import TopBar from "../components/TopBar";
 import {
   ALL_LOCATIONS,
@@ -103,6 +106,7 @@ import NodeTelemetry from "../components/NodeTelemetry";
 import TodayDashboard from "../components/TodayDashboard";
 import StockChart from "../components/StockChart";
 import ShipmentCard from "../components/ShipmentCard";
+import { focusNote, focusPick, focusRows } from "../lib/route-focus";
 import { formatKg } from "../lib/overview-format";
 // Fase 2 bento Overview: selisih hero & pangsa terhadap kebutuhan — logika
 // murni di lib/overview-bento.ts (diuji di tests/overview-bento.test.ts).
@@ -215,6 +219,13 @@ export default function Home() {
   const [mapCommodity, setMapCommodity] = useState("telur");
   // Lokasi aktif yang disorot di peta, dipilih dari dropdown top bar.
   const [activeLocation, setActiveLocation] = useState<string | null>(null);
+  // Kiriman yang sedang disorot di peta (Arah C riset 16 Okt 2026). `null` =
+  // semua kiriman; satu nilai ini dipakai BERSAMA oleh pemilih di peta dan kartu
+  // kiriman di bawahnya, jadi angka di kartu dan garis di peta tidak bisa beda
+  // cerita. Dikosongkan otomatis saat pemakai berpindah peran/tab? Tidak:
+  // id-nya gagal-tertutup (id tak dikenal = tampilan semua), jadi tidak perlu
+  // efek pembersih yang bisa lupa dipasang.
+  const [focusedRoute, setFocusedRoute] = useState<string | null>(null);
   // Kerangka acuan: rail bisa dilipat (lebar 68px, label disembunyikan).
   const [sideCollapsed, setSideCollapsed] = useState(false);
   // Identitas pemakai (GET /auth/me) lewat React Query (Rules.md §3). Kunci
@@ -254,6 +265,9 @@ export default function Home() {
   // ringkasan jaringan), bukan hanya halaman Overview. Stempel "terakhir
   // diperbarui" datang dari React Query, bukan state kedua yang bisa menyimpang.
   const mapQuery = useBalanceMap(token, identityScope, mapCommodity);
+  // Papan status integrasi (W-3): dipakai panel di tab Agent Log; isinya env +
+  // artefak, jadi tidak di-poll.
+  const integrationStatus = useIntegrationStatus(token);
   const mapData = mapQuery.data;
   const mapError = mapQuery.error;
   const mapUpdatedAt = mapQuery.updatedAt;
@@ -262,6 +276,31 @@ export default function Home() {
   // turunan (sampel → run/pemasok) dihitung ulang tanpa perlu.
   const decisions = useMemo(() => decisionsQuery.data?.items ?? [], [decisionsQuery.data]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // ── Deep link `?keputusan=<id>` (Langkah 3) ──────────────────────────────
+  // `linkSiap` memastikan pembacaan URL selesai SEBELUM efek penulis berjalan,
+  // supaya param yang baru dibuka tidak langsung dihapus pada commit pertama.
+  const linkSiap = useRef(false);
+  useEffect(() => {
+    if (!linkSiap.current) return;
+    const sekarang = window.location.search;
+    // Param hanya mewakili tab bukti: pindah tab → param dilepas, supaya
+    // tautan tidak menunjuk keputusan yang tidak sedang dilihat.
+    const berikut = withDecisionLink(sekarang, tab === "evidence" ? selectedId : null);
+    if (berikut === sekarang) return;
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${berikut}${window.location.hash}`
+    );
+  }, [selectedId, tab]);
+  useEffect(() => {
+    const dariUrl = readDecisionLink(window.location.search);
+    if (dariUrl) {
+      setSelectedId(dariUrl);
+      setTab("evidence");
+    }
+    linkSiap.current = true;
+  }, []);
   // Detail keputusan terpilih (jejak, rantai, ringkasan kanonik, konteks
   // pemasok) lewat React Query — lihat lib/hooks/useDecisionDetail.ts.
   const detail = useDecisionDetail(token, selectedId, identityScope);
@@ -316,6 +355,10 @@ export default function Home() {
     tab,
     mapData?.commodity ?? null
   );
+  // Sorotan peta (Arah C): baris yang dipilih + jumlah seluruh kiriman tampilan.
+  // Keduanya dari data yang SAMA dengan garis di peta (mapSupplierRoutesQuery).
+  const focusRow = focusPick(mapSupplierRoutesQuery.data, focusedRoute);
+  const focusTotal = focusRows(mapSupplierRoutesQuery.data).length;
   // Tabel Pemasok menampilkan SEMUA pemasok (tidak disaring komoditas), jadi
   // jalurnya juga daftar penuh — kalau disaring komoditas, baris pemasok lain
   // akan terbaca "tidak punya jalur" padahal jalurnya hanya tidak diminta.
@@ -427,18 +470,6 @@ export default function Home() {
     if (!tujuan) return;
     selectAgendaDate(tujuan);
   };
-  const kpi = kpiQuery.data;
-  const kpiLoading = kpiQuery.loading;
-  const kpiError = kpiQuery.error;
-
-  // Turunan dari sampel: run agen (jejak + putusan verifikator) dan pasangan
-  // pemasok. Dihitung dengan useMemo supaya tidak ada penulisan state di dalam
-  // efek — satu arah data: query → turunan → tampilan.
-  const byDecisionId = useMemo(
-    () => new Map(decisions.map((d) => [d.decision_id, d])),
-    [decisions]
-  );
-  const qualityRuns = useMemo<QualityRun[]>(
 
   // Popup pemilih tanggal (permintaan pemilik 2026-10-17). Kalender lama hanya
   // punya ‹ › dan judul bulan yang mati: melompat setahun = 12 klik. Bulan DRAFT
@@ -489,6 +520,18 @@ export default function Home() {
     setAgendaPickerOpen(false);
     setAgendaPickerMonth(null);
   };
+  const kpi = kpiQuery.data;
+  const kpiLoading = kpiQuery.loading;
+  const kpiError = kpiQuery.error;
+
+  // Turunan dari sampel: run agen (jejak + putusan verifikator) dan pasangan
+  // pemasok. Dihitung dengan useMemo supaya tidak ada penulisan state di dalam
+  // efek — satu arah data: query → turunan → tampilan.
+  const byDecisionId = useMemo(
+    () => new Map(decisions.map((d) => [d.decision_id, d])),
+    [decisions]
+  );
+  const qualityRuns = useMemo<QualityRun[]>(
     () =>
       (sampleQuery.rows ?? []).map(({ decisionId, trace, summary }) =>
         runOf(byDecisionId.get(decisionId), trace, summary)
@@ -867,18 +910,6 @@ export default function Home() {
             agendaDate={agendaDay ?? undefined}
             agendaToday={now ? wibToday(now) : undefined}
             agendaMonth={agendaBulan ?? undefined}
-            onAgendaSelect={selectAgendaDate}
-            onAgendaShiftDay={shiftAgendaDay}
-            onAgendaRetry={() => void agendaQuery.refetch()}
-            greetingName={roleLabel}
-            batchesLoading={batchesLoading}
-            batchesError={batchesError}
-            onRetry={() => void todayQuery.refetch()}
-            onOpenDecision={(decisionId) => {
-              setSelectedId(decisionId);
-              setTab("recommendations");
-            }}
-            onOpenAllDecisions={() => setTab("recommendations")}
             agendaPicker={{
               open: agendaPickerOpen,
               month: agendaPickerBulan,
@@ -896,6 +927,18 @@ export default function Home() {
               onToday: () => pickAgendaDate(agendaDay ?? ""),
               onRetry: () => void agendaPickerQuery.refetch(),
             }}
+            onAgendaSelect={selectAgendaDate}
+            onAgendaShiftDay={shiftAgendaDay}
+            onAgendaRetry={() => void agendaQuery.refetch()}
+            greetingName={roleLabel}
+            batchesLoading={batchesLoading}
+            batchesError={batchesError}
+            onRetry={() => void todayQuery.refetch()}
+            onOpenDecision={(decisionId) => {
+              setSelectedId(decisionId);
+              setTab("recommendations");
+            }}
+            onOpenAllDecisions={() => setTab("recommendations")}
             onOpenLocation={(location) => {
               setActiveLocation(location);
               setTab("overview");
@@ -1090,6 +1133,8 @@ export default function Home() {
                 suppliers={mapSuppliersQuery.data}
                 supplierRoutes={mapSupplierRoutesQuery.data}
                 reachKm={supplierReachKm}
+                focusedRouteId={focusedRoute}
+                onFocusRoute={setFocusedRoute}
               />
               <div className="overview-side">
                 {/* Antrean keputusan (Fase 2): 4 teratas + tunggakan dinyatakan
@@ -1163,7 +1208,8 @@ export default function Home() {
                 peta tidak bisa berbeda cerita. */}
             <ShipmentCard
               routes={mapSupplierRoutesQuery.data}
-              note="Mengikuti komoditas yang sedang ditampilkan di peta. Rincian tiap kiriman ada di dalam panelnya."
+              hanya={focusRow ? (row) => row.id === focusRow.id : undefined}
+              note={`${focusNote(focusRow, focusTotal)} Mengikuti komoditas yang sedang ditampilkan di peta.`}
             />
 
             {/* Grafik pasokan per lokasi (Fase 2): sebelumnya di kolom samping
@@ -1253,7 +1299,14 @@ export default function Home() {
               token={token}
               role={role ?? "sppg_head"}
               onDataChanged={() => {
-                if (token) void decisionsQuery.refetch();
+                if (!token) return;
+                // Peta, pemilih kiriman, dan garis jalur membaca sumber yang
+                // SAMA dengan keputusan. Tanpa ini, "Segarkan ke hari ini"
+                // mengubah isi DB tetapi peta tetap menampilkan waktu lama
+                // sampai halaman dimuat ulang — tombolnya tampak tidak bekerja.
+                void decisionsQuery.refetch();
+                void mapQuery.refetch();
+                void mapSupplierRoutesQuery.refetch();
               }}
             />
             <OpsConsole
@@ -1472,6 +1525,7 @@ export default function Home() {
             decisions={decisions}
             selected={selected}
             selectedId={selectedId}
+            loading={decisionsQuery.isPending}
             onSelect={(decisionId) => setSelectedId(decisionId)}
             chain={selectedId ? chain : []}
             summary={approvalSummary}
@@ -1619,6 +1673,13 @@ export default function Home() {
               steps={traces}
               decisionId={selected?.decision_id ?? null}
               now={now}
+            />
+            {/* W-3 (2026-10-17): bukti integrasi per komponen — panel, bukan tab baru. */}
+            <IntegrationStatusPanel
+              data={integrationStatus.data}
+              loading={integrationStatus.isFetching && !integrationStatus.data}
+              error={integrationStatus.error}
+              onRetry={() => void integrationStatus.refetch()}
             />
           </section>
         )}

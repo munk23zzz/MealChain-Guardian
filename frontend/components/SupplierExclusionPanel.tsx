@@ -5,6 +5,7 @@ import {
   proposeSupplierExclusion, proposeSupplierRestoration,
   type EvidenceRef, type SupplierContext, type SupplierExclusion,
 } from "../lib/supplier-exclusions";
+import { safetyLabel } from "../lib/bahasa";
 import styles from "./SupplierExclusionPanel.module.css";
 
 type Props = {
@@ -102,12 +103,18 @@ export function SupplierExclusionView({ context, role, token, onCreated }: Props
   }
 
   return <section className={styles.panel} aria-label="Supplier exclusion" aria-busy={busy}>
-    <div className={styles.header}><h3>Supplier governance</h3><span className={styles.badge}>LOCAL · SPPG</span></div>
-    <p>Scope SPPG penerima: {context.scope_location_id ?? "tidak tersedia"}.</p>
-    <p className={styles.safety}>Pemulihan administratif tidak mengubah safety batch. Batch FAIL tetap tidak eligible.</p>
+    <div className={styles.header}><h3>Supplier governance</h3><span className={styles.badge}>Lingkup lokal · SPPG</span></div>
+    <p>
+      SPPG penerima:{" "}
+      {context.scope_location_id ? `#${String(context.scope_location_id).slice(0, 8)}` : "tidak tersedia"}.
+    </p>
+    <p className={styles.safety}>
+      Pemulihan administratif tidak mengubah status keamanan batch. Batch yang gagal
+      pemeriksaan tetap tidak bisa dipakai.
+    </p>
     {context.suppliers.map(item => <div className={styles.record} key={item.id}>
       <strong>{item.name}</strong><span>Supplier: {item.id}</span>
-      {item.batches.map(batch => <span key={batch.id}>Batch {batch.id} · Safety: <strong>{batch.safety_status ?? "NEEDS_VERIFICATION"}</strong></span>)}
+      {item.batches.map(batch => <span key={batch.id}>Batch {batch.id} · Keamanan: <strong>{safetyLabel(batch.safety_status) ?? "status belum ada"}</strong></span>)}
     </div>)}
     {context.reason_unavailable && <p>{context.reason_unavailable}</p>}
     {!canMutate && <p>Hanya Kepala SPPG atau Ahli Gizi pada SPPG tujuan yang berwenang mengusulkan. Tampilan ini hanya baca.</p>}

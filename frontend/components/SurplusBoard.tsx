@@ -46,6 +46,13 @@ export default function SurplusBoard({
           <span className="page-header-pills">
             <span className="commodity-pill">Komoditas {commodity ? commodity : "—"}</span>
             <span className="commodity-pill">{summary.surplusCount} lokasi surplus</span>
+            {summary.unmeasuredCount > 0 && (
+              // Lokasi yang salah satu sisinya belum tercatat TIDAK hilang diam-
+              // diam dari hitungan: jumlahnya dikatakan (PLAN-023).
+              <span className="commodity-pill">
+                {summary.unmeasuredCount} lokasi tanpa catatan lengkap
+              </span>
+            )}
           </span>
         }
       />

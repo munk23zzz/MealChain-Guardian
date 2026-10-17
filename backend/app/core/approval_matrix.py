@@ -17,12 +17,17 @@ APPROVER_ROLES = frozenset({"sppg_head", "sppg_nutritionist"})
 _DUAL = [["sppg_head"], ["sppg_nutritionist"]]
 
 
-def approval_requirement(verdict: str) -> dict:
-    """Requirement approval untuk verdict verifier (lowercase)."""
+def approval_requirement(verdict: str, *, dua_role_wajib: bool = False) -> dict:
+    """Requirement approval untuk verdict verifier (lowercase).
+
+    `dua_role_wajib=True` dipakai keputusan OPERASIONAL (transfer): dua
+    approval dari dua role berbeda wajib, apa pun verdict verifier-nya.
+    Keputusan administrasi (supplier exclusion) tetap mengikuti verdict.
+    """
     v = (verdict or "").strip().lower()
     if v not in VALID_VERIFIER_VERDICTS:
         raise ValueError(f"verdict verifier tidak dikenal: {verdict!r}")
-    if v == "consistent":
+    if v == "consistent" and not dua_role_wajib:
         return {
             "verdict": "consistent",
             "min_approvals": 1,

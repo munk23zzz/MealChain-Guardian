@@ -50,6 +50,9 @@ export const queryKeys = {
     ["agenda", scope, start, end] as const,
   decisionDetail: (decisionId: string, scope: string) =>
     ["decision-detail", decisionId, scope] as const,
+  // Papan status integrasi (W-3, 2026-10-17): isinya env + artefak, bukan angka
+  // live — tanpa scope karena sama untuk semua peran yang sah.
+  integrationStatus: () => ["integration-status"] as const,
   qualitySample: (scope: string, sampleKey: string) =>
     ["quality-sample", scope, sampleKey] as const,
   supplierContext: (decisionId: string) => ["supplier-context", decisionId] as const,

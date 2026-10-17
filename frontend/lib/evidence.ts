@@ -1,4 +1,14 @@
 import { dueLabel } from "./today";
+import { formatDateTime } from "./datetime";
+import { roleLabel } from "./settings";
+import { statusWord } from "./decision-picker";
+import {
+  agentLabel,
+  blockingReasons,
+  executionTargetLabel,
+  roleList,
+  safetyLabel,
+} from "./bahasa";
 
 // Putusan mesin aturan persetujuan (enum backend) → bahasa manusia; nilai tak
 // dikenal tetap ditampilkan apa adanya (jujur, tanpa menebak).
@@ -190,9 +200,7 @@ export function nextStep(input: {
     : null;
   const requirement = (payload?.approval_requirement ?? null) as Record<string, unknown> | null;
   const minApprovals = Number(requirement?.min_approvals);
-  const blocking = Array.isArray(payload?.blocking_reasons)
-    ? ((payload!.blocking_reasons as unknown[]).map((reason) => text(reason)).filter(Boolean) as string[])
-    : [];
+  const blocking = blockingReasons(payload);
   const expiry = (payload?.expiry ?? null) as Record<string, unknown> | null;
   const lewat = expiry ? expiry.valid === false : false;
   // Daftar penahan dipangkas: tiga alasan sekaligus membuat kalimatnya
@@ -238,6 +246,471 @@ export function nextStep(input: {
     return { text: `Menunggu persetujuan${hitung}${penahan}.`, tone: "warn" };
   }
   return { text: "Tidak ada tindakan mendesak untuk keputusan ini.", tone: "plain" };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DESAIN BARU HALAMAN BUKTI (17 Okt 2026) — struktur "catatan keputusan".
+//
+// Riset pola (rujukan lengkap di _qa/rencana-decision-evidence-v2.md):
+//   • Approval workflow (UX Patterns Guide): catatan permintaan yang dirutekan —
+//     ringkasan, penyetuju, status rute, tenggat, kontrol keputusan, riwayat.
+//   • Aturan 3 detik (AgentInterface): aksi = huruf terbesar, lalu skala, lalu
+//     konsekuensi; "kuning bukan merah" — merah hanya untuk yang merusak.
+//   • Triage lewat FLAG (Code and Proof): daftar panjang bisa ditinjau kalau
+//     yang menyimpang ditandai, dan konsekuensinya dirender dari data
+//     terstruktur — bukan dari kalimat yang dikarang.
+//
+// Semua fungsi di bawah HANYA membaca field yang sudah dikirim backend:
+//   /decisions/{id} → decision_type, status, quantity_kg, created_at,
+//     proposed_by, iteration, rejection_reason, verified_by
+//   /decisions/{id}/approval-summary → source/target_location, commodity,
+//     safe_delivered_cost, cost_breakdown, supplier, verifier, safety, expiry,
+//     approval_requirement, approval_state, approvals, can_execute,
+//     blocking_reasons, execution_target
+// Tidak ada angka, ambang, atau sebab yang dikarang di sini.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Aksi dalam bahasa manusia untuk judul kepala halaman (bukan label jenis). */
+const HEADLINE_VERBS: Record<string, string> = {
+  regional_balance: "Alihkan",
+  safety_disruption: "Ganti pasokan",
+  price_anomaly: "Sesuaikan harga",
+  surplus_redistribution: "Redistribusikan",
+  supplier_exclusion: "Keluarkan pemasok",
+  supplier_restoration: "Pulihkan pemasok",
+};
+
+export type MetricItem = { label: string; value: string };
+export type FlagItem = { id: string; label: string; text: string; tone: FactTone };
+export type RouteStep = {
+  id: "proposed" | "verify" | "approve" | "execute";
+  label: string;
+  state: "done" | "current" | "waiting" | "blocked";
+  detail: string;
+};
+
+const objectOf = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+
+const listOf = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+
+const kg = (value: unknown): string | null => {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return null;
+  return `${num.toLocaleString("id-ID", { maximumFractionDigits: 3 })} kg`;
+};
+
+/** Angka rupiah bertanda untuk selisih (mis. "+Rp486.000"). */
+function selisih(value: number): string {
+  if (!Number.isFinite(value) || value === 0) return idr(value);
+  return `${value > 0 ? "+" : "−"}${idr(Math.abs(value))}`;
+}
+
+/**
+ * Judul satu baris: aksi + jumlah + komoditas + rute yang BENAR-BENAR diketahui.
+ * Bagian yang datanya tidak ada dihilangkan (bukan ditulis "—"): judul dengan
+ * tanda pisah justru terbaca seperti data rusak.
+ */
+export function decisionHeadline(decision: unknown, summary: unknown): string {
+  const d = objectOf(decision) ?? {};
+  const s = objectOf(summary) ?? {};
+  const type = text(d.decision_type) ?? text(s.decision_type);
+  const verb = type ? HEADLINE_VERBS[type] : null;
+  const kepala = verb ?? (type ? type.replace(/_/g, " ") : "Keputusan");
+  const bagian = [kepala];
+  const jumlah = kg(d.quantity_kg ?? s.quantity_kg);
+  if (jumlah) bagian.push(jumlah);
+  const komoditas = text(s.commodity) ?? text(d.commodity);
+  if (komoditas) bagian.push(komoditas);
+  const asal = text(s.source_location) ?? text(d.source_location);
+  const tujuan = text(s.target_location) ?? text(d.target_location);
+  const rute = asal && tujuan ? `: ${asal} → ${tujuan}` : "";
+  return `${bagian.join(" ")}${rute}`;
+}
+
+/** 2–4 angka kunci untuk dibaca dalam tiga detik. Yang tidak ada tidak dipaksa. */
+export function decisionMetrics(decision: unknown, summary: unknown): MetricItem[] {
+  const d = objectOf(decision) ?? {};
+  const s = objectOf(summary) ?? {};
+  const rows: MetricItem[] = [];
+  const jumlah = kg(d.quantity_kg ?? s.quantity_kg);
+  if (jumlah) rows.push({ label: "Kuantitas", value: jumlah });
+  const biaya = Number(s.safe_delivered_cost ?? d.safe_delivered_cost);
+  if (Number.isFinite(biaya)) rows.push({ label: "Biaya aman terkirim", value: idr(biaya) });
+  const beli = Number(objectOf(s.cost_breakdown)?.purchase);
+  if (Number.isFinite(biaya) && Number.isFinite(beli) && beli > 0) {
+    rows.push({ label: "Selisih dari harga beli", value: selisih(biaya - beli) });
+  }
+  const tujuan = text(s.target_location) ?? text(d.target_location);
+  if (tujuan) rows.push({ label: "Tujuan", value: tujuan });
+  return rows;
+}
+
+/**
+ * "Perlu diperhatikan": TRIASE, bukan alarm. Hanya keadaan yang benar-benar
+ * dinyatakan data yang masuk — keputusan sehat menghasilkan daftar kosong.
+ */
+export function attentionFlags(input: { decision: unknown; summary: unknown }): FlagItem[] {
+  const d = objectOf(input?.decision) ?? {};
+  const s = objectOf(input?.summary) ?? {};
+  const status = (text(d.status) ?? text(s.status) ?? "").toLowerCase();
+  const flags: FlagItem[] = [];
+
+  const verifier = objectOf(s.verifier);
+  if (status !== "rejected" && !text(verifier?.verified_by)) {
+    flags.push({
+      id: "verifier",
+      label: "Belum diverifikasi",
+      text: "Belum ada verdict verifier untuk keputusan ini — eksekusi ditolak sampai diverifikasi.",
+      tone: "warn",
+    });
+  }
+
+  const expiry = objectOf(s.expiry);
+  if (expiry && expiry.valid === false) {
+    const habis = formatDateTime(String(expiry.expires_at ?? ""));
+    flags.push({
+      id: "expiry",
+      label: "Jendela berlaku lewat",
+      text:
+        habis === DASH
+          ? "Jendela berlaku sudah habis; eksekusi ditolak sampai ada keputusan baru."
+          : `Jendela berlaku habis ${habis}; eksekusi ditolak sampai ada keputusan baru.`,
+      tone: "warn",
+    });
+  }
+
+  const safety = objectOf(s.safety);
+  if (safety?.blocked === true) {
+    flags.push({
+      id: "safety",
+      label: "Keamanan batch sumber",
+      text: text(safety.reason) ?? "Batch sumber tidak lolos pemeriksaan keamanan.",
+      tone: "danger",
+    });
+  }
+
+  if (status === "rejected") {
+    const alasan = text(d.rejection_reason);
+    flags.push({
+      id: "rejected",
+      label: "Keputusan ditolak",
+      text: alasan
+        ? `Alasan: ${alasan}`
+        : "Permintaan ini berhenti; agent dapat mengajukan iterasi baru dengan perbaikan.",
+      tone: "danger",
+    });
+  }
+
+  return flags;
+}
+
+/** Kata manusia untuk verdict verifier (peta sudah ada; jangan diduplikasi). */
+function verdictWord(verdict: unknown): string | null {
+  const key = text(verdict)?.toLowerCase();
+  if (!key) return null;
+  return REQUIREMENT_VERDICT_ID[key] ?? key.replace(/_/g, " ");
+}
+
+/**
+ * Jalur persetujuan sebagai empat langkah tetap (diajukan → verifikasi →
+ * persetujuan → eksekusi). Sama untuk semua peran; hanya kontrolnya yang
+ * berbeda. Rincian langkah menyebut SIAPA memegang dan SIAPA berikutnya.
+ */
+export function approvalRoute(input: {
+  decision: unknown;
+  summary: unknown;
+  now: Date | null;
+}): RouteStep[] {
+  const d = objectOf(input?.decision) ?? {};
+  const s = objectOf(input?.summary) ?? {};
+  const status = (text(d.status) ?? text(s.status) ?? "").toLowerCase();
+
+  const created = formatDateTime(String(d.created_at ?? ""));
+  const steps: RouteStep[] = [
+    {
+      id: "proposed",
+      label: "Diajukan",
+      state: "done",
+      detail: [agentLabel(d.proposed_by) ?? "agent", created === DASH ? null : created]
+        .filter(Boolean)
+        .join(" · "),
+    },
+  ];
+
+  const verifier = objectOf(s.verifier);
+  const verifiedBy = text(verifier?.verified_by) ?? text(d.verified_by);
+  steps.push({
+    id: "verify",
+    label: "Verifikasi agent",
+    state: verifiedBy ? "done" : "waiting",
+    detail: verifiedBy
+      ? [verdictWord(verifier?.verdict), agentLabel(verifiedBy)].filter(Boolean).join(" · ")
+      : "belum ada verdict",
+  });
+
+  const state = objectOf(s.approval_state);
+  const req = objectOf(s.approval_requirement);
+  const approvals = listOf(s.approvals).map((row) => objectOf(row) ?? {});
+  const disetujui = approvals.filter((row) => row.approved === true);
+  const peran = new Set(
+    listOf(state?.approved_roles)
+      .map((role) => String(role))
+      .concat(disetujui.map((row) => String(row.role ?? "")))
+  );
+  const grup = listOf(req?.required_roles);
+  const kurang = grup.filter(
+    (group) => !listOf(group).some((role) => peran.has(String(role)))
+  );
+  const min = Number(req?.min_approvals);
+  // Hitungan memakai PERAN unik yang sudah menyetujui (requirement berbicara
+  // grup peran, bukan jumlah klik): dua approval dari peran sama tetap "1 dari 2".
+  const disetujuiPeran = Array.from(peran).filter((role) => role !== "").length;
+  const jumlah = Number.isFinite(min)
+    ? `${disetujuiPeran} dari ${min}`
+    : `${disetujuiPeran} disetujui`;
+  const berikutnya = kurang
+    .map((group) => listOf(group).map((role) => roleLabel(String(role))).join(" atau "))
+    .filter(Boolean);
+  const ditolak = state?.rejected === true || status === "rejected";
+  const puas =
+    !ditolak &&
+    (state?.satisfied === true || (kurang.length === 0 && grup.length > 0));
+  steps.push({
+    id: "approve",
+    label: "Persetujuan",
+    state: ditolak ? "blocked" : puas ? "done" : "current",
+    detail: [
+      jumlah,
+      berikutnya.length ? `berikutnya: ${berikutnya.join(" · ")}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  });
+
+  const executed = status === "executed";
+  const target = text(s.execution_target);
+  steps.push({
+    id: "execute",
+    label: "Eksekusi",
+    state: executed ? "done" : s.can_execute === true ? "current" : "waiting",
+    detail: executed
+      ? target
+        ? `sudah dijalankan (${target})`
+        : "sudah dijalankan"
+      : target
+        ? `target ${executionTargetLabel(target) ?? target}`
+        : "belum dijalankan",
+  });
+
+  return steps;
+}
+
+/**
+ * Akibat tiap pilihan — jawaban untuk "kalau saya pilih ini, lalu apa?".
+ * Hanya bersumber data: target eksekusi, penghalang, status, nomor iterasi.
+ */
+export function consequences(input: { decision: unknown; summary: unknown }): {
+  approve: string;
+  reject: string;
+} {
+  const d = objectOf(input?.decision) ?? {};
+  const s = objectOf(input?.summary) ?? {};
+  const target = text(s.execution_target);
+  const penghalang = blockingReasons(s);
+
+  let approve: string;
+  if (s.can_execute === true) {
+    approve =
+      target === "MOCK"
+        ? "Eksekusi dijalankan di simulasi (mock) — tidak ada pesanan nyata yang dibuat."
+        : target
+          ? `Eksekusi dijalankan di target ${executionTargetLabel(target) ?? target}.`
+          : "Eksekusi dijalankan.";
+  } else if (penghalang.length) {
+    const dipangkas = penghalang.slice(0, 2).join(" · ");
+    const sisa = penghalang.length > 2 ? ` (+${penghalang.length - 2} lain)` : "";
+    approve = `Belum bisa dieksekusi: ${dipangkas}${sisa}.`;
+  } else {
+    approve = "Belum bisa dieksekusi — masih ada syarat yang belum terpenuhi.";
+  }
+
+  const status = (text(d.status) ?? text(s.status) ?? "").toLowerCase();
+  const iterasi = Number(d.iteration ?? s.iteration);
+  const reject =
+    status === "rejected"
+      ? "Keputusan sudah ditolak; agent dapat mengajukan iterasi baru dengan perbaikan."
+      : `Permintaan ini berhenti. Agent dapat mengajukan iterasi ${
+          Number.isFinite(iterasi) ? `v${iterasi + 1}` : "baru"
+        } dengan perbaikan.`;
+
+  return { approve, reject };
+}
+
+// ── Langkah 2 (17 Okt 2026): lini masa audit + umur jendela ──────────────────
+
+/** Catatan verifier yang hanya mengulang verdict mentah → jangan diulang. */
+function catatanUnik(verdict: unknown, note: unknown): string | null {
+  const isi = text(note);
+  if (!isi) return null;
+  const putusan = text(verdict);
+  return putusan && isi.trim().toLowerCase() === putusan.trim().toLowerCase() ? null : isi;
+}
+
+export type AuditEvent = {
+  id: string;
+  /** ISO waktu kejadian, atau null kalau memang tidak ada — jangan dikarang. */
+  at: string | null;
+  title: string;
+  /** Siapa pelakunya (peran manusia bila yang tersedia hanya peran backend). */
+  actor: string | null;
+  detail: string | null;
+  tone: FactTone;
+};
+
+/** Waktu → milidetik; tak terbaca = Infinity supaya tetap di urutan terakhir. */
+function waktu(value: unknown): number {
+  if (value === null || value === undefined || value === "") return Infinity;
+  const ms = Date.parse(String(value));
+  return Number.isFinite(ms) ? ms : Infinity;
+}
+
+/**
+ * Lini masa audit satu keluarga keputusan: iterasi lama → pengajuan iterasi kini
+ * → verifikasi → tiap keputusan orang. Urutannya BERCERITA (bukan diurut ulang
+ * menurut jam), karena verifikasi tidak punya kolom waktunya sendiri di DB —
+ * mengurutkannya secara kronologis akan menaruh verifikasi di akhir, salah.
+ *
+ * Hanya memakai: `/decisions/{id}` (created_at, proposed_by, verifier_note,
+ * iteration, rejection_reason), `/approval-summary` (verifier, approvals[]),
+ * dan `/decisions/{id}/chain` (iterasi keluarga).
+ */
+export function auditTimeline(input: {
+  decision: unknown;
+  summary: unknown;
+  chain: unknown;
+}): AuditEvent[] {
+  const d = objectOf(input?.decision) ?? {};
+  const s = objectOf(input?.summary) ?? {};
+  const idKini = text(d.decision_id);
+  const events: AuditEvent[] = [];
+
+  const riwayat = listOf(input?.chain)
+    .map((row) => objectOf(row))
+    .filter((row): row is Record<string, unknown> => row !== null);
+  for (const item of riwayat) {
+    // Iterasi yang sedang dibuka dirender dari payload keputusan di bawah.
+    if (idKini && text(item.decision_id) === idKini) continue;
+    const nomor = Number(item.iteration);
+    const status = (text(item.status) ?? "").toLowerCase();
+    const alasan = text(item.rejection_reason);
+    events.push({
+      id: `iterasi-${text(item.decision_id) ?? events.length}`,
+      at: text(item.created_at),
+      title: `v${Number.isFinite(nomor) ? nomor : "?"} diajukan`,
+      actor: null,
+      detail:
+        [status ? statusWord(status) : null, alasan ? `alasan: ${alasan}` : null]
+          .filter(Boolean)
+          .join(" · ") || null,
+      tone: status === "rejected" ? "danger" : "plain",
+    });
+  }
+
+  const nomorKini = Number(d.iteration ?? s.iteration);
+  events.push({
+    id: "diajukan",
+    at: text(d.created_at),
+    title: `v${Number.isFinite(nomorKini) ? nomorKini : "?"} diajukan`,
+    actor: agentLabel(d.proposed_by),
+    detail: null,
+    tone: "plain",
+  });
+
+  const verifier = objectOf(s.verifier);
+  const verifiedBy = text(verifier?.verified_by) ?? text(d.verified_by);
+  if (verifiedBy) {
+    events.push({
+      id: "verifikasi",
+      // Model Decision tidak menyimpan waktu verifikasi — null, bukan jam karangan.
+      at: null,
+      title: "Diverifikasi",
+      actor: agentLabel(verifiedBy),
+      // Kalau catatan verifier cuma mengulang putusannya ("consistent" →
+      // "konsisten · consistent"), jangan dibordukan — sekali saja.
+      detail:
+        [verdictWord(verifier?.verdict), catatanUnik(verifier?.verdict, d.verifier_note)]
+          .filter(Boolean)
+          .join(" · ") || null,
+      tone: "ok",
+    });
+  }
+
+  const approvals = listOf(s.approvals).map((row) => objectOf(row) ?? {});
+  const berurut = approvals
+    .map((row, index) => ({ row, index, ms: waktu(row.approved_at) }))
+    .sort((a, b) => (a.ms === b.ms ? a.index - b.index : a.ms - b.ms))
+    .map((entry) => entry.row);
+  for (let index = 0; index < berurut.length; index += 1) {
+    const row = berurut[index];
+    // Baris tanpa keputusan biner (true/false) BUKAN penolakan: mengklaim
+    // "Ditolak" dari field yang tidak ada = melaporkan sesuatu yang tak terjadi.
+    if (row.approved !== true && row.approved !== false) continue;
+    const setuju = row.approved === true;
+    const peran = text(row.role);
+    events.push({
+      id: `keputusan-${index}`,
+      at: text(row.approved_at),
+      title: setuju ? "Disetujui" : "Ditolak",
+      // Nama orangnya tidak dikirim API — peran manusia adalah yang paling jujur.
+      actor: peran ? roleLabel(peran) : null,
+      detail: text(row.comment),
+      tone: setuju ? "ok" : "danger",
+    });
+  }
+
+  const status = (text(d.status) ?? text(s.status) ?? "").toLowerCase();
+  if (status === "rejected" && !approvals.some((row) => row.approved === false)) {
+    events.push({
+      id: "ditolak",
+      at: null,
+      title: "Ditolak",
+      actor: null,
+      detail: text(d.rejection_reason),
+      tone: "danger",
+    });
+  }
+
+  return events;
+}
+
+/**
+ * Umur jendela berlaku dalam persen. SENGAJA tidak memakai ember
+ * "fresh/aging/breached" ala Skopx: target waktu-ke-keputusan per jenis
+ * permintaan tidak ada di data repo ini, dan mengarang ambangnya = mengarang
+ * kebijakan. Yang ditampilkan hanya dua fakta: persen terpakai & lewat/tidak.
+ */
+export function windowUsage(input: {
+  created_at: unknown;
+  expires_at: unknown;
+  now: Date | null;
+}): { state: "aman" | "lewat" | "tidak diketahui"; persen: number | null; label: string } {
+  const tidakTahu = {
+    state: "tidak diketahui" as const,
+    persen: null,
+    label: "Umur jendela tidak dapat dihitung",
+  };
+  const now = input?.now instanceof Date && Number.isFinite(input.now.getTime()) ? input.now : null;
+  const mulai = waktu(input?.created_at);
+  const selesai = waktu(input?.expires_at);
+  if (!now || !Number.isFinite(mulai) || !Number.isFinite(selesai)) return tidakTahu;
+  const total = selesai - mulai;
+  if (!(total > 0)) return tidakTahu;
+  if (now.getTime() >= selesai) return { state: "lewat", persen: 100, label: "Jendela lewat" };
+  const persen = Math.min(99, Math.max(0, Math.round(((now.getTime() - mulai) / total) * 100)));
+  return { state: "aman", persen, label: `Jendela terpakai ${persen}%` };
 }
 
 function text(value: unknown): string | null {
@@ -350,7 +823,7 @@ export function decisionFacts(decision: unknown, now: Date): FactRow[] {
       value: Number.isFinite(iteration) ? String(iteration) : DASH,
     },
     { label: "Menggantikan", value: shortId(merged.supersedes_id) },
-    { label: "Diusulkan oleh", value: text(merged.proposed_by) ?? DASH },
+    { label: "Diusulkan oleh", value: agentLabel(merged.proposed_by) ?? DASH },
     {
       label: "Tenggat",
       value: dueLabel(expiresAt, now),
@@ -430,7 +903,8 @@ export function safetyFacts(summary: unknown): FactRow[] {
   return [
     {
       label: "Status keamanan terburuk",
-      value: worst ?? DASH,
+      // Nada tetap dari enum mentah; yang dibaca manusia adalah katanya.
+      value: safetyLabel(worst) ?? DASH,
       tone: worst ? (SAFETY_TONE[worst] ?? "muted") : "muted",
     },
     { label: "Batch diperiksa", value: Number.isFinite(checked) ? String(checked) : DASH },
@@ -441,10 +915,12 @@ export function safetyFacts(summary: unknown): FactRow[] {
     },
     {
       label: "Verifikator",
-      value: verdict || verifiedBy ? [verdict, verifiedBy].filter(Boolean).join(" · ") : DASH,
+      // "consistent · verifier_agent" → "konsisten · Agen verifikator".
+      value:
+        [verdictWord(verdict), agentLabel(verifiedBy)].filter(Boolean).join(" · ") || DASH,
     },
     { label: "Nomor material", value: text(payload?.material_number) ?? DASH },
-    { label: "Target eksekusi", value: text(payload?.execution_target) ?? DASH },
+    { label: "Target eksekusi", value: executionTargetLabel(payload?.execution_target) ?? DASH },
   ];
 }
 
@@ -475,12 +951,8 @@ export function approvalFacts(summary: unknown): FactRow[] {
   const requirementValue =
     requirementText ??
     (Number.isFinite(minApprovals) ? `minimal ${minApprovals} persetujuan` : DASH);
-  const blocking = Array.isArray(payload?.blocking_reasons)
-    ? (payload!.blocking_reasons as unknown[]).map((reason) => text(reason)).filter(Boolean)
-    : [];
-  const roles = Array.isArray(payload?.approver_roles)
-    ? (payload!.approver_roles as unknown[]).map((role) => text(role)).filter(Boolean)
-    : [];
+  const blocking = blockingReasons(payload);
+  const roles = roleList(payload?.approver_roles);
   return [
     {
       label: "Persetujuan",
@@ -490,7 +962,7 @@ export function approvalFacts(summary: unknown): FactRow[] {
       label: "Syarat persetujuan",
       value: requirementValue,
       hint: requirementVerdict && requirementVerdict !== "ok"
-        ? `putusan aturan: ${REQUIREMENT_VERDICT_ID[requirementVerdict.toLowerCase()] ?? requirementVerdict}`
+        ? `aturan persetujuan: ${REQUIREMENT_VERDICT_ID[requirementVerdict.toLowerCase()] ?? requirementVerdict}`
         : null,
     },
     { label: "Boleh disetujui", value: boolLabel(payload?.can_approve) },

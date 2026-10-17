@@ -366,24 +366,38 @@ export function balanceForLocation(raw: unknown, own: string | null | undefined)
       (row) => (text(row["location"]) ?? "").toLowerCase() === ownNorm
     );
     if (!found) return null;
+    // Asal nilai (PLAN-023): perbandingan kebutuhan-vs-kiriman hanya bermakna
+    // bila KEDUA sisinya tercatat. Sebelum ini sisi yang tidak ada diisi 0,
+    // sehingga kalimatnya bisa mengklaim surplus/kekurangan yang tak terukur;
+    // sekarang nilainya `null` (laporan repo: "null → —", bukan angka karangan).
+    const tanpaSisi =
+      found["supply_state"] === "tidak_ada_baris" ||
+      found["demand_state"] === "tidak_ada_baris";
     return {
       commodity,
       locationLabel: text(found["location"]) ?? DASH,
-      demandKg: angka(found["demand_kg"]),
-      supplyKg: angka(found["supply_kg"]),
-      shortageKg: angka(found["shortage_kg"]),
-      surplusKg: angka(found["surplus_kg"]),
+      demandKg: tanpaSisi ? null : angka(found["demand_kg"]),
+      supplyKg: tanpaSisi ? null : angka(found["supply_kg"]),
+      shortageKg: tanpaSisi ? null : angka(found["shortage_kg"]),
+      surplusKg: tanpaSisi ? null : angka(found["surplus_kg"]),
       isAggregate: false,
     };
   }
 
+  // Agregat (pengawas nasional): hanya lokasi yang KEDUA sisinya tercatat yang
+  // boleh masuk jumlah — angka 0 hasil pengisian tidak dihitung sebagai fakta.
+  const terukur = list.filter(
+    (row) =>
+      row["supply_state"] !== "tidak_ada_baris" &&
+      row["demand_state"] !== "tidak_ada_baris"
+  );
   return {
     commodity,
     locationLabel: "Seluruh lokasi",
-    demandKg: jumlah(list, "demand_kg"),
-    supplyKg: jumlah(list, "supply_kg"),
-    shortageKg: jumlah(list, "shortage_kg"),
-    surplusKg: jumlah(list, "surplus_kg"),
+    demandKg: jumlah(terukur, "demand_kg"),
+    supplyKg: jumlah(terukur, "supply_kg"),
+    shortageKg: jumlah(terukur, "shortage_kg"),
+    surplusKg: jumlah(terukur, "surplus_kg"),
     isAggregate: true,
   };
 }

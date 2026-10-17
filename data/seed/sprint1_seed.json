@@ -214,7 +214,7 @@
       "supplier": "Supplier A Cianjur",
       "quantity_kg": 800,
       "harvested_at_offset_hours": -36,
-      "dispatch_offset_hours": -1,
+      "dispatch_offset_hours": -0.35,
       "shelf_life_days": 35,
       "freshness_score": 0.90,
       "freshness_status": "pass",
@@ -226,6 +226,45 @@
         {"timestamp_offset_hours": 0, "temperature_c": 4.0}
       ],
       "certification_status": "haccp"
+    },
+    {
+      "code": "BATCH-JAKARTA-TELUR-BOGOR-1",
+      "location": "Jakarta",
+      "commodity": "telur",
+      "supplier": "Supplier Bogor-1",
+      "quantity_kg": 120,
+      "harvested_at_offset_hours": -20,
+      "dispatch_offset_hours": -2.5,
+      "shelf_life_days": 28,
+      "freshness_score": 0.86,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {"timestamp_offset_hours": -20, "temperature_c": 3.4},
+        {"timestamp_offset_hours": -14, "temperature_c": 2.9},
+        {"timestamp_offset_hours": -6, "temperature_c": 3.1},
+        {"timestamp_offset_hours": 0, "temperature_c": 3.2}
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "BATCH-JAKARTA-TELUR-D",
+      "location": "Jakarta",
+      "commodity": "telur",
+      "supplier": "Supplier D Cianjur",
+      "quantity_kg": 90,
+      "harvested_at_offset_hours": -26,
+      "dispatch_offset_hours": null,
+      "shelf_life_days": 28,
+      "freshness_score": 0.80,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {"timestamp_offset_hours": -26, "temperature_c": 5.2},
+        {"timestamp_offset_hours": -18, "temperature_c": 5.0},
+        {"timestamp_offset_hours": -6, "temperature_c": 5.4}
+      ],
+      "certification_status": "none"
     }
   ],
   "prices": [

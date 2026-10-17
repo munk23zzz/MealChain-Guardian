@@ -144,7 +144,10 @@ def test_verify_flagged_turunkan_status_verifier_flagged(client, fake_verifier):
 
 def test_verify_ditolak_409_setelah_approved(client, fake_verifier):
     head = _mk_user("sppg_head", "Jakarta")
-    nutritionist = _mk_user("sppg_nutritionist", "Bogor")
+    # Ruling 2026-10-14 §3: uji ini soal integritas jejak audit (verify setelah
+    # ada approval → 409), bukan soal cakupan. Ahli gizi wajib satu SPPG dengan
+    # target agar sampai ke penjaga 409, bukan berhenti di 403 cakupan.
+    nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
     decision_id = _event1_decision_id()
     try:
         fake_verifier("CONSISTENT")

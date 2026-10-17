@@ -1,6 +1,7 @@
 "use client";
 
 import { evidenceRowsFromDossier, type ComplianceDossier } from "../lib/evidence";
+import { safetyLabel } from "../lib/bahasa";
 // Satuan diterjemahkan di satu tempat (WS-C): "percent" → "persen".
 import { unitLabel } from "./KPIDashboard";
 import styles from "./ComplianceEvidencePanel.module.css";
@@ -17,7 +18,8 @@ export default function ComplianceEvidencePanel({ dossier }: { dossier: Complian
       <div className={styles.header}>
         <strong>Bukti kepatuhan tersimpan</strong>
         <span data-testid="compliance-counts">
-          PASS {counts.PASS ?? 0} · FAIL {counts.FAIL ?? 0} · NEEDS_VERIFICATION {counts.NEEDS_VERIFICATION ?? 0}
+          {safetyLabel("PASS")} {counts.PASS ?? 0} · {safetyLabel("FAIL")} {counts.FAIL ?? 0} ·{" "}
+          {safetyLabel("NEEDS_VERIFICATION")} {counts.NEEDS_VERIFICATION ?? 0}
         </span>
       </div>
       {rows.length === 0 ? <p>Belum ada bukti pengukuran untuk keputusan ini.</p> : (

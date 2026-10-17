@@ -435,6 +435,21 @@ REFRESH_WARNING = (
 )
 
 
+async def _sync_routes_aman(now: datetime) -> tuple[dict, str | None]:
+    """Sinkronkan rute jalan untuk refresh; kegagalan jaringan DILAPORKAN, bukan dilempar.
+
+    Dipisah supaya bisa diuji tanpa DB/HTTP: perilaku yang dijanjikan tombol demo
+    adalah "coba sinkronkan; kalau OSRM mati, refresh tetap jalan dan alasannya
+    terlihat di respons".
+    """
+    from app.seed.seed_data import sync_routes_after_seed
+
+    try:
+        return await sync_routes_after_seed(now), None
+    except Exception as exc:  # jaringan/OSRM di luar dugaan
+        return {}, f"{type(exc).__name__}: {exc}"
+
+
 @router.post("/demo/refresh", status_code=200)
 async def refresh_to_today(
     db: AsyncSession = Depends(get_db),
@@ -449,11 +464,20 @@ async def refresh_to_today(
 
     now = datetime.now(timezone.utc)
     rows = await load_seed(now)
+    # Rute jalan ikut disinkronkan: seeder memindahkan tanggal kiriman ke hari
+    # ini, dan pasangan pemasok→tujuan yang BELUM ada di cache hanya punya garis
+    # kalau disinkronkan di sini. Tanpa langkah ini tombol "Segarkan ke hari ini"
+    # menghasilkan kiriman tanpa geometri ("belum disinkronkan") — peta kosong
+    # padahal datanya ada. Gagal jaringan TIDAK menggagalkan refresh: laporannya
+    # dibawa di respons supaya terlihat, bukan disembunyikan.
+    routes, route_error = await _sync_routes_aman(now)
     cases = await _seed_demo_cases(db, force=True)
     return {
         "reference_time": now.isoformat(),
         "rows": rows,
         "cases": cases,
+        "routes": routes,
+        "route_error": route_error,
         "warning": REFRESH_WARNING,
         "message": "Snapshot kanonik disegarkan ke hari ini; 4 kasus skrip dimuat ulang.",
     }

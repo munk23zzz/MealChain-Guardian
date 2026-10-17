@@ -1,4 +1,5 @@
 import { evidenceRowsFromDossier, type ComplianceDossier } from "./evidence";
+import { fetchDossier } from "./api";
 
 const FORBIDDEN = /^(token|access_token|refresh_token|credential|credentials|private_key|privatekey|secret)$/i;
 
@@ -55,4 +56,24 @@ export function downloadText(filename: string, content: string, mime = "text/pla
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Nama berkas artefak bukti — SATU tempat, supaya ekspor dari kepala halaman dan
+ * dari panel bukti tersimpan tidak pernah memberi nama berbeda untuk benda sama.
+ */
+export function dossierFileName(decisionId: string): string {
+  return `dossier-${decisionId}.json`;
+}
+
+/**
+ * Unduh dossier JSON satu keputusan (bukti tersimpan: alamat konten + tanda
+ * tangan). Dipakai tombol "Unduh bukti" di kepala halaman Decision & Evidence;
+ * mengembalikan nama berkas supaya UI bisa memberi umpan balik yang jujur.
+ */
+export async function downloadDossier(decisionId: string, token: string): Promise<string> {
+  const dossier = (await fetchDossier(decisionId, token)) as ComplianceDossier;
+  const nama = dossierFileName(decisionId);
+  downloadText(nama, dossierToJson(dossier), "application/json;charset=utf-8");
+  return nama;
 }

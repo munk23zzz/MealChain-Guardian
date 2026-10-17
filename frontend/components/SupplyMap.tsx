@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
+  dataSourceNote,
   formatBalanceGap,
   formatBalanceStatus,
   formatKg,
@@ -30,6 +31,18 @@ import {
   pinTone,
   type MapFocus,
 } from "../lib/map-console";
+// Kendali tampilan peta (langkah 7b-1): label + ikon tombol "Tampilkan semua".
+// Judulnya fungsi murni karena kalimat itu JANJI — lihat lib/map-view.ts.
+import {
+  MAP_RESET_ICON,
+  MAP_RESET_LABEL,
+  lokalkanPesanGesture,
+  mapCooperativeGestures,
+  mapResetTitle,
+} from "../lib/map-view";
+// Baris legenda ringkas di bawah kanvas (C2, langkah 7b-2): aturan isinya
+// (status selalu ada, keterangan ikut sakelar lapisan) hidup di lib murni.
+import { compactLegendItems, legendMarkClass } from "../lib/map-legend-compact";
 import {
   SUPPLIER_LABEL_MIN_ZOOM,
   SUPPLIER_PIN_LEGEND,
@@ -66,12 +79,37 @@ import {
   supplierRoutes as supplierRouteRows,
   type SupplierRoute,
 } from "../lib/supplier-routes";
+import {
+  FOCUS_ALL,
+  FOCUS_CLEAR_LABEL,
+  focusFilterText,
+  focusLineFeatures,
+  focusOptions,
+  focusPick,
+} from "../lib/route-focus";
+import RouteFocusPicker from "./RouteFocusPicker";
 
 /** Id source/layer MapLibre untuk garis jalur kiriman (Fase 10). */
 const ROUTE_SOURCE_ID = "supplier-routes";
 const ROUTE_LAYER_ID = "supplier-route-line";
+// Garis SOROTAN (Arah C): satu source berisi sampai dua potong — padat = sudah
+// ditempuh, putus-putus = belum. Dipisah dari layer dasar supaya aturan warna
+// layer dasar tidak perlu diubah sama sekali.
+const ROUTE_FOCUS_SOURCE_ID = "supplier-route-focus";
+const ROUTE_FOCUS_DONE_LAYER_ID = "supplier-route-focus-done";
+const ROUTE_FOCUS_TODO_LAYER_ID = "supplier-route-focus-todo";
 
 /** Id panel rincian lapisan — dipakai `aria-controls` tombol lipatnya. */
+/**
+ * Pembungkus `matchMedia` yang aman di lingkungan tanpa DOM penuh (uji jsdom
+ * tidak menyediakan `matchMedia`). Tanpa jawaban media query, peta memakai
+ * perilaku bawaan desktop — bukan menebak "ini ponsel".
+ */
+function mediaQueryCocok(query: string): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  return window.matchMedia(query).matches;
+}
+
 const LAYER_INFO_PANEL_ID = "map-layer-info-panel";
 const LEGEND_PANEL_ID = "map-legend-panel";
 
@@ -83,6 +121,19 @@ const ROUTE_LINE_WIDTH: maplibregl.ExpressionSpecification = [
   2,
   10,
   4,
+];
+
+// Garis sorotan (Arah C) lebih tebal 2 px pada tiap tingkat zoom. Ditulis sebagai
+// ekspresi sendiri karena `ROUTE_LINE_WIDTH` adalah ExpressionSpecification —
+// menambahkan angka ke ekspresi menghasilkan error tipe (dan peta diam saja).
+const ROUTE_FOCUS_WIDTH: maplibregl.ExpressionSpecification = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  5,
+  4,
+  10,
+  6,
 ];
 
 function fitBoundsFor(
@@ -120,6 +171,15 @@ function popupNode(location: BalanceMapLocation): HTMLElement {
   const gap = document.createElement("em");
   gap.textContent = formatBalanceGap(location);
   box.append(title, numbers, gap);
+  // Asal nilai (PLAN-023) hanya muncul di RINCIAN: lokasi tanpa baris
+  // permintaan/pasokan tidak lagi tampak seperti angka terukur.
+  const note = dataSourceNote(location);
+  if (note) {
+    const catatan = document.createElement("span");
+    catatan.className = "map-popup-note";
+    catatan.textContent = note;
+    box.append(catatan);
+  }
   return box;
 }
 
@@ -169,7 +229,9 @@ function refreshPin(marker: maplibregl.Marker, location: BalanceMapLocation): vo
 /** Keterangan penanda untuk pembaca layar (MapLibre menandai tiap penanda
  *  "Map marker"; sepuluh penanda tanpa keterangan tidak berguna). */
 function pinAccessibleLabel(location: BalanceMapLocation): string {
-  return `${location.location} — pasokan ${formatKg(location.supply_kg)}, permintaan ${formatKg(location.demand_kg)}, ${formatBalanceGap(location)}`;
+  const note = dataSourceNote(location);
+  const dasar = `${location.location} — pasokan ${formatKg(location.supply_kg)}, permintaan ${formatKg(location.demand_kg)}, ${formatBalanceGap(location)}`;
+  return note ? `${dasar}, ${note}` : dasar;
 }
 
 /** Isi popup pemasok — NODE DOM, bukan innerHTML (nama pemasok dari DB). */
@@ -269,18 +331,22 @@ export function StatusLocationList({
         </span>
       </div>
       <ul className="map-list">
-        {locations.map((l) => (
-          <li key={l.location} className={`map-row map-row-${l.status}`}>
-            <i className={`map-dot map-dot-${l.status}`} aria-hidden="true" />
-            <span className="map-row-name">{l.location}</span>
-            <span className="map-row-status">
-              {formatBalanceStatus(l.status)}
-            </span>
-            <span className="map-row-supply">Pasokan: {formatKg(l.supply_kg)}</span>
-            <span className="map-row-demand">Kebutuhan: {formatKg(l.demand_kg)}</span>
-            <span className="map-row-gap">Selisih: {formatBalanceGap(l)}</span>
-          </li>
-        ))}
+        {locations.map((l) => {
+          const note = dataSourceNote(l);
+          return (
+            <li key={l.location} className={`map-row map-row-${l.status}`}>
+              <i className={`map-dot map-dot-${l.status}`} aria-hidden="true" />
+              <span className="map-row-name">{l.location}</span>
+              <span className="map-row-status">
+                {formatBalanceStatus(l.status)}
+              </span>
+              <span className="map-row-supply">Pasokan: {formatKg(l.supply_kg)}</span>
+              <span className="map-row-demand">Kebutuhan: {formatKg(l.demand_kg)}</span>
+              <span className="map-row-gap">Selisih: {formatBalanceGap(l)}</span>
+              {note && <span className="map-row-note">{note}</span>}
+            </li>
+          );
+        })}
       </ul>
     </>
   );
@@ -318,6 +384,8 @@ export default function SupplyMap({
   suppliers = null,
   supplierRoutes = null,
   reachKm = null,
+  focusedRouteId = null,
+  onFocusRoute = null,
 }: {
   locations: readonly BalanceMapLocation[];
   commodity?: string;
@@ -345,6 +413,13 @@ export default function SupplyMap({
    *  (Fase 7b). Peran SPPG memakai 150 km — diputuskan di pemanggil lewat
    *  `supplierReachKmForRole`, bukan di dalam peta, supaya aturannya satu tempat. */
   reachKm?: number | null;
+  /** Kiriman yang sedang DISOROT (Arah C). `null` = semua kiriman; id tak dikenal
+   *  diperlakukan sama (gagal-tertutup, lihat `lib/route-focus.ts`). */
+  focusedRouteId?: string | null;
+  /** Pemilih harus dikendalikan pemanggil (peta + kartu kiriman memakai pilihan
+   *  yang SAMA). `null` = pemilih tidak dirender — peta tetap bisa dipakai tanpa
+   *  Arah C (mis. di tab yang tidak punya kartu kiriman). */
+  onFocusRoute?: ((id: string) => void) | null;
 }) {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -361,6 +436,14 @@ export default function SupplyMap({
   // peta. Keduanya murni & diuji di lib/map-console.ts.
   const pinSignaturesRef = useRef<Record<string, string>>({});
   const focusRef = useRef<MapFocus>(MAP_FOCUS_INITIAL);
+  /** Tombol "Tampilkan semua" (langkah 7b-1) — elemennya dibuat MapLibre di
+   *  dalam grup kontrol kanan-atas; ref ini yang memegang elemennya supaya
+   *  judul/aria-label bisa diperbarui saat data berubah. */
+  const resetButtonRef = useRef<HTMLButtonElement | null>(null);
+  /** Fungsi "kembalikan tampilan" terbaru. Kontrol MapLibre dibuat SEKALI, jadi
+   *  klik-nya harus memanggil versi terbaru — bukan salinan saat peta dibangun
+   *  (klik setelah lapisan jalur dinyalakan/matikan harus ikut menyesuaikan). */
+  const fitAllRef = useRef<() => void>(() => {});
 
   const hasLocations = Boolean(locations?.length);
   // Pemicu sinkronisasi = tanda tangan ISI data, bukan identitas array.
@@ -421,11 +504,32 @@ export default function SupplyMap({
     () => (showRoutes ? routeJourneyRows(routePinRows) : []),
     [routePinRows, showRoutes]
   );
+  // Isi baris legenda ringkas di bawah kanvas (C2, langkah 7b-2). Aturannya ada
+  // di lib murni `map-legend-compact.ts`: status lokasi selalu tampil (pin SPPG
+  // tidak punya sakelar), sedangkan butir jalur/pemasok hanya muncul saat
+  // lapisannya hidup — keterangan warna tanpa lapisan adalah informasi palsu.
+  const legendCompact = useMemo(
+    () =>
+      compactLegendItems({
+        jalur: showRoutes ? routeLegendEntries(routePinRows) : [],
+        pemasok: showSuppliers ? SUPPLIER_PIN_LEGEND : [],
+      }),
+    [routePinRows, showRoutes, showSuppliers]
+  );
   const routeBounds = useMemo(() => routeBoundsPoints(supplierRoutes), [supplierRoutes]);
   const routeRowsRef = useRef<readonly SupplierRoute[]>(routePinRows);
   const routeFeaturesRef = useRef(routeFeatures);
   const routeBoundsRef = useRef<readonly [number, number][]>(routeBounds);
   const showRoutesRef = useRef(true);
+  // --- Sorotan kiriman (Arah C) -------------------------------------------
+  const focusOptionRows = useMemo(() => focusOptions(supplierRoutes), [supplierRoutes]);
+  const focusRow = useMemo(
+    () => focusPick(supplierRoutes, focusedRouteId),
+    [supplierRoutes, focusedRouteId]
+  );
+  const focusLines = useMemo(() => focusLineFeatures(focusRow), [focusRow]);
+  const focusLinesRef = useRef(focusLines);
+  const onFocusRouteRef = useRef(onFocusRoute);
   // Peta dibuka ulang SEKALI saat jalur pertama tiba: ujung asal (mis. Cianjur)
   // berada di luar cakupan peta SPPG tujuan, jadi tanpa ini garisnya tak terlihat.
   const routeFitDoneRef = useRef(false);
@@ -510,10 +614,65 @@ export default function SupplyMap({
       const id = (event.features?.[0]?.properties as { id?: string } | undefined)?.id;
       const row = routeRowsRef.current.find((item) => item.id === id);
       if (!row) return;
+      // Klik garis = sorot kiriman ini (Arah C). Popup tetap muncul: ia yang
+      // dibaca di tempat klik, sedangkan kartu kiriman di bawah peta memuat
+      // stepper, rincian, dan riwayatnya.
+      onFocusRouteRef.current?.(row.id);
       new maplibregl.Popup({ offset: 10 })
         .setLngLat(event.lngLat)
         .setDOMContent(routePopupNode(row))
         .addTo(map);
+    });
+  }, []);
+
+  /** Sinkronkan garis SOROTAN (Arah C).
+   *
+   *  Sama seperti layer dasar: butuh gaya peta siap sebelum source bisa dibuat,
+   *  dan saat tidak ada yang disorot seluruh layer + source DIBUANG — tidak boleh
+   *  tertinggal garis sorotan untuk kiriman yang sudah dilepas. */
+  const syncFocusLayer = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const data = focusLinesRef.current;
+    const aktif = showRoutesRef.current && data.features.length > 0;
+    const source = map.getSource(ROUTE_FOCUS_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    if (!aktif) {
+      if (map.getLayer(ROUTE_FOCUS_DONE_LAYER_ID)) map.removeLayer(ROUTE_FOCUS_DONE_LAYER_ID);
+      if (map.getLayer(ROUTE_FOCUS_TODO_LAYER_ID)) map.removeLayer(ROUTE_FOCUS_TODO_LAYER_ID);
+      if (source) map.removeSource(ROUTE_FOCUS_SOURCE_ID);
+      return;
+    }
+    if (source) {
+      source.setData(data);
+      return;
+    }
+    if (!map.isStyleLoaded()) return;
+    map.addSource(ROUTE_FOCUS_SOURCE_ID, { type: "geojson", data });
+    // Sudah ditempuh: padat (pola Oracle "padat = sudah dilalui").
+    map.addLayer({
+      id: ROUTE_FOCUS_DONE_LAYER_ID,
+      type: "line",
+      source: ROUTE_FOCUS_SOURCE_ID,
+      filter: ["==", ["get", "kind"], "done"],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": ["match", ["get", "tone"], "fail", ROUTE_LINE_COLORS.fail, ROUTE_LINE_COLORS.ok],
+        "line-width": ROUTE_FOCUS_WIDTH,
+      },
+    });
+    // Belum ditempuh: putus-putus dengan warna yang sama.
+    map.addLayer({
+      id: ROUTE_FOCUS_TODO_LAYER_ID,
+      type: "line",
+      source: ROUTE_FOCUS_SOURCE_ID,
+      filter: ["==", ["get", "kind"], "todo"],
+      layout: { "line-cap": "butt", "line-join": "round" },
+      paint: {
+        "line-color": ["match", ["get", "tone"], "fail", ROUTE_LINE_COLORS.fail, ROUTE_LINE_COLORS.ok],
+        "line-width": ROUTE_FOCUS_WIDTH,
+        "line-dasharray": [2, 1.2],
+        "line-opacity": 0.75,
+      },
     });
   }, []);
 
@@ -565,12 +724,55 @@ export default function SupplyMap({
         layers: [{ id: "osm", type: "raster", source: "osm" }],
       },
       attributionControl: false,
+      // Gestur kooperatif (celah C9, langkah 7b-2): hanya untuk perangkat sentuh
+      // UTAMA. Di ponsel, satu jari menggulir HALAMAN dan dua jari menggeser
+      // peta — tanpa itu, geser di atas peta "mencuri" gulir halaman sehingga
+      // kartu di bawah peta tidak bisa dicapai. Desktop sengaja TIDAK diikutkan:
+      // roda tetikus = zoom tetap seperti sekarang (lihat lib/map-view.ts).
+      cooperativeGestures: mapCooperativeGestures(mediaQueryCocok),
     });
     mapRef.current = map;
+    // Pesan layar gestur bawaan MapLibre berbahasa Inggris; peta ini berbahasa
+    // Indonesia dan pesan itu muncul tepat saat pengguna bingung kenapa peta
+    // tidak bergeser. Diganti seketika setelah peta dibuat (elemennya sudah ada).
+    if (mapContainer.current) lokalkanPesanGesture(mapContainer.current);
     // Kontrol bawaan: zoom + kompas kanan-atas, atribusi (© OpenStreetMap
     // contributors · MapLibre) kanan-bawah — seperti acuan.
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     map.addControl(new maplibregl.AttributionControl({ compact: false }), "bottom-right");
+    // Kontrol skala jarak (langkah 7b-1 / riset §5 C3): kategori kontrol
+    // "Informational" yang sebelumnya tidak ada. Posisinya kiri-bawah — sama
+    // dengan bawaan MapLibre dan acuan industri. Sebelumnya ia ditaruh
+    // kanan-bawah karena sudut kiri-bawah dipakai panggung legenda; sejak
+    // langkah 7b-2 legenda pindah ke bawah kanvas, jadi sudut itu bebas lagi.
+    map.addControl(new maplibregl.ScaleControl({ maxWidth: 88, unit: "metric" }), "bottom-left");
+    // Tombol "Tampilkan semua" (riset §5 C4): literatur interaksi peta menyebut
+    // tombol kembali ke tampilan awal sebagai kebutuhan dasar — tanpa itu,
+    // pengguna yang sudah menggeser/zoom harus menebak cara pulang.
+    // Elemennya <button> ASLI (bukan DIV bergaya tombol): kontrol peta harus bisa
+    // difokus keyboard, aturan yang sama dengan pemilih kiriman Arah C.
+    map.addControl(
+      {
+        onAdd() {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "map-reset-view";
+          button.innerHTML = MAP_RESET_ICON;
+          button.setAttribute("aria-label", MAP_RESET_LABEL);
+          button.title = mapResetTitle(
+            locationsRef.current?.length ?? 0,
+            showRoutesRef.current && routeBoundsRef.current.length > 0
+          );
+          button.addEventListener("click", () => fitAllRef.current());
+          resetButtonRef.current = button;
+          return button;
+        },
+        onRemove() {
+          resetButtonRef.current = null;
+        },
+      },
+      "top-right"
+    );
     // Fokus awal (semua lokasi). Efek fokus di bawah yang mengarahkan ke lokasi
     // aktif bila ada. Setelah ini peta TIDAK pernah dibangun ulang lagi.
     map.fitBounds(fitBoundsFor(locationsRef.current, routeBoundsRef.current), {
@@ -591,6 +793,8 @@ export default function SupplyMap({
     // Source/layer GeoJSON hanya bisa ditambahkan setelah gaya peta siap.
     map.on("load", syncRouteLayer);
     syncRouteLayer();
+    map.on("load", syncFocusLayer);
+    syncFocusLayer();
 
     // Kontainer berubah ukuran (jendela, sidebar dilipat, breakpoint tata
     // letak) tanpa MapLibre mengetahuinya — tanpa ini peta tertinggal di
@@ -602,6 +806,7 @@ export default function SupplyMap({
       observer.disconnect();
       map.off("zoomend", onZoom);
       map.off("load", syncRouteLayer);
+      map.off("load", syncFocusLayer);
       map.remove();
       mapRef.current = null;
       markers.clear();
@@ -609,7 +814,7 @@ export default function SupplyMap({
       pinSignaturesRef.current = {};
       focusRef.current = MAP_FOCUS_INITIAL;
     };
-  }, [hasLocations, syncMarkers, syncSupplierMarkers, syncRouteLayer]);
+  }, [hasLocations, syncMarkers, syncSupplierMarkers, syncRouteLayer, syncFocusLayer]);
 
   // Sinkronisasi data (arah Roy 2026-10-11): penanda saja, tanpa fitBounds.
   useEffect(() => {
@@ -632,9 +837,47 @@ export default function SupplyMap({
     syncRouteLayer();
   }, [showRoutes, routePinRows, routeFeatures, syncRouteLayer]);
 
+  // Sorotan kiriman (Arah C): pilihan + geometrinya. Tidak menyentuh kamera peta.
+  useEffect(() => {
+    focusLinesRef.current = focusLines;
+    syncFocusLayer();
+  }, [focusLines, syncFocusLayer]);
+
+  useEffect(() => {
+    onFocusRouteRef.current = onFocusRoute;
+  }, [onFocusRoute]);
+
   useEffect(() => {
     routeBoundsRef.current = routeBounds;
   }, [routeBounds]);
+
+  // Tombol "Tampilkan semua": memakai hitungan batas yang SAMA dengan tampilan
+  // awal (`fitBoundsFor`) — bukan rumus kedua. Jalur ikut HANYA kalau lapisannya
+  // sedang hidup: mengembalikan pandangan ke jalur yang disembunyikan akan
+  // membingungkan (aturan lama: "yang tidak tampil tidak diterangkan").
+  const fitAll = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.fitBounds(
+      fitBoundsFor(locationsRef.current, showRoutesRef.current ? routeBoundsRef.current : []),
+      { padding: 40, duration: 600 }
+    );
+  }, []);
+
+  useEffect(() => {
+    fitAllRef.current = fitAll;
+  }, [fitAll]);
+
+  // Judul tombol = janji yang harus tetap benar setelah data/lapisan berubah.
+  // (`aria-label` cukup dipasang sekali: itu NAMA tombol, bukan keterangan.)
+  useEffect(() => {
+    const button = resetButtonRef.current;
+    if (!button) return;
+    button.title = mapResetTitle(
+      locations?.length ?? 0,
+      showRoutes && routeFeatures.features.length > 0
+    );
+  }, [locations, showRoutes, routeFeatures]);
 
   // Buka tampilan SEKALI saat jalur pertama tiba — supaya kedua ujung kiriman
   // terlihat. Sinkronisasi berikutnya tidak pernah menyentuh kamera peta lagi
@@ -714,6 +957,24 @@ export default function SupplyMap({
         </div>
       )}
       <div className="map-body">
+        {/* Chip saringan aktif (celah C8, langkah 7b-2; riset §5): begitu satu
+            kiriman disorot, peta menyembunyikan kiriman lain — dan itu satu-satunya
+            keadaan di mana orang bisa mencari pin yang tidak ada. Keadaan itu harus
+            terbaca SEBELUM orang mencarinya, lengkap dengan jalan keluarnya di
+            tempat yang sama (bukan hanya di pemilih di bawah kartu). */}
+        {focusRow && onFocusRoute && (
+          <div className="map-filter">
+            <span className="map-filter-text">{focusFilterText(focusRow)}</span>
+            <button
+              type="button"
+              className="map-filter-clear"
+              onClick={() => onFocusRoute(FOCUS_ALL)}
+            >
+              {FOCUS_CLEAR_LABEL}
+            </button>
+          </div>
+        )}
+
         {/* Container peta — dirender SSR, MapLibre menempel di client */}
         <div className="map-shell">
           <div ref={mapContainer} className="map-gl" />
@@ -746,34 +1007,38 @@ export default function SupplyMap({
                   {routeToggleLabel(routePinRows)}
                 </button>
               )}
+              {/* Chip "Info map" masuk PIL yang sama supaya kanvas hanya punya
+                  SATU zona kendali yang mengapung (celah C5, langkah 7b-2; riset
+                  §5). Isinya dirender DI BAWAH kanvas (`.map-legend-detail`) —
+                  jadi membukanya tidak pernah menutupi pin. */}
+              <button
+                type="button"
+                className="map-legend-toggle"
+                aria-expanded={showLegend}
+                aria-controls={LEGEND_PANEL_ID}
+                onClick={() => setShowLegend((value) => !value)}
+              >
+                <span className="map-legend-chevron" aria-hidden="true" />
+                Info map
+              </button>
             </div>
           )}
-          {/* Info map — kotak penjelasan isi peta. Sejak revisi 16 Okt namanya
-              berganti dari "Legenda peta" (arah pemilik: "ganti menjadi info
-              map"), karena isinya bukan cuma arti warna: ada juga keadaan
-              PERJALANAN kiriman (jam berangkat → estimasi tiba, dari server).
+          {/* Rincian "Info map" — DI BAWAH kanvas dan DI DALAM ALUR (bukan
+              mengapung di atas peta). Sejak langkah 7b-2 chip pembukanya pindah
+              ke pil kendali kiri-atas (satu-satunya elemen yang mengapung, celah
+              C5), sedangkan isinya turun ke sini supaya membukanya tidak pernah
+              menutupi pin di Jawa Barat (aturan pemilik 2026-10-16).
 
-              Dua aturan penyusunan isinya:
+              Isinya tetap lengkap dan namanya tetap "Info map"; dua aturan
+              penyusunannya tidak berubah:
               1. kelompok yang lapisannya sedang MATI tidak ditampilkan —
                  keterangan warna yang tidak ada di peta adalah informasi palsu;
               2. entri "gagal uji" hanya muncul kalau memang ada kiriman bergaris
                  seperti itu (lihat `routeLegendEntries`).
 
-              Kotaknya tetap DILIPAT secara bawaan supaya kanvas peta tidak
-              tertutup; angka pentingnya sudah terbaca di tag bilah rincian. */}
-          <div
-            className={`map-legend-stack${showLegend ? " map-legend-stack-open" : ""}`}
-          >
-            <button
-              type="button"
-              className="map-legend-toggle"
-              aria-expanded={showLegend}
-              aria-controls={LEGEND_PANEL_ID}
-              onClick={() => setShowLegend((value) => !value)}
-            >
-              <span className="map-legend-chevron" aria-hidden="true" />
-              Info map
-            </button>
+              Yang terbaca TANPA klik adalah baris legenda ringkas di bawah kartu
+              (celah C2); kotak ini memuat rincian yang lebih panjang. */}
+          <div className="map-legend-detail" data-open={showLegend}>
             <div
               className="map-legend-boxes"
               id={LEGEND_PANEL_ID}
@@ -845,6 +1110,38 @@ export default function SupplyMap({
             </div>
           </div>
         </div>
+
+        {/* Baris legenda ringkas (celah C2, langkah 7b-2): makna titik & garis
+            terbaca TANPA satu klik. Sengaja di BAWAH kanvas, bukan mengapung di
+            atasnya — panel putih di atas peta pernah menutup 39% kanvas, tepat di
+            atas Jawa Barat (keputusan pemilik 2026-10-16). Di sini hanya tanda +
+            nama; kalimat panjang (perjalanan & asal geometri) tetap di "Info map",
+            dan angka jumlahnya tetap di tag bilah rincian. */}
+        <div className="map-legend-compact" role="group" aria-label="Legenda peta">
+          <span className="map-legend-compact-title">Legenda:</span>
+          {legendCompact.map((butir) => {
+            const [kelasDasar, kelasNada] = legendMarkClass(butir);
+            return (
+              <span key={butir.id} className="map-legend-compact-item">
+                <i className={`${kelasDasar} ${kelasNada}`} aria-hidden="true" />{" "}
+                {butir.label}
+              </span>
+            );
+          })}
+        </div>
+
+        {/* Pemilih kiriman untuk disorot (Arah C). Hanya dirender kalau pemanggil
+            mengendalikan pilihannya — di tab yang tidak punya kartu kiriman,
+            peta tetap persis seperti sebelumnya. Garis di kanvas tidak bisa
+            difokus keyboard, jadi tombol inilah jalur setaranya. */}
+        {onFocusRoute && focusOptionRows.length > 0 && (
+          <RouteFocusPicker
+            options={focusOptionRows}
+            focused={focusRow?.id ?? null}
+            total={focusOptionRows.length}
+            onFocus={onFocusRoute}
+          />
+        )}
 
         {/* Bilah rincian lapisan (revisi 2026-10-16, arah pemilik): angkanya
             SELALU terlihat sebagai tag ringkas satu baris; kalimat penjelas

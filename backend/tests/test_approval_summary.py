@@ -43,6 +43,24 @@ def _db_all(query: str, params: dict | None = None):
         engine.dispose()
 
 
+def _pasangan_tanpa_batch(utamakan: str) -> tuple[str, str] | None:
+    """(location_id, nama komoditas) yang belum punya batch di lokasi itu.
+
+    Dicari saat tes berjalan supaya kasus `supplier_unknown` tidak bergantung
+    pada ingatan "kiriman kanonik ke Jakarta hanya telur" — seed demo bertambah
+    dan premis itu sudah tidak benar. Lokasi `utamakan` dicoba lebih dulu.
+    """
+    rows = _db_all(
+        "SELECT l.id, c.name FROM locations l CROSS JOIN commodities c WHERE NOT EXISTS ("
+        "SELECT 1 FROM batches b WHERE b.location_id = l.id AND b.commodity_id = c.id) "
+        "ORDER BY (l.id = :u) DESC, l.name, c.name LIMIT 1",
+        {"u": utamakan},
+    )
+    if not rows:
+        return None
+    return str(rows[0][0]), str(rows[0][1])
+
+
 def _db_exec(query: str, params: dict | None = None):
     engine = create_engine(DB_URL)
     try:
@@ -336,13 +354,20 @@ def test_approval_summary_canonical_fields(client):
 def test_approval_summary_or_complete_then_execute_parity(client, binding):
     """Only a bound transfer promises a supplier and can execute."""
     batch = _mk_batch(_bogor_id(), fail=False) if binding == "explicit" else None
-    # "missing" sengaja memakai komoditas AYAM: kiriman kanonik ke Jakarta hanya telur,
-    # jadi tidak ada satu pun batch sumber yang bisa dipakai menyimpulkan pemasok.
-    did = (
-        _mk_decision(_bogor_id(), _jakarta_id())
-        if batch
-        else _mk_decision(_jakarta_id(), _jakarta_id(), commodity="ayam")
-    )
+    # Kasus "missing" menuntut lokasi+komoditas yang TIDAK punya satu pun batch,
+    # supaya pemasok tidak bisa disimpulkan. Dulu dipaku ke `ayam` + Jakarta;
+    # seed bertambah, jadi pasangannya DICARI saat tes berjalan.
+    pasangan = None if batch else _pasangan_tanpa_batch(_jakarta_id())
+    if not batch:
+        assert pasangan is not None, (
+            "semua lokasi×komoditas punya batch; kasus supplier_unknown mustahil dibentuk"
+        )
+    if batch:
+        did = _mk_decision(_bogor_id(), _jakarta_id())
+    else:
+        assert pasangan is not None
+        sumber, komoditas = pasangan
+        did = _mk_decision(sumber, _jakarta_id(), commodity=komoditas)
     try:
         if batch:
             _bind_decision(did, batch)
@@ -354,7 +379,8 @@ def test_approval_summary_or_complete_then_execute_parity(client, binding):
             "UPDATE decisions SET verifier_note='consistent' WHERE id=:d",
             {"d": did},
         )
-        # Approval satu role (OR).
+        # Approval Head saja TIDAK cukup: transfer operasional butuh dua role
+        # (PLAN.md §13.3) meski verdict verifier CONSISTENT.
         ra = client.post(
             "/actions/approve",
             headers=_head_user(client),
@@ -362,6 +388,17 @@ def test_approval_summary_or_complete_then_execute_parity(client, binding):
         )
         assert ra.status_code == 200, ra.text
 
+        summary = client.get(
+            f"/decisions/{did}/approval-summary", headers=_head_user(client)
+        ).json()
+        assert summary["approval_state"]["satisfied"] is False
+        # Approval kedua: Nutritionist (user berbeda).
+        rn = client.post(
+            "/actions/approve",
+            headers=_nut_user(client),
+            json={"decision_id": did, "approved": True},
+        )
+        assert rn.status_code == 200, rn.text
         summary = client.get(
             f"/decisions/{did}/approval-summary", headers=_head_user(client)
         ).json()
@@ -411,15 +448,27 @@ def test_approval_summary_or_complete_then_execute_parity(client, binding):
 def test_approval_summary_dual_missing_role(client):
     """Same role dua kali TIDAK memenuhi AND matrix; missing role tampil."""
     did = _mk_decision(_bogor_id(), _jakarta_id())
+    dibuat: list[str] = []
     try:
         client.post(
             "/actions/verify", headers=_head_user(client), json={"decision_id": did}
         )
-        # Dua approval dari role SAMA (dua user head berbeda dari DB).
+        # Dua approval dari role SAMA (dua user head berbeda di lokasi target).
         users = _db_all(
-            "SELECT id FROM users WHERE role='sppg_head' ORDER BY id LIMIT 2"
+            "SELECT id FROM users WHERE role='sppg_head' AND location_id=:l ORDER BY id LIMIT 2",
+            {"l": _jakarta_id()},
         )
-        assert len(users) == 2
+        # Akun head bisa tersapu sesi lain (fixture @test.local), jadi lengkapi
+        # sendiri: tes tidak boleh bergantung pada user buatan tes lain.
+        while len(users) < 2:
+            uid = str(uuid.uuid4())
+            _db_exec(
+                "INSERT INTO users (id, name, email, password_hash, role, location_id) "
+                "VALUES (:i, 'uji dua head', :e, 'x', 'sppg_head', :l)",
+                {"i": uid, "e": f"dua-head-{uid[:8]}@test.local", "l": _jakarta_id()},
+            )
+            dibuat.append(uid)
+            users = list(users) + [(uid,)]
         for (uid,) in users:
             _db_exec(
                 "INSERT INTO approvals (decision_id, approved_by, approved) "
@@ -429,7 +478,7 @@ def test_approval_summary_dual_missing_role(client):
         summary = client.get(
             f"/decisions/{did}/approval-summary", headers=_head_user(client)
         ).json()
-        # verdict UNAVAILABLE → dua grup AND; dua head tidak memenuhi grup
+        # Transfer operasional selalu butuh dua grup; dua head tidak memenuhi grup
         # nutritionist.
         assert summary["approval_state"]["satisfied"] is False
         assert summary["approval_state"]["missing"] == [["sppg_nutritionist"]]
@@ -438,6 +487,8 @@ def test_approval_summary_dual_missing_role(client):
         assert roles == {"sppg_head"}
     finally:
         _cleanup_decision(did)
+        for uid in dibuat:
+            _db_exec("DELETE FROM users WHERE id=:i", {"i": uid})
 
 
 def test_approval_summary_expired_blocks(client):
@@ -573,17 +624,26 @@ def test_approval_summary_missing_facts_null_not_fake(client):
 
 
 def _siapkan_verified_approved(did: str) -> None:
-    """Loloskan prasyarat execute: terverifikasi + approval memenuhi matriks."""
+    """Loloskan prasyarat execute: terverifikasi + DUA approval (Head + Nutritionist).
+
+    PLAN.md §13.3: transfer operasional wajib dua approval dari dua role, dan
+    approval hanya dihitung bila approver berada di lokasi target.
+    """
     _db_exec(
         "UPDATE decisions SET verifier_note='consistent', "
         "verified_by='verifier_agent' WHERE id=:d",
         {"d": did},
     )
-    users = _db_all("SELECT id FROM users WHERE role='sppg_head' ORDER BY id LIMIT 1")
-    _db_exec(
-        "INSERT INTO approvals (decision_id, approved_by, approved) VALUES (:d, :u, True)",
-        {"d": did, "u": str(users[0][0])},
-    )
+    target = _db_all("SELECT target_location_id FROM decisions WHERE id=:d", {"d": did})[0][0]
+    for role in ("sppg_head", "sppg_nutritionist"):
+        baris = _db_all(
+            "SELECT id FROM users WHERE role=:r AND location_id=:l ORDER BY id LIMIT 1",
+            {"r": role, "l": target},
+        ) or _db_all("SELECT id FROM users WHERE role=:r ORDER BY id LIMIT 1", {"r": role})
+        _db_exec(
+            "INSERT INTO approvals (decision_id, approved_by, approved) VALUES (:d, :u, True)",
+            {"d": did, "u": str(baris[0][0])},
+        )
 
 
 def _sumber_baru(prefix: str) -> str:

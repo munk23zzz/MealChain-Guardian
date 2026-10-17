@@ -6,6 +6,7 @@
 // hilang tampil "unavailable", bukan default palsu (plan §S4-04).
 
 import { formatIDR } from "../lib/auth";
+import { safetyLabel } from "../lib/bahasa";
 
 function Show({ value }: { value: any }) {
   // Semua nilai dari server ditampilkan apa adanya; null → unavailable.
@@ -77,7 +78,10 @@ export default function ApprovalModal({
           <li>Scope SPPG: <Show value={summary.target_location} /></li>
           <li>Alasan: <Show value={governance?.reason} /></li>
           <li>Bukti: {(governance?.evidence_refs ?? []).map((ref: { type: string; id: string }) => `${ref.type}: ${ref.id}`).join(", ") || "unavailable"}</li>
-          <li>Aktif sampai pemulihan berbukti dengan approval baru. Batch FAIL tetap diblokir.</li>
+          <li>
+            Aktif sampai pemulihan terbukti dengan approval baru. Batch yang gagal pemeriksaan
+            tetap diblokir.
+          </li>
         </> : <>
         <li>
           Alokasi: <Show value={summary.source_location} /> →{" "}
@@ -95,8 +99,8 @@ export default function ApprovalModal({
         </>}
         <li>
           Safety batch sumber:{" "}
-          <Show value={safety.worst_status ?? null} />
-          {safety.blocked ? " — EXCLUDED (FAIL)" : ""}
+          <Show value={safetyLabel(safety.worst_status)} />
+          {safety.blocked ? " — dikecualikan (gagal pemeriksaan)" : ""}
         </li>
         <li>
           Verdict verifier: <Show value={verdict} /> (server-side)

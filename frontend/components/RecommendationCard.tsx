@@ -57,6 +57,15 @@ const PLACEHOLDER_NOTES = new Set(["unavailable", "n/a", "na", "-", "none", "nul
 // apa pun) — karena itu pemanggil di sana mengirim `hint={null}`.
 export const CARD_HINT = "Klik untuk rincian & jejak agen";
 
+/**
+ * Badge "kasus demo" dari `decision.demo_case` — SATU sumber untuk kartu feed DAN
+ * kepala halaman Decision & Evidence (dua peta label cepat menyimpang).
+ */
+export function caseLabelOf(decision: any): string | null {
+  if (!decision?.demo_case) return null;
+  return CASE_LABELS[decision.demo_case] ?? `Kasus: ${String(decision.demo_case).replace(/-/g, " ")}`;
+}
+
 export default function RecommendationCard({
   decision,
   mockSourced = false,
@@ -68,10 +77,7 @@ export default function RecommendationCard({
   hint?: string | null;
 }) {
   const typeLabel = DECISION_TYPE_LABELS[decision.decision_type] ?? "Rekomendasi baru";
-  const caseLabel = decision.demo_case
-    ? (CASE_LABELS[decision.demo_case] ??
-      `Kasus: ${decision.demo_case.replace(/-/g, " ")}`)
-    : null;
+  const caseLabel = caseLabelOf(decision);
   const edge = cardEdge(decision);
   // Alasan penolakan / catatan verifier = satu-satunya narasi yang benar-benar
   // ada di data; kalau dua-duanya kosong, tidak ada paragraf yang ditampilkan.

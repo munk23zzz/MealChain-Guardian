@@ -142,6 +142,8 @@ def test_exclusion_requires_verify_dual_approval_then_execute_once(scenario):
         client.post("/actions/approve", json={"decision_id": did, "approved": True}).status_code
         == 200
     )
+    # Eksekusi milik Head (PLAN.md §13.3); Nutritionist hanya approval kedua.
+    actor("head")
     execution = client.post("/actions/execute", json={"decision_id": did})
     assert execution.status_code == 200, execution.text
     assert execution.json()["exclusion"]["status"] == "active"
@@ -187,6 +189,8 @@ def activate(client, ids, actor):
         client.post("/actions/approve", json={"decision_id": did, "approved": True}).status_code
         == 200
     )
+    # Eksekusi milik Head (PLAN.md §13.3).
+    actor("head")
     assert client.post("/actions/execute", json={"decision_id": did}).status_code == 200
     return row
 
@@ -227,11 +231,14 @@ def test_restoration_needs_new_evidence_and_fresh_approvals_without_changing_fai
         == 200
     )
     assert client.post("/actions/execute", json={"decision_id": did}).status_code == 409
-    actor("head")
+    # Approval kedua oleh role berbeda (Head sudah approve di atas).
+    actor("nutritionist")
     assert (
         client.post("/actions/approve", json={"decision_id": did, "approved": True}).status_code
         == 200
     )
+    # Eksekusi milik Head (PLAN.md §13.3).
+    actor("head")
     result = client.post("/actions/execute", json={"decision_id": did})
     assert result.status_code == 200, result.text
     assert result.json()["exclusion"]["status"] == "revoked"
@@ -338,6 +345,16 @@ def test_old_transfer_revalidates_supplier_and_exact_batch(scenario):
         ).status_code
         == 200
     )
+    # Transfer operasional butuh approval kedua (PLAN.md §13.3), supaya yang
+    # diuji di bawah benar-benar blokir "excluded", bukan approval kurang.
+    actor("nutritionist")
+    assert (
+        client.post(
+            "/actions/approve", json={"decision_id": str(transfer), "approved": True}
+        ).status_code
+        == 200
+    )
+    actor("head")
     activate(client, ids, actor)
     result = client.post("/actions/execute", json={"decision_id": str(transfer)})
     assert result.status_code == 409, result.text

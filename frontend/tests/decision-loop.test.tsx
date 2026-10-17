@@ -105,10 +105,17 @@ describe("visibleActions (repropose)", () => {
     expect(a.readOnly).toBe(true);
   });
 
-  it("pending_approval: approve & execute tersedia, repropose tidak", () => {
+  it("pending_approval: Nutritionist hanya approve (execute milik Head)", () => {
     const a = visibleActions("sppg_nutritionist", "pending_approval");
     expect(a.approve).toBe(true);
-    expect(a.execute).toBe(true);
+    // PLAN.md §13.1/§13.3: eksekusi transfer hanya oleh Head.
+    expect(a.execute).toBe(false);
     expect(a.repropose).toBe(false);
+  });
+
+  it("pending_approval: Head mendapat approve & execute", () => {
+    const a = visibleActions("sppg_head", "pending_approval");
+    expect(a.approve).toBe(true);
+    expect(a.execute).toBe(true);
   });
 });

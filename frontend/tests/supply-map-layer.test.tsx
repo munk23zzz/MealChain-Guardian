@@ -36,7 +36,17 @@ const fake = vi.hoisted(() => {
     constructor(public options: Record<string, unknown>) {
       mapLog.push(this);
     }
-    addControl() {}
+    // Kontrol (langkah 7b-1): tiruan MENCATAT kontrol + memanggil `onAdd`-nya
+    // seperti MapLibre, supaya elemen buatan kontrol sendiri (tombol "Tampilkan
+    // semua") benar-benar ada di DOM dan bisa diuji — bukan hanya "addControl
+    // pernah dipanggil".
+    controls: { control: any; position?: string }[] = [];
+    controlElements: HTMLElement[] = [];
+    fitBoundsLog: unknown[][] = [];
+    addControl(control: any, position?: string) {
+      this.controls.push({ control, position });
+      if (typeof control?.onAdd === "function") this.controlElements.push(control.onAdd(this));
+    }
     // Fase 10: komponen kini juga memasang source/layer GeoJSON (garis jalur
     // kiriman), jadi tiruan peta perlu API-nya seperti MapLibre asli.
     sources: Record<string, { data: unknown; setData: (data: unknown) => void }> = {};
@@ -69,7 +79,9 @@ const fake = vi.hoisted(() => {
     removeSource(id: string) {
       delete this.sources[id];
     }
-    fitBounds() {}
+    fitBounds(bounds?: unknown, options?: unknown) {
+      this.fitBoundsLog.push([bounds, options]);
+    }
     resize() {}
     getZoom() {
       return this.zoom;
@@ -155,6 +167,9 @@ vi.mock("maplibre-gl", () => ({
     Popup: fake.FakePopup,
     NavigationControl: class {},
     AttributionControl: class {},
+    // Langkah 7b-1: peta kini memasang kontrol skala (riset §5 C3). Kelasnya
+    // diberi nama supaya tes bisa memastikan kontrol INI yang dipasang.
+    ScaleControl: class ScaleControl {},
   },
 }));
 
@@ -163,6 +178,7 @@ const mapLog = fake.mapLog as any[];
 const popupLog = fake.popupLog as any[];
 
 import SupplyMap from "../components/SupplyMap";
+import { FOCUS_ALL, FOCUS_CLEAR_LABEL, focusLabel, focusPick } from "../lib/route-focus";
 
 const LOCATIONS = [
   {
@@ -262,10 +278,17 @@ function unmount() {
 type FakeMapInstance = {
   removed: boolean;
   zoom: number;
+  /** Opsi konstruktor peta asli (mis. `cooperativeGestures`, langkah 7b-2). */
+  options: Record<string, unknown>;
   sources: Record<string, { data: unknown; setData: (data: unknown) => void }>;
   layers: Record<string, Record<string, unknown>>;
   setZoom: (zoom: number) => void;
   fire: (event: string) => void;
+  /** Kontrol yang dipasang + elemen hasil `onAdd()` + jejak `fitBounds()`
+   *  (langkah 7b-1: skala & tombol "Tampilkan semua"). */
+  controls: { control: any; position?: string }[];
+  controlElements: HTMLElement[];
+  fitBoundsLog: unknown[][];
 };
 
 /** Jalur kiriman uji — angka dari respons nyata `GET /supplier-routes`. */
@@ -753,5 +776,349 @@ describe("SupplyMap — kotak Info map (nama, susunan isi, perjalanan kiriman)",
     expect(teks).not.toContain("jarak lurus");
     expect(teks).not.toContain("berkelok");
     expect(teks).not.toContain("Tiba sebelum batas layak");
+  });
+});
+
+describe("SupplyMap — sorotan kiriman di peta (Arah C)", () => {
+  /** Mount dengan pilihan fokus yang dikendalikan pemanggil. */
+  function mountFocus(
+    focused: string | null,
+    onFocus: ((id: string) => void) | null = () => {}
+  ) {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    mounted = true;
+    act(() => {
+      root.render(
+        <SupplyMap
+          locations={LOCATIONS}
+          supplierRoutes={ROUTES}
+          focusedRouteId={focused}
+          onFocusRoute={onFocus}
+        />
+      );
+    });
+  }
+
+  it("tanpa kiriman disorot: tidak ada layer sorotan yang tertinggal", () => {
+    mountFocus(null);
+    expect(map().layers["supplier-route-focus-done"]).toBeUndefined();
+    expect(map().layers["supplier-route-focus-todo"]).toBeUndefined();
+    expect(map().sources["supplier-route-focus"]).toBeUndefined();
+  });
+
+  it("kiriman disorot: dua potong garis (padat = sudah ditempuh, putus-putus = sisa)", () => {
+    mountFocus("s1->l1");
+    expect(map().layers["supplier-route-focus-done"]).toBeTruthy();
+    expect(map().layers["supplier-route-focus-todo"]).toBeTruthy();
+    const data = map().sources["supplier-route-focus"].data as {
+      features: { properties: { kind: string } }[];
+    };
+    expect(data.features.map((f) => f.properties.kind)).toEqual(["done", "todo"]);
+    // Garis dasar TETAP ada — sorotan menambah, bukan menggantikan.
+    expect(map().layers["supplier-route-line"]).toBeTruthy();
+  });
+
+  it("melepas sorotan membuang layer + source-nya (tidak ada garis tersisa)", () => {
+    mountFocus("s1->l1");
+    expect(map().layers["supplier-route-focus-done"]).toBeTruthy();
+    act(() => {
+      root.render(
+        <SupplyMap
+          locations={LOCATIONS}
+          supplierRoutes={ROUTES}
+          focusedRouteId={null}
+          onFocusRoute={() => {}}
+        />
+      );
+    });
+    expect(map().layers["supplier-route-focus-done"]).toBeUndefined();
+    expect(map().sources["supplier-route-focus"]).toBeUndefined();
+  });
+
+  it("id tak dikenal = tampilan semua (gagal-tertutup, bukan menyorot kiriman lain)", () => {
+    mountFocus("s9->l9");
+    expect(map().layers["supplier-route-focus-done"]).toBeUndefined();
+  });
+
+  it("pemilih memanggil pemanggil dengan id kiriman, dan FOCUS_ALL untuk 'Semua'", () => {
+    const dipanggil: string[] = [];
+    mountFocus(null, (id) => dipanggil.push(id));
+    const pil = host.querySelectorAll<HTMLButtonElement>(".route-focus-pill");
+    expect(pil).toHaveLength(2);
+    expect(pil[0].textContent).toContain("Semua (1)");
+    act(() => pil[1].click());
+    act(() => pil[0].click());
+    expect(dipanggil).toEqual(["s1->l1", "__all__"]);
+  });
+
+  it("tanpa pengendali pilihan: pemilih tidak dirender (peta tetap seperti sebelumnya)", () => {
+    mountWithRoutes();
+    expect(host.querySelector(".route-focus")).toBeNull();
+  });
+});
+
+describe("SupplyMap — kontrol peta (langkah 7b-1: skala + tombol Tampilkan semua)", () => {
+  /** Tombol "Tampilkan semua" buatan aplikasi (di grup kontrol kanan-atas). */
+  function tombolReset(): HTMLButtonElement {
+    const button = map().controlElements.find(
+      (el) => el instanceof HTMLButtonElement && el.classList.contains("map-reset-view")
+    );
+    if (!button) throw new Error('tombol "Tampilkan semua" tidak dipasang ke peta');
+    return button as HTMLButtonElement;
+  }
+
+  it("menambah kontrol skala jarak di kiri-bawah (kontrol yang tadinya tidak ada)", () => {
+    mountWithRoutes();
+    // Langkah 7b-1 menaruhnya di kanan-bawah karena sudut kiri-bawah dipakai
+    // panggung legenda; langkah 7b-2 memindahkan legenda ke bawah kanvas, jadi
+    // skala kembali ke posisi bawaan MapLibre & acuan industri (kiri-bawah).
+    const kiriBawah = map().controls.filter((c) => c.position === "bottom-left");
+    expect(kiriBawah.some((c) => c.control?.constructor?.name === "ScaleControl")).toBe(true);
+  });
+
+  it('tombol "Tampilkan semua" adalah <button> asli dengan nama aksesibilitas', () => {
+    mountWithRoutes();
+    const button = tombolReset();
+    expect(button.tagName).toBe("BUTTON");
+    // Nama (aria-label) tetap; keterangan (title) yang berubah mengikuti data.
+    expect(button.getAttribute("aria-label")).toBe("Tampilkan semua");
+    expect(button.title).toContain("1 lokasi");
+    expect(button.title).toContain("jalur kiriman");
+  });
+
+  it("klik tombol memanggil fitBounds ulang dengan batas yang SAMA seperti tampilan awal", () => {
+    mountWithRoutes();
+    const awal = map().fitBoundsLog[0][0];
+    const sebelum = map().fitBoundsLog.length;
+    act(() => tombolReset().click());
+    expect(map().fitBoundsLog).toHaveLength(sebelum + 1);
+    expect(map().fitBoundsLog.at(-1)?.[0]).toEqual(awal);
+  });
+
+  it("judul berhenti menyebut jalur begitu lapisan jalur dimatikan (janji ikut berubah)", () => {
+    mountWithRoutes();
+    expect(tombolReset().title).toContain("jalur kiriman");
+    act(() => routeToggle().click());
+    expect(tombolReset().title).not.toContain("jalur");
+    expect(tombolReset().title).toContain("1 lokasi");
+  });
+
+  it('tanpa jalur kiriman: tombol tetap ada, judulnya tidak menyebut jalur', () => {
+    mount();
+    const button = tombolReset();
+    expect(button.title).not.toContain("jalur");
+    expect(button.getAttribute("aria-label")).toBe("Tampilkan semua");
+  });
+});
+
+describe("SupplyMap — baris legenda ringkas selalu terlihat (C2, langkah 7b-2)", () => {
+  /** Baris legenda ringkas di bawah kanvas. */
+  function baris() {
+    const el = host.querySelector<HTMLElement>(".map-legend-compact");
+    if (!el) throw new Error("baris legenda ringkas tidak ada");
+    return el;
+  }
+
+  it("dirender DI BAWAH kanvas, bukan mengapung di atasnya", () => {
+    mountWithRoutes();
+    expect(baris()).not.toBeNull();
+    // Aturan pemilik 2026-10-16: kanvas tidak boleh tertutup panel putih. Karena
+    // itu legenda yang selalu terlihat ini hidup di luar `.map-shell`.
+    expect(host.querySelector(".map-shell")?.contains(baris())).toBe(false);
+  });
+
+  it("maknanya terbaca tanpa satu klik pun (status lokasi selalu ada)", () => {
+    mountWithRoutes();
+    const teks = baris().textContent ?? "";
+    for (const status of ["Surplus", "Seimbang", "Shortage"]) {
+      expect(teks).toContain(status);
+    }
+    // Bukan tombol dan tidak punya keadaan buka/tutup — memang selalu tampil.
+    expect(baris().getAttribute("aria-expanded")).toBeNull();
+    expect(baris().querySelector("button")).toBeNull();
+  });
+
+  it("butir jalur mengikuti sakelar lapisannya (tidak ada keterangan tanpa lapisan)", () => {
+    mountWithRoutes();
+    // Labelnya dari `routeLegendEntries` — legenda menyebut makna yang BENAR
+    // dipakai garis di peta, bukan karangan teks di tes.
+    expect(baris().textContent).toContain("Jalur kiriman (jalan)");
+    act(() => routeToggle().click());
+    expect(baris().textContent).not.toContain("Jalur kiriman (jalan)");
+    expect(baris().textContent).toContain("Surplus");
+  });
+
+  it("butir pemasok baru muncul setelah lapisan pemasok dinyalakan", () => {
+    // Butuh data pemasok: tanpa prop `suppliers` tidak ada sakelar pemasok sama
+    // sekali (kendali nganggur tidak dirender).
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    mounted = true;
+    act(() => {
+      root.render(
+        <SupplyMap locations={LOCATIONS} suppliers={SUPPLIERS} supplierRoutes={ROUTES} />
+      );
+    });
+    expect(baris().textContent).not.toContain("Keandalan rendah");
+    toggle(); // sakelar "Pemasok (n)"
+    expect(baris().textContent).toContain("Keandalan rendah");
+  });
+
+  it("tanda di baris memakai kelas legenda yang sama dengan kotak Info map", () => {
+    mountWithRoutes();
+    expect(baris().querySelectorAll(".map-legend-box-dot")).toHaveLength(3);
+    expect(baris().querySelectorAll(".map-legend-line").length).toBeGreaterThan(0);
+  });
+});
+
+describe("SupplyMap — satu zona kendali di kanvas (C5, langkah 7b-2)", () => {
+  /** Pil kendali kiri-atas: satu-satunya elemen yang mengapung di kanvas. */
+  function pil() {
+    const el = host.querySelector<HTMLElement>(".map-overlay-toggles");
+    if (!el) throw new Error("pil kendali peta tidak ada");
+    return el;
+  }
+
+  function kotakInfo() {
+    const el = host.querySelector<HTMLElement>(".map-legend-boxes");
+    if (!el) throw new Error("kotak Info map tidak ada");
+    return el;
+  }
+
+  it("chip Info map duduk di dalam pil yang sama dengan sakelar lapisan", () => {
+    // Butuh KEDUA data lapisan supaya kedua sakelar ada (kendali nganggur tidak
+    // dirender: tanpa prop `suppliers` hanya sakelar jalur yang tampil).
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    mounted = true;
+    act(() => {
+      root.render(
+        <SupplyMap locations={LOCATIONS} suppliers={SUPPLIERS} supplierRoutes={ROUTES} />
+      );
+    });
+    expect(pil().querySelector(".map-legend-toggle")).not.toBeNull();
+    // Dua sakelar lapisan tetap terbaca sebagai sakelar (bukan ikut terhitung
+    // sebagai chip Info map), jadi keadaan tekan & keadaan buka tidak tertukar.
+    expect(pil().querySelectorAll(".map-layer-toggle")).toHaveLength(2);
+  });
+
+  it("isi Info map dirender di luar pil dan di luar kanvas — tidak menutupi peta", () => {
+    mountWithRoutes();
+    expect(pil().contains(kotakInfo())).toBe(false);
+    expect(host.querySelector(".map-gl")?.contains(kotakInfo())).toBe(false);
+    // Ia ikut alur di dalam `.map-shell`, persis di bawah kanvas.
+    expect(host.querySelector(".map-shell")?.contains(kotakInfo())).toBe(true);
+  });
+
+  it("membuka Info map tidak menambah satu pun elemen di dalam pil", () => {
+    mountWithRoutes();
+    const sebelum = pil().querySelectorAll("*").length;
+    act(() => host.querySelector<HTMLButtonElement>(".map-legend-toggle")?.click());
+    expect(pil().querySelectorAll("*").length).toBe(sebelum);
+    expect(kotakInfo().parentElement?.getAttribute("data-open")).toBe("true");
+  });
+});
+
+describe("SupplyMap — gestur kooperatif (C9, langkah 7b-2)", () => {
+  /** Media query tiruan: satu perangkat, satu jawaban per pertanyaan. */
+  function perangkat(jenis: "sentuh" | "tetikus") {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("pointer: coarse") && jenis === "sentuh",
+      media: query,
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent: () => false,
+    }));
+  }
+
+  it("perangkat sentuh utama: peta dibuat dengan gestur kooperatif", () => {
+    perangkat("sentuh");
+    mountWithRoutes();
+    expect(map().options.cooperativeGestures).toBe(true);
+  });
+
+  it("desktop: tidak diaktifkan — roda tetikus tetap memperbesar peta", () => {
+    perangkat("tetikus");
+    mountWithRoutes();
+    expect(map().options.cooperativeGestures).toBe(false);
+  });
+
+  it("tanpa matchMedia (jsdom/lingkungan lama): peta tetap jalan seperti desktop", () => {
+    vi.stubGlobal("matchMedia", undefined);
+    mountWithRoutes();
+    expect(map().options.cooperativeGestures).toBe(false);
+  });
+});
+
+describe("SupplyMap — chip saringan aktif di atas kanvas (C8, langkah 7b-2)", () => {
+  /** Mount dengan pilihan sorotan yang dikendalikan pemanggil. */
+  function mountFokus(focused: string | null, onFocus: ((id: string) => void) | null = () => {}) {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    mounted = true;
+    act(() => {
+      root.render(
+        <SupplyMap
+          locations={LOCATIONS}
+          supplierRoutes={ROUTES}
+          focusedRouteId={focused}
+          onFocusRoute={onFocus}
+        />
+      );
+    });
+  }
+
+  function chip() {
+    const el = host.querySelector<HTMLElement>(".map-filter");
+    if (!el) throw new Error("chip saringan tidak ada");
+    return el;
+  }
+
+  it("tanpa sorotan: tidak ada chip yang mengaku menyaring", () => {
+    mountFokus(null);
+    expect(host.querySelector(".map-filter")).toBeNull();
+  });
+
+  it("peta mandiri (tanpa pengendali pilihan): chip tidak dirender", () => {
+    mount();
+    expect(host.querySelector(".map-filter")).toBeNull();
+  });
+
+  it("satu kiriman disorot: chip menyebut nama kiriman yang sama dengan pemilih", () => {
+    mountFokus("s1->l1");
+    const row = focusPick(ROUTES, "s1->l1");
+    expect(row).not.toBeNull();
+    expect(chip().textContent).toBe(`Menyaring: ${focusLabel(row!)}Lepas`);
+    expect(chip().textContent).toContain("Menyaring:");
+  });
+
+  it("chip duduk DI ATAS kanvas dan di luar kanvas itu sendiri", () => {
+    mountFokus("s1->l1");
+    const kanvas = host.querySelector(".map-shell")!;
+    // jsdom tidak menghitung tata letak, jadi posisinya diperiksa lewat urutan DOM:
+    // chip HARUS muncul sebelum wadah peta.
+    expect(chip().compareDocumentPosition(kanvas) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(host.querySelector(".map-gl")?.contains(chip())).toBe(false);
+  });
+
+  it('tombol "Lepas" mengirim penanda "semua kiriman", bukan id kosong', () => {
+    const dipanggil: string[] = [];
+    mountFokus("s1->l1", (id) => dipanggil.push(id));
+    const tombol = chip().querySelector<HTMLButtonElement>(".map-filter-clear")!;
+    expect(tombol.textContent).toBe(FOCUS_CLEAR_LABEL);
+    act(() => tombol.click());
+    expect(dipanggil).toEqual([FOCUS_ALL]);
   });
 });

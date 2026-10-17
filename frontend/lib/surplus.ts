@@ -17,6 +17,9 @@ export type BalanceNode = {
   surplus_kg?: number | string | null;
   shortage_kg?: number | string | null;
   status?: string | null;
+  /** Asal nilai per sisi (PLAN-023). Tidak ada = respons lama → dianggap terukur. */
+  supply_state?: string | null;
+  demand_state?: string | null;
 };
 
 export type SurplusSummary = {
@@ -25,12 +28,38 @@ export type SurplusSummary = {
   shortageKg: number | null;
   shortageCount: number;
   balancedCount: number;
+  /** Lokasi yang salah satu sisinya tidak tercatat (bukan spekulasi angka). */
+  unmeasuredCount: number;
 };
+
+/** Sisi tanpa baris → angka 0-nya hasil pengisian, bukan fakta (PLAN-023). */
+function tanpaCatatan(state: unknown): boolean {
+  return state === "tidak_ada_baris";
+}
+
+function surplusTerukur(node: BalanceNode): boolean {
+  return !tanpaCatatan(node.demand_state);
+}
+
+function kekuranganTerukur(node: BalanceNode): boolean {
+  return !tanpaCatatan(node.supply_state);
+}
+
+function lengkap(node: BalanceNode): boolean {
+  return !tanpaCatatan(node.supply_state) && !tanpaCatatan(node.demand_state);
+}
 
 export function surplusSummary(locations: unknown): SurplusSummary {
   const list = nodes(locations);
-  const surplus = list.filter((node) => number(node.surplus_kg) > 0);
-  const shortage = list.filter((node) => number(node.shortage_kg) > 0);
+  // Surplus hanya dihitung bila PERMINTAANNYA terukur: tanpa itu, "surplus"
+  // hanyalah selisih terhadap angka 0 yang diisi engine (nyata: Bandung &
+  // Cianjur untuk telur). Sisi cerminnya berlaku untuk kekurangan.
+  const surplus = list.filter(
+    (node) => number(node.surplus_kg) > 0 && surplusTerukur(node)
+  );
+  const shortage = list.filter(
+    (node) => number(node.shortage_kg) > 0 && kekuranganTerukur(node)
+  );
   const surplusKg = sumOrNull(surplus.map((node) => number(node.surplus_kg)).filter((n) => n > 0));
   const shortageKg = sumOrNull(shortage.map((node) => number(node.shortage_kg)).filter((n) => n > 0));
   return {
@@ -38,7 +67,10 @@ export function surplusSummary(locations: unknown): SurplusSummary {
     surplusCount: surplus.length,
     shortageKg,
     shortageCount: shortage.length,
-    balancedCount: list.filter((node) => String(node.status ?? "") === "balanced").length,
+    balancedCount: list.filter(
+      (node) => String(node.status ?? "") === "balanced" && lengkap(node)
+    ).length,
+    unmeasuredCount: list.filter((node) => !lengkap(node)).length,
   };
 }
 
@@ -75,11 +107,16 @@ export type Allocation = {
  */
 export function allocationPlan(locations: unknown, limit = 5): Allocation[] {
   const list = nodes(locations);
+  // Pemasok hanya dari lokasi yang permintaannya TERUKUR (sisi lain cerminnya):
+  // surplus di atas permintaan yang tidak tercatat bukan fakta, jadi jangan
+  // dialirkan sebagai rencana pengalihan (PLAN-023).
   const pools = list
+    .filter((node) => surplusTerukur(node))
     .map((node) => ({ node, left: number(node.surplus_kg) }))
     .filter((pool) => pool.left > 0)
     .sort((a, b) => b.left - a.left);
   const needs = list
+    .filter((node) => kekuranganTerukur(node))
     .map((node) => ({ node, left: number(node.shortage_kg) }))
     .filter((need) => need.left > 0)
     .sort((a, b) => b.left - a.left);

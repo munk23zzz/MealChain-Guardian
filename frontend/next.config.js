@@ -42,6 +42,9 @@ const API_ROOTS = [
   // Fase 11 lanjutan: catatan penerimaan barang (opsi "Lainnya" yang tersimpan,
   // migrasi 016) — jalur tulis kedua dari kartu "Penerimaan barang".
   "receipts",
+  // W-3 (2026-10-17): papan status integrasi per komponen. Tanpa akar ini
+  // panel di tab Agent Log menerima 404 HTML dari router Next sendiri.
+  "integrations",
 ];
 
 const nextConfig = {

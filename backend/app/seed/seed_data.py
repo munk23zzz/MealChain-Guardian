@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.core.journey import dispatch_time, validate_dispatch
@@ -534,7 +534,7 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
 async def _load_p6_facts(session, rows: dict, loc_by_name, com_by_name,
                          counts: dict) -> None:
     """P6: muat facts KPI (menu plan / delivery / disposal) — idempoten merge."""
-    from sqlalchemy import select as _select
+    from sqlalchemy import select as _select, update
 
     from app.models import DeliveryEvent, DisposalEvent, MenuPlan
 
@@ -561,10 +561,18 @@ async def _load_p6_facts(session, rows: dict, loc_by_name, com_by_name,
     # tidak terlihat dan INSERT menabrak `uq_menu_plans_loc_date` →
     # UniqueViolationError, dan baris kanonik tidak pernah ada di tanggal itu.
     #
-    # Prioritas: baris KANONIK menang atas baris demo (id demo diganti id kanonik
-    # supaya FK `delivery_events` di bawah menunjuk baris yang benar). Baris
-    # kanonik yang sudah ada TIDAK disentuh (`WHERE origin='demo'`) — kebijakan
-    # "hari kanonik menang" yang sama dengan generator.
+    # Prioritas: isi KANONIK menang atas baris demo — baris demo di tanggal itu
+    # diadopsi (planned_portions + origin jadi kanonik) dan id-nya DIPERTAHANKAN,
+    # karena mengganti PK induk yang masih dirujuk `delivery_events` memutus FK.
+    # Baris kanonik yang sudah ada TIDAK disentuh (`WHERE origin='demo'`).
+    # Id baris yang SUDAH menempati tiap (lokasi, tanggal) — apa pun asalnya.
+    # Anak-anak (delivery_events) harus menunjuk id AKTUAL ini, bukan id kanonik
+    # hasil hitung: kalau baris demo yang menempati tanggal itu, id-nya lain.
+    id_aktual = {
+        (r.location_id, r.plan_date): r.id
+        for r in (await session.execute(_select(MenuPlan))).scalars()
+    }
+
     if rows["menu_plans"]:
         plan_stmt = pg_insert(MenuPlan).values(
             [
@@ -580,8 +588,11 @@ async def _load_p6_facts(session, rows: dict, loc_by_name, com_by_name,
         )
         plan_stmt = plan_stmt.on_conflict_do_update(
             constraint="uq_menu_plans_loc_date",
+            # `id` SENGAJA tidak di-update: mengganti PK induk yang masih
+            # dirujuk delivery_events = ForeignKeyViolationError, dan dulu itu
+            # menggagalkan seluruh refresh (500). Baris demo di tanggal itu
+            # "diadopsi" apa adanya (isi + origin jadi kanonik, id tetap).
             set_={
-                "id": plan_stmt.excluded.id,
                 "planned_portions": plan_stmt.excluded.planned_portions,
                 "origin": "seed",
             },
@@ -589,12 +600,16 @@ async def _load_p6_facts(session, rows: dict, loc_by_name, com_by_name,
         )
         await session.execute(plan_stmt)
     await session.flush()  # pastikan menu_plan tersimpan sebelum delivery FK
+    peta_plan = {
+        item["id"]: id_aktual.get((loc_by_name[item["location"]].id, item["plan_date"]), item["id"])
+        for item in rows["menu_plans"]
+    }
     for item in rows["delivery_events"]:
         if item["id"] in delivery_ids:
             continue
         session.add(DeliveryEvent(
             id=item["id"],
-            menu_plan_id=item["menu_plan"],
+            menu_plan_id=peta_plan.get(item["menu_plan"], item["menu_plan"]),
             delivered_portions=item["delivered_portions"],
             status=item["status"],
             delivered_at=item["delivered_at"],

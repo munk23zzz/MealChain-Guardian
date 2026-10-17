@@ -57,9 +57,11 @@ suite frontend via kontainer, dan `psql` langsung ke DB compose.
   - Head `GET /admin/users` → **403**; Monitor → **200**
 - [x] `bgn_monitor` read-only pada jalur mutasi; tetap bisa membaca `/decisions` lintas lokasi
 - [x] Guard mutasi konsisten (`MUTATING_ROLES`) pada demo, events, evidence fuse, supplier exclusion
-- [~] Approval matrix masih generik: verdict `consistent` = **1** approval (salah satu role), `flagged`/`unavailable` = 2 role (`backend/app/core/approval_matrix.py`). Tidak ada syarat "dua user berbeda" dan tidak ada urutan Head → Nutritionist
-- [ ] **Head-only** propose / penentuan purpose / execute: kode masih `VERIFIER_ROLES = ("sppg_head", "sppg_nutritionist")` di `backend/app/api/actions.py:30` (dipakai baris 111, 185, 264, 352, 545)
-- [ ] Nutritionist diblokir dari propose & execute secara eksplisit (konsekuensi butir di atas)
+- [x] Satu user tidak dapat menjadi approver dua kali: approve kedua oleh user yang sama ditolak **409 "approval sudah tercatat"** (`backend/app/api/actions.py:284`)
+- [x] Matriks AND berlaku di dalam satu SPPG untuk keputusan administratif/exclusion: `require_scope(user, target_location_id)` + matriks dihitung ulang hanya dari approver berlokasi sama (`actions.py:397-409`), sesuai `docs/ruling-2026-10-14-scope-lokasi.md`
+- [~] Matrix per verdict: `consistent` = **1** approval (salah satu role), `flagged`/`unavailable` = 2 role (`core/approval_matrix.py`); tidak ada urutan yang dipaksakan Head → Nutritionist
+- [ ] **CELAH (temuan sesi ini):** untuk keputusan **transfer**, `approve` dan `execute` TIDAK memanggil `require_scope(...)` — panggilan itu hanya ada di cabang `exclusions.ADMIN_TYPES` (`actions.py:203, 273, 358, 397`), dan matriks untuk transfer juga tidak difilter lokasi. Jadi secara teknis approver SPPG lain dapat menyetujui keputusan SPPG lain bila memiliki `decision_id`. Belum dibuktikan dengan probe mutasi (sengaja tidak memanggil endpoint mutasi)
+- [ ] Kebijakan PLAN.md §13.3 (**Head-only** propose/purpose/execute) belum ditegakkan: `VERIFIER_ROLES = ("sppg_head", "sppg_nutritionist")` dipakai di `actions.py:30` (baris 111, 185, 264, 352, 545). Catatan penting: ruling pemilik yang berlaku di repo (`docs/ruling-2026-10-14-scope-lokasi.md`) **tidak** mensyaratkan Head-only — ia hanya mengunci matriks AND di dalam satu SPPG. Dua dokumen kebijakan ini bertentangan dan butuh keputusan pemilik
 
 ## 3. Alur keputusan
 
@@ -138,7 +140,8 @@ Satu halaman `frontend/app/page.tsx` dengan **11 tab** (bukan 8 modul PLAN.md):
 | 8.5 | Sesi lain tampaknya sedang bekerja di repo: berkas berubah < 20 menit sebelum pemeriksaan (`agent/LANGKAH-DEPLOY-MANUAL.md`, `backend/app/seed/timeseries.py`, `frontend/app/globals.css`, `DecisionEvidence.tsx`) | `find -mmin -20` | Pemilik (koordinasi sesi) |
 | 8.6 | Blocker eksternal: izin IAM (peran eksekusi + ECR push + `iam:PassRole`) untuk AgentCore; akses S/4HANA + tenant SAP untuk AWS for SAP MCP | `docs/verification/agentcore-deploy.md` §2, §4 | Pemilik akun |
 | 8.7 | Perbaikan `.env` yang belum dieksekusi: `INFERHUB_URL`, model id verifier, fallback supervisor Legacy, 4 tes host-only merah | `memory/global/active_context.md` (blok "Menunggu pemilik") | Pemilik |
-| 8.8 | Kebijakan RBAC final (Head-only propose/execute, dual approval dua user) belum ditegakkan di kode | `backend/app/api/actions.py:30`, `core/approval_matrix.py` | Keputusan pemilik dulu — ini perubahan desain |
+| 8.8 | Dua dokumen kebijakan saling bertentangan: PLAN.md §13.3 (Head-only propose/execute) vs `docs/ruling-2026-10-14-scope-lokasi.md` (matriks AND di dalam satu SPPG, tanpa Head-only) | `backend/app/api/actions.py:30` vs ruling §3 | Keputusan pemilik |
+| 8.9 | Celah scope pada jalur tulis transfer: `approve`/`execute` tidak memakai `require_scope` (hanya cabang `ADMIN_TYPES`) | `backend/app/api/actions.py:203/273/358/397` | Hermes (perbaikan kecil + tes) atau pemilik (terima sebagai batasan) |
 
 ---
 
@@ -153,7 +156,8 @@ tidak ada lagi di repo ini maupun di klon demo `HackathonBil\MealChainGuardian`:
 |---|---|
 | PLAN-011 SAP AI Core `Blocked`; caller masih `RuntimeError: belum terimplementasi` | **Salah untuk sekarang** — `sap_ai_core_caller.py` nyata dan terbukti live (S4-10, 11 Okt); `grep "belum terimplementasi"` di `backend/app` = kosong |
 | PLAN-012 "Gateway READY, Memory ACTIVE" | Itu bukti akun AWS **lama** (679583588036). Akun yang dipakai sekarang: 0 gateway, 0 runtime, 1 memory |
-| PLAN-002 / PLAN-021 berlabel `Done` (RBAC final + dual approval) | **Tidak sesuai kode**: `VERIFIER_ROLES` masih dipakai untuk propose/verify/approve/execute dan matrix approval masih generik |
+| PLAN-002 / PLAN-021 berlabel `Done` (RBAC final + dual approval) | **Sebagian benar**: guard "satu user hanya sekali approve" ADA (409) dan matriks AND dalam satu SPPG ADA untuk keputusan administratif/exclusion. Yang BELUM: klaim Head-only propose/execute, dan scope lokasi pada approve/execute transfer |
+| PLAN.md §13.3 kebijakan final RBAC (Head-only propose/purpose/execute) | **Bertentangan dengan ruling yang berlaku di repo** (`docs/ruling-2026-10-14-scope-lokasi.md`, yang justru membahas kelayakan demo matriks AND) |
 | PLAN-004 gate `happy-dom` container (P0) | **Tidak berlaku**: `frontend/vitest.config.ts` memakai `environment: "node"`; `happy-dom` tidak ada di `package.json` maupun `node_modules` kontainer |
 | PLAN-001 `PLAN-001 tidak lagi memblokir roadmap` (freshness 0.85/0.60) | Sesuai: `core/freshness.py:7-8` memakai 0.85/0.60 |
 | PLAN-020 audit 10 lokasi, `users.location_id` satu assignment | Sesuai dan sudah ditegakkan: scope per peran terbukti live (Head 1 lokasi, Monitor 10 lokasi) |
@@ -164,7 +168,7 @@ tidak ada lagi di repo ini maupun di klon demo `HackathonBil\MealChainGuardian`:
 ## 10. Yang TIDAK diverifikasi di sesi ini
 
 - Suite backend penuh, `ruff`, `tsc`, `next lint`, `next build` — tidak dijalankan (angka di §7 dikutip dengan tanggalnya).
-- Probe endpoint mutasi (propose/approve/execute/demo) — sengaja dihindari agar DB demo tidak berubah.
+- Probe endpoint mutasi (propose/approve/execute/demo) — sengaja dihindari agar DB demo tidak berubah. Akibatnya celah scope pada transfer (§2) baru terbukti dari pembacaan kode, belum dari probe 403/200.
 - Inferensi SAP AI Core live dan koneksi AgentCore ke AWS — tidak diprobe ulang; statusnya dikutip dari artefak tim (11–16 Okt).
 - Akses AWS for SAP MCP dan tenant SAP — belum ada buktinya sama sekali.
 - Review screenshot browser dan audit aksesibilitas di semua ukuran viewport.
