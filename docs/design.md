@@ -1181,9 +1181,10 @@ legenda ("Info map") dan "Rincian lapisan peta" 24 px; **tidak ada** kontrol ska
 kembali ke tampilan awal; angka operasional "−780 kg" menempel di baris attribution.
 
 Urutan kerja: **7b-1 SELESAI 17 Okt** → **7b-2 SELESAI 17 Okt** (legenda terlihat tanpa klik, satu zona
-"Info peta", chip penanda filter aktif, cooperative gestures di perangkat sentuh) → 7b-3 (butuh keputusan
-pemilik: arti garis, lebar peta, daftar pin bernama, popup jalur dipangkas bukan dihapus, seed dengan
-kiriman di jalan).
+"Info peta", chip penanda filter aktif, cooperative gestures di perangkat sentuh) → **K5 dari 7b-3 SELESAI
+17 Okt** (seed tiga keadaan perjalanan; lihat §7b-3 di bawah) → sisa 7b-3 menunggu giliran: K1 arti garis
+padat/putus-putus, K3 daftar penanda bernama + padanan sr-only, K4 popup jalur satu baris. K2 (melebarkan
+peta) diputuskan TIDAK dikerjakan.
 
 ### 7b-1 — kontrol peta (selesai 17 Okt 2026)
 
@@ -1244,3 +1245,35 @@ ringkas disengaja — ringkas untuk makna sekejap, kotak untuk rincian perjalana
 dipindah ke kiri-bawah (posisi bawaan MapLibre, bukan zona atas seperti usul riset, karena acuan industri
 menaruh skala di sudut bawah); gestur kooperatif TIDAK berlaku di desktop (mode MapLibre mengubah desktop
 juga, dan keluhan yang diperbaiki hanya gulir halaman di ponsel).
+
+### 7b-3 — K5: tiga keadaan perjalanan di seed (selesai 17 Okt 2026)
+
+Berkas: `data/seed/sprint1_seed.json` + `backend/app/seed/seed_data.py` + `backend/app/api/demo.py` +
+`frontend/app/page.tsx`. Tes baru: `backend/tests/test_seed_jakarta_journey_states.py` (4),
+`backend/tests/test_demo_refresh_routes.py` (2), `backend/tests/test_seed_menu_plan_anak.py` (1).
+
+Masalahnya: pemilih kiriman hanya berisi "Semua (1)" + satu kiriman "Sudah tiba", sehingga garis sisa
+perjalanan, tag "perkiraan", dan alur peta→keputusan→bukti tidak bisa diperagakan. Sekarang seed Jakarta
+memuat tiga kiriman **satu komoditas** (telur) dari tiga pemasok berbeda supaya ketiganya tampil di pemilih
+yang disaring komoditas:
+
+| Kiriman | Berangkat | Keadaan |
+|---|---|---|
+| Supplier A Cianjur | −21 menit (rute 84 menit) | Di jalan · ± 1 jam 2 menit lagi, 27% jalur |
+| Supplier Bogor-1 | −2,5 jam | Sudah tiba 10.32 |
+| Supplier D Cianjur | `null` | Belum berangkat |
+
+Jam relatif terhadap "hari ini", jadi tetap benar setelah "Segarkan ke hari ini" — bukan tanggal mati.
+
+Dua bug yang ketemu saat memverifikasi dan diperbaiki (keduanya memblokir tombol demo):
+
+1. **`POST /demo/refresh` → 500** (bukan bug K5): upsert `menu_plans` mengganti **PK** baris `origin='demo'`
+   di tanggal kanonik (id demo → id kanonik) sementara `delivery_events` masih merujuk id lama →
+   `ForeignKeyViolationError`, dan satu tanggal bentrok menggagalkan SELURUH refresh. Perbaikan: baris demo di
+   tanggal itu **diadopsi** (isi + `origin` jadi `seed`, **id dipertahankan**), anak-anaknya diarahkan lewat
+   peta id aktual (`peta_plan`). Tidak ada PK yang diganti. Dijaga tes `test_seed_menu_plan_anak.py` (merah
+   dulu, hijau setelah perbaikan).
+2. **Peta tidak ikut segar setelah refresh**: `onDataChanged` hanya me-refetch keputusan, peta & pemilih
+   kiriman tetap memakai cache → tombol "Segarkan ke hari ini" terasa tidak bekerja sampai halaman dimuat
+   ulang. Perbaikan: `mapQuery.refetch()` + `mapSupplierRoutesQuery.refetch()`.
+

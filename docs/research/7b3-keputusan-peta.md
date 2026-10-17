@@ -196,6 +196,29 @@ Mapbox/dashboard GIS tetapi tidak cocok di sini:
 Kalau Anda memilih subset lain, urutannya boleh berubah — tetapi K5 dan K1 saling menguatkan:
 tanpa kiriman "di jalan", arti garis padat/putus-putus tetap tidak bisa diperagakan.
 
+## 9. Hasil K5 setelah dikerjakan (terukur 17 Okt 2026, 12.15 WIB)
+
+K5 disetujui dan dikerjakan lebih dulu (bukan K1) karena paling berdampak dan tidak menyentuh tata letak.
+Seed Jakarta kini memperagakan **tiga keadaan perjalanan** sekaligus, semuanya komoditas `telur` dari tiga
+pemasok berbeda — kalau komoditasnya berbeda, pemilih kiriman (yang disaring komoditas) hanya menampilkan
+satu, dan itulah yang membuat percobaan pertama saya gagal.
+
+| Yang diukur | Sebelum | Sesudah |
+|---|---|---|
+| Pil pemilih kiriman | `Semua (1)`, satu kiriman "Sudah tiba 19.24" | `Semua (3)` + Di jalan · Belum berangkat · Sudah tiba |
+| Persentase jalur pada kartu | tidak pernah ada (semua kiriman sudah tiba) | `27% jalur`, `Tiba ± 13.18 WIB`, `110,4 km jalan`, `± 1 jam 24 menit` |
+| `POST /demo/refresh` | **500** (`ForeignKeyViolationError` pada `menu_plans`) | **200** |
+
+Dua cacat yang baru terlihat setelah dicoba di aplikasi hidup (bukan dari membaca kode):
+
+1. `POST /demo/refresh` 500 — upsert `menu_plans` mengganti PK baris demo yang masih dirujuk
+   `delivery_events`. Perbaikan: baris demo "diadopsi" (id dipertahankan), anak diarahkan ke id aktual.
+2. Peta tidak ikut menyegar setelah refresh — `onDataChanged` hanya me-refetch keputusan. Perbaikan: ikut
+   me-refetch data peta & jalur kiriman.
+
+Pelajaran: dua dari tiga masalah di sini hanya muncul saat tombolnya benar-benar diklik. Membaca komponen
+sudah memberi keyakinan yang salah.
+
 ## Sources
 
 [1] https://www.esri.com/arcgis-blog/products/arcgis-pro/mapping/cartographic-conventions — Esri — Cartographic conventions (Heather Smith, 17 Jan 2024)
