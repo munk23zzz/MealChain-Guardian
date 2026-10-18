@@ -15,8 +15,8 @@
  * 2. **Status diterjemahkan** (`submitted` → "terkirim"), bukan ditampilkan
  *    mentah, dan status asing dibiarkan apa adanya (tidak dikarang).
  * 3. **PO tanpa keputusan** (baris seed/adapter, `decision_id = null`) menulis
- *    "tanpa keputusan" dan TIDAK menaut ke mana pun — PO itu tidak punya
- *    keputusan yang bisa dibuka.
+ *    "tanpa keputusan", TIDAK menaut ke mana pun, dan diberi label "data demo"
+ *    (`originLabel`) — bukan tampil seolah terbit dari eksekusi.
  * 4. **Kosong ≠ nol rupiah**: tidak ada baris berarti kalimat "belum ada
  *    purchase order", bukan deret angka 0.
  * 5. **Galat tetap galat**: tidak pernah dilaporkan sebagai daftar kosong.
@@ -37,6 +37,8 @@ export type PurchaseOrderRow = {
   price_per_kg: number;
   total_value: number;
   source?: string | null;
+  /** "execution" bila lahir dari eksekusi keputusan, "demo" bila baris seed. */
+  origin?: string | null;
 };
 
 export type PurchaseOrderPayload = {
@@ -65,6 +67,19 @@ const STATUS_LABEL: Record<string, string> = {
 export function statusLabel(status: string | null | undefined): string {
   if (!status) return "tidak dikenal";
   return STATUS_LABEL[status] ?? status;
+}
+
+/**
+ * Asal baris PO → kata yang jujur.
+ *
+ * `execution` = lahir dari `POST /actions/execute` (punya decision_id).
+ * `demo` = baris seed yang tidak pernah melewati approval.
+ * Selain itu tidak dikarang: "asal tidak tercatat".
+ */
+export function originLabel(origin: string | null | undefined): string {
+  if (origin === "execution") return "dari eksekusi";
+  if (origin === "demo") return "data demo";
+  return "asal tidak tercatat";
 }
 
 const ANGKA = new Intl.NumberFormat("id-ID", {
@@ -128,7 +143,7 @@ export default function PurchaseOrderList({
     <section className="po-panel" aria-labelledby="po-panel-title">
       <div className="po-panel-head">
         <div>
-          <h3 id="po-panel-title">Purchase order (mock SAP)</h3>
+          <h3 id="po-panel-title">Purchase order (mock lokal)</h3>
           <p className="po-panel-sub">{sourceNote(scope)}</p>
         </div>
         {onRetry ? (
@@ -173,6 +188,7 @@ export default function PurchaseOrderList({
                   <span className={`po-status po-status-${po.status}`}>
                     {statusLabel(po.status)}
                   </span>
+                  <span className="po-note po-origin">{originLabel(po.origin)}</span>
                   {po.location_name ? (
                     <span className="po-note">{po.location_name}</span>
                   ) : null}

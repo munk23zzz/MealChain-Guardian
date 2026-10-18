@@ -52,6 +52,9 @@ FIELDS = {
     "price_per_kg",
     "total_value",
     "source",
+    # Asal baris: PO yang lahir dari eksekusi keputusan vs baris seed demo.
+    # Dipakai panel untuk berhenti menyebut semua baris "terbit dari eksekusi".
+    "origin",
 }
 
 
@@ -101,6 +104,7 @@ def test_kontrak_kolom_dan_label_sumber(client, monitor_headers):
     row = body["items"][0]
     assert set(row) == FIELDS, sorted(set(row) ^ FIELDS)
     assert row["source"] == "mock_sap_table"
+    assert row["origin"] in {"execution", "demo"}
     assert row["status"] in {"draft", "submitted", "confirmed"}
     assert row["ordered_quantity_kg"] > 0
     assert row["price_per_kg"] > 0
@@ -188,3 +192,17 @@ def test_tidak_ada_rute_tulis(client, monitor_headers):
     for method in ("post", "put", "patch", "delete"):
         resp = getattr(client, method)("/sap/purchase-orders", headers=monitor_headers)
         assert resp.status_code == 405, f"{method} seharusnya 405, dapat {resp.status_code}"
+
+
+def test_asal_po_mengikuti_ada_tidaknya_keputusan(client, monitor_headers):
+    """`origin` adalah fakta turunan, bukan label seragam.
+
+    Baris yang lahir dari eksekusi selalu punya `decision_id`; baris seed demo
+    tidak. Kalau endpoint melabeli semua baris sama, panel akan mengklaim PO
+    demo "terbit dari eksekusi" — persis yang dicegah tes ini.
+    """
+    body = _get(client, monitor_headers, limit=200).json()
+    assert body["items"], "DB demo selalu punya PO"
+    for row in body["items"]:
+        harapan = "execution" if row["decision_id"] else "demo"
+        assert row["origin"] == harapan, f"{row['po_number']}: {row['origin']} != {harapan}"

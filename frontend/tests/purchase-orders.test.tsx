@@ -22,6 +22,7 @@ import AgentTraceViewer from "../components/AgentTraceViewer";
 import PurchaseOrderList, {
   formatKg,
   formatRupiah,
+  originLabel,
   sourceNote,
   statusLabel,
 } from "../components/PurchaseOrderList";
@@ -47,6 +48,7 @@ const PAYLOAD = {
       price_per_kg: 38500,
       total_value: 4639250,
       source: "mock_sap_table",
+      origin: "execution",
     },
     {
       po_number: "4500000001",
@@ -63,6 +65,7 @@ const PAYLOAD = {
       price_per_kg: 27000,
       total_value: 1080000,
       source: "mock_sap_table",
+      origin: "demo",
     },
   ],
 };
@@ -106,6 +109,14 @@ describe("label & format", () => {
     const nasional = sourceNote("nasional");
     expect(nasional).toContain("seluruh lokasi");
   });
+
+  it("membedakan PO hasil eksekusi dari PO data demo", () => {
+    // 18 Okt: semua baris dulu tampil seolah "terbit dari eksekusi". Padahal
+    // baris seed (DEMO-PO-*, 4500000001) tidak pernah melewati approval.
+    expect(originLabel("execution")).toBe("dari eksekusi");
+    expect(originLabel("demo")).toBe("data demo");
+    expect(originLabel(null)).toBe("asal tidak tercatat");
+  });
 });
 
 describe("panel purchase order", () => {
@@ -118,6 +129,15 @@ describe("panel purchase order", () => {
     expect(html).toContain("terkonfirmasi");
     expect(html).toContain("Rp 5.719.250,00"); // total ringkasan
     expect(html).toContain("tabel transaksi mock");
+    // Judul tidak boleh berbunyi "mock SAP" seolah ada integrasi SAP nyata.
+    expect(html).toContain("mock lokal");
+    expect(html).not.toContain("Purchase order (mock SAP)");
+  });
+
+  it("setiap baris menyebut asalnya: eksekusi atau data demo", () => {
+    const html = render();
+    expect(html).toContain("dari eksekusi");
+    expect(html).toContain("data demo");
   });
 
   it("PO berkeputusan menaut ke deep link, PO tanpa keputusan tidak", () => {

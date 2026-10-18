@@ -24,6 +24,10 @@ Modul ini menutup celah itu dengan tiga aturan:
    melihat PO untuk keputusan bertarget lokasinya; `bgn_monitor` lintas lokasi.
    PO tanpa keputusan (mis. baris seed/adapter) tidak punya lokasi, jadi **tidak
    pernah** terlihat oleh peran SPPG — hanya monitor nasional.
+4. **Asal baris dikirim eksplisit** (`origin`): `execution` bila PO punya
+   `decision_id` (lahir dari `POST /actions/execute`), `demo` bila baris seed.
+   Panel memakainya supaya PO `DEMO-PO-*` tidak tampil seolah terbit dari
+   eksekusi yang belum pernah terjadi.
 """
 
 import uuid
@@ -82,6 +86,11 @@ def _baris(row) -> dict:
         "price_per_kg": harga,
         "total_value": round(harga * qty, 2),
         "source": SUMBER,
+        # Fakta turunan, bukan label seragam: hanya baris yang lahir dari
+        # eksekusi keputusan punya decision_id. Baris seed (DEMO-PO-*,
+        # 4500000001) tidak pernah melewati approval, jadi tidak boleh tampil
+        # seolah "terbit dari eksekusi".
+        "origin": "execution" if row["decision_id"] else "demo",
     }
 
 
