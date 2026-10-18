@@ -35,8 +35,8 @@ from app.core.candidate import PriceInfo
 from app.core.candidate_generation import generate_candidates
 from app.core.config import settings
 from app.core.freshness import classify_freshness, compute_freshness_score
-from app.core.menu_hierarchy import cadangan_kontinuitas_kg, kebutuhan_menu_kg
 from app.core.logistics import estimate_logistics
+from app.core.menu_hierarchy import cadangan_kontinuitas_kg, kebutuhan_menu_kg
 from app.core.price import price_deviation
 from app.core.ranking import ScoredCandidate, rank_candidates
 from app.core.safe_delivered_cost import (
@@ -54,8 +54,8 @@ from app.models import (
     Batch,
     Commodity,
     DemandRecord,
-    MenuPlan,
     Location,
+    MenuPlan,
     PriceSignal,
     Supplier,
     SupplierExclusion,
