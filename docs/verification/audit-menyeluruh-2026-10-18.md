@@ -4,6 +4,7 @@
 **Commit saat audit:** `c2e1ae1` (branch `feature/sprint2-decision-intelligence`)
 **Metode:** tiga audit paralel read-only (siklus hidup keputusan & matriks izin backend; wiring UI↔API; integritas data & KPI), lalu temuan terberat diverifikasi ulang langsung lewat kode dan SQL oleh auditor utama. Tidak ada data yang diubah, tidak ada endpoint mutasi yang dipanggil.
 **Catatan:** DB dipakai bersama sesi lain dan bergerak selama audit (keputusan 15→16→17, `ledger_blocks` 7685→7757, `menu_plans` 660→70→660). Semua angka dikunci pada waktu ukurnya.
+**Status penutupan:** kelima blocker (A1–A5) sudah ditutup pada 18 Okt malam — lihat `docs/verification/penutupan-blocker-2026-10-18.md` untuk bukti per blocker.
 
 ---
 

@@ -114,6 +114,25 @@ def test_approval_riwayat_demo_sesuai_lokasi_target(seed_akun):
     assert not beda, beda
 
 
+def test_semua_approval_sesuai_lokasi_target(seed_akun):
+    """Pagarnya bukan hanya riwayat demo: SETIAP approval di DB harus berasal
+    dari approver di lokasi target keputusannya. Ini penjaga A5 yang paling
+    luas — kalau ada jalur lain yang menyemai approval lintas kota, tes ini
+    merah tanpa perlu tahu jalur mana."""
+    rows = _rows(
+        "SELECT d.status, dl.name AS target, ul.name AS approver_loc, u.role, "
+        "a.decision_id "
+        "FROM approvals a "
+        "JOIN decisions d ON d.id = a.decision_id "
+        "JOIN users u ON u.id = a.approved_by "
+        "LEFT JOIN locations ul ON ul.id = u.location_id "
+        "LEFT JOIN locations dl ON dl.id = d.target_location_id"
+    )
+    assert rows, "tidak ada approval sama sekali — DB demo belum disemai?"
+    beda = [r for r in rows if r["approver_loc"] != r["target"]]
+    assert not beda, beda
+
+
 def test_kepala_bandung_hanya_melihat_keputusan_bandung(seed_akun, client):
     akun = next(
         u
