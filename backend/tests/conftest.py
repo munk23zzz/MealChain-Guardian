@@ -17,6 +17,11 @@ from sqlalchemy import create_engine, text
 HOST_ONLY_MODULES = [
     "test_supervisor_agent.py",
     "test_supervisor_tools.py",
+    "test_agent_contracts.py",
+    "test_agent_workers.py",
+    "test_agent_workers_p3.py",
+    "test_agent_validation.py",
+    "test_agent_golden_cases.py",
     "test_verify_agentcore_access.py",
     "test_verify_bedrock_access.py",
     "test_compose_contract.py",

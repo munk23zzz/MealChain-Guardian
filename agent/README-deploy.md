@@ -21,8 +21,72 @@ mengembalikan `{"response": "<narasi>"}`. Port **8080** dan path **/invocations*
 kontrak AgentCore Runtime, bukan pilihan kita.
 
 Setelah `AGENTCORE_RUNTIME_ARN` terisi, `backend/app/ai_providers/model_registry.py` otomatis
-menaruh AgentCore sebagai **slot primary** setiap rantai agent (slot env bergeser satu) — jadi orkestrator
-TIDAK perlu diubah lagi; cukup ARN-nya.
+menaruh AgentCore sebagai **slot primary** setiap rantai agent (slot env bergeser satu) — jadi
+orkestrator TIDAK perlu diubah lagi; cukup ARN-nya.
+
+## Mode review 7 worker agent (flag belum aktif)
+
+P0–P3 menambahkan kontrak, registry, tujuh worker baca, dan validator. **Flag tetap
+default `false`**, jadi perilaku aplikasi sekarang masih satu supervisor Strands + empat
+tool baca sampai orkestrasi P4 terpasang.
+
+| Env | Default | Arti |
+|---|---|---|
+| `MULTI_AGENT_REVIEW` | `false` | `true` nanti menyalakan review 7 worker setelah keputusan dibuat. |
+| `AGENT_REVIEW_MODE` | `advisory` | Agen hanya meninjau; tidak menghitung ulang SDC/safety dan tidak mengeksekusi. |
+| `AGENT_REVIEW_TIMEOUT_SECONDS` | `75` | Batas total review; lewat batas → status `timeout`, bukan angka karangan. |
+
+Jangan menyalakan flag ini sebelum kontrak, worker, trace, dan UI P1–P5 selesai.
+Saat runtime cloud dipakai, `MEALCHAIN_API_URL` **wajib** bisa dijangkau dari AgentCore
+(bukan `http://backend:8000`, yang hanya ada di jaringan Compose). Kalau backend masih
+lokal, jalankan runtime secara lokal dan sebut “runtime lokal” di UI — jangan mengklaim
+AgentCore live.
+
+## Kontrak P1 (sudah ada, belum aktif)
+
+- `contracts.py` — `AgentFinding`, `AgentRun`, `Citation`, dan validator angka wajib sitasi.
+- `hierarchy.json` — tujuh role, stage, endpoint allowlist, dan lane paralel.
+- `registry.py` — memuat dan memvalidasi konfigurasi di atas.
+- `workers/` — tujuh worker baca nyata: Supply, Demand, Safety, Freshness,
+  Price, Logistics, Evidence. Belum ada panggilan model.
+
+Tes kontrak (host-only, butuh repo root di `PYTHONPATH`):
+
+```bash
+docker compose run --rm -e PYTHONPATH=/repo -v "$PWD:/repo" -w /repo backend \
+  pytest -q backend/tests/test_agent_contracts.py
+```
+
+## Worker baca P2–P3 (7/7 — Supply, Demand, Safety, Freshness, Price, Logistics, Evidence)
+
+Tujuh worker membaca API lewat `agent/api_client.py`. Hanya GET, ditambah dua
+endpoint komputasi murni yang di-allowlist (`POST /price/deviation`,
+`POST /logistics/estimate`); tidak ada endpoint mutasi.
+
+- Supply: `GET /balance/{location}/{commodity}`; nilai yang tidak terukur
+  dikosongkan (`null`), bukan diubah menjadi 0.
+- Demand: `GET /demand/...` dan `GET /demand/forecast/...?horizon_days=7`.
+- Safety: `GET /batches` dan `GET /supplier-exclusions`; tidak memanggil
+  `POST /safety/evaluate` yang menulis DB.
+- Freshness: `GET /batches`; tidak memanggil `POST /freshness/evaluate` yang menulis DB.
+- Price: `GET /price/quotes/...`, `GET /price/...`, `GET /decisions/{id}/approval-summary`,
+  dan `POST /price/deviation` (komputasi murni).
+- Logistics: `GET /supplier-routes`; fallback `POST /logistics/estimate` hanya bila
+  sumber/kuantitas tersedia dan tidak ada rute aktif.
+- Evidence: `GET /decisions/{id}/dossier|compliance|chain|approval-summary` dan
+  `GET /ledger/verify`; tidak memanggil `/evidence/fuse`.
+
+`agent/validation.py` mendeteksi worker hilang/ganda, kontradiksi fakta, dan
+menentukan `completed|partial|failed`. Sepuluh golden case ada di
+`backend/tests/test_agent_golden_cases.py`.
+
+Tes mock transport:
+
+```bash
+docker compose run --rm -e PYTHONPATH=/repo -v "$PWD:/repo" -w /repo backend \
+  pytest -q backend/tests/test_agent_workers.py backend/tests/test_agent_workers_p3.py \
+  backend/tests/test_agent_validation.py backend/tests/test_agent_golden_cases.py
+```
 
 ## Blocker saat ini (terukur, bukan dugaan)
 

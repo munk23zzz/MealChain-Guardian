@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     demo_mode: bool = False
     app_name: str = "MealChain Guardian"
 
+    # Review 7 worker agent (P0: default MATI, belum ada worker yang berjalan).
+    # `advisory` = agen hanya meninjau keputusan deterministik; bukan pre-decision.
+    multi_agent_review: bool = False
+    agent_review_mode: str = "advisory"
+    agent_review_timeout_seconds: int = 75
+
     # Konfigurasi demo komoditas (plan Sprint 1 — bukan kolom Schema.md):
     # shelf life dalam hari: telur 28, ayam 5, wortel 21
     shelf_life_days_telur: float = 28.0

@@ -1,5 +1,6 @@
 """Kontrak docker-compose.yml Sprint 0: tepat 4 service sesuai plan."""
 
+import re
 from pathlib import Path
 
 import yaml
@@ -9,6 +10,12 @@ COMPOSE_FILE = Path(__file__).resolve().parents[2] / "docker-compose.yml"
 
 def _load_compose() -> dict:
     return yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
+
+
+def _resolved_port(entry: object) -> str:
+    """Buka default Compose `${VAR:-15432}` agar tes tidak bergantung sintaks."""
+    text = str(entry)
+    return re.sub(r"\$\{[^}:]+:-([^}]+)\}", r"\1", text)
 
 
 def test_compose_has_exactly_four_services() -> None:
@@ -57,12 +64,20 @@ def test_postgres_host_port_not_5432_default() -> None:
     """Port host 5432 dipakai postgres proyek lain — MealChain wajib 15432."""
     compose = _load_compose()
     ports = compose["services"]["postgres"]["ports"]
-    joined = " ".join(str(p) for p in ports)
+    joined = " ".join(_resolved_port(p) for p in ports)
     assert "15432:5432" in joined
 
 
 def test_mock_sap_service_exposed_port_8001() -> None:
     compose = _load_compose()
     ports = compose["services"]["mock-sap"]["ports"]
-    joined = " ".join(str(p) for p in ports)
+    joined = " ".join(_resolved_port(p) for p in ports)
     assert "8001:8001" in joined
+
+
+def test_multi_agent_review_is_disabled_by_default() -> None:
+    env = _load_compose()["services"]["backend"].get("environment") or {}
+    flag = str(env.get("MULTI_AGENT_REVIEW", "false")).lower()
+    assert flag == "false" or ":-false" in flag
+    assert "advisory" in str(env.get("AGENT_REVIEW_MODE", "advisory")).lower()
+    assert ":-75" in str(env.get("AGENT_REVIEW_TIMEOUT_SECONDS", "75"))

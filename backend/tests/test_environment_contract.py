@@ -43,6 +43,9 @@ REQUIRED_KEYS = [
     "SAP_PRODUCT_MASTER_MODE",
     "DEMO_MODE",
     "DEBUG",
+    "MULTI_AGENT_REVIEW",
+    "AGENT_REVIEW_MODE",
+    "AGENT_REVIEW_TIMEOUT_SECONDS",
     "NEXT_PUBLIC_API_URL",
     "BACKEND_PORT",
     "FRONTEND_PORT",
@@ -84,15 +87,31 @@ def test_demo_mode_defaults_to_false() -> None:
     assert _env_value("DEMO_MODE") == "false"
 
 
+def test_multi_agent_review_defaults_off() -> None:
+    assert _env_value("MULTI_AGENT_REVIEW") == "false"
+    assert _env_value("AGENT_REVIEW_MODE") == "advisory"
+    assert _env_value("AGENT_REVIEW_TIMEOUT_SECONDS") == "75"
+
+
 def test_all_sap_modes_default_to_mock() -> None:
     for key in SAP_MODE_KEYS:
         assert _env_value(key) == "mock", f"{key} harus default mock"
 
 
 def test_env_example_has_no_real_credentials() -> None:
-    content = ENV_EXAMPLE.read_text(encoding="utf-8").lower()
-    for pattern in SECRET_PATTERNS:
-        assert pattern.lower() not in content, f"Pola secret terdeteksi: {pattern}"
+    """Key kosong di template bukan secret; yang dilarang adalah nilai terisi."""
+    for line in ENV_EXAMPLE.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        _, value = stripped.split("=", 1)
+        if not value.strip():
+            continue
+        lowered = stripped.lower()
+        for pattern in SECRET_PATTERNS:
+            assert pattern.lower() not in lowered, (
+                f"Pola secret terisi terdeteksi: {pattern}"
+            )
 
 
 def test_gitignore_excludes_env_file() -> None:
