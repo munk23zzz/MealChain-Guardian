@@ -166,9 +166,9 @@ export default function ApprovalMenu({
                 <div className="action-menu-text">
                   <strong>Setuju belum tersedia</strong>
                   <span>
-                    Verifikasi belum tercatat. Tanpa verdict, persetujuan mengunci jalan keluar
-                    (status <code>approved</code> tidak menerima verifikasi lagi) — catat hasil
-                    verifier dulu.
+                    Verifikasi belum menghasilkan verdict. Tanpa verdict, persetujuan mengunci
+                    jalan keluar (status <code>approved</code> tidak menerima verifikasi lagi) —
+                    catat hasil verifier dulu.
                   </span>
                 </div>
               </li>

@@ -182,9 +182,17 @@ export default function DecisionActions({
       // O-SEC-3: server menurunkan verdict independen; UI hanya memicu
       // verifikasi dan menampilkan hasil server apa adanya.
       const result = await verifyAction(decisionId, token);
-      setMessage(
-        `Verifier (${result.provider ?? "tanpa provider"}): ${result.verdict ?? "tidak tersedia"} — keputusan siap dieksekusi setelah approval terpenuhi.`
-      );
+      // Audit M1 (18 Okt 2026): UNAVAILABLE bukan verifikasi. Server tidak
+      // mencatatnya, jadi UI tidak boleh menjanjikan jalan ke eksekusi.
+      if (result.recorded === false) {
+        setMessage(
+          `Verifier (${result.provider ?? "tanpa provider"}): ${result.verdict ?? "tidak tersedia"} — tidak ada verdict hasil audit, jadi belum dihitung sebagai verifikasi. Setuju tetap terkunci sampai verifier memberi hasil.`
+        );
+      } else {
+        setMessage(
+          `Verifier (${result.provider ?? "tanpa provider"}): ${result.verdict ?? "tidak tersedia"} — verdict tercatat, keputusan siap dieksekusi setelah approval terpenuhi.`
+        );
+      }
       return null;
     } catch (err: any) {
       return String(err.message ?? err);

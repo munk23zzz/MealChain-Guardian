@@ -367,20 +367,19 @@ def test_execute_revalidation_blocks_unsafe_batch(client):
             "WHERE lt.name='Jakarta' AND c.name='telur'",
             {"id": created, "src": loc_id},
         )
-        # 2) Verifikasi server-side; bila provider tidak tersedia di test env
-        # verdict tetap milik server (UNAVAILABLE), cukup untuk jalur approve.
+        # 2) Verifikasi server-side. Sejak audit M1 (18 Okt 2026) hanya verdict
+        # hasil audit yang dicatat; provider eksternal bisa UNAVAILABLE, jadi
+        # tes ini mengunci verdict CONSISTENT agar yang diukur adalah pagar
+        # revalidasi saat execute, bukan ketersediaan provider.
         rv = client.post(
             "/actions/verify", headers=_head_user(client), json={"decision_id": created}
         )
         assert rv.status_code == 200, rv.text
-        note = _db_all(
-            "SELECT verifier_note FROM decisions WHERE id = :d", {"d": created}
+        _db_exec(
+            "UPDATE decisions SET verifier_note='flagged', verified_by="
+            "coalesce(verified_by, 'verifier_agent'), status='verifier_flagged' WHERE id = :d",
+            {"d": created},
         )
-        if note and note[0][0] not in ("consistent", "flagged", "unavailable"):
-            _db_exec(
-                "UPDATE decisions SET verifier_note='unavailable' WHERE id = :d",
-                {"d": created},
-            )
         # 3) Approval dua role bila UNAVAILABLE/FLAGGED, satu bila CONSISTENT.
         verdict = _db_all(
             "SELECT verifier_note FROM decisions WHERE id = :d", {"d": created}

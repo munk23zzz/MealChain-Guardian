@@ -25,6 +25,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
+from app.api.actions import get_verifier_chain
 from app.main import app
 
 DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
@@ -59,6 +60,22 @@ def _pasangan_tanpa_batch(utamakan: str) -> tuple[str, str] | None:
     if not rows:
         return None
     return str(rows[0][0]), str(rows[0][1])
+
+
+def _kunci_verdict(verdict: str) -> None:
+    """Kunci verdict provider untuk tes deterministik (tanpa panggilan LLM)."""
+    import json as _json
+
+    def _chain():
+        return [
+            (
+                "test_provider",
+                lambda prompt: _json.dumps({"verdict": verdict, "reason": "uji"}),
+                "test",
+            )
+        ]
+
+    app.dependency_overrides[get_verifier_chain] = _chain
 
 
 def _db_exec(query: str, params: dict | None = None):
@@ -294,7 +311,12 @@ def test_approval_summary_monitor_readonly_200(client):
 
 
 def test_approval_summary_canonical_fields(client):
-    """Field kanonik tampil dari DB; verifier UNAVAILABLE → AND matrix."""
+    """Field kanonik tampil dari DB; verdict tercatat (FLAGGED) → AND matrix.
+
+    Sejak audit M1 (18 Okt 2026) verdict UNAVAILABLE tidak dicatat sebagai
+    verifikasi, jadi matriks dua-grup diuji dengan verdict yang benar-benar
+    tercatat — provider dikunci agar hasilnya deterministik.
+    """
     did = _mk_decision(_jakarta_id(), _jakarta_id())
     try:
         # Kanonik 8 Okt punya TIGA batch telur → Jakarta (Supplier A, Bogor-1, D Cianjur),
@@ -312,11 +334,13 @@ def test_approval_summary_canonical_fields(client):
         )
         assert baris, "batch kanonik Supplier A → Jakarta (telur) tidak ada"
         _ikat_batch(did, str(baris[0][1]), [str(baris[0][0])])
-        # Verifikasi server-side (test env tanpa provider → UNAVAILABLE).
+        # Verifikasi server-side dengan verdict terkunci (FLAGGED → dua grup).
+        _kunci_verdict("FLAGGED")
         rv = client.post(
             "/actions/verify", headers=_head_user(client), json={"decision_id": did}
         )
         assert rv.status_code == 200, rv.text
+        assert rv.json()["recorded"] is True
         resp = client.get(
             f"/decisions/{did}/approval-summary", headers=_head_user(client)
         )
@@ -326,7 +350,8 @@ def test_approval_summary_canonical_fields(client):
         assert body["decision_id"] == did
         assert body["decision_type"] == "regional_balance"
         assert body["iteration"] >= 1
-        assert body["status"] == "pending_approval"
+        # FLAGGED mengunci status ke `verifier_flagged` (tetap boleh di-approve).
+        assert body["status"] in {"pending_approval", "verifier_flagged"}
         # Konteks material.
         assert body["source_location"] == "Jakarta"
         assert body["target_location"] == "Jakarta"
@@ -362,6 +387,7 @@ def test_approval_summary_canonical_fields(client):
         assert body["expiry"]["valid"] is True
         assert body["expiry"]["seconds_remaining"] > 0
     finally:
+        app.dependency_overrides.pop(get_verifier_chain, None)
         _cleanup_decision(did)
 
 
@@ -395,7 +421,8 @@ def test_approval_summary_or_complete_then_execute_parity(client, binding):
             "/actions/verify", headers=_head_user(client), json={"decision_id": did}
         )
         _db_exec(
-            "UPDATE decisions SET verifier_note='consistent' WHERE id=:d",
+            "UPDATE decisions SET verifier_note='consistent', verified_by="
+            "(SELECT id FROM users WHERE role='sppg_head' LIMIT 1) WHERE id=:d",
             {"d": did},
         )
         # Approval Head saja TIDAK cukup: transfer operasional butuh dua role
@@ -519,7 +546,8 @@ def test_approval_summary_expired_blocks(client):
     did = _mk_decision(_jakarta_id(), _jakarta_id(), expires_minutes=-10)
     try:
         _db_exec(
-            "UPDATE decisions SET verifier_note='consistent' WHERE id=:d",
+            "UPDATE decisions SET verifier_note='consistent', verified_by="
+            "(SELECT id FROM users WHERE role='sppg_head' LIMIT 1) WHERE id=:d",
             {"d": did},
         )
         users = _db_all(
@@ -554,7 +582,8 @@ def test_approval_summary_safety_revalidation_block(client):
     did = _mk_decision(loc_id, _jakarta_id())
     try:
         _db_exec(
-            "UPDATE decisions SET verifier_note='consistent' WHERE id=:d",
+            "UPDATE decisions SET verifier_note='consistent', verified_by="
+            "(SELECT id FROM users WHERE role='sppg_head' LIMIT 1) WHERE id=:d",
             {"d": did},
         )
         users = _db_all(
@@ -796,7 +825,7 @@ def test_approval_summary_expired_ordinary_type_matches_approve_endpoint(client)
     did = _mk_decision(_jakarta_id(), _jakarta_id(), expires_minutes=-10)
     try:
         _db_exec(
-            "UPDATE decisions SET verified_by="
+            "UPDATE decisions SET verifier_note='consistent', verified_by="
             "(SELECT id FROM users WHERE role='sppg_head' LIMIT 1) "
             "WHERE id=:d",
             {"d": did},
@@ -854,7 +883,7 @@ def test_summary_approved_by_me_hanya_untuk_user_yang_sudah_menyetujui(client):
         nut = _nut_user(client)
         # Fase 0 butir 2: approve mensyaratkan verifikasi tercatat.
         _db_exec(
-            "UPDATE decisions SET verified_by="
+            "UPDATE decisions SET verifier_note='consistent', verified_by="
             "(SELECT id FROM users WHERE role='sppg_head' LIMIT 1) "
             "WHERE id=:d",
             {"d": did},

@@ -255,7 +255,10 @@ async def build_approval_summary(
         execution_target = "LOCAL"
 
     # Readiness aksi (kesimpulan server, bukan UI).
-    unverified = not decision.verified_by
+    verified_note = (decision.verifier_note or "").lower()
+    # Audit M1 (18 Okt 2026): "terverifikasi" = ada verdict hasil audit, bukan
+    # sekadar baris verify. `verified_by` dulu ditulis walau UNAVAILABLE.
+    unverified = not (decision.verified_by and verified_note in {"consistent", "flagged"})
     # Ruling Owner 2026-10-16 (keputusan 1b + 3b): gerbang approve/reject.
     #
     # SATU endpoint (`approve_action`) menangani "setuju" DAN "tolak" — bedanya
@@ -288,7 +291,11 @@ async def build_approval_summary(
     if not valid:
         blocking.append("decision expired")
     if unverified:
-        blocking.append("decision belum terverifikasi")
+        blocking.append(
+            "decision belum terverifikasi"
+            if not decision.verified_by
+            else "verdict verifier tidak tersedia — bukan hasil audit"
+        )
     if decision.status == "rejected":
         blocking.append("decision ditolak")
     if decision.status == "executed":

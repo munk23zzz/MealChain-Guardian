@@ -98,7 +98,168 @@ def _requirement_for(row: Decision) -> dict:
 
 
 def _verifier_unverified(row: Decision) -> bool:
-    return not row.verified_by
+    """Belum ADA verdict hasil audit (audit M1, 18 Okt 2026).
+
+    Dulu cukup `verified_by` — padahal endpoint verify menulisnya bahkan ketika
+    provider menjawab UNAVAILABLE. Sekarang verdict harus CONSISTENT/FLAGGED;
+    "unavailable" berarti belum dinilai, bukan lulus.
+    """
+    return not (
+        row.verified_by
+        and (row.verifier_note or "").lower() in {"consistent", "flagged"}
+    )
+
+
+async def _verifier_ctx(
+    db: AsyncSession, decision: Decision, commodity: Commodity | None
+) -> dict:
+    """Susun ctx verifier DARI data kanonik (audit M1).
+
+    Sebelum ini safety/freshness/kandidat/logistik dikirim `null`, sehingga
+    model hanya bisa menjawab UNAVAILABLE — dan verdict itu tetap dicatat
+    sebagai "terverifikasi". Sekarang:
+    - safety & freshness: batch terbaru di lokasi sumber untuk komoditas yang
+      sama; trace DETECT (bila ada) menang karena ia peristiwa pemicunya;
+    - kandidat: hasil OPTIMIZE trace (eligible_count + recommended_candidate),
+      jatuh ke `candidate_score` snapshot bila trace tidak ada;
+    - logistik: komponen jarak/transport dari cost breakdown keputusan.
+    """
+    safety_status = None
+    freshness_score = None
+    if decision.source_location_id and decision.commodity_id:
+        batch = (
+            await db.execute(
+                text(
+                    "SELECT safety_status, freshness_score FROM batches "
+                    "WHERE location_id = :src AND commodity_id = :com "
+                    "ORDER BY created_at DESC LIMIT 1"
+                ),
+                {"src": decision.source_location_id, "com": decision.commodity_id},
+            )
+        ).mappings().first()
+        if batch:
+            safety_status = batch["safety_status"]
+            freshness_score = (
+                float(batch["freshness_score"])
+                if batch["freshness_score"] is not None
+                else None
+            )
+
+    traces = (
+        await db.execute(
+            text(
+                "SELECT step_name, output_summary FROM agent_traces "
+                "WHERE decision_id = :d ORDER BY step_at"
+            ),
+            {"d": decision.id},
+        )
+    ).mappings().all()
+    detect = next((t for t in traces if t["step_name"] == "DETECT"), None)
+    if detect and isinstance(detect["output_summary"], dict):
+        safety_status = detect["output_summary"].get("safety_status") or safety_status
+
+    opt = next((t for t in traces if t["step_name"] == "OPTIMIZE"), None)
+    opt_out = (opt["output_summary"] if opt else None) or {}
+    candidates: list[dict] = []
+    if detect and isinstance(detect["output_summary"], dict):
+        daftar = detect["output_summary"].get("candidates")
+        if isinstance(daftar, list) and daftar:
+            candidates = daftar
+    if not candidates and isinstance(opt_out, dict) and opt_out.get("chosen_candidate_id"):
+        candidates = [
+            {
+                "candidate_id": opt_out.get("chosen_candidate_id"),
+                "score": opt_out.get("score"),
+                "rank": opt_out.get("rank"),
+                "source_location": None,
+                "destination_location": None,
+                "commodity": commodity.name if commodity else None,
+            }
+        ]
+
+    breakdown = decision.cost_breakdown if isinstance(decision.cost_breakdown, dict) else {}
+    if not candidates and breakdown.get("candidate_score") is not None:
+        source_name = None
+        if decision.source_location_id:
+            source_name = (
+                await db.execute(
+                    text("SELECT name FROM locations WHERE id = :l"),
+                    {"l": decision.source_location_id},
+                )
+            ).scalar_one_or_none()
+        candidates = [
+            {
+                "source_location": source_name,
+                "score": str(breakdown.get("candidate_score")),
+                "commodity": commodity.name if commodity else None,
+            }
+        ]
+
+    logistics = None
+    if breakdown.get("supplier_leg_km") or breakdown.get("transport_supplier_leg"):
+        logistics = {
+            "supplier_leg_km": breakdown.get("supplier_leg_km"),
+            "transport_supplier_leg": breakdown.get("transport_supplier_leg"),
+            "reference": breakdown.get("supplier_leg_reference"),
+        }
+    if logistics is None and decision.source_location_id and decision.target_location_id:
+        # Fallback jujur: rute cache OSRM untuk pasangan lokasi ini (bila ada).
+        # Tanpa rute, `logistics` tetap None — jangan mengarang jarak.
+        from app.core.road_route import route_key
+
+        koord = (
+            await db.execute(
+                text(
+                    "SELECT id, latitude, longitude FROM locations "
+                    "WHERE id IN (:src, :tgt)"
+                ),
+                {"src": decision.source_location_id, "tgt": decision.target_location_id},
+            )
+        ).mappings().all()
+        peta = {str(r["id"]): r for r in koord}
+        asal = peta.get(str(decision.source_location_id))
+        tujuan = peta.get(str(decision.target_location_id))
+        if asal and tujuan:
+            key = route_key(
+                float(asal["latitude"]),
+                float(asal["longitude"]),
+                float(tujuan["latitude"]),
+                float(tujuan["longitude"]),
+            )
+            rute = (
+                await db.execute(
+                    text(
+                        "SELECT distance_m, duration_s, source FROM road_routes "
+                        "WHERE route_key = :k"
+                    ),
+                    {"k": key},
+                )
+            ).mappings().first()
+            if rute:
+                logistics = {
+                    "distance_km": round(rute["distance_m"] / 1000, 1),
+                    "duration_minutes": round(rute["duration_s"] / 60),
+                    "reference": f"road_routes:{rute['source']}",
+                }
+
+    sdc = str(decision.safe_delivered_cost) if decision.safe_delivered_cost is not None else None
+    return {
+        "decision_id": str(decision.id),
+        "commodity": commodity.name if commodity else None,
+        "quantity_kg": (
+            float(decision.quantity_kg) if decision.quantity_kg is not None else None
+        ),
+        "safety_status": safety_status,
+        "freshness_score": freshness_score,
+        "candidates": candidates,
+        "eligible_count": opt_out.get("eligible_count") if isinstance(opt_out, dict) else None,
+        "evidence": {"safe_delivered_cost": sdc, "cost_breakdown": breakdown},
+        "logistics": logistics,
+        "cost": {"safe_delivered_cost": sdc, "breakdown": breakdown},
+        "rationale": (
+            f"Audit independen decision {decision.decision_type} " f"iterasi {decision.iteration}"
+        ),
+    }
 
 
 async def _source_batches_still_safe(db: AsyncSession, decision: Decision) -> bool:
@@ -173,33 +334,6 @@ async def propose_action(
     }
 
 
-def _event_verifier_ctx(decision: Decision, commodity: Commodity | None) -> dict:
-    """Susun ctx verifier kanonik DARI DB — sumber kebenaran server-side.
-
-    Browser tidak menyuplai angka; dimensi audit diambil dari snapshot
-    decision + commodity. Tanpa provider aktif, `run_verifier`
-    mengembalikan UNAVAILABLE (konservatif).
-    """
-    sdc = str(decision.safe_delivered_cost) if decision.safe_delivered_cost is not None else None
-    return {
-        "decision_id": str(decision.id),
-        "commodity": commodity.name if commodity else None,
-        "quantity_kg": (float(decision.quantity_kg) if decision.quantity_kg is not None else None),
-        "safety_status": None,
-        "freshness_score": None,
-        "candidates": [],
-        "evidence": {
-            "safe_delivered_cost": sdc,
-            "cost_breakdown": decision.cost_breakdown,
-        },
-        "logistics": None,
-        "cost": {"safe_delivered_cost": sdc, "breakdown": decision.cost_breakdown},
-        "rationale": (
-            f"Audit independen decision {decision.decision_type} " f"iterasi {decision.iteration}"
-        ),
-    }
-
-
 def get_verifier_chain() -> list[tuple[str, Callable, str]]:
     """Dependency chain verifier — overridable oleh test.
 
@@ -259,7 +393,7 @@ async def verify_action(
     commodity = (
         await db.execute(select(Commodity).where(Commodity.id == decision.commodity_id))
     ).scalar_one_or_none()
-    ctx = _event_verifier_ctx(decision, commodity)
+    ctx = await _verifier_ctx(db, decision, commodity)
     if decision.decision_type in exclusions.ADMIN_TYPES:
         from app.models import DecisionEvidence
 
@@ -275,7 +409,12 @@ async def verify_action(
         ctx["evidence"] = {"administrative_evidence": [e.payload for e in evidence]}
     result = run_verifier(ctx, default_chain=chain)
     verdict = result.verdict  # CONSISTENT | FLAGGED | UNAVAILABLE (server)
-    decision.verified_by = "verifier_agent"
+    # Audit M1 (18 Okt 2026): `verified_by` hanya ditulis bila ADA hasil audit.
+    # Dulu baris ini tanpa syarat, sehingga UNAVAILABLE pun tercatat sebagai
+    # "terverifikasi" — dan pagar approve ikut terbuka.
+    recorded = verdict in {"CONSISTENT", "FLAGGED"}
+    if recorded:
+        decision.verified_by = "verifier_agent"
     decision.verifier_note = verdict.lower()
     if verdict == "FLAGGED":
         decision.status = "verifier_flagged"
@@ -284,6 +423,7 @@ async def verify_action(
     return {
         "decision_id": str(decision.id),
         "verdict": verdict,
+        "recorded": recorded,
         "reason": result.reason,
         "verifier_note": verdict.lower(),
         "provider": result.provider,

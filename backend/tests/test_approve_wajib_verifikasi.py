@@ -16,6 +16,7 @@ Aturan sekarang:
 4. Setelah verifikasi dicatat, approve kembali normal (200).
 """
 
+import json
 import uuid
 
 import bcrypt
@@ -23,6 +24,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
+from app.api.actions import get_verifier_chain
 from app.main import app
 
 DB_URL = (
@@ -75,6 +77,22 @@ def _drop(email: str) -> None:
             conn.execute(text("DELETE FROM users WHERE email = :e"), {"e": email})
     finally:
         engine.dispose()
+
+
+def _force_verdict(verdict: str):
+    """Kunci verdict provider: tes ukur pagar server, bukan ketersediaan LLM."""
+
+    def _chain():
+        return [
+            (
+                "test_provider",
+                lambda prompt: json.dumps({"verdict": verdict, "reason": "uji verdict"}),
+                "test",
+            )
+        ]
+
+    app.dependency_overrides[get_verifier_chain] = _chain
+    return lambda: app.dependency_overrides.pop(get_verifier_chain, None)
 
 
 def _login(client: TestClient, user: dict) -> dict:
@@ -184,11 +202,13 @@ def test_ringkasan_menyembunyikan_setuju_sebelum_verifikasi(client):
 def test_setelah_verifikasi_approve_lolos(client):
     kepala = _mk_user("sppg_head")
     did = None
+    restore = _force_verdict("CONSISTENT")
     try:
         did = _siapkan(client, kepala)
         headers = _login(client, kepala)
         resp = client.post("/actions/verify", json={"decision_id": did}, headers=headers)
         assert resp.status_code == 200, resp.text
+        assert resp.json()["recorded"] is True
         resp = client.post(
             "/actions/approve",
             json={"decision_id": did, "approved": True},
@@ -197,6 +217,7 @@ def test_setelah_verifikasi_approve_lolos(client):
         assert resp.status_code == 200, resp.text
         assert _jumlah_approval(did) == 1
     finally:
+        restore()
         _cleanup(did)
         _drop(kepala["email"])
 

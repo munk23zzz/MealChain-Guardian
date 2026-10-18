@@ -106,7 +106,7 @@ describe("ApprovalMenu (isi popup governance & persetujuan)", () => {
       },
     });
     expect(html).toContain("Setuju belum tersedia");
-    expect(html).toContain("Verifikasi belum tercatat");
+    expect(html).toContain("Verifikasi belum menghasilkan verdict");
     expect(html).not.toContain(">Setuju<");
     // Menolak tetap boleh — penolakan menghentikan laju, tidak butuh verdict.
     expect(html).toContain('data-action="reject"');

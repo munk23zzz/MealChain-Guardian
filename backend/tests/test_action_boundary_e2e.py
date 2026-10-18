@@ -233,14 +233,19 @@ def test_e2e_event1_to_mock_sap_dua_approval_untuk_transfer(client):
         _cleanup(decision_id, [head["email"], nutritionist["email"]])
 
 
-def test_e2e_unavailable_requires_both_approvers(client):
-    """UNAVAILABLE: dua approval (head DAN nutritionist) wajib."""
+def test_e2e_flagged_requires_both_approvers(client):
+    """FLAGGED (verdict hasil audit): dua approval (head DAN nutritionist) wajib.
+
+    Sejak audit M1 (18 Okt 2026) UNAVAILABLE tidak dicatat sebagai verifikasi,
+    jadi approve akan 409 lebih dulu — yang bisa mengukur pagar dua-approver
+    adalah verdict yang benar-benar tercatat.
+    """
     head = _mk_user("sppg_head", "Jakarta")
     # Ruling 2026-10-14 §3: approver kedua wajib satu SPPG dengan target
     # (dulu "Bogor" — lolos hanya karena jalur tulis belum ber-cakupan).
     nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
     decision_id = _event1_decision_id()
-    restore = _force_server_verdict("UNAVAILABLE")
+    restore = _force_server_verdict("FLAGGED")
     try:
         client.post(
             "/actions/propose",
