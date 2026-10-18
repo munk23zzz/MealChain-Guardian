@@ -94,8 +94,28 @@ describe("kontrak CSS kontrol peta (7b-1)", () => {
     expect(gabungan).toMatch(/\.maplibregl-ctrl-group button[^{}]*\{[^}]*min-width:\s*44px/);
   });
 
-  it("bilah skala peta punya gaya sendiri (dibaca di atas peta terang)", () => {
-    expect(blok("\\.map-shell \\.maplibregl-ctrl-scale")).toMatch(/background:/);
+  it("bilah skala dihapus: kiri-bawah milik pil sakelar lapisan", () => {
+    // Keputusan pemilik 19 Okt 2026 ("info km di kiri-bawah hapus saja").
+    expect(css).not.toMatch(/\.maplibregl-ctrl-scale\s*\{/);
+  });
+
+  it("pil sakelar pindah ke KIRI-BAWAH dan piring putihnya dihapus", () => {
+    const pil = blok("\\.map-overlay-toggles");
+    expect(pil).toMatch(/bottom:\s*8px/);
+    expect(pil).toMatch(/left:\s*8px/);
+    expect(pil).toMatch(/background:\s*transparent/);
+    // Tanpa piring: tidak ada latar permukaan, bingkai, atau bayangan.
+    expect(pil).not.toMatch(/background:\s*var\(--surface\)/);
+    expect(pil).not.toMatch(/box-shadow/);
+    expect(pil).toMatch(/border:\s*0/);
+  });
+
+  it("tombol pil transparan di atas peta, plat putih hanya saat hover", () => {
+    const tombol = blok("\\.map-layer-toggle");
+    expect(tombol).toMatch(/background:\s*transparent/);
+    // Kontras ikon dijaga halo putih tipis, bukan kotak latar.
+    expect(tombol).toMatch(/filter:\s*drop-shadow/);
+    expect(css).toMatch(/\.map-layer-toggle:hover\s*\{[^}]*background:\s*rgba\(255,\s*255,\s*255/);
   });
 
   it("layar pesan gestur dipergelap: bawaan MapLibre terlalu tipis di atas peta terang", () => {

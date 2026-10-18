@@ -1134,7 +1134,11 @@ export default function SupplyMap({
     // dengan bawaan MapLibre dan acuan industri. Sebelumnya ia ditaruh
     // kanan-bawah karena sudut kiri-bawah dipakai panggung legenda; sejak
     // langkah 7b-2 legenda pindah ke bawah kanvas, jadi sudut itu bebas lagi.
-    map.addControl(new maplibregl.ScaleControl({ maxWidth: 88, unit: "metric" }), "bottom-left");
+    // Bilah skala ("50 km") DIHAPUS atas permintaan pemilik 19 Okt 2026: ia
+    // duduk di kiri-bawah, tempat yang sekarang dipakai pil sakelar lapisan,
+    // dan skalanya jarang dibaca saat memeriksa pin/jalur. Konsekuensi yang
+    // disengaja: jarak tidak lagi bisa diukur langsung dari peta — angka km
+    // tetap ada di popup jalur dan kartu kiriman.
     // Tombol "Tampilkan semua" (riset §5 C4): literatur interaksi peta menyebut
     // tombol kembali ke tampilan awal sebagai kebutuhan dasar — tanpa itu,
     // pengguna yang sudah menggeser/zoom harus menebak cara pulang.

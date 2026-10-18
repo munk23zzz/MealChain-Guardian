@@ -129,3 +129,18 @@
   "Rincian lapisan peta". Satu fakta, satu tempat: legenda (tanpa klik) → tag jumlah → panel rincian.
 - **Pelajaran:** klaim dokumen "kontrol skala & tombol reset belum ada" ternyata BASI — keduanya
   sudah ditambahkan di 7b-1. Periksa kode sebelum mengutip daftar celah dari dokumen desain.
+
+## 19 Okt 2026 — skala peta dihapus, pil sakelar turun & transparan
+
+- **Keputusan pemilik: bilah skala ("50 km") dihapus.** Kiri-bawah dipakai pil sakelar lapisan.
+  Konsekuensi diterima: jarak tidak bisa diukur langsung dari peta; km tetap ada di popup jalur,
+  kartu kiriman, dan panel rincian (sumber sama: OSRM).
+- **Keputusan pemilik: pil di kiri-bawah, tanpa piring putih.** Tombol transparan di atas peta;
+  plat putih hanya muncul saat hover/fokus supaya area klik tetap terlihat.
+- **Konsekuensi desain: keadaan nyala tidak lagi berupa kotak aksen terisi.** Nyala = ikon hijau tua
+  + garis miring hilang; mati = ikon tinta + garis miring. Dua penanda (bentuk + warna) supaya
+  tidak bergantung warna saja, dan ikon 16 px tanpa latar butuh ≥4,5:1 — karena itu `#15803d`,
+  bukan `--map-accent` #22c55e.
+- **Catatan teknis:** tema konsol peta (`app/map-console.css`, sesi paralel) mengecat tombol dengan
+  kaca gelap; aturan transparan di `globals.css` dinaikkan spesifisitasnya
+  (`.map-card .map-overlay-toggles .map-layer-toggle`) alih-alih memakai `!important`.

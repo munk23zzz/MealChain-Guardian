@@ -1269,9 +1269,10 @@ Acuan yang dipilih (detail, kutipan verbatim, dan celah lengkap: `docs/research/
 Keadaan terukur SETELAH 7b-1/7b-2/7b-3 (19 Okt 2026): kartu peta 752×528 px @1440 /
 331×502 px @375; kontrol MapLibre 29×29 px di desktop dan **44×44 px** di `(pointer: coarse)`;
 sakelar lapisan **32×32 px** di desktop dan **44×44 px** di layar sentuh; tombol "Rincian lapisan
-peta" 44 px di layar sentuh. Kontrol skala (`ScaleControl`, metrik) dan tombol "Tampilkan semua"
-(reset ke batas awal) **sudah ada** — keduanya ditambahkan di 7b-1, jadi butir 1 pada daftar riset
-di atas tidak lagi menjadi celah. Legenda terbaca tanpa klik (baris di bawah kanvas) dan "Info map"
+peta" 44 px di layar sentuh. Tombol "Tampilkan semua" (reset ke batas awal) ada sejak 7b-1. Bilah
+skala sempat ada (7b-1) lalu **dihapus 19 Okt 2026** atas permintaan pemilik — kiri-bawah dipakai pil
+sakelar lapisan (§14.4). Jadi butir 1 pada daftar riset di atas kini terpenuhi SEBAGIAN: reset ada,
+skala tidak — keputusan pemilik, bukan kelalaian. Legenda terbaca tanpa klik (baris di bawah kanvas) dan "Info map"
 sudah tidak ada sebagai panel terpisah (lihat §14).
 
 Urutan kerja: **7b-1 SELESAI 17 Okt** → **7b-2 SELESAI 17 Okt** (legenda terlihat tanpa klik, satu zona
@@ -1699,3 +1700,39 @@ Hasilnya tiga permukaan informasi, masing-masing dengan satu tugas:
   jalur dimatikan, dan legenda tetap terbaca tanpa klik.
 - `tests/supply-map-suppliers.test.tsx`, `tests/supply-map.test.tsx` — jumlah pindah ke `aria-label`;
   legenda status kini "Legenda: … Shortage" (judul "Status lokasi:" ikut hilang bersama kotaknya).
+
+### 14.4 Revisi pemilik, 19 Okt 2026 (lanjutan): skala dihapus, pil turun ke kiri-bawah, transparan
+
+Permintaan: *"info km di bawah kiri hapus saja dan untuk pil sakelar taruh di bawah kiri dan
+hapus background putih di belakang jadikan transparant."*
+
+| Sebelum | Sesudah |
+|---|---|
+| Bilah skala `50 km` di kiri-bawah (`ScaleControl`, 7b-1) | **Dihapus** — kontrol tidak lagi dipasang |
+| Pil sakelar di kiri-atas, piring putih (latar `--surface`, border, bayangan) | **Kiri-bawah**, latar **transparan**, tanpa border, tanpa bayangan |
+| Tombol berlatar putih 96% | Tombol transparan; plat putih **hanya saat hover/fokus** (area klik) |
+| Nyala = kotak aksen terisi | Nyala = **ikon hijau tua + garis miring hilang**, tetap tanpa latar |
+
+Konsekuensi yang disengaja (ditulis supaya tidak jadi temuan):
+
+- **Jarak tidak lagi bisa diukur langsung dari peta.** Angka km tetap ada di popup jalur, kartu
+  kiriman, dan panel rincian — sumbernya sama (OSRM). Ini keputusan pemilik, bukan kehilangan data.
+- **Keadaan nyala/mati kini dibawa BENTUK + warna, bukan latar.** Mati: ikon tinta gelap
+  (`--ink`) + garis miring; nyala: ikon hijau tua `#15803d` (4,6:1 di atas peta terang) + tanpa
+  garis miring. Hijau `--map-accent` (#22c55e, ±2,2:1) sengaja **tidak** dipakai untuk ikon tanpa
+  latar karena terlalu pucat.
+- **Tema konsol peta gelap (`app/map-console.css`) mengecat tombol dengan kaca gelap.** Aturan
+  transparan di `globals.css` karena itu dinaikkan spesifisitasnya
+  (`.map-card .map-overlay-toggles .map-layer-toggle`) supaya menang tanpa `!important`; warna ikon
+  tetap tinta gelap karena **ubin peta tetap terang** walau kerangka konsol gelap.
+- Halo putih 1,5 px (`drop-shadow`) menjaga kontras saat ikon jatuh di atas jalan, hutan, atau pin
+  berwarna.
+
+Terukur di aplikasi hidup: pil di `left 8 px / bottom 8 px`, lebar 70 px untuk dua tombol 32×32,
+`background rgba(0,0,0,0)`, tanpa border & bayangan, `ScaleControl` **tidak ada** di daftar kontrol;
+tombol mati `rgb(15,23,42)` + garis miring, tombol nyala `rgb(21,128,61)`.
+Artefak: `ui-audit/p19-pil-transparan.png`, `p19-pil-dua-nyala.png`.
+
+Tes yang ikut berubah: `tests/supply-map-layer.test.tsx` (skala **tidak** dipasang; kiri-bawah kosong
+dari kontrol) dan `tests/map-controls-css.test.ts` (pil kiri-bawah + latar transparan + tanpa
+bayangan; tombol transparan + plat putih hanya saat hover; aturan skala harus tetap hilang).

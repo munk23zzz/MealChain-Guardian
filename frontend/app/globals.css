@@ -2303,27 +2303,26 @@ a:focus-visible {
    Kanvas tetap hanya punya SATU elemen mengapung (celah C5), dan semua
    keterangan panjang tidak menutupi pin. */
 .map-overlay-toggles {
+  /* 19 Okt 2026 (permintaan pemilik): pil pindah ke KIRI-BAWAH dan piring
+     putihnya dihapus. Kiri-bawah dulu dipakai bilah skala — bilah itu kini
+     dihapus, jadi tidak ada yang bertabrakan; sudut ini juga laut/open water
+     di tampilan Indonesia, sehingga ikon tidak menutupi pin SPPG.
+     Tanpa latar: ikon duduk langsung di atas peta. Keterbacaan dijaga halo
+     putih tipis pada ikon + plat putih MUNCUL saat hover/fokus, jadi area klik
+     tetap terlihat saat dibutuhkan tanpa menutupi peta sepanjang waktu. */
   position: absolute;
-  top: 8px;
+  bottom: 8px;
   left: 8px;
+  top: auto;
   z-index: 4;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14);
-  max-width: calc(100% - 16px);
-}
-/* Di dalam pil, tombol tidak perlu bingkai sendiri: batas kontrol yang terlihat
-   adalah pil-nya (>= 3:1 terhadap peta). */
-.map-overlay-toggles .map-layer-toggle {
+  gap: 6px;
+  padding: 0;
   border: 0;
   background: transparent;
-  border-radius: 5px;
+  max-width: calc(100% - 16px);
 }
 .map-layer-toggle {
   /* Ikon saja (19 Okt 2026): 32 px persegi di desktop — cukup besar untuk
@@ -2338,10 +2337,14 @@ a:focus-visible {
   height: 32px;
   padding: 0;
   position: relative;
-  border: 1px solid var(--line-input);
+  border: 1px solid transparent;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.96);
+  /* Transparan di atas peta (permintaan pemilik). Ikon tetap terbaca karena
+     warnanya `--ink` di atas ubin terang; halo putih tipis menjaga kontras
+     saat ikon jatuh di atas garis jalan atau pin berwarna. */
+  background: transparent;
   color: var(--ink);
+  filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.95));
   cursor: pointer;
   /* Umpan balik halus: warna + dorongan tekan. Aturan global `button:active`
      yang mempersingkat durasi ke --dur-1 saat tombol ditekan. */
@@ -2350,12 +2353,55 @@ a:focus-visible {
     border-color var(--dur-2) var(--ease-standard),
     transform var(--dur-2) var(--ease-standard);
 }
-.map-layer-toggle:hover { background: var(--surface-sunken); }
+.map-layer-toggle:hover {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: var(--line-input);
+}
+/* Keadaan tertekan juga butuh latar putih yang sama supaya garis miring pada
+   ikon tidak tenggelam di peta; ini bukan piring tetap, hanya saat hover. */
+.map-layer-toggle:active { background: rgba(255, 255, 255, 0.92); }
 .map-layer-toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .map-layer-toggle[aria-pressed="true"] {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
   color: var(--surface);
+  filter: none;
+}
+
+/* Pil sakelar TETAP transparan walau tema konsol peta (map-console.css) mengecat
+   tombol dengan kaca gelap. Spesifisitas sengaja dinaikkan (`.map-card` + pil +
+   tombol) supaya aturan ini menang tanpa `!important`.
+   Warna ikon = tinta gelap, bukan `--map-text` (putih): ubin peta tetap TERANG
+   walau kerangka konsol gelap, jadi ikon putih akan hilang di atas peta. Halo
+   putih tipis menjaga kontras saat ikon jatuh di atas jalan/pin berwarna. */
+.map-card .map-overlay-toggles .map-layer-toggle {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+  filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.95));
+}
+.map-card .map-overlay-toggles .map-layer-toggle:hover,
+.map-card .map-overlay-toggles .map-layer-toggle:focus-visible {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: var(--line-input);
+  color: var(--ink);
+}
+/* Nyala: tetap terisi aksen tema (hijau konsol) — keadaan dibawa bentuk+isi,
+   bukan piring putih. */
+/* Nyala: TETAP transparan — tidak ada piring sama sekali, termasuk saat aktif.
+   Keadaan dibaca dari DUA hal, bukan warna saja: ikon kehilangan garis miring
+   (bentuk) DAN berubah warna menjadi hijau tua (4,6:1 di atas peta terang).
+   Hijau tua dipilih, bukan `--map-accent` (#22c55e ≈ 2,2:1) yang terlalu pucat
+   untuk ikon 16 px tanpa latar. */
+.map-card .map-overlay-toggles .map-layer-toggle[aria-pressed="true"] {
+  background: transparent;
+  border-color: transparent;
+  color: var(--map-accent-ink, #15803d);
+  filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.95));
+  box-shadow: none;
 }
 .map-layer-toggle-icon {
   position: relative;
@@ -2887,15 +2933,10 @@ a:focus-visible {
   text-align: center;
 }
 
-.map-shell .maplibregl-ctrl-scale {
-  border: 1px solid var(--line);
-  border-top: 0;
-  border-radius: 0 0 4px 4px;
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--ink);
-  font-size: var(--fs-1);
-  padding: 0 4px;
-}
+/* Bilah skala ("50 km") dihapus 19 Okt 2026 atas permintaan pemilik: kiri-bawah
+   sekarang dipakai pil sakelar lapisan. Gaya bilah skala sengaja tidak
+   disisakan — kalau kontrolnya kembali, gayanya harus ditulis ulang agar tidak
+   muncul sebagai kotak putih bawaan yang tidak terbaca di peta terang. */
 /* Isi popup masuk dengan gerak kecil. Animasi dipasang pada ISI popup
    (`.map-popup`), bukan `.maplibregl-popup`: MapLibre memakai `transform` elemen
    itu untuk memposisikan popup — menimpanya akan membuat popup mendarat di

@@ -1005,13 +1005,15 @@ describe("SupplyMap — kontrol peta (langkah 7b-1: skala + tombol Tampilkan sem
     return button as HTMLButtonElement;
   }
 
-  it("menambah kontrol skala jarak di kiri-bawah (kontrol yang tadinya tidak ada)", () => {
+  it("bilah skala TIDAK dipasang — kiri-bawah dipakai pil sakelar lapisan", () => {
     mountWithRoutes();
-    // Langkah 7b-1 menaruhnya di kanan-bawah karena sudut kiri-bawah dipakai
-    // panggung legenda; langkah 7b-2 memindahkan legenda ke bawah kanvas, jadi
-    // skala kembali ke posisi bawaan MapLibre & acuan industri (kiri-bawah).
-    const kiriBawah = map().controls.filter((c) => c.position === "bottom-left");
-    expect(kiriBawah.some((c) => c.control?.constructor?.name === "ScaleControl")).toBe(true);
+    // Keputusan pemilik 19 Okt 2026: "info km di kiri-bawah hapus saja".
+    // Konsekuensi yang disengaja: jarak tidak bisa diukur langsung dari peta;
+    // angka km tetap di popup jalur dan kartu kiriman.
+    const semua = map().controls.map((c) => c.control?.constructor?.name);
+    expect(semua).not.toContain("ScaleControl");
+    // Kiri-bawah tidak lagi ditempati kontrol apa pun — sudut itu milik pil.
+    expect(map().controls.filter((c) => c.position === "bottom-left")).toHaveLength(0);
   });
 
   it('tombol "Tampilkan semua" adalah <button> asli dengan nama aksesibilitas', () => {
