@@ -89,3 +89,8 @@ sap-joule/keybroker-credentials.txt
 sap-joule/*.env
 sap-joule/**/.venv/
 sap-joule/**/.pytest_cache/
+
+# Sertifikat & kunci TLS (mis. Tailscale untuk akses demo) — JANGAN di-commit
+*.key
+*.crt
+*.pem
