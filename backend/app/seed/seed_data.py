@@ -672,6 +672,38 @@ DEMO_USERS = [
         "location": None,
         "password": "Demo#BGN2026",
     },
+    # Keputusan produk 3A (18 Okt 2026): setiap kota yang menyimpan riwayat demo
+    # punya approver SENDIRI. Tanpa ini, keputusan bertarget Bandung/Surabaya
+    # mustahil di-approve (scope menolak 403) dan riwayat `executed`-nya hanya
+    # bisa dibuat dengan approval dari SPPG lain — bukti yang tidak sah.
+    {
+        "email": "sppg.head.bandung@demo.local",
+        "name": "SPPG Head Bandung Demo",
+        "role": "sppg_head",
+        "location": "Bandung",
+        "password": "Demo#SPPG2026",
+    },
+    {
+        "email": "sppg.nutritionist.bandung@demo.local",
+        "name": "SPPG Nutritionist Bandung Demo",
+        "role": "sppg_nutritionist",
+        "location": "Bandung",
+        "password": "Demo#Nut2026",
+    },
+    {
+        "email": "sppg.head.surabaya@demo.local",
+        "name": "SPPG Head Surabaya Demo",
+        "role": "sppg_head",
+        "location": "Surabaya",
+        "password": "Demo#SPPG2026",
+    },
+    {
+        "email": "sppg.nutritionist.surabaya@demo.local",
+        "name": "SPPG Nutritionist Surabaya Demo",
+        "role": "sppg_nutritionist",
+        "location": "Surabaya",
+        "password": "Demo#Nut2026",
+    },
 ]
 
 

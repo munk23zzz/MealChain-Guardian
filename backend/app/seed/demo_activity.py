@@ -158,21 +158,21 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
     }
     komoditas = {c.name: c.id for c in (await db.execute(select(Commodity))).scalars()}
     pemasok = list((await db.execute(select(Supplier).order_by(Supplier.name))).scalars())
-    kepala = (
-        await db.execute(
-            select(User).where(User.role == "sppg_head").order_by(User.email)
-        )
-    ).scalars().first()
-    #: Regional_balance operasional wajib DUA role (`dua_role_wajib`), jadi
-    #: penyemai harus punya keduanya. Tanpa akun ahli gizi, riwayat yang
-    #: dihasilkan akan tampil "approval belum memenuhi requirement" pada
-    #: keputusan yang statusnya sudah `executed` — lebih baik tidak menyemai.
-    nutrisi = (
-        await db.execute(
-            select(User).where(User.role == "sppg_nutritionist").order_by(User.email)
-        )
-    ).scalars().first()
-    if not lokasi or not komoditas or not pemasok or kepala is None or nutrisi is None:
+    #: Approval demo harus berasal dari approver KOTA ITU SENDIRI. Scope backend
+    #: menolak approve lintas SPPG (403), jadi menyemai approval dari Jakarta
+    #: untuk keputusan Bandung/Surabaya menghasilkan riwayat yang tidak mungkin
+    #: terjadi lewat alur — persis yang diperbaiki 18 Okt (keputusan produk 3A).
+    approver = {
+        (u.location_id, u.role): u
+        for u in (
+            await db.execute(
+                select(User).where(
+                    User.role.in_(("sppg_head", "sppg_nutritionist"))
+                )
+            )
+        ).scalars()
+    }
+    if not lokasi or not komoditas or not pemasok or not approver:
         return {
             "keputusan_demo": 0,
             "limbah_demo": 0,
@@ -188,7 +188,15 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
         return {"keputusan_demo": 0, "limbah_demo": 0, "dilewati": "komoditas kosong"}
 
     dibuat = 0
+    dilewati_kota: list[str] = []
     for i, (nama_kota, loc) in enumerate(sorted(lokasi.items())):
+        kepala_kota = approver.get((loc.id, "sppg_head"))
+        nutrisi_kota = approver.get((loc.id, "sppg_nutritionist"))
+        if kepala_kota is None or nutrisi_kota is None:
+            # Jangan menyemai riwayat yang tidak mungkin lahir dari alur: kota
+            # tanpa approver sendiri dilewati, bukan di-approve dari SPPG lain.
+            dilewati_kota.append(nama_kota)
+            continue
         nama_komoditas = urut_komoditas[i % len(urut_komoditas)]
         sup = pemasok[i % len(pemasok)]
         did = demo_decision_id(nama_kota, nama_komoditas)
@@ -314,33 +322,41 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
             bukti_binding.is_consistent = True
 
         acc_id = uuid.uuid5(did, "approval")
-        if await db.get(Approval, acc_id) is None:
+        acc = await db.get(Approval, acc_id)
+        if acc is None:
             db.add(
                 Approval(
                     id=acc_id,
                     decision_id=did,
-                    approved_by=kepala.id,
+                    approved_by=kepala_kota.id,
                     approved=True,
                     comment="Disetujui untuk demo lintas lokasi.",
                     approved_at=mulai + timedelta(minutes=12),
                 )
             )
+        else:
+            # Reparasi: baris lama (sebelum 18 Okt) memakai approver Jakarta.
+            # Seed bersifat idempoten, jadi ia harus menyembuhkan riwayatnya.
+            acc.approved_by = kepala_kota.id
 
         # Approval kedua: ahli gizi. `regional_balance` operasional wajib dua
         # role berbeda (`dua_role_wajib`), jadi satu approval saja membuat
         # riwayat "diekskusi" ini melanggar matriksnya sendiri.
         acc2_id = uuid.uuid5(did, "approval:nutrisi")
-        if await db.get(Approval, acc2_id) is None:
+        acc2 = await db.get(Approval, acc2_id)
+        if acc2 is None:
             db.add(
                 Approval(
                     id=acc2_id,
                     decision_id=did,
-                    approved_by=nutrisi.id,
+                    approved_by=nutrisi_kota.id,
                     approved=True,
                     comment="Disetujui ahli gizi untuk demo lintas lokasi.",
                     approved_at=mulai + timedelta(minutes=14),
                 )
             )
+        else:
+            acc2.approved_by = nutrisi_kota.id
 
         for step, menit in JALUR_KEPUTUSAN:
             trace_id = uuid.uuid5(did, f"trace:{step}")
@@ -395,5 +411,9 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
                 )
                 limbah += 1
     await db.flush()
-    return {"keputusan_demo": dibuat, "limbah_demo": limbah}
+    return {
+        "keputusan_demo": dibuat,
+        "limbah_demo": limbah,
+        "dilewati_kota": dilewati_kota,
+    }
 

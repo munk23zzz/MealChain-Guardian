@@ -19,11 +19,22 @@ describe("login polish", () => {
     expect(html).not.toContain("50 km");
   });
 
-  it("tiga akun demo tersedia untuk klik-isi cepat (label saja, email tak tampil — arah Roy 2026-10-10)", () => {
+  it("akun demo kota lain tersedia: Bandung & Surabaya (label saja)", () => {
+    // Keputusan produk 3A: approver per kota supaya alur approval bisa
+    // didemokan di luar Jakarta.
+    expect(html).toContain("Kepala Bandung");
+    expect(html).toContain("Gizi Bandung");
+    expect(html).toContain("Kepala Surabaya");
+    expect(html).toContain("Gizi Surabaya");
+    expect(html).toContain("Kota lain:");
+    // Email demo tidak dipajang di login (visual lebih bersih).
+    expect(html).not.toContain("demo.local");
+  });
+
+  it("tiga akun demo utama tetap ada untuk klik-isi cepat", () => {
     expect(html).toContain("SPPG Head");
     expect(html).toContain("Nutritionist");
     expect(html).toContain("BGN Monitor");
-    // Email demo tidak dipajang di login (visual lebih bersih).
     expect(html).not.toContain("demo.local");
   });
 

@@ -628,6 +628,26 @@ export default function Home() {
       { label: "Nutritionist", email: "sppg.nutritionist@demo.local", password: "Demo#Nut2026" },
       { label: "BGN Monitor", email: "bgn.monitor@demo.local", password: "Demo#BGN2026" },
     ];
+    // Keputusan produk 3A (18 Okt): Bandung & Surabaya punya approver sendiri,
+    // jadi alur approval bisa didemokan di kota yang bukan Jakarta.
+    const demoKota = [
+      { label: "Kepala Bandung", email: "sppg.head.bandung@demo.local", password: "Demo#SPPG2026" },
+      {
+        label: "Gizi Bandung",
+        email: "sppg.nutritionist.bandung@demo.local",
+        password: "Demo#Nut2026",
+      },
+      {
+        label: "Kepala Surabaya",
+        email: "sppg.head.surabaya@demo.local",
+        password: "Demo#SPPG2026",
+      },
+      {
+        label: "Gizi Surabaya",
+        email: "sppg.nutritionist.surabaya@demo.local",
+        password: "Demo#Nut2026",
+      },
+    ];
     return (
       <main className="login-shell">
         {/* Panel brand: dunia subject — rantai dingin SPPG, angka dari data demo asli */}
@@ -679,6 +699,27 @@ export default function Home() {
               <p className="demo-hint">Demo:</p>
               <p className="demo-links">
                 {demoAccounts.map((acc, i) => (
+                  <span key={acc.email}>
+                    {i > 0 && " · "}
+                    <button
+                      type="button"
+                      className="demo-link"
+                      onClick={() => {
+                        setEmail(acc.email);
+                        setPassword(acc.password);
+                        setLoginError(null);
+                      }}
+                    >
+                      {acc.label}
+                    </button>
+                  </span>
+                ))}
+              </p>
+              {/* Approver Kota lain — supaya alur dua approval bisa dicoba di
+                  Bandung/Surabaya, bukan hanya di Jakarta. */}
+              <p className="demo-hint demo-hint-kota">Kota lain:</p>
+              <p className="demo-links">
+                {demoKota.map((acc, i) => (
                   <span key={acc.email}>
                     {i > 0 && " · "}
                     <button

@@ -799,6 +799,11 @@ a:focus-visible {
   line-height: 2.2; /* ruang klik horizontal ≥44px tinggi */
 }
 
+/* Pemisah baris "Kota lain:" — approver Bandung & Surabaya (18 Okt). */
+.demo-hint-kota {
+  margin-top: 12px;
+}
+
 .demo-link {
   background: none;
   border: 0;
