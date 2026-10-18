@@ -180,3 +180,36 @@ menyebut jam pembaruan UI, sedangkan kartu KPI menyebut tanggal DATA.
 - `ruff check` bersih untuk 10 berkas backend yang disentuh. `ruff format --check`
   TIDAK dipakai sebagai gerbang di repo ini: `core.autocrlf=true` membuat semua
   berkas CRLF sehingga ruff selalu minta reformat.
+
+## Tiga tindak lanjut audit (dikerjakan 18 Okt 2026 malam)
+
+**1. Label peta: jam sinkron dipisah dari tanggal data.** Dulu peta menulis
+"terakhir diperbarui 20.20.22 WIB" dari jam fetch, sehingga terbaca sebagai waktu data.
+Sekarang dua hal itu tegas: `Sinkron HH.MM.SS WIB` (= `syncLabel()`, jam polling) dan
+`Data per 18 Okt 2026` (= `snapshotNote()`, dibaca dari `*_recorded_at`). Prop
+`updatedAtLabel` di TopBar ternyata tidak pernah dirender (kode mati) dan ikut dihapus.
+Bukti UI: pill "Sinkron 20.47.38 WIB" bersamaan dengan kartu "Data per 18 Okt 2026";
+teks "terakhir diperbarui" = 0 kemunculan.
+
+**2. Panel detail memakai snapshot peta (`as_of`), bukan jam sendiri.**
+`GET /balance/{lokasi}/{komoditas}` sudah menerima `as_of`; kini frontend mengirimkannya
+lewat `balancePath()` dari `as_of` respons `/balance/map`. Bukti: klik "Muat kondisi"
+di Demo Control memicu
+`/balance/Jakarta/telur?as_of=2026-10-18T13%3A48%3A38.431813%2B00%3A00`.
+Yang tetap berbeda waktu secara desain: keputusan (`/decisions`), batch (`/batches`),
+dan KPI 24 jam — domain lain dengan jamnya sendiri, bukan angka yang bisa dibandingkan
+langsung dengan peta.
+
+**3. Geometri rute jalan: `overview=full`, bukan `simplified`.**
+`simplified` hanya ~36 titik untuk rute 110 km sehingga sudut jalan terpotong di zoom
+tinggi. Cache `road_routes` disinkronkan ulang: 15 rute, rata-rata 4.166 titik
+(min 72 untuk rute 2,5 km, maks 14.901), total 3.258,9 km. API `/supplier-routes`
+menyajikan Cianjur→Jakarta 3.041–3.058 titik (sebelumnya 36). Cache hidup di DB,
+jadi ukurannya tidak membebani repo.
+
+Gerbang pada perubahan ini: frontend 110 berkas / 1.291 tes lulus, `tsc` EXIT=0,
+`next lint` bersih, `next build` 4/4 halaman. Backend penuh: **1.134 lulus, 6 gagal** —
+keenam kegagalan berada di alur approval/ledger/exclusion dan SUDAH gagal tanpa
+perubahan ini (dibuktikan dengan `git stash` pada berkas backend yang diubah): aturan
+baru "approve hanya setelah verdict CONSISTENT/FLAGGED" (commit `81e5909`/`37aabfb`)
+membuat tes alur lama menerima 409 "keputusan belum diverifikasi" dan 403 cakupan.

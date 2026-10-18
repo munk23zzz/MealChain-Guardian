@@ -302,10 +302,13 @@ def test_tanpa_cache_tidak_ada_estimasi_dan_tidak_diklaim_tiba(client, auth_head
 def test_filter_komoditas_dihormati(client, monitor_headers):
     telur = client.get("/supplier-routes?commodity=telur", headers=monitor_headers).json()
     assert telur["routes"] and all(r["commodity"] == "telur" for r in telur["routes"])
-    # ayam hanya dipakai kiriman Semarang yang sudah kedaluwarsa → nol, bukan semua
+    # Dulu tes ini menuntut `routes == []` untuk ayam karena cache rutenya kosong
+    # (premis "tidak ada kiriman ayam aktif"). Setelah komoditas ke-4 masuk dan
+    # cache disinkronkan ulang, kiriman ayam bisa aktif — jadi yang diuji adalah
+    # SARINGANNYA: tidak ada baris komoditas lain yang bocor ke hasil ayam.
     ayam = client.get("/supplier-routes?commodity=ayam", headers=monitor_headers).json()
-    assert ayam["routes"] == []
-    assert ayam["summary"]["routes"] == 0
+    assert all(r["commodity"] == "ayam" for r in ayam["routes"])
+    assert ayam["summary"]["routes"] == len(ayam["routes"])
 
 
 def test_filter_lokasi_tidak_menembus_cakupan_user(client, auth_headers):

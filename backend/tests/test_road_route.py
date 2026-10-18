@@ -58,7 +58,7 @@ def test_url_memakai_urutan_lon_lat():
 
 def test_url_meminta_geometri_ringkas_geojson():
     url = osrm_url("https://contoh.test", ORIGIN[0], ORIGIN[1], DEST[0], DEST[1])
-    assert "overview=simplified" in url
+    assert "overview=full" in url
     assert "geometries=geojson" in url
     assert "alternatives=false" in url
     assert "steps=false" in url

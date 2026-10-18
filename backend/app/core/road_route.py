@@ -86,9 +86,11 @@ def osrm_url(
     dipakai di seluruh repo ini). Tertukar tidak menghasilkan error — hasilnya
     rute di benua lain, jadi urutannya dikunci di sini, bukan di pemanggil.
 
-    `overview=simplified` dipilih sadar: cukup halus untuk digambar di peta
-    (rute Cianjur→Jakarta = 36 titik, 1,5 KB) jauh lebih ringan daripada
-    `full` (3.083 titik, 71 KB) untuk tabel cache yang ikut ter-commit.
+    `overview=full` dipilih sadar: geometri `simplified` hanya ~36 titik untuk
+    rute 110 km sehingga sudut jalan terpotong di zoom >= 12 — garis terlihat
+    "memotong" blok kota. `full` memberi geometri jalan sebenarnya (Cianjur→
+    Jakarta 3.011 titik, ~72 KB). Cache-nya hidup di tabel `road_routes` (DB),
+    bukan berkas yang ikut ter-commit, jadi ukuran itu tidak membebani repo.
     """
     coords = (
         f"{float(lon_a):.4f},{float(lat_a):.4f};"
@@ -97,7 +99,7 @@ def osrm_url(
     base = base_url.rstrip("/")
     return (
         f"{base}/route/v1/{profile}/{coords}"
-        "?overview=simplified&geometries=geojson&alternatives=false&steps=false"
+        "?overview=full&geometries=geojson&alternatives=false&steps=false"
     )
 
 
