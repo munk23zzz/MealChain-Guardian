@@ -814,6 +814,11 @@ async def repropose_action(
     permintaan Roy 2026-10-07). Iterasi baru TETAP butuh approve manusia.
     """
     parent = await _load_decision(db, payload.decision_id)
+    # Audit M3 (18 Okt 2026): cakupan diperiksa untuk SEMUA tipe, bukan hanya
+    # cabang ADMIN_TYPES. Sebelum ini Kepala SPPG lain bisa me-repropose
+    # keputusan operasional yang ditolak; anaknya menyalin target parent,
+    # sehingga ia menciptakan keputusan untuk SPPG yang bukan wilayahnya.
+    _require_decision_scope(user, parent)
     if parent.decision_type in exclusions.ADMIN_TYPES:
         exclusions.require_scope(user, parent.target_location_id)
         raise HTTPException(

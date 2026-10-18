@@ -1,5 +1,6 @@
 """Real PostgreSQL + HTTP administrative lifecycle, isolated rollback fixture."""
 
+import json
 import uuid
 from datetime import datetime, timezone
 
@@ -7,9 +8,33 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
+from app.api.actions import get_verifier_chain
 from app.api.auth import get_current_user
 from app.main import app
 from app.models import User
+
+
+@pytest.fixture(autouse=True)
+def _verdict_konsisten():
+    """Kunci verdict provider agar alur administratif deterministik.
+
+    Sejak audit M1 (18 Okt 2026) approve mensyaratkan verdict hasil audit, dan
+    provider nyata bisa menjawab UNAVAILABLE. Tes ini mengukur pagar siklus
+    administratif (DUA approver), jadi verdict-nya dikunci FLAGGED — CONSISTENT
+    akan menurunkan syarat menjadi satu approval dan mengubah arti tes.
+    """
+    def _chain():
+        return [
+            (
+                "test_provider",
+                lambda prompt: json.dumps({"verdict": "FLAGGED", "reason": "uji"}),
+                "test",
+            )
+        ]
+
+    app.dependency_overrides[get_verifier_chain] = _chain
+    yield
+    app.dependency_overrides.pop(get_verifier_chain, None)
 
 
 @pytest.fixture
