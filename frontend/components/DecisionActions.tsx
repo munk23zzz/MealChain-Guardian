@@ -29,21 +29,40 @@ export function visibleActions(
   status: string
 ): {
   approve: boolean;
+  verify: boolean;
   execute: boolean;
   repropose: boolean;
   readOnly: boolean;
 } {
   if (!APPROVER_ROLES.has(role)) {
-    return { approve: false, execute: false, repropose: false, readOnly: true };
+    return {
+      approve: false,
+      verify: false,
+      execute: false,
+      repropose: false,
+      readOnly: true,
+    };
   }
   // PLAN.md §13.1/§13.3: approve milik Head DAN Nutritionist (dua approval
-  // berbeda user), tetapi eksekusi & ajukan ulang hanya milik Head.
+  // berbeda user), tetapi verifikasi, eksekusi & ajukan ulang hanya Head.
   const headOnly = role === "sppg_head";
-  const actionable =
+  const dapatDisetujui =
     status === "pending_approval" || status === "verifier_flagged";
+  // Eksekusi baru masuk akal setelah kuorum penuh (status `approved`, produk
+  // 2A). Sebelumnya tombol ini digantung pada status pra-approval sehingga
+  // `approved` tidak pernah punya tombol apa pun.
+  const dapatDieksekusi = status === "approved";
   return {
-    approve: actionable,
-    execute: actionable && headOnly,
+    approve: dapatDisetujui,
+    // Verifikasi punya gerbangnya sendiri: dulu menumpang `actions.execute`,
+    // sehingga setelah eksekusi dipisah ke status `approved`, tombol
+    // Verifikasi ikut hilang dari keputusan yang justru belum diverifikasi.
+    verify:
+      (status === "proposed" ||
+        status === "pending_approval" ||
+        status === "verifier_flagged") &&
+      headOnly,
+    execute: dapatDieksekusi && headOnly,
     // Rejection loop: keputusan ditolak → agent minta iterasi baru.
     repropose: status === "rejected" && headOnly,
     readOnly: false,

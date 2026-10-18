@@ -90,6 +90,7 @@ describe("top bar — notifikasi tindakan", () => {
       countActionable([
         { status: "pending_approval" },
         { status: "VERIFIER_FLAGGED" },
+        { status: "approved" },
         { status: "needs_verification" },
         { status: "executed" },
         { status: "rejected" },
@@ -191,14 +192,16 @@ describe("notifList", () => {
     },
     {
       decision_id: "d2",
-      status: "APPROVED", // bukan actionable → tidak masuk notifikasi
+      status: "EXECUTED", // bukan actionable → tidak masuk notifikasi
       decision_type: "price_anomaly",
       quantity_kg: 100,
       created_at: "2026-10-11T09:00:00Z",
     },
     {
       decision_id: "d3",
-      status: "needs_verification", // huruf kecil tetap dikenali
+      // Kuorum penuh (dua approval) tetapi PO belum terbit: masih menuntut
+      // tindakan Kepala SPPG (Eksekusi). Sebelum 18 Okt status ini tidak ada.
+      status: "approved",
       decision_type: "safety_disruption",
       quantity_kg: 250,
       created_at: "2026-10-11T07:00:00Z",

@@ -295,10 +295,6 @@ async def approve_action(
     db: AsyncSession = Depends(get_db),
 ):
     decision = await _load_decision(db, payload.decision_id)
-    if decision.status not in {"pending_approval", "verifier_flagged"}:
-        raise HTTPException(
-            status_code=409, detail=f"decision status {decision.status} tidak dapat di-approve"
-        )
     # Ruling 2026-10-14 §3 + integritas jejak approval. Kedua penjaga ini DULU
     # berada di dalam cabang `ADMIN_TYPES`, sehingga keputusan operasional bisa
     # di-approve oleh peran SPPG dari lokasi lain dan di-approve dua kali oleh
@@ -322,6 +318,14 @@ async def approve_action(
     ).first()
     if existing:
         raise HTTPException(409, "approval sudah tercatat")
+    # Status gate sengaja SETELAH pemeriksaan duplikat: user yang sudah
+    # menyetujui keputusan berstatus `approved` harus membaca "approval sudah
+    # tercatat", bukan "status approved tidak dapat di-approve" — pesan kedua
+    # membuat orang mencari tombol yang sebenarnya sudah ia tekan.
+    if decision.status not in {"pending_approval", "verifier_flagged"}:
+        raise HTTPException(
+            status_code=409, detail=f"decision status {decision.status} tidak dapat di-approve"
+        )
     # Penolakan WAJIB beralasan — alasan inilah bahan learning agent
     # (rejection loop, permintaan Roy 2026-10-07). Tanpa alasan = 422.
     if not payload.approved and not (payload.comment or "").strip():
@@ -343,6 +347,29 @@ async def approve_action(
         if decision.decision_type == "supplier_exclusion":
             exclusion = await exclusions.for_decision(db, decision)
             exclusion.status = "rejected"
+    # Ruling produk 2A (18 Okt 2026): kuorum penuh = status `approved`.
+    #
+    # Sebelum ini approve TIDAK PERNAH menyentuh status, sehingga keputusan
+    # dengan dua approval tetap `pending_approval` sampai dieksekusi. Dampaknya:
+    # auditor tidak bisa membedakan kuorum 1 dari kuorum 2, dan blok ledger
+    # approval kedua menyimpan status yang salah. Evaluasi dilakukan SEBELUM
+    # commit karena baris approval baru harus ikut dihitung (flush), dan status
+    # hasilnya harus masuk ke payload ledger di bawah.
+    await db.flush()
+    rows = (
+        (await db.execute(select(Approval).where(Approval.decision_id == decision.id)))
+        .scalars()
+        .all()
+    )
+    evaluation = evaluate_approvals(
+        _requirement_for(decision),
+        [
+            {"role": u.role, "approved": a.approved}
+            for a, u in zip(rows, await _approval_users(db, rows))
+        ],
+    )
+    if payload.approved and evaluation["satisfied"]:
+        decision.status = "approved"
     # P1 Merkle ledger: setiap approve/reject = block append-only.
     await append_block(
         db,
@@ -357,18 +384,6 @@ async def approve_action(
         },
     )
     await db.commit()
-    rows = (
-        (await db.execute(select(Approval).where(Approval.decision_id == decision.id)))
-        .scalars()
-        .all()
-    )
-    evaluation = evaluate_approvals(
-        _requirement_for(decision),
-        [
-            {"role": u.role, "approved": a.approved}
-            for a, u in zip(rows, await _approval_users(db, rows))
-        ],
-    )
     return {
         "decision_id": str(decision.id),
         "approved_by": str(user.id),
@@ -410,7 +425,7 @@ async def execute_action(
         raise HTTPException(status_code=409, detail="decision ditolak")
     if not is_decision_valid(_now_utc(), decision.expires_at):
         raise HTTPException(status_code=409, detail="decision expired")
-    if decision.status not in {"pending_approval", "verifier_flagged"}:
+    if decision.status not in {"pending_approval", "verifier_flagged", "approved"}:
         raise HTTPException(
             status_code=409,
             detail=f"status {decision.status} tidak dapat dieksekusi",

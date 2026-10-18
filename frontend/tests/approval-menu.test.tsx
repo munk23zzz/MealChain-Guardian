@@ -66,12 +66,23 @@ describe("ApprovalMenu (isi popup governance & persetujuan)", () => {
     expect(html).not.toContain('role="dialog"');
   });
 
-  it("pilihan tindakan lengkap saat server MENGIZINKAN eksekusi", () => {
-    // can_execute: true → semua tindakan tersedia (lihat tes pagar di bawah).
-    const html = render({ summary: { ...SUMMARY, can_execute: true } });
-    for (const label of ["Setuju", "Tolak", "Verifikasi", "Eksekusi"]) {
+  it("pilihan tindakan lengkap saat keputusan masih menunggu approval", () => {
+    // Status `pending_approval`: Setuju/Tolak/Verifikasi tersedia. Eksekusi
+    // sengaja TIDAK — tombol itu baru sah setelah kuorum penuh (`approved`).
+    const html = render({ summary: { ...SUMMARY, can_execute: false } });
+    for (const label of ["Setuju", "Tolak", "Verifikasi"]) {
       expect(html).toContain(label);
     }
+    expect(html).not.toContain('data-action="execute"');
+  });
+
+  it("Eksekusi ditawarkan saat kuorum penuh dan server MENGIZINKAN", () => {
+    const html = render({
+      summary: { ...SUMMARY, can_execute: true },
+      actions: visibleActions("sppg_head", "approved"),
+    });
+    expect(html).toContain('data-action="execute"');
+    expect(html).toContain("Eksekusi");
   });
 
   // WS-B (QA 16 Okt): "Eksekusi" dulu selalu ditawarkan selama peran+status
@@ -83,7 +94,10 @@ describe("ApprovalMenu (isi popup governance & persetujuan)", () => {
     // Diperiksa dari KONTROL-nya (data-action), bukan dari kata "Eksekusi":
     // catatan alasan di bawah tetap menyebut nama aksinya supaya orang tahu
     // apa yang hilang dan kenapa.
-    const html = render(); // SUMMARY.can_execute = false
+    const html = render({
+      summary: { ...SUMMARY, can_execute: false },
+      actions: visibleActions("sppg_head", "approved"),
+    });
     expect(html).not.toContain('data-action="execute"');
     expect(html).toContain("server belum mengizinkan");
   });

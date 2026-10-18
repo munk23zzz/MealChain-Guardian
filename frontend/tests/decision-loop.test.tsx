@@ -113,9 +113,17 @@ describe("visibleActions (repropose)", () => {
     expect(a.repropose).toBe(false);
   });
 
-  it("pending_approval: Head mendapat approve & execute", () => {
+  it("pending_approval: Head mendapat approve & verifikasi, bukan eksekusi", () => {
     const a = visibleActions("sppg_head", "pending_approval");
     expect(a.approve).toBe(true);
-    expect(a.execute).toBe(true);
+    // Eksekusi baru sah setelah kuorum penuh (status `approved`).
+    expect(a.execute).toBe(false);
+    expect(a.verify).toBe(true);
+  });
+
+  it("approved: hanya Head yang mendapat eksekusi", () => {
+    expect(visibleActions("sppg_head", "approved").execute).toBe(true);
+    expect(visibleActions("sppg_head", "approved").approve).toBe(false);
+    expect(visibleActions("sppg_nutritionist", "approved").execute).toBe(false);
   });
 });

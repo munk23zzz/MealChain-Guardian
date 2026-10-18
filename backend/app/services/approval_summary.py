@@ -289,7 +289,7 @@ async def build_approval_summary(
         blocking.append("decision ditolak")
     if decision.status == "executed":
         blocking.append("decision sudah dieksekusi")
-    if decision.status not in {"pending_approval", "verifier_flagged"} and (
+    if decision.status not in {"pending_approval", "verifier_flagged", "approved"} and (
         decision.status not in {"executed", "rejected"}
     ):
         blocking.append(f"status {decision.status} tidak dapat dieksekusi")

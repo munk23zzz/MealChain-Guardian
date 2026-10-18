@@ -20,6 +20,7 @@ import ApprovalModal from "./ApprovalModal";
 
 export type MenuActions = {
   approve: boolean;
+  verify: boolean;
   execute: boolean;
   repropose: boolean;
   readOnly: boolean;
@@ -75,7 +76,8 @@ export default function ApprovalMenu({
     setRejecting(true);
   }
 
-  const hasChoice = actions.approve || actions.execute || actions.repropose;
+  const hasChoice =
+    actions.approve || actions.verify || actions.execute || actions.repropose;
 
   // WS-B (QA 16 Okt): pagar aksi mutasi memakai KEPUTUSAN SERVER, bukan
   // hitungan ulang di sini. Read model yang sama sudah mengirim `can_execute`
@@ -148,7 +150,7 @@ export default function ApprovalMenu({
               </li>
             )}
 
-            {actions.execute && belumKedaluwarsa && (
+            {actions.verify && belumKedaluwarsa && (
               <li className="action-menu-item">
                 <div className="action-menu-text">
                   <strong>Catat hasil verifier</strong>
@@ -169,7 +171,7 @@ export default function ApprovalMenu({
               </li>
             )}
 
-            {actions.execute && !belumKedaluwarsa && (
+            {actions.verify && !belumKedaluwarsa && (
               <li className="action-menu-item action-menu-note">
                 <div className="action-menu-text">
                   <strong>Catat hasil verifier</strong>

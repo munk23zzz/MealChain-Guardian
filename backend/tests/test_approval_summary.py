@@ -437,7 +437,11 @@ def test_approval_summary_or_complete_then_execute_parity(client, binding):
             return
         assert summary["supplier"]["id"] == batch["supplier_id"]
         assert summary["can_execute"] is True
-        assert summary["can_approve"] is True
+        # Sejak 18 Okt (keputusan produk 2A) kuorum penuh menulis status
+        # `approved`: tidak ada lagi yang bisa disetujui/ditolak, jadi read
+        # model berhenti menawarkan kedua tombol itu.
+        assert summary["can_approve"] is False
+        assert summary["can_reject"] is False
         assert summary["approvals"], "approval tercatat harus tampil"
         assert summary["approvals"][0]["role"] == "sppg_head"
         assert summary["approvals"][0]["approved"] is True

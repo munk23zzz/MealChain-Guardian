@@ -28,10 +28,17 @@ export type ScopeModel = {
   placeholder: string;
 };
 
-/** Status yang menunggu tindakan manusia (sumber: alur approval backend). */
+/** Status yang menunggu tindakan manusia (sumber: alur approval backend).
+ *
+ * `approved` = kuorum dua approval sudah penuh tetapi PO belum terbit; Kepala
+ * SPPG masih harus menekan Eksekusi, jadi keputusan itu MASIH menuntut tindakan.
+ * `needs_verification` sengaja tidak ada: CHECK constraint `decisions` tidak
+ * mengizinkannya, jadi status itu mustahil muncul dan hanya membuat hitungan
+ * berbeda dari kenyataan.
+ */
 export const ACTIONABLE_STATUSES = [
   "PENDING_APPROVAL",
-  "NEEDS_VERIFICATION",
+  "APPROVED",
   "VERIFIER_FLAGGED",
 ] as const;
 

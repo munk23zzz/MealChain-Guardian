@@ -74,19 +74,32 @@ describe("visibleActions (role scope murni, design.md §1.4)", () => {
   it("bgn_monitor tidak pernah melihat aksi mutasi", () => {
     expect(visibleActions("bgn_monitor", "pending_approval")).toEqual({
       approve: false,
+      verify: false,
       execute: false,
       repropose: false,
       readOnly: true,
     });
   });
 
-  it("sppg_head melihat approve+execute pada status yang memenuhi syarat", () => {
+  it("sppg_head bisa approve+verifikasi saat menunggu approval, belum eksekusi", () => {
     expect(visibleActions("sppg_head", "pending_approval")).toEqual({
       approve: true,
+      verify: true,
+      execute: false,
+      repropose: false,
+      readOnly: false,
+    });
+  });
+
+  it("kuorum penuh (`approved`) → hanya Eksekusi, dan hanya untuk Head", () => {
+    expect(visibleActions("sppg_head", "approved")).toEqual({
+      approve: false,
+      verify: false,
       execute: true,
       repropose: false,
       readOnly: false,
     });
+    expect(visibleActions("sppg_nutritionist", "approved").execute).toBe(false);
   });
 
   it("status executed/rejected → tanpa aksi", () => {

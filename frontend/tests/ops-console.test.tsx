@@ -204,7 +204,33 @@ describe("Langkah Verifikasi (syarat execute — kontrol backend nyata)", () => 
       />
     );
     expect(html).toContain("Verifikasi");
-    expect(html).toContain("Eksekusi");
+    // Eksekusi baru ditawarkan setelah kuorum penuh (status `approved`).
+    expect(html).not.toContain('data-action="execute"');
+  });
+
+  it("Eksekusi muncul saat kuorum penuh, hanya untuk Head", () => {
+    const noop = async () => null;
+    const html = renderToStaticMarkup(
+      <ApprovalMenu
+        summary={{
+          decision_id: "d1",
+          status: "approved",
+          can_approve: false,
+          can_execute: true,
+          verifier: { verdict: "consistent", verified_by: "verifier_agent" },
+        }}
+        actions={visibleActions("sppg_head", "approved")}
+        administrative={false}
+        onApprove={noop}
+        onReject={noop}
+        onVerify={noop}
+        onExecute={noop}
+        onRepropose={noop}
+        onClose={() => {}}
+      />
+    );
+    expect(html).toContain('data-action="execute"');
+    expect(html).not.toContain('data-action="verify"');
   });
 
   it("bgn_monitor tidak melihat Verifikasi (read-only)", () => {

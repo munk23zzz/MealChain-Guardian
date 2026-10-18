@@ -69,7 +69,8 @@ describe("pendingDecisions — yang menunggu tindakan manusia", () => {
     const items = [
       decision({ decision_id: "a", status: "pending_approval" }),
       decision({ decision_id: "b", status: "verifier_flagged" }),
-      decision({ decision_id: "c", status: "needs_verification" }),
+      // Kuorum penuh tetap menuntut tindakan: Kepala SPPG harus menekan Eksekusi.
+      decision({ decision_id: "c", status: "approved" }),
       decision({ decision_id: "d", status: "rejected" }),
       decision({ decision_id: "e", status: "proposed" }),
       decision({ decision_id: "f", status: "executed" }),

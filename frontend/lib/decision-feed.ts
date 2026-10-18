@@ -57,7 +57,6 @@ export const FEED_SORT_LABELS: Record<FeedSort, string> = {
 /** Urutan chip status: yang menuntut tindakan lebih dulu, sisanya mengikuti alur. */
 const STATUS_ORDER = [
   "pending_approval",
-  "needs_verification",
   "verifier_flagged",
   "proposed",
   "approved",
