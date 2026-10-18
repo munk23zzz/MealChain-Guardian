@@ -26,6 +26,7 @@ from pathlib import Path
 import jwt as pyjwt
 
 ROOT = Path(__file__).resolve().parents[2]
+KUNCI_TOKEN = "MEALCHAIN_API_TOKEN"
 
 
 def cari_root(mulai: Path) -> Path:
@@ -73,7 +74,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Buat token JWT untuk agent MealChain.")
     parser.add_argument("--email", default="bgn.monitor@demo.local")
     parser.add_argument("--hari", type=int, default=30, help="umur token dalam hari")
-    parser.add_argument("--tulis-env", action="store_true", help="tulis ke .env (tanpa mencetak token)")
+    parser.add_argument(
+        "--tulis-env", action="store_true", help="tulis ke .env (tanpa mencetak token)"
+    )
     parser.add_argument("--database-url", default="", help="override DATABASE_URL")
     args = parser.parse_args()
 
@@ -103,9 +106,11 @@ def main() -> int:
     if args.tulis_env:
         path = root / ".env"
         baris_baru = [
-            b for b in path.read_text(encoding="utf-8").splitlines() if not b.startswith("MEALCHAIN_API_TOKEN=")
+            b
+            for b in path.read_text(encoding="utf-8").splitlines()
+            if not b.startswith(f"{KUNCI_TOKEN}=")
         ]
-        baris_baru.append(f"MEALCHAIN_API_TOKEN={token}")
+        baris_baru.append(f"{KUNCI_TOKEN}={token}")
         path.write_text("\n".join(baris_baru) + "\n", encoding="utf-8")
         print(f"token untuk {args.email} (role {role}) ditulis ke .env; panjang {len(token)}")
     else:
