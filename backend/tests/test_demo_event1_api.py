@@ -185,3 +185,115 @@ def test_kandidat_kosong_dijawab_409_bukan_500(client, monkeypatch, pemakai):
     )
     assert resp.status_code == 409
     assert "kandidat eligible" in resp.json()["detail"]
+
+
+# --- review 7 agen (P4) ----------------------------------------------------
+
+
+def test_agent_review_off_mengembalikan_disabled_tanpa_panggilan(
+    client, monkeypatch, pemakai
+):
+    panggilan: list = []
+
+    def _fake_review(*args, **kwargs):
+        panggilan.append((args, kwargs))
+        raise AssertionError("review_decision tidak boleh dipanggil saat flag mati")
+
+    monkeypatch.setattr(
+        "app.api.demo.run_event1",
+        lambda commodity, target_location, **kwargs: _fake_outcome(
+            commodity=commodity
+        ),
+    )
+    monkeypatch.setattr("app.api.demo.review_decision", _fake_review)
+    monkeypatch.setattr("app.api.demo.settings.multi_agent_review", False)
+
+    head = pemakai("sppg_head", "Jakarta")
+    headers = _login(client, head)
+    resp = client.post(
+        "/demo/event1",
+        json={"commodity": "telur", "target_location": "Jakarta"},
+        headers=headers,
+    )
+
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["agent_review"] == {"status": "disabled", "run_id": None}
+    assert panggilan == []
+
+
+def test_agent_review_on_runtime_mati_tetap_201(
+    client, monkeypatch, pemakai
+):
+    from app.services.agent_review_client import AgentReviewResult
+
+    dipanggil: dict = {}
+
+    def _fake_review(decision_id, *, timeout_seconds):
+        dipanggil.update(
+            decision_id=decision_id, timeout_seconds=timeout_seconds
+        )
+        return AgentReviewResult(status="unavailable", error="ARN kosong")
+
+    monkeypatch.setattr(
+        "app.api.demo.run_event1",
+        lambda commodity, target_location, **kwargs: _fake_outcome(
+            commodity=commodity
+        ),
+    )
+    monkeypatch.setattr("app.api.demo.review_decision", _fake_review)
+    monkeypatch.setattr("app.api.demo.settings.multi_agent_review", True)
+    monkeypatch.setattr("app.api.demo.settings.agent_review_timeout_seconds", 75)
+    before = _jumlah_keputusan()
+
+    head = pemakai("sppg_head", "Jakarta")
+    headers = _login(client, head)
+    resp = client.post(
+        "/demo/event1",
+        json={"commodity": "telur", "target_location": "Jakarta"},
+        headers=headers,
+    )
+
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["agent_review"]["status"] == "unavailable"
+    assert resp.json()["supervisor"]["status"] == "narrated"
+    assert dipanggil == {
+        "decision_id": "00000000-0000-0000-0000-000000000001",
+        "timeout_seconds": 45.0,
+    }
+    assert _jumlah_keputusan() == before
+
+
+def test_agent_review_on_completed_membawa_run_id(
+    client, monkeypatch, pemakai
+):
+    from app.services.agent_review_client import AgentReviewResult
+
+    monkeypatch.setattr(
+        "app.api.demo.run_event1",
+        lambda commodity, target_location, **kwargs: _fake_outcome(
+            commodity=commodity
+        ),
+    )
+    monkeypatch.setattr(
+        "app.api.demo.review_decision",
+        lambda decision_id, *, timeout_seconds: AgentReviewResult(
+            status="completed",
+            run_id="run-abc",
+            payload={"findings": [{} for _ in range(7)]},
+        ),
+    )
+    monkeypatch.setattr("app.api.demo.settings.multi_agent_review", True)
+
+    head = pemakai("sppg_head", "Jakarta")
+    headers = _login(client, head)
+    resp = client.post(
+        "/demo/event1",
+        json={"commodity": "telur", "target_location": "Jakarta"},
+        headers=headers,
+    )
+
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["agent_review"] == {
+        "status": "completed",
+        "run_id": "run-abc",
+    }

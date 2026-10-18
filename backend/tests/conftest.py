@@ -21,6 +21,8 @@ HOST_ONLY_MODULES = [
     "test_agent_workers.py",
     "test_agent_workers_p3.py",
     "test_agent_validation.py",
+    "test_agent_orchestrator.py",
+    "test_agent_runtime_task.py",
     "test_agent_golden_cases.py",
     "test_verify_agentcore_access.py",
     "test_verify_bedrock_access.py",

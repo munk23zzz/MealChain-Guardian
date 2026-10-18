@@ -29,6 +29,25 @@ const APPROVER = new Set(["sppg_head", "sppg_nutritionist"]);
 const LOCATIONS = ["Jakarta", "Bogor", "Cianjur", "Bandung", "Surabaya"];
 const COMMODITIES = ["telur", "beras", "ayam"];
 
+function labelReview7Agen(status?: string): string {
+  switch (status) {
+    case "completed":
+      return "selesai";
+    case "partial":
+      return "selesai sebagian";
+    case "timeout":
+      return "masih berjalan (melewati batas)";
+    case "unavailable":
+      return "runtime belum tersedia";
+    case "failed":
+      return "gagal";
+    case "disabled":
+      return "belum aktif";
+    default:
+      return "belum ada hasil";
+  }
+}
+
 export default function OpsConsole({
   role,
   token,
@@ -269,6 +288,12 @@ export default function OpsConsole({
             </dd>
             <dt>Langkah</dt>
             <dd>{(event1.trace_steps ?? []).join(" → ")}</dd>
+            {event1.agent_review && (
+              <>
+                <dt>Review 7 agen</dt>
+                <dd>{labelReview7Agen(event1.agent_review.status)}</dd>
+              </>
+            )}
           </dl>
           {event1.supervisor?.summary && (
             <p className="ops-summary">{event1.supervisor.summary}</p>

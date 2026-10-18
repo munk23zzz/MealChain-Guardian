@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import require_roles
 from app.api.dependencies import get_db
+from app.core.config import settings
 from app.core.scope import assert_in_scope
 from app.models import AgentTrace, Commodity, Decision, Location, User
 from app.seed.timeseries import (
@@ -47,6 +48,7 @@ from app.seed.timeseries import (
     purge_demo_rows,
     validate_range,
 )
+from app.services.agent_review_client import AgentReviewResult, review_decision
 from app.services.event1_orchestrator import run_event1
 
 router = APIRouter()
@@ -540,7 +542,7 @@ async def run_demo_event1(
     try:
         # `run_event1` sinkron (membuka sesi + loop-nya sendiri) → dijalankan di
         # worker thread supaya tidak menabrak event loop request.
-        return await run_in_threadpool(
+        outcome = await run_in_threadpool(
             run_event1,
             payload.commodity,
             payload.target_location,
@@ -550,3 +552,70 @@ async def run_demo_event1(
         # Termasuk "tidak ada kandidat eligible untuk Event 1": keadaan data,
         # bukan kerusakan server.
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    outcome["agent_review"] = await _jalankan_agent_review(db, outcome)
+    return outcome
+
+
+async def _jalankan_agent_review(
+    db: AsyncSession, outcome: dict
+) -> dict:
+    """Review opsional setelah decision dibuat; kegagalan tidak membatalkan 201."""
+    disabled = {"status": "disabled", "run_id": None}
+    if not settings.multi_agent_review:
+        return disabled
+
+    decision_id = outcome.get("decision_id")
+    if not isinstance(decision_id, str) or not decision_id.strip():
+        return {"status": "failed", "run_id": None}
+
+    timeout = float(min(max(settings.agent_review_timeout_seconds, 1), 45))
+    try:
+        result = await run_in_threadpool(
+            review_decision, decision_id, timeout_seconds=timeout
+        )
+    except Exception:
+        result = AgentReviewResult(status="failed", error="review client gagal")
+
+    if not isinstance(result, AgentReviewResult):
+        result = AgentReviewResult(status="failed", error="review client tidak valid")
+
+    if not result.completed:
+        # Kegagalan/ timeout dicatat jujur sebagai SUPERVISE; tidak ada 7 row palsu.
+        await _catat_review_gagal(db, decision_id, result)
+
+    return {
+        "status": result.status,
+        "run_id": result.run_id,
+    }
+
+
+async def _catat_review_gagal(
+    db: AsyncSession, decision_id: str, result: AgentReviewResult
+) -> None:
+    """Tulis satu baris SUPERVISE best-effort; decision tetap ada."""
+    try:
+        import uuid
+
+        decision_uuid = uuid.UUID(decision_id)
+        if await db.get(Decision, decision_uuid) is None:
+            return
+        db.add(
+            AgentTrace(
+                decision_id=decision_uuid,
+                step_name="SUPERVISE",
+                tool_called="agent.review",
+                input_summary={"task": "review_decision"},
+                output_summary={
+                    "status": result.status,
+                    "run_id": result.run_id,
+                    "error": result.error,
+                },
+            )
+        )
+        await db.commit()
+    except Exception:
+        try:
+            await db.rollback()
+        except Exception:
+            pass

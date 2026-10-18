@@ -24,23 +24,22 @@ Setelah `AGENTCORE_RUNTIME_ARN` terisi, `backend/app/ai_providers/model_registry
 menaruh AgentCore sebagai **slot primary** setiap rantai agent (slot env bergeser satu) — jadi
 orkestrator TIDAK perlu diubah lagi; cukup ARN-nya.
 
-## Mode review 7 worker agent (flag belum aktif)
+## Mode review 7 worker agent (orkestrasi P4 ada; flag tetap default mati)
 
-P0–P3 menambahkan kontrak, registry, tujuh worker baca, dan validator. **Flag tetap
-default `false`**, jadi perilaku aplikasi sekarang masih satu supervisor Strands + empat
-tool baca sampai orkestrasi P4 terpasang.
+P0–P4 menambahkan kontrak, registry, tujuh worker baca, validator, dan orkestrasi
+review. **Flag tetap default `false`**, jadi perilaku aplikasi sekarang masih satu
+supervisor Strands + empat tool baca. Panel trace/UI 7 agen menyusul di P5.
 
 | Env | Default | Arti |
 |---|---|---|
-| `MULTI_AGENT_REVIEW` | `false` | `true` nanti menyalakan review 7 worker setelah keputusan dibuat. |
+| `MULTI_AGENT_REVIEW` | `false` | `true` menyalakan review 7 worker setelah keputusan dibuat. |
 | `AGENT_REVIEW_MODE` | `advisory` | Agen hanya meninjau; tidak menghitung ulang SDC/safety dan tidak mengeksekusi. |
-| `AGENT_REVIEW_TIMEOUT_SECONDS` | `75` | Batas total review; lewat batas → status `timeout`, bukan angka karangan. |
+| `AGENT_REVIEW_TIMEOUT_SECONDS` | `75` | Batas total review; lewat batas → status `timeout`, bukan angka karangan. Backend membatasi panggilan runtime ke 45 detik agar request Event 1 tidak menggantung. |
 
-Jangan menyalakan flag ini sebelum kontrak, worker, trace, dan UI P1–P5 selesai.
-Saat runtime cloud dipakai, `MEALCHAIN_API_URL` **wajib** bisa dijangkau dari AgentCore
-(bukan `http://backend:8000`, yang hanya ada di jaringan Compose). Kalau backend masih
-lokal, jalankan runtime secara lokal dan sebut “runtime lokal” di UI — jangan mengklaim
-AgentCore live.
+Jangan menyalakan flag ini sebelum panel trace/UI P5 selesai. Saat runtime cloud dipakai,
+`MEALCHAIN_API_URL` **wajib** bisa dijangkau dari AgentCore (bukan `http://backend:8000`,
+yang hanya ada di jaringan Compose). Kalau backend masih lokal, jalankan runtime secara
+lokal dan sebut “runtime lokal” di UI — jangan mengklaim AgentCore live.
 
 ## Kontrak P1 (sudah ada, belum aktif)
 
@@ -79,6 +78,41 @@ endpoint komputasi murni yang di-allowlist (`POST /price/deviation`,
 `agent/validation.py` mendeteksi worker hilang/ganda, kontradiksi fakta, dan
 menentukan `completed|partial|failed`. Sepuluh golden case ada di
 `backend/tests/test_agent_golden_cases.py`.
+
+## Orkestrasi P4 — tujuh worker + trace delapan baris
+
+`agent/orchestrator.py` menjalankan satu putaran review advisory:
+
+- Lane 1 Supply+Demand, lane 2 Safety+Freshness, lane 3 Price+Logistics (paralel);
+  Evidence Fusi setelah lane selesai.
+- Setiap worker mendapat `run_id` + decision context dari
+  `GET /decisions/{id}/approval-summary`.
+- Hasil tujuh finding divalidasi `agent/validation.py`; kegagalan satu worker
+  menjadi `partial`, bukan angka palsu.
+- `agent/telemetry.py` menghasilkan **7 baris worker + 1 baris SUPERVISE** (8 baris)
+  yang siap dipersist ke `agent_traces` pada P5.
+- `agent/runtime_server.py` menerima task
+  `{"task":"review_decision","decision_id":"…"}` dan mengembalikan JSON `AgentRun`.
+- Backend memanggilnya lewat `backend/app/services/agent_review_client.py`; tanpa
+  `AGENTCORE_RUNTIME_ARN` hasilnya `unavailable` (Event 1 tetap 201), bukan 7 temuan palsu.
+- `Dockerfile` menyalin seluruh paket `agent/` dan menjalankan
+  `python -m agent.runtime_server`, supaya import relatif orchestrator/worker valid.
+
+Tes P4:
+
+```bash
+docker compose run --rm -e PYTHONPATH=/repo -v "$PWD:/repo" -w /repo backend \
+  pytest -q backend/tests/test_agent_orchestrator.py \
+  backend/tests/test_agent_runtime_task.py backend/tests/test_agent_review_client.py
+```
+
+Live probe read-only (butuh stack Docker dan database berisi keputusan):
+
+```bash
+docker compose run --rm -e PYTHONPATH=/repo:/repo/backend \
+  -v "$PWD:/repo" -v "path/ke/_qa:/work" -w /repo backend \
+  python /work/probe_p4_review.py
+```
 
 Tes mock transport:
 

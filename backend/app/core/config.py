@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     demo_mode: bool = False
     app_name: str = "MealChain Guardian"
 
-    # Review 7 worker agent (P0: default MATI, belum ada worker yang berjalan).
+    # Review 7 worker agent (P4: orkestrasi siap, flag default MATI sampai panel P5).
     # `advisory` = agen hanya meninjau keputusan deterministik; bukan pre-decision.
     multi_agent_review: bool = False
     agent_review_mode: str = "advisory"

@@ -38,12 +38,21 @@ from pathlib import Path
 
 import strands
 import strands.models
-from tools import (
-    get_cost_eligibility,
-    get_evidence_digest,
-    get_safety_freshness,
-    get_supply_demand,
-)
+
+try:  # dipakai sebagai paket `agent.supervisor_agent` (runtime image)
+    from .tools import (
+        get_cost_eligibility,
+        get_evidence_digest,
+        get_safety_freshness,
+        get_supply_demand,
+    )
+except ImportError:  # dijalankan sebagai skrip tunggal oleh tes lama
+    from tools import (  # type: ignore[no-redef]
+        get_cost_eligibility,
+        get_evidence_digest,
+        get_safety_freshness,
+        get_supply_demand,
+    )
 
 PROMPT_RELATIVE_PATH = Path("prompts") / "supervisor_system_prompt.md"
 HELLO_WORLD_PROMPT = "Balas tepat: MEALCHAIN_STRANDS_OK"
