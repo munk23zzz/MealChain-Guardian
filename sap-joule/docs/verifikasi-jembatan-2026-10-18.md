@@ -72,3 +72,20 @@ Total: **53 lulus, 4 dilewati** (yang dilewati = tes integrasi tanpa env backend
 - `requirements-dev.txt`: tambah `pyyaml` (tes kontrak membaca YAML).
 - `docs/runbook-cf-joule.md` §10: urutan pasang ulang DA kalau hilang dari tenant, termasuk cara
   memisahkan "jembatan mati" dari "DA hilang".
+
+## 6. Bukti chat Joule (dikonfirmasi pemilik, 18 Okt 2026)
+
+Setelah custom destination `SWZ_JOULE` dihapus (DA dihapus lalu dideploy ulang bersih),
+pertanyaan di web client **menampilkan tabel data**, bukan lagi "Something went wrong".
+
+| Fakta | Bukti |
+|---|---|
+| Runtime Joule memanggil jembatan | log CF: `POST / HTTP/1.1" 200 355 2705 "…" "Java-http-client/25.0.4.1"` (14:54 WIB) |
+| Destination yang dipakai | `joule get … -c mealchain_capability` → Default `MEALCHAIN_AGENT_01`, Custom **kosong** |
+| Jalur artefak SpEL benar | tabel tampil di chat, jadi `<? apiResponse.body.artifacts[0].parts[0].text ?>` memang menerima `result` A2A (bukan `body.result`) |
+| Data yang tampil = DB kita | 12/12 UUID laporan antrean ada di tabel `decisions` (diukur lewat `message/send` langsung ke jembatan) |
+
+**Pelajaran operasional:** custom destination tersimpan di konfigurasi asisten dan **menang** atas
+`destination:` di YAML. Nilai itu melekat saat deploy pertama, jadi kalau YAML pertama salah, deploy
+ulang tidak menolong — DA harus dihapus lalu dibuat ulang. Karena itu `test_kontrak_joule.py` mengunci
+nilai `MEALCHAIN_AGENT_01`.
