@@ -286,6 +286,15 @@ def pytest_collection_modifyitems(config, items):
 
 _SISA_TEST_LIKE = "%@test.local"
 
+# Dua sesi bisa menjalankan pytest BERSAMAAN pada DB yang sama. Sapuan tanpa
+# batas umur pernah menghapus user milik suite yang sedang berjalan: login
+# berikutnya di suite itu 401 "email atau password salah", dan approval yang
+# menunjuk user terhapus memunculkan galat pagar yang terbaca seperti regresi.
+# Karena itu sapuan hanya menyentuh sisa yang LEBIH TUA dari masa tenggang —
+# user run berjalan (baru dibuat) tidak pernah tersentuh, sisa run yang mati
+# tetap dibersihkan pada run berikutnya.
+_SISA_UMUR_TENGGANG = "15 minutes"
+
 
 def _sapu_sisa_test() -> int:
     """Hapus user sisa test + approval yang menahannya.
@@ -304,12 +313,20 @@ def _sapu_sisa_test() -> int:
                 conn.execute(
                     text(
                         "DELETE FROM approvals WHERE approved_by IN "
-                        "(SELECT id FROM users WHERE email LIKE :p)"
+                        "(SELECT id FROM users WHERE email LIKE :p "
+                        " AND created_at < now() - interval '"
+                        + _SISA_UMUR_TENGGANG
+                        + "')"
                     ),
                     {"p": _SISA_TEST_LIKE},
                 )
                 hasil = conn.execute(
-                    text("DELETE FROM users WHERE email LIKE :p"),
+                    text(
+                        "DELETE FROM users WHERE email LIKE :p "
+                        "AND created_at < now() - interval '"
+                        + _SISA_UMUR_TENGGANG
+                        + "'"
+                    ),
                     {"p": _SISA_TEST_LIKE},
                 )
             return int(hasil.rowcount or 0)
