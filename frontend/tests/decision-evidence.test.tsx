@@ -121,7 +121,13 @@ describe("Decision & Evidence — dengan keputusan", () => {
     expect(html).toContain("Lolos");
     expect(html).toContain("Supplier A Cianjur");
     expect(html).toContain("keandalan 80%");
-    expect(html).toContain("1 dari 2");
+    // F1: hitungan persetujuan hanya di stepper. Fixture ini tidak menyebut
+    // peran penyetuju, jadi stepper jujur menulis "0 dari 2" — dan angkanya
+    // tidak boleh muncul dua kali di layar yang sama.
+    // "0 dari 2" hanya boleh muncul sekali (stepper); "2 dari 2" di Syarat
+    // persetujuan adalah ambang, bukan hitungan yang sama.
+    expect(html).toContain("0 dari 2");
+    expect((html.match(/0 dari 2/g) ?? []).length).toBe(1);
   });
 
   it("tenggat memakai jam yang diberikan pemanggil", () => {
@@ -384,7 +390,11 @@ describe("Decision & Evidence — struktur catatan keputusan", () => {
     expect(html).toContain("600 kg");
     expect(html).toContain("Rp16.206.000");
     expect(html).toContain("+Rp486.000");
-    expect(html).toContain("Tujuan");
+    // F1 redesign: "Tujuan" tidak lagi berdiri sebagai metrik — ia sudah ada
+    // di judul ("Cianjur → Jakarta"). Yang masuk strip keempat adalah Tenggat,
+    // dan hanya muncul kalau jam acuan diberikan.
+    expect(html).not.toContain("<dt>Tujuan</dt>");
+    expect(html).toContain("Cianjur → Jakarta");
     // Status ditulis sebagai kata, bukan enum mentah (copy hygiene).
     expect(html).toContain(">menunggu persetujuan<");
     expect(html).not.toContain(">PENDING_APPROVAL<");

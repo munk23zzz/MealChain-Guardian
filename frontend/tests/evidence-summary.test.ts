@@ -121,26 +121,33 @@ describe("dossierMeta — alamat konten, tanda tangan, verifikasi", () => {
 });
 
 describe("decisionFacts — identitas keputusan", () => {
-  it("mengambil asal/tujuan, komoditas, jumlah dari summary kanonik", () => {
+  it("mengambil asal/tujuan, komoditas, iterasi dari summary kanonik", () => {
     const rows = decisionFacts(SUMMARY, new Date("2026-10-11T02:00:00Z"));
     expect(find(rows, "Rute").value).toBe("Cianjur → Jakarta");
     expect(find(rows, "Komoditas").value).toBe("telur");
-    expect(find(rows, "Jumlah").value).toBe("600 kg");
     expect(find(rows, "Iterasi").value).toBe("3");
     expect(find(rows, "Menggantikan").value).toBe("0267f818");
     expect(find(rows, "Diusulkan oleh").value).toBe("Agen supervisor");
   });
 
-  it("tenggat ditulis sebagai sisa waktu manusiawi (dari expiry bersarang)", () => {
-    // /approval-summary menaruh tenggat di `expiry.expires_at`; /decisions/{id}
-    // menaruhnya di root. Keduanya harus terbaca.
-    const rows = decisionFacts(SUMMARY, new Date("2026-10-11T02:30:00Z"));
+  // F1 redesign (18 Okt 2026): "Jumlah" dan "Tenggat" pindah ke strip metrik
+  // kepala halaman supaya angkanya tidak muncul dua kali. Lihat
+  // _qa/rencana-decision-evidence-v3.md §4.2 dan tests/evidence-dedup.test.ts.
+  it("tidak lagi memuat Jumlah/Tenggat (keduanya di strip metrik)", () => {
+    const labels = decisionFacts(SUMMARY, new Date("2026-10-11T02:00:00Z")).map((r) => r.label);
+    expect(labels).not.toContain("Jumlah");
+    expect(labels).not.toContain("Tenggat");
+  });
+
+  it("tenggat tetap terbaca — sebagai metrik dari expiry bersarang", () => {
+    const rows = decisionMetrics({}, SUMMARY, new Date("2026-10-11T02:30:00Z"));
     expect(find(rows, "Tenggat").value).toBe("Lewat 13 mnt");
   });
 
-  it("tenggat di root payload keputusan juga terbaca", () => {
-    const rows = decisionFacts(
+  it("tenggat di root payload keputusan juga terbaca sebagai metrik", () => {
+    const rows = decisionMetrics(
       { expires_at: "2026-10-11T05:00:00Z", quantity_kg: 600 },
+      {},
       new Date("2026-10-11T02:00:00Z")
     );
     expect(find(rows, "Tenggat").value).toBe("3 jam lagi");
@@ -153,26 +160,26 @@ describe("decisionFacts — identitas keputusan", () => {
     );
     expect(find(rows, "Rute").value).toBe("—");
     expect(find(rows, "Komoditas").value).toBe("—");
-    expect(find(rows, "Jumlah").value).toBe("600 kg");
-    expect(find(rows, "Tenggat").value).toBe("—");
+    expect(find(rows, "Iterasi").value).toBe("1");
     expect(find(rows, "Menggantikan").value).toBe("—");
   });
 });
 
 describe("costFacts — biaya", () => {
-  it("harga beli, logistik, total aman terkirim, catatan", () => {
+  it("harga beli, logistik, catatan (total ada di strip metrik, tidak diulang)", () => {
     const rows = costFacts(SUMMARY);
     expect(find(rows, "Harga beli").value).toBe("Rp15.720.000");
     expect(find(rows, "Logistik").value).toBe("Rp486.000");
-    expect(find(rows, "Biaya aman terkirim").value).toBe("Rp16.206.000");
     expect(find(rows, "Catatan").value).toBe("seed demo — angka konsisten docs");
+    // F1 redesign: total pindah ke strip; kalau dipertahankan di sini, angka
+    // yang sama muncul dua kali dalam satu layar.
+    expect(rows.map((r) => r.label)).not.toContain("Biaya aman terkirim");
   });
 
   it("tanpa cost_breakdown: '—' (bukan Rp0)", () => {
     const rows = costFacts({ safe_delivered_cost: null });
     expect(find(rows, "Harga beli").value).toBe("—");
     expect(find(rows, "Logistik").value).toBe("—");
-    expect(find(rows, "Biaya aman terkirim").value).toBe("—");
   });
 
   // Fase 7d: jarak pemasok masuk biaya → panel menampilkan pecahannya.
@@ -213,7 +220,7 @@ describe("costFacts — biaya", () => {
     const labels = costFacts(SUMMARY).map((r) => r.label);
     expect(labels).not.toContain("Angkut pemasok → SPPG");
     expect(labels).not.toContain("Angkut antar SPPG");
-    expect(labels).toEqual(["Harga beli", "Logistik", "Biaya aman terkirim", "Catatan"]);
+    expect(labels).toEqual(["Harga beli", "Logistik", "Catatan"]);
   });
 });
 
@@ -253,9 +260,10 @@ describe("safetyFacts — keamanan & pemasok", () => {
 });
 
 describe("approvalFacts — governance", () => {
-  it("jumlah persetujuan, syarat, izin, alasan tertahan, peran", () => {
+  it("syarat, izin, alasan tertahan, peran (hitungan ada di stepper)", () => {
     const rows = approvalFacts(SUMMARY);
-    expect(find(rows, "Persetujuan").value).toBe("1 dari 2");
+    // F1 redesign: "1 dari 2" hanya di stepper; kartu ini tidak mengulangnya.
+    expect(rows.map((r) => r.label)).not.toContain("Persetujuan");
     expect(find(rows, "Syarat persetujuan").value).toBe("2 dari 2");
     expect(find(rows, "Boleh disetujui").value).toBe("Belum");
     expect(find(rows, "Boleh dieksekusi").value).toBe("Belum");
@@ -283,13 +291,13 @@ describe("approvalFacts — governance", () => {
     const rows = approvalFacts({ can_approve: true, can_execute: true, approvals: [] });
     expect(find(rows, "Boleh disetujui").value).toBe("Ya");
     expect(find(rows, "Boleh dieksekusi").value).toBe("Ya");
-    expect(find(rows, "Persetujuan").value).toBe("0 dari —");
+    expect(rows.map((r) => r.label)).not.toContain("Persetujuan");
     expect(find(rows, "Alasan tertahan").value).toBe("—");
   });
 
   it("tanpa summary: '—' semua (bukan 'Tidak' yang menyesatkan)", () => {
     const rows = approvalFacts(null);
-    expect(find(rows, "Persetujuan").value).toBe("—");
+    expect(rows.map((r) => r.label)).not.toContain("Persetujuan");
     expect(find(rows, "Boleh disetujui").value).toBe("—");
     expect(find(rows, "Boleh dieksekusi").value).toBe("—");
   });

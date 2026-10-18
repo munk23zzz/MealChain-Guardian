@@ -50,7 +50,7 @@ import {
 } from "../lib/evidence";
 import { downloadDossier } from "../lib/export";
 import FactList from "./FactList";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 // Nada lencana status memakai kelas `.status-*` yang sudah ada — jangan bikin
 // palet kedua. Status tak dikenal → netral (jujur, bukan ditebak).
@@ -137,7 +137,7 @@ export default function DecisionEvidence({
   const langkah = nextStep({ role, status: String(selected?.status ?? ""), summary });
   const konsekuensi = consequences({ decision: selected, summary });
   const judul = decisionHeadline(selected, summary);
-  const metrik = decisionMetrics(selected, summary);
+  const metrik = decisionMetrics(selected, summary, now);
   const flags = attentionFlags({ decision: selected, summary });
   const rute = approvalRoute({ decision: selected, summary, now });
   const audit = auditTimeline({ decision: selected, summary, chain });
@@ -159,6 +159,36 @@ export default function DecisionEvidence({
     includeExpired: showExpired,
     keep: selectedId,
   });
+
+  // ── F3: bar aksi saat zona keputusan sudah tergulir keluar layar ───────────
+  // Pengukuran sebelum redesign: tombol "Kelola persetujuan…" berada di y≈1155
+  // pada viewport 900 — 255 px di bawah lipatan. Bar ini hanya MENGANTAR ke
+  // kontrol yang sama (#zona-keputusan); ia tidak pernah menggandakan aksi,
+  // supaya tidak ada dua jalur mutasi yang bisa berlomba.
+  const [zonaTerlihat, setZonaTerlihat] = useState(true);
+  useEffect(() => {
+    if (!selected?.decision_id) return;
+    const el = document.getElementById("zona-keputusan");
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([entry]) => setZonaTerlihat(entry.isIntersecting), {
+      rootMargin: "-96px 0px 0px 0px",
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [selected?.decision_id]);
+
+  // Peran pengawas mendapat kalimat "bersifat pengawasan" (nextStep → tone muted);
+  // untuk mereka bar aksi tidak muncul karena memang tidak ada aksi yang boleh.
+  const bolehBertindak = langkah.tone !== "muted";
+  const ringkasanGov = (summary ?? {}) as Record<string, unknown>;
+  const jumlahSetuju = Array.isArray(ringkasanGov.approvals)
+    ? (ringkasanGov.approvals as unknown[]).length
+    : null;
+  const ambangSetuju = Number((ringkasanGov.approval_requirement as Record<string, unknown> | undefined)?.min_approvals);
+  const hitunganSetuju =
+    jumlahSetuju !== null && Number.isFinite(ambangSetuju)
+      ? `${jumlahSetuju} dari ${ambangSetuju} persetujuan`
+      : null;
 
   return (
     <section className="evidence-page">
@@ -215,6 +245,30 @@ export default function DecisionEvidence({
         }
       />
 
+      {/* F2: navigasi bagian — pengganti "gulir 3.000 px lalu menebak".
+          Tautan biasa (bukan tombol) supaya bisa dibuka di tab baru dan
+          terbaca pembaca layar sebagai daftar tujuan. */}
+      {selected && !loading && (
+        <nav className="evidence-jump" aria-label="Lompat ke bagian halaman">
+          <span className="evidence-jump-label">Bagian</span>
+          <ul className="evidence-jump-list">
+            {[
+              ["ringkasan", "Ringkasan"],
+              ["rute", "Jalur persetujuan"],
+              ["zona-keputusan", "Keputusan"],
+              ["bukti", "Bukti"],
+              ["jejak", "Jejak & integritas"],
+            ].map(([id, label]) => (
+              <li key={id}>
+                <a className="badge evidence-jump-link" href={`#${id}`}>
+                  {label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
+
       {!selected && loading ? (
         <article className="card evidence-empty" role="status">
           <h2>Memuat keputusan…</h2>
@@ -269,7 +323,7 @@ export default function DecisionEvidence({
       ) : (
         <>
           {/* ── A. KEPALA KEPUTUSAN ─────────────────────────────────────────── */}
-          <article className="card evidence-hero">
+          <article className="card evidence-hero" id="ringkasan">
             <div className="evidence-hero-bar">
               <span
                 className={`badge evidence-hero-status status-${STATUS_TONES[statusKey] ?? "neutral"}`}
@@ -363,17 +417,25 @@ export default function DecisionEvidence({
               <p className="evidence-next-text">{langkah.text}</p>
             </div>
 
-            {/* Akibat tiap pilihan — bukan hanya status. */}
-            <dl className="evidence-consequence">
-              <div className="evidence-consequence-row">
-                <dt>Kalau disetujui</dt>
-                <dd>{konsekuensi.approve}</dd>
-              </div>
-              <div className="evidence-consequence-row">
-                <dt>Kalau ditolak</dt>
-                <dd>{konsekuensi.reject}</dd>
-              </div>
-            </dl>
+            {/* Akibat tiap pilihan — dilipat (F1) supaya kepala keputusan tidak
+                memanjang. Ringkasan menyebut kedua cabang, dan tidak ada angka
+                yang hanya hidup di dalam lipatan: angkanya dari strip metrik. */}
+            <details className="evidence-consequence">
+              <summary className="evidence-consequence-summary">
+                Akibat tiap pilihan
+                <span className="evidence-consequence-hint">disetujui / ditolak</span>
+              </summary>
+              <dl className="evidence-consequence-list">
+                <div className="evidence-consequence-row">
+                  <dt>Kalau disetujui</dt>
+                  <dd>{konsekuensi.approve}</dd>
+                </div>
+                <div className="evidence-consequence-row">
+                  <dt>Kalau ditolak</dt>
+                  <dd>{konsekuensi.reject}</dd>
+                </div>
+              </dl>
+            </details>
 
             {onOpenTraces ? (
               <p className="evidence-traces">
@@ -390,7 +452,7 @@ export default function DecisionEvidence({
           </article>
 
           {/* ── B. JALUR PERSETUJUAN ────────────────────────────────────────── */}
-          <article className="card evidence-route">
+          <article className="card evidence-route" id="rute">
             <h2>Jalur persetujuan</h2>
             {rute.length === 0 ? (
               <p className="evidence-note">
@@ -428,7 +490,7 @@ export default function DecisionEvidence({
           </article>
 
           {/* ── D. BUKTI ────────────────────────────────────────────────────── */}
-          <div className="evidence-grid">
+          <div className="evidence-grid" id="bukti">
             <article className="card">
               <h2>Biaya</h2>
               <FactList rows={costFacts({ ...selected, summary })} collapseEmpty />
@@ -472,6 +534,21 @@ export default function DecisionEvidence({
             <IntegrityPanel token={token ?? ""} decisionId={selected.decision_id} />
           </div>
         </>
+      )}
+
+      {/* F3: hanya pintasan, bukan aksi kedua — kontrol yang sama tetap di
+          #zona-keputusan. Disembunyikan saat zona itu terlihat, dan untuk peran
+          pengawas yang memang tidak punya aksi. */}
+      {selected && bolehBertindak && !zonaTerlihat && (
+        <div className="evidence-actionbar" role="region" aria-label="Pintasan ke zona keputusan">
+          <span className="evidence-actionbar-text">
+            {statusWord(selected.status)}
+            {hitunganSetuju ? ` · ${hitunganSetuju}` : ""}
+          </span>
+          <a className="button button-primary evidence-actionbar-link" href="#zona-keputusan">
+            Ke zona keputusan
+          </a>
+        </div>
       )}
     </section>
   );

@@ -362,7 +362,7 @@ export function decisionHeadline(decision: unknown, summary: unknown): string {
 }
 
 /** 2–4 angka kunci untuk dibaca dalam tiga detik. Yang tidak ada tidak dipaksa. */
-export function decisionMetrics(decision: unknown, summary: unknown): MetricItem[] {
+export function decisionMetrics(decision: unknown, summary: unknown, now?: Date | null): MetricItem[] {
   const d = objectOf(decision) ?? {};
   const s = objectOf(summary) ?? {};
   const rows: MetricItem[] = [];
@@ -374,8 +374,19 @@ export function decisionMetrics(decision: unknown, summary: unknown): MetricItem
   if (Number.isFinite(biaya) && Number.isFinite(beli) && beli > 0) {
     rows.push({ label: "Selisih dari harga beli", value: selisih(biaya - beli) });
   }
-  const tujuan = text(s.target_location) ?? text(d.target_location);
-  if (tujuan) rows.push({ label: "Tujuan", value: tujuan });
+  // "Tujuan" keluar dari strip: ia sudah ada di judul keputusan ("…: Bogor → Jakarta").
+  // Slot keempat dipakai TENGGAT, yang sebelumnya diulang di kartu Identitas —
+  // jadi satu angka pindah tempat, bukan informasi yang hilang.
+  const expiresAt =
+    text(s.expires_at) ??
+    text(d.expires_at) ??
+    text((objectOf(s.expiry) ?? {}).expires_at) ??
+    text((objectOf(d.expiry) ?? {}).expires_at);
+  if (expiresAt) {
+    // Tanpa jam acuan kita tetap menyebut barisnya dengan "—": pembaca perlu
+    // tahu keputusan INI punya tenggat, hanya jamnya belum bisa dihitung.
+    rows.push({ label: "Tenggat", value: now ? dueLabel(expiresAt, now) : DASH });
+  }
   return rows;
 }
 
@@ -824,8 +835,8 @@ export function dossierMeta(dossier: unknown) {
   };
 }
 
-/** Identitas keputusan: rute, komoditas, jumlah, iterasi, tenggat, asal-usul. */
-export function decisionFacts(decision: unknown, now: Date): FactRow[] {
+/** Identitas keputusan: rute, komoditas, iterasi, asal-usul. */
+export function decisionFacts(decision: unknown, _now?: Date | null): FactRow[] {
   const decisionPayload = (decision ?? {}) as Record<string, unknown>;
   // Summary kanonik (/approval-summary) memberi nama lokasi; payload keputusan
   // hanya memberi id — jangan tebak namanya kalau tidak ada.
@@ -833,12 +844,7 @@ export function decisionFacts(decision: unknown, now: Date): FactRow[] {
   const merged: Record<string, unknown> = summary ? { ...decisionPayload, ...summary } : decisionPayload;
   const source = text(merged.source_location);
   const target = text(merged.target_location);
-  const kg = Number(merged.quantity_kg);
   const iteration = Number(merged.iteration);
-  // Tenggat bisa ada di root (payload keputusan) atau di `expiry` (summary).
-  const expiry = (merged.expiry ?? null) as Record<string, unknown> | null;
-  const expiresAt = merged.expires_at ?? expiry?.expires_at ?? null;
-  const seconds = Number(merged.seconds_remaining ?? expiry?.seconds_remaining);
   return [
     {
       label: "Rute",
@@ -846,20 +852,13 @@ export function decisionFacts(decision: unknown, now: Date): FactRow[] {
     },
     { label: "Komoditas", value: text(merged.commodity) ?? DASH },
     {
-      label: "Jumlah",
-      value: Number.isFinite(kg) ? `${kg.toLocaleString("id-ID")} kg` : DASH,
-    },
-    {
       label: "Iterasi",
       value: Number.isFinite(iteration) ? String(iteration) : DASH,
     },
     { label: "Menggantikan", value: shortId(merged.supersedes_id) },
     { label: "Diusulkan oleh", value: agentLabel(merged.proposed_by) ?? DASH },
-    {
-      label: "Tenggat",
-      value: dueLabel(expiresAt, now),
-      hint: Number.isFinite(seconds) && seconds > 0 ? `${Math.round(seconds / 60)} mnt sisa di server` : null,
-    },
+    // "Jumlah" dan "Tenggat" sengaja TIDAK di sini: keduanya sudah tampil di strip
+    // metrik kepala halaman (F1 redesign, _qa/rencana-decision-evidence-v3.md).
   ];
 }
 
@@ -891,11 +890,9 @@ export function costFacts(decision: unknown): FactRow[] {
   const payload = (decision ?? {}) as Record<string, unknown>;
   const summary = (payload.summary ?? null) as Record<string, unknown> | null;
   const breakdown = (summary?.cost_breakdown ?? payload.cost_breakdown ?? {}) as Record<string, unknown>;
-  const total = summary?.safe_delivered_cost ?? payload.safe_delivered_cost;
   const rows: FactRow[] = [
     { label: "Harga beli", value: breakdown.purchase === undefined ? DASH : idr(breakdown.purchase) },
     { label: "Logistik", value: breakdown.logistics === undefined ? DASH : idr(breakdown.logistics) },
-    { label: "Biaya aman terkirim", value: total === undefined || total === null ? DASH : idr(total) },
     { label: "Catatan", value: text(breakdown.note) ?? DASH },
   ];
   // Fase 7d: biaya angkut dipecah jadi kaki pertama (pemasok → SPPG sumber) dan
@@ -968,10 +965,9 @@ export function supplierFact(summary: unknown): FactRow {
   };
 }
 
-/** Governance: jumlah persetujuan, syarat, izin, alasan tertahan, peran. */
+/** Governance: syarat, izin, alasan tertahan, peran. Hitungan persetujuan ada di stepper. */
 export function approvalFacts(summary: unknown): FactRow[] {
   const payload = (summary ?? null) as Record<string, unknown> | null;
-  const approvals = Array.isArray(payload?.approvals) ? (payload!.approvals as unknown[]) : null;
   const requirement = (payload?.approval_requirement ?? null) as Record<string, unknown> | null;
   const minApprovals = Number(requirement?.min_approvals);
   const requirementText = text(requirement?.requirement);
@@ -985,10 +981,6 @@ export function approvalFacts(summary: unknown): FactRow[] {
   const blocking = blockingReasons(payload);
   const roles = roleList(payload?.approver_roles);
   return [
-    {
-      label: "Persetujuan",
-      value: approvals ? `${approvals.length} dari ${Number.isFinite(minApprovals) ? minApprovals : DASH}` : DASH,
-    },
     {
       label: "Syarat persetujuan",
       value: requirementValue,
