@@ -83,8 +83,10 @@ describe("SupplyMap — layer pemasok", () => {
     expect(html).not.toContain("map-supplier-controls");
     expect(html).not.toContain("map-layer-toggle");
     expect(html).not.toContain("Legenda pemasok");
-    // Kontrak lama (legenda status) tetap ada.
-    expect(html).toContain("Status lokasi:");
+    // Legenda status tetap terbaca tanpa klik — kini di baris ringkas bawah
+    // kanvas (kotak "Info map" yang memuat judul "Status lokasi:" sudah dilebur).
+    expect(html).toContain("Legenda:");
+    expect(html).toContain("Shortage");
   });
 
   it("dengan data pemasok: tombol layer mati secara bawaan", () => {
@@ -93,17 +95,24 @@ describe("SupplyMap — layer pemasok", () => {
     expect(html).toContain('aria-pressed="false"');
     expect(html).toContain('type="button"');
     // 3 baris, satu di antaranya tanpa koordinat → hanya 2 yang bisa dipin.
-    // Teks yang terlihat ringkas; kalimat lengkapnya jadi tooltip (title).
-    expect(html).toContain(">Pemasok (2)</button>");
+    // Sejak 19 Okt 2026 tombolnya IKON SAJA: jumlah pindah ke nama aksesibel
+    // (`aria-label`), aksinya ke tooltip. Teks yang terlihat sudah tidak ada.
+    expect(html).toContain('aria-label="Pemasok (2)"');
     expect(html).toContain('title="Tampilkan pemasok (2)"');
+    expect(html).toContain('class="map-layer-toggle-icon"');
+    expect(html).not.toContain(">Pemasok (2)</button>");
   });
 
   it("label tombol mengikuti filter komoditas peta", () => {
-    expect(render({ suppliers: SUPPLIERS, commodity: "telur" })).toContain(">Pemasok (1)</button>");
-    expect(render({ suppliers: SUPPLIERS, commodity: "wortel" })).toContain(
-      ">Pemasok (1)</button>"
+    expect(render({ suppliers: SUPPLIERS, commodity: "telur" })).toContain(
+      'aria-label="Pemasok (1)"'
     );
-    expect(render({ suppliers: SUPPLIERS, commodity: "ayam" })).toContain(">Pemasok (0)</button>");
+    expect(render({ suppliers: SUPPLIERS, commodity: "wortel" })).toContain(
+      'aria-label="Pemasok (1)"'
+    );
+    expect(render({ suppliers: SUPPLIERS, commodity: "ayam" })).toContain(
+      'aria-label="Pemasok (0)"'
+    );
   });
 
   it("keterangan pemasok hanya dirender saat lapisannya hidup", () => {
@@ -113,7 +122,7 @@ describe("SupplyMap — layer pemasok", () => {
     // sini lewat sumber datanya, dan perilakunya setelah tombol dinyalakan ada di
     // tests/supply-map-layer.test.tsx.
     const html = render({ suppliers: SUPPLIERS });
-    expect(html).toContain(">Pemasok (2)</button>");
+    expect(html).toContain('aria-label="Pemasok (2)"');
     expect(html).not.toContain('aria-label="Keterangan pemasok"');
     expect(html).not.toContain("map-legend-box-shape-excluded");
     const label = SUPPLIER_PIN_LEGEND.map((entry) => entry.label).join(" | ");
@@ -129,7 +138,7 @@ describe("SupplyMap — layer pemasok", () => {
     const html = render({
       suppliers: { items: [SUPPLIERS.items[2]] },
     });
-    expect(html).toContain(">Pemasok (0)</button>");
+    expect(html).toContain('aria-label="Pemasok (0)"');
     expect(html).toContain('title="Tampilkan pemasok (0)"');
   });
 

@@ -2219,47 +2219,11 @@ a:focus-visible {
    tidak perlu lagi mengapung: mengalir di bawah kanvas berarti membukanya
    TIDAK PERNAH bisa menutupi pin — aturan pemilik 2026-10-16 tetap utuh, dan
    kanvas kembali punya satu elemen mengapung saja (pil itu). */
-.map-legend-detail {
-  margin-top: 8px;
-  font-size: var(--fs-1);
-  line-height: 1.35;
-  color: var(--ink);
-}
-/* Chip "Info map" DI DALAM pil kendali: mengikuti gaya chip lapisan di pil yang
-   sama (tanpa bingkai sendiri — batas yang terlihat adalah pil-nya), sementara
-   keadaannya tetap dibedakan lewat `aria-expanded`. */
-.map-overlay-toggles .map-legend-toggle {
-  border: 0;
-  background: transparent;
-  border-radius: 5px;
-}
-/* Isi legenda: TERTUTUP secara bawaan. `display: none` (bukan cuma opacity)
-   supaya ia juga keluar dari pohon aksesibilitas — yang tidak terlihat tidak
-   boleh terbaca pembaca layar. Tidak ada isi legenda yang dihapus dari DOM. */
-.map-legend-boxes {
-  display: none;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  max-width: 100%;
-  padding: 6px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--line);
-  /* Dulu putih 95% karena berdiri di atas ubin peta; sekarang ia duduk di atas
-     kartu putih, jadi latarnya memakai permukaan kartu yang lebih gelap supaya
-     kotaknya masih terbaca sebagai satu blok. */
-  background: var(--surface-sunken);
-}
-.map-legend-detail[data-open="true"] .map-legend-boxes {
-  display: flex;
-  /* Muncul sekali dengan gerak kecil saat dibuka — legenda adalah kunci
-     membaca pin, jadi ia "datang" sesudah peta, bukan menyala mendadak. */
-  animation: map-legend-in var(--dur-3) var(--ease-standard) both;
-}
-@keyframes map-legend-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: none; }
-}
+/* Bungkus "Info map" DIHAPUS 19 Okt 2026: isinya memang legenda yang sama
+   dengan baris legenda ringkas di bawah kanvas, jadi panelnya dilebur ke
+   "Rincian lapisan peta" (lihat `.map-layer-info-panel`). Tidak ada aturan
+   tata letak yang tertinggal di sini — kelas penanda (`.map-legend-box-dot`,
+   `-line`, `-shape`) tetap dipakai baris legenda itu.
 /* Satu BARIS di dalam kotak legenda: bukan kotak sendiri lagi — tanpa bingkai,
    latar, atau bayangan; hanya deretan item yang boleh membungkus. */
 .map-legend-box {
@@ -2331,10 +2295,13 @@ a:focus-visible {
    terbaca sebagai satu kendali, bukan dua kotak terpisah — dan sejak revisi
    16 Okt (arah pemilik: "2 tombol di atas dibuat kecil saja") pil ini diperkecil
    lagi supaya tidak menutupi Jawa Barat tempat pin SPPG & jalur kiriman berada.
-   Sejak langkah 7b-2 pil ini memuat TIGA chip: dua sakelar lapisan + tombol
-   "Info map". Isi Info map dirender di bawah kanvas (`.map-legend-detail`),
-   rincian penjelas lapisan di `.map-layer-info` — jadi kanvas hanya punya SATU
-   elemen mengapung (celah C5), dan semua keterangan panjang tidak menutupi pin. */
+   Sejak 19 Okt 2026 pil ini memuat DUA tombol IKON saja (pemasok, jalur):
+   label teks "Pemasok (6)"/"Jalur kiriman (12)" memakan lebar tepat di atas
+   Jawa Barat, sementara artinya sudah dibawa baris legenda di bawah kanvas dan
+   jumlahnya di tag "Rincian lapisan peta". Tombol "Info map" dihapus karena
+   isinya duplikat legenda; daftar perjalanan kiriman pindah ke panel rincian.
+   Kanvas tetap hanya punya SATU elemen mengapung (celah C5), dan semua
+   keterangan panjang tidak menutupi pin. */
 .map-overlay-toggles {
   position: absolute;
   top: 8px;
@@ -2359,21 +2326,22 @@ a:focus-visible {
   border-radius: 5px;
 }
 .map-layer-toggle {
-  min-height: 26px;                 /* revisi 16 Okt (arah pemilik "dibuat kecil
-                                       saja"): 34 → 26px. Ukuran huruf TIDAK ikut
-                                       turun — 12px (`--fs-1`) adalah batas bawah
-                                       teks data (docs/design.md §4). Target sentuh
-                                       44px di (pointer: coarse) / <=720px ditulis
-                                       EKSPLISIT di blok "Kontrol peta" pada media
-                                       yang sama, karena `min-height` kelas ini
-                                       MENANG atas `button { min-height: 44px }`. */
-  padding: 2px 8px;
+  /* Ikon saja (19 Okt 2026): 32 px persegi di desktop — cukup besar untuk
+     sasaran tunjuk mouse, tetap kecil di atas kanvas. Target 44x44 px untuk
+     layar sentuh ditulis EKSPLISIT di blok "Kontrol peta" media yang sama
+     (WCAG 2.5.8: minimum 24 px; panduan sentuh 44 px), karena `width`/`height`
+     di kelas ini MENANG atas aturan global `button` (min-height 44px). */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  position: relative;
   border: 1px solid var(--line-input);
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.96);
   color: var(--ink);
-  font-size: var(--fs-1);
-  font-weight: 600;
   cursor: pointer;
   /* Umpan balik halus: warna + dorongan tekan. Aturan global `button:active`
      yang mempersingkat durasi ke --dur-1 saat tombol ditekan. */
@@ -2388,6 +2356,30 @@ a:focus-visible {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
   color: var(--surface);
+}
+.map-layer-toggle-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+/* Keadaan MATI diberi garis miring: bentuk, bukan hanya warna. Pengguna
+   buta warna tetap melihat "dicoret", dan `aria-pressed` membawa keadaan yang
+   sama untuk pembaca layar (ui-ux-pro-max prioritas 1: jangan andalkan warna). */
+.map-layer-toggle[aria-pressed="false"] .map-layer-toggle-icon::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 20px;
+  height: 2px;
+  margin: -1px 0 0 -10px;
+  background: currentColor;
+  transform: rotate(-45deg);
+  opacity: 0.55;
+  pointer-events: none;
 }
 /* --- Chip saringan aktif di atas kanvas (celah C8, langkah 7b-2) -----------
    Saat satu kiriman disorot, peta menyembunyikan kiriman lain. Riset menuntut
@@ -2497,8 +2489,7 @@ a:focus-visible {
 }
 /* Chip lipat bersama: dipakai tombol "Rincian lapisan peta" di bawah kanvas dan
    tombol "Legenda peta" di atas kanvas — satu bahasa visual, dua tempat. */
-.map-layer-info-toggle,
-.map-legend-toggle {
+.map-layer-info-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2517,19 +2508,16 @@ a:focus-visible {
     color var(--dur-2) var(--ease-standard),
     transform var(--dur-2) var(--ease-standard);
 }
-.map-layer-info-toggle:hover,
-.map-legend-toggle:hover {
+.map-layer-info-toggle:hover {
   background: var(--surface);
   border-color: var(--line-input);
   color: var(--ink);
 }
-.map-layer-info-toggle:focus-visible,
-.map-legend-toggle:focus-visible {
+.map-layer-info-toggle:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
-.map-layer-info-toggle[aria-expanded="true"],
-.map-legend-toggle[aria-expanded="true"] {
+.map-layer-info-toggle[aria-expanded="true"] {
   background: var(--surface);
   border-color: var(--line-input);
   color: var(--navy-700);
@@ -2537,8 +2525,7 @@ a:focus-visible {
 /* Chevron: segitiga CSS (bukan gambar) supaya tidak ada permintaan berkas.
    Diputar 90° saat panel terbuka — gerak kecil yang menjelaskan ke mana
    isinya pergi, bukan sekadar hiasan. */
-.map-layer-info-chevron,
-.map-legend-chevron {
+.map-layer-info-chevron {
   flex: none;
   width: 0;
   height: 0;
@@ -2547,8 +2534,7 @@ a:focus-visible {
   border-bottom: 3.5px solid transparent;
   transition: transform var(--dur-2) var(--ease-standard);
 }
-.map-layer-info-toggle[aria-expanded="true"] .map-layer-info-chevron,
-.map-legend-toggle[aria-expanded="true"] .map-legend-chevron {
+.map-layer-info-toggle[aria-expanded="true"] .map-layer-info-chevron {
   transform: rotate(90deg);
 }
 /* Tag angka: satu baris, angka rata (tabular) supaya tidak "melompat" saat
@@ -2632,7 +2618,6 @@ a:focus-visible {
 }
 /* Contoh garis di dalam kotak legenda peta ikut diperkecil (keputusan pemilik
    2026-10-16). `.ship-route` di popup dibiarkan 22px supaya tetap jelas. */
-.map-legend-detail .map-legend-line,
 .map-legend-compact .map-legend-line {
   width: 16px;
   border-top-width: 2px;
@@ -6802,8 +6787,20 @@ button:active:not(:disabled),
     height: 20px;
   }
 
-  .map-layer-toggle,
-  .map-overlay-toggles .map-legend-toggle,
+  .map-layer-toggle {
+    /* Ikon persegi: `min-height` saja akan membuatnya 44x32 (lonjong), jadi
+       lebar ikut ditulis. 44x44 = panduan sentuh iOS/Android (skill prioritas 2). */
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .map-layer-toggle-icon,
+  .map-layer-toggle-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
   .map-layer-info-toggle,
   .map-filter-clear {
     min-height: 44px;

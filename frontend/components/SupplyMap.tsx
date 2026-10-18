@@ -57,6 +57,10 @@ import { penandaPeta, ringkasPenanda } from "../lib/map-a11y";
 // Kelas pin digabung, bukan ditimpa — kelas `maplibregl-marker` milik pustaka
 // membawa position:absolute; menghapusnya membuat pin bergeser dari koordinat.
 import { gabungKelasPin } from "../lib/map-pin-class";
+// Ikon sakelar lapisan (19 Okt 2026): pil kendali kini ikon saja — teks
+// "Pemasok (6)"/"Jalur kiriman (12)" memakan lebar tepat di atas Jawa Barat,
+// padahal artinya sudah dibawa legenda di bawah kanvas dan jumlahnya di tag.
+import { IkonLapisanJalur, IkonLapisanPemasok } from "./map-toggle-icons";
 import {
   daftarkanSorot,
   langgananSorot,
@@ -144,7 +148,9 @@ function mediaQueryCocok(query: string): boolean {
 }
 
 const LAYER_INFO_PANEL_ID = "map-layer-info-panel";
-const LEGEND_PANEL_ID = "map-legend-panel";
+// Id panel rincian; dulu ada juga LEGEND_PANEL_ID untuk chip "Info map", tetapi
+// panel itu sudah dilebur ke sini (19 Okt 2026) supaya legenda hanya dibaca di
+// SATU tempat: baris legenda di bawah kanvas, dengan rincian di panel ini.
 
 const ROUTE_LINE_WIDTH: maplibregl.ExpressionSpecification = [
   "interpolate",
@@ -674,7 +680,7 @@ export default function SupplyMap({
   // terbaca sebagai tag ringkas di bilah, jadi kalimat penjelas panjang tidak
   // perlu menahan ruang. Isinya tetap ada di DOM (tidak dihapus).
   const [showLayerInfo, setShowLayerInfo] = useState(false);
-  const [showLegend, setShowLegend] = useState(false);
+
   const routePinRows = useMemo(() => supplierRouteRows(supplierRoutes), [supplierRoutes]);
   const routeFeatures = useMemo(() => routeGeoJson(supplierRoutes), [supplierRoutes]);
   const routeSummary = useMemo(() => routeLayerSummary(supplierRoutes), [supplierRoutes]);
@@ -1396,16 +1402,24 @@ export default function SupplyMap({
               luas kanvas (terukur 650x262 px dari 947x460 px), tepat di atas Jawa
               Barat tempat pin SPPG dan jalur kiriman berada. */}
           {(Boolean(suppliers) || Boolean(supplierRoutes)) && (
-            <div className="map-overlay-toggles">
+            <div className="map-overlay-toggles" role="group" aria-label="Lapisan peta">
+              {/* Ikon saja (19 Okt 2026). Nama aksesibel tetap membawa jumlah
+                  ("Pemasok (6)") dan tooltip-nya membawa aksi ("Tampilkan …"),
+                  karena teksnya hilang dari layar. Keadaan nyala/mati TIDAK
+                  hanya dibedakan warna: `aria-pressed` + garis miring di ikon
+                  saat mati (ui-ux-pro-max prioritas 1: jangan andalkan warna). */}
               {Boolean(suppliers) && (
                 <button
                   type="button"
-                  className="map-layer-toggle"
+                  className="map-layer-toggle map-supplier-toggle"
                   aria-pressed={showSuppliers}
+                  aria-label={supplierToggleLabel(supplierMapRows)}
                   title={supplierToggleAction(supplierMapRows, showSuppliers)}
                   onClick={() => setShowSuppliers((value) => !value)}
                 >
-                  {supplierToggleLabel(supplierMapRows)}
+                  <span className="map-layer-toggle-icon">
+                    <IkonLapisanPemasok />
+                  </span>
                 </button>
               )}
               {Boolean(supplierRoutes) && (
@@ -1413,114 +1427,23 @@ export default function SupplyMap({
                   type="button"
                   className="map-layer-toggle map-route-toggle"
                   aria-pressed={showRoutes}
+                  aria-label={routeToggleLabel(routePinRows)}
                   title={routeToggleAction(routePinRows, showRoutes)}
                   onClick={() => setShowRoutes((value) => !value)}
                 >
-                  {routeToggleLabel(routePinRows)}
+                  <span className="map-layer-toggle-icon">
+                    <IkonLapisanJalur />
+                  </span>
                 </button>
               )}
-              {/* Chip "Info map" masuk PIL yang sama supaya kanvas hanya punya
-                  SATU zona kendali yang mengapung (celah C5, langkah 7b-2; riset
-                  §5). Isinya dirender DI BAWAH kanvas (`.map-legend-detail`) —
-                  jadi membukanya tidak pernah menutupi pin. */}
-              <button
-                type="button"
-                className="map-legend-toggle"
-                aria-expanded={showLegend}
-                aria-controls={LEGEND_PANEL_ID}
-                onClick={() => setShowLegend((value) => !value)}
-              >
-                <span className="map-legend-chevron" aria-hidden="true" />
-                Info map
-              </button>
             </div>
           )}
-          {/* Rincian "Info map" — DI BAWAH kanvas dan DI DALAM ALUR (bukan
-              mengapung di atas peta). Sejak langkah 7b-2 chip pembukanya pindah
-              ke pil kendali kiri-atas (satu-satunya elemen yang mengapung, celah
-              C5), sedangkan isinya turun ke sini supaya membukanya tidak pernah
-              menutupi pin di Jawa Barat (aturan pemilik 2026-10-16).
-
-              Isinya tetap lengkap dan namanya tetap "Info map"; dua aturan
-              penyusunannya tidak berubah:
-              1. kelompok yang lapisannya sedang MATI tidak ditampilkan —
-                 keterangan warna yang tidak ada di peta adalah informasi palsu;
-              2. entri "gagal uji" hanya muncul kalau memang ada kiriman bergaris
-                 seperti itu (lihat `routeLegendEntries`).
-
-              Yang terbaca TANPA klik adalah baris legenda ringkas di bawah kartu
-              (celah C2); kotak ini memuat rincian yang lebih panjang. */}
-          <div className="map-legend-detail" data-open={showLegend}>
-            <div
-              className="map-legend-boxes"
-              id={LEGEND_PANEL_ID}
-              role="group"
-              aria-label="Info map"
-            >
-              <div className="map-legend-box" role="group" aria-label="Keterangan status lokasi">
-                <span className="map-legend-box-title">Status lokasi:</span>
-                <span className="map-legend-box-item">
-                  <i className="map-legend-box-dot map-legend-box-dot-surplus" aria-hidden="true" /> Surplus
-                </span>
-                <span className="map-legend-box-item">
-                  <i className="map-legend-box-dot map-legend-box-dot-balanced" aria-hidden="true" /> Seimbang
-                </span>
-                <span className="map-legend-box-item">
-                  <i className="map-legend-box-dot map-legend-box-dot-shortage" aria-hidden="true" /> Shortage
-                </span>
-              </div>
-              {Boolean(supplierRoutes) && showRoutes && (
-                <div
-                  className="map-legend-box map-legend-box-routes"
-                  role="group"
-                  aria-label="Keterangan jalur kiriman"
-                >
-                  <span className="map-legend-box-title">Jalur kiriman:</span>
-                  {routeLegendEntries(routePinRows).map((entry) => (
-                    <span key={`${entry.tone}-${entry.gaya}`} className="map-legend-box-item">
-                      <i
-                        className={`map-legend-line map-legend-line-${entry.tone} map-legend-line-${entry.gaya}`}
-                        aria-hidden="true"
-                      />{" "}
-                      {entry.label}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {Boolean(suppliers) && showSuppliers && (
-                <div
-                  className="map-legend-box map-legend-box-suppliers"
-                  role="group"
-                  aria-label="Keterangan pemasok"
-                >
-                  <span className="map-legend-box-title">Pemasok:</span>
-                  {SUPPLIER_PIN_LEGEND.map((entry) => (
-                    <span key={entry.tone} className="map-legend-box-item">
-                      <i
-                        className={`map-legend-box-shape map-legend-box-shape-${entry.tone}`}
-                        aria-hidden="true"
-                      />{" "}
-                      {entry.label}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {Boolean(supplierRoutes) && showRoutes && journeyRows.length > 0 && (
-                <div
-                  className="map-legend-box map-journey"
-                  role="group"
-                  aria-label="Perjalanan kiriman"
-                >
-                  <span className="map-legend-box-title">Perjalanan kiriman:</span>
-                  {journeyRows.map((row) => (
-                    <span key={row.teks} className={row.kelas}>
-                      {row.teks}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          {/* Sematan "Info map" dilebur ke panel "Rincian lapisan peta" di
+              bawah (19 Okt 2026). Alasannya bukan ruang: isi panel itu memang
+              legenda yang SAMA dengan baris legenda di bawah kanvas (status,
+              jalur, pemasok) — satu fakta dibaca dua tempat, yang kedua lewat
+              klik. Satu-satunya isi yang tidak duplikat, daftar perjalanan
+              kiriman, ikut pindah ke panel itu. */}
         </div>
 
         {/* Baris legenda ringkas (celah C2, langkah 7b-2): makna titik & garis
@@ -1618,6 +1541,25 @@ export default function SupplyMap({
               data-open={showLayerInfo}
             >
               <div className="map-layer-info-inner">
+                {/* Perjalanan kiriman: satu-satunya isi "Info map" yang tidak
+                    duplikat legenda, jadi ia ikut pindah ke sini. Hanya saat
+                    lapisan jalur hidup — keterangan garis yang tidak ada di
+                    peta adalah informasi palsu (aturan yang sama seperti
+                    legenda ringkas). */}
+                {journeyRows.length > 0 && (
+                  <div
+                    className="map-legend-box map-journey"
+                    role="group"
+                    aria-label="Perjalanan kiriman"
+                  >
+                    <span className="map-legend-box-title">Perjalanan kiriman:</span>
+                    {journeyRows.map((row) => (
+                      <span key={row.teks} className={row.kelas}>
+                        {row.teks}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {Boolean(suppliers) && (
                   <p className="map-supplier-note">
                     {supplierReachNote(

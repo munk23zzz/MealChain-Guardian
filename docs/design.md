@@ -1266,10 +1266,13 @@ Acuan yang dipilih (detail, kutipan verbatim, dan celah lengkap: `docs/research/
   Ini konfirmasi konvensi untuk aturan Arah C (sisa perjalanan = putus-putus).
 - Tooltip di peta untuk info singkat; cerita panjang di panel tetap — Axis Maps [22], NN/g [13].
 
-Keadaan terukur sekarang (SPPG Head, Overview, seed default; `ui-audit/p0-inventaris.json`):
-kartu peta 752×528 px @1440 / 331×502 px @375; kontrol MapLibre 29×29 px; toggle lapisan 26 px;
-legenda ("Info map") dan "Rincian lapisan peta" 24 px; **tidak ada** kontrol skala maupun tombol
-kembali ke tampilan awal; angka operasional "−780 kg" menempel di baris attribution.
+Keadaan terukur SETELAH 7b-1/7b-2/7b-3 (19 Okt 2026): kartu peta 752×528 px @1440 /
+331×502 px @375; kontrol MapLibre 29×29 px di desktop dan **44×44 px** di `(pointer: coarse)`;
+sakelar lapisan **32×32 px** di desktop dan **44×44 px** di layar sentuh; tombol "Rincian lapisan
+peta" 44 px di layar sentuh. Kontrol skala (`ScaleControl`, metrik) dan tombol "Tampilkan semua"
+(reset ke batas awal) **sudah ada** — keduanya ditambahkan di 7b-1, jadi butir 1 pada daftar riset
+di atas tidak lagi menjadi celah. Legenda terbaca tanpa klik (baris di bawah kanvas) dan "Info map"
+sudah tidak ada sebagai panel terpisah (lihat §14).
 
 Urutan kerja: **7b-1 SELESAI 17 Okt** → **7b-2 SELESAI 17 Okt** (legenda terlihat tanpa klik, satu zona
 "Info peta", chip penanda filter aktif, cooperative gestures di perangkat sentuh) → **K5 dari 7b-3 SELESAI
@@ -1631,3 +1634,68 @@ oleh pembersihan tes sesi paralel (terukur: keputusan/limbah demo hilang di anta
 pemeriksaan beberapa detik). Karena itu: setelah menjalankan pytest, tekan
 **"Segarkan ke hari ini"** sebelum menilai UI, dan jangan menyimpulkan "fitur rusak"
 dari angka yang berubah-ubah tanpa memeriksa ulang barisnya di DB.
+
+## 14. Pil peta jadi ikon & "Info map" dilebur (19 Okt 2026)
+
+Permintaan pemilik: *"untuk pemasok dan jalur, tombolnya dibuat ikon saja; informasi map
+yang saya lihat sama saja dengan legenda."* Dua-duanya dikerjakan bersamaan karena
+sumbernya satu: pil kendali yang mengapung di kanvas.
+
+### 14.1 Sakelar lapisan: ikon saja
+
+| Sebelum | Sesudah |
+|---|---|
+| `Pemasok (7)` + `Jalur kiriman (3)` + `⌄ Info map` — tiga chip berteks | Dua tombol ikon: pin (pemasok) dan polyline (jalur) |
+| Tinggi 26 px, lebar mengikuti teks (~120 px) | **32×32 px** di desktop, **44×44 px** di `(pointer: coarse)` |
+| Nama = teks tombol | Nama aksesibel `aria-label="Pemasok (7)"`, aksi di `title` |
+
+Kenapa aman menghapus teksnya (dan bukan sekadar merapikan): jumlah dan makna tetap ada di
+dua tempat yang sudah terbaca — baris **Legenda** di bawah kanvas (tanpa klik) dan tag
+**"Rincian lapisan peta"**. Yang hilang hanya label 120 px yang menutupi Jawa Barat.
+
+Aturan yang dipegang (ui-ux-pro-max prioritas 1 & 2):
+- **Nama aksesibel wajib** kalau ikon tanpa teks; `aria-label` membawa jumlah, `title` membawa aksi.
+- **Keadaan tidak boleh warna saja**: tombol mati diberi **garis miring** (`.map-layer-toggle-icon::after`),
+  tombol hidup terisi aksen — jadi pengguna buta warna tetap melihat bedanya, dan `aria-pressed`
+  membawa keadaan yang sama untuk pembaca layar.
+- **Ikon dekoratif** `aria-hidden="true"` + `focusable="false"`; dua ikonnya beda bentuk (pin vs polyline)
+  supaya tidak tertukar walau tanpa label.
+- Target sentuh 44×44 px eksplisit di blok media (WCAG 2.5.8 minta minimum 24 px; panduan sentuh 44 px).
+
+### 14.2 "Info map" dihapus, isinya dipindah
+
+Temuan pemilik benar dan terverifikasi di kode: isi kotak "Info map" adalah **butir legenda yang
+sama** dengan baris legenda ringkas (`compactLegendItems` memakai `STATUS_LEGEND`, nada jalur, dan
+`SUPPLIER_PIN_LEGEND` yang sama) — satu fakta dibaca dua tempat, yang kedua lewat klik tambahan.
+Satu-satunya isi yang tidak duplikat: daftar **Perjalanan kiriman**.
+
+Jadi: kotak status/jalur/pemasok dihapus, `Perjalanan kiriman` dipindah ke panel
+**"Rincian lapisan peta"** (satu panel lipat di bawah peta, konten tetap di DOM walau tertutup).
+Hasilnya tiga permukaan informasi, masing-masing dengan satu tugas:
+
+1. **baris Legenda** — makna warna/bentuk, selalu terlihat, tanpa klik;
+2. **tag jumlah** — "7/9 pemasok dalam jangkauan", "3 jalur kiriman · semua lewat jalur jalan";
+3. **panel Rincian lapisan** — perjalanan per kiriman + kalimat panjang (termasuk asal geometri OSRM).
+
+### Terukur di aplikasi hidup (19 Okt 2026, SPPG Head, Overview)
+
+- Pil: **2 tombol, 32×32 px**, `innerText` pil kosong, label `Pemasok (7)` / `Jalur kiriman (3)`,
+  `aria-pressed` `false` / `true`. Tidak ada teks "Info map" di halaman mana pun.
+- Ponsel 375 px: kedua tombol **44×44 px**.
+- Menyalakan pemasok menambah butir legenda (`Pemasok · Keandalan rendah · Dikecualikan ·
+  Di luar jangkauan · Sedang mengirim`) — keterangan warna hanya muncul saat lapisannya hidup.
+- Panel rincian: `Perjalanan kiriman: Jakarta · di jalan · tiba ± 02.18 (1 jam 3 menit lagi) …
+  7 dari 9 pemasok dalam jangkauan 150 km dari Jakarta · 2 di luar jangkauan tidak dipasang di peta`.
+- Artefak: `ui-audit/p15-pil-ikon.png`, `p16-pil-mati-nyala.png`, `p15-peta-375.png`.
+
+### Tes yang mengunci bentuk baru
+
+- `tests/map-toggle-icons.test.tsx` (6) — tanpa teks terlihat, `aria-label`+jumlah, `title`+aksi,
+  `aria-pressed`, ikon `aria-hidden`, dua ikon beda, tidak ada "Info map".
+- `tests/map-controls-css.test.ts` — 32 px persegi di desktop, 44 px di sentuh, dan
+  **garis miring untuk keadaan mati** (bukan hanya warna); kelas `map-legend-toggle`/
+  `map-legend-detail` harus tetap hilang.
+- `tests/supply-map-layer.test.tsx` — perjalanan kiriman ada di panel rincian, hilang saat lapisan
+  jalur dimatikan, dan legenda tetap terbaca tanpa klik.
+- `tests/supply-map-suppliers.test.tsx`, `tests/supply-map.test.tsx` — jumlah pindah ke `aria-label`;
+  legenda status kini "Legenda: … Shortage" (judul "Status lokasi:" ikut hilang bersama kotaknya).

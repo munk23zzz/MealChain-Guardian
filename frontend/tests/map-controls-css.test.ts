@@ -54,8 +54,23 @@ describe("kontrak CSS kontrol peta (7b-1)", () => {
     expect(blok("\\.map-reset-view")).toMatch(/pointer-events:\s*auto/);
   });
 
-  it("kontrol peta ringkas di desktop: chip tetap 26 px, bukan 44 px", () => {
-    expect(blok("\\.map-layer-toggle")).toMatch(/min-height:\s*26px/);
+  it("sakelar lapisan ikon: 32 px persegi di desktop, bukan chip berteks", () => {
+    const tombol = blok("\\.map-layer-toggle");
+    expect(tombol).toMatch(/width:\s*32px/);
+    expect(tombol).toMatch(/height:\s*32px/);
+    // Tidak ada lagi teks di dalam tombol, jadi jangan ada padding horizontal
+    // yang menyisakan ruang untuk label (ikon dipusatkan dengan flex).
+    expect(tombol).toMatch(/display:\s*inline-flex/);
+    expect(tombol).toMatch(/justify-content:\s*center/);
+  });
+
+  it("keadaan MATI ditandai garis miring — bukan hanya warna", () => {
+    // ui-ux-pro-max prioritas 1: makna tidak boleh disampaikan warna saja.
+    const aturan = css.match(
+      /\.map-layer-toggle\[aria-pressed="false"\] \.map-layer-toggle-icon::after\s*\{([^}]*)\}/
+    );
+    expect(aturan, "garis miring untuk keadaan mati hilang").toBeTruthy();
+    expect(aturan?.[1]).toMatch(/transform:\s*rotate\(-45deg\)/);
   });
 
   it("chip peta naik ke 44 px di perangkat sentuh / jendela sempit", () => {
@@ -64,7 +79,6 @@ describe("kontrak CSS kontrol peta (7b-1)", () => {
     const gabungan = blokKontrol.join("\n");
     for (const selector of [
       "\\.map-layer-toggle",
-      "\\.map-overlay-toggles \\.map-legend-toggle",
       "\\.map-layer-info-toggle",
       "\\.map-reset-view",
     ]) {
@@ -92,13 +106,12 @@ describe("kontrak CSS kontrol peta (7b-1)", () => {
     expect(cssGestur).toMatch(/background:\s*rgba\(15,\s*23,\s*42/);
   });
 
-  it("rincian Info map tidak lagi mengapung: ikut alur di bawah kanvas", () => {
-    // Langkah 7b-2 (celah C5): satu-satunya elemen mengapung di kanvas adalah
-    // pil kendali. Kalau panggung absolut ini kembali, artinya rincian legenda
-    // bisa menutupi pin lagi — persis yang dilarang pemilik 2026-10-16.
-    const cssLegenda = blok("\\.map-legend-detail");
-    expect(cssLegenda).not.toMatch(/position:\s*absolute/);
-    expect(cssLegenda).toMatch(/margin-top/);
-    expect(blok("\\.map-overlay-toggles \\.map-legend-toggle")).toMatch(/border:\s*0/);
+  it("panel 'Info map' yang terpisah sudah tidak ada (dilebur ke rincian lapisan)", () => {
+    // 19 Okt 2026: isinya duplikat baris legenda, jadi panelnya dihapus. Kalau
+    // kelas ini kembali, berarti legenda dibaca di dua tempat lagi.
+    expect(css).not.toContain(".map-legend-toggle");
+    expect(css).not.toContain(".map-legend-detail");
+    // Legenda ringkas (yang terbaca tanpa klik) tetap punya gayanya sendiri.
+    expect(css).toContain(".map-legend-compact");
   });
 });

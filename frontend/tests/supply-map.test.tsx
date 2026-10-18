@@ -64,10 +64,14 @@ describe("SupplyMap (MapLibre GL)", () => {
     expect(pinLabel(LOCATIONS[2])).toBe("Bogor seimbang");
   });
 
-  it("peta terang: legenda putih kiri-bawah memakai makna status aplikasi", () => {
+  it("peta terang: legenda memakai makna status aplikasi", () => {
     const html = renderToStaticMarkup(<SupplyMap locations={LOCATIONS} />);
+    // 19 Okt 2026: kotak "Info map" (judul "Status lokasi:") dilebur ke baris
+    // legenda ringkas — satu tempat baca, dan terbaca tanpa klik.
     expect(html).toContain("map-legend-box");
-    expect(html).toContain("Status lokasi:");
+    expect(html).toContain("map-legend-compact");
+    expect(html).toContain("Legenda:");
+    expect(html).toContain("Shortage");
     expect(html).toContain("map-legend-box-dot-surplus");
     expect(html).toContain("map-legend-box-dot-shortage");
     // Tanpa kepala/kaki panel gelap dari versi sebelumnya.

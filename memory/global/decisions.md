@@ -115,3 +115,17 @@
 - **Pelajaran operasional:** DB demo dipakai bersama sesi lain; baris demo bisa hilang
   di antara dua pemeriksaan karena pembersihan tes. Selalu tekan "Segarkan ke hari ini"
   sebelum menilai UI, dan verifikasi lewat DB/tes, bukan dari tangkapan layar tunggal.
+
+## 19 Okt 2026 — pil peta jadi ikon, "Info map" dilebur
+
+- **Keputusan: sakelar lapisan peta jadi tombol IKON (32 px desktop / 44 px sentuh).** Teks
+  "Pemasok (7)"/"Jalur kiriman (3)" memakan ~120 px tepat di atas Jawa Barat, sementara jumlah dan
+  maknanya sudah ada di baris legenda (tanpa klik) dan tag "Rincian lapisan peta". Nama aksesibel
+  membawa jumlah, `title` membawa aksi, `aria-pressed` membawa keadaan.
+- **Keputusan: keadaan MATI ditandai garis miring, bukan hanya warna** — pengguna buta warna tetap
+  melihat bedanya; ini syarat dari skill ui-ux-pro-max prioritas 1, bukan hiasan.
+- **Keputusan: kotak "Info map" dihapus, bukan dirapikan.** Isinya duplikat butir legenda
+  (sumber data yang sama); satu-satunya isi unik, daftar Perjalanan kiriman, dipindah ke panel
+  "Rincian lapisan peta". Satu fakta, satu tempat: legenda (tanpa klik) → tag jumlah → panel rincian.
+- **Pelajaran:** klaim dokumen "kontrol skala & tombol reset belum ada" ternyata BASI — keduanya
+  sudah ditambahkan di 7b-1. Periksa kode sebelum mengutip daftar celah dari dokumen desain.
