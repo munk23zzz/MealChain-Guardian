@@ -43,8 +43,12 @@ async def _pasang_demo(item):
             loc_id,
             item["plan_date"],
         )
-        id_demo = stable_uuid("menu_plan", "demo-uji", item["location"], item["plan_date"].isoformat())
-        id_kirim = stable_uuid("delivery", "demo-uji", item["location"], item["plan_date"].isoformat())
+        id_demo = stable_uuid(
+            "menu_plan", "demo-uji", item["location"], item["plan_date"].isoformat()
+        )
+        id_kirim = stable_uuid(
+            "delivery", "demo-uji", item["location"], item["plan_date"].isoformat()
+        )
         await conn.execute(
             "insert into menu_plans (id, location_id, plan_date, planned_portions, origin) "
             "values ($1,$2,$3,999,'demo')",
@@ -105,6 +109,8 @@ def test_seed_memindahkan_anak_baris_demo_sebelum_mengganti_id() -> None:
         assert len(baris) == 1, "tanggal kanonik harus menyisakan tepat satu baris menu"
         assert baris[0]["origin"] == "seed", "isi kanonik menang: origin jadi seed"
         assert baris[0]["planned_portions"] == item["planned_portions"]
-        assert str(anak) == str(baris[0]["id"]), "kiriman harus menunjuk id baris yang benar-benar ada"
+        assert str(anak) == str(baris[0]["id"]), (
+            "kiriman harus menunjuk id baris yang benar-benar ada"
+        )
 
     asyncio.run(alur())

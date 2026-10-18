@@ -255,7 +255,9 @@ def test_jam_berangkat_dan_estimasi_tiba_konsisten_dengan_db(client, monitor_hea
             assert 0.0 <= journey["progress"] <= 1.0
         assert abs((tiba - ref).total_seconds() / 60 - journey["remaining_min"]) < 0.2
         assert journey["usable_until"] == row["usable_until"]
-        assert journey["arrives_before_usable_until"] == (tiba <= datetime.fromisoformat(row["usable_until"]))
+        assert journey["arrives_before_usable_until"] == (
+            tiba <= datetime.fromisoformat(row["usable_until"])
+        )
 
 
 def test_kiriman_belum_berangkat_tidak_diberi_estimasi_karangan(client, monitor_headers):

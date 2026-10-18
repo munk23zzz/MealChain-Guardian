@@ -109,14 +109,18 @@ def test_freshness_evaluate_pass_band_persists(client):
 
 
 def test_freshness_evaluate_fail_band(client):
-    # Semarang ayam freshness 0.15 → fail
+    # Semarang ayam freshness 0.00 → fail.
+    # `origin='seed'` WAJIB: DB ini dipakai bersama tes lain dan penyemai demo,
+    # jadi `WHERE c.name='ayam' LIMIT 1` bisa memilih batch ayam lain (mis. batch
+    # demo ber-freshness 0.92) dan asersi fail berubah jadi needs_verification
+    # hanya karena urutan baris — bukan karena endpoint salah.
     with _db().connect() as conn:
         batch_id = str(
             conn.execute(
                 text(
                     "SELECT b.id FROM batches b "
                     "JOIN commodities c ON c.id = b.commodity_id "
-                    "WHERE c.name = 'ayam' LIMIT 1"
+                    "WHERE c.name = 'ayam' AND b.origin = 'seed' LIMIT 1"
                 )
             ).scalar_one()
         )
@@ -141,6 +145,8 @@ def test_freshness_missing_batch_404(client):
 
 
 def test_safety_evaluate_fail_persists_uppercase(client):
+    # Batch Surabaya kanonik (seed) dengan riwayat suhu buruk. `origin='seed'`
+    # memisahkan dari batch demo/tes lain yang bisa lebih dulu terbaca.
     with _db().connect() as conn:
         batch_id = str(
             conn.execute(
@@ -148,7 +154,7 @@ def test_safety_evaluate_fail_persists_uppercase(client):
                     "SELECT b.id FROM batches b "
                     "JOIN commodities c ON c.id = b.commodity_id "
                     "JOIN locations l ON l.id = b.location_id "
-                    "WHERE l.name = 'Surabaya' LIMIT 1"
+                    "WHERE l.name = 'Surabaya' AND b.origin = 'seed' LIMIT 1"
                 )
             ).scalar_one()
         )

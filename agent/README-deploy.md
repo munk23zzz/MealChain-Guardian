@@ -21,60 +21,8 @@ mengembalikan `{"response": "<narasi>"}`. Port **8080** dan path **/invocations*
 kontrak AgentCore Runtime, bukan pilihan kita.
 
 Setelah `AGENTCORE_RUNTIME_ARN` terisi, `backend/app/ai_providers/model_registry.py` otomatis
-menaruh AgentCore sebagai **slot primary** setiap rantai agent (slot env bergeser satu) — jadi
-orkestrator TIDAK perlu diubah lagi; cukup ARN-nya.
-
-## Mode review 7 worker agent (P0 — belum aktif)
-
-P0 hanya menambahkan gerbang konfigurasi; **belum ada worker yang dibuat atau dijalankan**.
-Perilaku sekarang tetap satu supervisor Strands + empat tool baca.
-
-| Env | Default | Arti |
-|---|---|---|
-| `MULTI_AGENT_REVIEW` | `false` | `true` nanti menyalakan review 7 worker setelah keputusan dibuat. |
-| `AGENT_REVIEW_MODE` | `advisory` | Agen hanya meninjau; tidak menghitung ulang SDC/safety dan tidak mengeksekusi. |
-| `AGENT_REVIEW_TIMEOUT_SECONDS` | `75` | Batas total review; lewat batas → status `timeout`, bukan angka karangan. |
-
-Jangan menyalakan flag ini sebelum kontrak, worker, trace, dan UI P1–P5 selesai.
-Saat runtime cloud dipakai, `MEALCHAIN_API_URL` **wajib** bisa dijangkau dari AgentCore
-(bukan `http://backend:8000`, yang hanya ada di jaringan Compose). Kalau backend masih
-lokal, jalankan runtime secara lokal dan sebut “runtime lokal” di UI — jangan mengklaim
-AgentCore live.
-
-## Kontrak P1 (sudah ada, belum aktif)
-
-- `contracts.py` — `AgentFinding`, `AgentRun`, `Citation`, dan validator angka wajib sitasi.
-- `hierarchy.json` — tujuh role, stage, endpoint allowlist, dan lane paralel.
-- `registry.py` — memuat dan memvalidasi konfigurasi di atas.
-- `workers/` — P1: tujuh stub `skipped`; P2: empat worker baca nyata
-  (Supply, Demand, Safety, Freshness), tiga masih stub. Belum ada panggilan model.
-
-Tes kontrak (host-only, butuh repo root di `PYTHONPATH`):
-
-```bash
-docker compose run --rm -e PYTHONPATH=/repo -v "$PWD:/repo" -w /repo backend \
-  pytest -q backend/tests/test_agent_contracts.py
-```
-
-## Worker baca P2 (4/7 — Supply, Demand, Safety, Freshness)
-
-Empat worker pertama sudah membaca API lewat `agent/api_client.py` (GET saja):
-
-- Supply: `GET /balance/{location}/{commodity}`; nilai yang tidak terukur
-  dikosongkan (`null`), bukan diubah menjadi 0.
-- Demand: `GET /demand/...` dan `GET /demand/forecast/...?horizon_days=7`.
-- Safety: `GET /batches` dan `GET /supplier-exclusions`; tidak memanggil
-  `POST /safety/evaluate` yang menulis DB.
-- Freshness: `GET /batches`; tidak memanggil `POST /freshness/evaluate` yang menulis DB.
-
-Tes mock transport:
-
-```bash
-docker compose run --rm -e PYTHONPATH=/repo -v "$PWD:/repo" -w /repo backend \
-  pytest -q backend/tests/test_agent_workers.py backend/tests/test_agent_contracts.py
-```
-
-Tiga worker sisanya (Price, Logistics, Evidence) masih stub P1.
+menaruh AgentCore sebagai **slot primary** setiap rantai agent (slot env bergeser satu) — jadi orkestrator
+TIDAK perlu diubah lagi; cukup ARN-nya.
 
 ## Blocker saat ini (terukur, bukan dugaan)
 
