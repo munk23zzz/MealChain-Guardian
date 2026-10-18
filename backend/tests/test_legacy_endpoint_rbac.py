@@ -98,7 +98,6 @@ GET_PATHS = [
 POST_CASES = [
     ("/freshness/evaluate", {"batch_id": "00000000-0000-0000-0000-000000000000"}),
     ("/safety/evaluate", {"batch_id": "00000000-0000-0000-0000-000000000000"}),
-    ("/price/deviation", {"location": "Jakarta", "commodity": "telur", "supplier_price": 28000}),
     ("/logistics/estimate", {"source": "Bogor", "target": "Jakarta", "quantity_kg": 100}),
     (
         "/cost/safe-delivered",
@@ -141,6 +140,15 @@ def test_bgn_monitor_baca_semua_lokasi_200(client):
 
 
 def test_bgn_monitor_mutasi_ditolak_403(client):
+    """POST yang MENULIS tetap ditolak untuk peran baca.
+
+    Catatan perubahan (P2, 18 Okt): `/price/deviation` dikeluarkan dari daftar ini
+    karena endpoint itu komputasi murni (baca satu baris harga referensi + hitung,
+    tanpa tulisan apa pun). Menjaganya dengan MUTATING_ROLES membuat worker Price
+    milik agent read-only selalu 403 → review jadi `partial` tanpa data yang
+    dilindungi. Perilaku barunya diuji di `test_price_deviation_readonly.py`,
+    termasuk kontrol bahwa `/safety/evaluate` (yang menulis) tetap 403.
+    """
     email = f"bgn-{uuid.uuid4().hex[:8]}@test.local"
     _, email, pw = _mk_user(email, "bgn_monitor", None)
     try:

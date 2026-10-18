@@ -96,6 +96,7 @@ import { StatusLocationList } from "../components/SupplyMap";
 import RecommendationCard, { DECISION_TYPE_LABELS } from "../components/RecommendationCard";
 import AgentTraceViewer from "../components/AgentTraceViewer";
 import AgentSwarmPanel from "../components/AgentSwarmPanel";
+import { defaultAgentLogId } from "../lib/agent-swarm";
 import ChaosPanel from "../components/ChaosPanel";
 import DemoDataPanel from "../components/DemoDataPanel";
 import { mapHeaderSubtitle } from "../lib/overview-copy";
@@ -857,6 +858,12 @@ export default function Home() {
             if (id === "evidence" && !selectedId) {
               const fallback = defaultEvidenceId(decisions, now);
               if (fallback) setSelectedId(fallback);
+            }
+            // P4: tab Agent Log tidak boleh terbuka pada keputusan yang tidak
+            // punya review 7 agen — pilih keputusan terbaru yang punya.
+            if (id === "agent-log") {
+              const berikut = defaultAgentLogId(decisions, selectedId);
+              if (berikut && berikut !== selectedId) setSelectedId(berikut);
             }
           }}
         />

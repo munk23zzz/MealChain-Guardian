@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import get_current_user
 from app.api.dependencies import get_db
 from app.core.scope import apply_location_scope, assert_in_scope
-from app.models import Commodity, Decision, Location, User
+from app.models import AgentTrace, Commodity, Decision, Location, User
 from app.services.approval_summary import build_approval_summary
 
 router = APIRouter()
@@ -183,6 +183,27 @@ async def list_decisions(
         .scalars()
         .all()
     )
+    # P4: tandai keputusan yang benar-benar punya jejak 7 worker (agent_name terisi).
+    # Dihitung sekali untuk semua baris (bukan satu query per keputusan) supaya
+    # halaman Agent Log bisa memilih default tanpa N permintaan.
+    ids = [row.id for row in rows]
+    dengan_review: set = set()
+    if ids:
+        dengan_review = set(
+            (
+                await db.execute(
+                    select(AgentTrace.decision_id)
+                    .where(
+                        AgentTrace.decision_id.in_(ids),
+                        AgentTrace.agent_name.is_not(None),
+                    )
+                    .distinct()
+                )
+            )
+            .scalars()
+            .all()
+        )
+
     items = []
     for row in rows:
         validity = _validity(row.expires_at)
@@ -208,6 +229,8 @@ async def list_decisions(
                 # yang butuh langkah Verifikasi sebelum bisa dieksekusi.
                 "verified_by": row.verified_by,
                 "verifier_note": row.verifier_note,
+                # True hanya bila ada baris trace worker (agent_name terisi).
+                "has_agent_review": row.id in dengan_review,
             }
         )
     return {"items": items}

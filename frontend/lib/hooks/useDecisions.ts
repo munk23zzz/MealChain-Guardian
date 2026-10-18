@@ -26,6 +26,8 @@ export type DecisionRow = {
   safe_delivered_cost: number | null;
   expires_at: string;
   valid: boolean;
+  /** P4: true bila keputusan ini punya jejak 7 worker (dihitung backend). */
+  has_agent_review?: boolean;
 };
 
 export function useDecisions(token: string | null, scope: string) {

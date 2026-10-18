@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import MUTATING_ROLES, get_current_user, require_roles
+from app.api.auth import get_current_user
 from app.api.dependencies import get_db
 from app.api.supply import _resolve_commodity, _resolve_location
 from app.core.price import price_deviation
@@ -147,7 +147,12 @@ class DeviationRequest(BaseModel):
 async def post_price_deviation(
     payload: DeviationRequest,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles(*MUTATING_ROLES)),
+    # Komputasi murni: satu baris harga referensi dibaca, lalu `price_deviation()`
+    # menghitung dari payload. Tidak ada satu pun tulisan ke DB, jadi peran baca
+    # (bgn_monitor) dan worker agen ber-token read-only tetap boleh memakainya.
+    # Sebelumnya endpoint ini dijaga MUTATING_ROLES, akibatnya worker Price selalu
+    # `degraded` (403) padahal tidak ada data yang dilindungi.
+    _user: User = Depends(get_current_user),
 ) -> dict:
     loc = await _resolve_location(db, payload.location)
     com = await _resolve_commodity(db, payload.commodity)

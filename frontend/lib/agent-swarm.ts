@@ -219,3 +219,31 @@ export function supervisorSummary(run: SwarmRun): {
     contradictions: countLabel(row?.output_summary?.contradiction_count),
   };
 }
+
+/**
+ * P4: keputusan mana yang harus dibuka saat tab Agent Log pertama kali dilihat.
+ *
+ * Aturannya sederhana dan tidak mengarang: pertahankan pilihan pengguna bila
+ * keputusan itu punya review; kalau tidak, ambil keputusan terbaru yang PUNYA
+ * review (`has_agent_review` dihitung backend dari `agent_traces`). Bila tak ada
+ * satu pun punya review, kembalikan pilihan semula supaya pesan "Belum ada
+ * review 7 agen" tetap jujur — bukan menyembunyikannya.
+ */
+export function defaultAgentLogId(
+  decisions:
+    | Array<{ decision_id?: string; has_agent_review?: boolean | null }>
+    | null
+    | undefined,
+  currentId: string | null
+): string | null {
+  const daftar = (decisions ?? []).filter(
+    (d): d is { decision_id: string; has_agent_review?: boolean | null } =>
+      typeof d?.decision_id === "string" && d.decision_id.length > 0
+  );
+  if (currentId) {
+    const sekarang = daftar.find((d) => d.decision_id === currentId);
+    if (sekarang?.has_agent_review === true) return currentId;
+  }
+  const kandidat = daftar.find((d) => d.has_agent_review === true);
+  return kandidat ? kandidat.decision_id : (currentId ?? null);
+}
