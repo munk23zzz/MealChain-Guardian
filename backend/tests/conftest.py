@@ -24,6 +24,10 @@ HOST_ONLY_MODULES = [
     "test_agent_orchestrator.py",
     "test_agent_runtime_task.py",
     "test_agent_golden_cases.py",
+    # d730448 menambah tes ini, tetapi tidak mendaftarkannya di sini: pytest di
+    # kontainer berhenti saat koleksi (`No module named 'agent'`) dan seluruh
+    # gerbang backend ikut batal. Berkas ini mengimpor paket host `agent/`.
+    "test_agent_verify.py",
     "test_verify_agentcore_access.py",
     "test_verify_bedrock_access.py",
     "test_compose_contract.py",
