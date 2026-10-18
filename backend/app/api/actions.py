@@ -390,6 +390,20 @@ async def verify_action(
     # ada tidak berubah — yang berubah hanya panggilan yang dulu lolos.
     if not is_decision_valid(_now_utc(), decision.expires_at):
         raise HTTPException(status_code=409, detail="decision expired")
+    # Audit M2 (18 Okt 2026): verdict yang SUDAH tercatat bersifat final.
+    # Sebelum ini endpoint boleh dipanggil berulang selama belum ada approval,
+    # dan setiap panggilan menimpa `verifier_note` — hasil audit bisa "diulang
+    # sampai menyenangkan" (FLAGGED → CONSISTENT menurunkan syarat approval).
+    # Retry tetap diizinkan bila percobaan sebelumnya TIDAK menghasilkan verdict
+    # (unavailable): provider boleh pulih, dan belum ada hasil untuk ditimpa.
+    if not _verifier_unverified(decision):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "verdict sudah tercatat — hasil audit tidak bisa ditimpa; "
+                "tarik/ajukan keputusan baru bila perlu penilaian ulang"
+            ),
+        )
     commodity = (
         await db.execute(select(Commodity).where(Commodity.id == decision.commodity_id))
     ).scalar_one_or_none()
@@ -418,6 +432,38 @@ async def verify_action(
     decision.verifier_note = verdict.lower()
     if verdict == "FLAGGED":
         decision.status = "verifier_flagged"
+    # Audit M2: setiap percobaan meninggalkan jejak, dan verdict yang TERCATAT
+    # menambah blok ledger. Tanpa ini riwayat "siapa memverifikasi, kapan, dengan
+    # hasil apa" hanya hidup sebagai satu kolom yang bisa ditimpa.
+    db.add(
+        AgentTrace(
+            decision_id=decision.id,
+            step_name="VERIFY",
+            tool_called="verifier",
+            input_summary={"source": "db_canonical", "decision_status": decision.status},
+            output_summary={
+                "verdict": verdict,
+                "recorded": recorded,
+                "provider": result.provider,
+                "fallback_used": result.fallback_used,
+                "reason": (result.reason or "")[:500],
+            },
+            step_at=datetime.now(timezone.utc),
+        )
+    )
+    if recorded:
+        await append_block(
+            db,
+            action="verify",
+            entity_id=decision.id,
+            actor_id=user.id,
+            payload={
+                "decision_id": str(decision.id),
+                "verdict": verdict,
+                "provider": result.provider,
+                "verifier_note": verdict.lower(),
+            },
+        )
     await db.commit()
     req = _requirement_for(decision)
     return {

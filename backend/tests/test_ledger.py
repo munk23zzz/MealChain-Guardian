@@ -110,12 +110,27 @@ def test_ledger_verify_detects_tamper(auth_headers):
 
 
 def test_approve_appends_ledger_block(ledger_approver):
-    """Approve sebuah decision → block ledger bertambah + rantai valid."""
+    """Approve sebuah decision → block ledger bertambah + rantai valid.
+
+    Pilihan baris HARUS mengikuti cakupan token: approver ini Kepala Jakarta,
+    sedangkan DB demo kini juga memuat keputusan Bandung/Surabaya (seed per
+    kota + suite lain). Dulu tes mengambil `pending_approval` APA SAJA dan
+    merah 403 begitu yang terambil bukan Jakarta — kegagalan yang terbaca
+    seperti regresi pagar cakupan padahal cakupannya benar.
+    """
     dec = _db_exec(
-        "SELECT id FROM decisions WHERE status = 'pending_approval' LIMIT 1"
+        "SELECT d.id FROM decisions d "
+        "JOIN locations l ON l.id = d.target_location_id "
+        "WHERE d.status = 'pending_approval' AND l.name = 'Jakarta' "
+        "AND d.verified_by IS NOT NULL "
+        "AND d.verifier_note IN ('consistent', 'flagged') "
+        "AND NOT EXISTS (SELECT 1 FROM approvals a WHERE a.decision_id = d.id "
+        "                AND a.approved_by = :u) "
+        "ORDER BY d.created_at DESC LIMIT 1",
+        {"u": ledger_approver["id"]},
     )
     if not dec:
-        pytest.skip("tidak ada decision pending_approval")
+        pytest.skip("tidak ada decision Jakarta yang siap di-approve di DB")
     decision_id = str(dec[0][0])
     before = _db_exec("SELECT COUNT(*) FROM ledger_blocks")[0][0]
     headers = _login(ledger_approver)
