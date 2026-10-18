@@ -98,6 +98,23 @@ const fake = vi.hoisted(() => {
     getZoom() {
       return this.zoom;
     }
+    getMaxZoom() {
+      return 20;
+    }
+    /** Proyeksi sederhana: cukup untuk menghitung jarak antar-penanda di tes.
+     *  Tidak perlu akurat seperti Mercator — yang diuji perilaku klaster
+     *  (mengelompok atau tidak), bukan ketepatan kartografi. */
+    project(posisi: [number, number] | { lng: number; lat: number }) {
+      const lng = Array.isArray(posisi) ? posisi[0] : posisi.lng;
+      const lat = Array.isArray(posisi) ? posisi[1] : posisi.lat;
+      return { x: lng * 10, y: -lat * 10 };
+    }
+    unproject(titik: { x: number; y: number }) {
+      return [titik.x / 10, -titik.y / 10];
+    }
+    easeTo() {
+      return this;
+    }
     // MapLibre menerima bentuk `on(tipe, layerId, handler)` untuk event layer
     // (Fase 10 memakai itu untuk popup garis) — handler selalu argumen terakhir.
     on(event: string, ...args: unknown[]) {
@@ -150,6 +167,13 @@ const fake = vi.hoisted(() => {
     }
     getElement() {
       return this.element;
+    }
+    /** Dipakai fitur klaster: posisi penanda dibaca untuk dihitung jaraknya. */
+    getLngLat() {
+      return this.lngLat ?? [0, 0];
+    }
+    togglePopup() {
+      return this;
     }
   }
 
@@ -1230,5 +1254,48 @@ describe("SupplyMap — chip saringan aktif di atas kanvas (C8, langkah 7b-2)", 
     expect(tombol.textContent).toBe(FOCUS_CLEAR_LABEL);
     act(() => tombol.click());
     expect(dipanggil).toEqual([FOCUS_ALL]);
+  });
+});
+
+describe("SupplyMap — penanda bertumpuk jadi gelembung klaster", () => {
+  // Dua lokasi berdekatan: pada proyeksi tiruan (10 px per derajat) jaraknya
+  // 9,4 px — jauh di bawah ambang klaster 34 px, persis seperti kondisi nyata
+  // yang dilaporkan audit (pin berjarak 5–9 px dan target-nya saling menutup).
+  const DEKAT = [
+    LOCATIONS[0],
+    { ...LOCATIONS[0], location: "Bekasi", longitude: 106.94, latitude: -6.2388 },
+  ];
+
+  it("menggambar satu gelembung berisi jumlah lokasi, bukan dua pin bertumpuk", () => {
+    mount();
+    act(() => root.render(<SupplyMap locations={DEKAT} />));
+    const gelembung = markerLog.filter((m) => m.element.className.includes("map-cluster"));
+    expect(gelembung).toHaveLength(1);
+    expect(gelembung[0].element.textContent).toBe("2");
+    expect(gelembung[0].element.tagName).toBe("BUTTON");
+    // Nama aksesibel menyebut lokasinya, bukan sekadar angka.
+    const label = gelembung[0].element.getAttribute("aria-label") ?? "";
+    expect(label).toContain("2 lokasi berdekatan");
+    expect(label).toContain("Jakarta");
+  });
+
+  it("menyembunyikan pin anggota dari tampilan DAN dari urutan Tab", () => {
+    mount();
+    act(() => root.render(<SupplyMap locations={DEKAT} />));
+    const pin = locationMarkers();
+    expect(pin).toHaveLength(2);
+    pin.forEach((marker) => {
+      expect(marker.element.style.visibility).toBe("hidden");
+      expect(marker.element.getAttribute("aria-hidden")).toBe("true");
+      expect(marker.element.getAttribute("tabindex")).toBe("-1");
+    });
+  });
+
+  it("lokasi yang berjauhan tetap jadi pin sendiri (tidak diklaster)", () => {
+    const jauh = [LOCATIONS[0], { ...LOCATIONS[0], location: "Surabaya", longitude: 112.75, latitude: -7.25 }];
+    mount();
+    act(() => root.render(<SupplyMap locations={jauh} />));
+    expect(markerLog.filter((m) => m.element.className.includes("map-cluster"))).toHaveLength(0);
+    expect(locationMarkers().every((marker) => marker.element.style.visibility !== "hidden")).toBe(true);
   });
 });

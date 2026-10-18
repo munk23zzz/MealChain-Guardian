@@ -2150,6 +2150,29 @@ a:focus-visible {
   transform: scale(1.06);
   box-shadow: 0 0 0 2px var(--surface), 0 3px 9px rgba(15, 23, 42, 0.42);
 }
+/* Gelembung pengganti penanda yang BERTUMPUK (WCAG 2.5.8: target minimal
+   24x24 px dan jarak antar-target). 30 px + cincin 2 px supaya tetap nyaman
+   untuk jari, dan tinta putih di atas --ink = 16,8:1 (lolos AA teks kecil). */
+.map-cluster {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  background: var(--ink);
+  color: #ffffff;
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.4);
+}
+.map-cluster:hover { background: var(--ink-muted); }
+.map-cluster:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .map-pin-surplus { --pin-ink: var(--status-safe); }
 .map-pin-shortage { --pin-ink: var(--status-danger); }
 .map-pin-label {

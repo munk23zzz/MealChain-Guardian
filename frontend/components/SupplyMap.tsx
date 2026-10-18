@@ -43,6 +43,16 @@ import {
 // Baris legenda ringkas di bawah kanvas (C2, langkah 7b-2): aturan isinya
 // (status selalu ada, keterangan ikut sakelar lapisan) hidup di lib murni.
 import { compactLegendItems, legendMarkClass } from "../lib/map-legend-compact";
+import {
+  KLASTER_JARAK_PIKSEL,
+  KLASTER_ZOOM_MAKS,
+  gabungKlasterBerdekatan,
+  kelompokkanBertumpuk,
+  klasterPerluGelembung,
+  labelKlaster,
+  offsetSpider,
+  pusatKlaster,
+} from "../lib/map-cluster";
 import { penandaPeta, ringkasPenanda } from "../lib/map-a11y";
 // Ikon di dalam penanda (bukan emoji/teks): siluet bangunan untuk SPPG dan
 // truk untuk pemasok — dua lapisan penanda jadi bisa dibedakan dari bentuknya.
@@ -283,6 +293,52 @@ function pasangAksesPin(el: HTMLElement, marker: maplibregl.Marker, accessible: 
   });
 }
 
+/** Geser kontrol kanan-atas peta ke bawah pil lapisan.
+ *
+ *  Di 375 px pil ("Pemasok", "Jalur kiriman", "Info map") memakai hampir seluruh
+ *  lebar kanvas, sehingga tombol zoom dan "Tampilkan semua" tertutup pil —
+ *  axe melaporkannya sebagai target yang terhalang (44x10 px terlihat). Karena
+ *  tinggi pil berubah saat isinya berganti, offsetnya dihitung dari elemennya,
+ *  bukan angka mati. */
+function aturOffsetKontrol(container: HTMLElement): void {
+  // Pil lapisan adalah SAUDARA kanvas (di dalam .map-shell), bukan anak kontainer
+  // MapLibre — jadi pencariannya dari shell, bukan dari kontainer peta.
+  const shell = container.closest<HTMLElement>(".map-shell") ?? container;
+  const pil = shell.querySelector<HTMLElement>(".map-overlay-toggles");
+  const sudut = container.querySelector<HTMLElement>(".maplibregl-ctrl-top-right");
+  if (!sudut) return;
+  const tinggi = pil ? pil.getBoundingClientRect().height : 0;
+  // Hanya geser bila pil benar-benar menabrak sudut kontrol (terjadi di ponsel);
+  // di desktop pil berhenti jauh sebelum kolom kontrol, dan menggeser kontrol
+  // hanya akan mengubah tata letak tanpa alasan.
+  const bertabrakan = pil ? pil.getBoundingClientRect().right > sudut.getBoundingClientRect().left : false;
+  const nilai = bertabrakan ? `${Math.round(tinggi + 16)}px` : "0px";
+  // Bandingkan dulu: MutationObserver di bawah memantau atribut style, dan
+  // penulisan berulang dengan nilai sama akan memicu lingkaran tak berujung.
+  if (sudut.style.top !== nilai) sudut.style.top = nilai;
+}
+
+/** Tampilkan kembali penanda yang tadi diganti gelembung klaster. */
+function tampilkanPin(markers: Map<string, maplibregl.Marker>): void {
+  markers.forEach((marker) => {
+    const el = marker.getElement();
+    if (!el) return;
+    el.style.visibility = "";
+    el.removeAttribute("aria-hidden");
+    el.setAttribute("tabindex", "0");
+  });
+}
+
+/** Sembunyikan penanda anggota klaster dari pandangan DAN dari tab order:
+ *  target yang tak terlihat tapi masih bisa difokus adalah jebakan keyboard. */
+function sembunyikanPin(marker: maplibregl.Marker): void {
+  const el = marker.getElement();
+  if (!el) return;
+  el.style.visibility = "hidden";
+  el.setAttribute("aria-hidden", "true");
+  el.setAttribute("tabindex", "-1");
+}
+
 /** Segarkan isi penanda yang sudah ada (posisi, label, keterangan, popup) —
  *  tanpa menyentuh kamera peta. Dipakai saat sinkronisasi data. */
 function refreshPin(marker: maplibregl.Marker, location: BalanceMapLocation): void {
@@ -508,6 +564,12 @@ export default function SupplyMap({
   // Isi penanda terakhir (tanda tangan, bukan identitas objek) + keadaan fokus
   // peta. Keduanya murni & diuji di lib/map-console.ts.
   const pinSignaturesRef = useRef<Record<string, string>>({});
+  /** Gelembung klaster yang sedang tampil — dibuang lalu dibuat ulang setiap
+   *  sinkronisasi supaya jumlahnya selalu sesuai data terbaru. */
+  const clusterMarkersRef = useRef<maplibregl.Marker[]>([]);
+  /** Koordinat asli penanda yang sempat disebar (spiderfy) di zoom maksimum;
+   *  dipulihkan begitu peta digeser/diperbesar lagi agar posisi tetap jujur. */
+  const sebarRef = useRef<Map<string, maplibregl.LngLat>>(new Map());
   const focusRef = useRef<MapFocus>(MAP_FOCUS_INITIAL);
   /** Tombol "Tampilkan semua" (langkah 7b-1) — elemennya dibuat MapLibre di
    *  dalam grup kontrol kanan-atas; ref ini yang memegang elemennya supaya
@@ -645,6 +707,93 @@ export default function SupplyMap({
       if (diff.changed.includes(row.location)) refreshPin(existing, row);
     });
     pinSignaturesRef.current = next;
+  }, []);
+
+  /** Ganti penanda yang BERTUMPUK dengan satu gelembung berisi jumlah lokasi.
+   *
+   *  Alasan: dua target yang pusatnya kurang dari 24 px saling berpotongan
+   *  (WCAG 2.5.8 "Target Size" minimal 24×24 px + pengecualian jarak), dan di
+   *  ponsel ketukan jari mengenai penanda yang salah. Koordinat penanda tidak
+   *  diubah — hanya tampilannya yang digabung; gelembung diketuk akan
+   *  memperbesar peta sampai penanda terpisah sendiri. */
+  const syncClusters = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    clusterMarkersRef.current.forEach((marker) => marker.remove());
+    clusterMarkersRef.current = [];
+    const pin = markersRef.current;
+    // Pulihkan posisi asli bila sebelumnya sempat disebar (spiderfy) di zoom
+    // maksimum, lalu tampilkan semua penanda lagi sebelum dikelompokkan ulang.
+    sebarRef.current.forEach((asli, id) => pin.get(id)?.setLngLat(asli));
+    sebarRef.current.clear();
+    tampilkanPin(pin);
+    if (!pin.size || map.getZoom() > KLASTER_ZOOM_MAKS) return;
+
+    const titik: { id: string; x: number; y: number }[] = [];
+    pin.forEach((marker, id) => {
+      const s = map.project(marker.getLngLat());
+      titik.push({ id, x: s.x, y: s.y });
+    });
+    const grup = klasterPerluGelembung(gabungKlasterBerdekatan(kelompokkanBertumpuk(titik)));
+    if (!grup.length) return;
+
+    grup.forEach((anggota) => {
+      anggota.forEach((t) => {
+        const marker = pin.get(t.id);
+        if (marker) sembunyikanPin(marker);
+      });
+      const pusat = pusatKlaster(anggota);
+      const nama = anggota.map((t) => t.id);
+      const gelembung = document.createElement("button");
+      gelembung.type = "button";
+      gelembung.className = "map-cluster";
+      gelembung.textContent = String(anggota.length);
+      gelembung.title = nama.join(", ");
+      let gelembungMarker: maplibregl.Marker | null = null;
+      gelembung.addEventListener("click", () => {
+        const lngLat = map.unproject([pusat.x, pusat.y]);
+        if (map.getZoom() < KLASTER_ZOOM_MAKS) {
+          // Berapa level zoom yang benar-benar dibutuhkan? Cari jarak terdekat
+          // antar-anggota, lalu hitung faktor pembesaran agar jaraknya melewati
+          // ambang klaster (24 px). Satu klik harus cukup — kalau tidak, pengguna
+          // hanya melihat gelembung yang sama berpindah tempat.
+          let terdekat = Infinity;
+          for (let i = 0; i < anggota.length; i += 1) {
+            for (let j = i + 1; j < anggota.length; j += 1) {
+              const jarak = Math.hypot(anggota[i].x - anggota[j].x, anggota[i].y - anggota[j].y);
+              if (jarak < terdekat) terdekat = jarak;
+            }
+          }
+          const faktor = (KLASTER_JARAK_PIKSEL * 1.4) / Math.max(terdekat, 1);
+          const langkah = Math.min(Math.max(Math.log2(faktor), 1.5), 5);
+          map.easeTo({
+            center: lngLat,
+            zoom: Math.min(map.getZoom() + langkah, KLASTER_ZOOM_MAKS),
+          });
+          return;
+        }
+        // Sudah di zoom maksimum (koordinat benar-benar berimpit): sebar
+        // penanda pada lingkaran supaya masing-masing bisa diketuk.
+        gelembungMarker?.remove();
+        tampilkanPin(pin);
+        const offset = offsetSpider(anggota.length, 30);
+        anggota.forEach((t, i) => {
+          const marker = pin.get(t.id);
+          if (!marker) return;
+          const asli = marker.getLngLat();
+          if (!sebarRef.current.has(t.id)) sebarRef.current.set(t.id, asli);
+          const p = map.project(asli);
+          marker.setLngLat(map.unproject([p.x + offset[i].dx, p.y + offset[i].dy]));
+        });
+      });
+      gelembungMarker = new maplibregl.Marker({ element: gelembung })
+        .setLngLat(map.unproject([pusat.x, pusat.y]))
+        .addTo(map);
+      // MapLibre menulis aria-label="Map marker" saat marker dibuat (sama
+      // seperti penanda SPPG), jadi nama yang benar dipasang SETELAHnya.
+      gelembung.setAttribute("aria-label", labelKlaster(nama));
+      clusterMarkersRef.current.push(gelembungMarker);
+    });
   }, []);
 
   /** Sinkronkan layer jalur kiriman dengan data terbaru.
@@ -874,6 +1023,7 @@ export default function SupplyMap({
     // dijalankan (aturan react-hooks/exhaustive-deps).
     const markers = markersRef.current;
     const supplierMarkers = supplierMarkersRef.current;
+    const sebar = sebarRef.current;
     const map = new maplibregl.Map({
       container: mapContainer.current,
       style: {
@@ -945,6 +1095,7 @@ export default function SupplyMap({
       duration: 0,
     });
     syncMarkers();
+    syncClusters();
     // Zoom menentukan apakah pin pemasok boleh tampil (mereka baru muncul di
     // zoom 8+). Keadaan zoom juga dipakai untuk memberi tahu pengguna kenapa
     // lapisan yang dinyalakan masih kosong.
@@ -952,6 +1103,7 @@ export default function SupplyMap({
     const onZoom = () => {
       setZoomEnough(supplierPinsVisible(map.getZoom()));
       syncSupplierMarkers();
+      syncClusters();
     };
     map.on("zoomend", onZoom);
     syncSupplierMarkers();
@@ -964,11 +1116,35 @@ export default function SupplyMap({
     // Kontainer berubah ukuran (jendela, sidebar dilipat, breakpoint tata
     // letak) tanpa MapLibre mengetahuinya — tanpa ini peta tertinggal di
     // ukuran saat dibuat.
-    const observer = new ResizeObserver(() => map.resize());
-    observer.observe(mapContainer.current);
+    const wadah = mapContainer.current;
+    const observer = new ResizeObserver(() => {
+      map.resize();
+      if (wadah) aturOffsetKontrol(wadah);
+    });
+    observer.observe(wadah);
+    // Pil lapisan muncul BELAKANGAN (setelah data pemasok tiba), jadi tinggi
+    // awalnya 0. MutationObserver memantau DOM kanvas: begitu pil (atau isinya)
+    // berubah, offset kontrol kanan-atas dihitung ulang.
+    let raf = 0;
+    const pemantau = new MutationObserver(() => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        aturOffsetKontrol(wadah);
+      });
+    });
+    pemantau.observe(wadah.closest(".map-shell") ?? wadah, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["class", "style"],
+    });
+    aturOffsetKontrol(wadah);
 
     return () => {
       observer.disconnect();
+      pemantau.disconnect();
+      if (raf) cancelAnimationFrame(raf);
       map.off("zoomend", onZoom);
       map.off("load", syncRouteLayer);
       map.off("load", syncFocusLayer);
@@ -976,15 +1152,18 @@ export default function SupplyMap({
       mapRef.current = null;
       markers.clear();
       supplierMarkers.clear();
+      clusterMarkersRef.current = [];
+      sebar.clear();
       pinSignaturesRef.current = {};
       focusRef.current = MAP_FOCUS_INITIAL;
     };
-  }, [hasLocations, syncMarkers, syncSupplierMarkers, syncRouteLayer, syncFocusLayer]);
+  }, [hasLocations, syncMarkers, syncClusters, syncSupplierMarkers, syncRouteLayer, syncFocusLayer]);
 
   // Sinkronisasi data (arah Roy 2026-10-11): penanda saja, tanpa fitBounds.
   useEffect(() => {
     syncMarkers();
-  }, [pinSnapshot, syncMarkers]);
+    syncClusters();
+  }, [pinSnapshot, syncMarkers, syncClusters]);
 
   // Layer pemasok: tombol + data. Keduanya hanya menyentuh penanda pemasok.
   useEffect(() => {
