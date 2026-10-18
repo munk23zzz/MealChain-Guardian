@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     shelf_life_days_ayam: float = 5.0
     shelf_life_days_wortel: float = 21.0
 
+    # Hierarki keputusan lapis 2 & 3 (proposal): gram per porsi untuk
+    # menghitung kebutuhan menu, dan berapa hari cadangan yang HARUS tinggal di
+    # lokasi asal supaya pengiriman antarwilayah tidak memutus makan di sana.
+    # Angka gram adalah asumsi porsi demo — dinyatakan terbuka, bukan data gizi
+    # resmi; ubah lewat env bila komposisi menu berbeda.
+    menu_grams_telur: float = 60.0
+    menu_grams_ayam: float = 50.0
+    menu_grams_wortel: float = 40.0
+    continuity_reserve_days: float = 1.0
+
     # Safe range suhu rantai dingin demo (°C)
     safe_temp_min_c: float = 0.0
     safe_temp_max_c: float = 8.0

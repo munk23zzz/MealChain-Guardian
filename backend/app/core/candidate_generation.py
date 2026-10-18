@@ -38,6 +38,7 @@ deterministik) karena model mewajibkan integer.
 from decimal import ROUND_CEILING, Decimal
 
 from app.core.candidate import BalancingCandidate, PriceInfo
+from app.core.menu_hierarchy import shortage_setelah_gizi, surplus_setelah_kontinuitas
 
 __all__ = ["generate_candidates"]
 
@@ -111,6 +112,8 @@ def generate_candidates(
     *,
     prices,
     commodity=None,
+    menu_requirements=None,
+    continuity_reserve=None,
 ) -> list:
     _require_mapping(source_records, "source_records")
     _require_mapping(destination_records, "destination_records")
@@ -143,9 +146,13 @@ def generate_candidates(
     for d_loc, d_com in destination_keys:
         demand = _to_decimal(destination_records[(d_loc, d_com)], "demand_kg")
         supply_d = _to_decimal(source_records.get((d_loc, d_com), 0), "supply_kg")
-        if demand <= supply_d:
-            continue  # destinasi surplus/balanced → tidak ada shortage
-        shortage = demand - supply_d
+        # Lapis 2 hierarki: kebutuhan menu adalah LANTAI kekurangan destinasi.
+        menu_d = _to_decimal(
+            (menu_requirements or {}).get((d_loc, d_com), 0), "kebutuhan_menu_kg"
+        )
+        shortage = shortage_setelah_gizi(demand, supply_d, menu_d)
+        if shortage <= 0:
+            continue  # destinasi surplus/balanced (dan menunya sudah tertutup)
 
         source_keys = sorted(
             (s_loc, s_com) for (s_loc, s_com) in source_records if s_com == d_com and s_loc != d_loc
@@ -153,9 +160,13 @@ def generate_candidates(
         for s_loc, s_com in source_keys:
             supply_s = _to_decimal(source_records[(s_loc, s_com)], "supply_kg")
             demand_s = _to_decimal(destination_records.get((s_loc, s_com), 0), "demand_kg")
-            if supply_s <= demand_s:
-                continue  # sumber tanpa surplus
-            surplus_s = supply_s - demand_s
+            # Lapis 3 hierarki: cadangan kontinuitas lokasi asal tidak diekspor.
+            cadangan_s = _to_decimal(
+                (continuity_reserve or {}).get((s_loc, s_com), 0), "cadangan_kg"
+            )
+            surplus_s = surplus_setelah_kontinuitas(supply_s, demand_s, cadangan_s)
+            if surplus_s <= 0:
+                continue  # sumber tanpa surplus yang boleh keluar
 
             groups = [
                 (sid, [b for b in group if d_loc not in b.get("excluded_destinations", [])])

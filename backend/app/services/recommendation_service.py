@@ -35,6 +35,7 @@ from app.core.candidate import PriceInfo
 from app.core.candidate_generation import generate_candidates
 from app.core.config import settings
 from app.core.freshness import classify_freshness, compute_freshness_score
+from app.core.menu_hierarchy import cadangan_kontinuitas_kg, kebutuhan_menu_kg
 from app.core.logistics import estimate_logistics
 from app.core.price import price_deviation
 from app.core.ranking import ScoredCandidate, rank_candidates
@@ -53,6 +54,7 @@ from app.models import (
     Batch,
     Commodity,
     DemandRecord,
+    MenuPlan,
     Location,
     PriceSignal,
     Supplier,
@@ -191,7 +193,64 @@ async def fetch_operational_facts(db, as_of):
         {str(s.id): (s.latitude, s.longitude) for s in supplier_rows},
         {loc.name: (loc.latitude, loc.longitude) for loc in loc_rows},
     )
-    return supply, demand, refs, quotes, batches, reliability, supplier_legs
+    # Lapis 2 & 3 hierarki: kebutuhan menu hari itu dan cadangan kontinuitas
+    # per (lokasi, komoditas). Tanpa baris `menu_plans` → peta kosong, dan
+    # generator berperilaku seperti sebelumnya (tidak ada angka karangan).
+    menu_requirements, continuity_reserve = await _menu_hierarchy_maps(
+        db, locs, as_of
+    )
+
+    return (
+        supply,
+        demand,
+        refs,
+        quotes,
+        batches,
+        reliability,
+        supplier_legs,
+        {"menu_requirements": menu_requirements, "continuity_reserve": continuity_reserve},
+    )
+
+
+_GRAM_PER_PORSI = {
+    "telur": settings.menu_grams_telur,
+    "ayam": settings.menu_grams_ayam,
+    "wortel": settings.menu_grams_wortel,
+}
+
+
+async def _menu_hierarchy_maps(db, locs: dict, as_of):
+    """Kebutuhan menu & cadangan kontinuitas per (lokasi, komoditas).
+
+    Porsi diambil dari `menu_plans` untuk tanggal as_of menurut zona WIB (hari
+    kerja dapur SPPG), dikali gram per porsi dari settings. Komoditas tanpa
+    gram per porsi tidak menghasilkan kebutuhan (0), jadi tidak ada lokasi yang
+    tiba-tiba "butuh" komoditas yang tidak masuk komposisi menunya.
+    """
+    from zoneinfo import ZoneInfo
+
+    tanggal = as_of.astimezone(ZoneInfo("Asia/Jakarta")).date()
+    rows = (
+        await db.execute(
+            select(MenuPlan).where(MenuPlan.plan_date == tanggal)
+        )
+    ).scalars().all()
+    komoditas = [c.name for c in (await db.execute(select(Commodity))).scalars()]
+    menu: dict = {}
+    cadangan: dict = {}
+    for plan in rows:
+        lokasi = locs.get(plan.location_id)
+        if lokasi is None:
+            continue
+        for nama in komoditas:
+            gram = _GRAM_PER_PORSI.get(nama, 0.0)
+            if gram <= 0:
+                continue
+            menu[(lokasi, nama)] = kebutuhan_menu_kg(plan.planned_portions, gram)
+            cadangan[(lokasi, nama)] = cadangan_kontinuitas_kg(
+                plan.planned_portions, gram, settings.continuity_reserve_days
+            )
+    return menu, cadangan
 
 
 def _build_prices_map(refs, quotes):
@@ -269,6 +328,11 @@ async def build_recommendations(
     # Fase 7d: elemen ke-7 (peta jarak pemasok) opsional — 6-tuple kontrak
     # Task 9 tetap sah; tanpa peta kaki pertama ditandai "tidak diketahui".
     supplier_legs = facts[6] if len(facts) > 6 else {}
+    # Elemen ke-8 (peta hierarki gizi/menu & kontinuitas) juga opsional: kontrak
+    # 6-tuple Task 9 tetap sah, dan pemanggil lama tidak berubah perilakunya.
+    hierarki = facts[7] if len(facts) > 7 else {}
+    menu_requirements = hierarki.get("menu_requirements") or None
+    continuity_reserve = hierarki.get("continuity_reserve") or None
     supply, demand, refs, quotes, batches = _filter_commodity(
         supply, demand, refs, quotes, batches, commodity
     )
@@ -290,6 +354,8 @@ async def build_recommendations(
         batches=batches,
         logistics_by_pair=logistics_by_pair,
         prices=prices_map,
+        menu_requirements=menu_requirements,
+        continuity_reserve=continuity_reserve,
     )
 
     scored = []
