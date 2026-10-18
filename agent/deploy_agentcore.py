@@ -28,7 +28,7 @@ ECR_REPO_DEFAULT = "mealchain/supervisor-agent"
 
 # Izin minimum untuk SELURUH proses. Dipakai sebagai preflight (simulate) supaya
 # kegagalan izin ketahuan SEBELUM build image, bukan setelah.
-PERLU = [
+PERLU_STAR = [
     "ecr:CreateRepository",
     "ecr:GetAuthorizationToken",
     "ecr:BatchCheckLayerAvailability",
@@ -36,11 +36,27 @@ PERLU = [
     "ecr:UploadLayerPart",
     "ecr:CompleteLayerUpload",
     "ecr:PutImage",
-    "iam:PassRole",
     "bedrock-agentcore:CreateAgentRuntime",
     "bedrock-agentcore:UpdateAgentRuntime",
     "bedrock-agentcore:GetAgentRuntime",
+    "bedrock-agentcore:ListAgentRuntimes",
+    "bedrock-agentcore:CreateWorkloadIdentity",
+    "bedrock-agentcore:GetWorkloadIdentity",
+    "bedrock-agentcore:ListWorkloadIdentities",
 ]
+# Aksi control-plane yang dibatasi resource runtime/* di policy produksi.
+PERLU_RUNTIME = [
+    "bedrock-agentcore:CreateAgentRuntimeEndpoint",
+    "bedrock-agentcore:UpdateAgentRuntimeEndpoint",
+    "bedrock-agentcore:GetAgentRuntimeEndpoint",
+    "bedrock-agentcore:DeleteAgentRuntimeEndpoint",
+    "bedrock-agentcore:InvokeAgentRuntime",
+]
+# Aksi list tidak mendukung resource-level permission → disimulasikan pada "*".
+PERLU_LIST = ["bedrock-agentcore:ListAgentRuntimeEndpoints"]
+# Aksi beresource khusus: iam:PassRole → ARN peran; CreateServiceLinkedRole → ARN SLR.
+PERLU_KHUSUS = ["iam:PassRole", "iam:CreateServiceLinkedRole"]
+PERLU = PERLU_STAR + PERLU_RUNTIME + PERLU_LIST + PERLU_KHUSUS
 
 
 def muat_env(path: Path) -> None:
@@ -62,8 +78,13 @@ def jalan(cmd: list[str], **kw) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, check=True, text=True, **kw)
 
 
-def preflight(region: str) -> tuple[bool, list[str]]:
-    """Kembalikan (boleh, daftar_izin_hilang). Tidak menulis apa pun."""
+def preflight(region: str, role_arn: str = "") -> tuple[bool, list[str]]:
+    """Kembalikan (boleh, daftar_izin_hilang). Tidak menulis apa pun.
+
+    Resource simulasi harus cocok dengan bentuk di policy: `iam:PassRole` diuji pada ARN
+    peran, `iam:CreateServiceLinkedRole` pada ARN SLR yang persis (wildcard pada resource
+    simulasi dibaca literal, bukan pola), dan aksi list pada "*".
+    """
     import boto3
 
     sts = boto3.client("sts")
@@ -71,18 +92,61 @@ def preflight(region: str) -> tuple[bool, list[str]]:
     print(f"Identitas: {ident['Arn']} (akun {ident['Account']}, region {region})")
 
     iam = boto3.client("iam")
+    keputusan: dict[str, tuple[str, str]] = {}
     try:
-        hasil = iam.simulate_principal_policy(
-            PolicySourceArn=ident["Arn"], ActionNames=PERLU, MaxItems=200
+        akun = ident["Account"]
+        runtime_arn = f"arn:aws:bedrock-agentcore:{region}:{akun}:runtime/*"
+        slr_resources = [
+            (
+                f"arn:aws:iam::{akun}:role/aws-service-role/runtime-identity"
+                ".bedrock-agentcore.amazonaws.com/"
+                "AWSServiceRoleForBedrockAgentCoreRuntimeIdentity"
+            ),
+            (
+                f"arn:aws:iam::{akun}:role/aws-service-role/network"
+                ".bedrock-agentcore.amazonaws.com/AWSServiceRoleForBedrockAgentCoreNetwork"
+            ),
+        ]
+
+        def sim(actions: list[str], resource: str) -> None:
+            hasil = iam.simulate_principal_policy(
+                PolicySourceArn=ident["Arn"], ActionNames=actions, ResourceArns=[resource]
+            )
+            for r in hasil["EvaluationResults"]:
+                keputusan[r["EvalActionName"]] = (r["EvalDecision"], resource)
+
+        sim(PERLU_STAR, "*")
+        sim(PERLU_RUNTIME, runtime_arn)
+        sim(PERLU_LIST, "*")
+        if role_arn:
+            sim(["iam:PassRole"], role_arn)
+        slr_ok = True
+        for arn_slr in slr_resources:
+            hasil_slr = iam.simulate_principal_policy(
+                PolicySourceArn=ident["Arn"],
+                ActionNames=["iam:CreateServiceLinkedRole"],
+                ResourceArns=[arn_slr],
+            )
+            if any(r["EvalDecision"] != "allowed" for r in hasil_slr["EvaluationResults"]):
+                slr_ok = False
+        keputusan["iam:CreateServiceLinkedRole"] = (
+            "allowed" if slr_ok else "implicitDeny",
+            "SLR runtime-identity + network",
         )
     except Exception as e:  # noqa: BLE001
         print(f"Preflight izin tidak bisa dijalankan: {type(e).__name__}: {e}")
         return True, []  # jangan menghalangi; kegagalan asli akan muncul saat aksi
 
-    hilang = [r["EvalActionName"] for r in hasil["EvaluationResults"] if r["EvalDecision"] != "allowed"]
-    for r in hasil["EvaluationResults"]:
-        tanda = "ok   " if r["EvalDecision"] == "allowed" else "TOLAK"
-        print(f"  {tanda} {r['EvalActionName']}")
+    hilang = [a for a in PERLU if keputusan.get(a, ("?", ""))[0] != "allowed"]
+    if not role_arn:
+        hilang = [a for a in hilang if a != "iam:PassRole"]
+    for aksi in PERLU:
+        if aksi == "iam:PassRole" and not role_arn:
+            print("  LEWAT iam:PassRole  (ARN peran belum diisi; uji dengan --role-arn)")
+            continue
+        hasil, resource = keputusan.get(aksi, ("?", ""))
+        tanda = "ok   " if hasil == "allowed" else "TOLAK"
+        print(f"  {tanda} {aksi}  ({resource})")
     return not hilang, hilang
 
 
@@ -210,7 +274,7 @@ def main() -> int:
     akun = boto3.client("sts").get_caller_identity()["Account"]
 
     print("\n== 1/5 preflight izin ==")
-    boleh, hilang = preflight(region)
+    boleh, hilang = preflight(region, args.role_arn)
     if args.preflight_saja:
         return 0 if boleh else 2
     if not boleh:
