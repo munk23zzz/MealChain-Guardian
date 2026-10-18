@@ -669,18 +669,32 @@ async def _collect_baselines(session) -> dict:
     }
 
 
+def _potong(rows: list[dict], per: int = 1000):
+    """Pecah baris jadi beberapa INSERT.
+
+    asyncpg menolak satu statement dengan lebih dari 32767 argumen bind
+    (`the number of query arguments cannot exceed 32767`). Satu baris
+    supply_records memakai 7 argumen, jadi regenerasi besar (banyak hari x
+    lokasi x komoditas) akan menabrak batas itu kalau dijadikan satu INSERT.
+    1000 baris per potong = ~7000 argumen, jauh di bawah batas.
+    """
+    for i in range(0, len(rows), per):
+        yield rows[i : i + per]
+
+
 async def _upsert_supply(session, rows: list[dict], now: datetime) -> None:
     if not rows:
         return
-    stmt = pg_insert(SupplyRecord).values(
-        [{**row, "generated_at": now} for row in rows]
-    )
-    stmt = stmt.on_conflict_do_update(
-        constraint="uq_supply_records_loc_com_time_source",
-        set_={"quantity_kg": stmt.excluded.quantity_kg, "generated_at": stmt.excluded.generated_at},
-        where=SupplyRecord.origin == "demo",
-    )
-    await session.execute(stmt)
+    for bagian in _potong(rows):
+        stmt = pg_insert(SupplyRecord).values(
+            [{**row, "generated_at": now} for row in bagian]
+        )
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_supply_records_loc_com_time_source",
+            set_={"quantity_kg": stmt.excluded.quantity_kg, "generated_at": stmt.excluded.generated_at},
+            where=SupplyRecord.origin == "demo",
+        )
+        await session.execute(stmt)
 
 
 async def _upsert_demand(session, rows: list[dict], now: datetime) -> None:
@@ -691,19 +705,20 @@ async def _upsert_demand(session, rows: list[dict], now: datetime) -> None:
     """
     if not rows:
         return
-    stmt = pg_insert(DemandRecord).values(
-        [{**row, "generated_at": now} for row in rows]
-    )
-    stmt = stmt.on_conflict_do_update(
-        constraint="uq_demand_records_loc_com_time",
-        set_={
-            "quantity_kg": stmt.excluded.quantity_kg,
-            "needed_by": stmt.excluded.needed_by,
-            "generated_at": stmt.excluded.generated_at,
-        },
-        where=DemandRecord.origin == "demo",
-    )
-    await session.execute(stmt)
+    for bagian in _potong(rows):
+        stmt = pg_insert(DemandRecord).values(
+            [{**row, "generated_at": now} for row in bagian]
+        )
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_demand_records_loc_com_time",
+            set_={
+                "quantity_kg": stmt.excluded.quantity_kg,
+                "needed_by": stmt.excluded.needed_by,
+                "generated_at": stmt.excluded.generated_at,
+            },
+            where=DemandRecord.origin == "demo",
+        )
+        await session.execute(stmt)
 
 
 async def _upsert_prices(session, rows: list[dict], now: datetime) -> None:
@@ -715,23 +730,24 @@ async def _upsert_prices(session, rows: list[dict], now: datetime) -> None:
         subset = [row for row in rows if row["source"] == source]
         if not subset:
             continue
-        stmt = pg_insert(PriceSignal).values(
-            [{**row, "generated_at": now} for row in subset]
-        )
-        stmt = stmt.on_conflict_do_update(
-            index_elements=(
-                ["location_id", "commodity_id", "recorded_at"]
-                if source == "pihps_reference"
-                else ["location_id", "commodity_id", "supplier_id", "recorded_at"]
-            ),
-            index_where=PriceSignal.source == source,
-            set_={
-                "price_per_kg": stmt.excluded.price_per_kg,
-                "generated_at": stmt.excluded.generated_at,
-            },
-            where=PriceSignal.origin == "demo",
-        )
-        await session.execute(stmt)
+        for bagian in _potong(subset):
+            stmt = pg_insert(PriceSignal).values(
+                [{**row, "generated_at": now} for row in bagian]
+            )
+            stmt = stmt.on_conflict_do_update(
+                index_elements=(
+                    ["location_id", "commodity_id", "recorded_at"]
+                    if source == "pihps_reference"
+                    else ["location_id", "commodity_id", "supplier_id", "recorded_at"]
+                ),
+                index_where=PriceSignal.source == source,
+                set_={
+                    "price_per_kg": stmt.excluded.price_per_kg,
+                    "generated_at": stmt.excluded.generated_at,
+                },
+                where=PriceSignal.origin == "demo",
+            )
+            await session.execute(stmt)
 
 
 async def _insert_menu_plans(session, rows: list[dict], now: datetime) -> None:
@@ -743,9 +759,10 @@ async def _insert_menu_plans(session, rows: list[dict], now: datetime) -> None:
     """
     if not rows:
         return
-    stmt = pg_insert(MenuPlan).values([{**row, "generated_at": now} for row in rows])
-    stmt = stmt.on_conflict_do_nothing(constraint="uq_menu_plans_loc_date")
-    await session.execute(stmt)
+    for bagian in _potong(rows):
+        stmt = pg_insert(MenuPlan).values([{**row, "generated_at": now} for row in bagian])
+        stmt = stmt.on_conflict_do_nothing(constraint="uq_menu_plans_loc_date")
+        await session.execute(stmt)
 
 
 def _komoditas_per_lokasi(baselines: dict) -> dict:
