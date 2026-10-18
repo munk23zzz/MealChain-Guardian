@@ -73,10 +73,10 @@ def _buat_lokasi(
                 conn.execute(
                     text(
                         "INSERT INTO demand_records (location_id, commodity_id,"
-                        " quantity_kg, needed_by, recorded_at, seed_key)"
-                        " VALUES (:l, :c, :q, now(), now(), :k)"
+                        " quantity_kg, needed_by, recorded_at)"
+                        " VALUES (:l, :c, :q, now(), now())"
                     ),
-                    {"l": loc_id, "c": com_id, "q": demand_kg, "k": key},
+                    {"l": loc_id, "c": com_id, "q": demand_kg},
                 )
     finally:
         engine.dispose()

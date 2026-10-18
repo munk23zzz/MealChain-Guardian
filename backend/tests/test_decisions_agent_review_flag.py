@@ -49,14 +49,18 @@ def _id_dengan_review() -> str:
     engine = create_engine(DSN)
     try:
         with engine.connect() as conn:
-            return str(
-                conn.execute(
-                    text(
-                        "SELECT decision_id FROM agent_traces WHERE agent_name IS NOT NULL "
-                        "LIMIT 1"
-                    )
-                ).scalar_one()
-            )
+            nilai = conn.execute(
+                text(
+                    "SELECT decision_id FROM agent_traces "
+                    "WHERE agent_name IS NOT NULL LIMIT 1"
+                )
+            ).scalar()
+            if nilai is None:
+                # `MULTI_AGENT_REVIEW` default MATI: DB yang baru di-seed belum
+                # punya baris review worker. Dulu `scalar_one()` melempar
+                # NoResultFound sehingga terlihat seperti regresi endpoint.
+                pytest.skip("tidak ada baris review worker di DB (MULTI_AGENT_REVIEW mati)")
+            return str(nilai)
     finally:
         engine.dispose()
 
