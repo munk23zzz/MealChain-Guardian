@@ -657,6 +657,31 @@ def _kembalikan_baseline() -> None:
         engine.dispose()
     asyncio.run(load_seed(CANONICAL_REF))
     asyncio.run(generate_timeseries(DEFAULT_START, DEFAULT_END))
+    # `/demo/refresh` mem-purge SELURUH baris demo, termasuk batch & keputusan
+    # demo. Tanpa langkah ini rollback hanya mengembalikan deret waktu, sehingga
+    # tes berikutnya dalam suite yang sama melihat "riwayat demo tidak ada" dan
+    # `batches.seed` bertambah satu (refresh membuat batch untuk pasangan yang
+    # batch demo-nya sudah dihapus). Penyemai memakai id stabil → aman diulang.
+    async def _pulihkan_kegiatan_demo() -> None:
+        from app.core.config import settings as _settings
+        from app.db import create_engine as _async_engine
+        from app.db import create_session_maker
+        from app.seed.demo_activity import (
+            seed_demo_activity,
+            seed_demo_completed_decisions,
+        )
+
+        eng = _async_engine(_settings.database_url)
+        maker = create_session_maker(eng)
+        try:
+            async with maker() as sesi:
+                await seed_demo_activity(sesi, datetime.now(UTC))
+                await seed_demo_completed_decisions(sesi, datetime.now(UTC))
+                await sesi.commit()
+        finally:
+            await eng.dispose()
+
+    asyncio.run(_pulihkan_kegiatan_demo())
 
 
 def test_refresh_hari_ini_bergeser_dan_bisa_dikembalikan(

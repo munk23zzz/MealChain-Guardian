@@ -330,6 +330,11 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
                 .where(
                     Batch.location_id == loc.id,
                     Batch.commodity_id == komoditas[nama_komoditas],
+                    # Keputusan "selesai" tidak boleh bersandar pada batch yang
+                    # belum lolos mutu. Tanpa filter ini seeder mengambil batch
+                    # pertama (bisa `needs_verification`) sehingga riwayat demo
+                    # memuat eksekusi di atas bahan yang belum lulus audit.
+                    Batch.safety_status == "pass",
                 )
                 .order_by(Batch.id)
             )
