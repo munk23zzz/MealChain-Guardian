@@ -12,6 +12,8 @@ import bcrypt
 import pytest
 from sqlalchemy import create_engine, text
 
+from tests.gate_lock import ambil_kunci, dsn_psycopg, lepas_kunci
+
 # Test yang butuh modul host-only (agent/, infra/) atau file root repo
 # (compose, .env.example, .gitignore, struktur) — tidak tersedia di container.
 HOST_ONLY_MODULES = [
@@ -38,6 +40,8 @@ HOST_ONLY_MODULES = [
 # Test yang butuh infrastruktur Docker (Postgres via psycopg sync, env container).
 DOCKER_ONLY_MODULES = [
     "test_master_data_schema.py",
+    # Kunci gerbang hidup di server Postgres: hanya bisa diuji dalam kontainer.
+    "test_gate_lock.py",
 ]
 
 _backend_dir = Path(__file__).resolve().parents[1]
@@ -386,7 +390,49 @@ def _jumlah_deret_demo() -> dict[str, int]:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def jaring_deret_demo():
+def kunci_gerbang():
+    """Satu suite pytest pada satu waktu untuk satu database.
+
+    Semua tes memakai DB kerja yang sama dengan aplikasi demo. Dua suite
+    bersamaan saling menghapus baris dan mencabut token, lalu menghasilkan
+    kegagalan di berkas yang tidak disentuh siapa pun. Kalau suite lain sudah
+    memegang kunci, berhenti dengan kode 3 dan pesan jelas — angka dari run
+    bersamaan tidak boleh dipakai sebagai baseline.
+
+    Di host tanpa Postgres kunci dilewati: test sisi agent tidak memakai DB.
+    """
+    import os
+
+    dsn = dsn_psycopg(
+        os.environ.get(
+            "DATABASE_URL",
+            "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain",
+        )
+    )
+    try:
+        pegangan = ambil_kunci(dsn)
+    except Exception as exc:  # DB tidak terjangkau: host tanpa Postgres
+        print(f"[conftest] kunci gerbang dilewati: {exc}")
+        yield
+        return
+
+    if pegangan is None:
+        pytest.exit(
+            "suite pytest lain sedang memakai database ini "
+            "(kunci gerbang dipegang). Tunggu sampai selesai lalu ulangi; "
+            "hasil run bersamaan bukan baseline.",
+            returncode=3,
+        )
+    assert pegangan is not None  # pytest.exit di atas sudah berhenti
+    print("[conftest] kunci gerbang dipegang")
+    try:
+        yield
+    finally:
+        lepas_kunci(pegangan)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def jaring_deret_demo(kunci_gerbang):
     """Pulihkan deret demo kanonik bila sesi ini menghabiskannya."""
     awal = _jumlah_deret_demo()
     yield

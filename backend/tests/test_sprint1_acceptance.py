@@ -56,9 +56,14 @@ def test_acceptance_2_safety_fail_not_overridable_via_api(client):
         batch_id = str(
             conn.execute(
                 text(
+                    # Pilih batch KANONIK secara eksplisit: `LIMIT 1` tanpa
+                    # filter dulu mengambil batch hasil penyemai demo (tanpa
+                    # excursion) begitu sesi lain menambah baris, sehingga tes
+                    # merah walau aturan safety-nya benar.
                     "SELECT b.id FROM batches b "
                     "JOIN locations l ON l.id=b.location_id "
-                    "WHERE l.name='Surabaya' LIMIT 1"
+                    "WHERE l.name='Surabaya' AND b.origin='seed' "
+                    "ORDER BY b.id LIMIT 1"
                 )
             ).scalar_one()
         )

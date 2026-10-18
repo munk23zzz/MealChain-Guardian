@@ -1,7 +1,8 @@
 """Keputusan "selesai" hasil penyemai KPI harus KOheren, bukan cuma berstatus executed.
 
-Latar (temuan 17 Okt 2026): `seed_demo_completed_decisions` menulis tiga keputusan
-`executed` untuk mengisi kartu KPI "hari ini", tetapi bukti yang menyertainya tidak
+Latar (temuan 17 Okt 2026): `seed_demo_completed_decisions` menulis keputusan
+`executed` untuk mengisi kartu KPI "hari ini" (tiga kota demo bergilir komoditas,
+ditambah beras untuk Jakarta), tetapi bukti yang menyertainya tidak
 cukup untuk membenarkan status itu. Saat ringkasan persetujuannya dibuka, layar
 menampilkan penghalang yang mustahil pada keputusan yang sudah dieksekusi:
 
@@ -73,11 +74,52 @@ async def _jalankan() -> tuple[dict, list[Decision], dict]:
         await engine.dispose()
 
 
-async def test_penyemai_menghasilkan_keputusan_selesai() -> None:
+async def _peta_nama() -> tuple[dict, dict]:
+    from app.models import Commodity, Location
+
+    engine = create_engine(settings.database_url)
+    maker = create_session_maker(engine)
+    try:
+        async with maker() as sesi:
+            lokasi = {
+                lok.id: lok.name
+                for lok in (await sesi.execute(select(Location))).scalars()
+            }
+            komoditas = {
+                c.id: c.name for c in (await sesi.execute(select(Commodity))).scalars()
+            }
+        return lokasi, komoditas
+    finally:
+        await engine.dispose()
+
+
+async def test_penyemai_menghasilkan_satu_keputusan_per_pasangan_kota_komoditas() -> None:
+    """Jumlah kota demo boleh berubah; yang dikunci adalah SATU baris per pasangan.
+
+    Sebelumnya tes ini menuntut tepat 3 baris, lalu merah ketika penyemai mulai
+    menyemai beras untuk Jakarta secara eksplisit (permintaan pemilik 18 Okt:
+    panel Decision & Evidence perlu baris beras). Asersi yang benar bukan
+    "3", melainkan "tidak ada pasangan ganda" + pasangan wajib ada.
+    """
     _, keputusan, _ = await _jalankan()
-    assert len(keputusan) == 3, (
-        "penyemai KPI harus membuat tepat 3 keputusan selesai (satu per kota demo); "
+    pasangan = {(d.target_location_id, d.commodity_id) for d in keputusan}
+    assert len(pasangan) == len(keputusan), (
+        "penyemai membuat lebih dari satu keputusan untuk pasangan lokasi×komoditas "
+        f"yang sama: {len(keputusan)} baris, {len(pasangan)} pasangan"
+    )
+    assert len(keputusan) >= 3, (
+        "penyemai KPI harus mengisi minimal tiga kota demo; "
         f"dapat {len(keputusan)}"
+    )
+
+    nama_lokasi, nama_komoditas = await _peta_nama()
+    berpasangan = {
+        (nama_lokasi.get(d.target_location_id), nama_komoditas.get(d.commodity_id))
+        for d in keputusan
+    }
+    assert ("Jakarta", "beras") in berpasangan, (
+        "beras Jakarta disemai eksplisit supaya panel Decision & Evidence punya "
+        f"baris beras; pasangan yang ada: {sorted(map(str, berpasangan))}"
     )
 
 
