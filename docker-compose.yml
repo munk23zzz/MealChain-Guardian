@@ -47,6 +47,10 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mealchain}:${POSTGRES_PASSWORD:-mealchain_local}@postgres:5432/${POSTGRES_DB:-mealchain}
       DEMO_MODE: ${DEMO_MODE:-false}
       DEBUG: ${DEBUG:-false}
+      # P0: review 7 worker agent — default MATI agar perilaku lama tidak berubah.
+      MULTI_AGENT_REVIEW: ${MULTI_AGENT_REVIEW:-false}
+      AGENT_REVIEW_MODE: ${AGENT_REVIEW_MODE:-advisory}
+      AGENT_REVIEW_TIMEOUT_SECONDS: ${AGENT_REVIEW_TIMEOUT_SECONDS:-75}
       SAP_MATERIAL_STOCK_MODE: ${SAP_MATERIAL_STOCK_MODE:-mock}
       SAP_PURCHASE_ORDER_MODE: ${SAP_PURCHASE_ORDER_MODE:-mock}
       SAP_MATERIAL_DOCUMENT_MODE: ${SAP_MATERIAL_DOCUMENT_MODE:-mock}
