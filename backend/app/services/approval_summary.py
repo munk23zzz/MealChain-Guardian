@@ -310,6 +310,34 @@ async def build_approval_summary(
         # Alasan diambil dari _safety_view (bisa "batch sumber FAIL" atau
         # "tidak ada batch sumber") — jangan menuliskan sebab yang belum tentu.
         blocking.append(safety.get("reason") or "safety revalidation gagal")
+    # Audit M5 (18 Okt 2026): read model wajib mencerminkan pagar
+    # /actions/execute. Endpoint menolak 422 untuk komoditas/kuantitas/harga
+    # yang tidak valid dan 409 untuk supplier yang dikecualikan; sebelumnya
+    # `can_execute` hanya memeriksa approval/expiry/safety, sehingga tombol
+    # Eksekusi menyala untuk keputusan yang pasti ditolak.
+    if decision.decision_type not in exclusions.ADMIN_TYPES:
+        if commodity is None:
+            blocking.append("commodity decision tidak valid")
+        qty = decision.quantity_kg
+        if qty is None or qty <= 0:
+            blocking.append("quantity decision tidak valid")
+        if decision.safe_delivered_cost is None or decision.safe_delivered_cost <= 0:
+            blocking.append("unit price decision tidak valid")
+        if supplier is not None:
+            from app.models import SupplierExclusion
+
+            aktif = (
+                await db.execute(
+                    select(SupplierExclusion.id).where(
+                        SupplierExclusion.supplier_id == supplier.id,
+                        SupplierExclusion.scope_location_id == decision.target_location_id,
+                        SupplierExclusion.status == "active",
+                    )
+                )
+            ).first()
+            if aktif:
+                # Kalimat SAMA dengan `revalidate_transfer` — satu sumber pesan.
+                blocking.append("supplier excluded pada SPPG penerima")
     can_execute = not blocking
     # Decision yang sudah executed tetap tampil executed tanpa tombol baru.
     if decision.status == "executed":
