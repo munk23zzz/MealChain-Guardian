@@ -691,7 +691,10 @@ async def _upsert_supply(session, rows: list[dict], now: datetime) -> None:
         )
         stmt = stmt.on_conflict_do_update(
             constraint="uq_supply_records_loc_com_time_source",
-            set_={"quantity_kg": stmt.excluded.quantity_kg, "generated_at": stmt.excluded.generated_at},
+            set_={
+                "quantity_kg": stmt.excluded.quantity_kg,
+                "generated_at": stmt.excluded.generated_at,
+            },
             where=SupplyRecord.origin == "demo",
         )
         await session.execute(stmt)
