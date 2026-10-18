@@ -22,6 +22,7 @@ from .contracts import AgentFinding, AgentName, AgentRun, RunStatus, WorkerStatu
 from .registry import get_spec
 from .telemetry import build_trace_rows
 from .validation import detect_contradictions, run_status, safety_veto
+from .verify import verify_run
 from .workers import build_workers
 from .workers.base import WorkerContext, as_number
 
@@ -283,6 +284,9 @@ def run_review(
         total_latency_ms=max(0, int((monotonic() - started) * 1000)),
     )
     run = run.model_copy(update={"narrative": _narrative(run)})
+    # Gerbang verifikasi deterministik dijalankan SETELAH supervisor menyusun
+    # rangkuman, dan hanya menandai — tidak mengubah status atau keputusan.
+    run = run.model_copy(update={"verification": verify_run(run)})
     return run
 
 

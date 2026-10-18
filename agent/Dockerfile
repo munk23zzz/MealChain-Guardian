@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt -r requirements-runtime.txt
 # antar worker/orchestrator tetap valid.
 COPY __init__.py supervisor_agent.py tools.py runtime_server.py \
      orchestrator.py telemetry.py api_client.py contracts.py registry.py \
-     validation.py hierarchy.json ./agent/
+     validation.py verify.py hierarchy.json ./agent/
 COPY prompts/ ./agent/prompts/
 COPY workers/ ./agent/workers/
 

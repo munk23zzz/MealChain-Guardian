@@ -159,6 +159,19 @@ class Contradiction(BaseModel):
     message: str = Field(min_length=1)
 
 
+class VerifyResult(BaseModel):
+    """Hasil gerbang verifikasi deterministik atas rangkuman supervisor.
+
+    `flag` berarti ada ketidaksesuaian yang harus dibaca manusia; gerbang ini
+    tidak pernah memveto dan tidak mengubah status keputusan.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    verdict: Literal["pass", "flag"]
+    reasons: list[str] = Field(default_factory=list)
+
+
 class AgentRun(BaseModel):
     """Satu putaran review tujuh worker; bukan keputusan dan bukan approval."""
 
@@ -172,6 +185,9 @@ class AgentRun(BaseModel):
     contradictions: list[Contradiction] = Field(default_factory=list)
     safety_veto: bool = False
     narrative: str | None = None
+    # Hasil gerbang verifikasi deterministik (dijalankan SETELAH supervisor).
+    # None berarti belum diverifikasi, bukan berarti lolos.
+    verification: VerifyResult | None = None
     total_latency_ms: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")

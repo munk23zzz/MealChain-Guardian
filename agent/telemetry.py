@@ -66,6 +66,9 @@ def build_trace_rows(run: AgentRun) -> list[dict]:
                 "contradictions": [
                     contradiction.model_dump() for contradiction in run.contradictions
                 ],
+                "verification": (
+                    run.verification.model_dump() if run.verification is not None else None
+                ),
             },
         }
     )
