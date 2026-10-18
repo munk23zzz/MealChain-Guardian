@@ -153,5 +153,9 @@ def test_review_only_menolak_semua_jalur_tulis():
                 assert resp.status_code == 409, (path, resp.status_code, resp.text)
                 detail = str(resp.json().get("detail", "")).lower()
                 assert "review" in detail or "tinjauan" in detail, (path, detail)
+                # Audit M9: /actions/propose bukan "usul ULANG" — kata "ulang"
+                # hanya benar untuk /actions/repropose.
+                if path == "/actions/propose":
+                    assert "ulang" not in detail, (path, detail)
     finally:
         _bersihkan(did, body.get("_quote_id"))

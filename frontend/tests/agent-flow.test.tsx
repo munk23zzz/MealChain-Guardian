@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+  ApiError,
   login,
   fetchDecisions,
   fetchDecisionTraces,
@@ -98,7 +99,11 @@ describe("api client (kontrak backend aktual)", () => {
         json: () => Promise.resolve({ detail: "unauthorized" }), text: () => Promise.resolve(JSON.stringify({ detail: "unauthorized" })),
       })
     );
-    await expect(login("x", "y")).rejects.toThrow("401");
+    // Audit M9: pesan galat = alasan server; status tetap terbaca dari properti.
+    const galat = (await login("x", "y").catch((err) => err)) as ApiError;
+    expect(galat).toBeInstanceOf(ApiError);
+    expect(galat.status).toBe(401);
+    expect(galat.message).toBe("unauthorized");
   });
 });
 

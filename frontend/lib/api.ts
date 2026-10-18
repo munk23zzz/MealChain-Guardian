@@ -11,32 +11,73 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
  *  Pesannya tetap "HTTP <status>: <path>" seperti sebelumnya. */
 export class ApiError extends Error {
   readonly status: number;
-  constructor(status: number, path: string) {
-    super(`HTTP ${status}: ${path}`);
+  /** Alasan dari server (`detail`), apa adanya; null bila tak ada/tak terbaca.
+   *  Audit M9: dulu hanya `HTTP 409: /actions/approve` yang sampai ke layar,
+   *  sehingga pengguna tidak tahu APA yang menahan (mis. "verdict sudah
+   *  tercatat — hasil audit tidak bisa ditimpa"). */
+  readonly detail: string | null;
+  constructor(status: number, path: string, detail?: string | null) {
+    super(detail && detail.trim() ? detail : `HTTP ${status}: ${path}`);
     this.name = "ApiError";
     this.status = status;
+    this.detail = detail && detail.trim() ? detail : null;
   }
+}
+
+/** `detail` FastAPI → satu kalimat yang bisa dibaca.
+ *
+ *  String dikembalikan apa adanya. Daftar validasi (422) diringkas menjadi
+ *  "field: pesan" — kalau daftarnya dibiarkan, UI menampilkan [object Object].
+ *  Bentuk lain (objek, dsb.) tidak ditebak: null, supaya pemanggil memakai
+ *  pesan status yang jujur. */
+function pesanDetail(body: unknown): string | null {
+  const detail = (body as { detail?: unknown } | null)?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const bagian = detail
+      .map((baris) => {
+        const isi = baris as { loc?: unknown; msg?: unknown };
+        const loc = Array.isArray(isi?.loc)
+          ? isi.loc.filter((x) => x !== "body" && x !== "query" && x !== "path").join(".")
+          : "";
+        const msg = typeof isi?.msg === "string" ? isi.msg : "";
+        if (!msg) return "";
+        return loc ? `${loc}: ${msg}` : msg;
+      })
+      .filter(Boolean);
+    return bagian.length ? bagian.join("; ") : null;
+  }
+  return null;
 }
 
 export async function request(path: string, init: RequestInit): Promise<any> {
   const resp = await fetch(`${API_URL}${path}`, init);
-  if (!resp.ok) {
-    throw new ApiError(resp.status, path);
-  }
-  // Backend kadang membalas HTML (proxy/error page) — pesan parse mentah
-  // ("Unexpected token '<'...") jangan sampai tampil di UI.
+  // Body dibaca SEKALI, untuk sukses maupun galat: alasan server ikut dibawa
+  // ke layar (audit M9), dan body tidak bisa dibaca dua kali.
   const text = await resp.text();
+  let hasil: unknown;
+  let jsonSah = true;
   try {
-    const hasil = JSON.parse(text);
-    // Satu-satunya tempat semua tulis lewat: begitu server menerima perubahan,
-    // SELURUH cache data disegarkan (lihat `lib/refresh.ts`). Tanpa ini, tiap
-    // komponen harus ingat me-refetch query-nya sendiri — dan yang lupa akan
-    // menampilkan angka lama.
-    if (metodeMenulis(init.method)) segarkanSetelahTulis();
-    return hasil;
+    hasil = JSON.parse(text);
   } catch {
+    jsonSah = false;
+  }
+  if (!resp.ok) {
+    // Backend kadang membalas HTML (proxy/error page): jangan menebak alasan,
+    // pakai pesan status yang jujur.
+    throw new ApiError(resp.status, path, jsonSah ? pesanDetail(hasil) : null);
+  }
+  // Backend kadang membalas HTML pada status 200 — pesan parse mentah
+  // ("Unexpected token '<'...") jangan sampai tampil di UI.
+  if (!jsonSah) {
     throw new Error(`Respons bukan JSON dari ${path} (HTTP ${resp.status})`);
   }
+  // Satu-satunya tempat semua tulis lewat: begitu server menerima perubahan,
+  // SELURUH cache data disegarkan (lihat `lib/refresh.ts`). Tanpa ini, tiap
+  // komponen harus ingat me-refetch query-nya sendiri — dan yang lupa akan
+  // menampilkan angka lama.
+  if (metodeMenulis(init.method)) segarkanSetelahTulis();
+  return hasil;
 }
 
 export async function login(email: string, password: string) {
@@ -554,6 +595,14 @@ export async function triggerPriceAnomaly(
 // S4-03: KPI tujuh metrik — envelope {period, scope, computed_at,
 // data_source, metrics[]}. Nilai null/state unavailable dirender apa
 // adanya (TANPA fake 0); scope SPPG = own location, monitor = global.
+/** Ringkasan limbah + mitra pengolahan (GET /waste/summary). */
+export async function fetchWasteSummary(token: string, days = 30) {
+  const params = new URLSearchParams({ days: String(days) });
+  return request(`/waste/summary?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export async function fetchKpis(
   start: string,
   end: string,

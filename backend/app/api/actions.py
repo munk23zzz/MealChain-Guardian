@@ -306,7 +306,7 @@ async def propose_action(
     if decision.status not in {"proposed", "verifier_flagged"}:
         raise HTTPException(
             status_code=409,
-            detail=f"decision status {decision.status} tidak dapat dipropose ulang",
+            detail=f"decision status {decision.status} tidak dapat diajukan untuk persetujuan",
         )
     if decision.decision_type in exclusions.ADMIN_TYPES:
         raise HTTPException(409, "gunakan endpoint proposal supplier-exclusions")
