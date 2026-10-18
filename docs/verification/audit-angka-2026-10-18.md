@@ -143,3 +143,40 @@ tetap "keputusan tersimpan dan bisa dibaca", bukan urutan ranking global.
 DB dipakai bersama sesi lain: selama audit terlihat `price_signals` 4.054 baris
 (harapan 4.040) dan jumlah keputusan bertambah dari 21 → 26. Angka di dokumen ini
 adalah snapshot waktu pengukuran, bukan baseline baru.
+
+## Baseline 10×4 (beras) — angka terverifikasi 2026-10-18 20.20 WIB
+
+Komoditas keempat (beras) resmi masuk, jadi baseline kanonik menjadi 10 lokasi ×
+4 komoditas (pasokan seed 40 baris, harga referensi 40, pemasok 38 = 17 kanonik +
+24 baris demo − 3 overlay). Angka di bawah dibaca dari UI, lalu dicocokkan ke DB
+dengan batas yang sama seperti endpoint (`recorded_at <= now()`).
+
+**Telur, nasional (BGN Monitor):** 4.556,15 kg pasokan · 3.149,37 kg kebutuhan
+jaringan · 145% · selisih +1.406,78 kg · 4 surplus / 6 shortage / 10 terpetakan ·
+label satu tanggal "Data per 18 Okt 2026".
+DB: `sum` pasokan pada stempel terbaru per lokasi = 4.556,15; permintaan terbaru
+8 lokasi + 2 tanpa catatan = 3.149,37 (Bandung & Cianjur ditulis "permintaan
+tanpa catatan", bukan nol).
+
+**Telur, Jakarta (SPPG Head):** 288,26 kg pasokan (mock_sap, 18 Okt 12:00 UTC) ·
+977,82 kg kebutuhan (demo, 18 Okt 00:00 UTC) · 29% · kurang 689,56 kg.
+DB: pasokan 288,26; permintaan 977,82; selisih 689,56 — cocok sampai sen.
+
+**Beras, nasional:** 10.744,69 kg pasokan · 10.175,02 kg kebutuhan · 106% ·
++569,67 kg · 3 surplus / 7 shortage · label "Data per 18 Okt 2026".
+DB: pasokan 10.744,69; permintaan 10.175,02 dari 8 lokasi (2 tanpa catatan).
+Permintaan beras hanya dibuat untuk pasangan yang punya baseline kanonik — bukan
+disamakan rata, dan bukan diisi nol.
+
+Peta tetap menampilkan satu waktu data, bukan waktu fetch: "Live Sync" hanya
+menyebut jam pembaruan UI, sedangkan kartu KPI menyebut tanggal DATA.
+
+## Gerbang setelah baseline 10×4
+
+- Backend penuh: 1.126 passed / 3 skipped / 0 failed (EXIT=0, 658,50 s) pada DB
+  sunyi; tidak ada deadlock/FK/unique violation di log.
+- Frontend penuh: `tsc --noEmit` EXIT=0; vitest 108 berkas / 1.282 tes; `next lint`
+  bersih; `next build` 4/4 halaman (rute `/` 401 kB).
+- `ruff check` bersih untuk 10 berkas backend yang disentuh. `ruff format --check`
+  TIDAK dipakai sebagai gerbang di repo ini: `core.autocrlf=true` membuat semua
+  berkas CRLF sehingga ruff selalu minta reformat.
