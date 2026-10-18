@@ -75,6 +75,19 @@ def demo_batch_id(lokasi: str, pemasok: str, komoditas: str) -> uuid.UUID:
     return uuid.uuid5(uuid.NAMESPACE_URL, f"mcg:{DEMO_TAG}:{lokasi}:{pemasok}:{komoditas}")
 
 
+def _pemasok_untuk_pasangan(
+    kanonik: set[uuid.UUID] | None, slot: uuid.UUID
+) -> uuid.UUID:
+    """Pemasok batch demo: ikuti kanonik bila ada, selain itu pemasok slot.
+
+    Deterministik (id terkecil) supaya menyegarkan demo tidak menggeser pemasok
+    dari satu pemasok kanonik ke pemasok kanonik lain.
+    """
+    if kanonik:
+        return min(kanonik)
+    return slot
+
+
 def _slot(nama_lokasi: str, index_lokasi: int, semua_pemasok: list[Supplier]):
     """Empat pemasok bergilir per lokasi — cukup beragam, tanpa penugasan acak."""
     awal = (index_lokasi * 4) % max(1, len(semua_pemasok))
@@ -91,6 +104,21 @@ async def seed_demo_activity(session: AsyncSession, now: datetime) -> dict:
     tersedia = [nama for nama in SHELF_LIFE_HARI if nama in komoditas]
     if not lokasi or not pemasok or not tersedia:
         return {"batch_demo": 0, "dilewati": "data dasar belum ada"}
+
+    # Audit M10 (18 Okt 2026): pemasok kanonik per pasangan (lokasi, komoditas).
+    # Seed demo TIDAK boleh menambah pemasok kedua untuk pasangan yang kanoniknya
+    # tunggal: `resolve_binding` lalu menolak menyimpulkan pemasok
+    # ("supplier_unknown") untuk keputusan tanpa `allocation_binding`, dan pagar
+    # yang benar itu jadi dipicu oleh data demo kita sendiri.
+    kanonik: dict[tuple[uuid.UUID, uuid.UUID], set[uuid.UUID]] = {}
+    for loc_id, com_id, sup_id in (
+        await session.execute(
+            select(Batch.location_id, Batch.commodity_id, Batch.supplier_id).where(
+                Batch.origin != "demo"
+            )
+        )
+    ).all():
+        kanonik.setdefault((loc_id, com_id), set()).add(sup_id)
 
     dibuat = 0
     dihapus = 0
@@ -113,7 +141,13 @@ async def seed_demo_activity(session: AsyncSession, now: datetime) -> dict:
                 "id": id_batch,
                 "commodity_id": komoditas[nama_komoditas],
                 "location_id": loc.id,
-                "supplier_id": sup.id,
+                # Pemasok slot dipakai HANYA bila pasangan ini belum punya
+                # batch kanonik sama sekali. Kalau sudah ada, batch demo ikut
+                # salah satu pemasok kanonik (yang terkecil id-nya, supaya
+                # deterministik) — jangan menambah pemasok baru ke pasangan.
+                "supplier_id": _pemasok_untuk_pasangan(
+                    kanonik.get((loc.id, komoditas[nama_komoditas])), sup.id
+                ),
                 "quantity_kg": Decimal(200 + ((i * 7 + j * 13) % 9) * 100),
                 "harvested_at": panen,
                 "temperature_log": [],
@@ -160,7 +194,6 @@ from app.models import (  # noqa: E402  (impor di bawah agar blok ini mandiri)
     Approval,
     Decision,
     DecisionEvidence,
-    DisposalEvent,
     SapMockPurchaseOrder,
     User,
 )
@@ -473,11 +506,11 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
     if jakarta is not None and "telur" in komoditas:
         #: Satu kejadian dialihkan ke mitra, satu dibuang tanpa mitra: dua
         #: keadaan itu HARUS terlihat berbeda di panel, bukan sama-sama "—".
-        MITRA = ("Bank Sampah Melati", None)
+        mitra_hari_ini = ("Bank Sampah Melati", None)
         for n, (menit, kg) in enumerate(((-150, Decimal("12.5")), (-90, Decimal("8")))):
             dis_id = uuid.uuid5(uuid.NAMESPACE_URL, f"mcg:{DEMO_TAG}:limbah:jakarta:{n}")
             kapan = now + timedelta(minutes=menit)
-            mitra = MITRA[n]
+            mitra = mitra_hari_ini[n]
             ada_limbah = await db.get(DisposalEvent, dis_id)
             if ada_limbah is None:
                 db.add(
