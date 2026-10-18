@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.core.journey import dispatch_time, validate_dispatch
@@ -352,6 +352,18 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
                 if item["name"] not in com_by_name:
                     session.add(Commodity(name=item["name"], unit=item["unit"]))
                     counts["commodities"] = counts.get("commodities", 0) + 1
+            # Peta nama→objek dibangun SEBELUM baris baru ditambahkan, sehingga
+            # pada DB kosong (CI / gerbang terisolasi) pemasok pertama yang
+            # menunjuk lokasi/komoditas baru gagal `KeyError` (mis. 'Cianjur').
+            # Setelah flush, id baris baru sudah ada → bangun ulang petanya.
+            await session.flush()
+            loc_by_name = {
+                r.name: r for r in (await session.execute(select(Location))).scalars()
+            }
+            com_by_name = {
+                r.name: r for r in (await session.execute(select(Commodity))).scalars()
+            }
+
             for item in rows["suppliers"]:
                 existing = sup_by_name.get(item["name"])
                 if existing is None:
@@ -535,6 +547,33 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
             counts["menu_plans"] = len(rows["menu_plans"])
             counts["delivery_events"] = len(rows["delivery_events"])
             counts["disposal_events"] = len(rows["disposal_events"])
+            # Migrasi 012 mem-backfill koordinat pemasok yang SUDAH ADA saat
+            # migrasi berjalan. Di DB baru pemasok lahir SESUDAH migrasi, jadi
+            # sebagian tertinggal tanpa pin peta. Backfill idempoten (hanya
+            # menyentuh baris NULL) supaya bootstrap dari nol setara demo.
+            await session.execute(
+                text(
+                    """
+                    WITH ranked AS (
+                        SELECT s.id,
+                               l.latitude  AS base_lat,
+                               l.longitude AS base_lon,
+                               row_number() OVER (
+                                   PARTITION BY s.location_id ORDER BY s.name
+                               ) - 1 AS rn
+                        FROM suppliers s
+                        JOIN locations l ON l.id = s.location_id
+                        WHERE s.latitude IS NULL AND l.latitude IS NOT NULL
+                    )
+                    UPDATE suppliers s
+                    SET latitude  = r.base_lat  + (0.012 * ((r.rn % 3) - 1)),
+                        longitude = r.base_lon + (0.012 * (((r.rn / 3) % 3) - 1)),
+                        updated_at = now()
+                    FROM ranked r
+                    WHERE s.id = r.id
+                    """
+                )
+            )
             await session.commit()
     finally:
         await engine.dispose()
