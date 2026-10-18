@@ -77,7 +77,15 @@ class EvidenceWorker(ReadOnlyWorker):
         if not traces_complete:
             warnings.append("compliance tidak memuat daftar traces")
 
-        decision = compliance.get("decision") if isinstance(compliance.get("decision"), dict) else {}
+        raw_decision = compliance.get("decision")
+        decision = raw_decision if isinstance(raw_decision, dict) else {}
+        decision_status = decision.get("status")
+        decision_quantity = as_number(
+            decision.get("quantity_kg"), allow_numeric_string=True
+        )
+        decision_sdc = as_number(
+            decision.get("safe_delivered_cost"), allow_numeric_string=True
+        )
         signature = compliance.get("signature") if isinstance(compliance.get("signature"), dict) else {}
         signature_state = signature.get("state") if isinstance(signature.get("state"), str) else None
         raw_verify = compliance.get("verify")
@@ -101,7 +109,9 @@ class EvidenceWorker(ReadOnlyWorker):
 
         facts = {
             "decision_id": context.decision_id,
-            "decision_status": decision.get("status"),
+            "decision_status": decision_status,
+            "decision_quantity_kg": decision_quantity,
+            "decision_safe_delivered_cost": decision_sdc,
             "chain_length": len(chain) if chain is not None else None,
             "evidence_count": len(evidence),
             "approval_count": len(approvals),
@@ -139,6 +149,24 @@ class EvidenceWorker(ReadOnlyWorker):
             citations.append(
                 self._citation("ledger_blocks", "/ledger/verify", "blocks", ledger_blocks)
             )
+        if decision_quantity is not None:
+            citations.append(
+                self._citation(
+                    "decision_quantity_kg",
+                    compliance_path,
+                    "decision.quantity_kg",
+                    decision_quantity,
+                )
+            )
+        if decision_sdc is not None:
+            citations.append(
+                self._citation(
+                    "decision_safe_delivered_cost",
+                    compliance_path,
+                    "decision.safe_delivered_cost",
+                    decision_sdc,
+                )
+            )
 
         if inconsistent:
             warnings.append(f"{inconsistent} evidence ditandai tidak konsisten")
@@ -166,6 +194,7 @@ class EvidenceWorker(ReadOnlyWorker):
             or not evidence_complete
             or not approvals_complete
             or not traces_complete
+            or not isinstance(raw_decision, dict)
         )
         summary = (
             f"Keputusan {facts['decision_status'] or 'tidak diketahui'}; "

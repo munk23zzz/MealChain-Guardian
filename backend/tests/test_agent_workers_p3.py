@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from agent.api_client import AgentApiError
 from agent.contracts import AgentFinding
-from agent.workers.base import WorkerContext
+from agent.workers.base import WorkerContext, as_number
 from agent.workers.evidence import EvidenceWorker
 from agent.workers.logistics import LogisticsWorker
 from agent.workers.price import PriceWorker
@@ -320,7 +320,11 @@ def _evidence_get() -> dict[str, object]:
             "verify": True,
         },
         "/decisions/decision-1/compliance": {
-            "decision": {"status": "pending_approval"},
+            "decision": {
+                "status": "pending_approval",
+                "quantity_kg": "600.00",
+                "safe_delivered_cost": "16206000.00",
+            },
             "evidence": [
                 {"evidence_type": "human_inspection", "is_consistent": True},
             ],
@@ -358,6 +362,8 @@ def test_evidence_membaca_dossier_chain_dan_ledger() -> None:
     assert finding.facts["ledger_valid"] is True
     assert finding.facts["signature_verified"] is True
     assert finding.facts["can_execute"] is False
+    assert finding.facts["decision_quantity_kg"] == 600.0
+    assert finding.facts["decision_safe_delivered_cost"] == 16206000.0
     assert finding.blocking is False
     assert _citations(finding) == {
         "chain_length": 2,
@@ -366,6 +372,8 @@ def test_evidence_membaca_dossier_chain_dan_ledger() -> None:
         "trace_count": 2,
         "inconsistent_evidence_count": 0,
         "ledger_blocks": 6637,
+        "decision_quantity_kg": 600.0,
+        "decision_safe_delivered_cost": 16206000.0,
     }
 
 
@@ -447,3 +455,10 @@ def test_tujuh_worker_nyata_terdaftar() -> None:
 
     assert len(workers) == 7
     assert {worker.name for worker in workers} == set(AgentName)
+
+
+def test_as_number_tidak_menebak_string_umum() -> None:
+    assert as_number("600.00") is None
+    assert as_number("600.00", allow_numeric_string=True) == 600.0
+    assert as_number("tidak tersedia", allow_numeric_string=True) is None
+    assert as_number(True, allow_numeric_string=True) is None

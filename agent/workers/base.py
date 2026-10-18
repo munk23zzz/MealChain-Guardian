@@ -8,6 +8,7 @@ worker nyata diimplementasikan.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from time import monotonic
 from typing import Any
 from uuid import UUID
@@ -169,10 +170,20 @@ class ReadOnlyWorker(StubWorker):
     """Marker base untuk worker P2+; hanya membaca API."""
 
 
-def as_number(value: object) -> int | float | None:
-    """Ambil angka apa adanya; bool, string, dan None bukan angka fakta."""
+def as_number(value: object, *, allow_numeric_string: bool = False) -> int | float | None:
+    """Ambil angka apa adanya; bool dan None bukan angka fakta.
+
+    `allow_numeric_string` hanya dipakai untuk field DB yang diserialisasi
+    sebagai string desimal (mis. `quantity_kg` di dossier). String non-angka
+    tetap dikembalikan None, bukan dikarang menjadi 0.
+    """
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
         return value
+    if allow_numeric_string and isinstance(value, str):
+        try:
+            return float(Decimal(value.strip()))
+        except (InvalidOperation, ValueError):
+            return None
     return None

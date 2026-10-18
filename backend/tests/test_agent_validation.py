@@ -124,6 +124,64 @@ def test_kontradiksi_status_eksekusi_price_evidence() -> None:
     assert contradictions[0].field == "can_execute"
 
 
+def test_kontradiksi_angka_price_evidence() -> None:
+    findings = _all_findings(
+        **{
+            "price": _finding(
+                AgentName.PRICE,
+                facts={
+                    "quantity_kg": 600.0,
+                    "safe_delivered_cost": 16206000.0,
+                    "can_execute": False,
+                },
+                citations=[
+                    Citation(
+                        claim="quantity_kg",
+                        source_path="/decisions/d1/approval-summary",
+                        source_field="quantity_kg",
+                        source_value=600.0,
+                    ),
+                    Citation(
+                        claim="safe_delivered_cost",
+                        source_path="/decisions/d1/approval-summary",
+                        source_field="safe_delivered_cost",
+                        source_value=16206000.0,
+                    ),
+                ],
+            ),
+            "evidence": _finding(
+                AgentName.EVIDENCE,
+                facts={
+                    "decision_quantity_kg": 600.0,
+                    "decision_safe_delivered_cost": 16210000.0,
+                    "can_execute": False,
+                },
+                citations=[
+                    Citation(
+                        claim="decision_quantity_kg",
+                        source_path="/decisions/d1/compliance",
+                        source_field="decision.quantity_kg",
+                        source_value=600.0,
+                    ),
+                    Citation(
+                        claim="decision_safe_delivered_cost",
+                        source_path="/decisions/d1/compliance",
+                        source_field="decision.safe_delivered_cost",
+                        source_value=16210000.0,
+                    ),
+                ],
+            ),
+        }
+    )
+
+    contradictions = detect_contradictions(findings)
+
+    assert len(contradictions) == 1
+    assert contradictions[0].field == "safe_delivered_cost"
+    assert set(contradictions[0].agents) == {AgentName.PRICE, AgentName.EVIDENCE}
+    assert run_status(findings, contradictions) == "partial"
+
+
 def test_status_completed_saat_semua_ok() -> None:
     findings = _all_findings()
 

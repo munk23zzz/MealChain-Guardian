@@ -117,6 +117,31 @@ def detect_contradictions(findings: list[AgentFinding]) -> list[Contradiction]:
             if len({repr(value) for _, value in values}) > 1:
                 contradictions.append(_contradiction(field, values, label))
 
+        for price_field, evidence_field, label in (
+            ("quantity_kg", "decision_quantity_kg", "kuantitas keputusan"),
+            (
+                "safe_delivered_cost",
+                "decision_safe_delivered_cost",
+                "safe delivered cost",
+            ),
+        ):
+            left = price.facts.get(price_field)
+            right = evidence.facts.get(evidence_field)
+            if (
+                isinstance(left, (int, float))
+                and not isinstance(left, bool)
+                and isinstance(right, (int, float))
+                and not isinstance(right, bool)
+                and abs(float(left) - float(right)) > 1e-6
+            ):
+                contradictions.append(
+                    _contradiction(
+                        price_field,
+                        [(price.agent, left), (evidence.agent, right)],
+                        label,
+                    )
+                )
+
     return contradictions
 
 
