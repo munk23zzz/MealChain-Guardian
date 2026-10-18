@@ -4,3 +4,5 @@
 -r requirements.txt
 pytest
 uvicorn
+# Tes kontrak artefak Joule membaca YAML (capability/DA/scenario) apa adanya.
+pyyaml

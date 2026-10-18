@@ -317,3 +317,61 @@ menjawab "belum bisa diambil", **bukan** tabel kosong yang terbaca seolah tidak 
 | Timeout di Joule | Joule menunggu maks 60 detik; jembatan ini hanya memanggil endpoint baca cepat — kalau timeout, backend-nya yang lambat |
 | Scenario tidak cocok | Kata kunci pada deskripsi scenario harus ada di kalimat pengguna ("pasokan", "kpi", "usulan") |
 | Setelah ubah role/group, akses gagal | Logout-login ulang Joule CLI **dan** web client: token masih menyimpan role lama |
+
+---
+
+## 10. Kalau asisten Joule hilang dari tenant (pasang ulang)
+
+Digital Assistant hasil `joule deploy` hidup di tenant, **bukan** di repo. Kalau tenant di-reset,
+DA dihapus orang lain, atau `joule list` kosong, artefak di repo tidak hilang — yang hilang hanya
+hasil deploy-nya. Urutan diagnosis lalu pasang ulang:
+
+**1. Pisahkan "jembatan mati" dari "DA hilang".**
+
+```
+curl -s https://mealchain-joule-bridge-4sehat3trio.cfapps.ap10.hana.ondemand.com/health
+```
+
+| Hasil | Artinya | Tindakan |
+|---|---|---|
+| `"reachable":true` | jembatan hidup & backend terjangkau | lanjut ke langkah 2 (masalahnya di sisi Joule) |
+| `"reachable":false` | jembatan hidup, URL backend salah/mati | `cf set-env <app> MEALCHAIN_API_URL <url baru>` + `cf restage <app>` — **bukan** deploy ulang DA |
+| tidak menjawab / 502 | aplikasi CF mati | `cf app <app>` lalu `cf logs <app> --recent` |
+
+**2. Pastikan prasyarat yang sering terlupa** (tanpa ini deploy tetap "berhasil" tapi chat diam):
+
+- Destination `SWZ_JOULE` ada di cockpit, Proxy Type = Internet, Authentication = NoAuthentication.
+  Nama harus **persis** — salah huruf → `destination not found`.
+- Agent card jembatan hidup: `curl -s https://<bridge>/.well-known/agent-card.json` → 3 skill.
+- `capability.sapdas.yaml`: `schema_version: 3.28.0` dan `namespace: joule.ext`.
+
+**3. Deploy ulang dari folder `joule/`** (tempat `da.sapdas.yaml`):
+
+```
+cd sap-joule/joule
+joule login --no-app-tid          # authurl = uaa.url dari key tim, bukan URL di README
+joule lint
+joule deploy -c -n "mealchain_assistant_4sehat3trio"
+joule list                        # nama di kolom "Digital Assistant Name" harus muncul
+joule launch "mealchain_assistant_4sehat3trio"
+```
+
+`joule deploy` **tidak** punya `--use-env`; hanya `joule login` yang punya. Login selalu meminta
+username+password IAS — tidak bisa diotomasi, dan secret tidak boleh masuk riwayat shell.
+
+**4. Verifikasi bahwa yang dijawab Joule adalah data kita, bukan instans lain.**
+
+Jalankan dari akar repo (stack demo hidup):
+
+```
+cd sap-joule
+MEALCHAIN_READ_PASSWORD='<password akun baca demo>' bash scripts/uji-jembatan-lokal.sh
+```
+
+Skrip itu memeriksa `/health`, tiga skill, dan **mencocokkan satu UUID keputusan dari laporan
+antrean dengan tabel `decisions`**. Kalau UUID-nya tidak ada di DB kita, jembatan menunjuk backend
+lain — gejala yang pernah terjadi 18 Okt 2026 (tunnel mati, host di manifest sudah tidak resolve).
+
+Kontrak artefak Joule (DA, capability, fungsi, scenario, kata kunci) dikunci tes di
+`a2a_server/tests/test_kontrak_joule.py`, supaya perubahan/penghapusan berkas ketahuan sebelum
+deploy, bukan saat demo.
