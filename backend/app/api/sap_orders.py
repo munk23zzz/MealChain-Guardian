@@ -2,7 +2,8 @@
 
 Latar (17 Okt 2026): `api/actions.py` sudah lama menulis baris ke
 `sap_mock_purchase_orders` setiap kali sebuah keputusan dieksekusi (PO `MC-*`
-berstatus `submitted`), dan seed menambahkan tiga PO `DEMO-PO-*` berstatus
+berstatus `submitted`), dan seed aktivitas demo menambahkan PO `MC-*` juga
+berstatus
 `confirmed`. Tetapi **tidak ada satu rute pun yang membacanya**: satu-satunya
 jejak di layar adalah toast sesaat di `DecisionActions.tsx`, sedangkan
 `services/kpi_service.py` hanya memakai tabel ini sebagai agregat. Akibatnya
@@ -25,9 +26,10 @@ Modul ini menutup celah itu dengan tiga aturan:
    PO tanpa keputusan (mis. baris seed/adapter) tidak punya lokasi, jadi **tidak
    pernah** terlihat oleh peran SPPG — hanya monitor nasional.
 4. **Asal baris dikirim eksplisit** (`origin`): `execution` bila PO punya
-   `decision_id` (lahir dari `POST /actions/execute`), `demo` bila baris seed.
-   Panel memakainya supaya PO `DEMO-PO-*` tidak tampil seolah terbit dari
-   eksekusi yang belum pernah terjadi.
+   `decision_id` (lahir dari `POST /actions/execute` atau seed aktivitas demo),
+   `demo` bila baris impor SAP tanpa keputusan (mis. `4500000001`).
+   Sejak audit M8 (18 Okt 2026) semua PO yang lahir dari keputusan memakai
+   `MC-<12 hex id keputusan>` — satu aturan, satu pembentuk (`core/po_number`).
 """
 
 import uuid

@@ -22,6 +22,7 @@ from decimal import Decimal
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.po_number import nomor_po
 from app.models import Batch, Commodity, Location, Supplier
 
 DEMO_TAG = "demo-aktivitas"
@@ -379,7 +380,9 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
             db.add(
                 SapMockPurchaseOrder(
                     id=po_id,
-                    po_number=f"DEMO-PO-{nama_kota.upper()[:4]}-{nama_komoditas.upper()[:4]}",
+                    # Audit M8: PO demo lahir dari keputusan yang sama seperti
+                    # eksekusi nyata, jadi nomornya memakai aturan yang sama.
+                    po_number=nomor_po(did),
                     supplier_id=sup.id,
                     material_number=f"MAT-{nama_komoditas.upper()[:4]}",
                     ordered_quantity=Decimal(600),

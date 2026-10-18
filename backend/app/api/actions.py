@@ -21,6 +21,7 @@ from app.api.auth import require_roles
 from app.api.dependencies import get_db
 from app.core.approval_matrix import approval_requirement, evaluate_approvals
 from app.core.decision_validity import is_decision_valid
+from app.core.po_number import nomor_po
 from app.core.scope import assert_in_scope
 from app.models import AgentTrace, Approval, Batch, Commodity, Decision, User
 from app.services import supplier_exclusion_service as exclusions
@@ -727,7 +728,8 @@ async def execute_action(
     if unit_price <= 0:
         raise HTTPException(status_code=422, detail="unit price decision tidak valid")
 
-    po_number = f"MC-{decision.id.hex[:12].upper()}"
+    # Audit M8 (18 Okt 2026): satu pembentuk nomor PO untuk semua jalur.
+    po_number = nomor_po(decision.id)
     if supplier_id is None:
         raise HTTPException(status_code=422, detail="supplier untuk lokasi target tidak ditemukan")
     await db.execute(

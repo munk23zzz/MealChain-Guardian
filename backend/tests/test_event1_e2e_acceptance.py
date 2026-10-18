@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
 from app.main import app
+from tests.test_action_boundary_e2e import _force_server_verdict
 from tests.test_actions import _cleanup, _login, _mk_user
 from tests.test_event1_supervisor_flow import _trace_rows
 
@@ -81,7 +82,21 @@ def test_event1_e2e_propose_approve_execute_mock_sap(client):
             headers=head_h,
         )
         assert resp.status_code == 201, resp.text
-        # UNAVAILABLE → dual AND (konservatif, S3-01)
+        # UNAVAILABLE dari supervisor hop → approval TERKUNCI (audit M1: approve
+        # menuntut verdict hasil audit). Verdict dicatat lewat jalur server
+        # /actions/verify dengan provider uji, bukan dengan memalsukan kolom DB.
+        restore = _force_server_verdict("CONSISTENT", "uji e2e")
+        try:
+            resp = client.post(
+                "/actions/verify",
+                json={"decision_id": decision_id},
+                headers=head_h,
+            )
+            assert resp.status_code == 200, resp.text
+            assert resp.json()["recorded"] is True, resp.text
+        finally:
+            restore()
+        # dual AND tetap berlaku (konservatif, S3-01)
         assert resp.json()["approval_requirement"]["min_approvals"] == 2
 
         for user in (head, nut):
@@ -183,7 +198,12 @@ def test_event1_e2e_approval_boundary_blocked_paths(client):
 
 
 def test_event1_e2e_verifier_unavailable_dual_approval(client):
-    """verifier UNAVAILABLE → dual AND: 1 approval tidak cukup (409)."""
+    """dual AND tetap wajib: 1 approval tidak cukup (409).
+
+    Sejak audit M1, verify UNAVAILABLE tidak membuka approval sama sekali, jadi
+    verdict dicatat lebih dulu lewat /actions/verify dengan provider uji — yang
+    diuji di sini adalah kuorum dua peran, bukan jalur verifikasi.
+    """
     head = _mk_user("sppg_head", "Jakarta")
     nut = _mk_user("sppg_nutritionist", "Jakarta")
     decision_id, _ = _event1_decision_id()
@@ -197,6 +217,17 @@ def test_event1_e2e_verifier_unavailable_dual_approval(client):
             },
             headers=_login(client, head),
         )
+        restore = _force_server_verdict("CONSISTENT", "uji kuorum")
+        try:
+            resp = client.post(
+                "/actions/verify",
+                json={"decision_id": decision_id},
+                headers=_login(client, head),
+            )
+            assert resp.status_code == 200, resp.text
+            assert resp.json()["recorded"] is True, resp.text
+        finally:
+            restore()
         # HANYA head approve → execute HARUS ditolak (dual AND)
         client.post(
             "/actions/approve",
