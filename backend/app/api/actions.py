@@ -330,6 +330,19 @@ async def approve_action(
         raise HTTPException(
             status_code=409, detail=f"decision status {decision.status} tidak dapat di-approve"
         )
+    # Fase 0 butir 2 (18 Okt 2026): persetujuan SEBELUM verifikasi = jalan
+    # buntu permanen. Begitu kuorum penuh, status menjadi `approved`, dan
+    # status itu tidak menerima `/actions/verify` lagi — `/actions/execute`
+    # lalu menolak selamanya dengan "belum diverifikasi". Menolak keputusan
+    # tetap boleh: penolakan menghentikan laju, tidak butuh verdict.
+    if payload.approved and _verifier_unverified(decision):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "keputusan belum diverifikasi — catat hasil verifier dulu "
+                "sebelum meminta persetujuan"
+            ),
+        )
     # Penolakan WAJIB beralasan — alasan inilah bahan learning agent
     # (rejection loop, permintaan Roy 2026-10-07). Tanpa alasan = 422.
     if not payload.approved and not (payload.comment or "").strip():

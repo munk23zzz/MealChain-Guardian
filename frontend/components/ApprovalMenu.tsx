@@ -99,6 +99,10 @@ export default function ApprovalMenu({
   // milik server. Dulu UI menebaknya dari peran+status karena read model tidak
   // punya field-nya. Sekarang server menyatakan lewat `can_reject`.
   const canReject = summary?.can_reject === true;
+  // Fase 0 butir 2 (18 Okt 2026): Setuju baru sah setelah verifikasi tercatat.
+  // Server menolak approve tanpa `verified_by` (409) karena status `approved`
+  // tidak menerima verify lagi — alur akan buntu di eksekusi.
+  const canApprove = summary?.can_approve === true;
   // /actions/propose menolak keputusan kedaluwarsa tanpa syarat
   // (actions.py:129). `valid` yang tidak ada JANGAN dianggap kedaluwarsa —
   // jangan mengarang penghalang.
@@ -114,7 +118,7 @@ export default function ApprovalMenu({
           summary={summary}
           onConfirm={() => run("approve", onApprove)}
           onCancel={onClose}
-          showActions={actions.approve}
+          showActions={actions.approve && canApprove}
           busy={busy === "approve"}
         />
       </section>
@@ -152,6 +156,19 @@ export default function ApprovalMenu({
                   <span>
                     Server belum mengizinkan penolakan untuk keputusan ini — statusnya sudah
                     tidak dapat ditolak, atau keputusan administratif ini sudah lewat tenggat.
+                  </span>
+                </div>
+              </li>
+            )}
+
+            {actions.approve && !canApprove && (
+              <li className="action-menu-item action-menu-note">
+                <div className="action-menu-text">
+                  <strong>Setuju belum tersedia</strong>
+                  <span>
+                    Verifikasi belum tercatat. Tanpa verdict, persetujuan mengunci jalan keluar
+                    (status <code>approved</code> tidak menerima verifikasi lagi) — catat hasil
+                    verifier dulu.
                   </span>
                 </div>
               </li>

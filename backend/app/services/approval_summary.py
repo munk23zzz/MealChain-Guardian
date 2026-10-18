@@ -276,7 +276,11 @@ async def build_approval_summary(
         and (valid or decision.decision_type not in exclusions.ADMIN_TYPES)
         and approval_state["rejected"] is False
     )
-    can_approve = approval_accepted
+    # Fase 0 butir 2 (18 Okt 2026): Setuju hanya ditawarkan bila verifikasi
+    # sudah tercatat. Tanpa syarat ini alur bisa masuk jalan buntu: approve
+    # dua kali → status `approved` (tidak menerima verify lagi) → execute
+    # menolak selamanya. Penolakan tidak kami kunci.
+    can_approve = approval_accepted and not unverified
     can_reject = approval_accepted
     blocking: list[str] = []
     if binding_error is not None:

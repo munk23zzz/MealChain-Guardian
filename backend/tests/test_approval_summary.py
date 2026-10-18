@@ -787,9 +787,20 @@ def test_approval_summary_parity_execute_batch_terikat_hilang(client):
 
 def test_approval_summary_expired_ordinary_type_matches_approve_endpoint(client):
     """Kedaluwarsa jenis BIASA: approve/reject masih diterima endpoint → read model
-    tidak boleh mengklaim sebaliknya. Execute tetap terkunci."""
+    tidak boleh mengklaim sebaliknya. Execute tetap terkunci.
+
+    Sejak Fase 0 butir 2 (18 Okt 2026) verifikasi WAJIB sebelum approve, jadi
+    keputusan uji ini ditandai sudah diverifikasi lebih dulu — kalau tidak, yang
+    diukur justru pagar verifikasi, bukan pagar kedaluwarsa.
+    """
     did = _mk_decision(_jakarta_id(), _jakarta_id(), expires_minutes=-10)
     try:
+        _db_exec(
+            "UPDATE decisions SET verified_by="
+            "(SELECT id FROM users WHERE role='sppg_head' LIMIT 1) "
+            "WHERE id=:d",
+            {"d": did},
+        )
         summary = client.get(
             f"/decisions/{did}/approval-summary", headers=_head_user(client)
         ).json()
@@ -841,6 +852,13 @@ def test_summary_approved_by_me_hanya_untuk_user_yang_sudah_menyetujui(client):
     try:
         head = _head_user(client)
         nut = _nut_user(client)
+        # Fase 0 butir 2: approve mensyaratkan verifikasi tercatat.
+        _db_exec(
+            "UPDATE decisions SET verified_by="
+            "(SELECT id FROM users WHERE role='sppg_head' LIMIT 1) "
+            "WHERE id=:d",
+            {"d": did},
+        )
         ok = client.post(
             "/actions/approve", json={"decision_id": did, "approved": True}, headers=head
         )

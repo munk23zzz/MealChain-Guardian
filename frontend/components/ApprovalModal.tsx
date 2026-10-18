@@ -147,7 +147,7 @@ export default function ApprovalModal({
                 ? "Anda sudah menyetujui keputusan ini — menunggu approval role lain"
                 : canApprove
                   ? undefined
-                  : "Approve tidak tersedia untuk keputusan ini (expired/rejected)"
+                  : "Approve tidak tersedia: keputusan kedaluwarsa, ditolak, atau belum diverifikasi"
             }
           >
             {alreadyApproved

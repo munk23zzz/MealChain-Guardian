@@ -92,6 +92,26 @@ describe("ApprovalMenu (isi popup governance & persetujuan)", () => {
     expect(html).not.toContain('data-action="approve"');
   });
 
+  it("Setuju disembunyikan dan dijelaskan saat verifikasi belum tercatat", () => {
+    // Fase 0 butir 2: approve sebelum verify mematikan alur (status approved
+    // tidak menerima verify lagi). Menu menyebut sebabnya, bukan diam.
+    const html = render({
+      summary: {
+        ...SUMMARY,
+        status: "pending_approval",
+        can_approve: false,
+        can_reject: true,
+        blocking_reasons: ["decision belum terverifikasi"],
+        verifier: { verdict: null, verified_by: null },
+      },
+    });
+    expect(html).toContain("Setuju belum tersedia");
+    expect(html).toContain("Verifikasi belum tercatat");
+    expect(html).not.toContain(">Setuju<");
+    // Menolak tetap boleh — penolakan menghentikan laju, tidak butuh verdict.
+    expect(html).toContain('data-action="reject"');
+  });
+
   it("Keputusan administratif (supplier exclusion) tidak ditawari Ajukan", () => {
     // `/actions/propose` menolak ADMIN_TYPES (409 "gunakan endpoint proposal
     // supplier-exclusions"); menawarkan tombolnya hanya menciptakan galat.
