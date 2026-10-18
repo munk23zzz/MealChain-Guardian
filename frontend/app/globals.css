@@ -3299,6 +3299,195 @@ a:focus-visible {
 .recommendation-card .mock-badge { margin-top: 10px; }
 
 
+/* Panel review 7 agen (P5) — kartu worker + ringkasan supervisor.
+   Grid mengecil sampai 1 kolom di 375 px; teks panjang boleh pecah. */
+.swarm-panel {
+  margin: 14px 0 18px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  min-width: 0;
+}
+.swarm-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.swarm-kicker {
+  margin: 0 0 4px;
+  color: var(--ink-muted);
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.swarm-head h2 {
+  margin: 0;
+  color: var(--navy-900);
+  font-size: var(--fs-5);
+  line-height: var(--lh-head);
+}
+.swarm-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+}
+.swarm-run,
+.swarm-count {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.swarm-note {
+  margin: 8px 0 12px;
+  color: var(--ink-muted);
+  font-size: var(--fs-2);
+  line-height: 1.45;
+}
+.swarm-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.swarm-card,
+.swarm-supervisor {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+.swarm-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.swarm-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.swarm-card[data-state="ok"] .swarm-dot { background: var(--ok-ink); }
+.swarm-card[data-state="degraded"] .swarm-dot { background: var(--warn-ink); }
+.swarm-card[data-state="error"] .swarm-dot { background: var(--danger-ink); }
+.swarm-card[data-state="skipped"] .swarm-dot,
+.swarm-card[data-state="stub"] .swarm-dot,
+.swarm-card[data-state="not_recorded"] .swarm-dot { background: var(--ink-muted); }
+.swarm-card-head h3 {
+  margin: 0;
+  color: var(--navy-900);
+  font-size: var(--fs-4);
+  line-height: 1.25;
+}
+.swarm-status {
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  white-space: nowrap;
+}
+.swarm-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+  margin: 10px 0 0;
+}
+.swarm-facts div { min-width: 0; }
+.swarm-facts dt {
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+}
+.swarm-facts dd {
+  margin: 2px 0 0;
+  color: var(--ink);
+  font-family: var(--font-data);
+  font-size: var(--fs-2);
+}
+.swarm-detail {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.swarm-detail summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 6px 0;
+  color: var(--accent-strong);
+  cursor: pointer;
+  font-size: var(--fs-2);
+  font-weight: 600;
+}
+.swarm-detail summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.swarm-summary-text {
+  margin: 6px 0;
+  color: var(--ink);
+  font-size: var(--fs-2);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.swarm-warnings {
+  margin: 6px 0 0 18px;
+  padding: 0;
+  color: var(--warn-ink);
+  font-size: var(--fs-2);
+}
+.swarm-muted {
+  margin: 8px 0 0;
+  color: var(--ink-muted);
+  font-size: var(--fs-2);
+}
+.swarm-facts-json {
+  max-height: 180px;
+  margin: 8px 0 0;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: var(--surface-sunken);
+  color: var(--ink);
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.swarm-supervisor {
+  margin-top: 10px;
+  border-left: 3px solid var(--accent-strong);
+}
+.swarm-facts-wide { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+@media (max-width: 1100px) {
+  .swarm-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .swarm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .swarm-facts-wide { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) {
+  .swarm-panel { padding: 10px; }
+  .swarm-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* Konsol trace agent ala Stitch "Agent Activity Log": terminal gelap
    #0F172A dengan border var(--line) + accent #2DD4BF, header chrome jendela */
 .agent-console {

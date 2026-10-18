@@ -9,6 +9,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -178,6 +179,14 @@ class AgentTrace(Base):
     input_summary: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     output_summary: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # P5: metadata review 7 agen. NULL untuk baris lama (trace S3 tidak punya
+    # run_id/agent), sehingga migrasi aman tanpa backfill dan UI tetap jujur.
+    run_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
+    agent_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    citations: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
     step_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

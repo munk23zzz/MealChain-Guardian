@@ -24,11 +24,12 @@ Setelah `AGENTCORE_RUNTIME_ARN` terisi, `backend/app/ai_providers/model_registry
 menaruh AgentCore sebagai **slot primary** setiap rantai agent (slot env bergeser satu) — jadi
 orkestrator TIDAK perlu diubah lagi; cukup ARN-nya.
 
-## Mode review 7 worker agent (orkestrasi P4 ada; flag tetap default mati)
+## Mode review 7 worker agent (orkestrasi P4 + panel P5; flag tetap default mati)
 
-P0–P4 menambahkan kontrak, registry, tujuh worker baca, validator, dan orkestrasi
-review. **Flag tetap default `false`**, jadi perilaku aplikasi sekarang masih satu
-supervisor Strands + empat tool baca. Panel trace/UI 7 agen menyusul di P5.
+P0–P5 menambahkan kontrak, registry, tujuh worker baca, validator, orkestrasi,
+persist trace, dan panel Agent Log. **Flag tetap default `false`**, jadi perilaku
+aplikasi sekarang masih satu supervisor Strands + empat tool baca; panel review
+tetap kosong sampai flag dinyalakan dan runtime mengirim delapan baris trace.
 
 | Env | Default | Arti |
 |---|---|---|
@@ -36,7 +37,8 @@ supervisor Strands + empat tool baca. Panel trace/UI 7 agen menyusul di P5.
 | `AGENT_REVIEW_MODE` | `advisory` | Agen hanya meninjau; tidak menghitung ulang SDC/safety dan tidak mengeksekusi. |
 | `AGENT_REVIEW_TIMEOUT_SECONDS` | `75` | Batas total review; lewat batas → status `timeout`, bukan angka karangan. Backend membatasi panggilan runtime ke 45 detik agar request Event 1 tidak menggantung. |
 
-Jangan menyalakan flag ini sebelum panel trace/UI P5 selesai. Saat runtime cloud dipakai,
+Jangan menyalakan flag ini sebelum runtime AgentCore terpasang dan panel Agent Log
+diverifikasi di environment tujuan. Saat runtime cloud dipakai,
 `MEALCHAIN_API_URL` **wajib** bisa dijangkau dari AgentCore (bukan `http://backend:8000`,
 yang hanya ada di jaringan Compose). Kalau backend masih lokal, jalankan runtime secara
 lokal dan sebut “runtime lokal” di UI — jangan mengklaim AgentCore live.
@@ -90,7 +92,8 @@ menentukan `completed|partial|failed`. Sepuluh golden case ada di
 - Hasil tujuh finding divalidasi `agent/validation.py`; kegagalan satu worker
   menjadi `partial`, bukan angka palsu.
 - `agent/telemetry.py` menghasilkan **7 baris worker + 1 baris SUPERVISE** (8 baris)
-  yang siap dipersist ke `agent_traces` pada P5.
+  dengan metadata `run_id`, `agent_name`, `duration_ms`, `confidence`, dan `citations`. Sejak P5
+  backend mempersistensinya lewat `persist_agent_review` (idempoten per `run_id`).
 - `agent/runtime_server.py` menerima task
   `{"task":"review_decision","decision_id":"…"}` dan mengembalikan JSON `AgentRun`.
 - Backend memanggilnya lewat `backend/app/services/agent_review_client.py`; tanpa
@@ -120,6 +123,36 @@ Tes mock transport:
 docker compose run --rm -e PYTHONPATH=/repo -v "$PWD:/repo" -w /repo backend \
   pytest -q backend/tests/test_agent_workers.py backend/tests/test_agent_workers_p3.py \
   backend/tests/test_agent_validation.py backend/tests/test_agent_golden_cases.py
+```
+
+## Panel P5 — persist trace dan tujuh kartu Agent Log
+
+- Migrasi `018_agent_trace_worker_fields.py` hanya **menambah** kolom nullable
+  `run_id`, `agent_name`, `confidence`, `citations` pada `agent_traces`.
+  Baris trace lama tetap `NULL` dan tidak diisi angka karangan.
+- `persist_agent_review` menyimpan tepat 8 baris (7 worker + 1 `SUPERVISE`)
+  dalam satu transaksi, idempoten per `run_id`.
+- `GET /decisions/{id}/traces` mengembalikan field baru tanpa menghapus field lama.
+- `AgentSwarmPanel` berada di tab **Agent Log** (tidak menambah tab): tujuh kartu
+  status/durasi/confidence/jumlah sitasi/warning, ringkasan supervisor, detail
+  bisa dibuka dengan keyboard. Nilai `NULL` tampil `—`; tidak ada enum mentah.
+- Panel memilih run terbaru; keputusan tanpa review menampilkan empty state,
+  bukan tujuh kartu palsu.
+
+Tes P5:
+
+```bash
+docker compose run --rm -e PYTHONPATH=/repo:/repo/backend -v "$PWD:/repo" -w /repo backend \
+  pytest -q backend/tests/test_agent_trace_fields.py backend/tests/test_trace_persistence.py \
+  backend/tests/test_decision_read_endpoints.py backend/tests/test_demo_event1_api.py
+```
+
+Probe live P5 (menulis trace review nyata ke satu keputusan, tanpa mengubah status):
+
+```bash
+docker compose run --rm -e PYTHONPATH=/repo:/repo/backend \
+  -v "$PWD:/repo" -v "path/ke/_qa:/work" -w /repo backend \
+  python /work/probe_p5_trace.py
 ```
 
 ## Blocker saat ini (terukur, bukan dugaan)

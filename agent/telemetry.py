@@ -32,7 +32,9 @@ def build_trace_rows(run: AgentRun) -> list[dict]:
                 "output_summary": {
                     "status": finding.status.value,
                     "blocking": finding.blocking,
+                    "summary": finding.summary,
                     "warning_count": len(finding.warnings),
+                    "warnings": finding.warnings,
                     "citation_count": len(finding.citations),
                     "facts": finding.facts,
                 },
@@ -58,6 +60,7 @@ def build_trace_rows(run: AgentRun) -> list[dict]:
             },
             "output_summary": {
                 "status": run.status.value,
+                "narrative": run.narrative,
                 "safety_veto": run.safety_veto,
                 "contradiction_count": len(run.contradictions),
                 "contradictions": [

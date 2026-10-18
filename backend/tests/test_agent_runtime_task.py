@@ -80,6 +80,8 @@ def test_runtime_task_review_decision(monkeypatch) -> None:
     assert payload["run_id"] == str(run_id)
     assert payload["status"] == "partial"
     assert len(payload["findings"]) == 7
+    assert len(payload["trace_rows"]) == 8
+    assert payload["trace_rows"][-1]["step_name"] == "SUPERVISE"
     sys.modules.pop("agent.runtime_server", None)
 
 

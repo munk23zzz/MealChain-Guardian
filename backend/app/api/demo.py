@@ -50,6 +50,7 @@ from app.seed.timeseries import (
 )
 from app.services.agent_review_client import AgentReviewResult, review_decision
 from app.services.event1_orchestrator import run_event1
+from app.services.trace_persistence import persist_agent_review
 
 router = APIRouter()
 
@@ -580,7 +581,12 @@ async def _jalankan_agent_review(
     if not isinstance(result, AgentReviewResult):
         result = AgentReviewResult(status="failed", error="review client tidak valid")
 
-    if not result.completed:
+    if result.completed:
+        # P5: simpan 7 baris worker + SUPERVISE agar Agent Log bisa menampilkan
+        # satu putaran review. Bila payload tidak lengkap, catat kegagalan —
+        # jangan menulis 7 baris yang tidak berasal dari runtime.
+        await _catat_review_sukses(db, decision_id, result)
+    else:
         # Kegagalan/ timeout dicatat jujur sebagai SUPERVISE; tidak ada 7 row palsu.
         await _catat_review_gagal(db, decision_id, result)
 
@@ -588,6 +594,43 @@ async def _jalankan_agent_review(
         "status": result.status,
         "run_id": result.run_id,
     }
+
+
+async def _catat_review_sukses(
+    db: AsyncSession, decision_id: str, result: AgentReviewResult
+) -> None:
+    """Persist 8 baris review; kegagalan penyimpanan tidak membatalkan Event 1."""
+    rows = (result.payload or {}).get("trace_rows")
+    if not isinstance(rows, list) or len(rows) != 8:
+        await _catat_review_gagal(
+            db,
+            decision_id,
+            AgentReviewResult(
+                status="failed",
+                run_id=result.run_id,
+                error="payload trace review tidak lengkap (wajib 8 baris)",
+            ),
+        )
+        return
+    try:
+        await persist_agent_review(
+            db, decision_id=decision_id, trace_rows=rows
+        )
+        await db.commit()
+    except Exception as exc:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        await _catat_review_gagal(
+            db,
+            decision_id,
+            AgentReviewResult(
+                status="failed",
+                run_id=result.run_id,
+                error=f"trace review gagal disimpan: {type(exc).__name__}",
+            ),
+        )
 
 
 async def _catat_review_gagal(

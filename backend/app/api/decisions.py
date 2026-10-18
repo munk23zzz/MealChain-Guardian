@@ -314,6 +314,11 @@ async def get_decision_traces(
             "tool_called": row.tool_called,
             "input_summary": row.input_summary,
             "output_summary": row.output_summary,
+            "duration_ms": row.duration_ms,
+            "run_id": str(row.run_id) if row.run_id else None,
+            "agent_name": row.agent_name,
+            "confidence": row.confidence,
+            "citations": row.citations,
             "step_at": row.step_at.isoformat(),
         }
         for row in rows

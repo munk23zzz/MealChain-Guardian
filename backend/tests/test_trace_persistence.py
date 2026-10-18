@@ -65,6 +65,8 @@ def _run_sync(coroutine_factory):
         maker = create_session_maker(engine)
         async with maker() as session:
             result = coroutine_factory(session)
+            if hasattr(result, "__await__"):
+                result = await result
             await session.commit()
         await engine.dispose()
         return result
@@ -141,6 +143,102 @@ def test_invalid_step_name_rejected_explicitly(decision_id):
         ).scalar_one()
     engine.dispose()
     assert count == 0
+
+
+def test_persist_agent_review_metadata_dan_idempoten(decision_id):
+    from app.services.trace_persistence import persist_agent_review
+
+    run_id = str(uuid.uuid4())
+    rows = _review_rows(run_id)
+
+    def _do(session):
+        return persist_agent_review(
+            session, decision_id=decision_id, trace_rows=rows
+        )
+
+    assert _run_sync(_do) == 8
+    # panggilan kedua untuk run_id yang sama tidak menggandakan baris
+    assert _run_sync(_do) == 0
+
+    engine = create_engine(DB_URL)
+    with engine.begin() as conn:
+        result = conn.execute(
+            text(
+                "SELECT step_name, agent_name, duration_ms, confidence, "
+                "run_id, citations FROM agent_traces "
+                "WHERE decision_id = :d ORDER BY step_at, id"
+            ),
+            {"d": decision_id},
+        ).all()
+    engine.dispose()
+    assert len(result) == 8
+    assert [r[0] for r in result] == [
+        "DETECT", "PREDICT", "VERIFY", "VERIFY", "OPTIMIZE",
+        "OPTIMIZE", "TRACE", "SUPERVISE",
+    ]
+    assert result[0][1] == "supply"
+    assert result[0][2] == 12
+    assert result[0][3] == 0.8
+    assert str(result[0][4]) == run_id
+    assert result[0][5] == [{"source": "/balance/Jakarta/telur", "claim": "supply_kg"}]
+
+
+def test_persist_agent_review_wajib_8_dan_satu_run_id(decision_id):
+    from app.services.trace_persistence import persist_agent_review
+
+    with pytest.raises(ValueError, match="8 baris"):
+        _run_sync(
+            lambda session: persist_agent_review(
+                session, decision_id=decision_id, trace_rows=_review_rows("x")[:7]
+            )
+        )
+
+    mixed = _review_rows(str(uuid.uuid4()))
+    mixed[1]["run_id"] = str(uuid.uuid4())
+    with pytest.raises(ValueError, match="satu run_id"):
+        _run_sync(
+            lambda session: persist_agent_review(
+                session, decision_id=decision_id, trace_rows=mixed
+            )
+        )
+
+    engine = create_engine(DB_URL)
+    with engine.begin() as conn:
+        count = conn.execute(
+            text("SELECT COUNT(*) FROM agent_traces WHERE decision_id = :d"),
+            {"d": decision_id},
+        ).scalar_one()
+    engine.dispose()
+    assert count == 0
+
+
+def _review_rows(run_id: str) -> list[dict]:
+    stages = [
+        ("DETECT", "supply"),
+        ("PREDICT", "demand"),
+        ("VERIFY", "freshness"),
+        ("VERIFY", "safety"),
+        ("OPTIMIZE", "price"),
+        ("OPTIMIZE", "logistics"),
+        ("TRACE", "evidence"),
+        ("SUPERVISE", "supervisor"),
+    ]
+    return [
+        {
+            "run_id": run_id,
+            "step_name": stage,
+            "agent_name": agent,
+            "tool_called": f"agent.{agent}",
+            "duration_ms": 12,
+            "confidence": 0.8 if agent != "supervisor" else None,
+            "citations": [{"source": "/balance/Jakarta/telur", "claim": "supply_kg"}]
+            if agent != "supervisor"
+            else [],
+            "input_summary": {"agent": agent},
+            "output_summary": {"status": "ok" if agent != "supervisor" else "completed"},
+        }
+        for stage, agent in stages
+    ]
 
 
 def _run_persist(session, decision_id, steps):

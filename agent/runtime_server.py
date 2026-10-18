@@ -20,9 +20,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:  # runtime image menjalankan `python -m agent.runtime_server`
     from .orchestrator import run_review  # noqa: E402
     from .supervisor_agent import build_agent, load_system_prompt  # noqa: E402
+    from .telemetry import build_trace_rows  # noqa: E402
 except ImportError:  # dijalankan langsung dari folder agent/ (tes lama)
     from orchestrator import run_review  # type: ignore[no-redef]  # noqa: E402
     from supervisor_agent import build_agent, load_system_prompt  # type: ignore[no-redef]  # noqa: E402
+    from telemetry import build_trace_rows  # type: ignore[no-redef]  # noqa: E402
 
 try:
     from bedrock_agentcore.runtime import BedrockAgentCoreApp
@@ -76,9 +78,10 @@ def _review_response(decision_id: str) -> dict:
                 ensure_ascii=False,
             )
         }
+    payload = run.model_dump(mode="json")
     return {
         "response": json.dumps(
-            run.model_dump(mode="json"), ensure_ascii=False
+            {**payload, "trace_rows": build_trace_rows(run)}, ensure_ascii=False
         )
     }
 

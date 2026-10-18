@@ -14,6 +14,8 @@ keputusan ke DB demo yang dipakai presentasi.
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
@@ -297,3 +299,102 @@ def test_agent_review_on_completed_membawa_run_id(
         "status": "completed",
         "run_id": "run-abc",
     }
+
+
+def test_agent_review_completed_mempersist_8_baris(client, monkeypatch, pemakai):
+    """P5: payload trace dari runtime disimpan ke agent_traces, lalu dibaca API."""
+    from app.services.agent_review_client import AgentReviewResult
+
+    run_id = str(uuid.uuid4())
+    decision_id = str(uuid.uuid4())
+    engine = create_engine(DB_URL)
+    with engine.begin() as conn:
+        location_id = conn.execute(
+            text("SELECT id FROM locations WHERE name = 'Jakarta'")
+        ).scalar_one()
+        conn.execute(
+            text(
+                "INSERT INTO decisions (id, decision_type, status, proposed_by, "
+                "target_location_id, expires_at) VALUES "
+                "(:id, 'regional_balance', 'proposed', 'test', :loc, "
+                "now() + interval '30 minutes')"
+            ),
+            {"id": decision_id, "loc": location_id},
+        )
+    engine.dispose()
+
+    rows = _review_rows_8(run_id)
+    monkeypatch.setattr(
+        "app.api.demo.run_event1",
+        lambda commodity, target_location, **kwargs: {
+            **_fake_outcome(commodity=commodity),
+            "decision_id": decision_id,
+        },
+    )
+    monkeypatch.setattr(
+        "app.api.demo.review_decision",
+        lambda decision_id, *, timeout_seconds: AgentReviewResult(
+            status="completed",
+            run_id=run_id,
+            payload={"findings": [{} for _ in range(7)], "trace_rows": rows},
+        ),
+    )
+    monkeypatch.setattr("app.api.demo.settings.multi_agent_review", True)
+
+    head = pemakai("sppg_head", "Jakarta")
+    headers = _login(client, head)
+    try:
+        resp = client.post(
+            "/demo/event1",
+            json={"commodity": "telur", "target_location": "Jakarta"},
+            headers=headers,
+        )
+        assert resp.status_code == 201, resp.text
+        traces = client.get(
+            f"/decisions/{decision_id}/traces", headers=headers
+        ).json()["steps"]
+        review = [row for row in traces if row.get("run_id") == run_id]
+        assert len(review) == 8
+        assert [row["agent_name"] for row in review[:7]] == [
+            "supply", "demand", "freshness", "safety", "price", "logistics",
+            "evidence",
+        ]
+        assert review[0]["duration_ms"] == 12
+        assert review[0]["confidence"] == 0.8
+        assert review[0]["citations"][0]["claim"] == "supply_kg"
+    finally:
+        engine = create_engine(DB_URL)
+        with engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM decisions WHERE id = :d"), {"d": decision_id}
+            )
+        engine.dispose()
+
+
+def _review_rows_8(run_id: str) -> list[dict]:
+    stages = [
+        ("DETECT", "supply"),
+        ("PREDICT", "demand"),
+        ("VERIFY", "freshness"),
+        ("VERIFY", "safety"),
+        ("OPTIMIZE", "price"),
+        ("OPTIMIZE", "logistics"),
+        ("TRACE", "evidence"),
+        ("SUPERVISE", "supervisor"),
+    ]
+    return [
+        {
+            "run_id": run_id,
+            "step_name": stage,
+            "agent_name": agent,
+            "tool_called": f"agent.{agent}",
+            "duration_ms": 12,
+            "confidence": 0.8 if agent != "supervisor" else None,
+            "citations": [{"source": "/x", "claim": "supply_kg"}]
+            if agent != "supervisor"
+            else [],
+            "input_summary": {"agent": agent},
+            "output_summary": {"status": "ok", "summary": f"{agent} selesai"},
+        }
+        for stage, agent in stages
+    ]

@@ -131,6 +131,45 @@ def test_get_decision_traces_returns_ordered_actual_steps(client):
         assert optimize["tool_called"] == "balance.recommend"
         for s in steps:
             assert s["step_at"]
+            # P5: field worker selalu ada di kontrak, NULL untuk trace lama.
+            for field in (
+                "duration_ms",
+                "run_id",
+                "agent_name",
+                "confidence",
+                "citations",
+            ):
+                assert field in s
+            assert s["run_id"] is None
+            assert s["agent_name"] is None
+
+        # P5: serializer mengirim metadata worker yang tersimpan.
+        run_id = str(uuid.uuid4())
+        engine = create_engine(DB_URL)
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "UPDATE agent_traces SET run_id = :r, agent_name = 'supply', "
+                    "duration_ms = 1234, confidence = 0.9, "
+                    "citations = CAST(:c AS jsonb) "
+                    "WHERE decision_id = :d AND step_name = 'DETECT'"
+                ),
+                {
+                    "r": run_id,
+                    "c": '[{"source": "/balance/Jakarta/telur", "claim": "supply_kg"}]',
+                    "d": decision_id,
+                },
+            )
+        engine.dispose()
+        lagi = client.get(
+            f"/decisions/{decision_id}/traces", headers=_authed_headers(client)
+        ).json()["steps"]
+        detect = next(s for s in lagi if s["step_name"] == "DETECT")
+        assert detect["run_id"] == run_id
+        assert detect["agent_name"] == "supply"
+        assert detect["duration_ms"] == 1234
+        assert detect["confidence"] == 0.9
+        assert detect["citations"][0]["claim"] == "supply_kg"
     finally:
         _cleanup(decision_id)
 
