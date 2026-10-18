@@ -208,8 +208,20 @@ menyajikan Cianjur→Jakarta 3.041–3.058 titik (sebelumnya 36). Cache hidup di
 jadi ukurannya tidak membebani repo.
 
 Gerbang pada perubahan ini: frontend 110 berkas / 1.291 tes lulus, `tsc` EXIT=0,
-`next lint` bersih, `next build` 4/4 halaman. Backend penuh: **1.134 lulus, 6 gagal** —
-keenam kegagalan berada di alur approval/ledger/exclusion dan SUDAH gagal tanpa
-perubahan ini (dibuktikan dengan `git stash` pada berkas backend yang diubah): aturan
-baru "approve hanya setelah verdict CONSISTENT/FLAGGED" (commit `81e5909`/`37aabfb`)
-membuat tes alur lama menerima 409 "keputusan belum diverifikasi" dan 403 cakupan.
+`next lint` bersih, `next build` 4/4 halaman. Backend penuh: **1.134 lulus, 6 gagal**
+pada run 20.30–21.02. Diagnosis awal ("aturan approve hanya setelah verdict mematahkan
+tes lama") TERBUKTI SALAH: keenam tes itu lulus semua (14 passed) saat dijalankan tanpa
+suite lain. Akarnya sapuan `_sapu_sisa_test()` yang menghapus SEMUA user `%@test.local`
+di awal/akhir tiap sesi pytest — suite sesi lain yang berjalan bersamaan menghapus user
+milik run ini, sehingga login berikutnya 401 "email atau password salah" dan terbaca
+seperti regresi pagar approval. Perbaikan: sapuan dibatasi `created_at < now() - interval
+'15 minutes'` (`33e74fb`), diuji dengan user `uji-baru`/`uji-lama` (yang baru HIDUP,
+yang berumur satu jam HILANG).
+
+Gerbang penuh berikutnya (00.00–00.15) tetap merah, tetapi sebabnya kini terukur:
+`supply_records origin='seed'` berisi 160 baris saat run dan 80 setelahnya (kontrak 40),
+`price_signals` seed 114 (kontrak 57) — penyeed dijalankan dengan acuan "sekarang" oleh
+sesi lain yang masih menyunting `backend/app`. Nilai per barisnya identik dengan kanonik
+(contoh: telur Jakarta 300 kg, hanya `recorded_at` bergeser), jadi angka UI tidak berubah;
+yang patah adalah tes yang memaku jumlah baris. Gerbang penuh hanya sah setelah sesi itu
+selesai dan baseline dipulihkan (40/57/224/70, 5.160 demo).
