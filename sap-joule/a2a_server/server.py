@@ -52,7 +52,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import report
-from mealchain_client import MealchainClient, MealchainUnavailable
+from mealchain_client import MealchainClient, MealchainRejected, MealchainUnavailable
 
 ARTIFACT_ID = "mealchain_report"
 ARTIFACT_NAME = "mealchain_report"
@@ -145,7 +145,23 @@ def render_skill(client: ReadOnlyBackend, skill: str) -> str:
     komoditas = sorted(
         {str(row.get("commodity")) for row in batches if row.get("commodity")}
     )
-    balance = {nama: client.balance_map(nama) for nama in komoditas}
+    balance: dict[str, Mapping[str, Any]] = {}
+    gagal: list[str] = []
+    for nama in komoditas:
+        try:
+            balance[nama] = client.balance_map(nama)
+        except MealchainRejected as exc:
+            # Satu komoditas yang tidak punya data keseimbangan tidak boleh mematikan seluruh
+            # laporan: tabel batch (keamanan/kesegaran) tetap berguna. Kekosongannya disebut
+            # apa adanya — bukan diisi nol, karena nol terbaca "tidak ada masalah".
+            gagal.append(f"{nama} ({exc})")
+    if gagal:
+        tambahan = (
+            "Keseimbangan tidak terbaca untuk: "
+            + "; ".join(gagal)
+            + " — komoditas itu tidak muncul di tabel keseimbangan, bukan berarti nol."
+        )
+        note = f"{note}\n\n{tambahan}" if note else tambahan
     return report.supply_report(batches, balance, note=note)
 
 

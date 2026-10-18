@@ -20,7 +20,7 @@ from a2a.types import (
 from fastapi.testclient import TestClient
 
 import server
-from mealchain_client import MealchainUnavailable
+from mealchain_client import MealchainRejected, MealchainUnavailable
 
 
 class FakeClient:
@@ -300,3 +300,52 @@ def test_skill_antrean_menampilkan_asal_tujuan_dan_komoditas():
     assert "telur" in teks
     assert "600 kg" in teks
     assert "Persetujuan TIDAK bisa dilakukan dari Joule" in teks
+
+
+def test_komoditas_tanpa_keseimbangan_tidak_mematikan_seluruh_laporan():
+    """Satu komoditas yang 404 di `/balance/map` tidak boleh mengubah laporan jadi "tidak tersedia".
+
+    Terukur pada DB demo: komoditas berasal dari `/batches`, sedangkan `/balance/map` menolak
+    komoditas yang tidak dikenal (HTTP 404 "commodity tidak ditemukan"). Sebelum perbaikan ini,
+    satu komoditas baru di inventaris membuat SELURUH jawaban pasokan gagal — Joule hanya
+    menampilkan pesan error padahal tabel batch-nya masih bisa dibaca.
+    """
+
+    class KlienSebagian(FakeClient):
+        def batches(self) -> list[dict]:
+            self.dipanggil.append("batches")
+            return [
+                {
+                    "id": "b-1",
+                    "location": "SPPG Jakarta",
+                    "commodity": "telur",
+                    "quantity_kg": 120.0,
+                    "safety_status": "pass",
+                    "freshness_score": 0.7,
+                    "usable_until": "2026-10-20T00:00:00+00:00",
+                },
+                {
+                    "id": "b-2",
+                    "location": "SPPG Bandung",
+                    "commodity": "wortel",
+                    "quantity_kg": 80.0,
+                    "safety_status": "pass",
+                    "freshness_score": 0.9,
+                    "usable_until": "2026-10-21T00:00:00+00:00",
+                },
+            ]
+
+        def balance_map(self, commodity: str) -> dict:
+            if commodity == "wortel":
+                raise MealchainRejected(
+                    "/balance/map ditolak backend (HTTP 404): commodity tidak ditemukan"
+                )
+            return super().balance_map(commodity)
+
+    teks = server.render_skill(KlienSebagian(), server.SKILL_SUPPLY)
+
+    assert "telur" in teks, "komoditas yang datanya lengkap harus tetap tampil"
+    assert "wortel" in teks, "batch wortel tetap harus terlihat di tabel inventaris"
+    assert "Keseimbangan tidak terbaca untuk: wortel" in teks
+    assert "bukan berarti nol" in teks
+    assert "tidak dapat" not in teks.lower(), "laporan tidak boleh jatuh ke pesan 'tidak tersedia'"
