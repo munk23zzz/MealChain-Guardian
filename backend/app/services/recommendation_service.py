@@ -77,9 +77,20 @@ def _score(value: Decimal) -> Decimal:
     return value.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
 
 
-async def _latest_rows(db, model):
+async def _latest_rows(db, model, as_of):
+    """Baris terbaru per (lokasi, komoditas) yang SUDAH terjadi pada `as_of`.
+
+    Batas waktu wajib: deret demo berjalan sampai 4 Nov, jadi tanpa filter ini
+    alokasi memakai baris masa depan sementara peta memakai "sekarang".
+    """
     rows = (
-        (await db.execute(select(model).order_by(model.recorded_at.desc(), model.id.desc())))
+        (
+            await db.execute(
+                select(model)
+                .where(model.recorded_at <= as_of)
+                .order_by(model.recorded_at.desc(), model.id.desc())
+            )
+        )
         .scalars()
         .all()
     )
@@ -114,11 +125,15 @@ async def fetch_operational_facts(db, as_of):
     shelf = _shelf_life_map()
 
     supply = {}
-    for (loc_id, com_id), row in (await _latest_rows(db, SupplyRecord)).items():
+    for (loc_id, com_id), row in (
+        await _latest_rows(db, SupplyRecord, as_of)
+    ).items():
         supply[(locs[loc_id], coms[com_id])] = Decimal(str(row.quantity_kg))
 
     demand = {}
-    for (loc_id, com_id), row in (await _latest_rows(db, DemandRecord)).items():
+    for (loc_id, com_id), row in (
+        await _latest_rows(db, DemandRecord, as_of)
+    ).items():
         demand[(locs[loc_id], coms[com_id])] = Decimal(str(row.quantity_kg))
 
     refs, quotes = {}, {}
@@ -127,7 +142,9 @@ async def fetch_operational_facts(db, as_of):
     price_rows = (
         (
             await db.execute(
-                select(PriceSignal).order_by(PriceSignal.recorded_at.desc(), PriceSignal.id.desc())
+                select(PriceSignal)
+                .where(PriceSignal.recorded_at <= as_of)
+                .order_by(PriceSignal.recorded_at.desc(), PriceSignal.id.desc())
             )
         )
         .scalars()

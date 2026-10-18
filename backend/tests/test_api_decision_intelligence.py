@@ -158,7 +158,15 @@ def test_recommend_endpoint_ranks_candidates(client):
 
 def test_decisions_persist_and_get_validity(client):
     rec = client.post("/balance/recommend", json={}).json()
-    top = rec["recommendations"][0]
+    # Keputusan hanya boleh menyasar lokasi milik SPPG pengguna (Jakarta), jadi
+    # pilih kandidat TERATAS yang tujuannya Jakarta — bukan rank 1 global, yang
+    # bisa saja menuju kota lain dan memang ditolak 403 oleh aturan scope.
+    items = rec["recommendations"]
+    top = next(
+        (r for r in items if r["candidate"]["destination_location"] == "Jakarta"),
+        None,
+    )
+    assert top is not None, "seed wajib punya kandidat menuju Jakarta"
 
     payload = {
         "recommendation": top,

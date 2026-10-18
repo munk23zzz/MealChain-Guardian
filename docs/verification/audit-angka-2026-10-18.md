@@ -103,17 +103,29 @@ Nilai permintaan demo per pasangan berada pada rentang +1%…−12,5% dari basel
 kanonik (batas bawah = akhir pekan 0,92 × derau −2%), mis. Jakarta/telur 977,82–1.099,05 kg
 dengan baseline 1.080 kg.
 
-## Tindak lanjut yang BELUM dikerjakan (jujur, bukan disembunyikan)
+## Fakta rekomendasi ikut dibatasi `as_of` (dikerjakan)
 
-`app/services/recommendation_service.py::_latest_rows()` mengambil baris terbaru
-**tanpa batas waktu**, jadi fakta operasional untuk rekomendasi memakai baris
-4 Nov (pasokan maupun permintaan demo). `fetch_operational_facts(db, as_of)` sudah
-menerima `as_of`, tetapi parameter itu belum dipakai. Dampaknya: angka di peta
-mengikuti "sekarang" (`as_of`), sedangkan alokasi rekomendasi bisa memakai baris
-yang lebih maju — kedua sisi bisa berbeda pada hari yang sama. Perbaikannya
-terlihat kecil (filter `recorded_at <= as_of`), tetapi mengubah keluaran ranking
-rekomendasi sehingga perlu tes dan persetujuan tersendiri; belum dikerjakan di
-perubahan ini.
+`recommendation_service._latest_rows()` kini menerima `as_of` dan menyaring
+`recorded_at <= as_of` untuk pasokan, permintaan, dan harga (`PriceSignal`).
+`fetch_operational_facts()` sudah sejak awal memakai `as_of` untuk batch
+(`harvested_at <= as_of`) dan kebutuhan menu; sekarang seluruh tujuh elemen facts
+berbicara tentang waktu evaluasi yang sama. `as_of=None` = sekarang, bukan
+"selamanya".
+
+Buktinya bukan asersi kosong: dengan data demo yang berjalan sampai 4 Nov,
+`/balance/recommend` sebelum perbaikan memakai harga 30.834,06 dan sesudahnya
+30.305,95 (baris 15 Okt) untuk Jakarta/telur; pasokan 18 Okt 270,82 kg, bukan
+314,20 kg dari 4 Nov.
+
+Tes baru `tests/test_recommendation_as_of.py` (3 tes) memaku tiga hal: tidak ada
+baris masa depan untuk pasokan/permintaan, snapshot historis 8 Okt memberi angka
+kanonik, dan harga yang dipakai juga terbatas waktu evaluasi.
+
+Satu tes lama perlu disesuaikan, bukan dilonggarkan: `test_decisions_persist_and_get_validity`
+dulu memakai rekomendasi rank 1 global. Dengan fakta yang benar, rank 1 bisa
+menuju kota di luar scope penguji (Jakarta) sehingga ditolak 403 — sesuai aturan
+scope. Tes kini memilih kandidat teratas yang tujuannya Jakarta, jadi yang diuji
+tetap "keputusan tersimpan dan bisa dibaca", bukan urutan ranking global.
 
 ## Gerbang
 
