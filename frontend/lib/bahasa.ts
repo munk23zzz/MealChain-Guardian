@@ -31,6 +31,9 @@ const BLOCKER_ID: Record<string, string> = {
     "persetujuan belum lengkap — masih ada kelompok peran yang belum menyetujui",
   "safety revalidation gagal": "pemeriksaan ulang keamanan gagal",
   "batch sumber FAIL": "batch sumber gagal pemeriksaan keamanan",
+  // 409 /supplier-eligibility mengirim kode ini di awal kalimat; di kartu
+  // "Lanjutkan" (Decision & Evidence) kode mentah tidak boleh tampil.
+  supplier_unknown: "pemasok tidak dikenal",
 };
 
 // Urutan penting: frasa terpanjang dulu supaya tidak terpotong oleh yang pendek.

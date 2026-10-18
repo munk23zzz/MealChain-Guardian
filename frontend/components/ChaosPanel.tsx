@@ -128,7 +128,7 @@ export default function ChaosPanel({
         </span>
       </div>
       <p className="chaos-note">
-        Keputusan safety dihitung server dari temperature_log batch terpilih —
+        Keputusan safety dihitung server dari log suhu batch terpilih —
         tidak pernah dari browser. Pilih batch untuk memilih skenario; angka
         slider hanya penanda skenario dan TIDAK dikirim ke server.
       </p>

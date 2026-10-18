@@ -65,6 +65,7 @@ export default function SurplusBoard({
               key={c}
               type="button"
               className={`commodity-pill${commodity === c ? " commodity-pill-active" : ""}`}
+              data-komoditas={c}
               aria-pressed={commodity === c}
               onClick={() => onChangeCommodity(c)}
             >

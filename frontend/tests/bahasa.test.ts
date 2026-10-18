@@ -31,6 +31,14 @@ describe("humanizeBlocker — sebab tertahan dari server", () => {
     expect(humanizeBlocker("batch sumber FAIL")).toBe("batch sumber gagal pemeriksaan keamanan");
   });
 
+  it("kode teknis di awal kalimat server tidak tampil mentah", () => {
+    // 409 dari /supplier-eligibility: "supplier_unknown: keputusan lama ..."
+    // tampil di kartu Lanjutkan pada Decision & Evidence.
+    expect(humanizeBlocker("supplier_unknown: keputusan lama perlu binding batch eksplisit")).toBe(
+      "pemasok tidak dikenal: keputusan lama perlu binding batch eksplisit"
+    );
+  });
+
   it("menerjemahkan status dinamis lewat kosakata status yang sama", () => {
     expect(humanizeBlocker("status verifier_flagged tidak dapat dieksekusi")).toBe(
       "status ditandai verifier tidak dapat dieksekusi"

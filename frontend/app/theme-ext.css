@@ -123,3 +123,22 @@
 .audit-item.audit-warn {
   box-shadow: inset 3px 0 0 var(--sev-medium-solid);
 }
+
+/* ---------- Surplus & Limbah: dua sisi neraca ----------
+   Surplus = ketersediaan (teal), kekurangan = defisit (rose). Hanya label
+   dan rel tepi yang diberi warna; angka tetap netral supaya "0" tidak
+   terbaca seperti masalah. */
+.balance-side-surplus {
+  border-left: 3px solid var(--cat-teal-line);
+  padding-left: 10px;
+}
+.balance-side-surplus .balance-label {
+  color: var(--cat-teal-ink);
+}
+.balance-side-shortage {
+  border-right: 3px solid var(--cat-rose-line);
+  padding-right: 10px;
+}
+.balance-side-shortage .balance-label {
+  color: var(--cat-rose-ink);
+}
