@@ -3201,6 +3201,16 @@ a:focus-visible {
 }
 .integrity-panel h3 { margin: 0 0 8px; font-size: var(--fs-3); }
 .integrity-ledger, .integrity-dossier { margin-bottom: 10px; }
+/* Audit A4: rantai valid ≠ bukti lengkap. Blok yatim harus terlihat. */
+.integrity-warning {
+  margin: 4px 0 6px;
+  font-size: var(--fs-1);
+  color: var(--warning-ink, #92400e);
+  background: var(--warning-bg, #fffbeb);
+  border: 1px solid var(--warning-line, #fcd34d);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
 .integrity-ledger strong, .integrity-dossier strong { font-size: var(--fs-1); display: block; margin-bottom: 4px; }
 .integrity-panel dl { margin: 4px 0; }
 .integrity-panel dt { font-size: var(--fs-1); color: var(--muted-foreground); }

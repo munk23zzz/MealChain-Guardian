@@ -16,6 +16,7 @@ import { fetchDossier, verifyLedger } from "../lib/api";
 import ComplianceEvidencePanel from "./ComplianceEvidencePanel";
 import { dossierToCsv, dossierToJson, downloadText } from "../lib/export";
 import type { ComplianceDossier } from "../lib/evidence";
+import { coverageNote } from "../lib/ledger";
 
 type LedgerResult = {
   valid: boolean;
@@ -23,6 +24,11 @@ type LedgerResult = {
   head?: string | null;
   broken_at?: number | null;
   reason?: string | null;
+  entity_blocks?: number;
+  linked_blocks?: number;
+  orphan_blocks?: number;
+  linked_ratio?: number | null;
+  coverage_warning?: string | null;
 };
 
 type DossierResult = ComplianceDossier & {
@@ -98,6 +104,11 @@ export default function IntegrityPanel({
             ) : null}
           </p>
         )}
+        {ledger !== null && coverageNote(ledger) ? (
+          <p className="integrity-warning" data-testid="ledger-coverage">
+            ⚠️ {coverageNote(ledger)}
+          </p>
+        ) : null}
         <button
           type="button"
           data-testid="btn-verify-ledger"

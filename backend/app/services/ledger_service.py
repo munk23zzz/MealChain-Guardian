@@ -76,7 +76,15 @@ async def append_block(
 
 
 async def verify_chain(db: AsyncSession) -> dict:
-    """Verifikasi ulang seluruh rantai dari genesis (murni read)."""
+    """Verifikasi ulang seluruh rantai dari genesis (murni read).
+
+    Sejak 18 Okt 2026 respons juga menyatakan KETERKAITAN blok, bukan hanya
+    integritas hash (audit A4). `valid` tetap berarti "rantai tidak diputus" —
+    itu kebenaran teknis yang tidak boleh dipalsukan — tetapi blok yang
+    menunjuk keputusan/batch yang sudah dihapus dilaporkan terpisah supaya
+    tidak terbaca sebagai "bukti lengkap".
+    """
+    linkage = await _linkage(db)
     rows = (
         await db.execute(
             text(
@@ -89,10 +97,51 @@ async def verify_chain(db: AsyncSession) -> dict:
     for h, ph, expected, payload in rows:
         if h != 1 and ph != prev:
             return {"valid": False, "blocks": len(rows), "broken_at": h,
-                    "reason": "prev_hash tidak nyambung"}
+                    "reason": "prev_hash tidak nyambung", **linkage}
         actual = hashlib.sha256((ph + payload).encode()).hexdigest()
         if actual != expected:
             return {"valid": False, "blocks": len(rows), "broken_at": h,
-                    "reason": "payload_hash tidak cocok dengan sha256(prev+payload)"}
+                    "reason": "payload_hash tidak cocok dengan sha256(prev+payload)",
+                    **linkage}
         prev = expected
-    return {"valid": True, "blocks": len(rows), "head": prev if rows else None}
+    return {"valid": True, "blocks": len(rows), "head": prev if rows else None,
+            **linkage}
+
+
+async def _linkage(db: AsyncSession) -> dict:
+    """Hitung blok yang entitasnya masih ada (keputusan atau batch).
+
+    Blok tanpa `entity_id` (mis. catatan sistem) tidak dihitung sebagai yatim —
+    ia memang tidak menunjuk entitas apa pun, jadi tidak bisa "hilang".
+    """
+    row = (
+        await db.execute(
+            text(
+                """
+                SELECT
+                  count(*) FILTER (WHERE entity_id IS NOT NULL) AS entity_blocks,
+                  count(*) FILTER (
+                    WHERE entity_id IS NOT NULL
+                      AND NOT EXISTS (SELECT 1 FROM decisions d WHERE d.id = lb.entity_id)
+                      AND NOT EXISTS (SELECT 1 FROM batches b WHERE b.id = lb.entity_id)
+                  ) AS orphan_blocks
+                FROM ledger_blocks lb
+                """
+            )
+        )
+    ).one()
+    entity_blocks, orphan_blocks = int(row[0]), int(row[1])
+    linked_blocks = entity_blocks - orphan_blocks
+    return {
+        "entity_blocks": entity_blocks,
+        "linked_blocks": linked_blocks,
+        "orphan_blocks": orphan_blocks,
+        "linked_ratio": (
+            round(linked_blocks / entity_blocks, 3) if entity_blocks else None
+        ),
+        "coverage_warning": (
+            f"rantai utuh, tetapi {orphan_blocks} blok menunjuk entitas yang sudah tidak ada"
+            if orphan_blocks
+            else None
+        ),
+    }
