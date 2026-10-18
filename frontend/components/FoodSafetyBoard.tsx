@@ -51,6 +51,11 @@ import Popup from "./Popup";
 import ShipmentCard from "./ShipmentCard";
 import ScrollHint from "./ScrollHint";
 
+// Baris batch yang ditampilkan di kartu ringkas; dipakai di slice DAN kalimat
+// "Menampilkan N dari M" supaya keduanya tidak bisa menyimpang (audit angka
+// 18 Okt 2026).
+const MAKS_BATCH_TERLIHAT = 5;
+
 export type RecheckResult = {
   safety: { safety_status: string; reasons: string[]; excursion_minutes: number };
   freshness: { freshness_score: number; status: string; usable_until: string };
@@ -945,7 +950,7 @@ export default function FoodSafetyBoard({
                 </p>
               ) : null}
               <ul className="board-list">
-                {keamanan.rows.slice(0, 5).map((row) => (
+                {keamanan.rows.slice(0, MAKS_BATCH_TERLIHAT).map((row) => (
                   <li key={row.id}>
                     <span className="board-list-title">
                       Gangguan keamanan · {row.kg === null ? "—" : formatKg(row.kg)}
@@ -967,9 +972,10 @@ export default function FoodSafetyBoard({
                   </li>
                 ))}
               </ul>
-              {keamanan.rows.length > 5 ? (
+              {keamanan.rows.length > MAKS_BATCH_TERLIHAT ? (
                 <p className="evidence-note">
-                  Menampilkan 5 dari {keamanan.rows.length} — sisanya di tab Decision &amp; Evidence.
+                  Menampilkan {MAKS_BATCH_TERLIHAT} dari {keamanan.rows.length} — sisanya
+                  di tab Decision &amp; Evidence.
                 </p>
               ) : null}
             </>

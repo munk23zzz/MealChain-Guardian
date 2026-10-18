@@ -49,6 +49,11 @@ type KpiEnvelope = {
   period?: { start?: string | null; end?: string | null };
 } | null;
 
+// Jumlah agenda yang ditampilkan; dipakai di slice DAN di kalimat "+N lain"
+// supaya angka di layar tidak bisa menyimpang dari daftar yang benar-benar
+// dirender saat batas ini diubah (audit angka 18 Okt 2026).
+const MAKS_AGENDA_KEPUTUSAN = 6;
+
 const STATUS_LABELS: Record<string, string> = {
   PENDING_APPROVAL: "Menunggu persetujuan",
   NEEDS_VERIFICATION: "Menunggu verifikasi",
@@ -247,7 +252,7 @@ export default function TodayDashboard({
           </p>
           {pending.items.length > 0 && (
             <ul className="today-list">
-              {pending.items.slice(0, 6).map((decision, index) => {
+              {pending.items.slice(0, MAKS_AGENDA_KEPUTUSAN).map((decision, index) => {
                 const expired =
                   pending.overdueCount > 0 && index < pending.overdueCount;
                 return (
@@ -273,9 +278,12 @@ export default function TodayDashboard({
                   </li>
                 );
               })}
-              {pending.items.length > 6 && (
+              {pending.items.length > MAKS_AGENDA_KEPUTUSAN && (
                 <li className="today-more">
-                  <span>+{pending.items.length - 6} keputusan lain menunggu tindakan</span>
+                  <span>
+                    +{pending.items.length - MAKS_AGENDA_KEPUTUSAN} keputusan lain
+                    menunggu tindakan
+                  </span>
                   {onOpenAllDecisions && (
                     <button
                       type="button"

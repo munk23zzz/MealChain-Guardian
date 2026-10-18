@@ -1,8 +1,9 @@
 """Router balance (Task 10 Sprint 2) — tipis: validasi + delegasi service."""
 
+from datetime import datetime, timezone
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import String, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +21,19 @@ from app.models import (
 from app.services import recommendation_service as rs
 
 router = APIRouter()
+
+
+def _batas_waktu(as_of: datetime | None) -> datetime:
+    """Batas atas waktu baris: default SEKARANG (UTC).
+
+    Deret demo diperluas sampai 5 Nov (ACTUAL_REF), jadi tanpa batas ini
+    dashboard berlabel "Hari Ini" bisa menampilkan pasokan 4 Nov sementara
+    permintaan masih 8 Okt — dua tanggal berbeda yang terbaca sebagai kondisi
+    hari ini. `as_of` eksplisit dipakai untuk menelusuri snapshot lain.
+    """
+    if as_of is None:
+        return datetime.now(timezone.utc)
+    return as_of if as_of.tzinfo is not None else as_of.replace(tzinfo=timezone.utc)
 
 
 async def _resolve_location(db, value: str) -> Location:
@@ -81,6 +95,9 @@ def _waktu(row) -> str | None:
 async def get_balance(
     location: str,
     commodity: str,
+    as_of: datetime | None = Query(
+        None, description="Batas atas waktu baris (default: sekarang)"
+    ),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -89,12 +106,15 @@ async def get_balance(
     com = await _resolve_commodity(db, commodity)
     from app.core.gaps import calculate_supply_gap
 
+    batas = _batas_waktu(as_of)
+
     row_supply = (
         await db.execute(
             select(SupplyRecord)
             .where(
                 SupplyRecord.location_id == loc.id,
                 SupplyRecord.commodity_id == com.id,
+                SupplyRecord.recorded_at <= batas,
             )
             .order_by(SupplyRecord.recorded_at.desc(), SupplyRecord.id.desc())
             .limit(1)
@@ -106,6 +126,7 @@ async def get_balance(
             .where(
                 DemandRecord.location_id == loc.id,
                 DemandRecord.commodity_id == com.id,
+                DemandRecord.recorded_at <= batas,
             )
             .order_by(DemandRecord.recorded_at.desc(), DemandRecord.id.desc())
             .limit(1)
@@ -141,6 +162,8 @@ async def get_balance(
         "data_state": _data_state(row_supply, row_demand),
         "supply_recorded_at": _waktu(row_supply),
         "demand_recorded_at": _waktu(row_demand),
+        # Batas waktu yang dipakai (default: sekarang) — UI menyebut tanggalnya.
+        "as_of": batas.isoformat(),
     }
 
 
@@ -183,19 +206,23 @@ class AnalyzeRequest(BaseModel):
 @router.get("/balance/map")
 async def get_balance_map(
     commodity: str,
+    as_of: datetime | None = Query(
+        None, description="Batas atas waktu baris (default: sekarang)"
+    ),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     """S4-06 polish (arah Roy 2026-10-08): kondisi semua lokasi utk map.
 
     Read-only (JWT, semua role boleh baca). Satu komoditas → snapshot
-    supply/demand TERBARU tiap lokasi (record terakhir per lokasi,
-    aturan sama dengan GET /balance/{loc}/{com}), gap via
-    `calculate_supply_gap` — formula yang sama dengan panel, tanpa
+    supply/demand TERBARU tiap lokasi YANG SUDAH TERJADI (`recorded_at <=
+    as_of`, default sekarang), aturan sama dengan GET /balance/{loc}/{com},
+    gap via `calculate_supply_gap` — formula yang sama dengan panel, tanpa
     rumus kedua. Lokasi tanpa data → zeros (map tetap lengkap).
     Koordinat dari DB.
     """
     com = await _resolve_commodity(db, commodity)
+    batas = _batas_waktu(as_of)
     # Ruling 2026-10-14: peran SPPG hanya menerima lokasinya sendiri;
     # bgn_monitor tetap menerima seluruh lokasi (pengawasan nasional).
     locs = (
@@ -217,7 +244,10 @@ async def get_balance_map(
             (
                 await db.execute(
                     select(model)
-                    .where(model.commodity_id == com.id)
+                    .where(
+                        model.commodity_id == com.id,
+                        model.recorded_at <= batas,
+                    )
                     .order_by(
                         model.location_id.asc(),
                         model.recorded_at.desc(),
@@ -277,7 +307,7 @@ async def get_balance_map(
                 "demand_recorded_at": _waktu(d_row),
             }
         )
-    return {"commodity": com.name, "locations": items}
+    return {"commodity": com.name, "as_of": batas.isoformat(), "locations": items}
 
 
 @router.post("/balance/analyze")

@@ -51,6 +51,10 @@ def _db_latest_quantity_kg(kind: str, location: str, commodity: str):
     sedangkan demand tetap berhenti di baris kanonik 8 Okt. Jadi 'record
     terbaru' bergerak untuk supply tapi tidak untuk demand — angka panel
     demo lama (300/1400) tidak lagi berlaku.
+
+    Sejak audit angka 18 Okt 2026 endpoint hanya memakai baris yang SUDAH
+    terjadi (`recorded_at <= now()`, parameter `as_of`), jadi acuan di sini
+    memakai batas yang sama — baris masa depan bukan 'kondisi kini'.
     """
     table = _QUANTITY_TABLE[kind]
     with _db().connect() as conn:
@@ -60,6 +64,7 @@ def _db_latest_quantity_kg(kind: str, location: str, commodity: str):
                 "JOIN locations l ON l.id = r.location_id "
                 "JOIN commodities c ON c.id = r.commodity_id "
                 "WHERE l.name = :loc AND c.name = :com "
+                "AND r.recorded_at <= now() "
                 "ORDER BY r.recorded_at DESC, r.id DESC LIMIT 1"
             ),
             {"loc": location, "com": commodity},

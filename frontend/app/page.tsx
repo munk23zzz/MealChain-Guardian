@@ -111,7 +111,7 @@ import TodayDashboard from "../components/TodayDashboard";
 import StockChart from "../components/StockChart";
 import ShipmentCard from "../components/ShipmentCard";
 import { focusNote, focusPick, focusRows } from "../lib/route-focus";
-import { formatKg } from "../lib/overview-format";
+import { formatKg, snapshotNote } from "../lib/overview-format";
 // Fase 2 bento Overview: selisih hero & pangsa terhadap kebutuhan — logika
 // murni di lib/overview-bento.ts (diuji di tests/overview-bento.test.ts).
 import {
@@ -716,6 +716,10 @@ export default function Home() {
   const hero = heroGap(mapData?.locations ?? [], activeLocation);
   const heroShare = gapShareOfDemand(hero.gapKg, hero.demandKg);
   const networkTotal = networkTotals(mapData?.locations ?? []);
+  // Tanggal data yang BENAR-BENAR dipakai peta (dari `*_recorded_at`), supaya
+  // angka "pasokan terpantau" tidak dibaca sebagai kondisi hari ini ketika
+  // pasokan dan permintaan berasal dari tanggal berbeda.
+  const mapSnapshotNote = snapshotNote(mapData?.locations ?? []);
   const coveragePct = demandCoveragePct(
     networkTotal.supplyKg,
     networkTotal.demandKg
@@ -1055,6 +1059,11 @@ export default function Home() {
                     ? `dari ${formatKg(networkTotal.demandKg)} kebutuhan jaringan · ${coveragePct}%`
                     : "kebutuhan jaringan belum lengkap"}
                 </span>
+                {mapSnapshotNote ? (
+                  <span className="kpi-card-mini kpi-card-snapshot">
+                    {mapSnapshotNote}
+                  </span>
+                ) : null}
                 <span className="bento-bar" aria-hidden="true">
                   <span
                     className="bento-bar-fill"
@@ -1069,7 +1078,7 @@ export default function Home() {
                 <span className="kpi-card-foot">
                   {notif.expired > 0
                     ? `${notif.expired} lewat tenggat — tetap terlihat, tidak disembunyikan`
-                    : `${decisions.length} keputusan terakhir dipantau`}
+                    : `${decisions.length} keputusan dipantau`}
                 </span>
                 <span className="kpi-card-mini">
                   {notif.rest > 0

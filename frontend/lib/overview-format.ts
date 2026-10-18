@@ -51,6 +51,51 @@ export function isBalanceStatus(status: string): status is BalanceStatus {
   return (BALANCE_STATUSES as readonly string[]).includes(status);
 }
 
+const TANGGAL_DATA = new Intl.DateTimeFormat("id-ID", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "Asia/Jakarta",
+});
+
+/** Tanggal TERBARU dari satu sisi, dihitung dari stempel waktu mentah. */
+function tanggalTerbaru(
+  locations: readonly BalanceMapLocation[],
+  sisi: "supply_recorded_at" | "demand_recorded_at"
+): string | null {
+  let msTerbaru: number | null = null;
+  for (const location of locations) {
+    const ms = Date.parse(location[sisi] ?? "");
+    if (!Number.isFinite(ms)) continue;
+    if (msTerbaru === null || ms > msTerbaru) msTerbaru = ms;
+  }
+  return msTerbaru === null ? null : TANGGAL_DATA.format(new Date(msTerbaru));
+}
+
+/**
+ * Label periode data peta ("Pasokan per 4 Nov 2026 · permintaan per 8 Okt 2026").
+ *
+ * `GET /balance/map` memakai baris TERBARU per lokasi, dan deret demo sudah
+ * diperluas sampai 5 Nov — jadi pasokan dan permintaan bisa berasal dari
+ * tanggal berbeda. Tanpa label, angka itu terbaca sebagai "kondisi hari ini".
+ * Stempel waktunya dibaca dari payload (`*_recorded_at`), bukan dari jam sistem.
+ */
+export function snapshotNote(
+  locations: readonly BalanceMapLocation[] | null | undefined
+): string | null {
+  if (!locations?.length) return null;
+  const pasokan = tanggalTerbaru(locations, "supply_recorded_at");
+  const permintaan = tanggalTerbaru(locations, "demand_recorded_at");
+  if (pasokan && permintaan) {
+    return pasokan === permintaan
+      ? `Data per ${pasokan}`
+      : `Pasokan per ${pasokan} · permintaan per ${permintaan}`;
+  }
+  if (pasokan) return `Pasokan per ${pasokan} · permintaan belum ada catatan`;
+  if (permintaan) return `Permintaan per ${permintaan}`;
+  return null;
+}
+
 export function formatKg(value: number | string | null | undefined): string {
   if (value == null || value === "") return "—";
   const numeric = Number(value);

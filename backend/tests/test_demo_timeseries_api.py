@@ -70,10 +70,13 @@ def _teardown_counts(before: dict[str, int]) -> None:
 def _peta_acuan() -> dict[str, tuple[float, float]]:
     """(lokasi → pasokan terbaru, demand terbaru) dari DB — acuan peta.
 
-    Peta `/balance/map` menyajikan baris TERBARU tiap lokasi. Angka snapshot lama
+    Peta `/balance/map` menyajikan baris TERBARU tiap lokasi YANG SUDAH TERJADI
+    (`recorded_at <= now()`, parameter `as_of`; audit angka 18 Okt 2026 — baris
+    masa depan tidak boleh tampil sebagai kondisi kini). Angka snapshot lama
     (4.900 kg, 3 surplus : 7 shortage) adalah keadaan 8 Okt; setelah deret aktual
     diperluas sampai 4 Nov 12:00, angka itu bukan lagi sifat yang harus kekal.
-    Yang benar-benar harus berlaku: angka peta = baris terbaru di DB.
+    Yang benar-benar harus berlaku: angka peta = baris terbaru di DB yang sudah
+    terjadi.
     """
     engine = create_engine(DB_URL)
     try:
@@ -83,9 +86,11 @@ def _peta_acuan() -> dict[str, tuple[float, float]]:
                     "SELECT l.name, "
                     " (SELECT s.quantity_kg FROM supply_records s "
                     "   WHERE s.location_id = l.id AND s.commodity_id = c.id "
+                    "   AND s.recorded_at <= now() "
                     "   ORDER BY s.recorded_at DESC, s.id DESC LIMIT 1), "
                     " (SELECT d.quantity_kg FROM demand_records d "
                     "   WHERE d.location_id = l.id AND d.commodity_id = c.id "
+                    "   AND d.recorded_at <= now() "
                     "   ORDER BY d.recorded_at DESC, d.id DESC LIMIT 1) "
                     "FROM locations l, commodities c "
                     "WHERE c.name = 'telur'"
@@ -190,10 +195,11 @@ def test_membangun_deret_tidak_menggeser_jangkar(demo_state, auth_headers, monit
     assert sup.json()["recorded_at"].startswith("2026-11-04T12:00:00")
     assert _seed_supply_terbaru()[1] == 1400.0
 
-    # Jangkar peta: angka peta = baris TERBARU tiap lokasi di DB. Total 4.900 kg
-    # dan sebaran 3 surplus : 7 shortage adalah keadaan 8 Okt — dipaku di sini dulu
-    # dan pecah begitu deret aktual diperluas sampai 4 Nov. Yang diuji sekarang:
-    # peta setia pada baris terbaru + rumus gap (surplus bila supply > demand).
+    # Jangkar peta: angka peta = baris TERBARU tiap lokasi yang SUDAH TERJADI
+    # (`recorded_at <= now()`, audit angka 18 Okt 2026). Total dan sebaran
+    # surplus/shortage karena itu bergerak mengikuti waktu, bukan dipaku.
+    # Yang diuji: peta setia pada baris terbaru + rumus gap (surplus bila
+    # supply > demand).
     peta = demo_state.get("/balance/map?commodity=telur", headers=monitor_headers)
     assert peta.status_code == 200, peta.text
     lokasi = peta.json()["locations"]

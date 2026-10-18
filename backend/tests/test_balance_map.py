@@ -12,6 +12,7 @@ TDD RED dulu — endpoint read-only `GET /balance/map?commodity=telur`:
 - Response menyertakan lat/long dari DB (bukan koordinat karangan FE).
 """
 import uuid
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -99,8 +100,11 @@ def _latest_quantity_kg(table: str, location: str, commodity: str) -> float:
 
     Dipakai sebagai ACUAN (bukan angka kanonik yang dipaku): sejak deret aktual
     demo diperluas sampai 5 Nov (`ACTUAL_REF` di app/seed/timeseries.py), baris
-    terbaru Jakarta/telur bukan lagi snapshot kanonik 8 Okt. Urutan pilih baris
-    sama persis dengan endpoint (`recorded_at DESC, id DESC`).
+    terbaru Jakarta/telur bukan lagi snapshot kanonik 8 Okt. Sejak audit angka
+    (18 Okt 2026) endpoint membatasi baris ke `recorded_at <= now()` — baris
+    masa depan tidak boleh dipakai sebagai kondisi kini — jadi acuan di sini
+    memakai batas yang SAMA. Urutan pilih baris sama persis dengan endpoint
+    (`recorded_at DESC, id DESC`).
     """
     engine = create_engine(DB_URL)
     try:
@@ -111,6 +115,7 @@ def _latest_quantity_kg(table: str, location: str, commodity: str) -> float:
                     " JOIN locations l ON l.id = r.location_id"
                     " JOIN commodities c ON c.id = r.commodity_id"
                     " WHERE l.name = :loc AND c.name = :com"
+                    " AND r.recorded_at <= now()"
                     " ORDER BY r.recorded_at DESC, r.id DESC LIMIT 1"
                 ),
                 {"loc": location, "com": commodity},
@@ -217,3 +222,96 @@ def test_balance_map_monitor_can_read(client):
     )
     resp = client.get(f"/balance/map?commodity={COMMODITY}", headers=headers)
     assert resp.status_code == 200
+
+
+# --- Audit angka 18 Okt 2026: peta tidak boleh memakai baris MASA DEPAN -------
+# Deret demo diperluas sampai 5 Nov (ACTUAL_REF), sedangkan halaman berlabel
+# "Hari Ini". Tanpa batas atas waktu, `supply_kg` bisa berasal dari 4 Nov dan
+# `demand_kg` dari 8 Okt — dua tanggal berbeda yang terbaca sebagai kondisi
+# hari ini. Kontraknya sekarang: baris <= as_of (default: sekarang), dan
+# `as_of` dikembalikan supaya UI bisa menyebut tanggalnya.
+
+
+def _seed_supply_berjadwal(com_name: str, nilai_lalu: float, nilai_depan: float):
+    """Lokasi test dengan satu baris lampau (now-1 jam) + satu baris masa depan."""
+    key = f"map-{uuid.uuid4()}"
+    engine = create_engine(DB_URL)
+    try:
+        with engine.begin() as conn:
+            loc_id = conn.execute(
+                text(
+                    "INSERT INTO locations (name, region, latitude, longitude)"
+                    " VALUES (:n, 'Test Region', -6.2, 106.8) RETURNING id"
+                ),
+                {"n": f"TEST-{key[:12]}"},
+            ).scalar_one()
+            com_id = conn.execute(
+                text("SELECT id FROM commodities WHERE name=:n"), {"n": com_name}
+            ).scalar_one()
+            for nilai, jeda in ((nilai_lalu, "1 hour"), (nilai_depan, "10 days")):
+                tanda = "-" if nilai == nilai_lalu else "+"
+                conn.execute(
+                    text(
+                        "INSERT INTO supply_records (location_id, commodity_id,"
+                        " quantity_kg, recorded_at, source)"
+                        f" VALUES (:l, :c, :q, now() {tanda} interval '{jeda}', 'manual')"
+                    ),
+                    {"l": loc_id, "c": com_id, "q": nilai},
+                )
+    finally:
+        engine.dispose()
+    return key, loc_id
+
+
+def test_peta_memakai_baris_terakhir_yang_sudah_terjadi(client):
+    """Tanpa `as_of`, baris masa depan TIDAK boleh dipakai sebagai kondisi kini."""
+    key, loc_id = _seed_supply_berjadwal(COMMODITY, 111.0, 999.0)
+    try:
+        headers = _login(client, "bgn.monitor@demo.local", "Demo#BGN2026")
+        resp = client.get(f"/balance/map?commodity={COMMODITY}", headers=headers)
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        mine = next(
+            x for x in body["locations"] if x["location"] == f"TEST-{key[:12]}"
+        )
+        assert mine["supply_kg"] == pytest.approx(111.0)
+        assert body["as_of"], "respons wajib menyebut batas waktu yang dipakai"
+    finally:
+        _cleanup(loc_id)
+
+
+def test_peta_bisa_diminta_sampai_tanggal_tertentu(client):
+    """`as_of` eksplisit mengambil snapshot lain (dipakai untuk menelusuri waktu)."""
+    key, loc_id = _seed_supply_berjadwal(COMMODITY, 111.0, 999.0)
+    try:
+        headers = _login(client, "bgn.monitor@demo.local", "Demo#BGN2026")
+        as_of = (datetime.now(timezone.utc) + timedelta(days=20)).isoformat()
+        resp = client.get(
+            "/balance/map",
+            params={"commodity": COMMODITY, "as_of": as_of},
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        mine = next(
+            x for x in body["locations"] if x["location"] == f"TEST-{key[:12]}"
+        )
+        assert mine["supply_kg"] == pytest.approx(999.0)
+    finally:
+        _cleanup(loc_id)
+
+
+def test_panel_satu_lokasi_memakai_batas_waktu_yang_sama(client):
+    """Endpoint panel wajib ikut aturan yang sama (satu angka, satu sumber)."""
+    key, loc_id = _seed_supply_berjadwal(COMMODITY, 222.0, 888.0)
+    try:
+        headers = _login(client, "bgn.monitor@demo.local", "Demo#BGN2026")
+        resp = client.get(
+            f"/balance/TEST-{key[:12]}/{COMMODITY}", headers=headers
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["supply_kg"] == pytest.approx(222.0)
+        assert body["as_of"]
+    finally:
+        _cleanup(loc_id)
