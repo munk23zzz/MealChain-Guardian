@@ -32,6 +32,25 @@ DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain
 TABLES = ("supply_records", "demand_records", "price_signals", "menu_plans")
 
 
+def _kanonik_pada_stempel() -> int:
+    """Baris seed yang menempati stempel 8 Okt 12:00 (= yang tidak "added")."""
+    engine = create_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            return int(
+                conn.execute(
+                    text(
+                        "SELECT count(*) FROM supply_records"
+                        " WHERE origin='seed' AND recorded_at = :t"
+                    ),
+                    {"t": datetime(2026, 10, 8, 12, tzinfo=UTC)},
+                ).scalar()
+                or 0
+            )
+    finally:
+        engine.dispose()
+
+
 def _counts() -> dict[str, int]:
     engine = create_engine(DB_URL)
     try:
@@ -166,11 +185,13 @@ def test_membangun_deret_tidak_menggeser_jangkar(demo_state, auth_headers, monit
     )
     assert r.status_code == 200, r.text
     body = r.json()
-    # 3.870, bukan 3.900: 130 cap waktu × 30 pasangan = 3.900 baris yang direncanakan,
-    # tetapi 30 di antaranya jatuh tepat di (lokasi, komoditas, 8 Okt 12:00) — stamp
-    # yang sudah dipegang baris kanonik seed, jadi baris itu DIPERTAHANKAN dan tidak
-    # dihitung sebagai "added".
-    assert body["counts"]["supply"]["added"] == 3870
+    # "added" = planned − baris kanonik yang sudah menempati stempel 8 Okt 12:00
+    # (10 lokasi × 4 komoditas = 40 baris). Angka 3.870 yang dulu dipaku di sini
+    # pecah saat beras masuk, padahal yang diuji adalah "kanonik tidak dihitung
+    # sebagai added" — jadi hitung dari kontraknya, bukan dari angka tetap.
+    kanonik = _kanonik_pada_stempel()
+    assert kanonik == 40
+    assert body["counts"]["supply"]["added"] == body["counts"]["supply"]["planned"] - kanonik
     # Rencana menu harus menutup SELURUH rentang tanpa lubang. Angka "520"
     # sempat dipaku di sini dan pecah begitu jumlah hari kanonik berubah —
     # yang benar adalah cakupan, bukan selisih yang bergantung susunan lama.
@@ -314,7 +335,10 @@ def test_performa_66_hari_di_bawah_30_detik(demo_state, auth_headers):
     )
     durasi = time.perf_counter() - mulai
     assert r.status_code == 200, r.text
-    assert r.json()["counts"]["supply"]["added"] == 3870
+    assert (
+        r.json()["counts"]["supply"]["added"]
+        == r.json()["counts"]["supply"]["planned"] - _kanonik_pada_stempel()
+    )
     assert durasi < 30, f"generate 66 hari butuh {durasi:.1f}s (batas 30s)"
 
 
@@ -463,15 +487,24 @@ def test_data_status_membaca_db(demo_state, auth_headers):
     body = r.json()
     assert body["canonical_ref"] == "2026-10-08T12:00:00+00:00"
     supply = body["tables"]["supply_records"]
-    assert supply["seed"] == 30
-    assert supply["demo"] == 3870
+    assert supply["seed"] == 40, "10 lokasi × 4 komoditas"
+    assert supply["demo"] == 5160, "40 pasangan × 130 stempel − 40 kanonik"
     assert supply["demo_to"].startswith("2026-11-04T12:00:00")
     assert supply["seed_from"] == "2026-10-08T12:00:00+00:00"
     assert supply["generated_at"] is not None
+    # Permintaan ikut dilaporkan: tanpa ini panel hanya melihat 3 tabel dan
+    # menyembunyikan 864 baris permintaan demo.
+    demand = body["tables"]["demand_records"]
+    assert demand["seed"] == 224
+    assert demand["demo"] == 864
+    assert demand["demo_from"].startswith("2026-10-09T00:00:00")
     menu = body["tables"]["menu_plans"]
     assert menu["demo_to"].startswith("2026-11-05")
     assert body["totals"]["demo"] == (
-        supply["demo"] + body["tables"]["price_signals"]["demo"] + menu["demo"]
+        supply["demo"]
+        + demand["demo"]
+        + body["tables"]["price_signals"]["demo"]
+        + menu["demo"]
     )
 
 
@@ -660,7 +693,9 @@ def test_refresh_hari_ini_bergeser_dan_bisa_dikembalikan(
         assert "TANGGALNYA" in body["warning"]
 
         added = {t: _snapshot_ids()[t] - before_ids[t] for t in before_ids}
-        assert len(added["supply_records"]) == 30, "snapshot REF baru = 30 baris pasokan"
+        # Snapshot kanonik baru = satu baris per pasangan lokasi×komoditas:
+        # 10 lokasi × 4 komoditas (beras ikut sejak komoditas ke-4).
+        assert len(added["supply_records"]) == 40, "snapshot REF baru = 40 baris pasokan"
         # Rencana menu TIDAK digandakan: untuk tanggal yang sudah punya rencana
         # (deret demo menutup 8 Okt–5 Nov), seeder memakai rencana yang ada. Menu
         # boleh 0 baris baru — yang wajib bertambah adalah snapshot pasokan.

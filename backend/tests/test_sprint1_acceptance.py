@@ -81,13 +81,18 @@ def test_acceptance_3b_delivery_window_constraint():
     assert check_delivery_window(151.0, 150.0) is False
 
 
-def test_acceptance_4_seed_dataset_10x3_and_locked_values(national_client):
-    """Seed 10×3 dan angka kanonik Cianjur/Jakarta/Bogor tetap terkunci."""
+def test_acceptance_4_seed_dataset_10x4_and_locked_values(national_client):
+    """Seed 10×4 dan angka kanonik Cianjur/Jakarta/Bogor tetap terkunci.
+
+    Komoditas keempat (beras) masuk di commit "Beras: komoditas keempat", jadi
+    yang dikunci di sini adalah 10 lokasi × 4 komoditas — angka kanonik telur
+    tidak berubah.
+    """
     with create_engine(DB_URL).connect() as conn:
         n_loc = conn.execute(text("SELECT COUNT(*) FROM locations")).scalar()
         n_com = conn.execute(text("SELECT COUNT(*) FROM commodities")).scalar()
         assert n_loc == 10
-        assert n_com == 3
+        assert n_com == 4
         # Nilai kanonik DIKUNCI pada baris seed (`origin='seed'`) dan dibaca
         # langsung dari DB — bukan lewat endpoint: `/supply/*` mengembalikan
         # baris TERBARU, dan sejak deret aktual demo diperluas sampai 5 Nov

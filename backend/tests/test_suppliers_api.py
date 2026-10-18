@@ -27,9 +27,13 @@ from app.seed.suppliers_demo import load_demo_rows
 DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
 
 # dari data/seed/sprint1_seed.json (diverifikasi utuh di test_suppliers_data.py)
-CANONICAL_SUPPLIERS = 14
+CANONICAL_SUPPLIERS = 17  # 14 semula + 3 pemasok beras (komoditas ke-4)
 DEMO_SUPPLIERS = len(load_demo_rows())
-TOTAL_SUPPLIERS = CANONICAL_SUPPLIERS + DEMO_SUPPLIERS
+# Tiga baris demo beras memakai nama pemasok kanonik yang sama: berkas demo
+# berperan sebagai overlay koordinat, seeder mencocokkan lewat nama dan
+# MENG-UPDATE baris kanonik, bukan menambah baris baru.
+DEMO_OVERLAY = 3
+TOTAL_SUPPLIERS = CANONICAL_SUPPLIERS + DEMO_SUPPLIERS - DEMO_OVERLAY
 
 
 @pytest.fixture()
@@ -53,7 +57,20 @@ def tokens():
                 "/auth/login", json={"email": user["email"], "password": user["password"]}
             )
             assert resp.status_code == 200, resp.text
-            out[user["role"]] = {"Authorization": f"Bearer {resp.json()['access_token']}"}
+            headers = {"Authorization": f"Bearer {resp.json()['access_token']}"}
+            out[user["email"]] = headers
+            # Sejak 2026-10-18 ada TIGA user per peran (Jakarta/Bandung/Surabaya).
+            # Kunci per peran harus tetap menunjuk user JAKARTA — tes lama memakai
+            # peran saja dan memverifikasi jarak/rujukan Jakarta. User lain bisa
+            # diakses lewat kunci emailnya.
+            if user["email"] in (
+                "sppg.head@demo.local",
+                "sppg.nutritionist@demo.local",
+                "bgn.monitor@demo.local",
+            ):
+                out[user["role"]] = headers
+            else:
+                out.setdefault(user["role"], headers)
         yield out
 
 
@@ -138,10 +155,10 @@ def test_suppliers_filter_by_commodity(client, tokens):
 
 
 def test_suppliers_filter_by_location(client, tokens):
-    """Cianjur: 4 pemasok kanonik + 1 pemasok demo (sejak Fase 7 satu per hub)."""
+    """Cianjur: 5 pemasok kanonik (termasuk beras) + 1 pemasok demo."""
     resp = client.get("/suppliers?location=cianjur", headers=tokens["bgn_monitor"])
     body = resp.json()
-    assert body["count"] == 5
+    assert body["count"] == 6
     assert {i["location"] for i in body["items"]} == {"Cianjur"}
 
 
@@ -157,7 +174,10 @@ def test_suppliers_search_and_pagination(client, tokens):
 
     page = client.get("/suppliers?limit=5&offset=30", headers=tokens["bgn_monitor"]).json()
     assert page["total"] == TOTAL_SUPPLIERS
-    assert page["count"] == TOTAL_SUPPLIERS - 30
+    # Jumlah baris halaman = min(limit, sisa baris) — bukan "total − offset",
+    # yang hanya kebetulan sama ketika sisa baris <= limit (41 pemasok kini
+    # menyisakan 11 baris untuk halaman ini, jadi yang benar 5).
+    assert page["count"] == min(page["limit"], TOTAL_SUPPLIERS - 30)
     assert page["limit"] == 5 and page["offset"] == 30
 
     first = client.get("/suppliers?limit=5", headers=tokens["bgn_monitor"]).json()

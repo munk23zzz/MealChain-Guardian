@@ -64,14 +64,18 @@ def test_reconciliation_preserves_row_counts():
                     "WHERE source='supplier_quote' AND origin='seed'"
                 )
             ).scalar()
-        assert prices == 44
-        # Fase 2 (2026-10-14): +30 pemasok DEMO (data/seed/suppliers_demo.json)
-        # supaya pemasok bisa ditampilkan di peta. Angka 14 = pemasok kanonik
-        # sprint1_seed.json; keutuhan mereka (nama, skor, id) diverifikasi
-        # terpisah di tests/test_suppliers_data.py.
-        assert suppliers == 14 + len(load_demo_rows())
-        assert refs == 30
-        assert quotes == 14
+        # Komoditas ke-4 (beras) menambah 10 referensi + 3 quote; angka kanonik
+        # telur/ayam/wortel tidak berubah.
+        assert prices == 57
+        # Fase 2 (2026-10-14): pemasok DEMO (data/seed/suppliers_demo.json)
+        # supaya pemasok bisa ditampilkan di peta. `suppliers` = kanonik (17 di
+        # sprint1_seed.json, kini termasuk 3 pemasok beras) + demo; keutuhan nama,
+        # skor, dan id diverifikasi terpisah di tests/test_suppliers_data.py.
+        # 3 baris demo beras = overlay koordinat pemasok kanonik bernama sama,
+        # jadi jumlah baris = kanonik + demo − 3 (bukan penjumlahan mentah).
+        assert suppliers == 17 + len(load_demo_rows()) - 3
+        assert refs == 40
+        assert quotes == 17
     finally:
         engine.dispose()
 

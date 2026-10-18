@@ -78,9 +78,22 @@ def test_kepala_sppg_jakarta_hanya_melihat_kiriman_ke_lokasinya(client, auth_hea
     assert data["summary"]["reference_location"] == "Jakarta"
 
 
+def _baris_cianjur_telur(data: dict) -> dict:
+    """Baris kiriman Supplier A Cianjur → telur, bukan `routes[0]`.
+
+    Urutan `/supplier-routes` bergantung data; sejak komoditas beras masuk,
+    `routes[0]` bisa baris lain. Tes ini soal baris tertentu, jadi pilih
+    berdasarkan identitasnya.
+    """
+    for row in data["routes"]:
+        if row["supplier_name"] == "Supplier A Cianjur" and row["commodity"] == "telur":
+            return row
+    raise AssertionError("baris Supplier A Cianjur/telur tidak ditemukan")
+
+
 def test_kiriman_ke_jakarta_punya_koordinat_dan_jarak_lurus(client, auth_headers):
     data = client.get("/supplier-routes", headers=auth_headers).json()
-    row = data["routes"][0]
+    row = _baris_cianjur_telur(data)
     assert row["supplier_name"] == "Supplier A Cianjur"
     assert row["commodity"] == "telur"
     assert row["quantity_kg"] == 800.0
@@ -96,7 +109,8 @@ def test_rute_jalan_dari_cache_membawa_geometri_dan_lebih_panjang_dari_lurus(
     client, auth_headers
 ):
     data = client.get("/supplier-routes", headers=auth_headers).json()
-    road = data["routes"][0]["road"]
+    row = _baris_cianjur_telur(data)
+    road = row["road"]
     assert road is not None, "cache rute harus sudah tersinkron (lihat fase-10)"
     assert road["source"] == "osrm"
     assert road["geometry"]["type"] == "LineString"
@@ -105,7 +119,7 @@ def test_rute_jalan_dari_cache_membawa_geometri_dan_lebih_panjang_dari_lurus(
     lon, lat = road["geometry"]["coordinates"][0]
     assert 106.5 < lon < 107.5 and -7.2 < lat < -6.4
     # Jalan selalu >= lurus; kalau tidak, berarti ada yang salah hitung
-    assert road["distance_km"] >= data["routes"][0]["straight_km"]
+    assert road["distance_km"] >= row["straight_km"]
     assert road["ratio_vs_straight"] >= 1.0
 
 

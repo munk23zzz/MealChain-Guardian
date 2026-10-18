@@ -1202,7 +1202,7 @@ async def demo_data_status(database_url: str | None = None) -> dict:
     try:
         async with maker() as session:
             tables: dict[str, dict] = {}
-            for model in (SupplyRecord, PriceSignal, MenuPlan):
+            for model in (SupplyRecord, DemandRecord, PriceSignal, MenuPlan):
                 seed_count = await _count_origin(session, model, "seed")
                 demo_count = await _count_origin(session, model, "demo")
                 entry: dict = {"seed": seed_count, "demo": demo_count}

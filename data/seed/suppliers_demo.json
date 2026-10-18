@@ -274,8 +274,7 @@
       "certification_status": "hygiene",
       "contact_name": "Agus Setiawan",
       "address": "Jl. Raya Pajajaran No. 88, Bogor",
-      "latitude": -6.61,
-      "longitude": 106.806
+      "offset_index": 1
     },
     {
       "name": "Beras Pandan Wangi Cianjur",
@@ -286,8 +285,7 @@
       "certification_status": "haccp",
       "contact_name": "Rina Kartika",
       "address": "Jl. Raya Bandung Km 5, Cianjur",
-      "latitude": -6.838,
-      "longitude": 107.138
+      "offset_index": 1
     }
   ]
 }

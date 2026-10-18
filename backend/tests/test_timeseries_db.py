@@ -103,7 +103,8 @@ def test_generate_menambah_demo_tanpa_mengubah_kanonik(restore_demo):
             f"generator tidak menambah baris demo di {table}"
         )
         assert after[f"{table}:demo"] == summary["counts"][name]["added"]
-    assert summary["counts"]["supply"]["planned"] == 30 * summary["actual_timestamps"]
+    # 10 lokasi × 4 komoditas (beras masuk sebagai komoditas ke-4).
+    assert summary["counts"]["supply"]["planned"] == 40 * summary["actual_timestamps"]
     # Cakupan rencana menu harus utuh: (demo + kanonik) = grid 10 lokasi × 66 hari.
     assert after["menu_plans:demo"] + after["menu_plans:seed"] == 660
 
@@ -192,7 +193,7 @@ def test_record_terbaru_per_pasangan_dari_deret_dan_kanonik_tetap_ada(restore_de
                 """
             )
         ).all()
-        assert len(rows) == 30
+        assert len(rows) == 40, "10 lokasi × 4 komoditas"
         assert {row.origin for row in rows} == {"demo"}
         assert {row.recorded_at for row in rows} == {
             datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
@@ -217,7 +218,7 @@ def test_record_terbaru_per_pasangan_dari_deret_dan_kanonik_tetap_ada(restore_de
                 """
             )
         ).scalar()
-    assert int(kanonik or 0) == 30, "baris kanonik per pasangan harus tetap ada"
+    assert int(kanonik or 0) == 40, "baris kanonik per pasangan harus tetap ada"
     # Nilai terbaru kini dari deret (deterministik, bukan angka kanonik 1.400 kg).
     assert float(cianjur_telur) != 1400.0
 

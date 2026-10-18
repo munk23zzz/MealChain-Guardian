@@ -65,9 +65,12 @@ def test_demo_file_shape_and_distribution():
     Angka dulu (Fase 2): 30 baris = 3 per hub × 10 kota. Yang berubah SADAR di
     Fase 7 (permintaan pemilik 2026-10-15): klaster Jakarta diperbesar dan
     dijadikan berjenjang, hub lain cukup satu pemasok lokal.
+
+    Komoditas ke-4 (beras) menambah 3 baris (1 klaster Jakarta + 2 hub) yang
+    sekaligus menjadi overlay koordinat bagi pemasok kanonik bernama sama.
     """
     rows = load_demo_rows()
-    assert len(rows) == 21, "12 pemasok klaster Jakarta + 9 hub lain"
+    assert len(rows) == 24, "13 pemasok klaster Jakarta + 11 baris hub lain"
 
     per_hub: dict[str, int] = {}
     per_commodity: dict[str, int] = {}
@@ -76,9 +79,9 @@ def test_demo_file_shape_and_distribution():
         per_commodity[row["commodity"]] = per_commodity.get(row["commodity"], 0) + 1
 
     assert len(per_hub) == 10, "semua 10 lokasi harus punya pemasok"
-    assert per_hub["Jakarta"] == 12, f"klaster Jakarta harus 12 baris: {per_hub}"
+    assert per_hub["Jakarta"] == 13, f"klaster Jakarta harus 13 baris: {per_hub}"
     assert min(per_hub.values()) >= 1, f"ada hub tanpa pemasok: {per_hub}"
-    assert per_commodity == {"ayam": 5, "telur": 6, "wortel": 10}
+    assert per_commodity == {"ayam": 5, "beras": 3, "telur": 6, "wortel": 10}
 
     # Klaster Jakarta WAJIB berkoordinat absolut: jaraknya ke SPPG Jakarta yang
     # diperiksa (aturan "terjangkau"), bukan geseran kecil dari titik hub.
@@ -119,7 +122,8 @@ def test_jakarta_cluster_is_stratified_in_distance(conn):
     assert len(menengah) >= 2, menengah
     assert len(jauh) >= 1, jauh
     # Urutan ujung-ujungnya dipaku supaya perubahan besar terlihat sadar.
-    assert min(distances, key=lambda n: distances[n]) == "Sayur Segar Kramat Jati"
+    # Tetangga terdekat sekarang "Beras Makmur Jakarta" (0,6 km dari titik SPPG).
+    assert min(distances, key=lambda n: distances[n]) == "Beras Makmur Jakarta"
     assert max(distances, key=lambda n: distances[n]) == "Wortel Lestari Subang"
 
 
@@ -285,17 +289,29 @@ def test_every_supplier_has_its_own_pin(conn):
 
 
 def test_canonical_supplier_names_all_present(conn):
-    """14 nama pemasok kanonik harus tetap ada, dan nama demo tidak menabraknya."""
+    """17 nama pemasok kanonik harus tetap ada; tabrakan nama harus identik.
+
+    Berkas demo juga dipakai sebagai OVERLAY KOORDINAT: seeder mencocokkan
+    lewat nama, jadi tiga pemasok beras kanonik (Jakarta/Bogor/Cianjur) memang
+    muncul di kedua berkas. Yang dilarang bukan tabrakan nama, melainkan
+    tabrakan yang menyembunyikan entitas berbeda — jadi profilnya wajib sama.
+    """
     canonical = _canonical_suppliers()
-    assert len(canonical) == 14
+    assert len(canonical) == 17
     canonical_names = {item["name"] for item in canonical}
     stored = {
         name
         for name in conn.execute(text("SELECT name FROM suppliers")).scalars()
     }
     assert canonical_names <= stored, f"pemasok kanonik hilang: {canonical_names - stored}"
-    demo_names = {row["name"] for row in load_demo_rows()}
-    assert not (canonical_names & demo_names), "nama demo menabrak nama kanonik"
+
+    by_name = {item["name"]: item for item in canonical}
+    for row in load_demo_rows():
+        canon = by_name.get(row["name"])
+        if canon is None:
+            continue
+        assert row["location"] == canon["location"], row["name"]
+        assert float(row["reliability_score"]) == float(canon["reliability_score"]), row["name"]
 
 
 def test_canonical_supplier_scores_match_seed_json(conn):
@@ -380,21 +396,27 @@ def test_demo_seeding_is_purely_additive():
 
 
 def test_demo_rows_use_their_natural_key_ids(conn):
-    """Pemasok demo (21 baris): id = UUID5 `demo_supplier::<nama>`, tanpa tabrakan."""
+    """Pemasok demo (24 baris): id = UUID5 `demo_supplier::<nama>`, tanpa tabrakan."""
     rows = conn.execute(text("SELECT id, name FROM suppliers")).all()
     stored = {str(r.id): r.name for r in rows}
+    overlay = {item["name"] for item in _canonical_suppliers()}
     demo_ids = {}
     for row in load_demo_rows():
+        if row["name"] in overlay:
+            # Baris overlay (3 pemasok beras) menempati id KANONIK — seeder
+            # mencocokkan lewat nama. Yang penting barisnya ada, bukan id demo.
+            assert row["name"] in stored.values(), row["name"]
+            continue
         expected = str(demo_supplier_id(row["name"]))
         assert stored.get(expected) == row["name"], f"id demo tidak sesuai: {row['name']}"
         demo_ids[expected] = row["name"]
     others = {i for i in stored if i not in demo_ids}
     assert not (set(demo_ids) & others), "id demo bertabrakan dengan baris non-demo"
-    assert len(others) == 14
+    assert len(others) == len(_canonical_suppliers())
 
 
 def test_seeding_is_idempotent_against_live_db():
-    """Menjalankan seeder dua kali: tidak ada baris baru, isi tetap 44."""
+    """Menjalankan seeder dua kali: tidak ada baris baru, isi tetap 38."""
     import asyncio
 
     from app.seed.suppliers_demo import seed_demo_suppliers

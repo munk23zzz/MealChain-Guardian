@@ -27,8 +27,9 @@ from app.main import app
 DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
 KOMODITAS_DEMO = ("telur", "ayam", "wortel", "beras")
 # Cakupan minimum deret demo per komoditas (terukur 2026-10-17: supply 10/10,
-# demand 8/10 lokasi — beras ikut: supply 10/10, demand 8/10). Nilai 8 memberi ruang satu-dua lokasi tanpa catatan —
-# yang memang ada dan harus DIKATAKAN — tetapi menolak penyusutan diam-diam.
+# demand 8/10 lokasi — beras ikut: supply 10/10, demand 8/10). Nilai 8 memberi
+# ruang satu-dua lokasi tanpa catatan — yang memang ada dan harus DIKATAKAN —
+# tetapi menolak penyusutan diam-diam.
 MIN_LOKASI_TERUKUR = 8
 
 

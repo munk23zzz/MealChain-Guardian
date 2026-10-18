@@ -43,6 +43,9 @@ PRICE_BOUNDS = {
     "telur": (24000, 34000),
     "ayam": (32000, 46000),
     "wortel": (14000, 30000),
+    # Komoditas ke-4 (commit "Beras: komoditas keempat"): beras medium ritel
+    # 2026 ada di 11.800–14.500/kg, jadi batas realistis 11.000–16.000.
+    "beras": (11000, 16000),
 }
 
 # Kesamplesan wilayah: rasio harga termahal/termurah per komoditas >= 1.05
