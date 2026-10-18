@@ -54,6 +54,9 @@ import {
   pusatKlaster,
 } from "../lib/map-cluster";
 import { penandaPeta, ringkasPenanda } from "../lib/map-a11y";
+// Kelas pin digabung, bukan ditimpa — kelas `maplibregl-marker` milik pustaka
+// membawa position:absolute; menghapusnya membuat pin bergeser dari koordinat.
+import { gabungKelasPin } from "../lib/map-pin-class";
 import {
   daftarkanSorot,
   langgananSorot,
@@ -350,7 +353,14 @@ function sembunyikanPin(marker: maplibregl.Marker): void {
 function refreshPin(marker: maplibregl.Marker, location: BalanceMapLocation): void {
   const el = marker.getElement();
   const wasActive = el.classList.contains("map-pin-active");
-  el.className = `map-pin map-pin-${pinTone(location.status)}${wasActive ? " map-pin-active" : ""}`;
+  // Kelas digabung, BUKAN ditimpa: `className = ...` ikut menghapus
+  // `maplibregl-marker` (pembawa position:absolute) yang dipasang MapLibre,
+  // sehingga penanda jatuh ke alur normal dan bergeser dari koordinatnya
+  // setiap kali penanda lain ditambah/dibuang. Lihat lib/map-pin-class.ts.
+  el.className = gabungKelasPin(
+    el.className,
+    `map-pin map-pin-${pinTone(location.status)}${wasActive ? " map-pin-active" : ""}`
+  );
   const accessible = pinAccessibleLabel(location);
   pasangAksesPin(el, marker, accessible);
   const label = el.querySelector(".map-pin-label");
@@ -422,7 +432,10 @@ function refreshSupplierPin(
   reachKm: number | null
 ): void {
   const el = marker.getElement();
-  el.className = supplierPinClass(row, showLabels, reachKm);
+  // Sama seperti pin lokasi: jangan menimpa seluruh className — kelas
+  // `maplibregl-marker` milik pustaka harus bertahan supaya penanda tetap
+  // `position: absolute` dan menempel di koordinatnya saat zoom in/out.
+  el.className = gabungKelasPin(el.className, supplierPinClass(row, showLabels, reachKm));
   const accessible = supplierAccessibleLabel(row, reachKm);
   pasangAksesPin(el, marker, accessible);
   const label = el.querySelector(".map-pin-label");
