@@ -88,3 +88,20 @@ class Batch(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    # Karantina (migrasi 019): batch ditahan dari kandidat alokasi sampai
+    # manusia melepas atau menyatakannya gagal. Lihat core/quarantine.py.
+    quarantine_status: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="none"
+    )
+    quarantine_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    quarantined_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    quarantine_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    quarantine_actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )

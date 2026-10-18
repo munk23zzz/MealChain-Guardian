@@ -20,6 +20,8 @@ export type SafetyBatch = {
   safety_status?: string | null;
   freshness_score?: number | string | null;
   usable_until?: string | null;
+  /** Kolom baru (migrasi 019); data lama tidak punya → dianggap "none". */
+  quarantine_status?: string | null;
 };
 
 export type SafetyTone = "ok" | "warn" | "danger" | "muted";
@@ -53,6 +55,40 @@ export function safetyTone(status: unknown): SafetyTone {
   }
 }
 
+/** Status karantina: batch ditahan tidak boleh dipakai menyusun alokasi. */
+export type QuarantineStatus = "none" | "quarantined" | "released" | "failed";
+
+const QUARANTINE_VALID: readonly QuarantineStatus[] = [
+  "none",
+  "quarantined",
+  "released",
+  "failed",
+];
+
+/** Nilai tak dikenal (data lama) diperlakukan "none", tidak diteruskan mentah. */
+export function quarantineStatus(value: unknown): QuarantineStatus {
+  const key = text(value)?.toLowerCase();
+  return QUARANTINE_VALID.find((status) => status === key) ?? "none";
+}
+
+export function quarantineLabel(status: QuarantineStatus): string {
+  switch (status) {
+    case "quarantined":
+      return "Ditahan";
+    case "released":
+      return "Dilepas";
+    case "failed":
+      return "Gagal";
+    default:
+      return "";
+  }
+}
+
+export function quarantineTone(status: QuarantineStatus): SafetyTone {
+  if (status === "quarantined" || status === "failed") return "danger";
+  return "muted";
+}
+
 /** Sisa jam sampai `usable_until`. null kalau tanggalnya tidak ada/tak terbaca. */
 export function hoursLeft(usableUntil: unknown, now: Date): number | null {
   const parsed = Date.parse(String(usableUntil ?? ""));
@@ -82,6 +118,9 @@ export type SafetyRow = {
   usableUntil: string;
   hoursLeft: number | null;
   hoursLabel: string;
+  /** Karantina: batch ditahan tidak boleh dipakai menyusun alokasi. */
+  quarantine: QuarantineStatus;
+  quarantineLabel: string;
 };
 
 /** Skor kesegaran 0..1 → persen (dipakai bersama halaman lain). */
@@ -110,6 +149,7 @@ export function safetyRows(batches: unknown, now: Date): SafetyRow[] {
   return list.map((batch) => {
     const kg = Number(batch?.quantity_kg);
     const hours = hoursLeft(batch?.usable_until, now);
+    const karantina = quarantineStatus(batch?.quarantine_status);
     return {
       id: text(batch?.id),
       location: text(batch?.location) ?? DASH,
@@ -121,6 +161,8 @@ export function safetyRows(batches: unknown, now: Date): SafetyRow[] {
       usableUntil: usableLabel(batch?.usable_until),
       hoursLeft: hours,
       hoursLabel: hoursLabel(hours),
+      quarantine: karantina,
+      quarantineLabel: quarantineLabel(karantina),
     };
   });
 }
@@ -133,6 +175,9 @@ export type SafetySummary = {
   unchecked: number;
   failedKg: number | null;
   failedLocations: string[];
+  /** Batch yang sedang DITAHAN: stoknya ada, tetapi tidak layak dialokasikan. */
+  quarantined: number;
+  quarantinedKg: number | null;
   hasFail: boolean;
 };
 
@@ -147,18 +192,27 @@ export function safetySummary(batches: unknown): SafetySummary {
  */
 export function safetySummaryOfRows(rows: SafetyRow[]): SafetySummary {
   const failed = rows.filter((row) => row.tone === "danger");
+  const ditahan = rows.filter((row) => row.quarantine === "quarantined");
+  const quarantinedKg = ditahan.reduce<number | null>(
+    (total, row) => (row.kg === null ? total : (total ?? 0) + row.kg),
+    null
+  );
   const failedKg = failed.reduce<number | null>(
     (total, row) => (row.kg === null ? total : (total ?? 0) + row.kg),
     null
   );
   return {
     total: rows.length,
-    safe: rows.filter((row) => row.tone === "ok").length,
+    // Batch yang ditahan tidak dihitung "aman": secara operasional ia bukan
+    // stok yang boleh dipakai, seberapa pun bagus skor kesegarannya.
+    safe: rows.filter((row) => row.tone === "ok" && row.quarantine !== "quarantined").length,
     failed: failed.length,
     needsVerification: rows.filter((row) => row.tone === "warn").length,
     unchecked: rows.filter((row) => row.tone === "muted").length,
     failedKg,
     failedLocations: failed.map((row) => row.location),
+    quarantined: ditahan.length,
+    quarantinedKg,
     hasFail: failed.length > 0,
   };
 }

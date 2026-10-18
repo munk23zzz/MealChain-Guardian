@@ -38,6 +38,7 @@ import {
   safetyDecisions,
   safetyRows,
   safetySummaryOfRows,
+  quarantineTone,
   sortByDeadline,
   usableLabel,
   type ReceiptCardRow,
@@ -46,6 +47,7 @@ import {
 import { formatKg } from "../lib/overview-format";
 import type { SupplierRoute } from "../lib/supplier-routes";
 import { LoadingState } from "./LoadingState";
+import Popup from "./Popup";
 import ShipmentCard from "./ShipmentCard";
 import ScrollHint from "./ScrollHint";
 
@@ -79,6 +81,7 @@ export default function FoodSafetyBoard({
   onRecordReceipt,
   loadReceipts,
   onOpenDecisions,
+  onKarantina,
 }: {
   batches: unknown[] | null;
   now: Date | null;
@@ -115,6 +118,12 @@ export default function FoodSafetyBoard({
   /** Riwayat catatan penerimaan sebuah batch (dibaca dari server). */
   loadReceipts?: (batchId: string) => Promise<unknown>;
   onOpenDecisions?: () => void;
+  /** Karantina: menahan/melapas/menggagalkan batch = keputusan manusia. */
+  onKarantina?: (
+    batchId: string,
+    aksi: "tahan" | "lepas" | "gagal",
+    alasan: string
+  ) => Promise<void>;
 }) {
   const clock = now ?? new Date(0);
   const [scope, setScope] = useState<"own" | "all">(ownLocation ? "own" : "all");
@@ -124,6 +133,15 @@ export default function FoodSafetyBoard({
   const [catatan, setCatatan] = useState("");
   const [riwayat, setRiwayat] = useState<ReceiptCardRow[]>([]);
   const [terimaId, setTerimaId] = useState<string | null>(null);
+  // Dialog alasan karantina: satu batch + satu aksi pada satu waktu.
+  const [karantina, setKarantina] = useState<{
+    batchId: string;
+    aksi: "tahan" | "lepas" | "gagal";
+    label: string;
+  } | null>(null);
+  const [alasanKarantina, setAlasanKarantina] = useState("");
+  const [karantinaSibuk, setKarantinaSibuk] = useState(false);
+  const [karantinaGalat, setKarantinaGalat] = useState<string | null>(null);
   // Kunci idempotensi Event 3 per batch: dikirim ULANG saat mengulang, sehingga
   // percobaan kedua dilayani dari catatan server (tidak membuat keputusan kembar).
   const kunciRef = useRef<Record<string, string>>({});
@@ -210,6 +228,40 @@ export default function FoodSafetyBoard({
       batal = true;
     };
   }, [idTerima]);
+
+  // Karantina: dialog alasan dulu, baru kirim. Tidak ada aksi karantina yang
+  // terjadi tanpa alasan tertulis — alasannya ikut masuk evidence ledger.
+  function bukaKarantina(
+    batchId: string,
+    aksi: "tahan" | "lepas" | "gagal",
+    label: string
+  ) {
+    setKarantina({ batchId, aksi, label });
+    setAlasanKarantina("");
+    setKarantinaGalat(null);
+  }
+
+  async function kirimKarantina() {
+    if (!karantina || !onKarantina) return;
+    const alasan = alasanKarantina.trim();
+    if (!alasan) {
+      setKarantinaGalat("Alasan wajib diisi.");
+      return;
+    }
+    setKarantinaSibuk(true);
+    setKarantinaGalat(null);
+    try {
+      await onKarantina(karantina.batchId, karantina.aksi, alasan);
+      setKarantina(null);
+      setAlasanKarantina("");
+    } catch (error) {
+      setKarantinaGalat(
+        error instanceof Error ? error.message : "Gagal menyimpan keputusan karantina."
+      );
+    } finally {
+      setKarantinaSibuk(false);
+    }
+  }
 
   async function periksa(id: string, where: Aksi["where"]) {
     if (!onRecheck) return;
@@ -435,6 +487,17 @@ export default function FoodSafetyBoard({
             <div className={`stat-tile${summary.needsVerification ? " stat-tile-warn" : ""}`}>
               <span className="stat-tile-value">{String(summary.needsVerification)}</span>
               <span className="stat-tile-label">Perlu verifikasi</span>
+            </div>
+            <div className={`stat-tile${summary.quarantined ? " stat-tile-danger" : ""}`}>
+              <span className="stat-tile-value">{String(summary.quarantined)}</span>
+              <span className="stat-tile-label">Ditahan (karantina)</span>
+              {summary.quarantined ? (
+                <span className="stat-tile-note">
+                  {summary.quarantinedKg === null
+                    ? "tidak boleh dialokasikan"
+                    : `${formatKg(summary.quarantinedKg)} tidak boleh dialokasikan`}
+                </span>
+              ) : null}
             </div>
             {ownLocation ? (
               <div className={`stat-tile${kedaluwarsaJumlah ? " stat-tile-warn" : ""}`}>
@@ -702,7 +765,7 @@ export default function FoodSafetyBoard({
                     </th>
                     <th scope="col">Layak sampai</th>
                     <th scope="col">Sisa masa</th>
-                    {canMutate && onRecheck ? <th scope="col">Tindakan</th> : null}
+                    {canMutate && (onRecheck || onKarantina) ? <th scope="col">Tindakan</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -715,6 +778,17 @@ export default function FoodSafetyBoard({
                         <td className="num">{row.kg === null ? "—" : formatKg(row.kg)}</td>
                         <td>
                           <span className={`board-badge board-badge-${row.tone}`}>{row.statusLabel}</span>
+                          {row.quarantine !== "none" ? (
+                            <>
+                              {" "}
+                              <span
+                                className={`board-badge board-badge-${quarantineTone(row.quarantine)}`}
+                                title="Batch ditahan dari kandidat alokasi sampai diverifikasi"
+                              >
+                                {row.quarantineLabel}
+                              </span>
+                            </>
+                          ) : null}
                         </td>
                         <td className="num">{row.freshness}</td>
                         <td>{row.usableUntil}</td>
@@ -726,7 +800,7 @@ export default function FoodSafetyBoard({
                           ) : null}
                           {state.detail}
                         </td>
-                        {canMutate && (onRecheck || onTriggerDisruption) ? (
+                        {canMutate && (onRecheck || onTriggerDisruption || onKarantina) ? (
                           <td>
                             <div className="safety-row-actions">
                               {row.id && onRecheck ? (
@@ -749,6 +823,40 @@ export default function FoodSafetyBoard({
                                   {sibuk === `putus-${row.id}` ? "Mengajukan…" : "Ajukan keputusan"}
                                 </button>
                               ) : null}
+                              {row.id && onKarantina ? (
+                                row.quarantine === "quarantined" ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="button button-secondary"
+                                      onClick={() =>
+                                        bukaKarantina(String(row.id), "lepas", "Lepas dari karantina")
+                                      }
+                                    >
+                                      Lepas
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="button button-secondary"
+                                      onClick={() =>
+                                        bukaKarantina(String(row.id), "gagal", "Nyatakan gagal")
+                                      }
+                                    >
+                                      Gagal
+                                    </button>
+                                  </>
+                                ) : row.quarantine === "failed" ? null : (
+                                  <button
+                                    type="button"
+                                    className="button button-secondary"
+                                    onClick={() =>
+                                      bukaKarantina(String(row.id), "tahan", "Tahan batch")
+                                    }
+                                  >
+                                    Tahan
+                                  </button>
+                                )
+                              ) : null}
                               {!row.id ? "—" : null}
                             </div>
                           </td>
@@ -766,6 +874,44 @@ export default function FoodSafetyBoard({
           <p className={aksi.nada === "danger" ? "board-alert" : "evidence-note"}>{aksi.teks}</p>
         ) : null}
       </article>
+
+      {karantina ? (
+        <Popup
+          open
+          onClose={() => setKarantina(null)}
+          title={karantina.label}
+          description="Karantina menahan batch dari kandidat alokasi sampai keputusan Anda tercatat. Alasan wajib diisi dan ikut tersimpan di evidence ledger."
+          labelledBy="karantina-title"
+        >
+          <label className="field">
+            <span className="field-label">Alasan (tercatat di ledger)</span>
+            <textarea
+              value={alasanKarantina}
+              onChange={(event) => setAlasanKarantina(event.target.value)}
+              rows={3}
+              placeholder="mis. log suhu menunjukkan excursion 12 menit, menunggu cek fisik"
+            />
+          </label>
+          {karantinaGalat ? <p className="board-alert">{karantinaGalat}</p> : null}
+          <div className="popup-actions">
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => setKarantina(null)}
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              className="button button-primary"
+              disabled={karantinaSibuk || !alasanKarantina.trim()}
+              onClick={() => void kirimKarantina()}
+            >
+              {karantinaSibuk ? "Menyimpan…" : "Simpan keputusan"}
+            </button>
+          </div>
+        </Popup>
+      ) : null}
 
       {decisions ? (
         <article className="card">

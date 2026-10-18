@@ -45,4 +45,6 @@ def test_database_sudah_migrasi_018():
     finally:
         engine.dispose()
     assert WORKER_FIELDS.issubset(names)
-    assert version == "018_agent_trace_worker_fields"
+    # Head boleh maju (019 = karantina batch); yang dijaga tes ini adalah kolom
+    # worker sudah ada, bukan bahwa tidak ada migrasi sesudahnya.
+    assert version >= "018_agent_trace_worker_fields"

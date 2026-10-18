@@ -17,6 +17,7 @@ import {
   fetchReceipts,
   login,
   recordReceipt,
+  ubahKarantina,
   reproposeAction,
   seedDemo,
   triggerSafetyDisruption,
@@ -416,6 +417,18 @@ export default function Home() {
     const hasil = await triggerSafetyDisruption(batchId, me.location_id, operationKey, token);
     await Promise.all([decisionsQuery.refetch(), todayQuery.refetch()]);
     return hasil;
+  };
+
+  // Karantina batch (keputusan manusia): simpan alasan → server menulis blok
+  // ledger sendiri, lalu data batch dimuat ulang supaya tabel tidak berbohong.
+  const safetyKarantina = async (
+    batchId: string,
+    aksi: "tahan" | "lepas" | "gagal",
+    alasan: string
+  ) => {
+    if (!token) throw new Error("sesi tidak ada");
+    await ubahKarantina(batchId, aksi, alasan, token);
+    await todayQuery.refetch();
   };
 
   // Feed (14 Okt 2026): cakupan + pencarian + urutan. Cakupan "action" =
@@ -1591,6 +1604,7 @@ export default function Home() {
               recordReceipt(batchId, checked, catatan, token ?? "")
             }
             loadReceipts={(batchId) => fetchReceipts(batchId, token ?? "")}
+            onKarantina={safetyKarantina}
             onOpenDecisions={() => setTab("evidence")}
           />
         )}

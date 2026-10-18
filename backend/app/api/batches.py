@@ -37,6 +37,7 @@ async def list_batches(
             Batch.safety_status,
             Batch.freshness_score,
             Batch.usable_until,
+            Batch.quarantine_status,
             Batch.location_id,
             Location.name.label("location"),
             Commodity.name.label("commodity"),
@@ -60,6 +61,9 @@ async def list_batches(
                     float(r.freshness_score) if r.freshness_score is not None else None
                 ),
                 "usable_until": r.usable_until.isoformat() if r.usable_until else None,
+                # Karantina: batch ditahan tidak boleh dihitung sebagai stok
+                # layak pakai walau kilogram fisiknya masih tercatat.
+                "quarantine_status": r.quarantine_status,
             }
             for r in rows
         ]

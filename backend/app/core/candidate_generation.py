@@ -122,6 +122,11 @@ def generate_candidates(
     for b in batches:
         if b["safety_status"] == "fail" or b["freshness_status"] == "fail":
             continue
+        # Batch yang DITAHAN (karantina) tidak boleh menyumbang kilogram ke
+        # kandidat sama sekali — beda dari needs_verification yang tetap masuk
+        # sebagai review-required. Setelah dilepas, batch kembali dihitung.
+        if b.get("quarantine_status") == "quarantined":
+            continue
         if "supplier_id" in b and not b["supplier_id"]:
             continue  # supplier_unknown: explicit identity cannot be inferred
         key = (b["location"], b["commodity"], b.get("supplier_id"))

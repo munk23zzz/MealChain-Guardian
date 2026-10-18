@@ -175,6 +175,10 @@ async def fetch_operational_facts(db, as_of):
                 "freshness_score": _score(Decimal(str(score))),
                 "freshness_status": classify_freshness(float(score)),
                 "safety_status": b.safety_status,
+                # Karantina dibaca oleh generate_candidates: batch ditahan
+                # dikeluarkan dari kandidat, jadi kilogramnya tidak masuk
+                # available_kg walau stok fisik tetap tercatat.
+                "quarantine_status": b.quarantine_status,
             }
         )
 

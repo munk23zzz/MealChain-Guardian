@@ -187,6 +187,39 @@ export async function evaluateSafety(batchId: string, token: string): Promise<Sa
   });
 }
 
+export type KarantinaAksi = "tahan" | "lepas" | "gagal";
+
+export type KarantinaResult = {
+  batch_id: string;
+  quarantine_status: "none" | "quarantined" | "released" | "failed";
+  quarantine_reason: string;
+  quarantined_at: string | null;
+  quarantine_updated_at: string;
+  safety_status: string;
+  ledger_height: number;
+  ledger_hash: string;
+};
+
+/**
+ * Karantina batch: keputusan manusia, bukan langkah agent.
+ * `alasan` wajib — ia ikut tersimpan sebagai blok evidence ledger di server.
+ */
+export async function ubahKarantina(
+  batchId: string,
+  aksi: KarantinaAksi,
+  alasan: string,
+  token: string
+): Promise<KarantinaResult> {
+  return request(`/batches/${batchId}/quarantine`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ aksi, alasan }),
+  });
+}
+
 export type FreshnessCheck = {
   freshness_score: number;
   status: string;

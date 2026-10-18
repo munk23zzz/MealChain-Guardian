@@ -28,6 +28,7 @@ from app.api.kpi import router as kpi_router
 from app.api.ledger import router as ledger_router
 from app.api.logistics import router as logistics_router
 from app.api.price import router as price_router
+from app.api.quarantine import router as quarantine_router
 from app.api.receipts import router as receipts_router
 from app.api.safety import router as safety_router
 from app.api.sap_orders import router as sap_orders_router
@@ -95,6 +96,7 @@ app.include_router(price_router)
 app.include_router(logistics_router)
 app.include_router(balance_router)
 app.include_router(batches_router)
+app.include_router(quarantine_router)
 # 016: catatan penerimaan barang ("Lainnya" dari kartu Penerimaan barang).
 app.include_router(receipts_router)
 app.include_router(cost_router)
