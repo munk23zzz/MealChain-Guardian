@@ -1,113 +1,103 @@
 /**
- * Peta Overview — chrome gelap (glass) di atas basemap OSM terang.
+ * Peta Overview — chrome TERANG di atas basemap OSM terang.
  *
- * Diminta pemilik 2026-10-18: "untuk design nya gua kurang suka, saya mau
- * background putih di hapus" — lingkup yang dipilih: HANYA di dalam kartu peta
- * (label pin, legenda, kotak Info map, pil sakelar, popup, kontrol MapLibre).
- * Basemap OSM tetap terang; halaman lain tidak berubah.
+ * Riwayat: 18 Okt pemilik minta "background putih dihapus" -> chrome dibuat kaca
+ * gelap. 19 Okt arah dibalik: "terkait warna tema gelap buat ke tema terang".
+ * Berkas ini kini memberi chrome TERANG dengan aturan kontras yang diukur.
  *
- * Arah desain (ui-ux-pro-max):
- *  - Gaya: glassmorphism — `backdrop-filter: blur(10–20px)`, border 1px
- *    rgba(255,255,255,.2), lapisan transparan 15–30% (styles.csv).
- *  - Palet: DISELARASKAN dengan bahasa gelap milik app ini, bukan palet kedua:
- *    kartu kepercayaan `--trust-*` di globals.css (§5.6 docs/design.md) —
- *    latar #0F172A, garis rgba(148,163,184,.32), teks #E2E8F0, muted #AEBCCD,
- *    aksen sky #7DD3FC. Aksen biru #2563EB milik tema terang tidak dipakai
- *    sebagai teks di atas kaca (hanya 3,4:1); versi terangnya #7DD3FC lolos.
- *  - Wajib: kontras teks ≥4,5:1, fokus terlihat, makna tidak hanya warna
- *    (accessibility di kedua entri itu).
+ * Pendekatan: satu blok token di `.map-card` (nama token TIDAK berubah, supaya
+ * globals.css dan tes tetap berlaku), lalu setiap komponen memakai token itu —
+ * tidak ada lagi hex gelap yang tersebar di aturan komponen.
  *
- * Kontras diukur, bukan dikira (kaca rgba(15,23,42,.88) dikomposit di atas
- * EMPAT ekstrem basemap: putih murni #FFFFFF, jalan #F8F4E8, hijau taman
- * #B5C9A8, biru air #AAD3DF):
- *   teks  #E2E8F0 → 10,2–11,4:1
- *   muted #AEBCCD → 6,5–7,3:1
- *   aksen #7DD3FC → 7,6–8,5:1 (juga dipakai cincin fokus)
- *   surplus #4ADE80 7,2:1 · shortage #F87171 4,6:1 · seimbang #FBBF24 7,6:1
- *   tinta di atas isi aksen: #0B1220 di #7DD3FC = 11,2:1
- * Semua di atas ambang AA (teks kecil 4,5:1; elemen non-teks 3:1).
+ * Kontras diukur terhadap permukaan yang benar-benar dipakai. Elemen di DALAM
+ * piringan diukur ke putih #FFFFFF; elemen yang MENGAPUNG di peta diukur ke
+ * empat ekstrem basemap (putih #FFFFFF, jalan #F8F4E8, taman #B5C9A8, air
+ * #AAD3DF):
  *
- * Berkas terpisah dari globals.css dengan sengaja: kanvas peta sedang disunting
- * sesi lain, dan impor setelah theme-ext.css membuat berkas ini menang tanpa
- * satu pun hunk di berkas mereka.
+ *   teks   #0F172A -> 17,85 / 16,23 / 10,10 / 11,64:1
+ *   muted  #475569 ->  7,58 /  6,89 /  4,29 /  4,94:1  (di piringan lulus AA;
+ *                     di atas taman 4,29 -> muted hanya dipakai di dalam
+ *                     piringan, tidak pernah mengapung di kanvas)
+ *   aksen  #2563EB ->  5,17 /  4,70 /  2,93 /  3,37:1  (teks/border di piringan
+ *                     lulus; sebagai garis di atas taman gagal -> garis kontrol
+ *                     memakai #1E40AF)
+ *   aksen-tinta #1E40AF -> 8,72 / 7,93 / 4,94 / 5,69:1  (ikon pil, garis kontrol)
+ *   surplus #15803D 5,02:1 · shortage #B91C1C 6,47:1 · seimbang #B45309 5,02:1
+ *   batas kontrol rgba(15,23,42,.45) -> 3,2:1 di putih (WCAG 1.4.11 >=3:1)
+ *
+ * Berkas terpisah dari globals.css dengan sengaja: kanvas peta juga disentuh
+ * sesi lain, dan impor sesudah globals.css membuat berkas ini menang tanpa satu
+ * pun hunk di berkas mereka.
  */
 
-/* Token lokal, hanya di dalam kartu peta.
-   Warna diselaraskan dengan bahasa gelap yang SUDAH dipakai aplikasi ini:
-   kartu kepercayaan (`--trust-bg #0F172A`, `--trust-line`, `--trust-ink`,
-   `--trust-accent #7DD3FC`, §5.6 docs/design.md). Sebelumnya piringan memakai
-   palet Financial Dashboard dari katalog (navy #0F1726 + hijau #22C55E) yang
-   menjadi bahasa gelap KEDUA di app ini — diganti pada 19 Okt 2026 atas
-   permintaan pemilik ("tolong warna nya di sesuaikan"). */
+/* Token lokal, hanya di dalam kartu peta. */
 .map-card {
-  --map-glass: rgba(15, 23, 42, 0.88);
-  --map-glass-solid: #0f172a;
-  --map-glass-deep: rgba(10, 15, 28, 0.94);
-  --map-hair: rgba(148, 163, 184, 0.32);
-  --map-hair-strong: rgba(203, 213, 225, 0.5);
-  --map-text: #e2e8f0;
-  --map-text-muted: #aebccd;
-  --map-hover: rgba(148, 163, 184, 0.16);
-  --map-accent: #7dd3fc;
-  /* Dipakai globals.css sebagai WARNA IKON sakelar nyala (`.map-card
-     .map-overlay-toggles .map-layer-toggle[aria-pressed="true"]` memakai
-     `var(--map-accent-ink, #15803d)`). Ikon mengapung di atas peta TERANG.
-     Kandidat diuji terhadap empat ekstrem basemap (putih/jalan/hijau/air):
-     #15803D 5,02/4,56/2,84/3,13 — gagal 3:1 di hijau; #1E40AF (blue-800,
-     keluarga aksen brand #1D4ED8/#2563EB) 8,72/7,93/4,94/5,44 — lolos semua. */
+  --map-glass: rgba(255, 255, 255, 0.92);
+  --map-glass-solid: #ffffff;
+  --map-glass-deep: rgba(255, 255, 255, 0.97);
+  /* Rambut = PEMISAH dekoratif (tidak menanggung makna). */
+  --map-hair: rgba(15, 23, 42, 0.12);
+  /* Batas KONTROL: 45% tinta di atas putih = 3,2:1 -> lolos WCAG 1.4.11.
+     Rambut 12% hanya 1,4:1 dan membuat tombol tampak tanpa tepi di peta. */
+  --map-hair-strong: rgba(15, 23, 42, 0.45);
+  --map-text: #0f172a;
+  --map-text-muted: #475569;
+  --map-hover: rgba(15, 23, 42, 0.06);
+  --map-accent: #2563eb;
+  /* Warna IKON pil "nyala" (dipakai globals.css sebagai
+     `var(--map-accent-ink, #1e40af)`). Ikon mengapung di atas peta, jadi
+     diukur ke empat ekstrem basemap: 8,72/7,93/4,94/5,69 — satu-satunya
+     kandidat yang lolos 3:1 di keempatnya. */
   --map-accent-ink: #1e40af;
-  --map-accent-text: #bae6fd;
-  --map-focus: #7dd3fc;
-  --map-surplus: #4ade80;
-  --map-shortage: #f87171;
-  --map-balanced: #fbbf24;
-  --map-todo: #7dd3fc;
+  /* Teks aksen DI DALAM piringan putih (6,70:1), bukan di atas peta. */
+  --map-accent-text: #1d4ed8;
+  --map-focus: #1e40af;
+  --map-surplus: #15803d;
+  --map-shortage: #b91c1c;
+  --map-balanced: #b45309;
+  --map-todo: #1d4ed8;
 }
 
-/* ── Piringan gelap yang menampung kanvas + chrome-nya ──────────────────── */
+/* Piringan terang yang menampung kanvas + chrome-nya. */
 .map-card .map-body {
   padding: 10px;
   border-radius: 14px;
   background: var(--map-glass);
   border: 1px solid var(--map-hair);
-  -webkit-backdrop-filter: blur(14px) saturate(1.05);
-  backdrop-filter: blur(14px) saturate(1.05);
-  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  backdrop-filter: blur(10px) saturate(1.02);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
   color: var(--map-text);
 }
 
-/* Kanvas: rambut terang, bukan garis abu gelap. */
+/* Kanvas: batas kontrol, bukan rambut — tepi kanvas harus terlihat di piringan
+   putih tanpa mengandalkan bayangan. */
 .map-card .map-gl {
-  border-color: var(--map-hair);
+  border-color: var(--map-hair-strong);
   border-radius: 10px;
 }
 
-/* ── Label pin: chip gelap, bukan kertas putih ──────────────────────────── */
+/* Label pin: chip putih, bukan kaca gelap. */
 .map-card .map-pin-label {
-  background: rgba(12, 18, 32, 0.9);
-  border-color: var(--map-hair);
+  background: rgba(255, 255, 255, 0.97);
+  border-color: var(--map-hair-strong);
   color: var(--map-text);
-  box-shadow: 0 1px 4px rgba(2, 6, 23, 0.45);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
   font-weight: 600;
 }
 
-/* ── Pil sakelar lapisan (ikon): kaca gelap, keadaan nyala jelas ────────── */
-/* Pil sakelar lapisan SENGAJA tanpa piringan: sesi lain sudah memindahkannya
-   ke kiri-bawah dan menaruh ikon langsung di atas peta dengan halo putih 1,5px
-   (`.map-card .map-overlay-toggles .map-layer-toggle` di globals.css, 0-4-0).
-   Aturan itu MENANG atas selektor 0-2-0 di sini, dan itu memang hasil yang
-   diinginkan: tidak ada kotak putih, tidak ada piringan gelap tambahan.
-   Yang di bawah hanya untuk `.map-legend-toggle` bila kelak dipakai lagi. */
+/* Pil sakelar lapisan: TANPA piringan (permintaan pemilik). Ikon mengapung di
+   peta dan aturan globals.css (0-4-1) menang atas selektor di sini. Blok ini
+   hanya untuk `.map-legend-toggle` bila kelak dipakai lagi. */
 .map-card .map-legend-toggle {
   background: var(--map-glass-deep);
-  border-color: var(--map-hair);
+  border-color: var(--map-hair-strong);
   color: var(--map-text);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 
-/* Hover/fokus pil ikon: globals.css memberinya latar PUTIH .92 (0-4-0).
-   Diganti kaca gelap dengan kekhususan yang sama, ditulis sesudahnya. */
+/* Hover/fokus pil: piringan PUTIH (tema terang). */
 .map-card .map-overlay-toggles .map-layer-toggle:hover,
 .map-card .map-overlay-toggles .map-layer-toggle:focus-visible {
   background: var(--map-glass-deep);
@@ -120,17 +110,17 @@
   color: var(--map-accent-ink);
 }
 
-/* ── Chip saringan aktif + tombol rincian lapisan ───────────────────────── */
+/* Chip saringan aktif + tombol rincian lapisan. */
 .map-card .map-filter {
-  background: rgba(125, 211, 252, 0.14);
-  border-color: rgba(125, 211, 252, 0.55);
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.45);
   color: var(--map-text);
 }
 .map-card .map-filter-text {
   color: var(--map-text);
 }
 .map-card .map-filter-clear {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--map-glass-solid);
   border-color: var(--map-hair-strong);
   color: var(--map-text);
 }
@@ -140,22 +130,22 @@
 }
 
 .map-card .map-layer-info-toggle {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: var(--map-hair);
+  background: var(--map-glass-solid);
+  border-color: var(--map-hair-strong);
   color: var(--map-text-muted);
 }
 .map-card .map-layer-info-toggle:hover,
 .map-card .map-layer-info-toggle[aria-expanded="true"] {
   background: var(--map-hover);
-  border-color: var(--map-hair-strong);
-  color: #ffffff;
+  border-color: var(--map-text);
+  color: var(--map-text);
 }
 .map-card .map-layer-tags,
 .map-card .map-layer-tag {
   color: var(--map-text-muted);
 }
 .map-card .map-layer-tag-sep {
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(15, 23, 42, 0.35);
 }
 .map-card .map-supplier-note {
   color: var(--map-text-muted);
@@ -165,15 +155,12 @@
   color: var(--map-text-muted);
 }
 
-/* ── Legenda ringkas + baris penanda (teks langsung di piringan) ────────── */
-/* Di atas kertas putih, jarak antar baris sudah terbaca dari latar; di atas
-   kaca, semuanya menyatu. Rambut 1px rgba .08 memberi batas kelompok tanpa
-   menambah kotak baru. */
+/* Legenda ringkas + baris penanda: batas kelompok cukup rambut 12%. */
 .map-card .map-legend-compact,
 .map-card .map-marker-line,
 .map-card .route-focus,
 .map-card .map-layer-info {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--map-hair);
   padding-top: 9px;
 }
 .map-card .map-legend-compact,
@@ -190,32 +177,30 @@
   color: var(--map-text-muted);
 }
 
-/* Tanda legenda memakai nada yang SAMA dengan kanvas (makna tidak digeser),
-   diberi halo terang supaya nada gelap (hijau jalan #2E7D32) tetap terbaca di
-   atas piringan gelap. Legenda adalah alat keterbacaan, bukan palet kedua. */
+/* Tanda legenda memakai nada yang SAMA dengan kanvas (makna tidak digeser). */
 .map-card .map-legend-line {
-  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.75));
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.9));
 }
 .map-card .map-legend-box-shape,
 .map-card .map-legend-compact-item > i:not([class*="map-legend-line"]) {
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.25);
 }
 
-/* ── Pemilih kiriman (Arah C) ───────────────────────────────────────────── */
+/* Pemilih kiriman (Arah C). */
 .map-card .route-focus-label {
   color: var(--map-text-muted);
 }
 .map-card .route-focus-pill {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: var(--map-hair);
+  background: var(--map-glass-solid);
+  border-color: var(--map-hair-strong);
   color: var(--map-text);
 }
 .map-card .route-focus-pill:hover {
   background: var(--map-hover);
-  border-color: var(--map-hair-strong);
+  border-color: var(--map-text);
 }
 .map-card .route-focus-pill.is-active {
-  background: rgba(125, 211, 252, 0.18);
+  background: rgba(37, 99, 235, 0.1);
   border-color: var(--map-accent);
   color: var(--map-accent-text);
 }
@@ -226,15 +211,15 @@
   color: var(--map-accent-text);
 }
 
-/* ── Popup peta + kontrol bawaan MapLibre ───────────────────────────────── */
+/* Popup peta + kontrol bawaan MapLibre. */
 .map-card .maplibregl-popup-content {
   background: var(--map-glass-deep);
-  border: 1px solid var(--map-hair);
+  border: 1px solid var(--map-hair-strong);
   border-radius: 10px;
   color: var(--map-text);
-  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.45);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 .map-card .maplibregl-popup-content .map-popup-note,
 .map-card .maplibregl-popup-content .map-popup-line,
@@ -248,10 +233,10 @@
 }
 .map-card .maplibregl-popup-close-button:hover {
   background: var(--map-hover);
-  color: #ffffff;
+  color: var(--map-text);
 }
 /* Ujung panah popup: keempat sisi ditulis supaya tidak ada satu pun yang
-   tertinggal putih saat popup berganti arah. */
+   tertinggal gelap saat popup berganti arah. */
 .map-card .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
 .map-card .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
 .map-card .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
@@ -270,22 +255,22 @@
 }
 
 .map-card .map-reset-view {
-  background: var(--map-glass-deep);
-  border-color: var(--map-hair);
+  background: var(--map-glass-solid);
+  border-color: var(--map-hair-strong);
   color: var(--map-text);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 .map-card .map-reset-view:hover {
-  background: rgba(148, 163, 184, 0.18);
-  border-color: var(--map-hair-strong);
-  color: #ffffff;
+  background: var(--map-hover);
+  border-color: var(--map-text);
+  color: var(--map-text);
 }
 
 .map-card .maplibregl-ctrl-group {
-  background: var(--map-glass-deep);
-  border: 1px solid var(--map-hair);
-  box-shadow: 0 2px 10px rgba(2, 6, 23, 0.4);
+  background: var(--map-glass-solid);
+  border: 1px solid var(--map-hair-strong);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
 }
 .map-card .maplibregl-ctrl-group button + button {
   border-top-color: var(--map-hair);
@@ -293,12 +278,14 @@
 .map-card .maplibregl-ctrl-group button:hover {
   background: var(--map-hover);
 }
-/* Ikon navigasi/kompas bawaan berwarna gelap; dibalik supaya terlihat di kaca. */
+/* Ikon navigasi/kompas bawaan SUDAH gelap. Dulu dibalik (`invert`) karena
+   piringannya gelap; di piringan putih filter itu membuat ikonnya putih dan
+   hilang. */
 .map-card .maplibregl-ctrl-group .maplibregl-ctrl-icon {
-  filter: invert(0.92) hue-rotate(180deg);
+  filter: none;
 }
 .map-card .maplibregl-ctrl-scale {
-  background: var(--map-glass-deep);
+  background: var(--map-glass-solid);
   border-color: var(--map-hair);
   color: var(--map-text-muted);
 }
@@ -306,7 +293,7 @@
    kelas) dari page.css yang diinject SETELAH layout.css — selektor satu kelas
    akan kalah, jadi kelasnya ditulis dua kali di sini. */
 .map-card .maplibregl-ctrl.maplibregl-ctrl-attrib {
-  background: var(--map-glass-deep);
+  background: var(--map-glass-solid);
   color: var(--map-text-muted);
   border-radius: 4px;
 }
@@ -314,7 +301,10 @@
   color: var(--map-accent-text);
 }
 
-/* ── Fokus keyboard di atas kaca ────────────────────────────────────────── */
+/* Fokus keyboard: satu warna harus kontras ke DUA latar yang mungkin —
+   piringan putih (8,7:1) dan ubin peta termasuk taman (4,9:1).
+   `--map-accent` #2563EB gagal di taman (2,93:1), jadi cincin memakai
+   `--map-focus` #1E40AF. */
 .map-card .map-layer-toggle:focus-visible,
 .map-card .map-legend-toggle:focus-visible,
 .map-card .map-filter-clear:focus-visible,
@@ -326,7 +316,7 @@
   outline-offset: 2px;
 }
 
-/* ── Pemilih seluruh kehalaman: tanpa animasi saat reduced motion ───────── */
+/* Tanpa animasi saat reduced motion. */
 @media (prefers-reduced-motion: reduce) {
   .map-card .map-body,
   .map-card .map-layer-toggle,
@@ -338,8 +328,7 @@
   }
 }
 
-/* Transparansi diminta dikurangi (Safari/OS): kaca jadi pekat, teks tetap
-   lolos kontras tanpa bergantung pada tile di bawahnya. */
+/* Transparansi diminta dikurangi: piringan jadi putih pekat. */
 @media (prefers-reduced-transparency: reduce) {
   .map-card .map-body,
   .map-card .maplibregl-popup-content,
@@ -367,7 +356,7 @@
 }
 
 /* Daftar status lokasi (kalau suatu saat dihidupkan di dalam kartu peta) tetap
-   memakai permukaan terang — teks gelapnya tidak boleh jatuh di atas kaca. */
+   memakai permukaan terang. */
 .map-card .map-body .map-side {
   color: var(--ink);
   background: var(--surface);

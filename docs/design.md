@@ -1788,3 +1788,50 @@ legenda/panel `rgba(255,255,255,.08)`.
 
 Artefak: `ui-audit/p22-bingkai-diam.png`, `p22-bingkai-hover.png`, `p22-bingkai-fokus.png`
 (DPI 1x dan 3x).
+
+## 15. Chrome peta: tema gelap → tema terang (19 Okt 2026)
+
+Permintaan pemilik: *"terkait warna tema gelap buat ke tema terang"*. Lingkup: chrome di dalam
+kartu peta saja (label pin, legenda, panel, pil, popup, kontrol MapLibre, atribusi). Basemap OSM
+memang sudah terang; yang gelap hanya chromenya.
+
+Cara: `frontend/app/map-console.css` diubah menjadi tema terang dengan **nama token yang sama**
+(`--map-glass`, `--map-glass-deep`, `--map-text`, `--map-hair-strong`, `--map-accent-ink`,
+`--map-focus`, …), sehingga aturan di `globals.css` dan tes lama tetap berlaku tanpa disentuh.
+
+| Token | Gelap (sebelum) | Terang (sesudah) | Alasan |
+|---|---|---|---|
+| `--map-glass` | `rgba(15,23,42,.88)` | `rgba(255,255,255,.92)` | piringan kartu |
+| `--map-glass-deep` | `rgba(10,15,28,.94)` | `rgba(255,255,255,.97)` | chip, popup, kontrol |
+| `--map-hair` | `rgba(148,163,184,.32)` | `rgba(15,23,42,.12)` | pemisah dekoratif |
+| `--map-hair-strong` | `rgba(203,213,225,.5)` | `rgba(15,23,42,.45)` | batas kontrol = **3,2:1** (WCAG 1.4.11) |
+| `--map-text` | `#E2E8F0` | `#0F172A` | 17,85:1 di putih |
+| `--map-text-muted` | `#AEBCCD` | `#475569` | 7,58:1 di putih |
+| `--map-accent` | `#7DD3FC` | `#2563EB` | aksen brand; 5,17:1 di piringan |
+| `--map-accent-ink` | `#1E40AF` | `#1E40AF` | ikon pil mengapung di peta — 8,72/7,93/4,94/5,69 di empat ekstrem basemap |
+| `--map-focus` | `#7DD3FC` | `#1E40AF` | 8,7:1 di piringan putih, 4,9:1 di ubin taman |
+| surplus / shortage / seimbang | `#4ADE80` / `#F87171` / `#FBBF24` | `#15803D` / `#B91C1C` / `#B45309` | nada terang gagal di putih; versi 700/800 lulus 5,02 / 6,47 / 5,02:1 |
+
+Perubahan yang **bukan** sekadar tukar token:
+
+- **Ikon kontrol MapLibre**: `filter: invert(0.92)` dihapus — di piringan putih filter itu membuat
+  ikon zoom/kompas putih dan hilang.
+- **Popup**: panah (`-tip`) keempat arah mengikuti `--map-glass-solid` putih; teks muted, judul ink.
+- **Pil sakelar**: tetap tanpa piringan saat diam; plat hover/fokus kini **putih** `.97` dengan batas
+  `--map-hair-strong`. Di `globals.css` aturan hover/fokus yang dulu `border-color: transparent`
+  (untuk piringan gelap) diubah memakai token batas.
+- **Cincin fokus pil**: dari dua lapis (putih + halo gelap) menjadi satu cincin `--map-focus`
+  `#1E40AF`; di piringan putih lapisan kedua tidak lagi menambah apa pun.
+- `prefers-reduced-transparency` → putih pekat; `prefers-reduced-motion` dan `forced-colors` tetap.
+
+Terukur di aplikasi (bukan dari token): 18 simpul teks di kartu peta, **0 gagal** 4,5:1 (rentang
+7,56–17,85:1); chip pin `rgba(255,255,255,.97)` + teks `rgb(15,23,42)`; grup zoom & atribusi
+`rgb(255,255,255)`; cincin fokus `2px solid rgb(30,64,175)`; target sentuh 375 px semuanya ≥44 px;
+tanpa gulir mendatar; pil tidak menabrak atribusi.
+
+Temuan sampingan yang ikut diperbaiki: `min-height: 28px` pada `.map-card .route-focus-pill` (kelas
+0,3,0) **mengalahkan** `button { min-height: 44px }` (0,0,1) di blok sentuh, sehingga pil pemilih
+kembali 28–38 px di ponsel. Ditambahkan media block eksplisit 44 px + tes yang mengunci.
+
+Artefak: `ui-audit/p23-kartu-peta.png` (chrome terang), `p24-panel-terang.png` (legenda + panel),
+`p25-popup-terang.png`.

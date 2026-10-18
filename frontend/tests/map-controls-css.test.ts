@@ -110,7 +110,7 @@ describe("kontrak CSS kontrol peta (7b-1)", () => {
     expect(pil).toMatch(/border:\s*0/);
   });
 
-  it("tombol pil transparan saat diam; plat hover = kaca gelap tema (bukan putih)", () => {
+  it("tombol pil transparan saat diam; plat hover = piringan terang tema", () => {
     const tombol = blok("\\.map-layer-toggle");
     expect(tombol).toMatch(/background:\s*transparent/);
     // Kontras ikon dijaga halo putih tipis, bukan kotak latar.
@@ -120,11 +120,13 @@ describe("kontrak CSS kontrol peta (7b-1)", () => {
     // urutan berkas CSS.
     const hover = /^\.map-card \.map-overlay-toggles button\.map-layer-toggle:hover,\s*\n\.map-card \.map-overlay-toggles button\.map-layer-toggle:focus-visible \{([^}]*)\}/m.exec(css)?.[1] ?? "";
     const latar = /background:\s*([^;]+);/.exec(hover)?.[1] ?? "";
+    // Tema TERANG (19 Okt): piringan hover putih, diambil dari token tema —
+    // bukan hex putih lepas, supaya arah tema tetap satu sumber.
     expect(latar).toMatch(/var\(--map-glass-deep/);
-    expect(latar).not.toMatch(/#fff|rgba\(255/);
-    // Bingkai piringan hover TIDAK abu-abu setengah transparan (terbaca kotor).
+    expect(latar).not.toMatch(/#fff\b/);
+    // Tema terang: piringan putih WAJIB punya tepi 3:1 (WCAG 1.4.11).
     const garis = /border-color:\s*([^;]+);/.exec(hover)?.[1] ?? "";
-    expect(garis.trim()).toBe("transparent");
+    expect(garis).toMatch(/var\(--map-hair-strong/);
   });
 
   it("layar pesan gestur dipergelap: bawaan MapLibre terlalu tipis di atas peta terang", () => {
@@ -146,16 +148,23 @@ describe("kontrak CSS kontrol peta (7b-1)", () => {
     // Dua lapis: cincin PUTIH di dalam (piringan fokus gelap) + halo tinta
     // gelap di luar (ubin peta terang). Satu warna saja selalu hilang di salah
     // satu sisi.
-    // Bingkai dari LUAR ke dalam: cincin tinta gelap 2 px (13:1 di peta terang)
-    // + celah putih 2 px yang memisahkannya dari piringan gelap.
-    expect(fokus).toMatch(/outline:\s*2px solid rgba\(15,\s*23,\s*42/);
-    expect(fokus).toMatch(/box-shadow:\s*0 0 0 2px rgba\(255,\s*255,\s*255/);
+    // Tema terang: satu cincin --map-focus (#1E40AF) — 8,7:1 di piringan putih
+    // dan 4,9:1 di atas ubin taman. Aksen #2563EB gagal di taman (2,93:1).
+    expect(fokus).toMatch(/outline:\s*2px solid var\(--map-focus/);
+    expect(fokus).not.toMatch(/outline:\s*none/);
     expect(fokus).not.toMatch(/outline:\s*none/);
   });
 
   it("pil 'Pilih kiriman' minimal 28 px di desktop (WCAG 2.5.8: 24 px, terukur 22)", () => {
     const pil = blok("\\.map-card \\.route-focus-pill");
     expect(pil).toMatch(/min-height:\s*28px/);
+  });
+
+  it("pil 'Pilih kiriman' kembali 44 px di layar sentuh", () => {
+    // Kelas (0,3,0) MENANG atas `button { min-height: 44px }` (0,0,1); tanpa
+    // aturan eksplisit di media block, pil jatuh ke 28 px di ponsel (terukur).
+    const sentuh = blokMedia("pointer: coarse").join("\n");
+    expect(sentuh).toMatch(/\.map-card \.route-focus-pill \{[^}]*min-height:\s*44px/);
   });
 
   it("panel 'Info map' yang terpisah sudah tidak ada (dilebur ke rincian lapisan)", () => {

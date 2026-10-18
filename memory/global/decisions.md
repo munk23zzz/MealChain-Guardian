@@ -171,3 +171,18 @@
   adalah peta terang — cincin putih murni hanya ~1:1 di sana.
 - **Jangan pakai `!important` untuk menang atas tema.** Naikkan spesifisitas secara sadar
   (`button` di selektor) dan tulis alasannya di komentar, supaya tema tetap bisa mengubah.
+
+## 19 Okt 2026 — chrome peta kembali ke tema TERANG
+
+- **Arah berbalik dari 18 Okt.** Chrome gelap (kaca navy) di dalam kartu peta diganti tema terang;
+  nama token `--map-*` dipertahankan supaya globals.css + tes lama tetap berlaku.
+- **Batas kontrol ≠ rambut dekoratif.** Di tema terang, pemisah cukup `rgba(15,23,42,.12)` (dekoratif),
+  tetapi batas tombol/kontrol wajib `rgba(15,23,42,.45)` (3,2:1) — WCAG 1.4.11.
+- **Filter `invert` pada ikon MapLibre harus dihapus saat tema jadi terang**; kalau tidak, ikon
+  zoom/kompas menjadi putih di piringan putih.
+- **Warna aksen vs ikon mengapung diukur terhadap basemap, bukan terhadap piringan.** `#2563EB`
+  (aksen brand) 5,17:1 di putih tetapi 2,93:1 di ubin taman → ikon pil & cincin fokus memakai
+  `#1E40AF` (4,94:1 di taman).
+- **Jangan pasang `min-height` kelas lebih kecil dari 44 px tanpa blok sentuh**: kelas 0,3,0 menang
+  atas `button` (0,0,1), jadi pil pemilih turun ke 28 px di ponsel. Selalu tambahkan
+  `@media (pointer: coarse), (max-width: 720px)` yang menaikkannya lagi.

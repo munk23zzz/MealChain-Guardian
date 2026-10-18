@@ -2393,14 +2393,13 @@ a:focus-visible {
    milik tema (abu 50%) selalu menang dan tepi piringan tetap terlihat kotor. */
 .map-card .map-overlay-toggles button.map-layer-toggle:hover,
 .map-card .map-overlay-toggles button.map-layer-toggle:focus-visible {
-  background: var(--map-glass-deep, rgba(10, 15, 28, 0.94));
-  /* TANPA bingkai abu-abu. Tema memberi `--map-hair-strong` (abu 50%), dan
-     di atas piringan gelap garis setengah transparan itu terbaca sebagai tepi
-     kotor/berbayang — terlihat seperti tiga lapis bingkai. Piringan gelap sudah
-     memisahkan diri dari peta, jadi bingkainya cukup transparan; cincin fokus
-     di bawah yang mengambil alih tugas penanda. */
-  border-color: transparent;
-  color: var(--map-text, #e2e8f0);
+  /* Tema terang (19 Okt): piringan putih .97. Batasnya `--map-hair-strong`
+     (45% tinta = 3,2:1) karena piringan putih di atas peta terang butuh tepi
+     yang benar-benar terlihat — beda dengan tema gelap, di mana garis setengah
+     transparan justru terbaca kotor. */
+  background: var(--map-glass-deep, rgba(255, 255, 255, 0.97));
+  border-color: var(--map-hair-strong, rgba(15, 23, 42, 0.45));
+  color: var(--map-text, #0f172a);
 }
 /* Cincin fokus: tema konsol memakai `--map-focus` #7dd3fc — tepat di atas kaca
    GELAP, tapi pil ini transparan di atas ubin peta TERANG, sehingga cincin biru
@@ -2412,14 +2411,12 @@ a:focus-visible {
      tinta gelap hilang di piringan gelap, `--map-focus` #7dd3fc hilang di peta
      terang (1,43:1). Jadi dua lapis: cincin putih di dalam (18:1 ke piringan)
      dan halo tinta gelap 5 px di luar (≈8:1 ke peta). */
-  /* Bingkai dua warna dari LUAR ke dalam: celah putih 3 px menempel piringan,
-     lalu cincin tinta gelap 2 px di luarnya. Urutan ini dipilih karena peta
-     di belakang pil TERANG — cincin putih sendirian hanya ~1:1 terhadap peta,
-     sedangkan cincin gelap 13:1; celah putih yang memisahkannya dari piringan
-     gelap. Hasilnya satu bingkai bersih, bukan tiga lapis abu-abu. */
-  outline: 2px solid rgba(15, 23, 42, 0.92);
+  /* Tema terang: satu cincin `--map-focus` #1E40AF (8,7:1 di piringan putih,
+     4,9:1 di atas ubin taman) — cukup kontras ke dua latar tanpa lapisan kedua.
+     `--map-accent` #2563EB tidak dipakai: hanya 2,93:1 di atas taman. */
+  outline: 2px solid var(--map-focus, #1e40af);
   outline-offset: 2px;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.96);
+  box-shadow: none;
 }
 
 .map-card .map-overlay-toggles .map-layer-toggle[aria-pressed="true"] {
@@ -3023,11 +3020,17 @@ a:focus-visible {
 
 /* WCAG 2.5.8 (Target Size Minimum, AA): 24x24 px untuk penunjuk apa pun.
    Pil "Pilih kiriman" dan chip "Semua (N)" terukur 22 px di desktop — lolos
-   hanya kalau ada jarak 24 px, dan di sini jaraknya 6 px. Dinaikkan ke 28 px
-   (nyaman untuk tetikus, tetap rapat); di (pointer: coarse) tetap 44 px lewat
-   aturan `button` di blok sentuh. */
+   hanya kalau ada jarak 24 px, dan di sini jaraknya 6 px. Dinaikkan ke 28 px.
+   CATATAN: aturan kelas ini (0,3,0) MENANG atas `button { min-height: 44px }`
+   (0,0,1) di blok sentuh — dulu efeknya pil kembali 28 px di ponsel. Karena itu
+   blok media di bawah menaikkannya lagi secara eksplisit. */
 .map-card .route-focus-pill {
   min-height: 28px;
+}
+@media (pointer: coarse), (max-width: 720px) {
+  .map-card .route-focus-pill {
+    min-height: 44px;
+  }
 }
 .map-card .map-row-name { font-size: var(--fs-4); font-weight: 600; overflow-wrap: anywhere; }
 .map-card .map-row-status { font-size: var(--fs-1); padding: 3px 8px; border-radius: 4px; background: var(--bg-page); }
