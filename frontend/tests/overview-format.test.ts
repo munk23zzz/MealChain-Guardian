@@ -103,3 +103,25 @@ describe("snapshotNote — tanggal data yang benar-benar dipakai", () => {
     expect(note).toBe("Permintaan per 8 Okt 2026");
   });
 });
+
+// Label jam SINKRON (jam pengambilan data), bukan jam data. Dipisah supaya
+// tidak ada lagi pill "Diperbarui 15.14 WIB" yang terbaca sebagai waktu data.
+import { syncLabel } from "../lib/overview-format";
+
+describe("syncLabel — jam sinkron eksplisit", () => {
+  it("menulis jam WIB dengan detik", () => {
+    expect(syncLabel(new Date("2026-10-18T13:20:22Z"))).toBe("Sinkron 20.20.22 WIB");
+  });
+
+  it("menerima angka milidetik dan string ISO", () => {
+    const ms = Date.parse("2026-10-18T13:20:22Z");
+    expect(syncLabel(ms)).toBe("Sinkron 20.20.22 WIB");
+    expect(syncLabel("2026-10-18T13:20:22Z")).toBe("Sinkron 20.20.22 WIB");
+  });
+
+  it("nilai kosong/rusak menjadi null, bukan jam karangan", () => {
+    expect(syncLabel(null)).toBeNull();
+    expect(syncLabel(undefined)).toBeNull();
+    expect(syncLabel("bukan-jam")).toBeNull();
+  });
+});

@@ -52,6 +52,7 @@ export default function OpsConsole({
   role,
   token,
   ownLocationName = null,
+  asOf = null,
   onSubmitted,
   onDecisionCreated,
   snapshot: initialSnapshot = null,
@@ -62,6 +63,8 @@ export default function OpsConsole({
 }: {
   role: string;
   ownLocationName?: string | null;
+  /** Batas waktu snapshot peta; detail memakai instant yang sama. */
+  asOf?: string | null;
   token: string | null;
   onSubmitted?: () => void;
   /** Dipanggil setelah keputusan Event 1 dibuat — TANPA memindah tab, supaya
@@ -101,7 +104,7 @@ export default function OpsConsole({
     setBusy("snapshot");
     setMsg(null);
     try {
-      const data = await fetchBalance(location, commodity, token);
+      const data = await fetchBalance(location, commodity, token, asOf);
       setSnapshot(data);
       setAnalysis(null);
     } catch (e: any) {

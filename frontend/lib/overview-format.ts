@@ -96,6 +96,34 @@ export function snapshotNote(
   return null;
 }
 
+const JAM_SINKRON = new Intl.DateTimeFormat("id-ID", {
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+  timeZone: "Asia/Jakarta",
+});
+
+/**
+ * "Sinkron 20.20.22 WIB" — jam PENGAMBILAN data (polling), bukan jam data.
+ *
+ * Dulu pill peta menulis "Diperbarui 15.14 WIB" dari jam fetch, sehingga
+ * terbaca sebagai waktu data. Sekarang dua hal itu dipisah tegas: tanggal data
+ * memakai `snapshotNote()` (dibaca dari `*_recorded_at`), sedangkan jam sinkron
+ * memakai helper ini dan menyebut dirinya "Sinkron".
+ */
+export function syncLabel(at: Date | number | string | null | undefined): string | null {
+  if (at == null || at === "") return null;
+  const ms =
+    at instanceof Date
+      ? at.getTime()
+      : typeof at === "number"
+        ? at
+        : Date.parse(at as string);
+  if (!Number.isFinite(ms)) return null;
+  return `Sinkron ${JAM_SINKRON.format(new Date(ms))} WIB`;
+}
+
 export function formatKg(value: number | string | null | undefined): string {
   if (value == null || value === "") return "—";
   const numeric = Number(value);

@@ -32,7 +32,6 @@ function render(overrides: Partial<Parameters<typeof TopBar>[0]> = {}) {
       onSelectLocation={() => {}}
       ownLocation="Jakarta"
       decisions={[{ status: "pending_approval" }, { status: "executed" }]}
-      updatedAtLabel="Diperbarui 10.15.30"
       onOpenNotifications={() => {}}
       onLogout={() => {}}
       {...overrides}

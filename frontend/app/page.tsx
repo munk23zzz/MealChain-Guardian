@@ -68,7 +68,6 @@ import {
   type FeedSort,
 } from "../lib/decision-feed";
 import { useQueryClient } from "@tanstack/react-query";
-import { formatJam } from "../lib/jam";
 import { formatDateTime } from "../lib/datetime";
 import SettingsPanel from "../components/SettingsPanel";
 import IntegrationStatusPanel from "../components/IntegrationStatusPanel";
@@ -112,7 +111,7 @@ import TodayDashboard from "../components/TodayDashboard";
 import StockChart from "../components/StockChart";
 import ShipmentCard from "../components/ShipmentCard";
 import { focusNote, focusPick, focusRows } from "../lib/route-focus";
-import { formatKg, snapshotNote } from "../lib/overview-format";
+import { formatKg, snapshotNote, syncLabel } from "../lib/overview-format";
 // Fase 2 bento Overview: selisih hero & pangsa terhadap kebutuhan — logika
 // murni di lib/overview-bento.ts (diuji di tests/overview-bento.test.ts).
 import {
@@ -956,11 +955,6 @@ export default function Home() {
           onSelectLocation={(value) => setActiveLocation(value)}
           ownLocation={me?.location_name ?? null}
           decisions={decisions}
-          updatedAtLabel={
-            mapUpdatedAt !== null
-              ? `Diperbarui ${new Date(mapUpdatedAt).toLocaleTimeString("id-ID")}`
-              : null
-          }
           onOpenNotifications={() => setTab("recommendations")}
           onLogout={onLogout}
         />
@@ -1045,7 +1039,7 @@ export default function Home() {
                 </span>
                 {mapUpdatedAt !== null && (
                   <span className="overview-updated" aria-live="polite">
-                    terakhir diperbarui {formatJam(new Date(mapUpdatedAt)).teks}
+                    {syncLabel(mapUpdatedAt)}
                   </span>
                 )}
               </div>
@@ -1394,6 +1388,7 @@ export default function Home() {
               role={role ?? "sppg_head"}
               token={token}
               ownLocationName={me?.location_name ?? null}
+              asOf={(mapData as any)?.as_of ?? null}
               onSubmitted={() => {
                 if (token) void decisionsQuery.refetch();
                 setTab("recommendations");

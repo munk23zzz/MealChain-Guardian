@@ -37,8 +37,6 @@ export type TopBarProps = {
   ownLocation?: string | null;
   /** Keputusan dari GET /decisions — sumber isi popup notifikasi + hitungan. */
   decisions?: readonly NotifDecision[] | null;
-  /** Teks "terakhir diperbarui" dari polling peta. */
-  updatedAtLabel?: string | null;
   /** Dipakai tombol di dalam popup (bukan lagi klik lonceng langsung). */
   onOpenNotifications: () => void;
   onLogout: () => void;
@@ -53,7 +51,6 @@ export default function TopBar({
   onSelectLocation,
   ownLocation,
   decisions,
-  updatedAtLabel,
   onOpenNotifications,
   onLogout,
 }: TopBarProps) {

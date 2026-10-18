@@ -2,6 +2,7 @@
 // Tanpa karangan: hanya endpoint yang benar-benar ada di backend.
 
 import { metodeMenulis, segarkanSetelahTulis } from "./refresh";
+import { balancePath } from "./balance-url";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -469,9 +470,11 @@ export async function runEvent1(
 export async function fetchBalance(
   location: string,
   commodity: string,
-  token: string
+  token: string,
+  /** `as_of` dari respons peta: panel detail membaca snapshot yang SAMA. */
+  asOf?: string | null
 ) {
-  return request(`/balance/${location}/${commodity}`, {
+  return request(balancePath(location, commodity, asOf), {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
