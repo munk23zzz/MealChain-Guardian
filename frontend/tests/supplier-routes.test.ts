@@ -33,6 +33,7 @@ import {
   routePopupLines,
   routeToggleLabel,
   routeToggleAction,
+  shipmentKey,
   supplierRouteSummaries,
   supplierRoutes,
 } from "../lib/supplier-routes";
@@ -599,5 +600,31 @@ describe("Ringkasan jalur per pemasok (kolom 'Jalur kirim' di tabel Pemasok)", (
     const ringkas = peta.get("s-1") ?? null;
     expect(routeCellLabel(ringkas)).toBe("→ Bogor · 62,8 km · +1 tujuan");
     expect(routeCellTitle(ringkas)).toBe("Bogor 62,8 km · Jakarta 110,4 km (jarak jalan dari OSRM)");
+  });
+});
+
+// Bug nyata 18 Okt 2026: id baris adalah `pemasok->tujuan`, sehingga DUA KIRIMAN
+// dari pemasok yang sama ke tujuan yang sama (mis. beras 900 kg + kiriman demo
+// 800 kg ke Jakarta) berbagi id. React mencetak "Encountered two children with
+// the same key" dan satu baris berisiko hilang. Id TETAP per pasangan (dipakai
+// memilih jalur); kunci daftar yang harus per kiriman.
+describe("kunci baris kiriman: unik per batch, id tetap per pasangan", () => {
+  it("dua batch pasangan sama: id sama, kunci berbeda", () => {
+    const rows = supplierRoutes({
+      routes: [
+        kiriman({ batch_id: "b-1", quantity_kg: 900 }),
+        kiriman({ batch_id: "b-2", quantity_kg: 800 }),
+      ],
+    });
+    expect(rows).toHaveLength(2);
+    expect(rows[0].id).toBe("s-1->l-1");
+    expect(rows[1].id).toBe("s-1->l-1");
+    expect(shipmentKey(rows[0])).not.toBe(shipmentKey(rows[1]));
+  });
+
+  it("tanpa batch: kunci = id, tanpa kata 'undefined'", () => {
+    const rows = supplierRoutes({ routes: [kiriman({ batch_id: null })] });
+    expect(shipmentKey(rows[0])).toBe("s-1->l-1");
+    expect(shipmentKey(rows[0])).not.toContain("undefined");
   });
 });

@@ -19,7 +19,19 @@ _SHELF_LIFE_BY_COMMODITY = {
     "telur": settings.shelf_life_days_telur,
     "ayam": settings.shelf_life_days_ayam,
     "wortel": settings.shelf_life_days_wortel,
+    "beras": settings.shelf_life_days_beras,
 }
+
+# Rentang suhu aman PER KOMODITAS. Beras adalah barang kering pada suhu ruang
+# (26-28 C di Indonesia): memakai rentang dingin 0-8 C akan menuduhnya
+# "temperature excursion" padahal penyimpanannya justru benar.
+_SAFE_TEMP_BY_COMMODITY = {
+    "telur": (0.0, 8.0),
+    "ayam": (0.0, 8.0),
+    "wortel": (0.0, 8.0),
+    "beras": (15.0, 30.0),
+}
+_DEFAULT_SAFE_TEMP = (0.0, 8.0)
 
 
 class FreshnessRequest(BaseModel):
@@ -54,14 +66,22 @@ async def evaluate_freshness(
             )
         ).scalar_one()
     )
+    if commodity_name not in _SHELF_LIFE_BY_COMMODITY:
+        raise HTTPException(
+            status_code=422,
+            detail=f"komoditas '{commodity_name}' belum punya masa layak",
+        )
     shelf_life_days = _SHELF_LIFE_BY_COMMODITY[commodity_name]
+    safe_min_c, safe_max_c = _SAFE_TEMP_BY_COMMODITY.get(
+        commodity_name, _DEFAULT_SAFE_TEMP
+    )
     score = compute_freshness_score(
         harvested_at=batch.harvested_at,
         as_of=as_of,
         shelf_life_days=shelf_life_days,
         temperature_log=batch.temperature_log or [],
-        safe_min_c=0.0,
-        safe_max_c=8.0,
+        safe_min_c=safe_min_c,
+        safe_max_c=safe_max_c,
     )
     status = classify_freshness(score)
     usable_until = compute_usable_until(

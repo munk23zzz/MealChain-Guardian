@@ -10,7 +10,11 @@ import {
   shipmentTitle,
   shipmentVerdict,
 } from "../lib/shipment-card";
-import { supplierRoutes, type SupplierRoute } from "../lib/supplier-routes";
+import {
+  shipmentKey,
+  supplierRoutes,
+  type SupplierRoute,
+} from "../lib/supplier-routes";
 import {
   shipmentEvents,
   shipmentRouteAudit,
@@ -88,7 +92,7 @@ export default function ShipmentCard({
           const events = shipmentEvents(row);
           const routeAudit = shipmentRouteAudit(row);
           return (
-            <li key={row.id} className={`shipment-item shipment-item-${head.tone}`}>
+            <li key={shipmentKey(row)} className={`shipment-item shipment-item-${head.tone}`}>
               <div className="shipment-top">
                 <p className="shipment-title">{shipmentTitle(row)}</p>
                 <span className={`shipment-pill shipment-pill-${head.tone}`}>{head.label}</span>

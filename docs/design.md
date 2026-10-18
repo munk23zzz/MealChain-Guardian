@@ -1476,3 +1476,62 @@ Popup terukur 240×176 px berisi 5 baris; dua di antaranya hanya jam untuk satu 
 Tidak ada fakta yang dipangkas: baris jalur jalan, masa layak, peringatan "melewati batas layak", dan
 "Waktu tempuh jalur" (hanya saat estimasi tiba belum ada) tetap seperti sebelumnya
 
+## 12. Beras: komoditas keempat yang benar-benar berisi (selesai 18 Okt 2026)
+
+Chip "beras" sudah ada di UI sejak awal (`app/page.tsx` COMMODITIES, `components/OpsConsole.tsx`),
+tetapi tabel `commodities` hanya berisi `telur`, `ayam`, `wortel`. Akibatnya memilih beras memberi
+peta kosong, papan kiriman kosong, tanpa harga, tanpa pemasok — fitur yang terlihat tetapi tidak
+berfungsi. Permintaan pemilik 18 Okt 2026: "tolong buat data beras".
+
+### Yang ditambahkan (semua lewat jalur seed yang sudah ada, bukan data karangan di klien)
+
+| Bagian | Isi | Angka |
+|---|---|---|
+| Komoditas | `beras`, masa layak **180 hari** (barang kering) | 1 baris |
+| Pemasok | Beras Makmur Jakarta, Beras Sari Bogor, Beras Pandan Wangi Cianjur — koordinat, kapasitas, sertifikasi | 3 baris |
+| Pasokan | 10/10 lokasi | 600–2.400 kg |
+| Permintaan | 8/8 lokasi SPPG, 7 observasi tiap lokasi | 850–3.010 kg |
+| Kiriman | 2 sudah tiba, 1 di jalan, 1 belum berangkat | 800–2.400 kg |
+| Harga | `pihps_reference` 10 kota + `supplier_quote` 3 pemasok | Rp11.800–14.500/kg |
+| Stok SAP mock | material **1003** di CIANJ/BOGOR/JKRTA | 900–2.400 kg |
+
+### Dua keputusan teknis yang tidak boleh disederhanakan
+
+1. **Suhu aman per komoditas.** Evaluasi kesegaran memakai rentang dingin 0–8 °C. Beras disimpan
+   pada suhu ruang (26 °C di Indonesia); memakai rentang itu akan menuduhnya "temperature excursion"
+   padahal penyimpanannya benar. Karena itu `_SAFE_TEMP_BY_COMMODITY` di `app/api/freshness.py`
+   memberi beras **15–30 °C**, dan komoditas tanpa masa layak kini menjawab 422, bukan KeyError.
+2. **Pemasok beras butuh koordinat, bukan hanya nama.** Tanpa baris di `data/seed/suppliers_demo.json`,
+   ketiga pemasok beras tidak punya pin di peta dan "jarak dari SPPG" kosong. Karena itu berkas itu
+   memuat ketiganya (satu pengecualian yang ditulis di docstring modul: nama sama dengan baris kanonik).
+
+### Terukur di aplikasi hidup
+
+- Peta nasional (`bgn_monitor`): **10 lokasi** — Cianjur surplus 2.400 kg, Bandung surplus 1.200 kg,
+  Jakarta kurang **2.110 kg** (900 vs 3.010), 6 SPPG lain kekurangan 95–195 kg.
+- Pemasok beras (`sppg_head`, ≤150 km): **3** — 0,6 km / 44,8 km / 77,1 km, kapasitas 2.600/3.800/5.200 kg/minggu.
+- Rute jalan OSRM: **4 pasangan baru diambil, 0 gagal** (108,9 km / 83 menit untuk Cianjur → Jakarta).
+- Chip beras → `Penanda: Jakarta kurang 2.110 kg`, dua kartu kiriman ("Beras Makmur Jakarta → Jakarta
+  Sudah tiba 13.53", "Beras Pandan Wangi Cianjur → Jakarta Sudah tiba 17.13"), nol respons ≥400.
+
+### Batas jujur
+
+- **Belum ada keputusan demo beras.** Tiga keputusan demo tetap telur; panel Decision & Evidence
+  untuk beras akan kosong sampai ada keputusan nyata. Tidak diisi dengan keputusan karangan.
+- **Deret waktu beras belum ada.** Tombol deret waktu demo hanya mencakup tiga komoditas lama,
+  jadi grafik stok beras menampilkan satu titik (nilai kanonik), bukan tren.
+- **Dua kiriman beras lokal** (Jakarta → Jakarta) punya rasio jalan/lurus 3,85× karena OSRM memutar
+  di jalan kota; itu angka nyata, bukan kesalahan hitung.
+
+### Tes
+
+- `backend/tests/test_seed_beras.py` — 7 tes: komoditas+masa layak, pasokan tersebar, permintaan 7
+  observasi, kiriman dari pemasok beras, aturan sumber harga, stok SAP 1003, jangkar telur tidak bergeser.
+- Penyesuaian sadar pada tes yang memaku 3 komoditas: `test_seed_data.py` (3→4, +180 hari),
+  `test_balance_data_state.py` (KOMODITAS_DEMO + beras), `test_supplier_city_coverage.py`
+  (acuan 30→40, quote Cianjur + beras), batas harga beras 11.000–16.000.
+- Bug ikutan yang ditemukan & diperbaiki: **kunci daftar kiriman** memakai `id` pasangan
+  pemasok-tujuan, sehingga dua batch ke tujuan yang sama memicu "same key" di React. Kini
+  `shipmentKey(row)` = `id#batchId` (id pemilihan tetap per pasangan); tes: `tests/supplier-routes.test.ts`.
+
+

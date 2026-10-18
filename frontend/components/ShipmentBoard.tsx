@@ -20,7 +20,11 @@ import {
   boardSumber,
   type BoardSort,
 } from "../lib/shipment-board";
-import { supplierRoutes, type SupplierRoute } from "../lib/supplier-routes";
+import {
+  shipmentKey,
+  supplierRoutes,
+  type SupplierRoute,
+} from "../lib/supplier-routes";
 
 /**
  * "Papan kiriman" (Arah B riset 16 Okt 2026).
@@ -112,7 +116,7 @@ export default function ShipmentBoard({
                   const layak = boardLayakNote(row);
                   const sumber = boardSumber(row);
                   return (
-                    <tr key={row.id}>
+                    <tr key={shipmentKey(row)}>
                       <th scope="row" className="shipment-cell-name">
                         {row.supplierName}
                       </th>

@@ -47,10 +47,11 @@ def test_local_suppliers_named_after_their_city():
         )
 
 
-def test_quotes_reference_still_thirty_city_prices():
+def test_quotes_reference_still_forty_city_prices():
+    """10 kota x 4 komoditas (beras masuk 18 Okt 2026)."""
     rows = build_seed_rows(REF)["price_signals"]
     refs = [r for r in rows if r["source"] == "pihps_reference"]
-    assert len(refs) == 30, "acuan pasar 10 kota x 3 komoditas tetap utuh"
+    assert len(refs) == 40, "acuan pasar 10 kota x 4 komoditas tetap utuh"
 
 
 def test_cianjur_locked_quotes_still_exact():
@@ -65,11 +66,17 @@ def test_cianjur_locked_quotes_still_exact():
         "Supplier B Cianjur": 27000.0,
         "Supplier C Cianjur": 32000.0,
         "Supplier D Cianjur": 25400.0,
+        "Beras Pandan Wangi Cianjur": 12200.0,
     }
 
 
 def test_new_local_quotes_within_realistic_bounds():
-    bounds = {"telur": (24000, 34000), "ayam": (32000, 46000), "wortel": (14000, 30000)}
+    bounds = {
+        "telur": (24000, 34000),
+        "ayam": (32000, 46000),
+        "wortel": (14000, 30000),
+        "beras": (11000, 16000),
+    }
     rows = build_seed_rows(REF)["price_signals"]
     for r in rows:
         if r["source"] != "supplier_quote":

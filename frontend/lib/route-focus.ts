@@ -25,6 +25,8 @@ export const FOCUS_ALL = "__all__";
 
 export type FocusOption = {
   id: string;
+  /** Batch kiriman; dipakai sebagai bagian kunci daftar, bukan untuk memilih. */
+  batchId?: string | null;
   /** "Supplier A → Jakarta" */
   label: string;
   /** Keadaan perjalanan apa adanya dari server ("Di jalan · 20 menit lagi"). */
@@ -54,6 +56,9 @@ export function focusOptions(routes: unknown): FocusOption[] {
     const headline = shipmentHeadline(row);
     return {
       id: row.id,
+      // Dua batch bisa berbagi id (pasangan pemasok-tujuan sama); batchId
+      // membuat kunci daftar tetap unik tanpa mengubah id pemilihan.
+      batchId: row.batchId,
       label: focusLabel(row),
       state: headline.label,
       tone: headline.tone,

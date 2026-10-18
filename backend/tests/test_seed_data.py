@@ -22,7 +22,7 @@ EXPECTED_LOCATIONS = (
     "Palembang",
     "Medan",
 )
-EXPECTED_COMMODITIES = ("telur", "ayam", "wortel")
+EXPECTED_COMMODITIES = ("telur", "ayam", "wortel", "beras")
 
 REF_TIME = datetime(2026, 10, 1, 12, 0, 0, tzinfo=UTC)
 
@@ -36,11 +36,13 @@ def test_seed_json_has_exactly_ten_locked_locations() -> None:
     assert names == list(EXPECTED_LOCATIONS)
 
 
-def test_seed_json_has_exactly_three_commodities_with_shelf_life() -> None:
+def test_seed_json_has_exactly_four_commodities_with_shelf_life() -> None:
+    """Beras ditambahkan 17 Okt 2026: chip-nya sudah ada di UI sejak awal, jadi
+    komoditas ini tidak boleh lagi hanya jadi tombol kosong."""
     data = _load_json()
     commodities = {c["name"]: c["shelf_life_days"] for c in data["commodities"]}
     assert set(commodities) == set(EXPECTED_COMMODITIES)
-    assert commodities == {"telur": 28, "ayam": 5, "wortel": 21}
+    assert commodities == {"telur": 28, "ayam": 5, "wortel": 21, "beras": 180}
 
 
 def test_build_seed_rows_supply_counts_and_locked_values() -> None:

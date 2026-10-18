@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     shelf_life_days_telur: float = 28.0
     shelf_life_days_ayam: float = 5.0
     shelf_life_days_wortel: float = 21.0
+    shelf_life_days_beras: float = 180.0
 
     # Hierarki keputusan lapis 2 & 3 (proposal): gram per porsi untuk
     # menghitung kebutuhan menu, dan berapa hari cadangan yang HARUS tinggal di

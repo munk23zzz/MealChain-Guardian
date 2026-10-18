@@ -94,6 +94,7 @@ def _shelf_life_map():
         "telur": settings.shelf_life_days_telur,
         "ayam": settings.shelf_life_days_ayam,
         "wortel": settings.shelf_life_days_wortel,
+        "beras": settings.shelf_life_days_beras,
     }
 
 

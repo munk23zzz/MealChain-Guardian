@@ -439,6 +439,20 @@ export function supplierRoutes(raw: unknown): SupplierRoute[] {
   return out;
 }
 
+
+/**
+ * Kunci React untuk SATU baris kiriman.
+ *
+ * `id` sengaja per PASANGAN pemasok-tujuan (dipakai memilih/menyorot jalur),
+ * sehingga dua batch dari pemasok yang sama ke SPPG yang sama berbagi id.
+ * Kunci React harus per KIRIMAN: memakai `id` apa adanya memunculkan
+ * "Encountered two children with the same key" dan satu baris bisa hilang
+ * dari layar (kasus nyata: beras 900 kg + kiriman demo 800 kg, 18 Okt 2026).
+ */
+export function shipmentKey(row: Pick<SupplierRoute, "id" | "batchId">): string {
+  return row.batchId ? `${row.id}#${row.batchId}` : row.id;
+}
+
 /** Nada garis: kiriman bermutu `fail` memakai nada bahaya. */
 export function routeLineTone(row: SupplierRoute): RouteLineTone {
   return row.safetyStatus === "fail" ? "fail" : "ok";

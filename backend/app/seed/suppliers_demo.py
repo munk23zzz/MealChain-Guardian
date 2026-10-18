@@ -7,7 +7,7 @@ ratusan kilometer. Data 14 pemasok kanonik tidak cukup (dan tidak punya
 koordinat/kapasitas), jadi ditambah 21 pemasok demo dari
 `data/seed/suppliers_demo.json`:
 
-- **12 pemasok hub Jakarta** dengan koordinat ABSOLUT (`latitude`/`longitude`)
+- **13 pemasok hub Jakarta** dengan koordinat ABSOLUT (`latitude`/`longitude`)
   di Jakarta + kota penyangga (Bekasi, Depok, Tangerang, Bogor, Karawang,
   Cisarua, Serang, Subang, Cianjur), jarak berjenjang 0-25 / 25-60 / 60-150 km.
 - **9 hub lain**: satu pemasok lokal per hub (jaring nasional untuk
@@ -18,7 +18,11 @@ Aturan yang dijaga modul ini:
 - **Aditif untuk kanonik, dan membersihkan sisanya.** 14 pemasok kanonik dari
   `sprint1_seed.json` tidak pernah di-UPDATE di sini; sebaliknya baris demo yang
   sudah tidak ada di berkas (mis. karena kotanya dipindah) DIHAPUS, supaya
-  database tidak menyimpan pemasok hantu yang tidak bisa dijelaskan. Penghapusan
+  database tidak menyimpan pemasok hantu yang tidak bisa dijelaskan.
+  SATU pengecualian yang disengaja: tiga pemasok beras (Beras Makmur Jakarta,
+  Beras Sari Bogor, Beras Pandan Wangi Cianjur) memang SENAMA dengan baris
+  kanonik, dan baris di berkas ini yang mengisi koordinat/kapasitas keduanya —
+  tanpa itu pin beras tidak punya lokasi dan "jarak dari SPPG" kosong. Penghapusan
   ditolak keras bila ada baris lain yang menunjuknya (`batches`, `price_signals`,
   PO mock, eksklusi) - lebih baik gagal berisik daripada mencacah data.
 - **Deterministik.** Id = UUID5 dari natural key (`demo_supplier::<nama>`),

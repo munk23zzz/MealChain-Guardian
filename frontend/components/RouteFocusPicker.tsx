@@ -42,7 +42,7 @@ export default function RouteFocusPicker({
         const aktif = option.id === focused;
         return (
           <button
-            key={option.id}
+            key={option.batchId ? `${option.id}#${option.batchId}` : option.id}
             type="button"
             className={`commodity-pill route-focus-pill route-focus-pill-${option.tone}${aktif ? " is-active" : ""}`}
             aria-pressed={aktif}
