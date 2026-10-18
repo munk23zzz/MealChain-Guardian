@@ -4,4 +4,5 @@
 # sendiri). Agent di-deploy ke Amazon Bedrock AgentCore Runtime, jadi
 # dependensinya dipisah supaya image runtime tidak membawa FastAPI/SQLAlchemy.
 strands-agents>=1.0
+pydantic>=2.7  # kontrak AgentFinding/AgentRun (dipakai juga oleh Strands)
 boto3>=1.42.89  # service bedrock-agentcore butuh botocore >= 1.39

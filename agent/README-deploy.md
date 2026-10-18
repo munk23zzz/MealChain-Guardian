@@ -41,6 +41,20 @@ Saat runtime cloud dipakai, `MEALCHAIN_API_URL` **wajib** bisa dijangkau dari Ag
 lokal, jalankan runtime secara lokal dan sebut “runtime lokal” di UI — jangan mengklaim
 AgentCore live.
 
+## Kontrak P1 (sudah ada, belum aktif)
+
+- `contracts.py` — `AgentFinding`, `AgentRun`, `Citation`, dan validator angka wajib sitasi.
+- `hierarchy.json` — tujuh role, stage, endpoint allowlist, dan lane paralel.
+- `registry.py` — memuat dan memvalidasi konfigurasi di atas.
+- `workers/` — tujuh stub yang mengembalikan status `skipped`; **belum memanggil model/API**.
+
+Tes kontrak (host-only, butuh repo root di `PYTHONPATH`):
+
+```bash
+docker compose run --rm -e PYTHONPATH=/repo -v "$PWD:/repo" -w /repo backend \
+  pytest -q backend/tests/test_agent_contracts.py
+```
+
 ## Blocker saat ini (terukur, bukan dugaan)
 
 `python agent/deploy_agentcore.py` → berhenti di preflight dengan:
