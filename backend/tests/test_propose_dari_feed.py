@@ -197,7 +197,10 @@ def test_ajukan_dua_kali_409(client):
             "/actions/propose", json={"decision_id": did}, headers=headers
         )
         assert resp.status_code == 409, resp.text
-        assert "tidak dapat dipropose" in resp.json()["detail"]
+        # Audit M9: /actions/propose bukan "usul ULANG"; pesan menyebut
+        # "diajukan untuk persetujuan".
+        assert "tidak dapat diajukan" in resp.json()["detail"]
+        assert "ulang" not in resp.json()["detail"]
     finally:
         _cleanup(did)
         _drop(kepala["email"])
