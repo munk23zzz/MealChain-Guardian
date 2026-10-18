@@ -32,8 +32,7 @@
       "blocking_allowed": true,
       "description": "Memeriksa kesegaran batch dan risiko kedaluwarsa.",
       "endpoints": [
-        "GET /batches",
-        "POST /freshness/evaluate"
+        "GET /batches"
       ]
     },
     {

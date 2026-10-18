@@ -46,7 +46,8 @@ AgentCore live.
 - `contracts.py` — `AgentFinding`, `AgentRun`, `Citation`, dan validator angka wajib sitasi.
 - `hierarchy.json` — tujuh role, stage, endpoint allowlist, dan lane paralel.
 - `registry.py` — memuat dan memvalidasi konfigurasi di atas.
-- `workers/` — tujuh stub yang mengembalikan status `skipped`; **belum memanggil model/API**.
+- `workers/` — P1: tujuh stub `skipped`; P2: empat worker baca nyata
+  (Supply, Demand, Safety, Freshness), tiga masih stub. Belum ada panggilan model.
 
 Tes kontrak (host-only, butuh repo root di `PYTHONPATH`):
 
@@ -54,6 +55,26 @@ Tes kontrak (host-only, butuh repo root di `PYTHONPATH`):
 docker compose run --rm -e PYTHONPATH=/repo -v "$PWD:/repo" -w /repo backend \
   pytest -q backend/tests/test_agent_contracts.py
 ```
+
+## Worker baca P2 (4/7 — Supply, Demand, Safety, Freshness)
+
+Empat worker pertama sudah membaca API lewat `agent/api_client.py` (GET saja):
+
+- Supply: `GET /balance/{location}/{commodity}`; nilai yang tidak terukur
+  dikosongkan (`null`), bukan diubah menjadi 0.
+- Demand: `GET /demand/...` dan `GET /demand/forecast/...?horizon_days=7`.
+- Safety: `GET /batches` dan `GET /supplier-exclusions`; tidak memanggil
+  `POST /safety/evaluate` yang menulis DB.
+- Freshness: `GET /batches`; tidak memanggil `POST /freshness/evaluate` yang menulis DB.
+
+Tes mock transport:
+
+```bash
+docker compose run --rm -e PYTHONPATH=/repo -v "$PWD:/repo" -w /repo backend \
+  pytest -q backend/tests/test_agent_workers.py backend/tests/test_agent_contracts.py
+```
+
+Tiga worker sisanya (Price, Logistics, Evidence) masih stub P1.
 
 ## Blocker saat ini (terukur, bukan dugaan)
 
