@@ -61,13 +61,67 @@ docker compose up -d
 curl http://localhost:8000/health        # 200
 curl -o /dev/null -s -w "%{http_code}\n" http://localhost:3010   # 200 (FRONTEND_PORT di .env)
 
-# test backend + frontend
+# SATU perintah untuk seluruh rantai: backend, 3 akun demo, RBAC, trace 7 agen,
+# runtime AgentCore READY + invoke review_decision (7 finding).
+uv run --no-project --with boto3 python scripts/smoke_e2e.py
+# tanpa kredensial AWS:
+python scripts/smoke_e2e.py --skip-aws
+
+# tes satuan
 docker compose exec backend pytest
 docker compose exec frontend npm run test
 ```
 
-Angka yang diharapkan (per 2026-10-14, sesudah Fase 2 pemasok): backend 720 passed (3 skip),
-frontend 53 berkas / 449 passed. Kalau beda tipis karena commit baru, wajar — yang penting exit 0.
+Angka yang diharapkan (per 2026-10-18): backend **1013 passed** (3 skip), frontend
+**102 berkas / 1209 tes**, smoke **13 lulus · 0 gagal · 0 skip**. Kalau beda tipis karena
+commit baru, wajar — yang penting exit 0.
+
+## 3b. Frontend di Windows/exFAT (drive E:)
+
+```bash
+cd frontend
+npm ci            # WAJIB; lockfile sudah disinkronkan (npm 11)
+npm run test      # vitest (jsdom sudah ada di devDependencies)
+npm run typecheck # tsc --noEmit
+npm run lint
+npm run build     # sudah memuat scripts/exfat-readlink-patch.cjs
+```
+
+Kenapa ada patch: di exFAT, `fs.readlink()` pada berkas biasa melempar `EISDIR`, sedangkan
+webpack hanya memahami `EINVAL` sebagai "bukan symlink" — tanpa patch, `next build` gagal
+`EISDIR ... readlink '...next/dist/pages/_app.js'`. Script `build` sudah memuatnya otomatis
+(`node -r ./scripts/exfat-readlink-patch.cjs`), jadi tidak perlu `NODE_OPTIONS` manual; di
+NTFS/Linux patch ini tidak berpengaruh.
+
+Catatan operasional: `npm ci` menghapus `node_modules` — matikan dulu yang memegang folder itu
+(container frontend sudah memakai volume sendiri, tapi LSP/tsserver Hermes bisa mengunci).
+
+## 3c. Agen di AgentCore Runtime (agar review 7 agen hidup)
+
+1. `.env` (root): `MULTI_AGENT_REVIEW=true`, `AGENTCORE_RUNTIME_ARN=<arn runtime>`.
+2. Kredensial AWS di `secrets/aws-app.env` (jangan di `.env` yang ter-commit).
+3. Token baca untuk worker (30 hari, role `bgn_monitor`):
+
+   ```bash
+   uv run --no-project --with boto3 --with "psycopg[binary]" --with pyjwt \
+     python backend/scripts/buat_token_agen.py --email bgn.monitor@demo.local \
+     --hari 30 --tulis-env \
+     --database-url "postgresql://mealchain:<password-di-.env>@localhost:15432/mealchain"
+   ```
+
+4. URL backend yang bisa dijangkau DARI AWS (runtime tidak bisa memakai `localhost`).
+   Untuk demo lokal pakai tunnel tetap (cloudflared/ngrok); untuk produksi pakai VPS/domain.
+   Setelah URL berubah, **satu perintah** memindahkan env runtime:
+
+   ```bash
+   python agent/set_runtime_env.py --api-url https://<url-publik-backend>
+   python agent/set_runtime_env.py --tampilkan     # cek env runtime sekarang
+   ```
+
+5. Ulangi `scripts/smoke_e2e.py` — `invoke review_decision` harus `7 finding · 8 trace row`.
+
+Kalau URL backend mati (tunnel berhenti), invoke runtime akan gagal/menggantung walau runtime
+`READY`; itu gejala URL, bukan kerusakan agent — perbaiki dengan langkah 4.
 
 ## 4. Akun demo (login UI di localhost:3010)
 
