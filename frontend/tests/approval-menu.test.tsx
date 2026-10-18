@@ -46,6 +46,7 @@ function render(extra: Record<string, unknown> = {}) {
       onApprove={noop}
       onReject={noop}
       onVerify={noop}
+      onPropose={noop}
       onExecute={noop}
       onRepropose={noop}
       onClose={() => {}}
@@ -74,6 +75,32 @@ describe("ApprovalMenu (isi popup governance & persetujuan)", () => {
       expect(html).toContain(label);
     }
     expect(html).not.toContain('data-action="execute"');
+  });
+
+  it("Keputusan `proposed` menawarkan Ajukan, bukan Setuju/Eksekusi", () => {
+    // Audit 18 Okt BLOCKER A1: Event 1/2/3 berhenti di `proposed` tanpa jalan
+    // ke `pending_approval`. Menu sekarang memuat satu tombol Ajukan; Setuju
+    // baru muncul setelah pengajuan (server menolak approve status proposed).
+    const html = render({
+      summary: { ...SUMMARY, status: "proposed", can_approve: false, can_reject: false },
+      actions: visibleActions("sppg_head", "proposed"),
+    });
+    expect(html).toContain('data-action="propose"');
+    expect(html).toContain("Ajukan untuk persetujuan");
+    expect(html).not.toContain('data-action="execute"');
+    // Ringkasan tetap tampil (design.md §1.3), tetapi tombol Setuju tidak ada.
+    expect(html).not.toContain('data-action="approve"');
+  });
+
+  it("Keputusan administratif (supplier exclusion) tidak ditawari Ajukan", () => {
+    // `/actions/propose` menolak ADMIN_TYPES (409 "gunakan endpoint proposal
+    // supplier-exclusions"); menawarkan tombolnya hanya menciptakan galat.
+    const html = render({
+      summary: { ...SUMMARY, status: "proposed", decision_type: "supplier_exclusion" },
+      actions: visibleActions("sppg_head", "proposed"),
+      administrative: true,
+    });
+    expect(html).not.toContain('data-action="propose"');
   });
 
   it("Eksekusi ditawarkan saat kuorum penuh dan server MENGIZINKAN", () => {

@@ -22,6 +22,7 @@ export type MenuActions = {
   approve: boolean;
   verify: boolean;
   execute: boolean;
+  propose: boolean;
   repropose: boolean;
   readOnly: boolean;
 };
@@ -36,6 +37,7 @@ export default function ApprovalMenu({
   onApprove,
   onReject,
   onVerify,
+  onPropose,
   onExecute,
   onRepropose,
   onClose,
@@ -46,6 +48,7 @@ export default function ApprovalMenu({
   onApprove: () => ActionResult;
   onReject: (reason: string) => ActionResult;
   onVerify: () => ActionResult;
+  onPropose: () => ActionResult;
   onExecute: () => ActionResult;
   onRepropose: () => ActionResult;
   onClose: () => void;
@@ -77,7 +80,11 @@ export default function ApprovalMenu({
   }
 
   const hasChoice =
-    actions.approve || actions.verify || actions.execute || actions.repropose;
+    actions.approve ||
+    actions.verify ||
+    actions.propose ||
+    actions.execute ||
+    actions.repropose;
 
   // WS-B (QA 16 Okt): pagar aksi mutasi memakai KEPUTUSAN SERVER, bukan
   // hitungan ulang di sini. Read model yang sama sudah mengirim `can_execute`
@@ -177,6 +184,40 @@ export default function ApprovalMenu({
                   <strong>Catat hasil verifier</strong>
                   <span>
                     Belum tersedia — keputusan sudah lewat tenggat, jadi verifikasi ditolak
+                    server.
+                  </span>
+                </div>
+              </li>
+            )}
+
+            {actions.propose && !administrative && belumKedaluwarsa && (
+              <li className="action-menu-item">
+                <div className="action-menu-text">
+                  <strong>Ajukan untuk persetujuan</strong>
+                  <span>
+                    Status berpindah ke <code>pending_approval</code> supaya Ahli Gizi dan Kepala
+                    SPPG bisa menilai. Tanpa langkah ini keputusan berhenti di{" "}
+                    <code>proposed</code>.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="button action-menu-button"
+                  data-action="propose"
+                  onClick={() => run("propose", onPropose)}
+                  disabled={busy !== null}
+                >
+                  {busy === "propose" ? "Memproses…" : "Ajukan"}
+                </button>
+              </li>
+            )}
+
+            {actions.propose && !administrative && !belumKedaluwarsa && (
+              <li className="action-menu-item action-menu-note">
+                <div className="action-menu-text">
+                  <strong>Ajukan untuk persetujuan</strong>
+                  <span>
+                    Belum tersedia — keputusan sudah lewat tenggat, jadi pengajuan ditolak
                     server.
                   </span>
                 </div>

@@ -76,6 +76,7 @@ describe("visibleActions (role scope murni, design.md §1.4)", () => {
       approve: false,
       verify: false,
       execute: false,
+      propose: false,
       repropose: false,
       readOnly: true,
     });
@@ -86,9 +87,23 @@ describe("visibleActions (role scope murni, design.md §1.4)", () => {
       approve: true,
       verify: true,
       execute: false,
+      propose: false,
       repropose: false,
       readOnly: false,
     });
+  });
+
+  it("keputusan `proposed` hanya menawarkan Ajukan, dan itu milik Kepala", () => {
+    expect(visibleActions("sppg_head", "proposed")).toEqual({
+      approve: false,
+      verify: true,
+      execute: false,
+      propose: true,
+      repropose: false,
+      readOnly: false,
+    });
+    // Ahli Gizi boleh verifikasi, tetapi tidak boleh mengajukan.
+    expect(visibleActions("sppg_nutritionist", "proposed").propose).toBe(false);
   });
 
   it("kuorum penuh (`approved`) → hanya Eksekusi, dan hanya untuk Head", () => {
@@ -96,6 +111,7 @@ describe("visibleActions (role scope murni, design.md §1.4)", () => {
       approve: false,
       verify: false,
       execute: true,
+      propose: false,
       repropose: false,
       readOnly: false,
     });

@@ -198,12 +198,13 @@ describe("Langkah Verifikasi (syarat execute — kontrol backend nyata)", () => 
         onApprove={noop}
         onReject={noop}
         onVerify={noop}
+        onPropose={noop}
         onExecute={noop}
         onRepropose={noop}
         onClose={() => {}}
-      />
-    );
-    expect(html).toContain("Verifikasi");
+        />
+        );
+        expect(html).toContain("Verifikasi");
     // Eksekusi baru ditawarkan setelah kuorum penuh (status `approved`).
     expect(html).not.toContain('data-action="execute"');
   });
@@ -224,6 +225,7 @@ describe("Langkah Verifikasi (syarat execute — kontrol backend nyata)", () => 
         onApprove={noop}
         onReject={noop}
         onVerify={noop}
+        onPropose={noop}
         onExecute={noop}
         onRepropose={noop}
         onClose={() => {}}

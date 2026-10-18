@@ -16,7 +16,13 @@
 // bukan di kartu yang sudah tertutup popup.
 
 import { useRef, useState } from "react";
-import { approveAction, executeAction, reproposeAction, verifyAction } from "../lib/api";
+import {
+  approveAction,
+  executeAction,
+  proposeAction,
+  reproposeAction,
+  verifyAction,
+} from "../lib/api";
 import ApprovalMenu from "./ApprovalMenu";
 import { humanizeBlocker } from "../lib/bahasa";
 import Popup from "./Popup";
@@ -31,6 +37,7 @@ export function visibleActions(
   approve: boolean;
   verify: boolean;
   execute: boolean;
+  propose: boolean;
   repropose: boolean;
   readOnly: boolean;
 } {
@@ -39,6 +46,7 @@ export function visibleActions(
       approve: false,
       verify: false,
       execute: false,
+      propose: false,
       repropose: false,
       readOnly: true,
     };
@@ -63,6 +71,10 @@ export function visibleActions(
         status === "verifier_flagged") &&
       headOnly,
     execute: dapatDieksekusi && headOnly,
+    // Keputusan yang lahir `proposed` (Event 1/2/3, POST /decisions) belum
+    // bisa di-approve sebelum diajukan. Tanpa baris ini keputusan berhenti
+    // permanen — audit 18 Okt BLOCKER A1.
+    propose: status === "proposed" && headOnly,
     // Rejection loop: keputusan ditolak → agent minta iterasi baru.
     repropose: status === "rejected" && headOnly,
     readOnly: false,
@@ -117,6 +129,19 @@ export default function DecisionActions({
     try {
       await approveAction(decisionId, false, token, reason.trim());
       setMessage("Keputusan ditolak — agent bisa re-propose dengan iterasi baru.");
+      return null;
+    } catch (err: any) {
+      return String(err.message ?? err);
+    }
+  }
+
+  async function ajukan(): Promise<string | null> {
+    if (!token) return "Login diperlukan";
+    try {
+      await proposeAction(decisionId, null, token);
+      setMessage(
+        "Keputusan diajukan — menunggu persetujuan Ahli Gizi dan Kepala SPPG."
+      );
       return null;
     } catch (err: any) {
       return String(err.message ?? err);
@@ -205,6 +230,7 @@ export default function DecisionActions({
           onApprove={approve}
           onReject={reject}
           onVerify={verify}
+          onPropose={ajukan}
           onExecute={execute}
           onRepropose={repropose}
           onClose={() => setOpened(false)}

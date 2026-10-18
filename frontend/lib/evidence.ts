@@ -262,6 +262,12 @@ export function nextStep(input: {
         : ` (${approvals} dari ${Number.isFinite(minApprovals) ? minApprovals : "?"})`;
     return { text: `Menunggu persetujuan${hitung}${penahan}.`, tone: "warn" };
   }
+  if (status === "proposed") {
+    return {
+      text: `Keputusan belum diajukan — ajukan untuk persetujuan supaya Ahli Gizi dan Kepala SPPG bisa menilai${penahan}.`,
+      tone: "warn",
+    };
+  }
   return { text: "Tidak ada tindakan mendesak untuk keputusan ini.", tone: "plain" };
 }
 

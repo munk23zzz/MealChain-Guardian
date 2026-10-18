@@ -407,6 +407,19 @@ describe("langkah berikutnya: satu kalimat yang menjawab \"apa yang harus saya l
     expect(hasil.tone).toBe("warn");
   });
 
+  it("keputusan `proposed`: menyuruh mengajukan, bukan diam", () => {
+    // Audit 18 Okt BLOCKER A1: dulu keputusan ini jatuh ke "Tidak ada tindakan
+    // mendesak", padahal justru di sinilah satu-satunya langkah yang hilang.
+    const hasil = nextStep({
+      role: "sppg_head",
+      status: "proposed",
+      summary: { ...SUMMARY, can_execute: false, expiry: { valid: true } },
+    });
+    expect(hasil.text).toContain("belum diajukan");
+    expect(hasil.text).toContain("ajukan untuk persetujuan");
+    expect(hasil.tone).toBe("warn");
+  });
+
   it("jendela berlaku lewat: dikatakan lewat, bukan disembunyikan", () => {
     const hasil = nextStep({ ...dasar, summary: { ...SUMMARY, expiry: { valid: false }, can_execute: false } });
     expect(hasil.text).toContain("sudah lewat");

@@ -63,6 +63,7 @@ describe("Approval administratif supplier", () => {
         onApprove={noop}
         onReject={noop}
         onVerify={noop}
+        onPropose={noop}
         onExecute={noop}
         onRepropose={noop}
         onClose={() => {}}

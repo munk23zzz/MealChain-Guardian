@@ -323,10 +323,11 @@ export async function fetchReceipts(
 }
 
 // /actions/propose — angkat "proposed" → "pending_approval" agar bisa
-// di-approve (material_number = candidate_id, jejak sumber tetap jelas).
+// di-approve. `materialNumber` opsional (18 Okt 2026): UI tidak tahu kode
+// material, jadi server menurunkannya dari komoditas (`MAT-<KOMODITAS>`).
 export async function proposeAction(
   decisionId: string,
-  materialNumber: string,
+  materialNumber: string | null,
   token: string
 ) {
   return request("/actions/propose", {
@@ -337,7 +338,7 @@ export async function proposeAction(
     },
     body: JSON.stringify({
       decision_id: decisionId,
-      material_number: materialNumber,
+      ...(materialNumber ? { material_number: materialNumber } : {}),
     }),
   });
 }

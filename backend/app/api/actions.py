@@ -38,7 +38,10 @@ PROPOSER_ROLES = ("sppg_head",)
 class ProposeRequest(BaseModel):
     decision_id: uuid.UUID
     supplier_id: uuid.UUID | None = None
-    material_number: str = Field(min_length=1, max_length=64)
+    #: Opsional sejak 18 Okt 2026: UI tidak tahu kode material, jadi server
+    #: menurunkannya dari komoditas (`MAT-<KOMODITAS>`). Nilai eksplisit
+    #: (Demo Control) tetap dipakai apa adanya.
+    material_number: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class VerifyRequest(BaseModel):
@@ -160,12 +163,13 @@ async def propose_action(
     decision.status = "pending_approval"
     await db.commit()
     req = _requirement_for(decision)
+    material_number = payload.material_number or _material_number_for(commodity)
     return {
         "decision_id": str(decision.id),
         "status": decision.status,
         "verified": not _verifier_unverified(decision),
         "approval_requirement": req,
-        "material_number": payload.material_number,
+        "material_number": material_number,
     }
 
 
