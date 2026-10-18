@@ -97,3 +97,5 @@ sap-joule/**/.pytest_cache/
 
 # keadaan lokal watchdog tunnel (URL bergantung sesi)
 agent/.tunnel_state.json
+# Server dev kedua (port 3001, NEXT_DIST_DIR) — dibuat 2026-10-18 agar :3000 tidak terganggu.
+.next-dev2/
