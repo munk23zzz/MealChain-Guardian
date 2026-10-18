@@ -83,6 +83,24 @@ def _loc_map(locations) -> dict:
     return {loc.name: loc.id for loc in locations}
 
 
+async def _target_lokasi(db: AsyncSession, user: User) -> Location:
+    """Kota tujuan kasus demo = lokasi SPPG pemanggil (audit M4).
+
+    Kasus demo harus bisa ditindaklanjuti orang yang memuatnya; sebelumnya
+    target selalu Jakarta sehingga Kepala Bandung menerima kartu yang approve-nya
+    pasti 403 (scope).
+    """
+    if user.location_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail="akun ini tidak punya lokasi SPPG — kasus demo butuh kota tujuan",
+        )
+    target = await db.get(Location, user.location_id)
+    if target is None:
+        raise HTTPException(status_code=422, detail="lokasi SPPG akun ini tidak ditemukan")
+    return target
+
+
 async def _commodity_id(db: AsyncSession, name: str):
     row = (
         await db.execute(select(Commodity).where(Commodity.name == name))
@@ -158,28 +176,41 @@ def _decision(
     )
 
 
-async def _seed_demo_cases(db: AsyncSession, force: bool) -> dict:
+async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> dict:
     """Badan `POST /demo/seed` — dipakai juga oleh `/demo/refresh`.
 
     Dipisah sebagai fungsi supaya "Segarkan ke hari ini" bisa menjalankan
     seeder relatif lalu MEMUAT ULANG kasus skrip (TTL baru) tanpa menduplikasi
     logika kasus di dua tempat.
+
+    18 Okt 2026 (audit M4): kasus ditanam untuk lokasi PEMANGGIL, bukan selalu
+    Jakarta. Kepala Bandung yang menekan "Muat kasus demo" harus menerima kartu
+    yang bisa ia setujui; sebelumnya ia menerima empat kartu Jakarta yang
+    approve-nya pasti 403 (scope). Idempotensi juga per kota: `force=true`
+    hanya menghapus baris demo kota pemanggil.
     """
     existing = (
         await db.execute(
-            select(Decision).where(Decision.demo_case.in_(DEMO_CASES))
+            select(Decision).where(
+                Decision.demo_case.in_(DEMO_CASES),
+                Decision.target_location_id == target.id,
+            )
         )
     ).scalars().all()
     if existing and not force:
         return {
             "seeded": False,
             "already": len(existing),
+            "target": target.name,
             "message": "Kasus demo sudah ada — pakai force=true untuk reset.",
         }
     if force and existing:
-        # Hanya baris demo (demo_case NOT NULL) yang dihapus.
+        # Hanya baris demo (demo_case NOT NULL) kota ini yang dihapus.
         await db.execute(
-            delete(Decision).where(Decision.demo_case.in_(DEMO_CASES))
+            delete(Decision).where(
+                Decision.demo_case.in_(DEMO_CASES),
+                Decision.target_location_id == target.id,
+            )
         )
         await db.flush()
 
@@ -195,32 +226,46 @@ async def _seed_demo_cases(db: AsyncSession, force: bool) -> dict:
     if telur is None:
         raise HTTPException(status_code=422, detail="komoditas telur tidak ada")
 
+    def _nama_sumber(kandidat: tuple[str, ...]) -> str:
+        """Nama lokasi sumber pertama yang BUKAN kota target."""
+        for nama in kandidat:
+            if nama != target.name:
+                return nama
+        raise HTTPException(status_code=422, detail="tidak ada lokasi sumber selain kota target")
+
+    def _sumber(kandidat: tuple[str, ...]):
+        """Lokasi sumber (id) — lihat `_nama_sumber`."""
+        return loc[_nama_sumber(kandidat)]
+
     created: list[str] = []
 
     # ---- Kasus 1: rejection-loop-kuota (v1 ditolak → v2 ditolak → v3 fresh)
     v1 = _decision(
         "rejection-loop-kuota", 1, "rejected",
-        loc["Cianjur"], loc["Jakarta"], telur, "600", "16206000.00",
+        _sumber(("Cianjur", "Bogor", "Surabaya")), target.id, telur, "600", "16206000.00",
         ttl_minutes=-60,  # kedaluwarsa (sudah lewat, keputusan mati)
-        rejection_reason="Kuota SPPG Jakarta penuh minggu ini — coba skema bertahap.",
+        rejection_reason=f"Kuota SPPG {target.name} penuh minggu ini — coba skema bertahap.",
     )
     db.add(v1)
     await db.flush()
     created.append(v1.id)
     await _add_trace(db, v1.id, "DETECT", 95, "demand.snapshot",
-        {"location": "Jakarta", "window": "7d"},
+        {"location": target.name, "window": "7d"},
         {"shortage_kg": 600, "signal": "permintaan naik"})
     await _add_trace(db, v1.id, "DECIDE", 92, "supply_balance.propose",
-        {"source": "Cianjur", "target": "Jakarta", "qty": 600},
+        {"source": "Cianjur", "target": target.name, "qty": 600},
         {"sdc": 16206000, "scenario": "regional_balance"})
     await _add_trace(db, v1.id, "LEARN", 60, "rejection_loop.repropose",
         {"parent_iteration": 1},
-        {"parent_rejection_reason": "Kuota SPPG Jakarta penuh minggu ini — coba skema bertahap.",
+        {
+            "parent_rejection_reason": (
+                f"Kuota SPPG {target.name} penuh minggu ini — coba skema bertahap."
+            ),
          "learning_note": "Iterasi berikut: skema bertahap 300 kg + 300 kg."})
 
     v2 = _decision(
         "rejection-loop-kuota", 2, "rejected",
-        loc["Cianjur"], loc["Jakarta"], telur, "600", "16206000.00",
+        _sumber(("Cianjur", "Bogor", "Surabaya")), target.id, telur, "600", "16206000.00",
         ttl_minutes=-30,
         supersedes=v1.id,
         rejection_reason="Harga per kg naik 12% dari referensi — negosiasi ulang dulu.",
@@ -235,7 +280,7 @@ async def _seed_demo_cases(db: AsyncSession, force: bool) -> dict:
 
     v3 = _decision(
         "rejection-loop-kuota", 3, "pending_approval",
-        loc["Cianjur"], loc["Jakarta"], telur, "600", "16206000.00",
+        _sumber(("Cianjur", "Bogor", "Surabaya")), target.id, telur, "600", "16206000.00",
         ttl_minutes=480,  # demo-day guard: jangan EXPIRED saat demo (Roy)
         supersedes=v2.id,
         verified_by="verifier_agent",
@@ -248,13 +293,13 @@ async def _seed_demo_cases(db: AsyncSession, force: bool) -> dict:
         {"model": "chain-11-slot", "horizon_days": 7},
         {"method": "provider_forecast", "note": "skema bertahap 2×300 kg"})
     await _add_trace(db, v3.id, "DECIDE", 24, "supply_balance.propose",
-        {"source": "Cianjur", "target": "Jakarta", "qty": 600, "scheme": "2x300"},
+        {"source": "Cianjur", "target": target.name, "qty": 600, "scheme": "2x300"},
         {"sdc": 16206000, "learning_applied": ["kuota", "harga"]})
 
     # ---- Kasus 2: shortage-darurat (TTL pendek — drama safety window)
     s1 = _decision(
         "shortage-darurat", 1, "pending_approval",
-        loc["Bogor"], loc["Jakarta"], telur, "780", "14787096.28",
+        _sumber(("Bogor", "Cianjur", "Surabaya")), target.id, telur, "780", "14787096.28",
         ttl_minutes=120,  # drama tetap di trace (safety window 30 mnt);
         # TTL kartu panjang supaya kasus tidak mati saat demo (Roy)
         verified_by="verifier_agent",
@@ -264,19 +309,19 @@ async def _seed_demo_cases(db: AsyncSession, force: bool) -> dict:
     await db.flush()
     created.append(s1.id)
     await _add_trace(db, s1.id, "DETECT", 20, "demand.snapshot",
-        {"location": "Jakarta", "shortage": 780},
+        {"location": target.name, "shortage": 780},
         {"severity": "CRITICAL", "safety_window_minutes": 30})
     await _add_trace(db, s1.id, "PREDICT", 19, "forecast.daily",
         {"horizon_days": 1},
         {"method": "provider_forecast", "coverage": 0.94})
     await _add_trace(db, s1.id, "DECIDE", 18, "supply_balance.propose",
-        {"source": "Bogor", "target": "Jakarta", "qty": 780},
+        {"source": "Bogor", "target": target.name, "qty": 780},
         {"sdc": 14787096.28, "urgency": "safety_window"})
 
     # ---- Kasus 3: supplier-janggal (verifier FLAGGED — anti-fraud)
     j1 = _decision(
         "supplier-janggal", 1, "verifier_flagged",
-        loc["Cianjur"], loc["Jakarta"], telur, "600", "9200000.00",
+        _sumber(("Cianjur", "Bogor", "Surabaya")), target.id, telur, "600", "9200000.00",
         ttl_minutes=480,  # demo-day guard (Roy)
         verified_by="verifier_agent",
         verifier_note="flagged",
@@ -295,24 +340,27 @@ async def _seed_demo_cases(db: AsyncSession, force: bool) -> dict:
     # ---- Kasus 4: gangguan-logistik (v1 ditolak → v2 rute alternatif)
     g1 = _decision(
         "gangguan-logistik", 1, "rejected",
-        loc["Bogor"], loc["Jakarta"], telur, "600", "16206000.00",
+        _sumber(("Bogor", "Cianjur", "Surabaya")), target.id, telur, "600", "16206000.00",
         ttl_minutes=-45,
-        rejection_reason="Rute Bogor–Jakarta terganggu banjir — cari sumber alternatif.",
+        rejection_reason=f"Rute menuju {target.name} terganggu banjir — cari sumber alternatif.",
     )
     db.add(g1)
     await db.flush()
     created.append(g1.id)
     await _add_trace(db, g1.id, "DETECT", 70, "logistics.status",
-        {"route": "Bogor→Jakarta"},
+        {"route": f"{_nama_sumber(('Bogor', 'Cianjur', 'Surabaya'))}→{target.name}"},
         {"disruption": "banjir", "eta_delay_hours": 6})
     await _add_trace(db, g1.id, "LEARN", 45, "rejection_loop.repropose",
         {"parent_iteration": 1},
-        {"parent_rejection_reason": "Rute Bogor–Jakarta terganggu banjir — cari sumber alternatif.",
+        {
+            "parent_rejection_reason": (
+                f"Rute menuju {target.name} terganggu banjir — cari sumber alternatif."
+            ),
          "learning_note": "Iterasi berikut: sumber alternatif Cianjur."})
 
     g2 = _decision(
         "gangguan-logistik", 2, "pending_approval",
-        loc["Cianjur"], loc["Jakarta"], telur, "600", "16206000.00",
+        _sumber(("Cianjur", "Bogor", "Surabaya")), target.id, telur, "600", "16206000.00",
         ttl_minutes=300,  # demo-day guard (Roy)
         supersedes=g1.id,
         verified_by="verifier_agent",
@@ -325,7 +373,7 @@ async def _seed_demo_cases(db: AsyncSession, force: bool) -> dict:
         {"candidates": ["Cianjur", "Sukabumi"]},
         {"selected_source": "Cianjur", "eta_ok": True})
     await _add_trace(db, g2.id, "DECIDE", 39, "supply_balance.propose",
-        {"source": "Cianjur", "target": "Jakarta", "qty": 600},
+        {"source": "Cianjur", "target": target.name, "qty": 600},
         {"sdc": 16206000, "reroute_from": "Bogor"})
 
     await db.commit()
@@ -333,7 +381,8 @@ async def _seed_demo_cases(db: AsyncSession, force: bool) -> dict:
         "seeded": True,
         "cases": len(DEMO_CASES),
         "decisions": len(created),
-        "message": "4 kasus demo siap — v3 kuota & v2 logistik siap approve.",
+        "target": target.name,
+        "message": f"4 kasus demo {target.name} siap — v3 kuota & v2 logistik siap approve.",
     }
 
 
@@ -341,10 +390,11 @@ async def _seed_demo_cases(db: AsyncSession, force: bool) -> dict:
 async def seed_demo(
     payload: SeedRequest,
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
+    user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
 ) -> dict:
-    """Muat 4 kasus skrip. Idempotent; `force=true` menghapus ulang HANYA baris kasus."""
-    return await _seed_demo_cases(db, payload.force)
+    """Muat 4 kasus skrip UNTUK KOTA PEMANGGIL. Idempoten per kota; `force=true`
+    hanya menghapus ulang baris demo kota itu."""
+    return await _seed_demo_cases(db, payload.force, await _target_lokasi(db, user))
 
 
 # --------------------------------------------------------------------------
@@ -456,7 +506,7 @@ async def _sync_routes_aman(now: datetime) -> tuple[dict, str | None]:
 @router.post("/demo/refresh", status_code=200)
 async def refresh_to_today(
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
+    user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
 ) -> dict:
     """Tombol hari demo: seeder relatif `now` + muat ulang 4 kasus skrip.
 
@@ -485,7 +535,7 @@ async def refresh_to_today(
     # padahal datanya ada. Gagal jaringan TIDAK menggagalkan refresh: laporannya
     # dibawa di respons supaya terlihat, bukan disembunyikan.
     routes, route_error = await _sync_routes_aman(now)
-    cases = await _seed_demo_cases(db, force=True)
+    cases = await _seed_demo_cases(db, force=True, target=await _target_lokasi(db, user))
     return {
         "reference_time": now.isoformat(),
         "rows": rows,

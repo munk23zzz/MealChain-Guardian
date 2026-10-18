@@ -30,6 +30,7 @@ Penjaga regresi: `backend/tests/test_akun_multi_kota.py` — 6 tes, termasuk `te
 
 ## Masih terbuka (bukan blocker demo)
 
-- **Mayor**: `/demo/seed` selalu menanam kasus Jakarta walau dipanggil dari kota lain; `source_location_id = target_location_id` pada riwayat demo; `verified_by` ditulis walau verdict `unavailable` (pagar verifikasi = ada/tidaknya verdict, bukan mutunya).
+- ~~**Mayor**: `/demo/seed` selalu menanam kasus Jakarta… ; `source_location_id = target_location_id`~~ → **ditutup** 18 Okt malam (`seed-demo-per-kota-2026-10-18.md`): kasus ditanam untuk kota pemanggil, idempoten per kota, sumber ≠ target.
+- **Mayor (sisa)**: `verified_by` ditulis walau verdict `unavailable` — pagar verifikasi memeriksa ada/tidaknya verdict, bukan mutunya.
 - **Minor**: `ApiError.detail` belum menyampaikan pesan 409 apa adanya di semua layar; penomoran PO tidak seragam (`MC-*`, `DEMO-PO-*`, `4500000001`).
 - **Alur belum ada**: withdraw/cancel keputusan, sweeper kedaluwarsa, eskalasi approver, halaman PO penuh.

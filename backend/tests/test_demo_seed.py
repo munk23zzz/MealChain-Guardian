@@ -54,8 +54,10 @@ def test_seed_idempotent_dan_lengkap():
                 per_case = dict(
                     conn.execute(
                         text(
-                            "SELECT demo_case, count(*) FROM decisions "
-                            "WHERE demo_case IS NOT NULL GROUP BY demo_case"
+                            "SELECT d.demo_case, count(*) FROM decisions d "
+                            "JOIN locations l ON l.id = d.target_location_id "
+                            "WHERE d.demo_case IS NOT NULL AND l.name = 'Jakarta' "
+                            "GROUP BY d.demo_case"
                         )
                     ).all()
                 )
@@ -67,9 +69,11 @@ def test_seed_idempotent_dan_lengkap():
             with engine.begin() as conn:
                 v3 = conn.execute(
                     text(
-                        "SELECT id, status, iteration, expires_at > now() "
-                        "FROM decisions WHERE demo_case = 'rejection-loop-kuota' "
-                        "AND iteration = 3"
+                        "SELECT d.id, d.status, d.iteration, d.expires_at > now() "
+                        "FROM decisions d "
+                        "JOIN locations l ON l.id = d.target_location_id "
+                        "WHERE d.demo_case = 'rejection-loop-kuota' "
+                        "AND d.iteration = 3 AND l.name = 'Jakarta'"
                     )
                 ).one()
             assert v3[1] == "pending_approval"
@@ -95,11 +99,12 @@ def test_seed_idempotent_dan_lengkap():
             with engine.begin() as conn:
                 ttl_rows = conn.execute(
                     text(
-                        "SELECT demo_case, iteration, "
-                        "EXTRACT(EPOCH FROM (expires_at - now())) "
-                        "FROM decisions "
-                        "WHERE demo_case IS NOT NULL "
-                        "AND status IN ('pending_approval', 'verifier_flagged')"
+                        "SELECT d.demo_case, d.iteration, "
+                        "EXTRACT(EPOCH FROM (d.expires_at - now())) "
+                        "FROM decisions d "
+                        "JOIN locations l ON l.id = d.target_location_id "
+                        "WHERE d.demo_case IS NOT NULL AND l.name = 'Jakarta' "
+                        "AND d.status IN ('pending_approval', 'verifier_flagged')"
                     )
                 ).all()
             assert len(ttl_rows) == 4, ttl_rows

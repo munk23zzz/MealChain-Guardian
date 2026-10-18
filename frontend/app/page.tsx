@@ -915,7 +915,7 @@ export default function Home() {
               className="button-secondary button"
               onClick={onSeedDemo}
               aria-label="Muat kasus demo"
-              title="Muat ulang 4 kasus demo (idempotent)"
+              title="Muat ulang 4 kasus demo untuk kota SPPG Anda (idempotent)"
             >
               <SeedIcon />
               <span className="side-action-label">Muat kasus demo</span>
@@ -1359,15 +1359,16 @@ export default function Home() {
                 <span className="demo-step">Langkah 1 · siapkan kasus</span>
               </div>
               <p className="section-sub">
-                Memuat ulang empat kasus demo lewat API resmi (idempotent, aman
-                dijalankan berkali-kali sebelum demo day). Hasilnya muncul di
-                tab Recommendations &amp; Agent Log.
+                Memuat ulang empat kasus demo untuk <strong>kota SPPG Anda</strong> lewat
+                API resmi (idempotent, aman dijalankan berkali-kali sebelum demo day).
+                Kepala kota lain memuat kasusnya sendiri — tidak saling menghapus.
+                Hasilnya muncul di tab Recommendations &amp; Agent Log.
               </p>
               <button
                 type="button"
                 className="button button-secondary"
                 onClick={onSeedDemo}
-                title="Muat ulang 4 kasus demo (idempotent)"
+                title="Muat ulang 4 kasus demo untuk kota SPPG Anda (idempotent)"
               >
                 Muat kasus demo
               </button>
