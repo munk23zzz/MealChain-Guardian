@@ -4356,7 +4356,14 @@ a:focus-visible {
    menghabiskan hampir separuhnya, jadi grafiknya jadi sepetak. Tumpuk saja. */
 @media (max-width: 1280px) {
   .overview-split {
-    grid-template-columns: 1fr;
+    /* minmax(0, 1fr), bukan 1fr: `1fr` = minmax(auto, 1fr) sehingga lebar
+       minimum isi (peta + daftar status) dipakai sebagai lantai track dan
+       halaman melebar keluar viewport 375 px (temuan QA P7 G5). */
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .overview-split > * {
+    min-width: 0;
   }
 }
 
