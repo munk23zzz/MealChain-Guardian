@@ -1,0 +1,353 @@
+/**
+ * Peta Overview — chrome gelap (glass) di atas basemap OSM terang.
+ *
+ * Diminta pemilik 2026-10-18: "untuk design nya gua kurang suka, saya mau
+ * background putih di hapus" — lingkup yang dipilih: HANYA di dalam kartu peta
+ * (label pin, legenda, kotak Info map, pil sakelar, popup, kontrol MapLibre).
+ * Basemap OSM tetap terang; halaman lain tidak berubah.
+ *
+ * Arah desain (ui-ux-pro-max):
+ *  - Gaya: glassmorphism — `backdrop-filter: blur(10–20px)`, border 1px
+ *    rgba(255,255,255,.2), lapisan transparan 15–30% (styles.csv).
+ *  - Palet: Financial Dashboard gelap (colors.csv) — latar #020617, kartu
+ *    #0E1223, teks #F8FAFC, muted #94A3B8, border #334155, aksen #22C55E.
+ *  - Wajib: kontras teks ≥4,5:1, fokus terlihat, makna tidak hanya warna
+ *    (accessibility di kedua entri itu).
+ *
+ * Kontras diukur, bukan dikira (kaca rgba(13,20,34,.88) dikomposit di atas
+ * EMPAT ekstrem basemap: putih jalan #F8F4E8, hijau taman #B5C9A8, biru air
+ * #AAD3DF, putih murni #FFFFFF):
+ *   teks  #F1F5F9 → 11,2–13,7:1
+ *   muted #C3CEDD → 7,7–9,4:1
+ *   surplus #4ADE80 7,6:1 · shortage #F87171 4,8:1 · seimbang #FBBF24 7,9:1
+ *   sisa perjalanan #60A5FA 5,2:1 · cincin fokus #93C5FD 7,3:1
+ * Semua di atas ambang AA (teks kecil 4,5:1; elemen non-teks 3:1).
+ *
+ * Berkas terpisah dari globals.css dengan sengaja: kanvas peta sedang disunting
+ * sesi lain, dan impor setelah theme-ext.css membuat berkas ini menang tanpa
+ * satu pun hunk di berkas mereka.
+ */
+
+/* ── Token lokal, hanya di dalam kartu peta ─────────────────────────────── */
+.map-card {
+  --map-glass: rgba(13, 20, 34, 0.88);
+  --map-glass-solid: #0f1726;
+  --map-glass-deep: rgba(9, 14, 25, 0.94);
+  --map-hair: rgba(255, 255, 255, 0.16);
+  --map-hair-strong: rgba(255, 255, 255, 0.28);
+  --map-text: #f1f5f9;
+  --map-text-muted: #c3cedd;
+  --map-hover: rgba(255, 255, 255, 0.1);
+  --map-accent: #22c55e;
+  --map-focus: #93c5fd;
+  --map-surplus: #4ade80;
+  --map-shortage: #f87171;
+  --map-balanced: #fbbf24;
+  --map-todo: #60a5fa;
+}
+
+/* ── Piringan gelap yang menampung kanvas + chrome-nya ──────────────────── */
+.map-card .map-body {
+  padding: 10px;
+  border-radius: 14px;
+  background: var(--map-glass);
+  border: 1px solid var(--map-hair);
+  -webkit-backdrop-filter: blur(14px) saturate(1.05);
+  backdrop-filter: blur(14px) saturate(1.05);
+  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: var(--map-text);
+}
+
+/* Kanvas: rambut terang, bukan garis abu gelap. */
+.map-card .map-gl {
+  border-color: var(--map-hair);
+  border-radius: 10px;
+}
+
+/* ── Label pin: chip gelap, bukan kertas putih ──────────────────────────── */
+.map-card .map-pin-label {
+  background: rgba(11, 17, 28, 0.9);
+  border-color: var(--map-hair);
+  color: var(--map-text);
+  box-shadow: 0 1px 4px rgba(2, 6, 23, 0.45);
+  font-weight: 600;
+}
+
+/* ── Pil sakelar lapisan (ikon): kaca gelap, keadaan nyala jelas ────────── */
+.map-card .map-layer-toggle,
+.map-card .map-legend-toggle {
+  background: var(--map-glass-deep);
+  border-color: var(--map-hair);
+  color: var(--map-text);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+.map-card .map-layer-toggle:hover,
+.map-card .map-legend-toggle:hover {
+  background: #18233a;
+  border-color: var(--map-hair-strong);
+  color: #ffffff;
+}
+/* Nyala = terisi aksen + garis atas tebal; TIDAK hanya warna (ikon yang sama
+   tetap ada, dan `aria-pressed` sudah dibacakan). */
+.map-card .map-layer-toggle[aria-pressed="true"] {
+  background: var(--map-accent);
+  border-color: var(--map-accent);
+  color: #05230f;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+/* ── Chip saringan aktif + tombol rincian lapisan ───────────────────────── */
+.map-card .map-filter {
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(74, 222, 128, 0.55);
+  color: var(--map-text);
+}
+.map-card .map-filter-text {
+  color: var(--map-text);
+}
+.map-card .map-filter-clear {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--map-hair-strong);
+  color: var(--map-text);
+}
+.map-card .map-filter-clear:hover {
+  background: var(--map-hover);
+  border-color: var(--map-text);
+}
+
+.map-card .map-layer-info-toggle {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--map-hair);
+  color: var(--map-text-muted);
+}
+.map-card .map-layer-info-toggle:hover,
+.map-card .map-layer-info-toggle[aria-expanded="true"] {
+  background: var(--map-hover);
+  border-color: var(--map-hair-strong);
+  color: #ffffff;
+}
+.map-card .map-layer-tags,
+.map-card .map-layer-tag {
+  color: var(--map-text-muted);
+}
+.map-card .map-layer-tag-sep {
+  color: rgba(255, 255, 255, 0.35);
+}
+.map-card .map-supplier-note {
+  color: var(--map-text-muted);
+  border-left-color: var(--map-hair-strong);
+}
+.map-card .map-layer-hint {
+  color: var(--map-text-muted);
+}
+
+/* ── Legenda ringkas + baris penanda (teks langsung di piringan) ────────── */
+/* Di atas kertas putih, jarak antar baris sudah terbaca dari latar; di atas
+   kaca, semuanya menyatu. Rambut 1px rgba .08 memberi batas kelompok tanpa
+   menambah kotak baru. */
+.map-card .map-legend-compact,
+.map-card .map-marker-line,
+.map-card .route-focus,
+.map-card .map-layer-info {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 9px;
+}
+.map-card .map-legend-compact,
+.map-card .map-marker-line {
+  padding-bottom: 2px;
+}
+.map-card .map-legend-compact,
+.map-card .map-marker-line {
+  color: var(--map-text);
+}
+.map-card .map-legend-compact-title,
+.map-card .map-marker-line-title,
+.map-card .map-legend-box-title {
+  color: var(--map-text-muted);
+}
+
+/* Tanda legenda memakai nada yang SAMA dengan kanvas (makna tidak digeser),
+   diberi halo terang supaya nada gelap (hijau jalan #2E7D32) tetap terbaca di
+   atas piringan gelap. Legenda adalah alat keterbacaan, bukan palet kedua. */
+.map-card .map-legend-line {
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.75));
+}
+.map-card .map-legend-box-shape,
+.map-card .map-legend-compact-item > i:not([class*="map-legend-line"]) {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+
+/* ── Pemilih kiriman (Arah C) ───────────────────────────────────────────── */
+.map-card .route-focus-label {
+  color: var(--map-text-muted);
+}
+.map-card .route-focus-pill {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--map-hair);
+  color: var(--map-text);
+}
+.map-card .route-focus-pill:hover {
+  background: var(--map-hover);
+  border-color: var(--map-hair-strong);
+}
+.map-card .route-focus-pill.is-active {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: var(--map-accent);
+  color: #a7f3c4;
+}
+.map-card .route-focus-state {
+  color: var(--map-text-muted);
+}
+.map-card .route-focus-pill.is-active .route-focus-state {
+  color: #a7f3c4;
+}
+
+/* ── Popup peta + kontrol bawaan MapLibre ───────────────────────────────── */
+.map-card .maplibregl-popup-content {
+  background: var(--map-glass-deep);
+  border: 1px solid var(--map-hair);
+  border-radius: 10px;
+  color: var(--map-text);
+  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.45);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.map-card .maplibregl-popup-content .map-popup-note,
+.map-card .maplibregl-popup-content .map-popup-line,
+.map-card .maplibregl-popup-content p {
+  color: var(--map-text-muted);
+}
+.map-card .maplibregl-popup-close-button {
+  color: var(--map-text-muted);
+  font-size: 18px;
+  line-height: 1;
+}
+.map-card .maplibregl-popup-close-button:hover {
+  background: var(--map-hover);
+  color: #ffffff;
+}
+/* Ujung panah popup: keempat sisi ditulis supaya tidak ada satu pun yang
+   tertinggal putih saat popup berganti arah. */
+.map-card .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.map-card .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.map-card .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: var(--map-glass-solid);
+}
+.map-card .maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.map-card .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.map-card .maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: var(--map-glass-solid);
+}
+.map-card .maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: var(--map-glass-solid);
+}
+.map-card .maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: var(--map-glass-solid);
+}
+
+.map-card .map-reset-view {
+  background: var(--map-glass-deep);
+  border-color: var(--map-hair);
+  color: var(--map-text);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+.map-card .map-reset-view:hover {
+  background: #18233a;
+  border-color: var(--map-hair-strong);
+  color: #ffffff;
+}
+
+.map-card .maplibregl-ctrl-group {
+  background: var(--map-glass-deep);
+  border: 1px solid var(--map-hair);
+  box-shadow: 0 2px 10px rgba(2, 6, 23, 0.4);
+}
+.map-card .maplibregl-ctrl-group button + button {
+  border-top-color: var(--map-hair);
+}
+.map-card .maplibregl-ctrl-group button:hover {
+  background: var(--map-hover);
+}
+/* Ikon navigasi/kompas bawaan berwarna gelap; dibalik supaya terlihat di kaca. */
+.map-card .maplibregl-ctrl-group .maplibregl-ctrl-icon {
+  filter: invert(0.92) hue-rotate(180deg);
+}
+.map-card .maplibregl-ctrl-scale {
+  background: var(--map-glass-deep);
+  border-color: var(--map-hair);
+  color: var(--map-text-muted);
+}
+/* Atribusi: MapLibre menulis `.maplibregl-ctrl.maplibregl-ctrl-attrib` (dua
+   kelas) dari page.css yang diinject SETELAH layout.css — selektor satu kelas
+   akan kalah, jadi kelasnya ditulis dua kali di sini. */
+.map-card .maplibregl-ctrl.maplibregl-ctrl-attrib {
+  background: var(--map-glass-deep);
+  color: var(--map-text-muted);
+  border-radius: 4px;
+}
+.map-card .maplibregl-ctrl.maplibregl-ctrl-attrib a {
+  color: #a7f3c4;
+}
+
+/* ── Fokus keyboard di atas kaca ────────────────────────────────────────── */
+.map-card .map-layer-toggle:focus-visible,
+.map-card .map-legend-toggle:focus-visible,
+.map-card .map-filter-clear:focus-visible,
+.map-card .map-layer-info-toggle:focus-visible,
+.map-card .route-focus-pill:focus-visible,
+.map-card .map-reset-view:focus-visible,
+.map-card .maplibregl-ctrl-group button:focus-visible {
+  outline: 2px solid var(--map-focus);
+  outline-offset: 2px;
+}
+
+/* ── Pemilih seluruh kehalaman: tanpa animasi saat reduced motion ───────── */
+@media (prefers-reduced-motion: reduce) {
+  .map-card .map-body,
+  .map-card .map-layer-toggle,
+  .map-card .map-legend-toggle,
+  .map-card .route-focus-pill,
+  .map-card .maplibregl-popup-content {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* Transparansi diminta dikurangi (Safari/OS): kaca jadi pekat, teks tetap
+   lolos kontras tanpa bergantung pada tile di bawahnya. */
+@media (prefers-reduced-transparency: reduce) {
+  .map-card .map-body,
+  .map-card .maplibregl-popup-content,
+  .map-card .map-layer-toggle,
+  .map-card .map-legend-toggle,
+  .map-card .map-reset-view,
+  .map-card .maplibregl-ctrl-group,
+  .map-card .map-pin-label {
+    background: var(--map-glass-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* Mode kontras paksa (Windows High Contrast): serahkan warna ke sistem. */
+@media (forced-colors: active) {
+  .map-card .map-body,
+  .map-card .map-pin-label,
+  .map-card .map-layer-toggle,
+  .map-card .maplibregl-popup-content {
+    background: Canvas;
+    color: CanvasText;
+    border-color: CanvasText;
+  }
+}
+
+/* Daftar status lokasi (kalau suatu saat dihidupkan di dalam kartu peta) tetap
+   memakai permukaan terang — teks gelapnya tidak boleh jatuh di atas kaca. */
+.map-card .map-body .map-side {
+  color: var(--ink);
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 8px;
+}

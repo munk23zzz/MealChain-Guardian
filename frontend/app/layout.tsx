@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./theme-ext.css";
+// Chrome gelap di dalam kartu peta (2026-10-19). Diimpor TERAKHIR supaya
+// menang atas globals.css tanpa menyunting berkas yang dipakai bersama.
+import "./map-console.css";
 
 import Providers from "./providers";
 
