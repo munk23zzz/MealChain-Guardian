@@ -31,6 +31,11 @@ KUNCI_TOKEN = "MEALCHAIN_API_TOKEN"
 
 def cari_root(mulai: Path) -> Path:
     """Cari akar repo (folder berisi docker-compose.yml) tanpa bergantung kedalaman."""
+    if mulai.is_file():
+        # Tanpa ini, pemanggilan `cari_root(Path(__file__))` di image container
+        # (tidak ada docker-compose.yml di /app) jatuh ke fallback berkas itu
+        # sendiri dan `root / ".env"` melempar NotADirectoryError.
+        mulai = mulai.parent
     for kandidat in (mulai, *mulai.parents):
         if (kandidat / "docker-compose.yml").exists():
             return kandidat
@@ -105,11 +110,11 @@ def main() -> int:
 
     if args.tulis_env:
         path = root / ".env"
-        baris_baru = [
-            b
-            for b in path.read_text(encoding="utf-8").splitlines()
-            if not b.startswith(f"{KUNCI_TOKEN}=")
-        ]
+        # Di dalam image container tidak ada `.env` (nilai datang dari
+        # environment), jadi ketiadaan berkas harus berarti "mulai kosong",
+        # bukan FileNotFoundError.
+        lama = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+        baris_baru = [b for b in lama if not b.startswith(f"{KUNCI_TOKEN}=")]
         baris_baru.append(f"{KUNCI_TOKEN}={token}")
         path.write_text("\n".join(baris_baru) + "\n", encoding="utf-8")
         print(f"token untuk {args.email} (role {role}) ditulis ke .env; panjang {len(token)}")
