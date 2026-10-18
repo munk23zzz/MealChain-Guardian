@@ -115,6 +115,12 @@ const fake = vi.hoisted(() => {
     easeTo() {
       return this;
     }
+    /** Dipakai baris daftar "Status Lokasi" untuk terbang ke titik lokasi. */
+    flyLog: { center?: [number, number]; zoom?: number }[] = [];
+    flyTo(spec: { center?: [number, number]; zoom?: number }) {
+      this.flyLog.push(spec);
+      return this;
+    }
     // MapLibre menerima bentuk `on(tipe, layerId, handler)` untuk event layer
     // (Fase 10 memakai itu untuk popup garis) — handler selalu argumen terakhir.
     on(event: string, ...args: unknown[]) {
@@ -213,7 +219,7 @@ const markerLog = fake.markerLog as FakeMarker[];
 const mapLog = fake.mapLog as any[];
 const popupLog = fake.popupLog as any[];
 
-import SupplyMap from "../components/SupplyMap";
+import SupplyMap, { StatusLocationList } from "../components/SupplyMap";
 import { FOCUS_ALL, FOCUS_CLEAR_LABEL, focusLabel, focusPick } from "../lib/route-focus";
 
 const LOCATIONS = [
@@ -1297,5 +1303,48 @@ describe("SupplyMap — penanda bertumpuk jadi gelembung klaster", () => {
     act(() => root.render(<SupplyMap locations={jauh} />));
     expect(markerLog.filter((m) => m.element.className.includes("map-cluster"))).toHaveLength(0);
     expect(locationMarkers().every((marker) => marker.element.style.visibility !== "hidden")).toBe(true);
+  });
+});
+
+describe("SupplyMap — daftar Status Lokasi menyorot penanda", () => {
+  it("baris daftar adalah tombol yang terbang ke koordinat lokasi", () => {
+    mount();
+    const tombol = host.querySelector<HTMLButtonElement>(".map-row-btn")!;
+    expect(tombol).not.toBeNull();
+    expect(tombol.tagName).toBe("BUTTON");
+    expect(tombol.textContent).toContain("Jakarta");
+    act(() => tombol.click());
+    const fly = mapLog[0].flyLog as { center?: [number, number]; zoom?: number }[];
+    expect(fly).toHaveLength(1);
+    expect(fly[0].center).toEqual([LOCATIONS[0].longitude, LOCATIONS[0].latitude]);
+    // Zoom minimal 9 supaya penanda yang tadinya berklaster terpisah.
+    expect(fly[0].zoom).toBeGreaterThanOrEqual(9);
+  });
+
+  it("penanda lokasi yang dipilih diberi cincin aktif, yang lain dilepas", () => {
+    const dua = [LOCATIONS[0], { ...LOCATIONS[0], location: "Surabaya", longitude: 112.75, latitude: -7.25 }];
+    mount();
+    act(() => root.render(<SupplyMap locations={dua} />));
+    const surabaya = Array.from(host.querySelectorAll<HTMLButtonElement>(".map-row-btn")).find((b) =>
+      (b.textContent ?? "").includes("Surabaya")
+    )!;
+    act(() => surabaya.click());
+    const aktif = locationMarkers().filter((m) => m.element.classList.contains("map-pin-active"));
+    expect(aktif).toHaveLength(1);
+    expect(aktif[0].element.getAttribute("aria-label")).toContain("Surabaya");
+  });
+
+  it("tanpa peta (pemanggil tanpa onSorot) baris tetap statis, bukan tombol mati", () => {
+    const wadah = document.createElement("div");
+    document.body.append(wadah);
+    const akar = createRoot(wadah);
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    act(() => {
+      akar.render(<StatusLocationList locations={LOCATIONS} />);
+    });
+    expect(wadah.querySelector(".map-row-btn")).not.toBeNull();
+    expect(wadah.querySelector("button.map-row-btn")).toBeNull();
+    act(() => akar.unmount());
+    wadah.remove();
   });
 });

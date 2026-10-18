@@ -54,6 +54,12 @@ import {
   pusatKlaster,
 } from "../lib/map-cluster";
 import { penandaPeta, ringkasPenanda } from "../lib/map-a11y";
+import {
+  daftarkanSorot,
+  langgananSorot,
+  sorotLokasiTerenregistrasi,
+  sorotTersedia,
+} from "../lib/map-sorot";
 // Ikon di dalam penanda (bukan emoji/teks): siluet bangunan untuk SPPG dan
 // truk untuk pemasok — dua lapisan penanda jadi bisa dibedakan dari bentuknya.
 import { buildPinGlyph } from "../lib/map-pin-glyphs";
@@ -437,9 +443,18 @@ function refreshSupplierPin(
  */
 export function StatusLocationList({
   locations,
+  onSorot,
 }: {
   locations: readonly BalanceMapLocation[];
+  /** Bila diberikan, tiap baris menjadi TOMBOL yang menyorot lokasi di peta.
+   *  Tanpa prop ini, daftar memakai jembatan `lib/map-sorot` (peta yang
+   *  dirender sebagai elemen bersaudara mendaftarkan dirinya di sana); bila
+   *  tidak ada peta terdaftar, baris tetap statis — bukan tombol mati. */
+  onSorot?: (nama: string) => void;
 }) {
+  const [petaSiap, setPetaSiap] = useState(() => sorotTersedia());
+  useEffect(() => langgananSorot(() => setPetaSiap(sorotTersedia())), []);
+  const sorot = onSorot ?? (petaSiap ? sorotLokasiTerenregistrasi : undefined);
   if (!locations.length) return null;
 
   return (
@@ -462,17 +477,35 @@ export function StatusLocationList({
       <ul className="map-list">
         {locations.map((l) => {
           const note = dataSourceNote(l);
-          return (
-            <li key={l.location} className={`map-row map-row-${l.status}`}>
+          const isiBaris = (
+            <>
               <i className={`map-dot map-dot-${l.status}`} aria-hidden="true" />
               <span className="map-row-name">{l.location}</span>
-              <span className="map-row-status">
-                {formatBalanceStatus(l.status)}
-              </span>
+              <span className="map-row-status">{formatBalanceStatus(l.status)}</span>
               <span className="map-row-supply">Pasokan: {formatKg(l.supply_kg)}</span>
               <span className="map-row-demand">Kebutuhan: {formatKg(l.demand_kg)}</span>
               <span className="map-row-gap">Selisih: {formatBalanceGap(l)}</span>
               {note && <span className="map-row-note">{note}</span>}
+            </>
+          );
+          return (
+            <li key={l.location} className={`map-row map-row-${l.status}`}>
+              {/* Baris ini Tombol, bukan teks mati: mengetuknya menyorot lokasi
+                  di peta (terbang ke titiknya + cincin aktif). Sebelumnya daftar
+                  hanya bisa dibaca, sehingga satu-satunya jalan ke penanda adalah
+                  peta itu sendiri — termasuk penanda yang tertutup kontrol peta. */}
+              {sorot ? (
+                <button
+                  type="button"
+                  className="map-row-btn"
+                  title={`Sorot ${l.location} di peta`}
+                  onClick={() => sorot(l.location)}
+                >
+                  {isiBaris}
+                </button>
+              ) : (
+                <div className="map-row-btn map-row-btn-statis">{isiBaris}</div>
+              )}
             </li>
           );
         })}
@@ -708,6 +741,28 @@ export default function SupplyMap({
     });
     pinSignaturesRef.current = next;
   }, []);
+
+  /** Sorot satu lokasi dari daftar "Status Lokasi": peta terbang ke titiknya dan
+   *  penandanya diberi cincin aktif. Ini juga jalur menjangkau penanda yang
+   *  tertutup kolom kontrol peta (SC 2.5.8, pengecualian "Equivalent"). */
+  const sorotLokasi = useCallback((nama: string) => {
+    const map = mapRef.current;
+    const lokasi = (locationsRef.current ?? []).find((l) => l.location === nama);
+    if (!map || !lokasi) return;
+    markersRef.current.forEach((marker, id) => {
+      marker.getElement()?.classList.toggle("map-pin-active", id === nama);
+    });
+    map.flyTo({
+      center: [Number(lokasi.longitude), Number(lokasi.latitude)],
+      // Zoom 9 cukup untuk memisahkan penanda kota yang tadinya berklaster.
+      zoom: Math.max(map.getZoom(), 9),
+      duration: 700,
+    });
+  }, []);
+
+  // Halaman Overview merender daftar "Status Lokasi" di LUAR komponen peta, jadi
+  // baris daftar tidak bisa memakai props. Peta mendaftarkan penangannya di sini.
+  useEffect(() => daftarkanSorot(sorotLokasi), [sorotLokasi]);
 
   /** Ganti penanda yang BERTUMPUK dengan satu gelembung berisi jumlah lokasi.
    *
@@ -1583,7 +1638,7 @@ export default function SupplyMap({
         )}
         {showStatusList && (
           <div className="map-side">
-            <StatusLocationList locations={locations} />
+            <StatusLocationList locations={locations} onSorot={sorotLokasi} />
           </div>
         )}
       </div>
