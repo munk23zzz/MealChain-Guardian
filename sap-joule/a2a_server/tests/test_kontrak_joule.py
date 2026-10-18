@@ -78,11 +78,13 @@ def test_capability_memenuhi_syarat_deploy(capability):
     assert "manusia" in deskripsi, "deskripsi harus menyatakan persetujuan tetap oleh manusia"
 
 
-def test_alias_sistem_menunjuk_destination_panitia(capability):
+def test_alias_sistem_menunjuk_destination_jembatan(capability):
     alias = capability["system_aliases"]
     assert "MEALCHAIN_AGENT" in alias
-    assert alias["MEALCHAIN_AGENT"]["destination"] == "SWZ_JOULE", (
-        "destination kanonik = SWZ_JOULE (huruf Z); salah huruf -> destination not found"
+    # SWZ_JOULE milik panitia dan BUKAN endpoint A2A (POST / -> 401). Kalau alias dikembalikan
+    # ke sana, deploy berikutnya menghasilkan "Something went wrong" di chat.
+    assert alias["MEALCHAIN_AGENT"]["destination"] == "MEALCHAIN_AGENT_01", (
+        "destination kanonik = MEALCHAIN_AGENT_01 (menunjuk jembatan A2A); SWZ_JOULE bukan A2A"
     )
 
 
