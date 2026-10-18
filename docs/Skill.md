@@ -113,7 +113,16 @@ supplier_exclusions.context(decision_id)
 
 Semua response mock HARUS punya header `X-Data-Source: MOCK` — lihat `Architecture.md` §7.
 
-## 7. Real SAP field mapping — untuk AWSforSAPMCPProvider (lihat Architecture.md §9)
+## 7. Real SAP field mapping — untuk AwsMcpSapProvider (lihat Architecture.md §9)
+
+**Status kode (18 Okt 2026):** adapter-nya sudah ada di
+`backend/app/sap_integration/aws_mcp_provider.py` — MCP JSON-RPC 2.0 di atas HTTP
+(`initialize` → `notifications/initialized` → `tools/call`), dengan pemetaan field
+di bawah. Yang belum ada hanyalah **tenant SAP sungguhan**: tanpa
+`SAP_MCP_ENDPOINT` + `SAP_MCP_TOKEN`, pemilihan `SAP_PROVIDER=aws_mcp` ditolak
+(fail closed) dan aplikasi tetap memakai `MockSAPProvider`. Operasi tulis
+(`create_purchase_order`) hanya aktif bila `SAP_MCP_ALLOW_WRITE=true` dan tetap
+berangkat dari approval manusia.
 
 Ini kontrak yang HARUS dipatuhi `AWSforSAPMCPProvider` supaya field yang keluar identik
 dengan `MockSAPProvider` — model domain kita di kolom kiri, tidak boleh berubah.

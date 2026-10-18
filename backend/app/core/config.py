@@ -51,5 +51,19 @@ class Settings(BaseSettings):
     aws_region: str = "us-west-2"
     supervisor_model_primary: str = ""
 
+    # SAP lewat AWS for SAP MCP Server (A4). Default TETAP mock: adapter MCP
+    # hanya dipakai bila diminta eksplisit DAN endpoint-nya ada. Endpoint/token
+    # kosong = penolakan di factory, bukan fallback diam-diam ke data simulasi.
+    sap_provider: str = "mock"
+    sap_mcp_endpoint: str = ""
+    sap_mcp_token: str = ""
+    sap_mcp_timeout_seconds: float = 10.0
+    sap_mcp_allow_write: bool = False
+    sap_mcp_tool_stock: str = "sap_material_stock"
+    sap_mcp_tool_purchase_orders: str = "sap_purchase_orders"
+    sap_mcp_tool_create_purchase_order: str = "sap_create_purchase_order"
+    sap_mcp_tool_business_partner: str = "sap_business_partner"
+    sap_mcp_tool_product_master: str = "sap_product_master"
+
 
 settings = Settings()

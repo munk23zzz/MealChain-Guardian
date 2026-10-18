@@ -195,9 +195,12 @@ Bagian ini supaya tidak ada yang salah klaim saat presentasi. Sumbernya pengukur
 di stack lokal, bukan proposal.
 
 - **Data**: sintetis terkalibrasi (10 lokasi × 3 komoditas). Bukan transaksi SPPG nyata.
-- **SAP**: masih **mock** (`mock-sap` di :8001). PO yang "dibuat" tersimpan di tabel
-  `sap_mock_purchase_orders`; belum ada koneksi SAP asli maupun AWS for SAP MCP
-  (`AwsMcpSapProvider` masih stub).
+- **SAP**: default aplikasi masih **mock** (`mock-sap` di :8001); PO yang "dibuat"
+  tersimpan di tabel `sap_mock_purchase_orders`. Adapter **AWS for SAP MCP Server**
+  kini nyata (`AwsMcpSapProvider`: JSON-RPC 2.0, handshake, tools/call, pemetaan
+  field SAP-shaped, galat transport/tool eksplisit) dan teruji lewat server MCP
+  palsu di HTTP nyata — tetapi **belum dihubungkan ke tenant SAP sungguhan**,
+  karena itu belum boleh diklaim "terhubung ke SAP".
 - **AgentCore**: runtime **belum dibuat** (0 runtime, `AGENTCORE_RUNTIME_ARN` kosong).
   Artefak (Dockerfile, runtime server, deploy script, role IAM) sudah siap.
 - **Supervisor**: Strands Agent memegang **4 tool baca** (`get_supply_demand`,

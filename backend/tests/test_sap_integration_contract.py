@@ -21,8 +21,11 @@ def test_factory_rejects_unknown_kind():
         get_provider("unknown-provider")
 
 
-def test_factory_aws_mcp_raises_not_implemented():
-    with pytest.raises(NotImplementedError):
+def test_factory_aws_mcp_butuh_endpoint_eksplisit():
+    """A4: adapter MCP sudah ada; tanpa endpoint pemilihan tetap gagal tertutup."""
+    from app.sap_integration.aws_mcp_provider import SAPConfigurationError
+
+    with pytest.raises(SAPConfigurationError):
         get_provider(ProviderKind.AWS_MCP)
 
 
@@ -102,7 +105,10 @@ def test_all_mock_records_are_provenance_labeled():
 
 
 def test_explicit_aws_selection_fails_closed():
-    with pytest.raises(NotImplementedError, match="aws_mcp"):
+    """Tetap gagal tertutup tanpa konfigurasi — kini karena endpoint kosong."""
+    from app.sap_integration.aws_mcp_provider import SAPConfigurationError
+
+    with pytest.raises(SAPConfigurationError, match="aws_mcp"):
         get_provider(ProviderKind.AWS_MCP)
 
 

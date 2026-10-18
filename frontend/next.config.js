@@ -53,6 +53,11 @@ const API_ROOTS = [
 const nextConfig = {
   output: "standalone",
   reactStrictMode: true,
+  // Folder build bisa dipindah lewat env. Alasan: di Windows, `next dev` yang
+  // sedang hidup memegang `.next/trace` sehingga `next build` gagal EPERM
+  // padahal port dev berbeda. Dengan NEXT_DIST_DIR=.next-build, build bisa
+  // diverifikasi tanpa mematikan dev server orang lain. Default tetap `.next`.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   experimental: {
     // Proxy dev (rewrites di bawah) memutus koneksi ke backend pada 30 detik
     // (bawaan Next: node_modules/next/dist/server/lib/router-utils/
