@@ -2,12 +2,14 @@
 
 // Halaman "Surplus & Limbah" — halaman sidebar acuan /surplus, disesuaikan ke
 // data repo ini (/balance/map). Panel alokasi memakai surplus nyata; bagian
-// limbah ditulis "—" karena backend ini tidak punya pencatatan disposal.
+// limbah memakai GET /waste/summary (kolom `partner_name`, migrasi 022) —
+// "—" hanya muncul bila server bilang datanya tidak ada.
 
 import PageHeader from "./PageHeader";
 import FactList from "./FactList";
 import {
   allocationPlan,
+  angkaLimbahAda,
   surplusSummary,
   wasteFacts,
 } from "../lib/surplus";
@@ -24,6 +26,7 @@ export default function SurplusBoard({
   error = null,
   onRetry,
   onOpenLocation,
+  waste,
 }: {
   locations: unknown[] | null;
   commodity?: string | null;
@@ -33,6 +36,8 @@ export default function SurplusBoard({
   error?: string | null;
   onRetry?: () => void;
   onOpenLocation?: (location: string) => void;
+  /** Respons GET /waste/summary — sumber tiga baris limbah (bukan angka klien). */
+  waste?: unknown;
 }) {
   const summary = surplusSummary(locations);
   const plan = allocationPlan(locations, 6);
@@ -157,11 +162,16 @@ export default function SurplusBoard({
 
         <article className="card">
           <h2>Pencatatan limbah</h2>
-          <FactList rows={wasteFacts()} />
-          <p className="evidence-note">
-            Bagian ini sengaja kosong: menuliskan 0 kg akan terbaca “tidak ada limbah”, padahal yang
-            benar “belum dicatat”.
-          </p>
+          <FactList rows={wasteFacts(waste)} />
+          {/* Catatan ini hanya benar saat memang belum ada data. Begitu server
+              mengirim angka (recorded.available), kalimat "sengaja kosong"
+              berubah jadi bohong — jadi ia ikut hilang. */}
+          {!angkaLimbahAda(waste) && (
+            <p className="evidence-note">
+              Bagian ini sengaja kosong: menuliskan 0 kg akan terbaca “tidak ada limbah”, padahal
+              yang benar “belum dicatat”.
+            </p>
+          )}
         </article>
       </div>
 

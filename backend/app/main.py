@@ -18,6 +18,7 @@ from app.api.decisions import router as decisions_router
 from app.api.demand import forecast_router
 from app.api.demand import router as demand_router
 from app.api.demo import router as demo_router
+from app.api.waste import router as waste_router
 from app.api.dependencies import lifespan
 from app.api.dossier import router as dossier_router
 from app.api.events import router as events_router
@@ -111,6 +112,7 @@ app.include_router(actions_router)
 app.include_router(sap_orders_router)
 app.include_router(demo_router)
 app.include_router(kpi_router)
+app.include_router(waste_router)
 app.include_router(agenda_router)
 app.include_router(ledger_router)
 app.include_router(dossier_router)

@@ -516,6 +516,7 @@ async def refresh_to_today(
     from app.seed.demo_activity import (
         seed_demo_activity,
         seed_demo_completed_decisions,
+        seed_demo_daily_prices,
     )
     from app.seed.seed_data import load_seed
 
@@ -528,6 +529,10 @@ async def refresh_to_today(
     # Keputusan selesai + limbah HARI INI: tanpa ini empat kartu KPI menjawab
     # "belum ada data" pada periode hari-ini (seed kanonik berhenti di 8 Okt).
     selesai = await seed_demo_completed_decisions(db, now)
+    # Harga hari ini: metrik "Procurement Price Deviation" butuh acuan PIHPS yang
+    # LEBIH DULU daripada kutipan pemasok, dan keduanya bertanggal hari ini.
+    # Tanpa ini kartu itu kosong setiap hari baru walau datanya ada di hari lama.
+    harga = await seed_demo_daily_prices(db, now)
     # Rute jalan ikut disinkronkan: seeder memindahkan tanggal kiriman ke hari
     # ini, dan pasangan pemasok→tujuan yang BELUM ada di cache hanya punya garis
     # kalau disinkronkan di sini. Tanpa langkah ini tombol "Segarkan ke hari ini"
@@ -540,7 +545,7 @@ async def refresh_to_today(
         "reference_time": now.isoformat(),
         "rows": rows,
         "cases": cases,
-        "activity": {**aktivitas, **selesai},
+        "activity": {**aktivitas, **selesai, **harga},
         "routes": routes,
         "route_error": route_error,
         "warning": REFRESH_WARNING,

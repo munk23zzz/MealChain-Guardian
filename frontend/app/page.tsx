@@ -27,6 +27,7 @@ import { useDecisionDetail } from "../lib/hooks/useDecisionDetail";
 import { readDecisionLink, withDecisionLink } from "../lib/decision-link";
 import { useExclusions } from "../lib/hooks/useExclusions";
 import { useKpi } from "../lib/hooks/useKpi";
+import { useWasteSummary } from "../lib/hooks/useWasteSummary";
 import { useIntegrationStatus } from "../lib/hooks/useIntegrationStatus";
 import { usePurchaseOrders } from "../lib/hooks/usePurchaseOrders";
 import { agendaErrorText, useAgenda } from "../lib/hooks/useAgenda";
@@ -456,6 +457,9 @@ export default function Home() {
   // nilai yang sama untuk menandai pilihan aktif. Default tetap 24 jam.
   const [kpiWindow, setKpiWindow] = useState<KpiWindowKey>("24h");
   const kpiQuery = useKpi(token, identityScope, tab, kpiWindow);
+  // Limbah + mitra pengolahan (18 Okt 2026): panel Surplus & Limbah dulu menulis
+  // "—" karena tidak ada sumbernya. Sekarang dari server, dimuat hanya di tab itu.
+  const wasteQuery = useWasteSummary(token, identityScope, tab);
 
   // Kalender agenda harian (langkah 2, 2026-10-16). Bulan & hari terpilih
   // dimiliki HALAMAN — bukan komponen — supaya rentang yang diminta ke
@@ -1678,6 +1682,7 @@ export default function Home() {
               setActiveLocation(location);
               setTab("overview");
             }}
+            waste={wasteQuery.data}
           />
         )}
 

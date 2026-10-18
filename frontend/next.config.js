@@ -34,6 +34,10 @@ const API_ROOTS = [
   "suppliers",
   // Fase 10: rute JALAN kiriman pemasok → tujuan (dipakai peta untuk garis).
   "supplier-routes",
+  // Limbah + mitra pengolahan (18 Okt 2026): /waste/summary untuk panel
+  // Surplus & Limbah. Tanpa akar ini panel menerima 404 HTML dari Next sendiri
+  // dan tiga baris limbah kembali menjadi "—".
+  "waste",
   // Fase 11: dua hitung-ulang dari halaman Keamanan Pangan. Tanpa dua akar ini
   // tombol "Periksa kiriman"/"Uji ulang" membalas 404 HTML dari Next sendiri
   // (terukur: "Tidak bisa memeriksa: HTTP 404: /freshness/evaluate").

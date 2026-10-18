@@ -110,6 +110,10 @@ class DisposalEvent(Base):
     )
     quantity_kg: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
+    #: Mitra yang menerima limbah (bank sampah / komposter / pakan). NULL =
+    #: dibuang tanpa mitra; itu keadaan BERBEDA dari 0 kg, jadi API memisahkan
+    #: `diverted` dari `unassigned_kg` alih-alih menyamakannya.
+    partner_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: Lihat catatan di `DeliveryEvent.origin` (migrasi 017).
     origin: Mapped[str] = mapped_column(Text, nullable=False, server_default="seed")
     generated_at: Mapped[datetime | None] = mapped_column(

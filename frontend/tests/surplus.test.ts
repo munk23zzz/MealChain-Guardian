@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   allocationPlan,
+  angkaLimbahAda,
   haversineKm,
   surplusSummary,
   wasteFacts,
@@ -89,6 +90,42 @@ describe("bagian limbah", () => {
       expect(fact.value).toBe("—");
       expect(fact.hint).toBeTruthy();
     }
+  });
+
+  it("menampilkan kg dan mitra saat respons /waste/summary ada", () => {
+    const facts = wasteFacts({
+      recorded: { available: true, kg: 20.5, events: 2 },
+      diverted: { available: true, kg: 12.5, events: 1 },
+      unassigned: { available: true, kg: 8, events: 1 },
+      partners: [{ name: "Bank Sampah Melati", kg: 12.5, events: 1 }],
+    });
+    expect(facts.map((f) => f.label)).toEqual([
+      "Sisa pangan dicatat",
+      "Limbah dialihkan",
+      "Komposter / bank pangan",
+    ]);
+    expect(facts[0].value).toBe("20,5 kg");
+    expect(facts[0].hint).toContain("2 peristiwa");
+    expect(facts[1].value).toBe("12,5 kg");
+    expect(facts[2].value).toContain("Bank Sampah Melati");
+    expect(facts[2].value).toContain("12,5 kg");
+    expect(facts[2].hint).toContain("1 mitra");
+  });
+
+  it("tetap jujur saat server bilang datanya tidak tersedia", () => {
+    const facts = wasteFacts({
+      recorded: { available: false, kg: null, events: 0 },
+      diverted: { available: false, kg: null, events: 0 },
+      unassigned: { available: false, kg: null, events: 0 },
+      partners: [],
+    });
+    expect(facts.every((f) => f.value === "—")).toBe(true);
+    expect(angkaLimbahAda({ recorded: { available: false, kg: null, events: 0 } })).toBe(false);
+  });
+
+  it("menandai bahwa angka limbah benar-benar ada", () => {
+    expect(angkaLimbahAda({ recorded: { available: true, kg: 12.5, events: 1 } })).toBe(true);
+    expect(angkaLimbahAda(undefined)).toBe(false);
   });
 
 });

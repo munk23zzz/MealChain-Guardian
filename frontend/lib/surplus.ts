@@ -145,12 +145,69 @@ export function allocationPlan(locations: unknown, limit = 5): Allocation[] {
 
 export type SurplusFact = { label: string; value: string; hint?: string | null };
 
-/** Bagian limbah/sisa pangan yang sumbernya belum ada di repo ini. */
-export function wasteFacts(): SurplusFact[] {
+/** Bentuk minimum respons `GET /waste/summary` yang dipakai panel. */
+export type WastePayload = {
+  recorded?: { available?: boolean; kg?: number | null; events?: number };
+  diverted?: { available?: boolean; kg?: number | null; events?: number };
+  unassigned?: { available?: boolean; kg?: number | null; events?: number };
+  partners?: { name?: string; kg?: number; events?: number }[];
+};
+
+/** Apakah server benar-benar mengirim angka limbah (bukan "belum ada data")? */
+export function angkaLimbahAda(payload?: unknown): boolean {
+  const data = (payload ?? {}) as WastePayload;
+  return Boolean(data.recorded?.available);
+}
+
+function wasteKg(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return DASH;
+  return `${Number(value).toLocaleString("id-ID", { maximumFractionDigits: 1 })} kg`;
+}
+
+/**
+ * Bagian limbah/sisa pangan.
+ *
+ * `payload` = respons `/waste/summary` (kolom `partner_name`, migrasi 022).
+ * Tanpa payload, ketiga baris tetap "—" dengan alasannya — keadaan "belum
+ * dimuat" TIDAK boleh tampil sebagai 0 kg yang seolah terukur.
+ */
+export function wasteFacts(payload?: unknown): SurplusFact[] {
+  const data = (payload ?? {}) as WastePayload;
+  const tercatat = data.recorded;
+  const dialihkan = data.diverted;
+  const tanpaMitra = data.unassigned;
+  const mitra = (data.partners ?? []).filter(
+    (p): p is { name: string; kg: number; events?: number } =>
+      Boolean(p && p.name) && Number.isFinite(Number(p.kg))
+  );
+
+  const adaTercatat = Boolean(tercatat?.available);
+  const adaAlih = Boolean(dialihkan?.available);
+
   return [
-    { label: "Sisa pangan dicatat", value: DASH, hint: "pencatatan limbah/sisa pangan belum tersedia" },
-    { label: "Limbah dialihkan", value: DASH, hint: "pengalihan limbah belum tercatat" },
-    { label: "Komposter / bank pangan", value: DASH, hint: "belum ada data mitra pengolahan" },
+    {
+      label: "Sisa pangan dicatat",
+      value: adaTercatat ? wasteKg(tercatat?.kg) : DASH,
+      hint: adaTercatat
+        ? `${tercatat?.events ?? 0} peristiwa · ${wasteKg(tanpaMitra?.kg)} tanpa mitra`
+        : "pencatatan limbah/sisa pangan belum tersedia",
+    },
+    {
+      label: "Limbah dialihkan",
+      value: adaAlih ? wasteKg(dialihkan?.kg) : DASH,
+      hint: adaAlih
+        ? `${dialihkan?.events ?? 0} peristiwa ke mitra`
+        : "pengalihan limbah belum tercatat",
+    },
+    {
+      label: "Komposter / bank pangan",
+      value: mitra.length
+        ? mitra.map((p) => `${p.name} · ${wasteKg(p.kg)}`).join(" · ")
+        : DASH,
+      hint: mitra.length
+        ? `${mitra.length} mitra pengolahan`
+        : "belum ada data mitra pengolahan",
+    },
   ];
 }
 

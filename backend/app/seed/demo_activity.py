@@ -23,7 +23,14 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.po_number import nomor_po
-from app.models import Batch, Commodity, Location, Supplier
+from app.models import (
+    Batch,
+    Commodity,
+    DisposalEvent,
+    Location,
+    PriceSignal,
+    Supplier,
+)
 
 DEMO_TAG = "demo-aktivitas"
 
@@ -41,6 +48,26 @@ ROTASI = (
 
 MUTU = ("pass", "pass", "pending", "needs_verification")
 SERTIFIKASI = ("haccp", "hygiene", "none")
+
+#: Harga PO demo per komoditas (Rp/kg). Satu angka untuk semua komoditas membuat
+#: beras tercatat Rp25.132/kg — 89% di atas pasar — dan itu terbaca sebagai
+#: kesalahan data, bukan variasi.
+HARGA_PO = {
+    "telur": Decimal("25132.39"),
+    "ayam": Decimal("41500"),
+    "wortel": Decimal("23500"),
+    "beras": Decimal("13300"),
+}
+
+#: Acuan harga demo harian: (acuan PIHPS Rp/kg, deviasi kutipan pemasok).
+#: Deviasi sengaja kecil tapi tidak nol: 0% membuat metrik deviasi harga
+#: selalu "sempurna" dan tidak informatif.
+HARGA_HARIAN = {
+    "telur": (Decimal("30500"), Decimal("0.010")),
+    "ayam": (Decimal("41500"), Decimal("0.004")),
+    "wortel": (Decimal("23500"), Decimal("0.014")),
+    "beras": (Decimal("13400"), Decimal("0.006")),
+}
 
 
 def demo_batch_id(lokasi: str, pemasok: str, komoditas: str) -> uuid.UUID:
@@ -190,6 +217,11 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
 
     dibuat = 0
     dilewati_kota: list[str] = []
+    # Daftar pekerjaan dibangun dulu, lalu dieksekusi: rotasi 3 kota hanya
+    # memilih telur/ayam/wortel, sehingga beras tidak pernah kebagian. Beras
+    # disemai EKSPLISIT untuk Jakarta supaya panel Decision & Evidence punya
+    # baris beras yang bisa dibuka (permintaan pemilik 18 Okt 2026).
+    pekerjaan: list[tuple[str, object, str]] = []
     for i, (nama_kota, loc) in enumerate(sorted(lokasi.items())):
         kepala_kota = approver.get((loc.id, "sppg_head"))
         nutrisi_kota = approver.get((loc.id, "sppg_nutritionist"))
@@ -198,8 +230,23 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
             # tanpa approver sendiri dilewati, bukan di-approve dari SPPG lain.
             dilewati_kota.append(nama_kota)
             continue
-        nama_komoditas = urut_komoditas[i % len(urut_komoditas)]
-        sup = pemasok[i % len(pemasok)]
+        pekerjaan.append((nama_kota, loc, urut_komoditas[i % len(urut_komoditas)]))
+    jakarta = lokasi.get("Jakarta")
+    if (
+        jakarta is not None
+        and "beras" in komoditas
+        and approver.get((jakarta.id, "sppg_head")) is not None
+        and approver.get((jakarta.id, "sppg_nutritionist")) is not None
+    ):
+        pekerjaan.append(("Jakarta", jakarta, "beras"))
+
+    for nama_kota, loc, nama_komoditas in pekerjaan:
+        kepala_kota = approver[(loc.id, "sppg_head")]
+        nutrisi_kota = approver[(loc.id, "sppg_nutritionist")]
+        sup = pemasok[pekerjaan.index((nama_kota, loc, nama_komoditas)) % len(pemasok)]
+        if nama_komoditas == "beras":
+            # Pemasok beras dulu; kalau tidak ada, jatuh ke pemasok rotasi.
+            sup = next((p for p in pemasok if p.name.startswith("Beras")), sup)
         did = demo_decision_id(nama_kota, nama_komoditas)
         mulai = now - timedelta(minutes=44)
         nilai = {
@@ -277,7 +324,9 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
 
         for etype, menit in BUKTI_SEBELUM_APPROVAL:
             bukti_id = uuid.uuid5(did, f"bukti:{etype}")
-            if await db.get(DecisionEvidence, bukti_id) is None:
+            kapan = mulai + timedelta(minutes=menit)
+            ada_bukti = await db.get(DecisionEvidence, bukti_id)
+            if ada_bukti is None:
                 db.add(
                     DecisionEvidence(
                         id=bukti_id,
@@ -285,9 +334,15 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
                         evidence_type=etype,
                         payload={"demo": True, "kota": nama_kota},
                         is_consistent=True,
-                        recorded_at=mulai + timedelta(minutes=menit),
+                        recorded_at=kapan,
                     )
                 )
+            else:
+                # Tanggal ikut bergeser: bukti yang tertinggal di hari kemarin
+                # membuat Evidence Completeness & Decision Time kosong besok.
+                ada_bukti.recorded_at = kapan
+                ada_bukti.payload = {"demo": True, "kota": nama_kota}
+                ada_bukti.is_consistent = True
 
         # Binding eksplisit: menyebut pemasok DAN batch yang dipakai. Tanpa ini
         # `resolve_binding` harus menyimpulkan dari seluruh batch pasangan itu,
@@ -321,6 +376,7 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
             # dieksekusi. Menyemai ulang harus menyembuhkannya.
             bukti_binding.payload = binding_payload
             bukti_binding.is_consistent = True
+            bukti_binding.recorded_at = mulai + timedelta(minutes=9)
 
         acc_id = uuid.uuid5(did, "approval")
         acc = await db.get(Approval, acc_id)
@@ -339,6 +395,7 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
             # Reparasi: baris lama (sebelum 18 Okt) memakai approver Jakarta.
             # Seed bersifat idempoten, jadi ia harus menyembuhkan riwayatnya.
             acc.approved_by = kepala_kota.id
+            acc.approved_at = mulai + timedelta(minutes=12)
 
         # Approval kedua: ahli gizi. `regional_balance` operasional wajib dua
         # role berbeda (`dua_role_wajib`), jadi satu approval saja membuat
@@ -358,10 +415,13 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
             )
         else:
             acc2.approved_by = nutrisi_kota.id
+            acc2.approved_at = mulai + timedelta(minutes=14)
 
         for step, menit in JALUR_KEPUTUSAN:
             trace_id = uuid.uuid5(did, f"trace:{step}")
-            if await db.get(AgentTrace, trace_id) is None:
+            kapan = mulai + timedelta(minutes=menit)
+            ada_jejak = await db.get(AgentTrace, trace_id)
+            if ada_jejak is None:
                 db.add(
                     AgentTrace(
                         id=trace_id,
@@ -371,12 +431,20 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
                         input_summary={"demo": True},
                         output_summary={"ok": True},
                         duration_ms=800 + menit * 40,
-                        step_at=mulai + timedelta(minutes=menit),
+                        step_at=kapan,
                     )
                 )
+            else:
+                # Decision Time = DETECT..ACT di jendela; jejak yang tertinggal
+                # di hari kemarin membuat metrik itu kehilangan sampelnya.
+                ada_jejak.step_at = kapan
+                ada_jejak.duration_ms = 800 + menit * 40
 
         po_id = uuid.uuid5(did, "po")
-        if await db.get(SapMockPurchaseOrder, po_id) is None:
+        harga_po = HARGA_PO.get(nama_komoditas, Decimal("25132.39"))
+        po_kapan = now - timedelta(minutes=18)
+        ada_po = await db.get(SapMockPurchaseOrder, po_id)
+        if ada_po is None:
             db.add(
                 SapMockPurchaseOrder(
                     id=po_id,
@@ -386,20 +454,32 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
                     supplier_id=sup.id,
                     material_number=f"MAT-{nama_komoditas.upper()[:4]}",
                     ordered_quantity=Decimal(600),
-                    price=Decimal("25132.39"),
+                    price=harga_po,
                     decision_id=did,
                     status="confirmed",
-                    created_at=now - timedelta(minutes=18),
+                    created_at=po_kapan,
                 )
             )
+        else:
+            # Safe Delivered Cost berjangkar pada PO.created_at; PO yang tetap
+            # di hari kemarin mengosongkan metrik itu besok pagi.
+            ada_po.created_at = po_kapan
+            ada_po.price = harga_po
+            ada_po.supplier_id = sup.id
 
     # Limbah hari ini: dua kejadian kecil di Jakarta (alasan dari data kanonik).
     limbah = 0
     jakarta = lokasi.get("Jakarta")
     if jakarta is not None and "telur" in komoditas:
+        #: Satu kejadian dialihkan ke mitra, satu dibuang tanpa mitra: dua
+        #: keadaan itu HARUS terlihat berbeda di panel, bukan sama-sama "—".
+        MITRA = ("Bank Sampah Melati", None)
         for n, (menit, kg) in enumerate(((-150, Decimal("12.5")), (-90, Decimal("8")))):
             dis_id = uuid.uuid5(uuid.NAMESPACE_URL, f"mcg:{DEMO_TAG}:limbah:jakarta:{n}")
-            if await db.get(DisposalEvent, dis_id) is None:
+            kapan = now + timedelta(minutes=menit)
+            mitra = MITRA[n]
+            ada_limbah = await db.get(DisposalEvent, dis_id)
+            if ada_limbah is None:
                 db.add(
                     DisposalEvent(
                         id=dis_id,
@@ -409,14 +489,92 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
                         reason="spoilage_cold_chain",
                         origin="demo",
                         generated_at=now,
-                        disposed_at=now + timedelta(minutes=menit),
+                        disposed_at=kapan,
+                        partner_name=mitra,
                     )
                 )
                 limbah += 1
+            else:
+                # Avoidable Food Loss memakai jendela hari ini; limbah yang
+                # tertinggal sehari membuat metriknya kosong besok.
+                ada_limbah.disposed_at = kapan
+                ada_limbah.generated_at = now
+                ada_limbah.partner_name = mitra
     await db.flush()
     return {
         "keputusan_demo": dibuat,
         "limbah_demo": limbah,
         "dilewati_kota": dilewati_kota,
     }
+
+async def seed_demo_daily_prices(session: AsyncSession, now: datetime) -> dict:
+    """Harga demo HARI INI: acuan PIHPS + kutipan pemasok, berpasangan.
+
+    Metrik "Procurement Price Deviation" memasangkan `supplier_quote` dengan
+    `pihps_reference` TERAKHIR SEBELUM kutipan itu, di lokasi+komoditas yang
+    sama. Seed kanonik berhenti di 8 Okt dan deret waktu demo berhenti di hari
+    penenunannya, jadi setiap hari baru metrik itu menjawab "tidak ada record
+    pada periode ini" — padahal datanya ada di hari-hari sebelumnya.
+
+    Baris ditulis untuk kota yang punya keputusan demo (Jakarta, Bandung,
+    Surabaya) dan semua komoditas yang ada di DB, termasuk beras. Id
+    deterministik per (tanggal, kota, komoditas, jenis), sehingga menyegarkan
+    dua kali pada hari yang sama memperbarui baris yang sama.
+    """
+    kota = ("Jakarta", "Bandung", "Surabaya")
+    lokasi = {
+        loc.name: loc
+        for loc in (await session.execute(select(Location))).scalars()
+        if loc.name in kota
+    }
+    komoditas = {c.name: c.id for c in (await session.execute(select(Commodity))).scalars()}
+    pemasok = list((await session.execute(select(Supplier).order_by(Supplier.name))).scalars())
+    if not lokasi or not pemasok:
+        return {"harga_demo": 0, "dilewati": "lokasi/pemasok belum ada"}
+
+    hari = now.date()
+    dibuat = 0
+    for nama_kota, loc in sorted(lokasi.items()):
+        # Kutipan datang dari pemasok KOTA ITU; tanpa pemasok lokal, kutipan
+        # tetap sah tetapi jaraknya tidak masuk akal — jadi kota dilewati.
+        sup = next((p for p in pemasok if p.location_id == loc.id), None)
+        if sup is None:
+            continue
+        for nama, (acuan, deviasi) in HARGA_HARIAN.items():
+            if nama not in komoditas:
+                continue
+            kutipan = (acuan * (Decimal(1) + deviasi)).quantize(Decimal("0.01"))
+            rencana = (
+                ("acuan", acuan, now - timedelta(hours=4), "pihps_reference", None),
+                ("kutipan", kutipan, now - timedelta(hours=3), "supplier_quote", sup.id),
+            )
+            for jenis, harga, kapan, sumber, supplier_id in rencana:
+                pid = uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"mcg:{DEMO_TAG}:harga:{hari}:{nama_kota}:{nama}:{jenis}",
+                )
+                baris = await session.get(PriceSignal, pid)
+                if baris is None:
+                    session.add(
+                        PriceSignal(
+                            id=pid,
+                            location_id=loc.id,
+                            commodity_id=komoditas[nama],
+                            supplier_id=supplier_id,
+                            price_per_kg=harga,
+                            source=sumber,
+                            recorded_at=kapan,
+                            origin="demo",
+                            generated_at=now,
+                        )
+                    )
+                    dibuat += 1
+                else:
+                    baris.price_per_kg = harga
+                    baris.recorded_at = kapan
+                    baris.supplier_id = supplier_id
+                    baris.generated_at = now
+    await session.flush()
+    return {"harga_demo": dibuat}
+
 

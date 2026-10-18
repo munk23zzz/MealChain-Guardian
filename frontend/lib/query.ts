@@ -43,6 +43,9 @@ export const queryKeys = {
     ["balance-map", scope, commodity] as const,
   kpiLive: (scope: string, windowKey: string = "24h") =>
     ["kpi-live", scope, windowKey] as const,
+  // Limbah + mitra pengolahan (18 Okt 2026): satu angka per panel Surplus &
+  // Limbah. Kunci memuat scope karena SPPG hanya melihat lokasinya.
+  wasteSummary: (scope: string) => ["waste-summary", scope] as const,
   // Kalender agenda (langkah 2, 2026-10-16): rentang grid bulan masuk kunci
   // query supaya berpindah bulan memakai cache yang benar dan bulan yang sama
   // tidak diambil dua kali.

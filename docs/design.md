@@ -318,7 +318,7 @@ dengan **data API nyata** — bukan data contoh seperti di acuan:
 | Tab baru | Di acuan | Sumber angka di repo ini | Yang TIDAK dipakai dari acuan |
 |---|---|---|---|
 | Keamanan Pangan | `/compliance` | `GET /batches`: `safety_status`, `freshness_score`, `usable_until`, `quantity_kg` | papan CCP per-alat, bank sampel, jejak lot EPCIS (tidak ada endpoint) |
-| Surplus & Limbah | `/surplus` | `GET /balance/map?commodity=…`: `surplus_kg`, `shortage_kg`, `latitude`/`longitude`, `region` | pencatatan limbah/disposal (tidak ada tabel; ditulis "—" + alasan) |
+| Surplus & Limbah | `/surplus` | `GET /balance/map?commodity=…`: `surplus_kg`, `shortage_kg`, `latitude`/`longitude`, `region` | limbah: `GET /waste/summary` → `recorded` / `diverted` / `unassigned` + `partners` (kolom `disposal_events.partner_name`, migrasi 022; "—" hanya bila memang tak ada baris) |
 | Pemasok | `/suppliers` | **`GET /suppliers`** (35 pemasok: 14 kanonik + 21 demo — daftar, keandalan, komoditas, kapasitas, jarak/koordinat, status eksklusi) + `GET /supplier-exclusions`; pin di peta (lihat §3.1). Halaman Pemasok: kolom **Jarak** (dari `distance_km` server) + penyaring "Hanya dalam jangkauan" untuk peran SPPG; jarak tanpa rujukan ditulis "—". Kolom **Status** menulis pil ringkas dari kunci `shipping` server bila pemasok itu punya kiriman masih layak (`.shipping-tag`, token ok), pil bahaya terpisah `.shipping-tag-fail` bila ada kiriman gagal uji, "Dikecualikan di …" bila ada eksklusi, selain itu "Aktif"; kartu Ringkasan memuat "Sedang mengirim barang: N dari M". **F12c (16 Okt): tabel dirapikan jadi 7 kolom** — "Hub" dan "Koordinat" tidak lagi kolom sendiri, keduanya jadi baris kedua sel **Pemasok** (`supplierMetaLine`: "Surabaya · -7,2395 / 112,7731") karena dua kolom itu memakan 178 px dari 913 px; ukur sesudahnya: tabel **913 = 913 px (tanpa geser)**, tinggi baris **54 px rata**. **Satu standar bentuk label** (dipakai `.reach-tag`, `.shipping-tag`, `.shipping-tag-fail`): 12 px, `padding: 2px 8px`, `inline-flex`, `white-space: nowrap` + `text-overflow: ellipsis`, jadi **tinggi 22 px** (setara `.commodity-pill`) — sebelum F12c pil kiriman memuat kalimat penuh dan membungkus 3 baris (186×63 px). Kalimat penuh tetap tersedia lewat `title`; pil jangkauan hanya menulis keadaan karena km-nya sudah ada di kolom **Jarak** tepat di sebelahnya. Pemasok tanpa sumber profil tetap "—" (tidak dikarang) | harga/PO per pemasok (belum ada endpoint; ditulis "—") |
 | Kualitas Agen (bagian 2 tab **KPI & Kualitas Agen**) | `/quality` (`MOCK_AGENT_RUNS` di acuan) | `GET /decisions/{id}/traces` + `verdict` pada `approval-summary` (sampel 8) | LLM-as-judge, biaya token (belum ada di repo) |
 
@@ -678,7 +678,8 @@ diganti; **strukturnya** yang diperbaiki.
 - Surplus & Limbah: `.balance-flow` — dua angka besar (surplus `--ok-ink`, kekurangan
   `--danger-ink`) mengapit panah SVG aksen; `data-kosong="true"` membuat panah netral
   saat salah satu sisi tidak punya angka (panah tidak boleh menggambar aliran yang tak
-  terbukti). Jarak/Jumlah mono. Bagian limbah tetap "—" + alasan.
+  terbukti). Jarak/Jumlah mono. Bagian limbah kini berisi angka server (lihat §13); "—" hanya
+bila endpoint menjawab `available: false`.
 - Pemasok: kolom Keandalan = bar mini 6px + angka; lebar dari `reliabilityMeter()`
   (0–100, ambang `LOW_RELIABILITY` = 0,6), `aria-label` membawa angkanya, skor kosong →
   tanpa bar. Panel governance (`SupplierExclusionPanel.module.css`) memakai token tema.
@@ -1446,7 +1447,8 @@ di Hari Ini berubah dari `6/7 · 1 metrik belum ada data` menjadi **`7/7 · semu
 
 **Batas jujur yang TIDAK diisi dengan data karangan:** Agent Log tetap menulis "belum ada langkah agent yang
 tercatat" untuk keputusan non-demo karena `AGENTCORE_RUNTIME_ARN` kosong (tidak ada eksekusi nyata), dan
-Surplus & Limbah tetap menulis "belum ada data mitra pengolahan" karena kolomnya tidak ada di skema.
+Surplus & Limbah dulu menulis "belum ada data mitra pengolahan" karena kolomnya tidak ada di
+skema; sejak migrasi 022 + `/waste/summary` baris itu berisi mitra dan kg-nya (§13).
 
 ## 10. K3 — padanan TEKS untuk isi peta (selesai 17 Okt 2026)
 
@@ -1516,10 +1518,9 @@ berfungsi. Permintaan pemilik 18 Okt 2026: "tolong buat data beras".
 
 ### Batas jujur
 
-- **Belum ada keputusan demo beras.** Tiga keputusan demo tetap telur; panel Decision & Evidence
-  untuk beras akan kosong sampai ada keputusan nyata. Tidak diisi dengan keputusan karangan.
-- **Deret waktu beras belum ada.** Tombol deret waktu demo hanya mencakup tiga komoditas lama,
-  jadi grafik stok beras menampilkan satu titik (nilai kanonik), bukan tren.
+- ~~Belum ada keputusan demo beras / deret waktunya~~ → **selesai 19 Okt 2026 (§13)**:
+  keputusan Jakarta+beras dibuat lewat jalur seed yang sama (4 jejak, 3 bukti, 2 persetujuan),
+  dan deret waktu demo beras terisi penuh (1.290 baris pasokan, 216 permintaan, 1.338 harga).
 - **Dua kiriman beras lokal** (Jakarta → Jakarta) punya rasio jalan/lurus 3,85× karena OSRM memutar
   di jalan kota; itu angka nyata, bukan kesalahan hitung.
 
@@ -1534,4 +1535,99 @@ berfungsi. Permintaan pemilik 18 Okt 2026: "tolong buat data beras".
   pemasok-tujuan, sehingga dua batch ke tujuan yang sama memicu "same key" di React. Kini
   `shipmentKey(row)` = `id#batchId` (id pemilihan tetap per pasangan); tes: `tests/supplier-routes.test.ts`.
 
+## 13. Sisa pekerjaan "kerjakan semuanya" — rollover harian, beras, limbah bermitra (19 Okt 2026)
 
+Lima hal yang sebelumnya dilaporkan sebagai *belum bisa* kini selesai atau dibatasi
+secara eksplisit. Tiap butir menyebut buktinya, dan yang masih kosong tetap ditulis kosong.
+
+### 13.1 KPI "hari ini" ikut bergeser (dulu 6/7 tiap hari baru)
+
+Gejala: pada 18 Okt panel KPI menulis **Procurement Price Deviation — no_data** ⇒ 6/7,
+padahal sehari sebelumnya 7/7. Sebabnya bukan data hilang: keputusan/limbah demo
+bertanggal **17 Okt**, dan `seed_demo_completed_decisions` **idempoten** — baris yang
+sudah ada tidak disentuh, jadi tanggalnya membeku selamanya.
+
+Perbaikan (bukan mengarang angka baru, hanya memindahkan tanggal baris demo yang sudah ada):
+
+| Baris | Kolom yang dipindah tiap penyemaian |
+|---|---|
+| `decisions` | `created_at`, `updated_at` |
+| `decision_evidence` | `recorded_at` (dan payload/binding diperbarui) |
+| `decision_approvals` | `approved_at` |
+| `agent_traces` | `step_at`, `duration_ms` |
+| `purchase_orders` | `created_at` |
+| `disposal_events` | `generated_at`, `disposed_at` |
+
+Id deterministik TIDAK berubah, jadi penyemaian ulang memperbarui baris yang sama —
+tidak menggandakan keputusan/limbah.
+
+Tambahan `seed_demo_daily_prices()`: **3 kota × 4 komoditas × 2 jenis = 24 baris/hari**
+(acuan PIHPS pada `now−4 jam`, kutipan pemasok pada `now−3 jam`). Urutan itu penting:
+metrik deviasi memasangkan kutipan dengan acuan **terakhir SEBELUM** kutipan, jadi
+acuan yang bertanggal sesudah kutipan tidak akan berpasangan. Id per
+(tanggal, kota, komoditas, jenis) ⇒ menyegarkan dua kali pada hari yang sama tidak
+menggandakan baris.
+
+Bukti hidup (jendela 24 jam, 19 Okt 00:0x WIB): **7/7 metrik tersedia** —
+Meal Continuity 100,00% · Avoidable Food Loss 0,61% · Regional Imbalance 5,13% ·
+Safe Delivered Cost Rp15.454.957 · Procurement Price Deviation 0,98% (6 sampel) ·
+Decision Time 20,00 mnt · Evidence Completeness 50,00%.
+
+### 13.2 Keputusan BERAS (dulu: panel Decision & Evidence kosong untuk beras)
+
+Rotasi keputusan demo memilih komoditas per kota, sehingga beras tidak pernah kebagian.
+Sekarang beras disemai **eksplisit** untuk Jakarta lewat jalur yang sama:
+`MC-661695B2C685` — 600 kg, Rp13.300/kg = **Rp7.980.000**, pemasok *Beras Makmur Jakarta*,
+**4 jejak** (DETECT→…→ACT), **3 bukti**, **2 persetujuan**. Terukur di UI:
+baris *"MC-661695B2C685 terkonfirmasi dari eksekusi · Jakarta · Beras Makmur Jakarta ·
+600 kg · Rp 13.300,00/kg · Rp 7.980.000,00"*.
+
+Harga PO per komoditas kini berbeda (`HARGA_PO`): beras 13.300 — sebelumnya semua
+komoditas memakai harga telur 25.132,39, yang membuat beras tampak 2× lipat harga pasar.
+
+### 13.3 Deret waktu beras (dulu: satu titik kanonik)
+
+Deret waktu demo beras kini terisi penuh: **1.290 baris pasokan** (1 Sep–4 Nov),
+**216 baris permintaan** (8 SPPG × 27 hari), **1.338 baris harga**. Grafik stok beras
+menampilkan tren, bukan satu titik.
+
+### 13.4 Agent Log (dulu dilaporkan kosong)
+
+Dengan keputusan demo + jejaknya, tab Agent Log berisi **28 baris** saat diukur.
+Catatan jujur yang tetap berlaku: jejak untuk keputusan **non-demo** hanya lahir kalau
+`AGENTCORE_RUNTIME_ARN` diset — tanpa ARN, tidak ada yang bisa ditampilkan dan itu
+tidak diisi karangan.
+
+### 13.5 Mitra pengolahan limbah (dulu: kolomnya tidak ada)
+
+Panel menulis *"Komposter / bank pangan: — · belum ada data mitra pengolahan"*, dan itu
+memang benar: skema tidak menyimpan ke mana limbah dialihkan.
+
+Sekarang ada:
+
+- **Migrasi `022_disposal_partner`** — `disposal_events.partner_name text NULL`.
+  `NULL` = limbah **dibuang tanpa mitra**; itu keadaan BERBEDA dari 0 kg, jadi API
+  memisahkannya, tidak menyamakannya.
+- **`GET /waste/summary?days=30`** (`backend/app/api/waste.py`) → `recorded`,
+  `diverted`, `unassigned`, dan `partners[]` (nama + kg + jumlah peristiwa).
+  Invariannya: `recorded = diverted + unassigned`. Bila tidak ada baris, jawabannya
+  `available: false` + alasan — bukan 0 kg yang seolah terukur. Cakupan peran lewat
+  `app/core/scope.py` (SPPG = lokasi sendiri, BGN = nasional).
+- **Klien**: `wasteFacts(payload)` menggambar angka server; tanpa payload tetap "—".
+  `useWasteSummary` hanya memuat di tab Surplus & Limbah; penyegaran global sesudah
+  tulis tetap berlaku.
+- **Kontrak proxy**: `next.config.js` `API_ROOTS` + `"waste"` — tes
+  `tests/proxy-roots.test.ts` menangkap ini lebih dulu (tanpa akar itu panel menerima
+  404 HTML dari router Next, bukan JSON).
+
+Tes: `backend/tests/test_waste_summary.py` (2) mengunci invarian dan pemisahan
+mitra/dibuang serta cakupan peran; `frontend/tests/surplus.test.ts` (+2) mengunci
+tampilan kg/mitra dan keadaan "data tidak tersedia".
+
+### 13.6 Catatan operasional (penting untuk demo)
+
+DB demo dipakai **bersama** sesi lain. Selama pengerjaan, baris demo sempat terhapus
+oleh pembersihan tes sesi paralel (terukur: keputusan/limbah demo hilang di antara dua
+pemeriksaan beberapa detik). Karena itu: setelah menjalankan pytest, tekan
+**"Segarkan ke hari ini"** sebelum menilai UI, dan jangan menyimpulkan "fitur rusak"
+dari angka yang berubah-ubah tanpa memeriksa ulang barisnya di DB.
