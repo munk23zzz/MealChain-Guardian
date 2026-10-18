@@ -160,3 +160,14 @@
 - **Jangan menulis dua aturan dengan spesifisitas sama dan nilai berbeda** (putih
   vs kaca gelap untuk hover pil): hasilnya bergantung urutan berkas. Samakan
   nilainya, atau naikkan spesifisitas secara sadar dan catat alasannya.
+
+## 19 Okt 2026 — bingkai pil: buang abu setengah transparan, cincin fokus dari luar
+
+- **Bingkai abu `rgba(203,213,225,.5)` di atas piringan gelap terbaca kotor** (tiga lapis
+  bingkai: abu → putih → gelap). Piringan hover/fokus kini tanpa border; penanda fokus
+  sepenuhnya tugas cincin.
+- **Cincin fokus disusun dari LUAR ke dalam**: celah putih 2 px (pemisah dari piringan gelap)
+  lalu cincin tinta 2 px (13:1 di atas peta terang). Urutan ini dipilih karena latar pil
+  adalah peta terang — cincin putih murni hanya ~1:1 di sana.
+- **Jangan pakai `!important` untuk menang atas tema.** Naikkan spesifisitas secara sadar
+  (`button` di selektor) dan tulis alasannya di komentar, supaya tema tetap bisa mengubah.

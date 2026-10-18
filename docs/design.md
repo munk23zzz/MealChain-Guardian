@@ -1763,3 +1763,28 @@ tunggal, dan pil pemilih ≥28 px.
 
 Artefak: `ui-audit/p21-fokus-pil.png` (cincin fokus), `p19-pil-transparan.png`,
 `p20-peta-375.png` (ponsel).
+
+### 14.6 Warna bingkai pil, 19 Okt 2026 (revisi pemilik: "warna bingkainya perbaiki lagi")
+
+Keadaan sebelum: piringan hover/fokus membawa `border-color: var(--map-hair-strong)` —
+abu `rgba(203,213,225,.5)`. Di atas piringan gelap garis setengah transparan itu terbaca
+**kotor/berbayang**, dan bersama cincin fokus lama (putih 2 px + halo gelap 5 px) menghasilkan
+tiga lapis bingkai: abu → putih → gelap.
+
+| Keadaan | Sebelum | Sesudah |
+|---|---|---|
+| Diam | tanpa bingkai (transparan) | tetap — ikon langsung di peta |
+| Hover | piringan gelap + **bingkai abu 50%** | piringan gelap, **border transparan** |
+| Fokus | abu + cincin putih + halo gelap 5 px | **celah putih 2 px + cincin tinta 2 px** di luarnya |
+
+Cincin fokus dipilih dari LUAR ke dalam karena peta di belakang pil terang: cincin putih
+sendirian hanya ~1:1 terhadap peta, sedangkan tinta gelap 13:1; celah putih yang memisahkan
+cincin dari piringan gelap (18:1). Total tebal 4 px — cukup terlihat, tidak menggunakan
+`!important` (spesifisitas dinaikkan lewat `button` di selektor).
+
+Catatan: bingkai elemen peta lain sudah konsisten dan tidak diubah — `.map-gl`, `.map-pin-label`,
+`.map-reset-view`, dan grup kontrol MapLibre semuanya `1px rgba(148,163,184,.32)`; pemisah
+legenda/panel `rgba(255,255,255,.08)`.
+
+Artefak: `ui-audit/p22-bingkai-diam.png`, `p22-bingkai-hover.png`, `p22-bingkai-fokus.png`
+(DPI 1x dan 3x).

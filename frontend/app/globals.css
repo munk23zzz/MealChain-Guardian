@@ -2388,10 +2388,18 @@ a:focus-visible {
    vs gelap pada spesifisitas sama membuat hasilnya bergantung urutan berkas.
    Nilainya kini SAMA dengan tema (dengan fallback), jadi hasilnya tidak berubah
    walau urutan CSS berubah: piringan gelap + ikon terang = 15:1. */
-.map-card .map-overlay-toggles .map-layer-toggle:hover,
-.map-card .map-overlay-toggles .map-layer-toggle:focus-visible {
+/* `button` disisipkan di selektor: tema memakai selektor 0,4,0 untuk hover dan
+   berkasnya dimuat SESUDAH globals.css, jadi tanpa kenaikan ini `border-color`
+   milik tema (abu 50%) selalu menang dan tepi piringan tetap terlihat kotor. */
+.map-card .map-overlay-toggles button.map-layer-toggle:hover,
+.map-card .map-overlay-toggles button.map-layer-toggle:focus-visible {
   background: var(--map-glass-deep, rgba(10, 15, 28, 0.94));
-  border-color: var(--map-hair-strong, rgba(255, 255, 255, 0.28));
+  /* TANPA bingkai abu-abu. Tema memberi `--map-hair-strong` (abu 50%), dan
+     di atas piringan gelap garis setengah transparan itu terbaca sebagai tepi
+     kotor/berbayang — terlihat seperti tiga lapis bingkai. Piringan gelap sudah
+     memisahkan diri dari peta, jadi bingkainya cukup transparan; cincin fokus
+     di bawah yang mengambil alih tugas penanda. */
+  border-color: transparent;
   color: var(--map-text, #e2e8f0);
 }
 /* Cincin fokus: tema konsol memakai `--map-focus` #7dd3fc — tepat di atas kaca
@@ -2404,9 +2412,14 @@ a:focus-visible {
      tinta gelap hilang di piringan gelap, `--map-focus` #7dd3fc hilang di peta
      terang (1,43:1). Jadi dua lapis: cincin putih di dalam (18:1 ke piringan)
      dan halo tinta gelap 5 px di luar (≈8:1 ke peta). */
-  outline: 2px solid rgba(255, 255, 255, 0.96);
+  /* Bingkai dua warna dari LUAR ke dalam: celah putih 3 px menempel piringan,
+     lalu cincin tinta gelap 2 px di luarnya. Urutan ini dipilih karena peta
+     di belakang pil TERANG — cincin putih sendirian hanya ~1:1 terhadap peta,
+     sedangkan cincin gelap 13:1; celah putih yang memisahkannya dari piringan
+     gelap. Hasilnya satu bingkai bersih, bukan tiga lapis abu-abu. */
+  outline: 2px solid rgba(15, 23, 42, 0.92);
   outline-offset: 2px;
-  box-shadow: 0 0 0 5px rgba(15, 23, 42, 0.6);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.96);
 }
 
 .map-card .map-overlay-toggles .map-layer-toggle[aria-pressed="true"] {

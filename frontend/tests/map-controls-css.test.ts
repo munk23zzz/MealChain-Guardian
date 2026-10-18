@@ -118,10 +118,13 @@ describe("kontrak CSS kontrol peta (7b-1)", () => {
     // Plat hover/fokus TIDAK putih: tema konsol memakai kaca gelap. Nilainya
     // ditulis sama di globals.css dengan fallback supaya hasil tidak bergantung
     // urutan berkas CSS.
-    const hover = /^\.map-card \.map-overlay-toggles \.map-layer-toggle:hover,\s*\n\.map-card \.map-overlay-toggles \.map-layer-toggle:focus-visible \{([^}]*)\}/m.exec(css)?.[1] ?? "";
+    const hover = /^\.map-card \.map-overlay-toggles button\.map-layer-toggle:hover,\s*\n\.map-card \.map-overlay-toggles button\.map-layer-toggle:focus-visible \{([^}]*)\}/m.exec(css)?.[1] ?? "";
     const latar = /background:\s*([^;]+);/.exec(hover)?.[1] ?? "";
     expect(latar).toMatch(/var\(--map-glass-deep/);
     expect(latar).not.toMatch(/#fff|rgba\(255/);
+    // Bingkai piringan hover TIDAK abu-abu setengah transparan (terbaca kotor).
+    const garis = /border-color:\s*([^;]+);/.exec(hover)?.[1] ?? "";
+    expect(garis.trim()).toBe("transparent");
   });
 
   it("layar pesan gestur dipergelap: bawaan MapLibre terlalu tipis di atas peta terang", () => {
@@ -143,8 +146,10 @@ describe("kontrak CSS kontrol peta (7b-1)", () => {
     // Dua lapis: cincin PUTIH di dalam (piringan fokus gelap) + halo tinta
     // gelap di luar (ubin peta terang). Satu warna saja selalu hilang di salah
     // satu sisi.
-    expect(fokus).toMatch(/outline:\s*2px solid rgba\(255,\s*255,\s*255/);
-    expect(fokus).toMatch(/box-shadow:\s*0 0 0 5px rgba\(15,\s*23,\s*42/);
+    // Bingkai dari LUAR ke dalam: cincin tinta gelap 2 px (13:1 di peta terang)
+    // + celah putih 2 px yang memisahkannya dari piringan gelap.
+    expect(fokus).toMatch(/outline:\s*2px solid rgba\(15,\s*23,\s*42/);
+    expect(fokus).toMatch(/box-shadow:\s*0 0 0 2px rgba\(255,\s*255,\s*255/);
     expect(fokus).not.toMatch(/outline:\s*none/);
   });
 
