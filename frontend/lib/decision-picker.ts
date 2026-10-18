@@ -57,6 +57,7 @@ export const STATUS_WORDS: Record<string, string> = {
   executed: "dieksekusi",
   expired: "kedaluwarsa",
   rejected: "ditolak",
+  review_only: "tinjauan (review-only)",
 };
 
 const DASH = "—";

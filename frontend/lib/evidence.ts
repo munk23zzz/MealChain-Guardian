@@ -243,6 +243,14 @@ export function nextStep(input: {
   if (payload?.can_execute === true) {
     return { text: "Semua syarat terpenuhi — keputusan siap dieksekusi.", tone: "ok" };
   }
+  if (status === "review_only") {
+    // Audit M6: temuan (mis. anomali harga) berhenti sebagai bukti; jendela
+    // berlakunya tidak relevan karena tidak ada barang yang akan bergerak.
+    return {
+      text: "Temuan tinjauan — dicatat sebagai bukti. Tidak ada transfer yang dieksekusi dari keputusan ini.",
+      tone: "plain",
+    };
+  }
   if (lewat) {
     return {
       text: `Jendela berlaku keputusan sudah lewat${penahan}. Mintakan keputusan baru atau ajukan iterasi ulang sebelum barang bergerak.`,

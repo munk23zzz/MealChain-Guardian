@@ -153,7 +153,7 @@ export default function DecisionEvidence({
   // baru (backend menolak tindakannya). Semua baris lama tetap bisa dibuka lewat
   // tautan bersama karena `keep` menyertakan yang sedang dipilih.
   const [showExpired, setShowExpired] = useState(false);
-  const expiredCount = countExpiredActionable(decisions as any, now);
+  const expiredCount = countExpiredActionable(decisions as any, now, role);
   // Kelompok dropdown dari lib/decision-picker (satu sumber dengan tab Agent Log).
   const groups = decisionGroups(decisions, now, {
     includeExpired: showExpired,
@@ -203,7 +203,7 @@ export default function DecisionEvidence({
               </label>
             )}
             <span className="evidence-picker-hint">
-              {countActionable(decisions, now)} menunggu tindakan
+              {countActionable(decisions, now, role)} menunggu tindakan
               {expiredCount > 0
                 ? showExpired
                   ? ` · ${expiredCount} lewat tenggat ditampilkan`
@@ -277,16 +277,21 @@ export default function DecisionEvidence({
               >
                 {statusWord(selected.status)}
               </span>
-              <span className="evidence-hero-window">
-                Jendela berlaku: {dueLabel(selected.expires_at, clock)}
-              </span>
+              {/* Audit M6: temuan review-only tidak punya jendela tindakan. */}
+              {statusKey !== "review_only" && (
+                <span className="evidence-hero-window">
+                  Jendela berlaku: {dueLabel(selected.expires_at, clock)}
+                </span>
+              )}
               {/* Badge kasus demo: dulu datang dari kartu feed yang kini diganti
                   hero ini — penandanya tidak boleh hilang (kelas .rec-case
                   dipakai ulang, bukan bikin palet kedua). */}
               {caseLabelOf(selected) && (
                 <span className="badge rec-case">{caseLabelOf(selected)}</span>
               )}
-              {umur.state !== "tidak diketahui" && (
+              {/* Audit M6: temuan review-only tidak punya jendela tindakan —
+                  menampilkan "29 mnt lagi" membuatnya tampak menunggu sesuatu. */}
+              {statusKey !== "review_only" && umur.state !== "tidak diketahui" && (
                 <span className="evidence-usage" data-state={umur.state}>
                   {umur.label}
                 </span>

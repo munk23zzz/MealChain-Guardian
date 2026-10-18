@@ -36,7 +36,7 @@ class Decision(Base):
         ),
         CheckConstraint(
             "status IN ('proposed','verifier_flagged','pending_approval',"
-            "'approved','rejected','executed')",
+            "'approved','rejected','executed','review_only')",
             name="decisions_status_check",
         ),
         CheckConstraint(

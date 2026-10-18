@@ -10,6 +10,7 @@ import {
   countActionableBreakdown,
   defaultScope,
   initialsOf,
+  isActionableForRole,
   isExpired,
   isScopeChooser,
   networkState,
@@ -265,5 +266,33 @@ describe("notifList", () => {
   it("entri tanpa status atau status kosong diabaikan", () => {
     const { total } = notifList([{ decision_id: "x" }, { decision_id: "y", status: "" }]);
     expect(total).toBe(0);
+  });
+});
+
+describe("hitungan menunggu tindakan per peran (audit M7)", () => {
+  const baris = [
+    { status: "proposed", valid: true },
+    { status: "pending_approval", valid: true },
+    { status: "approved", valid: true },
+    { status: "review_only", valid: true },
+  ];
+
+  it("Kepala SPPG menghitung proposed — hanya dia yang bisa mengajukan", () => {
+    expect(countActionable(baris, undefined, "sppg_head")).toBe(3);
+    expect(notifList(baris, undefined, "sppg_head").total).toBe(3);
+  });
+
+  it("Ahli Gizi tidak menghitung proposed — tombolnya tidak ada untuknya", () => {
+    expect(countActionable(baris, undefined, "sppg_nutritionist")).toBe(2);
+    expect(notifList(baris, undefined, "sppg_nutritionist").total).toBe(2);
+  });
+
+  it("review_only tidak pernah dihitung sebagai tindakan", () => {
+    expect(isActionableForRole("review_only", "sppg_head")).toBe(false);
+    expect(isActionableForRole("review_only", "sppg_nutritionist")).toBe(false);
+  });
+
+  it("tanpa peran perilaku lama dipertahankan (proposed tidak dihitung)", () => {
+    expect(countActionable(baris)).toBe(2);
   });
 });

@@ -786,8 +786,11 @@ export default function Home() {
   // Hanya yang MASIH bisa ditindak (backend menolak tindakan atas keputusan
   // lewat tenggat dengan 409); tunggakannya dilaporkan terpisah supaya angkanya
   // jujur tanpa menyembunyikan apa pun (temuan QA F1).
-  const perluKeputusan = countActionable(decisions);
-  const lewatTenggat = countExpiredActionable(decisions);
+  // Audit M7: `proposed` hanya pekerjaan Kepala SPPG (hanya dia yang bisa
+  // menekan "Ajukan"), jadi hitungan per peran — Ahli Gizi tidak dibuat
+  // mengejar pekerjaan yang tombolnya tidak ada untuknya.
+  const perluKeputusan = countActionable(decisions, undefined, role);
+  const lewatTenggat = countExpiredActionable(decisions, undefined, role);
 
   // PRD 2.4: nav 5 tab (overview/kpi/recommendations/agent-log/demo-control)
   // + tab "Hari Ini" (permintaan Roy 2026-10-11) sebagai halaman pertama;

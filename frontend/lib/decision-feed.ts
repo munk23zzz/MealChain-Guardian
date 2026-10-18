@@ -62,6 +62,7 @@ const STATUS_ORDER = [
   "approved",
   "executed",
   "rejected",
+  "review_only",
 ];
 
 /** Prioritas jenis keputusan untuk urutan "urgency" (kecil = lebih dulu). */

@@ -79,7 +79,8 @@ export default function TopBar({
   const [notifOpen, setNotifOpen] = useState(false);
   const bellRef = useRef<HTMLButtonElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
-  const notifikasi = notifList(decisions);
+  // Peran ikut menentukan apa yang dihitung: `proposed` hanya pekerjaan Kepala.
+  const notifikasi = notifList(decisions, undefined, role);
   // SATU sumber angka untuk lonceng + panel: yang benar-benar bisa ditindak.
   // Dulu lonceng memakai countActionable sendiri sementara panel memakai
   // notifList — dua cara menghitung hal yang sama, dan keduanya ikut menghitung

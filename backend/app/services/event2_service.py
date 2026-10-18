@@ -218,7 +218,10 @@ async def run_price_anomaly_event(
     message = _deviation_message(dev_pct, status)
     decision = Decision(
         decision_type="price_anomaly",
-        status="proposed",
+        # Audit M6 (18 Okt 2026): temuan harga TIDAK pernah bisa dieksekusi
+        # (tanpa quantity_kg), jadi ia lahir terminal `review_only` — bukan
+        # `proposed` yang menawarkan transfer lalu berakhir jalan buntu.
+        status="review_only",
         proposed_by=actor_id or "event2_pipeline",
         target_location_id=target.id,
         source_location_id=quote.location_id,

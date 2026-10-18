@@ -504,6 +504,7 @@ const DECISION_STATUS_LABEL: Record<string, string> = {
   executed: "Dieksekusi",
   verified: "Terverifikasi",
   verifier_flagged: "Ditandai verifier",
+  review_only: "Tinjauan (review-only)",
 };
 
 /**

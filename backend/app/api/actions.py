@@ -613,6 +613,14 @@ async def execute_action(
     decision = await _load_decision(db, payload.decision_id)
     # Ruling 2026-10-14 §3: eksekusi terkunci ke lokasi target (semua tipe).
     _require_decision_scope(user, decision)
+    # Audit M6 (18 Okt 2026): temuan review-only tidak pernah bisa dieksekusi.
+    # Pesannya didahulukan supaya tidak terbaca "belum terverifikasi" — temuan
+    # ini memang tidak menuntut verifikasi maupun approval.
+    if decision.status == "review_only":
+        raise HTTPException(
+            status_code=409,
+            detail="decision tinjauan (review-only) — tidak untuk dieksekusi",
+        )
     if decision.status == "executed":
         if decision.decision_type in exclusions.ADMIN_TYPES:
             return {

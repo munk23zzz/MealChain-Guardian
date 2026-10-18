@@ -300,6 +300,9 @@ async def build_approval_summary(
         blocking.append("decision ditolak")
     if decision.status == "executed":
         blocking.append("decision sudah dieksekusi")
+    if decision.status == "review_only":
+        # Audit M6: temuan harga adalah bukti untuk ditinjau, bukan usulan transfer.
+        blocking.append("decision tinjauan (review-only) — tidak untuk dieksekusi")
     if decision.status not in {"pending_approval", "verifier_flagged", "approved"} and (
         decision.status not in {"executed", "rejected"}
     ):
@@ -338,6 +341,15 @@ async def build_approval_summary(
             if aktif:
                 # Kalimat SAMA dengan `revalidate_transfer` — satu sumber pesan.
                 blocking.append("supplier excluded pada SPPG penerima")
+    if decision.status == "review_only":
+        # Audit M6: temuan tidak lewat approval/eksekusi sama sekali. Alasan
+        # lain (belum terverifikasi, approval kurang, kuantitas kosong) benar
+        # tetapi hanya derau — pembaca cukup tahu satu hal: ini bukti, bukan
+        # perintah transfer.
+        blocking = [
+            "Temuan tinjauan (review-only): tidak menuntut verifikasi, approval, "
+            "atau eksekusi."
+        ]
     can_execute = not blocking
     # Decision yang sudah executed tetap tampil executed tanpa tombol baru.
     if decision.status == "executed":

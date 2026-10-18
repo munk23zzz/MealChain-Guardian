@@ -243,3 +243,19 @@ describe("ApprovalMenu (isi popup governance & persetujuan)", () => {
     expect(html).not.toContain("Alasan penolakan (wajib");
   });
 });
+
+describe("temuan review_only tidak menawarkan aksi (audit M6)", () => {
+  it("tidak ada approve/verify/execute/propose/repropose", () => {
+    for (const role of ["sppg_head", "sppg_nutritionist"]) {
+      const aksi = visibleActions(role, "review_only");
+      expect(aksi).toEqual({
+        approve: false,
+        verify: false,
+        execute: false,
+        propose: false,
+        repropose: false,
+        readOnly: false,
+      });
+    }
+  });
+});

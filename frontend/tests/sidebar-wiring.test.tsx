@@ -48,7 +48,7 @@ describe("wiring sidebar + map di app/page.tsx (S4-06 polish)", () => {
     // Dulu `Recommendations (126)` = seluruh keputusan yang pernah dibuat;
     // pengguna tidak bisa menebak artinya. Sekarang = jumlah yang menunggu
     // tindakan manusia, satu definisi dengan lonceng notifikasi top bar.
-    expect(pageSrc).toMatch(/perluKeputusan = countActionable\(decisions\)/);
+    expect(pageSrc).toMatch(/perluKeputusan = countActionable\(decisions, undefined, role\)/);
     expect(pageSrc).toMatch(/Recommendations\$\{perluKeputusan/);
     expect(pageSrc).not.toMatch(/Recommendations\$\{decisions\.length/);
   });

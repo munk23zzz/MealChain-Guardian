@@ -718,3 +718,21 @@ describe("umur jendela berlaku: dipakai apa adanya, tanpa ambang karangan", () =
     expect(windowUsage({ created_at: null, expires_at: null, now: new Date(0) }).state).toBe("tidak diketahui");
   });
 });
+
+describe("nextStep — temuan review_only (audit M6)", () => {
+  it("temuan tidak menyuruh eksekusi dan tidak bicara jendela kedaluwarsa", () => {
+    const hasil = nextStep({
+      role: "sppg_head",
+      status: "review_only",
+      summary: {
+        status: "review_only",
+        can_execute: false,
+        expiry: { valid: false },
+        blocking_reasons: ["decision tinjauan (review-only) — tidak untuk dieksekusi"],
+      },
+    });
+    expect(hasil.text).toContain("Temuan tinjauan");
+    expect(hasil.text).not.toContain("Jendela berlaku");
+    expect(hasil.tone).toBe("plain");
+  });
+});

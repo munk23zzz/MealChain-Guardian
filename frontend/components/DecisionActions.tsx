@@ -107,6 +107,15 @@ export default function DecisionActions({
   if (actions.readOnly) {
     return <p className="read-only-note">Peran {role} bersifat read-only.</p>;
   }
+  // Audit M6 (18 Okt 2026): temuan review-only tidak punya approval maupun
+  // eksekusi. Menawarkan "Kelola persetujuan" hanya mengantar ke penolakan.
+  if (status === "review_only") {
+    return (
+      <p className="read-only-note">
+        Temuan tinjauan (review-only): tidak ada approval atau eksekusi untuk keputusan ini.
+      </p>
+    );
+  }
 
   // Setiap handler: `null` = berhasil (menu menutup popup & pesan tampil di
   // kartu), string = galat yang ditampilkan DI DALAM popup.

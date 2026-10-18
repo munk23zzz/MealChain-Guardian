@@ -117,9 +117,31 @@ export function isExpired(row: ExpiryRow | null | undefined, now?: Date | null):
   return tenggat < nowMs;
 }
 
+/**
+ * Apakah status ini menuntut tindakan PERAN tersebut (audit M7, 18 Okt 2026).
+ *
+ * `proposed` hanya pekerjaan Kepala SPPG: hanya dia yang boleh menekan
+ * "Ajukan" (POST /actions/propose). Ahli Gizi tidak bisa mengajukan, jadi
+ * menghitung `proposed` untuknya berarti menampilkan pekerjaan yang mustahil
+ * dikerjakan. Tanpa `role` (pemanggil lama) perilaku lama dipertahankan:
+ * `proposed` tidak dihitung.
+ */
+export function isActionableForRole(
+  status: string | null | undefined,
+  role?: string | null
+): boolean {
+  const kode = String(status ?? "").toUpperCase();
+  if (ACTIONABLE_SET.has(kode)) return true;
+  return kode === "PROPOSED" && role === "sppg_head";
+}
+
 /** Menunggu tindakan manusia DAN masih bisa ditindak (belum lewat tenggat). */
-export function isPendingAction(row: ExpiryRow | null | undefined, now?: Date | null): boolean {
-  if (!ACTIONABLE_SET.has(String(row?.status ?? "").toUpperCase())) return false;
+export function isPendingAction(
+  row: ExpiryRow | null | undefined,
+  now?: Date | null,
+  role?: string | null
+): boolean {
+  if (!isActionableForRole(row?.status, role)) return false;
   return !isExpired(row, now);
 }
 
@@ -129,8 +151,12 @@ export function isPendingAction(row: ExpiryRow | null | undefined, now?: Date | 
  * ditawarkan sebagai pilihan baru. Keputusan yang sudah diputus (ditolak,
  * dieksekusi) TIDAK termasuk: tenggatnya tidak lagi menghalangi pembacaan.
  */
-export function isExpiredAction(row: ExpiryRow | null | undefined, now?: Date | null): boolean {
-  if (!ACTIONABLE_SET.has(String(row?.status ?? "").toUpperCase())) return false;
+export function isExpiredAction(
+  row: ExpiryRow | null | undefined,
+  now?: Date | null,
+  role?: string | null
+): boolean {
+  if (!isActionableForRole(row?.status, role)) return false;
   return isExpired(row, now);
 }
 
@@ -150,12 +176,13 @@ export type ActionableCounts = {
  */
 export function countActionableBreakdown(
   decisions: readonly ExpiryRow[] | null | undefined,
-  now?: Date | null
+  now?: Date | null,
+  role?: string | null
 ): ActionableCounts {
   let actionable = 0;
   let expired = 0;
   for (const decision of decisions ?? []) {
-    if (!ACTIONABLE_SET.has(String(decision?.status ?? "").toUpperCase())) continue;
+    if (!isActionableForRole(decision?.status, role)) continue;
     if (isExpired(decision, now)) expired += 1;
     else actionable += 1;
   }
@@ -165,17 +192,19 @@ export function countActionableBreakdown(
 /** Berapa keputusan yang benar-benar menunggu tindakan manusia (masih berlaku). */
 export function countActionable(
   decisions: readonly ExpiryRow[] | null | undefined,
-  now?: Date | null
+  now?: Date | null,
+  role?: string | null
 ): number {
-  return countActionableBreakdown(decisions, now).actionable;
+  return countActionableBreakdown(decisions, now, role).actionable;
 }
 
 /** Berapa keputusan berstatus menunggu tindakan yang sudah lewat tenggat. */
 export function countExpiredActionable(
   decisions: readonly ExpiryRow[] | null | undefined,
-  now?: Date | null
+  now?: Date | null,
+  role?: string | null
 ): number {
-  return countActionableBreakdown(decisions, now).expired;
+  return countActionableBreakdown(decisions, now, role).expired;
 }
 
 /** Jumlah maksimum baris notifikasi yang ditampilkan di popup lonceng. */
@@ -214,7 +243,8 @@ export type NotifList = {
  */
 export function notifList(
   decisions: readonly NotifDecision[] | null | undefined,
-  limit: number = NOTIF_LIMIT
+  limit: number = NOTIF_LIMIT,
+  role?: string | null
 ): NotifList {
   const waktu = (decision: NotifDecision): number => {
     const parsed = decision?.created_at ? Date.parse(decision.created_at) : Number.NaN;
@@ -223,7 +253,7 @@ export function notifList(
 
   let expired = 0;
   const menunggu = (decisions ?? []).filter((decision) => {
-    if (!ACTIONABLE_SET.has(String(decision?.status ?? "").toUpperCase())) return false;
+    if (!isActionableForRole(decision?.status, role)) return false;
     if (isExpired(decision)) {
       expired += 1;
       return false;
