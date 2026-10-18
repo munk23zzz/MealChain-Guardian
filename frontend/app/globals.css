@@ -2383,23 +2383,41 @@ a:focus-visible {
   box-shadow: none;
   filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.95));
 }
+/* Plat hover/fokus: KACA GELAP, bukan putih. Awalnya di sini putih 92%, tetapi
+   tema konsol peta memakai kaca gelap (`--map-glass-deep`) dan dua aturan putih
+   vs gelap pada spesifisitas sama membuat hasilnya bergantung urutan berkas.
+   Nilainya kini SAMA dengan tema (dengan fallback), jadi hasilnya tidak berubah
+   walau urutan CSS berubah: piringan gelap + ikon terang = 15:1. */
 .map-card .map-overlay-toggles .map-layer-toggle:hover,
 .map-card .map-overlay-toggles .map-layer-toggle:focus-visible {
-  background: rgba(255, 255, 255, 0.92);
-  border-color: var(--line-input);
-  color: var(--ink);
+  background: var(--map-glass-deep, rgba(10, 15, 28, 0.94));
+  border-color: var(--map-hair-strong, rgba(255, 255, 255, 0.28));
+  color: var(--map-text, #e2e8f0);
 }
-/* Nyala: tetap terisi aksen tema (hijau konsol) — keadaan dibawa bentuk+isi,
-   bukan piring putih. */
-/* Nyala: TETAP transparan — tidak ada piring sama sekali, termasuk saat aktif.
-   Keadaan dibaca dari DUA hal, bukan warna saja: ikon kehilangan garis miring
-   (bentuk) DAN berubah warna menjadi hijau tua (4,6:1 di atas peta terang).
-   Hijau tua dipilih, bukan `--map-accent` (#22c55e ≈ 2,2:1) yang terlalu pucat
-   untuk ikon 16 px tanpa latar. */
+/* Cincin fokus: tema konsol memakai `--map-focus` #7dd3fc — tepat di atas kaca
+   GELAP, tapi pil ini transparan di atas ubin peta TERANG, sehingga cincin biru
+   muda hanya ~1,4:1 dan praktis tak terlihat (gagal WCAG 1.4.11 / 2.4.7).
+   Spesifisitas 0,4,0 menang atas aturan tema (0,3,0) tanpa `!important`. */
+.map-card .map-overlay-toggles .map-layer-toggle:focus-visible {
+  /* Cincin fokus harus kontras ke DUA arah: ke dalam (piringan gelap saat
+     fokus) dan ke luar (ubin peta terang). Satu warna tidak bisa keduanya —
+     tinta gelap hilang di piringan gelap, `--map-focus` #7dd3fc hilang di peta
+     terang (1,43:1). Jadi dua lapis: cincin putih di dalam (18:1 ke piringan)
+     dan halo tinta gelap 5 px di luar (≈8:1 ke peta). */
+  outline: 2px solid rgba(255, 255, 255, 0.96);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px rgba(15, 23, 42, 0.6);
+}
+
 .map-card .map-overlay-toggles .map-layer-toggle[aria-pressed="true"] {
+  /* Nyala: TETAP transparan — bukan piring. Keadaan dibaca dari DUA hal, bukan
+     warna saja: garis miring HILANG (bentuk) dan warna berubah (warna).
+     Warna = `--map-accent-ink`; di tema konsol nilainya #1E40AF karena sudah
+     diukur terhadap empat ekstrem basemap (4,94-8,72:1). Hijau #15803D GAGAL
+     3:1 di atas ubin hijau (2,84:1), jadi hijau tidak dipakai. */
   background: transparent;
   border-color: transparent;
-  color: var(--map-accent-ink, #15803d);
+  color: var(--map-accent-ink, #1e40af);
   filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.95));
   box-shadow: none;
 }
@@ -2989,6 +3007,15 @@ a:focus-visible {
 .map-card button.map-row-btn { cursor: pointer; }
 .map-card button.map-row-btn:hover { background: var(--surface-sunken); border-color: var(--line-input); }
 .map-card button.map-row-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* WCAG 2.5.8 (Target Size Minimum, AA): 24x24 px untuk penunjuk apa pun.
+   Pil "Pilih kiriman" dan chip "Semua (N)" terukur 22 px di desktop — lolos
+   hanya kalau ada jarak 24 px, dan di sini jaraknya 6 px. Dinaikkan ke 28 px
+   (nyaman untuk tetikus, tetap rapat); di (pointer: coarse) tetap 44 px lewat
+   aturan `button` di blok sentuh. */
+.map-card .route-focus-pill {
+  min-height: 28px;
+}
 .map-card .map-row-name { font-size: var(--fs-4); font-weight: 600; overflow-wrap: anywhere; }
 .map-card .map-row-status { font-size: var(--fs-1); padding: 3px 8px; border-radius: 4px; background: var(--bg-page); }
 .map-card .map-row-shortage .map-row-status { color: var(--status-danger); background: rgba(198, 40, 40, 0.1); }

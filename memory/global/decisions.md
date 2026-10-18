@@ -144,3 +144,19 @@
 - **Catatan teknis:** tema konsol peta (`app/map-console.css`, sesi paralel) mengecat tombol dengan
   kaca gelap; aturan transparan di `globals.css` dinaikkan spesifisitasnya
   (`.map-card .map-overlay-toggles .map-layer-toggle`) alih-alih memakai `!important`.
+
+## 19 Okt 2026 — audit UI/UX ketat: cincin fokus, target 24 px, warna nyala
+
+- **Cincin fokus tidak boleh memakai satu warna.** Pil transparan duduk di peta
+  TERANG, tetapi saat fokus ia mendapat piringan GELAP dari tema. `--map-focus`
+  #7dd3fc hanya 1,43:1 di peta terang; tinta gelap hilang di piringan gelap.
+  Dipakai dua lapis: cincin putih 2 px + halo tinta gelap 5 px.
+- **WCAG 2.5.8 (24 px) berlaku untuk penunjuk apa pun, bukan hanya sentuh.**
+  Pil "Pilih kiriman" 22 px karena padding kecil; dinaikkan ke 28 px (44 px di
+  perangkat sentuh lewat aturan `button`).
+- **Warna keadaan harus diukur terhadap basemap, bukan terhadap aksen merek.**
+  Hijau #15803D gagal 3:1 di ubin hijau (2,84:1); `--map-accent-ink` #1E40AF
+  lolos 4,94–8,72:1 di empat ekstrem (putih/jalan/hijau/air).
+- **Jangan menulis dua aturan dengan spesifisitas sama dan nilai berbeda** (putih
+  vs kaca gelap untuk hover pil): hasilnya bergantung urutan berkas. Samakan
+  nilainya, atau naikkan spesifisitas secara sadar dan catat alasannya.

@@ -110,12 +110,18 @@ describe("kontrak CSS kontrol peta (7b-1)", () => {
     expect(pil).toMatch(/border:\s*0/);
   });
 
-  it("tombol pil transparan di atas peta, plat putih hanya saat hover", () => {
+  it("tombol pil transparan saat diam; plat hover = kaca gelap tema (bukan putih)", () => {
     const tombol = blok("\\.map-layer-toggle");
     expect(tombol).toMatch(/background:\s*transparent/);
     // Kontras ikon dijaga halo putih tipis, bukan kotak latar.
     expect(tombol).toMatch(/filter:\s*drop-shadow/);
-    expect(css).toMatch(/\.map-layer-toggle:hover\s*\{[^}]*background:\s*rgba\(255,\s*255,\s*255/);
+    // Plat hover/fokus TIDAK putih: tema konsol memakai kaca gelap. Nilainya
+    // ditulis sama di globals.css dengan fallback supaya hasil tidak bergantung
+    // urutan berkas CSS.
+    const hover = /^\.map-card \.map-overlay-toggles \.map-layer-toggle:hover,\s*\n\.map-card \.map-overlay-toggles \.map-layer-toggle:focus-visible \{([^}]*)\}/m.exec(css)?.[1] ?? "";
+    const latar = /background:\s*([^;]+);/.exec(hover)?.[1] ?? "";
+    expect(latar).toMatch(/var\(--map-glass-deep/);
+    expect(latar).not.toMatch(/#fff|rgba\(255/);
   });
 
   it("layar pesan gestur dipergelap: bawaan MapLibre terlalu tipis di atas peta terang", () => {
@@ -124,6 +130,27 @@ describe("kontrak CSS kontrol peta (7b-1)", () => {
     // Bawaan `rgba(0,0,0,.4)` hanya sekitar 2,8:1 dengan teks putih.
     expect(cssGestur).not.toMatch(/background:\s*rgba\(0,\s*0,\s*0,\s*\.?4\)/);
     expect(cssGestur).toMatch(/background:\s*rgba\(15,\s*23,\s*42/);
+  });
+
+  it("cincin fokus pil memakai tinta gelap + halo putih, BUKAN --map-focus", () => {
+    // Terukur 19 Okt 2026: --map-focus #7dd3fc hanya 1,43:1 di atas ubin peta
+    // terang (gagal WCAG 1.4.11 / 2.4.7), karena token itu dirancang untuk kaca
+    // konsol GELAP. Pil kini transparan di atas peta terang.
+    // Selector yang sama dipakai dua aturan (hover dan fokus khusus), jadi
+    // ambil SEMUA blok dengan selector itu dan cari yang berisi `outline`.
+    const semua = Array.from(css.matchAll(/^\.map-card \.map-overlay-toggles \.map-layer-toggle:focus-visible \{([^}]*)\}/gm), (m) => m[1]);
+    const fokus = semua.find((isi) => isi.includes("outline")) ?? "";
+    // Dua lapis: cincin PUTIH di dalam (piringan fokus gelap) + halo tinta
+    // gelap di luar (ubin peta terang). Satu warna saja selalu hilang di salah
+    // satu sisi.
+    expect(fokus).toMatch(/outline:\s*2px solid rgba\(255,\s*255,\s*255/);
+    expect(fokus).toMatch(/box-shadow:\s*0 0 0 5px rgba\(15,\s*23,\s*42/);
+    expect(fokus).not.toMatch(/outline:\s*none/);
+  });
+
+  it("pil 'Pilih kiriman' minimal 28 px di desktop (WCAG 2.5.8: 24 px, terukur 22)", () => {
+    const pil = blok("\\.map-card \\.route-focus-pill");
+    expect(pil).toMatch(/min-height:\s*28px/);
   });
 
   it("panel 'Info map' yang terpisah sudah tidak ada (dilebur ke rincian lapisan)", () => {

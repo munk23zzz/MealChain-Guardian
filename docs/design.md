@@ -1736,3 +1736,30 @@ Artefak: `ui-audit/p19-pil-transparan.png`, `p19-pil-dua-nyala.png`.
 Tes yang ikut berubah: `tests/supply-map-layer.test.tsx` (skala **tidak** dipasang; kiri-bawah kosong
 dari kontrol) dan `tests/map-controls-css.test.ts` (pil kiri-bawah + latar transparan + tanpa
 bayangan; tombol transparan + plat putih hanya saat hover; aturan skala harus tetap hilang).
+
+### 14.5 Audit UI/UX ketat (19 Okt 2026): tiga temuan, semuanya diperbaiki
+
+Dijalankan dengan aturan prioritas `ui-ux-pro-max` (aksesibilitas 1, sentuh 2) +
+`references/map-ui-patterns.md` + checklist `pro-rules.md`. Yang diukur adalah
+**warna yang benar-benar dirender** (latar efektif dirunut lewat leluhur, piksel
+peta diambil dari tangkapan layar), bukan token di CSS.
+
+| # | Temuan | Terukur | Status |
+|---|---|---|---|
+| 1 | Cincin fokus pil memakai `--map-focus` (#7dd3fc) dari tema konsol | **1,43:1** di atas ubin peta terang → gagal WCAG 1.4.11 & 2.4.7 | Diperbaiki: cincin putih 2 px (18:1 ke piringan fokus) + halo tinta gelap 5 px (≈8:1 ke peta). Dua lapis karena satu warna selalu hilang di salah satu sisi |
+| 2 | Pil "Pilih kiriman" & chip "Semua (N)" | tinggi **22 px** (WCAG 2.5.8 minta 24) | Naik ke **28 px** di desktop; 44 px di `(pointer: coarse)` tetap |
+| 3 | Ikon "nyala" hijau `#15803D` | **2,84:1** di atas ubin hijau → gagal 3:1 untuk grafis | Diganti `--map-accent-ink` (#1E40AF) yang diukur 4,94–8,72:1 di empat ekstrem basemap |
+
+Yang **lolos** dan tidak diubah: kontras teks panel/legenda 5,53–14,77:1 (18 simpul
+teks diukur, 0 gagal); target sentuh 375 px semuanya ≥44 px; tidak ada gulir
+mendatar; pil tidak menabrak atribusi MapLibre; ikon 16 px dengan stroke 1,6 px
+seragam; label aksesibel menyebut jumlah; keadaan nyala/mati dibawa bentuk + warna.
+
+Catatan konsistensi: aturan hover pil sempat putih 92% di `globals.css` sementara
+tema memakai kaca gelap pada spesifisitas sama — hasilnya bergantung urutan berkas.
+Nilainya kini **disamakan** dengan tema (`var(--map-glass-deep, …)`), jadi tidak
+lagi rapuh. Tes mengunci: latar hover bukan putih, cincin fokus bukan `--ink`
+tunggal, dan pil pemilih ≥28 px.
+
+Artefak: `ui-audit/p21-fokus-pil.png` (cincin fokus), `p19-pil-transparan.png`,
+`p20-peta-375.png` (ponsel).
