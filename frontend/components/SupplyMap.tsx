@@ -259,9 +259,28 @@ function createPin(map: maplibregl.Map, location: BalanceMapLocation, active: bo
   // menulis aria-label="Map marker" pada elemen saat konstruksi, menimpa teks
   // yang dipasang sebelumnya — pembaca layar lalu membacakan "Map marker" untuk
   // setiap penanda.
+  pasangAksesPin(el, marker, accessible);
+  return marker;
+}
+
+/** Pasang identitas aksesibilitas pada elemen penanda peta.
+ *
+ *  MapLibre 4.7 menimpa `aria-label` saat marker dibuat, jadi atribut dipasang
+ *  setelahnya. `aria-label` pada `<div>` tanpa peran dilaporkan axe sebagai
+ *  "aria-prohibited-attr", maka elemen diberi `role="button"` + `tabindex="0"`
+ *  dan tombol Enter/Spasi membuka popup yang sama seperti klik tetikus. */
+function pasangAksesPin(el: HTMLElement, marker: maplibregl.Marker, accessible: string): void {
   el.title = accessible;
   el.setAttribute("aria-label", accessible);
-  return marker;
+  el.setAttribute("role", "button");
+  el.setAttribute("tabindex", "0");
+  if (el.dataset.pinA11y === "1") return;
+  el.dataset.pinA11y = "1";
+  el.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    marker.togglePopup();
+  });
 }
 
 /** Segarkan isi penanda yang sudah ada (posisi, label, keterangan, popup) —
@@ -271,8 +290,7 @@ function refreshPin(marker: maplibregl.Marker, location: BalanceMapLocation): vo
   const wasActive = el.classList.contains("map-pin-active");
   el.className = `map-pin map-pin-${pinTone(location.status)}${wasActive ? " map-pin-active" : ""}`;
   const accessible = pinAccessibleLabel(location);
-  el.title = accessible;
-  el.setAttribute("aria-label", accessible);
+  pasangAksesPin(el, marker, accessible);
   const label = el.querySelector(".map-pin-label");
   if (label) label.textContent = pinLabel(location);
   marker.setLngLat([Number(location.longitude), Number(location.latitude)]);
@@ -283,8 +301,11 @@ function refreshPin(marker: maplibregl.Marker, location: BalanceMapLocation): vo
  *  "Map marker"; sepuluh penanda tanpa keterangan tidak berguna). */
 function pinAccessibleLabel(location: BalanceMapLocation): string {
   const note = dataSourceNote(location);
-  const dasar = `${location.location} — pasokan ${formatKg(location.supply_kg)}, permintaan ${formatKg(location.demand_kg)}, ${formatBalanceGap(location)}`;
-  return note ? `${dasar}, ${note}` : dasar;
+  const dasar = `pasokan ${formatKg(location.supply_kg)}, permintaan ${formatKg(location.demand_kg)}, ${formatBalanceGap(location)}`;
+  // Nama aksesibel WAJIB diawali teks yang terlihat di penanda (WCAG 2.5.3
+  // "Label in Name"): teks pin = "Bandung +380 kg", bukan "Bandung — pasokan …".
+  const awal = pinLabel(location);
+  return note ? `${awal}: ${dasar}, ${note}` : `${awal}: ${dasar}`;
 }
 
 /** Isi popup pemasok — NODE DOM, bukan innerHTML (nama pemasok dari DB). */
@@ -327,8 +348,7 @@ function createSupplierPin(
     .setPopup(new maplibregl.Popup({ offset: 18 }).setDOMContent(supplierPopupNode(row, reachKm)))
     .addTo(map);
   // Sama seperti pin SPPG: MapLibre menimpa aria-label saat konstruksi.
-  el.title = accessible;
-  el.setAttribute("aria-label", accessible);
+  pasangAksesPin(el, marker, accessible);
   return marker;
 }
 
@@ -342,8 +362,7 @@ function refreshSupplierPin(
   const el = marker.getElement();
   el.className = supplierPinClass(row, showLabels, reachKm);
   const accessible = supplierAccessibleLabel(row, reachKm);
-  el.title = accessible;
-  el.setAttribute("aria-label", accessible);
+  pasangAksesPin(el, marker, accessible);
   const label = el.querySelector(".map-pin-label");
   if (label) label.textContent = row.name;
   marker.setLngLat([row.longitude, row.latitude]);
@@ -372,7 +391,7 @@ export function StatusLocationList({
       <div className="map-section-head">
         <h3>Status Lokasi</h3>
         <span className="map-section-count">{locations.length} Lokasi</span>
-        <span className="map-legend" aria-label="Legenda status">
+        <span className="map-legend" role="group" aria-label="Legenda status">
           <span className="map-legend-item">
             <i className="map-dot map-dot-shortage" aria-hidden="true" /> Shortage
           </span>

@@ -188,7 +188,7 @@ export default function TopBar({
             }
             aria-haspopup="dialog"
             aria-expanded={notifOpen}
-            aria-controls="top-bar-notif-panel"
+            aria-controls={notifOpen ? "top-bar-notif-panel" : undefined}
             title="Buka informasi notifikasi"
           >
             <BellIcon size={18} />

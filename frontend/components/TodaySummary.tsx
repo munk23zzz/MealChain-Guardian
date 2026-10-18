@@ -55,9 +55,7 @@ export default function TodaySummary({
               type="button"
               className={`today-tile today-tile-${tile.tone}`}
               data-today-target={tile.target}
-              aria-label={`${tile.label}: ${tile.value}${
-                tile.note ? ` — ${tile.note}` : ""
-              }. Lihat kartu ${tile.label}`}
+              title={`Lihat kartu ${tile.label}`}
               onClick={() => onJump(tile.target)}
             >
               <span className="today-tile-label">{tile.label}</span>

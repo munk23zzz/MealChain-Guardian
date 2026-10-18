@@ -119,7 +119,7 @@
   /* ===== TAHAP 2 — token tambahan hasil audit UI/UX (11 Okt) =====
      Semua nilai sudah diuji kontras WCAG AA: tinta teks >= 4,5:1, batas kontrol >= 3:1. */
   /* Tinta */
-  --ink-subtle: #64748B;          /* teks tersier & pemisah (slate-500): ~4,8:1 di putih */
+  --ink-subtle: #5F6B7A;          /* teks tersier & pemisah: 5,4:1 di putih, 4,95:1 di #f1f5f9 (AA untuk teks kecil) */
   /* Garis */
   --line-input: #7C8B9B;          /* batas kontrol interaktif (input/select/tombol): >= 3:1 */
   /* Status — latar / tepi / tinta (menggantikan hex mentah di lencana & peringatan) */

@@ -92,10 +92,14 @@ describe("TopBar (header global)", () => {
     expect(html).not.toContain('role="dialog"');
     expect(html).toContain('aria-haspopup="dialog"');
     expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain('aria-controls="top-bar-notif-panel"');
+    // aria-controls hanya dipasang saat panel ADA di DOM. Menunjuk id yang belum
+    // dirender membuat axe melaporkan "aria-valid-attr-value" (atribut menunjuk
+    // elemen tak dikenal) — jadi saat tertutup atribut itu memang tidak ada.
+    expect(html).not.toContain('aria-controls="top-bar-notif-panel"');
     // Isi popup diambil dari logika murni lib/topbar.ts, bukan dihitung ulang
     // di komponen, dan tombolnya TIDAK memanggil onOpenNotifications langsung.
     const src = readFileSync("components/TopBar.tsx", "utf8");
+    expect(src).toContain('aria-controls={notifOpen ? "top-bar-notif-panel" : undefined}');
     expect(src).toContain("notifList");
     expect(src).toContain('role="dialog"');
     expect(src).toContain("Escape");
