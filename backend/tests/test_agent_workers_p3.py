@@ -462,3 +462,28 @@ def test_as_number_tidak_menebak_string_umum() -> None:
     assert as_number("600.00", allow_numeric_string=True) == 600.0
     assert as_number("tidak tersedia", allow_numeric_string=True) is None
     assert as_number(True, allow_numeric_string=True) is None
+
+
+def test_price_403_peran_read_only_dijelaskan_di_fakta() -> None:
+    """Token agen read-only ditolak 403 — fakta harus MENYEBUT sebabnya.
+
+    Tanpa ini, `degraded` tercampur antara "data harga tidak ada" dan
+    "peran tidak boleh menghitung"; pembaca log tidak bisa membedakannya.
+    """
+    api = FakeApi(
+        get=_price_get(),
+        post={
+            "/price/deviation": AgentApiError(
+                "HTTP 403 pada /price/deviation: role tidak diizinkan",
+                status_code=403,
+                path="/price/deviation",
+            )
+        },
+    )
+
+    finding = PriceWorker().run(_context(api))
+
+    assert finding.status == "degraded"
+    assert finding.facts["deviation_pct"] is None
+    assert finding.facts["deviation_unavailable_reason"] == "role_read_only"
+    assert any("hanya boleh membaca" in w for w in finding.warnings), finding.warnings

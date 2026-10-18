@@ -58,6 +58,7 @@ class PriceWorker(ReadOnlyWorker):
                         "latest_quote_price": None,
                         "reference_price": None,
                         "deviation_pct": None,
+                        "deviation_unavailable_reason": "data_missing",
                         "classification": None,
                         "flagged": None,
                         "safe_delivered_cost": None,
@@ -83,6 +84,10 @@ class PriceWorker(ReadOnlyWorker):
         deviation_pct = None
         classification = None
         flagged = None
+        # Alasan deviasi tidak ada dibedakan secara eksplisit: "data tidak ada"
+        # vs "peran agen read-only ditolak" vs "endpoint galat". Statusnya tetap
+        # degraded (tidak dipalsukan), tetapi pembaca log tidak perlu menebak.
+        deviation_unavailable_reason = None
         if latest_price is not None and reference_price is not None:
             try:
                 deviation = api.post_compute(
@@ -100,8 +105,17 @@ class PriceWorker(ReadOnlyWorker):
                 raw_flagged = deviation.get("flagged")
                 flagged = raw_flagged if isinstance(raw_flagged, bool) else None
             except AgentApiError as exc:
-                warnings.append(f"deviasi harga tidak dapat dihitung: {exc}")
+                if exc.status_code == 403:
+                    deviation_unavailable_reason = "role_read_only"
+                    warnings.append(
+                        "deviasi harga tidak dihitung: peran agen hanya boleh membaca "
+                        "(HTTP 403 dari /price/deviation) — angka tidak dikarang"
+                    )
+                else:
+                    deviation_unavailable_reason = "endpoint_error"
+                    warnings.append(f"deviasi harga tidak dapat dihitung: {exc}")
         else:
+            deviation_unavailable_reason = "data_missing"
             warnings.append("quote terbaru atau harga referensi tidak tersedia; deviasi tidak dihitung")
 
         approval = None
@@ -139,6 +153,7 @@ class PriceWorker(ReadOnlyWorker):
             "latest_quote_price": latest_price,
             "reference_price": reference_price,
             "deviation_pct": deviation_pct,
+            "deviation_unavailable_reason": deviation_unavailable_reason,
             "classification": classification,
             "flagged": flagged,
             "safe_delivered_cost": sdc,

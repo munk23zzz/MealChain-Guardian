@@ -298,6 +298,11 @@ def main() -> int:
     image = build_push(region, akun, uri, args.platform, args.tag)
     print(f"  image: {image}")
 
+    # Environment dikirim UTUH ke kedua jalur (create & update): AgentCore
+    # mengganti seluruh map saat update, jadi variabel yang tidak ikut terkirim
+    # akan HILANG. Dulu cabang update tidak mengirim env sama sekali sehingga
+    # runtime berjalan tanpa MEALCHAIN_API_URL/TOKEN (review gagal
+    # `missing_config` walau `create` sudah benar).
     print("\n== 4/5 CreateAgentRuntime ==")
     ctrl = boto3.client("bedrock-agentcore-control", region_name=region)
     env_vars = {
@@ -336,13 +341,21 @@ def main() -> int:
             runtime_id = kandidat[0]["agentRuntimeId"]
             arn = kandidat[0]["agentRuntimeArn"]
             print(f"  runtime sudah ada → update: {runtime_id}")
+            # Gabung env lama dengan env baru: update mengganti map utuh.
+            env_lama = dict(
+                ctrl.get_agent_runtime(agentRuntimeId=runtime_id).get("environmentVariables")
+                or {}
+            )
+            env_gabung = {**env_lama, **env_vars}
             ctrl.update_agent_runtime(
                 agentRuntimeId=runtime_id,
                 agentRuntimeArtifact={"containerConfiguration": {"containerUri": image}},
                 roleArn=args.role_arn,
                 networkConfiguration={"networkMode": "PUBLIC"},
                 protocolConfiguration={"serverProtocol": "HTTP"},
+                environmentVariables=env_gabung,
             )
+            print(f"  env dikirim saat update: {', '.join(sorted(env_gabung))}")
         else:
             print(f"  GAGAL: {type(e).__name__}: {pesan[:400]}")
             return 1
