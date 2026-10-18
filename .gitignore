@@ -94,3 +94,6 @@ sap-joule/**/.pytest_cache/
 *.key
 *.crt
 *.pem
+
+# keadaan lokal watchdog tunnel (URL bergantung sesi)
+agent/.tunnel_state.json
