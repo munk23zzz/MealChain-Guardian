@@ -20,6 +20,9 @@ yarn-error.log*
 
 # Next.js
 .next/
+# Folder build alternatif (NEXT_DIST_DIR), dipakai agar `next build` bisa jalan
+# saat `next dev` memegang .next/trace di Windows.
+.next-build/
 out/
 build/
 # Artefak increment build TypeScript (`tsc --incremental`) — bukan sumber.
