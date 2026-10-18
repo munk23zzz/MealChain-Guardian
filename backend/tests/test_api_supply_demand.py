@@ -181,10 +181,27 @@ def test_supply_by_uuid(client):
 
 
 def test_demand_happy_path(client):
+    engine = _db()
+    try:
+        with engine.connect() as conn:
+            loc_id, com_id = _ids_for(conn, "Jakarta", "telur")
+            # Acuan = baris TERBARU DB, bukan snapshot kanonik 1080: deret
+            # permintaan demo kini berjalan sampai 4 Nov (audit angka 18 Okt).
+            expected_qty = conn.execute(
+                text(
+                    "SELECT quantity_kg FROM demand_records "
+                    "WHERE location_id = :loc AND commodity_id = :com "
+                    "ORDER BY recorded_at DESC LIMIT 1"
+                ),
+                {"loc": loc_id, "com": com_id},
+            ).scalar_one()
+    finally:
+        engine.dispose()
+
     resp = client.get("/demand/Jakarta/telur")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["quantity_kg"] == 1080.0
+    assert body["quantity_kg"] == float(expected_qty)
     assert "needed_by" in body
 
 
@@ -202,10 +219,33 @@ def test_forecast_happy_path(client):
 
 
 def test_forecast_horizon_respected(client):
+    engine = _db()
+    try:
+        with engine.connect() as conn:
+            loc_id, com_id = _ids_for(conn, "Jakarta", "telur")
+            # 3 observasi TERBARU (terbaru dulu), lalu dibalik jadi terlama→terbaru
+            # supaya bobot 0.2/0.3/0.5 sama dengan perhitungan endpoint.
+            nilai = [
+                float(q)
+                for q in conn.execute(
+                    text(
+                        "SELECT quantity_kg FROM demand_records "
+                        "WHERE location_id = :loc AND commodity_id = :com "
+                        "ORDER BY recorded_at DESC LIMIT 3"
+                    ),
+                    {"loc": loc_id, "com": com_id},
+                ).scalars()
+            ]
+    finally:
+        engine.dispose()
+
+    assert len(nilai) == 3, "butuh 3 observasi permintaan untuk rata-rata berbobot"
+    terlama_ke_terbaru = list(reversed(nilai))
+    daily_avg = sum(
+        bobot * qty for bobot, qty in zip((0.2, 0.3, 0.5), terlama_ke_terbaru, strict=True)
+    )
     resp = client.get("/demand/forecast/Jakarta/telur", params={"horizon_days": 2})
     assert resp.status_code == 200
-    # 3 observasi terbaru Jakarta/telur (terlama→terbaru): 1100, 1000, 1080
-    daily_avg = 1100 * 0.2 + 1000 * 0.3 + 1080 * 0.5
     assert resp.json()["forecast_qty_kg"] == pytest.approx(daily_avg * 2, rel=1e-6)
 
 

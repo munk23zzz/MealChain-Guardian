@@ -67,6 +67,54 @@ Feed `GET /decisions` tidak punya limit, jadi "terakhir" menyesatkan. Diganti
 Ambang keandalan rendah 60%, jendela 48 jam, radius 150 km, zoom minimum 8 untuk pin
 pemasok, skala 0–100 pada meter KPI, dan `KPI_WINDOW_MS` 24 jam.
 
+## Perluasan deret permintaan (tindak lanjut)
+
+Sebelumnya peta membandingkan pasokan 18 Okt dengan permintaan **8 Okt** — labelnya
+jujur, tetapi dashboard "Hari Ini" jadi terasa aneh. Perbaikannya bukan menggeser
+label, melainkan **melanjutkan seri permintaan** dengan aturan yang bisa diaudit:
+
+- **Kadens**: satu observasi per hari pada 00:00 UTC (rencana menu), bukan 12 jam
+  seperti telemetri pasokan — kadens dua jenis data itu tidak dicampur.
+- **Nilai**: bergerak di sekitar baseline **kanonik terbaru** pasangan itu
+  (baris `origin='seed'` terakhir, 8 Okt) dengan derau ±2% dan pola akhir pekan
+  0,92 yang sudah dipakai seri lain. Tidak ada angka baru dari luar.
+- **`needed_by`**: `recorded_at` + 3 hari, jarak yang sama dengan baris kanonik.
+- **Cakupan**: hanya pasangan yang MEMANG punya permintaan kanonik → 24 pasangan ×
+  27 hari (9 Okt–4 Nov) = **648 baris** `origin='demo'`. Bandung & Cianjur tetap
+  `demand_state = "tidak_ada_baris"`; itu fakta yang kini tampil sebagai
+  "permintaan belum ada catatan", bukan ditambal angka nol.
+- **Kanonik aman**: `ON CONFLICT (lokasi, komoditas, recorded_at) DO UPDATE ...
+  WHERE origin='demo'` → bentrokan dengan baris 8 Okt 12:00 tidak mengubah apa pun.
+- **Bisa dibatalkan**: `DemandRecord` masuk `PURGE_MODELS`, jadi "buang data demo"
+  dan `pastikan_deret_demo` ikut memulihkannya.
+
+Hasil sesudah perluasan (`/balance/map?commodity=telur`, 18 Okt 10:06 UTC):
+
+| | Sebelum | Sesudah |
+|---|---|---|
+| Tanggal pasokan | 18 Okt 00:00 | 18 Okt 00:00 |
+| Tanggal permintaan | 8 Okt 12:00 | 18 Okt 00:00 |
+| Pasokan 10 lokasi | 4.544,31 kg | 4.544,31 kg |
+| Kebutuhan jaringan | 3.438 kg | 3.149,37 kg |
+| Selisih | +1.106,31 kg | +1.394,94 kg |
+| Lokasi shortage | 4 | 4 (Jakarta 707,00 · Semarang 12,05 · Makassar 12,83 · Yogyakarta 7,40) |
+
+Nilai permintaan demo per pasangan berada pada rentang +1%…−12,5% dari baseline
+kanonik (batas bawah = akhir pekan 0,92 × derau −2%), mis. Jakarta/telur 977,82–1.099,05 kg
+dengan baseline 1.080 kg.
+
+## Tindak lanjut yang BELUM dikerjakan (jujur, bukan disembunyikan)
+
+`app/services/recommendation_service.py::_latest_rows()` mengambil baris terbaru
+**tanpa batas waktu**, jadi fakta operasional untuk rekomendasi memakai baris
+4 Nov (pasokan maupun permintaan demo). `fetch_operational_facts(db, as_of)` sudah
+menerima `as_of`, tetapi parameter itu belum dipakai. Dampaknya: angka di peta
+mengikuti "sekarang" (`as_of`), sedangkan alokasi rekomendasi bisa memakai baris
+yang lebih maju — kedua sisi bisa berbeda pada hari yang sama. Perbaikannya
+terlihat kecil (filter `recorded_at <= as_of`), tetapi mengubah keluaran ranking
+rekomendasi sehingga perlu tes dan persetujuan tersendiri; belum dikerjakan di
+perubahan ini.
+
 ## Gerbang
 
 - Backend: `tests/test_balance_map.py` 9/9 (3 tes baru: peta tidak memakai baris masa

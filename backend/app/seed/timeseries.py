@@ -22,10 +22,15 @@ Masa depan hanya ditulis ke tabel yang MEMANG merencanakan: `menu_plans`
 digenerate — keduanya catatan kejadian (aktual), dan membuat "pengiriman"
 bertanggal masa depan sama dengan mengarang aktual masa depan.
 
-Yang SENGAJA tidak digenerate: `demand_records` (riwayatnya sudah 13 titik
-per pasangan sejak 20 Agu) — menambah observasi baru menggeser jendela
-"3 observasi terbaru" milik `/demand/forecast` dan nilai "kebutuhan terbaru",
-yaitu jangkar yang justru harus tetap. Keputusan ini tercatat di laporan fase.
+Yang SENGAJA tidak digenerate: baris kanonik apa pun. Sejak audit angka 18 Okt
+2026 permintaan (`demand_records`) ikut diperluas: baris kanonik berhenti di
+8 Okt sehingga dashboard berlabel "Hari Ini" membandingkan pasokan 18 Okt
+dengan permintaan 8 Okt. Generator kini menulis SATU observasi per hari (jam
+00:00 UTC) mulai 9 Okt untuk pasangan yang MEMANG punya permintaan kanonik;
+baris kanonik tidak ditimpa (kunci unik lokasi×komoditas×waktu, `DO UPDATE`
+hanya berlaku untuk `origin='demo'`). Pasangan tanpa permintaan kanonik
+(Bandung & Cianjur untuk telur) sengaja tetap kosong — "belum ada catatan"
+adalah fakta yang ditampilkan apa adanya, bukan lubang yang ditambal.
 
 Determinisme: nilai turunan `hashlib.sha256` atas kunci (pasangan + waktu),
 BUKAN RNG berjalan — jadi hasil tidak bergantung urutan iterasi dan dua kali
@@ -50,6 +55,7 @@ from app.models import (
     Batch,
     Decision,
     DeliveryEvent,
+    DemandRecord,
     DisposalEvent,
     Location,
     MenuPlan,
@@ -95,6 +101,17 @@ WEEKEND_FACTOR = Decimal("0.92")
 NOISE_SPREAD = Decimal("0.06")
 PRICE_NOISE_SPREAD = Decimal("0.03")
 
+#: Permintaan demo (audit angka 18 Okt 2026). Cadence-nya BUKAN 12 jam seperti
+#: pasokan: permintaan adalah rencana menu, dicatat sekali sehari. Derau lebih
+#: kecil daripada pasokan (rencana tidak bergerak secepat panen) dan pola
+#: akhir-pekan tetap dipakai supaya seri tidak terlihat rata/karangan.
+DEMAND_NOISE_SPREAD = Decimal("0.02")
+#: `needed_by` = `recorded_at` + 3 hari, sama dengan baris kanonik (8 -> 11 Okt).
+DEMAND_LEAD_DAYS = 3
+#: Hari pertama permintaan demo: sehari setelah baris kanonik terakhir (8 Okt).
+#: Baris kanonik tidak pernah ditimpa — kunci unik lokasi×komoditas×waktu dipakai.
+DEMAND_DEMO_START = datetime(2026, 10, 9, tzinfo=UTC)
+
 #: Kutipan pemasok tidak perlu serapat referensi harga.
 QUOTE_INTERVAL_DAYS = 7
 
@@ -104,7 +121,15 @@ QUOTE_INTERVAL_DAYS = 7
 #: data demo" yang meninggalkan 40 kiriman demo akan membuat peta tetap ramai
 #: padahal operator sudah meminta data demo dibuang. Anak FK-nya
 #: (`batch_receipts`) memakai ON DELETE CASCADE.
-PURGE_MODELS = (DeliveryEvent, DisposalEvent, SupplyRecord, PriceSignal, MenuPlan, Batch)
+PURGE_MODELS = (
+    DeliveryEvent,
+    DisposalEvent,
+    SupplyRecord,
+    DemandRecord,
+    PriceSignal,
+    MenuPlan,
+    Batch,
+)
 
 #: Hari rencana pertama yang BELUM punya kiriman/limbah kanonik. Kanonik:
 #: `delivery_events` 1–7 Okt, `disposal_events` 4–7 Okt. Mulai 8 Okt generator
@@ -235,6 +260,44 @@ def plan_supply_rows(
         for pair, location_id, commodity_id, baseline in pairs
         for at in timestamps
     ]
+
+
+def demand_value(baseline: Decimal, pair: str, at: datetime) -> Decimal:
+    """Nilai permintaan demo di sekitar baseline kanonik pasangan itu."""
+    factor = _factor(
+        f"demand|{pair}|{at.isoformat()}", DEMAND_NOISE_SPREAD, at.date()
+    )
+    return max(_quantize2(Decimal(baseline) * factor), Decimal("0"))
+
+
+def plan_demand_rows(
+    pairs: list[tuple[str, Any, Any, Decimal]],
+    timestamps: list[datetime],
+) -> list[dict]:
+    """Baris `demand_records` demo: SATU observasi per hari (jam 00:00).
+
+    Stempel 12:00 sengaja dilewati: itu kadens telemetri pasokan, bukan rencana
+    menu. Baris kanonik (8 Okt 12:00) tidak pernah ditimpa — `_upsert_demand`
+    memakai kunci unik lokasi×komoditas×waktu dan tidak meng-update baris non-demo.
+    Pasangan yang TIDAK punya permintaan kanonik (Bandung, Cianjur) tidak ikut:
+    "belum ada catatan" adalah fakta, bukan lubang yang ditambal.
+    """
+    rows: list[dict] = []
+    for pair, location_id, commodity_id, baseline in pairs:
+        for at in timestamps:
+            if at.hour != 0 or at < DEMAND_DEMO_START:
+                continue
+            rows.append(
+                {
+                    "location_id": location_id,
+                    "commodity_id": commodity_id,
+                    "quantity_kg": demand_value(baseline, pair, at),
+                    "needed_by": at + timedelta(days=DEMAND_LEAD_DAYS),
+                    "recorded_at": at,
+                    "origin": "demo",
+                }
+            )
+    return rows
 
 
 def plan_reference_price_rows(
@@ -411,6 +474,7 @@ def plan_all(
     reference_pairs: list[tuple[str, Any, Any, Decimal]],
     quotes: list[tuple[str, Any, Any, Any, Decimal]],
     menu_bases: list[tuple[Any, int]],
+    demand_pairs: list[tuple[str, Any, Any, Decimal]] | None = None,
     start: datetime,
     end: datetime,
     interval_hours: int = DEFAULT_INTERVAL_HOURS,
@@ -421,6 +485,7 @@ def plan_all(
     stamps = actual_timestamps(start, end, interval_hours, ref)
     actual_end = min(end, actual_cutoff(ref))
     menu_rows = plan_menu_plan_rows(menu_bases, start, end)
+    demand_rows = plan_demand_rows(demand_pairs or [], stamps)
     #: Berapa baris kiriman/limbah yang SEHARUSNYA ada: satu kiriman per rencana
     #: sejak 8 Okt, dua catatan limbah per hari rencana. Angka inilah yang dipakai
     #: laporan pratinjau dan jaring `pastikan_deret_demo` — bukan tebakan selisih.
@@ -432,9 +497,11 @@ def plan_all(
             1 for r in menu_rows if r["plan_date"] >= EVENT_DEMO_START.date()
         ),
         "disposals": len(hari_berevent) * 2,
+        "demand": len(demand_rows),
     }
     return {
         "supply": plan_supply_rows(supply_pairs, stamps),
+        "demand": demand_rows,
         "prices": plan_reference_price_rows(reference_pairs, stamps)
         + plan_quote_price_rows(quotes, start, actual_end),
         "menu_plans": menu_rows,
@@ -478,6 +545,25 @@ async def _collect_baselines(session) -> dict:
                 SupplyRecord.location_id,
                 SupplyRecord.commodity_id,
                 SupplyRecord.recorded_at.desc(),
+            )
+        )
+    ).all()
+    # Baseline permintaan: baris kanonik TERBARU per pasangan (8 Okt, origin
+    # 'seed'). Hanya pasangan yang memang punya permintaan yang ikut — pasangan
+    # tanpa baris (Bandung, Cianjur untuk telur) harus tetap "belum ada catatan".
+    demand_rows = (
+        await session.execute(
+            select(
+                DemandRecord.location_id,
+                DemandRecord.commodity_id,
+                DemandRecord.quantity_kg,
+            )
+            .where(DemandRecord.origin == "seed")
+            .distinct(DemandRecord.location_id, DemandRecord.commodity_id)
+            .order_by(
+                DemandRecord.location_id,
+                DemandRecord.commodity_id,
+                DemandRecord.recorded_at.desc(),
             )
         )
     ).all()
@@ -565,6 +651,15 @@ async def _collect_baselines(session) -> dict:
             )
             for loc, com, quantity in supply_rows
         ],
+        "demand_pairs": [
+            (
+                _pair_key(loc, com),
+                loc,
+                com,
+                Decimal(quantity),
+            )
+            for loc, com, quantity in demand_rows
+        ],
         "reference_pairs": [
             (_pair_key(loc, com), loc, com, Decimal(price))
             for loc, com, price in reference_rows
@@ -584,6 +679,29 @@ async def _upsert_supply(session, rows: list[dict], now: datetime) -> None:
         constraint="uq_supply_records_loc_com_time_source",
         set_={"quantity_kg": stmt.excluded.quantity_kg, "generated_at": stmt.excluded.generated_at},
         where=SupplyRecord.origin == "demo",
+    )
+    await session.execute(stmt)
+
+
+async def _upsert_demand(session, rows: list[dict], now: datetime) -> None:
+    """Idempoten pada (lokasi, komoditas, recorded_at); kanonik tidak ditimpa.
+
+    `DO UPDATE ... WHERE origin='demo'` berarti bentrokan dengan baris kanonik
+    (seed) tidak mengubah apa pun — baris 8 Okt 12:00 tetap milik seed.
+    """
+    if not rows:
+        return
+    stmt = pg_insert(DemandRecord).values(
+        [{**row, "generated_at": now} for row in rows]
+    )
+    stmt = stmt.on_conflict_do_update(
+        constraint="uq_demand_records_loc_com_time",
+        set_={
+            "quantity_kg": stmt.excluded.quantity_kg,
+            "needed_by": stmt.excluded.needed_by,
+            "generated_at": stmt.excluded.generated_at,
+        },
+        where=DemandRecord.origin == "demo",
     )
     await session.execute(stmt)
 
@@ -754,20 +872,33 @@ async def generate_timeseries(
             )
             before = {
                 "supply": await _count_origin(session, SupplyRecord, "demo"),
+                "demand": await _count_origin(session, DemandRecord, "demo"),
                 "prices": await _count_origin(session, PriceSignal, "demo"),
                 "menu_plans": await _count_origin(session, MenuPlan, "demo"),
                 "deliveries": await _count_origin(session, DeliveryEvent, "demo"),
                 "disposals": await _count_origin(session, DisposalEvent, "demo"),
             }
             now = datetime.now(UTC)
+            # Ditulis per tahap dengan commit masing-masing. Satu transaksi raksasa
+            # (3.870 pasokan + 648 permintaan + 520 menu + 290 limbah) menahan
+            # ratusan kunci FK sekaligus; bila proses lain (sesi lain, atau
+            # permintaan HTTP di proses yang sama) menulis tabel yang sama,
+            # Postgres bisa memilih korban deadlock. Commit per tahap mempersingkat
+            # jendela kunci; generator tetap idempoten sehingga aman diulang.
             await _upsert_supply(session, plan["supply"], now)
+            await session.commit()
+            await _upsert_demand(session, plan["demand"], now)
+            await session.commit()
             await _upsert_prices(session, plan["prices"], now)
+            await session.commit()
             await _insert_menu_plans(session, plan["menu_plans"], now)
+            await session.commit()
             # Kiriman & limbah menunjuk `menu_plan_id` → ditulis SETELAH menu ada.
             await _insert_events(session, end, now, _komoditas_per_lokasi(baselines))
             await session.commit()
             after = {
                 "supply": await _count_origin(session, SupplyRecord, "demo"),
+                "demand": await _count_origin(session, DemandRecord, "demo"),
                 "prices": await _count_origin(session, PriceSignal, "demo"),
                 "menu_plans": await _count_origin(session, MenuPlan, "demo"),
                 "deliveries": await _count_origin(session, DeliveryEvent, "demo"),
@@ -782,7 +913,7 @@ async def generate_timeseries(
             "added": after[name] - before[name],
             "in_db": after[name],
         }
-        for name in ("supply", "prices", "menu_plans")
+        for name in ("supply", "demand", "prices", "menu_plans")
     }
     # Kiriman/limbah: `planned` datang dari `event_plan` (dihitung per hari rencana
     # sejak 8 Okt), bukan `len(plan[...])` — rencananya memang bukan daftar baris.
@@ -834,6 +965,7 @@ async def preview_timeseries(
         "range": plan["range"],
         "counts": {
             "supply": {"planned": len(plan["supply"])},
+            "demand": {"planned": len(plan["demand"])},
             "prices": {"planned": len(plan["prices"])},
             "menu_plans": {
                 "planned": len(plan["menu_plans"]),
@@ -898,6 +1030,7 @@ async def pastikan_deret_demo(
     )
     harapan = {
         "supply_records": int(pratinjau["counts"]["supply"]["planned"]),
+        "demand_records": int(pratinjau["counts"]["demand"]["planned"]),
         "price_signals": int(pratinjau["counts"]["prices"]["planned"]),
         "menu_plans": int(pratinjau["counts"]["menu_plans"]["planned"]),
         # Kiriman & limbah ikut dijaga: keduanya kini punya `origin` (migrasi 017),
@@ -921,6 +1054,21 @@ async def pastikan_deret_demo(
                         .where(
                             SupplyRecord.recorded_at >= start,
                             SupplyRecord.recorded_at < batas_aktual,
+                        )
+                    )
+                ).scalar()
+                or 0
+            ),
+            # Permintaan demo juga dijaga: rentangnya sama dengan pasokan (baris
+            # kanonik 8 Okt berada di luar rentang ini, jadi tidak ikut dihitung).
+            "demand_records": int(
+                (
+                    await session.execute(
+                        select(func.count())
+                        .select_from(DemandRecord)
+                        .where(
+                            DemandRecord.recorded_at >= start,
+                            DemandRecord.recorded_at < batas_aktual,
                         )
                     )
                 ).scalar()

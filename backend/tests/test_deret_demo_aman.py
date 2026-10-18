@@ -145,8 +145,13 @@ def test_melaporkan_kekurangan_sebagai_data_bukan_tebakan():
     # purge pun masih ada baris kanonik (30 baris supply 8 Okt 12:00, 44 harga).
     assert hasil["sebelum"]["supply_records"] < hasil["harapan"]["supply_records"]
     assert hasil["sesudah"]["supply_records"] >= hasil["harapan"]["supply_records"]
+    # Permintaan ikut dilaporkan: setelah purge, baris demo permintaan habis
+    # (baris kanonik 8 Okt berada di luar rentang) dan dipulihkan oleh `pastikan`.
+    assert hasil["sebelum"]["demand_records"] < hasil["harapan"]["demand_records"]
+    assert hasil["sesudah"]["demand_records"] >= hasil["harapan"]["demand_records"]
     assert set(hasil["sebelum"]) == {
         "supply_records",
+        "demand_records",
         "price_signals",
         "menu_plans",
         "deliveries",

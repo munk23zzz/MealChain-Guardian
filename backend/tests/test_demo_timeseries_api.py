@@ -29,7 +29,7 @@ from app.seed.timeseries import (
 )
 
 DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
-TABLES = ("supply_records", "price_signals", "menu_plans")
+TABLES = ("supply_records", "demand_records", "price_signals", "menu_plans")
 
 
 def _counts() -> dict[str, int]:
@@ -186,6 +186,10 @@ def test_membangun_deret_tidak_menggeser_jangkar(demo_state, auth_headers, monit
         # memang benar.
         "batches",
         "disposal_events",
+        # `demand_records` masuk daftar PURGE_MODELS saat deret permintaan demo
+        # diperluas (audit angka 18 Okt 2026); tanpa baris ini tes menolak
+        # kontrak yang memang benar.
+        "demand_records",
     }
 
     # Jangkar sisi SUMBER: baris KANONIK Cianjur telur tetap 1.400 kg. Record TERBARU
@@ -232,7 +236,7 @@ def test_idempoten_lewat_http(demo_state, auth_headers):
         headers=auth_headers,
     )
     assert kedua.status_code == 200, kedua.text
-    for nama in ("supply", "prices", "menu_plans"):
+    for nama in ("supply", "demand", "prices", "menu_plans"):
         assert kedua.json()["counts"][nama]["added"] == 0
 
 
