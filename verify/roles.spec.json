@@ -1,0 +1,245 @@
+{
+  "name": "mealchain-role-matrix",
+  "artifact_dir": "verify-out-roles",
+  "log_fail_patterns": [
+    "Traceback (most recent call last)",
+    "ERROR",
+    "CRITICAL"
+  ],
+  "services": [
+    {
+      "name": "backend",
+      "external": true,
+      "port": 8000,
+      "health": "http://127.0.0.1:8000/health"
+    },
+    {
+      "name": "frontend",
+      "external": true,
+      "port": 3010,
+      "health": "http://127.0.0.1:3010/",
+      "health_timeout": 60
+    }
+  ],
+  "logins": {
+    "sppg_head": {
+      "as": "SPPG Jakarta (head)",
+      "url": "http://127.0.0.1:8000/auth/login",
+      "json": {
+        "email": "sppg.head@demo.local",
+        "password": "Demo#SPPG2026"
+      }
+    },
+    "bgn_monitor": {
+      "as": "BGN Monitor (nasional)",
+      "url": "http://127.0.0.1:8000/auth/login",
+      "json": {
+        "email": "bgn.monitor@demo.local",
+        "password": "Demo#BGN2026"
+      }
+    },
+    "kepala_bandung": {
+      "as": "Kepala SPPG Bandung",
+      "url": "http://127.0.0.1:8000/auth/login",
+      "json": {
+        "email": "sppg.head.bandung@demo.local",
+        "password": "Demo#SPPG2026"
+      }
+    }
+  },
+  "http": [
+    {
+      "name": "SPPG head: /admin/locations ditolak",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/admin/locations",
+      "as": "sppg_head",
+      "expect_status": [
+        403
+      ]
+    },
+    {
+      "name": "SPPG head: /admin/users ditolak",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/admin/users",
+      "as": "sppg_head",
+      "expect_status": [
+        403
+      ]
+    },
+    {
+      "name": "SPPG head: balance Jakarta boleh",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/balance/Jakarta/beras",
+      "as": "sppg_head",
+      "expect_status": 200,
+      "expect_keys": [
+        "status"
+      ],
+      "max_ms": 4000
+    },
+    {
+      "name": "SPPG head: balance Bandung ditolak",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/balance/Bandung/beras",
+      "as": "sppg_head",
+      "expect_status": [
+        403
+      ]
+    },
+    {
+      "name": "SPPG head: /demo/data-status boleh",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/demo/data-status",
+      "as": "sppg_head",
+      "expect_status": 200
+    },
+    {
+      "name": "BGN monitor: /admin/locations boleh",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/admin/locations",
+      "as": "bgn_monitor",
+      "expect_status": 200,
+      "expect_keys": [
+        "locations"
+      ],
+      "extract_len": "locations",
+      "store": "api_locations",
+      "max_ms": 3000
+    },
+    {
+      "name": "BGN monitor: /admin/users boleh",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/admin/users",
+      "as": "bgn_monitor",
+      "expect_status": 200,
+      "expect_keys": [
+        "users"
+      ]
+    },
+    {
+      "name": "BGN monitor: balance Bandung boleh",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/balance/Bandung/beras",
+      "as": "bgn_monitor",
+      "expect_status": 200,
+      "expect_keys": [
+        "status"
+      ]
+    },
+    {
+      "name": "BGN monitor: /demo/data-status ditolak",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/demo/data-status",
+      "as": "bgn_monitor",
+      "expect_status": [
+        403
+      ]
+    },
+    {
+      "name": "BGN monitor: KPI berskop nasional",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/kpi?start=2026-10-08T11%3A00%3A00%2B00%3A00&end=2026-10-08T12%3A00%3A00%2B00%3A00",
+      "as": "bgn_monitor",
+      "expect_status": 200,
+      "expect_json": {
+        "scope.role": "bgn_monitor"
+      },
+      "max_ms": 5000
+    },
+    {
+      "name": "Kepala Bandung: balance Bandung boleh",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/balance/Bandung/beras",
+      "as": "kepala_bandung",
+      "expect_status": 200,
+      "expect_keys": [
+        "status"
+      ]
+    },
+    {
+      "name": "Kepala Bandung: balance Jakarta ditolak",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/balance/Jakarta/beras",
+      "as": "kepala_bandung",
+      "expect_status": [
+        403
+      ]
+    },
+    {
+      "name": "Kepala Bandung: KPI berskop lokasinya",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/kpi?start=2026-10-08T11%3A00%3A00%2B00%3A00&end=2026-10-08T12%3A00%3A00%2B00%3A00",
+      "as": "kepala_bandung",
+      "expect_status": 200,
+      "expect_json": {
+        "scope.role": "sppg_head"
+      },
+      "max_ms": 5000
+    }
+  ],
+  "db": {
+    "kind": "command",
+    "target": "postgres:15432/mealchain",
+    "run": "docker exec mealchain-postgres psql -U mealchain -d mealchain -At -F \"|\" -c \"{sql}\"",
+    "checks": [
+      {
+        "name": "locations rows",
+        "sql": "SELECT count(*) FROM locations",
+        "expect_min": 1,
+        "store": "db_locations"
+      },
+      {
+        "name": "akun demo ada (7 peran demo)",
+        "sql": "SELECT count(*) FROM users WHERE email LIKE '%@demo.local'",
+        "expect_min": 7,
+        "store": "db_demo_users"
+      },
+      {
+        "name": "tidak ada akun demo duplikat",
+        "sql": "SELECT count(*) - count(DISTINCT email) FROM users WHERE email LIKE '%@demo.local'",
+        "expect": 0
+      }
+    ]
+  },
+  "ui": {
+    "script": "C:/Users/User/AppData/Local/hermes/skills/software-development/fullstack-verification/scripts/ui_check.py",
+    "env": {
+      "BASE_URL": "http://127.0.0.1:3010/",
+      "SETTLE_MS": "3000",
+      "IGNORE_CONSOLE": "defaultProps will be removed"
+    },
+    "flows": [
+      {
+        "name": "FE SPPG Head: cakupan Jakarta, tab Demo Control ada",
+        "env": {
+          "CLICK_SELECTOR": "text=SPPG Head,button:has-text('Masuk')",
+          "EXPECT_TEXT": "sppg.head@demo.local,Overview Pasokan & Distribusi,Demo Control",
+          "FORBID_TEXT": "Pengaturan"
+        }
+      },
+      {
+        "name": "FE BGN Monitor: nasional, tab Demo Control tidak ada",
+        "env": {
+          "CLICK_SELECTOR": "text=BGN Monitor,button:has-text('Masuk')",
+          "EXPECT_TEXT": "bgn.monitor@demo.local,Semua lokasi SPPG,Pengaturan",
+          "FORBID_TEXT": "Demo Control"
+        }
+      },
+      {
+        "name": "FE Kepala Bandung: cakupan Bandung, tanpa Pengaturan",
+        "env": {
+          "CLICK_SELECTOR": "text=Kepala Bandung,button:has-text('Masuk')",
+          "EXPECT_TEXT": "sppg.head.bandung@demo.local,Overview Pasokan & Distribusi",
+          "FORBID_TEXT": "Pengaturan"
+        }
+      }
+    ]
+  },
+  "compare": [
+    {
+      "name": "lokasi yang bisa dilihat BGN monitor == DB",
+      "left": "api_locations",
+      "right": "db_locations"
+    }
+  ]
+}

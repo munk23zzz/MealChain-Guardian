@@ -1,0 +1,83 @@
+# Stack TERISOLASI untuk menguji alur tulis keputusan (propose -> verify -> approve x2 -> execute).
+# Tujuan: tidak ada satu baris pun yang menyentuh DB demo.
+# - proyek compose sendiri (`-p mcg-mut`) => jaringan + volume sendiri.
+# - port host hanya 18000 (backend), tidak ada tabrakan dengan stack demo.
+# - `down -v` setelah selesai menghapus seluruh jejaknya.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mealchain
+      POSTGRES_PASSWORD: mealchain_local
+      POSTGRES_DB: mealchain
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mealchain -d mealchain"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - pg_mut:/var/lib/postgresql/data
+
+  backend:
+    image: mealchain-guardian-backend:latest
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain
+      DEMO_MODE: "false"
+      DEBUG: "false"
+      JWT_SECRET: "mutations-gate-only-secret"
+      # browser uji memakai origin 13010; allow-list CORS bawaan hanya 3000/3010
+      CORS_ORIGINS: "http://localhost:13010,http://127.0.0.1:13010,http://localhost:3010,http://127.0.0.1:3010"
+      SAP_MATERIAL_STOCK_MODE: mock
+      SAP_PURCHASE_ORDER_MODE: mock
+      SAP_MATERIAL_DOCUMENT_MODE: mock
+      SAP_BUSINESS_PARTNER_MODE: mock
+      SAP_PRODUCT_MASTER_MODE: mock
+      # Tanpa provider: verifier harus fail-closed (UNAVAILABLE), bukan menebak.
+      VERIFIER_MODEL_PRIMARY: ""
+    command:
+      - sh
+      - -lc
+      - >
+        alembic upgrade head &&
+        python -m app.seed.seed_data --reference-time 2026-10-08T12:00:00+00:00
+        --with-demo-users --skip-routes &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "127.0.0.1:18000:8000"
+    volumes:
+      - ../backend:/app
+      - ../data:/data:ro
+
+  frontend:
+    # sengaja sama dengan stack demo: restart policy ikut diuji
+    restart: unless-stopped
+    image: mealchain-guardian-frontend:latest
+    working_dir: /app
+    depends_on:
+      - backend
+    environment:
+      # dev mode membaca env ini saat compile; API = backend stack ini (18000)
+      NEXT_PUBLIC_API_URL: http://localhost:18000
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    command: npm run dev
+    healthcheck:
+      # paritas dengan stack demo: GET sungguhan, bukan cek port
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    ports:
+      - "127.0.0.1:13010:3000"
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  pg_mut:

@@ -1,0 +1,239 @@
+{
+  "name": "mealchain-guardian-stack",
+  "artifact_dir": "verify-out",
+  "log_fail_patterns": [
+    "Traceback (most recent call last)",
+    "ERROR",
+    "CRITICAL",
+    "Unhandled exception"
+  ],
+  "services": [
+    {
+      "name": "postgres",
+      "external": true,
+      "port": 15432,
+      "timeout": 20
+    },
+    {
+      "name": "backend",
+      "external": true,
+      "port": 8000,
+      "health": "http://127.0.0.1:8000/health",
+      "logs_command": "docker logs mealchain-backend --tail 400"
+    },
+    {
+      "name": "mock-sap",
+      "external": true,
+      "port": 8001,
+      "health": "http://127.0.0.1:8001/health"
+    },
+    {
+      "name": "frontend",
+      "external": true,
+      "port": 3010,
+      "health": "http://127.0.0.1:3010/",
+      "logs_command": "docker logs mealchain-frontend --tail 300",
+      "log_fail_patterns": [
+        "Unhandled Runtime Error",
+        "Module not found",
+        "ENOENT"
+      ]
+    }
+  ],
+  "login": {
+    "as": "bgn_monitor (nasional, read-only)",
+    "url": "http://127.0.0.1:8000/auth/login",
+    "json": {
+      "email": "bgn.monitor@demo.local",
+      "password": "Demo#BGN2026"
+    },
+    "token_path": "access_token"
+  },
+  "http": [
+    {
+      "name": "GET /health (tanpa token)",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/health",
+      "no_auth": true,
+      "expect_status": 200,
+      "expect_keys": [
+        "status",
+        "service"
+      ],
+      "max_ms": 1500
+    },
+    {
+      "name": "GET /suppliers tanpa token -> 401",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/suppliers",
+      "no_auth": true,
+      "expect_status": [
+        401
+      ]
+    },
+    {
+      "name": "GET /demo/data-status sebagai bgn_monitor -> 403",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/demo/data-status",
+      "expect_status": [
+        403
+      ]
+    },
+    {
+      "name": "GET /suppliers total",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/suppliers",
+      "expect_status": 200,
+      "expect_keys": [
+        "count",
+        "total",
+        "items"
+      ],
+      "extract": "total",
+      "store": "api_suppliers_total",
+      "max_ms": 4000
+    },
+    {
+      "name": "GET /admin/locations",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/admin/locations",
+      "expect_status": 200,
+      "expect_keys": [
+        "locations"
+      ],
+      "extract_len": "locations",
+      "store": "api_locations",
+      "max_ms": 3000
+    },
+    {
+      "name": "GET /ledger/verify",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/ledger/verify",
+      "expect_status": 200,
+      "expect_json": {
+        "valid": true
+      },
+      "extract": "entity_blocks",
+      "store": "api_ledger_entity",
+      "max_ms": 5000
+    },
+    {
+      "name": "GET /sap/purchase-orders/summary",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/sap/purchase-orders/summary",
+      "expect_status": 200,
+      "expect_keys": [
+        "by_status",
+        "count"
+      ],
+      "extract": "count",
+      "store": "api_po_count",
+      "max_ms": 4000
+    },
+    {
+      "name": "GET /decisions",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions",
+      "expect_status": 200,
+      "expect_keys": [
+        "items"
+      ],
+      "max_ms": 4000
+    },
+    {
+      "name": "GET /integrations/status",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/integrations/status",
+      "expect_status": 200,
+      "expect_keys": [
+        "components"
+      ],
+      "max_ms": 20000
+    }
+  ],
+  "db": {
+    "kind": "command",
+    "run": "docker exec mealchain-postgres psql -U mealchain -d mealchain -At -F \"|\" -c \"{sql}\"",
+    "checks": [
+      {
+        "name": "migrasi alembic head",
+        "sql": "SELECT version_num FROM alembic_version",
+        "expect": "022_disposal_partner"
+      },
+      {
+        "name": "suppliers rows",
+        "sql": "SELECT count(*) FROM suppliers",
+        "expect_min": 1,
+        "store": "db_suppliers"
+      },
+      {
+        "name": "locations rows",
+        "sql": "SELECT count(*) FROM locations",
+        "expect_min": 1,
+        "store": "db_locations"
+      },
+      {
+        "name": "ledger entity blocks",
+        "sql": "SELECT count(*) FROM ledger_blocks WHERE entity_id IS NOT NULL",
+        "expect_min": 1,
+        "store": "db_ledger_entity"
+      },
+      {
+        "name": "sap mock purchase orders",
+        "sql": "SELECT count(*) FROM sap_mock_purchase_orders",
+        "expect_min": 1,
+        "store": "db_po"
+      },
+      {
+        "name": "tidak ada batch dengan kuantitas negatif",
+        "sql": "SELECT count(*) FROM batches WHERE quantity_kg < 0",
+        "expect": 0
+      },
+      {
+        "name": "tidak ada keputusan pending tanpa pengusul",
+        "sql": "SELECT count(*) FROM decisions WHERE status = 'pending_approval' AND proposed_by IS NULL",
+        "expect": 0
+      }
+    ],
+    "target": "postgres:15432/mealchain"
+  },
+  "ui": {
+    "name": "login demo SPPG Head -> dashboard Overview",
+    "script": "C:/Users/User/AppData/Local/hermes/skills/software-development/fullstack-verification/scripts/ui_check.py",
+    "env": {
+      "BASE_URL": "http://127.0.0.1:3010/",
+      "CLICK_SELECTOR": "text=SPPG Head,button:has-text('Masuk')",
+      "SETTLE_MS": "3000",
+      "EXPECT_TEXT": "SPPG Operations Lead,Overview Pasokan & Distribusi",
+      "IGNORE_CONSOLE": "defaultProps will be removed"
+    }
+  },
+  "compare": [
+    {
+      "name": "jumlah pemasok: API total == DB",
+      "left": "api_suppliers_total",
+      "right": "db_suppliers"
+    },
+    {
+      "name": "jumlah lokasi: API == DB",
+      "left": "api_locations",
+      "right": "db_locations"
+    },
+    {
+      "name": "blok ledger entity: API == DB",
+      "left": "api_ledger_entity",
+      "right": "db_ledger_entity"
+    },
+    {
+      "name": "purchase order mock SAP: API == DB",
+      "left": "api_po_count",
+      "right": "db_po"
+    }
+  ],
+  "containers": [
+    "mealchain-frontend",
+    "mealchain-backend",
+    "mealchain-mock-sap",
+    "mealchain-postgres"
+  ]
+}

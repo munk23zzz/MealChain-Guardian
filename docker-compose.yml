@@ -146,6 +146,16 @@ services:
       - /app/node_modules
       - /app/.next
     command: npm run dev
+    healthcheck:
+      # GET sungguhan, bukan cek port: `next dev` sudah menerima koneksi saat kompilasi
+      # belum selesai, jadi cek TCP akan bilang "sehat" padahal halaman belum tersaji.
+      # `wget -q -O /dev/null` = BusyBox wget di node:20-alpine (terverifikasi exit 0).
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      # kompilasi pertama di bind mount exFAT bisa ~40 s; jangan dihitung sebagai gagal
+      start_period: 120s
     networks:
       - mealchain-network
 

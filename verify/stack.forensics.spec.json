@@ -1,0 +1,51 @@
+{
+  "name": "mealchain-container-forensics",
+  "artifact_dir": "verify-out-forensics",
+  "_comment": "Gate tipis untuk stack uji: memeriksa state kontainer di awal dan di akhir run, merekam docker events, dan menandai exit code != 0. Dipakai untuk membuktikan bahwa 'server exited with code 0 / port closed' bisa tertangkap sebagai FAIL, bukan teka-teki.",
+  "services": [],
+  "external": true,
+  "containers": [
+    "mcg-mut-frontend-1",
+    "mcg-mut-backend-1",
+    "mcg-mut-postgres-1"
+  ],
+  "http": [
+    {
+      "name": "backend health 18000",
+      "url": "http://127.0.0.1:18000/health",
+      "expect": [
+        200
+      ],
+      "store": "iso_backend_health"
+    },
+    {
+      "name": "frontend 13010",
+      "url": "http://127.0.0.1:13010/",
+      "expect": [
+        200
+      ],
+      "min_len": 200
+    }
+  ],
+  "ui": {
+    "script": "C:/Users/User/AppData/Local/hermes/skills/software-development/fullstack-verification/scripts/ui_tabs.py",
+    "env": {
+      "BASE_URL": "http://127.0.0.1:13010/",
+      "IGNORE_CONSOLE": "defaultProps will be removed",
+      "MIN_CHARS": "400",
+      "SETTLE_MS": "2500"
+    },
+    "flows": [
+      {
+        "name": "BGN Monitor - 3 tab (jendela waktu untuk uji kontainer)",
+        "timeout": 240,
+        "env": {
+          "LOGIN_STEPS": "text=BGN Monitor,button:has-text('Masuk')",
+          "TABS": "Hari Ini,Overview,Pengaturan",
+          "FORBID_TABS": "Surplus & Limbah,Demo Control",
+          "TAB_EXPECT": "{\"Overview\": \"Papan Pengawasan BGN\", \"Hari Ini\": \"Semua lokasi SPPG\"}"
+        }
+      }
+    ]
+  }
+}
