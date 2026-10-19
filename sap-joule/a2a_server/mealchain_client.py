@@ -8,10 +8,12 @@ klon (a) `mealchain-guardian` (v0.2.0), jadi klien ini membaca API-nya:
     GET  /health                                  (publik, tanpa token)
     GET  /admin/locations                         → {locations: [{id, name, region, …}]}
     GET  /batches                                 → {batches: [{location, commodity, …}]}
+    GET  /suppliers?limit=<n>                     → {items: [{name, location, commodity, …}]}
     GET  /balance/map?commodity=<nama>            → {commodity, locations: [supply/demand/…]}
     GET  /kpi?start=<iso>&end=<iso>               → {metrics: [{name, unit, state, value, reason}]}
     GET  /decisions                               → {items: [{decision_id, status, …}]}
     GET  /decisions/{id}/approval-summary          → {source_location, target_location, commodity, …}
+    GET  /sap/purchase-orders?limit=<n>           → {items: [{po_number, status, …}]}
 
 Tiga alasan modul ini tidak punya jalan tulis sama sekali:
 
@@ -51,6 +53,14 @@ DETAIL_LIMIT = 12
 
 #: Jendela KPI default (hari) bila pemanggil tidak menentukan.
 KPI_DEFAULT_DAYS = 7
+
+#: Batas PO yang ditarik sekali baca. Backend menjepit ke 200 (BATAS_MAKS), jadi angka ini
+#: sama dengan plafon backend: cukup untuk seluruh PO demo, dan tetap satu panggilan HTTP.
+PO_LIMIT = 200
+
+#: Batas direktori pemasok sekali baca. Backend menjepit `limit` ke 200; 60 pemasok demo
+#: muat dalam satu panggilan, jadi Joule tidak perlu memaginasi.
+SUPPLIER_LIMIT = 200
 
 
 class MealchainUnavailable(RuntimeError):
@@ -208,6 +218,39 @@ class MealchainClient:
         """Inventaris batch: lokasi, komoditas, kg, status keamanan, kesegaran, masa pakai."""
         return self._rows(self._get("/batches"), "batches")
 
+    def suppliers(self, limit: int = SUPPLIER_LIMIT) -> list[dict[str, Any]]:
+        """Direktori pemasok yang melayani tiap SPPG (`GET /suppliers`).
+
+        Kolom dipetakan ke bentuk camelCase yang dipakai `report.py`; TIDAK ada
+        perhitungan di sini — keandalan, kapasitas, dan ringkasan kiriman sudah
+        dihitung backend. `shipping` boleh `None` (pemasok terdaftar tetapi belum
+        mengirim); nilainya diteruskan apa adanya supaya perender bisa menulis `—`,
+        bukan mengarang nol.
+        """
+        batas = max(1, min(int(limit), SUPPLIER_LIMIT))
+        payload = self._get("/suppliers", params={"limit": batas})
+        hasil: list[dict[str, Any]] = []
+        for row in self._rows(payload, "items"):
+            shipping = row.get("shipping")
+            shipping = shipping if isinstance(shipping, dict) else {}
+            hasil.append(
+                {
+                    "name": row.get("name"),
+                    "location": row.get("location"),
+                    "commodity": row.get("commodity"),
+                    "reliability": row.get("reliability_score"),
+                    "capacityKgPerWeek": row.get("capacity_kg_per_week"),
+                    "certification": row.get("certification_status"),
+                    "address": row.get("address"),
+                    "contactName": row.get("contact_name"),
+                    "excludedAtHub": row.get("excluded_at_hub"),
+                    "shippingCount": shipping.get("count"),
+                    "shippingKg": shipping.get("total_kg"),
+                    "shippingUntil": shipping.get("until"),
+                }
+            )
+        return hasil
+
     def balance_map(self, commodity: str) -> dict[str, Any]:
         """Kondisi pasokan/kebutuhan satu komoditas untuk semua lokasi (`/balance/map`)."""
         payload = self._get("/balance/map", params={"commodity": commodity})
@@ -234,6 +277,38 @@ class MealchainClient:
         """Ringkasan satu keputusan — satu-satunya tempat asal→tujuan + komoditas dinamai."""
         payload = self._get(f"/decisions/{decision_id}/approval-summary")
         return payload if isinstance(payload, dict) else {}
+
+    def purchase_orders(self, limit: int = PO_LIMIT) -> list[dict[str, Any]]:
+        """Purchase order mock SAP yang boleh dibaca akun ini (`/sap/purchase-orders`).
+
+        Baca-saja dan tanpa perhitungan: `totalValue` diterima dari backend (sudah
+        `price × qty` di sana), jembatan tidak mengalikan ulang. Kolom dipetakan ke bentuk
+        camelCase yang dipakai `report.py`, sama seperti `pending_decisions`.
+
+        `origin` ikut dibawa: `execution` = lahir dari eksekusi keputusan, `demo` = baris
+        impor SAP tanpa keputusan. Perender memakainya untuk tidak menampilkan PO impor
+        seolah-olah melewati persetujuan.
+        """
+        batas = max(1, min(int(limit), PO_LIMIT))
+        payload = self._get("/sap/purchase-orders", params={"limit": batas})
+        return [
+            {
+                "poNumber": row.get("po_number"),
+                "status": row.get("status"),
+                "createdAt": row.get("created_at"),
+                "locationName": row.get("location_name"),
+                "supplierName": row.get("supplier_name"),
+                "materialNumber": row.get("material_number"),
+                "commodityName": row.get("commodity_name"),
+                "quantityKg": row.get("ordered_quantity_kg"),
+                "pricePerKg": row.get("price_per_kg"),
+                "totalValue": row.get("total_value"),
+                "decisionId": row.get("decision_id"),
+                "decisionStatus": row.get("decision_status"),
+                "origin": row.get("origin"),
+            }
+            for row in self._rows(payload, "items")
+        ]
 
     def pending_decisions(self, limit: int | None = None) -> list[dict[str, Any]]:
         """Keputusan belum tuntas, dilengkapi asal→tujuan + komoditas dari approval-summary.

@@ -106,8 +106,13 @@ def test_jalur_artefak_tidak_berubah(fungsi):
     assert pesan["content"] == SPEL_ARTEFAK
 
 
-def test_tiga_scenario_menargetkan_fungsi_yang_sama(scenario):
-    assert set(scenario) == {"situasi_pasokan", "indikator_kinerja", "antrean_usulan"}
+def test_empat_scenario_menargetkan_fungsi_yang_sama(scenario):
+    assert set(scenario) == {
+        "situasi_pasokan",
+        "indikator_kinerja",
+        "antrean_usulan",
+        "detail_purchase_order",
+    }
     for nama, isi in scenario.items():
         assert isi["target"] == {"name": "mealchain_query_function", "type": "function"}, nama
         assert len(isi["description"]) > 80, f"deskripsi {nama} terlalu pendek untuk NLU"
@@ -148,7 +153,25 @@ def test_kata_kunci_scenario_cocok_dengan_skill_jembatan(scenario):
     assert not bentrok, f"deskripsi pasokan memuat kata kunci skill lain: {bentrok}"
 
 
-def test_agent_card_menawarkan_tiga_skill_yang_sama():
+def test_scenario_po_memakai_kata_kunci_po_dan_tidak_direbut_scenario_lain(scenario):
+    """Sama seperti KPI/antrean: kata kunci PO harus ada di scenario-nya, dan TIDAK di lain.
+
+    Tanpa pemeriksaan ini, menambah scenario PO bisa membuat pertanyaan pasokan/KPI direbut
+    scenario PO (atau sebaliknya) tanpa satu pun tes lama gagal — kegagalan senyap.
+    """
+    from server import _PO_WORD
+
+    po = scenario["detail_purchase_order"]["description"]
+    assert _PO_WORD.search(po), "deskripsi scenario PO tidak memuat kata kunci PO"
+    assert "read-only" in po.lower()
+
+    for nama in ("situasi_pasokan", "indikator_kinerja", "antrean_usulan"):
+        assert not _PO_WORD.search(scenario[nama]["description"]), (
+            f"deskripsi {nama} memuat kata kunci PO — pertanyaannya bisa direbut scenario PO"
+        )
+
+
+def test_agent_card_menawarkan_skill_yang_sama_dengan_jembatan():
     from fastapi.testclient import TestClient
     from server import SKILLS, app
 

@@ -20,9 +20,16 @@ Aturan modul ini:
 
 from __future__ import annotations
 
-from typing import Any, Callable, Iterable, Mapping, Sequence
+import datetime as _dt
+from typing import Any, Callable, Mapping, Sequence
 
 MISSING = "—"
+
+#: Nama bulan Indonesia pendek — dipakai `wib()` untuk tanggal PO.
+BULAN = ("Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des")
+
+#: WIB = UTC+7 tanpa DST (Indonesia tidak memakai DST). Offset tetap, bukan hitungan.
+WIB = _dt.timezone(_dt.timedelta(hours=7), "WIB")
 
 #: Label Indonesia untuk status yang dikirim backend (Inggris di API).
 SUPPLY_STATUS_LABEL = {
@@ -273,6 +280,74 @@ def supply_report(
     )
 
 
+# --- direktori pemasok -------------------------------------------------------------------
+
+
+def supplier_directory_report(
+    rows: Sequence[Mapping[str, Any]] | None,
+    *,
+    limit: int = 25,
+    note: str | None = None,
+) -> str:
+    """Direktori pemasok per SPPG: hub, komoditas, keandalan, kapasitas, kiriman aktif.
+
+    Satu baris = satu pemasok seperti dikirim `GET /suppliers`. Jarak, kelayakan, dan
+    skor TIDAK ditaksir di sini — nilainya datang dari backend. `excluded_at_hub`
+    ditampilkan sebagai penanda, bukan disaring diam-diam: direktori memang daftar
+    sumber, dan konteks eksklusi berguna bagi manusia yang membacanya.
+    """
+    pemasok = list(rows or ())
+    if not pemasok:
+        return (
+            "Belum ada data pemasok yang dikirim backend MealChain.\n\n"
+            + _footnote([note or "sumber: GET /suppliers"])
+        )
+
+    def urut(row: Mapping[str, Any]) -> tuple[str, str]:
+        return (str(row.get("location") or ""), str(row.get("name") or ""))
+
+    tampil, sisa = _cap(sorted(pemasok, key=urut), limit)
+    baris: list[list[str]] = []
+    for row in tampil:
+        jumlah = row.get("shippingCount")
+        if jumlah is None:
+            kiriman = "belum mengirim"
+        else:
+            kiriman = f"{jumlah} batch"
+            if row.get("shippingKg") is not None:
+                kiriman += f" · {kg(row.get('shippingKg'))}"
+        if row.get("excludedAtHub"):
+            kiriman += " · dikecualikan di hub"
+        baris.append(
+            [
+                _text(row.get("name")),
+                _text(row.get("location")),
+                _text(row.get("commodity")),
+                num(row.get("reliability"), digits=2),
+                kg(row.get("capacityKgPerWeek")),
+                kiriman,
+            ]
+        )
+
+    return (
+        f"Direktori pemasok ({len(pemasok)} pemasok, dikelompokkan per SPPG):\n\n"
+        + _table(
+            ["Pemasok", "SPPG", "Komoditas", "Keandalan", "Kapasitas/minggu", "Kiriman aktif"],
+            baris,
+        )
+        + "\n\n"
+        + _footnote(
+            [
+                note,
+                "Sumber: backend MealChain `GET /suppliers` (baca-saja; Joule tidak menghitung ulang).",
+                "Pemasok tanpa baris kiriman berarti terdaftar tetapi belum/tidak sedang mengirim — "
+                "bukan nol karangan.",
+                sisa,
+            ]
+        )
+    )
+
+
 # --- KPI ----------------------------------------------------------------------------------
 
 
@@ -362,6 +437,166 @@ def approval_queue_report(
                 "Persetujuan TIDAK bisa dilakukan dari Joule: approver menekan Setuju di UI "
                 "MealChain dengan tokennya sendiri (Rules.md §1.2 — tidak ada auto-execute).",
                 "Sumber: GET /decisions + GET /decisions/{id}/approval-summary.",
+                catatan_sisa,
+            ]
+        )
+    )
+
+
+# --- purchase order (tabel mock SAP) ------------------------------------------------------
+
+PO_STATUS_LABEL = {
+    "draft": "rancangan",
+    "submitted": "terkirim",
+    "confirmed": "dikonfirmasi",
+}
+DECISION_STATUS_LABEL = {
+    "proposed": "usulan",
+    "verifier_flagged": "ditandai verifikator",
+    "pending_approval": "menunggu persetujuan",
+    "approved": "disetujui",
+    "rejected": "ditolak",
+    "executed": "dieksekusi",
+    "review_only": "tinjauan saja",
+}
+ORIGIN_LABEL = {
+    "execution": "lahir dari eksekusi keputusan",
+    "demo": "baris impor SAP (tanpa keputusan)",
+}
+
+
+def wib(timestamp: Any) -> str:
+    """ISO-8601 dari backend → `20 Okt 2026 09.20 WIB`.
+
+    WIB = UTC+7 tanpa DST (Indonesia tidak memakai DST), jadi offset tetap ini hanya
+    penandaan zona — bukan perhitungan atas data. Nilai yang tidak terbaca dikembalikan
+    apa adanya supaya waktu karangan tidak pernah muncul.
+    """
+    teks = str(timestamp or "").strip()
+    if not teks:
+        return MISSING
+    try:
+        saat = _dt.datetime.fromisoformat(teks.replace("Z", "+00:00"))
+    except ValueError:
+        return teks
+    if saat.tzinfo is None:  # backend selalu mengirim offset; kalau tidak, jangan menebak zona
+        return teks
+    lokal = saat.astimezone(WIB)
+    return (
+        f"{lokal.day} {BULAN[lokal.month - 1]} {lokal.year} "
+        f"{lokal.hour:02d}.{lokal.minute:02d} WIB"
+    )
+
+
+def _label(peta: Mapping[str, str], value: Any) -> str:
+    """Label Indonesia bila dikenal; nilai mentah bila tidak — istilah API tidak disembunyikan."""
+    teks = str(value or "").strip()
+    if not teks:
+        return MISSING
+    return peta.get(teks, teks)
+
+
+def _po_detail(po: Mapping[str, Any], *, jumlah_terbaca: int, note: str | None) -> str:
+    """Satu PO sebagai daftar kolom→nilai (bukan tabel selebar layar chat)."""
+    keputusan = _text(po.get("decisionId"))
+    if keputusan != MISSING:
+        keputusan = f"{keputusan} — {_label(DECISION_STATUS_LABEL, po.get('decisionStatus'))}"
+    baris = [
+        ("Status PO", _label(PO_STATUS_LABEL, po.get("status"))),
+        ("Dibuat", wib(po.get("createdAt"))),
+        ("Lokasi tujuan", _text(po.get("locationName"))),
+        ("Pemasok", _text(po.get("supplierName"))),
+        ("Bahan", _text(po.get("commodityName"))),
+        ("Nomor material SAP", _text(po.get("materialNumber"))),
+        ("Jumlah", kg(po.get("quantityKg"))),
+        ("Harga per kg", rupiah(po.get("pricePerKg"))),
+        ("Total nilai", rupiah(po.get("totalValue"))),
+        ("Keputusan", keputusan),
+        ("Asal baris", _label(ORIGIN_LABEL, po.get("origin"))),
+    ]
+    isi = "\n".join(f"- **{judul}:** {nilai}" for judul, nilai in baris)
+    return (
+        f"Purchase order {_text(po.get('poNumber'))}\n\n"
+        f"{isi}\n\n"
+        + _footnote(
+            [
+                note,
+                f"Sumber: GET /sap/purchase-orders (tabel mock SAP di backend) — 1 dari "
+                f"{jumlah_terbaca} PO yang terbaca akun baca ini.",
+                "Angka ditampilkan apa adanya; total nilai dihitung backend, bukan oleh jembatan.",
+                "Dokumen PDF PO diunduh dari UI MealChain (tab Decision & Evidence) setelah "
+                "keputusan disetujui — Joule hanya mengirim teks, tidak melampirkan berkas.",
+            ]
+        )
+    )
+
+
+def purchase_order_report(
+    orders: Sequence[Mapping[str, Any]] | None,
+    *,
+    po_number: str | None = None,
+    limit: int = 10,
+    note: str | None = None,
+) -> str:
+    """Daftar purchase order mock SAP, atau satu PO bila nomornya disebut.
+
+    Baris datang dari `/sap/purchase-orders` (read-only, cakupan akun `bgn_monitor` =
+    nasional). Nomor PO dicocokkan PERSIS — tidak ada pencarian samar yang bisa menampilkan
+    PO lain seolah-olah yang diminta.
+    """
+    items = list(orders or ())
+    dicari = (po_number or "").strip().upper()
+    if dicari:
+        cocok = [row for row in items if str(row.get("poNumber") or "").upper() == dicari]
+        if not cocok:
+            return (
+                f"Purchase order {dicari} tidak ditemukan di antara {len(items)} PO yang "
+                "terbaca akun baca ini.\n\n"
+                + _footnote(
+                    [
+                        note,
+                        "Sumber: GET /sap/purchase-orders (tabel mock SAP di backend).",
+                        "Nomor yang tidak terdaftar, atau PO di luar cakupan akun baca, tidak "
+                        "akan muncul di sini — bukan berarti PO-nya fiktif.",
+                    ]
+                )
+            )
+        return _po_detail(cocok[0], jumlah_terbaca=len(items), note=note)
+
+    if not items:
+        return (
+            "Belum ada purchase order yang terbaca di MealChain Guardian.\n\n"
+            + _footnote([note or "sumber: GET /sap/purchase-orders"])
+        )
+
+    tampil, catatan_sisa = _cap(items, limit)
+    rows = [
+        [
+            _text(row.get("poNumber")),
+            _label(PO_STATUS_LABEL, row.get("status")),
+            _text(row.get("locationName")),
+            _text(row.get("commodityName")),
+            kg(row.get("quantityKg")),
+            rupiah(row.get("totalValue")),
+            _label(DECISION_STATUS_LABEL, row.get("decisionStatus"))
+            if row.get("decisionId")
+            else "impor SAP",
+        ]
+        for row in tampil
+    ]
+    body = _table(
+        ["Nomor PO", "Status", "Lokasi tujuan", "Bahan", "Jumlah", "Total", "Keputusan"],
+        rows,
+    )
+    return (
+        f"Purchase order MealChain Guardian ({len(items)} PO terbaca):\n\n"
+        f"{body}\n\n"
+        + _footnote(
+            [
+                note,
+                "Sumber: GET /sap/purchase-orders (tabel mock SAP di backend), urutan "
+                "terbaru lebih dulu — angka apa adanya, tanpa hitung ulang di jembatan.",
+                "Sebut satu nomor PO (mis. `PO MC-661695B2C685`) untuk melihat rinciannya.",
                 catatan_sisa,
             ]
         )

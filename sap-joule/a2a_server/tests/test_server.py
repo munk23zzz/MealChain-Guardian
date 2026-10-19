@@ -64,6 +64,40 @@ class FakeClient:
             }
         ]
 
+    def suppliers(self) -> list[dict]:
+        self.dipanggil.append("suppliers")
+        self._cek()
+        return [
+            {
+                "name": "CV Cipinang Boga Utama",
+                "location": "Jakarta",
+                "commodity": "beras",
+                "reliability": 0.92,
+                "capacityKgPerWeek": 4200.0,
+                "certification": "haccp",
+                "address": "Jl. Cipinang Besar No. 12",
+                "contactName": "Budi Santoso",
+                "excludedAtHub": False,
+                "shippingCount": 2,
+                "shippingKg": 840.0,
+                "shippingUntil": "2026-10-22T00:00:00+00:00",
+            },
+            {
+                "name": "UD Cipanas Telur Sejahtera",
+                "location": "Cianjur",
+                "commodity": "telur",
+                "reliability": 0.86,
+                "capacityKgPerWeek": 2100.0,
+                "certification": "hygiene",
+                "address": "Jl. Raya Cipanas No. 4",
+                "contactName": "Asep",
+                "excludedAtHub": True,
+                "shippingCount": None,
+                "shippingKg": None,
+                "shippingUntil": None,
+            },
+        ]
+
     def balance_map(self, commodity: str) -> dict:
         self.dipanggil.append(f"balance_map:{commodity}")
         self._cek()
@@ -111,6 +145,27 @@ class FakeClient:
             }
         ]
 
+    def purchase_orders(self) -> list[dict]:
+        self.dipanggil.append("purchase_orders")
+        self._cek()
+        return [
+            {
+                "poNumber": "MC-661695B2C685",
+                "status": "confirmed",
+                "createdAt": "2026-10-20T02:20:00+00:00",
+                "locationName": "SPPG Jakarta Pusat",
+                "supplierName": "Telur Berkah",
+                "materialNumber": "MAT-BERA",
+                "commodityName": "telur",
+                "quantityKg": 600.0,
+                "pricePerKg": 18000.0,
+                "totalValue": 10800000.0,
+                "decisionId": "9f1c0a52-2b6e-4b31-91f5-3c0a1d5e7a11",
+                "decisionStatus": "executed",
+                "origin": "execution",
+            }
+        ]
+
 
 def _app(fake: FakeClient):
     return server.build_app(client_factory=lambda: fake, app_url="http://bridge.test")
@@ -142,15 +197,50 @@ def test_routing_kpi_dimenangkan_atas_antrean():
     assert server.resolve_skill("lihat usulan kpi")[0] == "kpi_snapshot"
 
 
+def test_routing_nomor_po_membawa_nomornya():
+    skill, payload = server.resolve_skill("Tampilkan PO MC-661695B2C685")
+
+    assert skill == "purchase_order"
+    assert payload["po_number"] == "MC-661695B2C685"
+
+
+def test_routing_po_dimenangkan_atas_kata_kunci_antrean():
+    """Pertanyaan PO sering memuat kata `setuju`/`keputusan` milik skill antrean."""
+    assert server.resolve_skill("PO mana yang sudah disetujui?")[0] == "purchase_order"
+    assert server.resolve_skill("purchase order dari keputusan tadi")[0] == "purchase_order"
+    assert server.resolve_skill("status pesanan pembelian terbaru")[0] == "purchase_order"
+
+
+def test_routing_po_tidak_menarik_kata_yang_mengandung_po():
+    # Batas kata: "produk"/"pasokan" bukan permintaan PO.
+    assert server.resolve_skill("stok produk unggulan?")[0] == "supply_situation"
+    assert server.resolve_skill("bagaimana pasokan hari ini?")[0] == "supply_situation"
+    # "keputusan" tanpa PO tetap milik antrean.
+    assert server.resolve_skill("keputusan yang menunggu persetujuan")[0] == "approval_queue"
+
+
+def test_routing_direktori_pemasok_tetapi_antrean_tetap_menang():
+    assert server.resolve_skill("Tampilkan direktori pemasok")[0] == "supplier_directory"
+    assert server.resolve_skill("daftar supplier SPPG Jakarta")[0] == "supplier_directory"
+    # "usulan eksklusi pemasok" adalah keputusan, bukan permintaan direktori.
+    assert server.resolve_skill("usulan eksklusi pemasok")[0] == "approval_queue"
+
+
 # --- kartu agen & /health -----------------------------------------------------------------
 
 
-def test_agent_card_di_well_known_berisi_tiga_skill():
+def test_agent_card_di_well_known_berisi_lima_skill():
     with TestClient(_app(FakeClient())) as client:
         card = client.get("/.well-known/agent-card.json").json()
 
     ids = [skill["id"] for skill in card["skills"]]
-    assert ids == ["supply_situation", "kpi_snapshot", "approval_queue"]
+    assert ids == [
+        "supply_situation",
+        "kpi_snapshot",
+        "approval_queue",
+        "purchase_order",
+        "supplier_directory",
+    ]
     assert card["url"] == "http://bridge.test"
     assert card["capabilities"]["streaming"] is False
 
@@ -283,6 +373,7 @@ def test_klien_nyata_memenuhi_protokol_jembatan():
         "balance_map",
         "kpi",
         "pending_decisions",
+        "purchase_orders",
         "close",
         "__enter__",
         "__exit__",
@@ -300,6 +391,20 @@ def test_skill_antrean_menampilkan_asal_tujuan_dan_komoditas():
     assert "telur" in teks
     assert "600 kg" in teks
     assert "Persetujuan TIDAK bisa dilakukan dari Joule" in teks
+
+
+def test_skill_direktori_pemasok_menampilkan_hub_dan_kiriman():
+    fake = FakeClient()
+    events = _jalan(server.MealchainExecutor(lambda: fake), "Tampilkan direktori pemasok")
+    teks = _teks_artefak(events[1])
+
+    assert "suppliers" in fake.dipanggil
+    assert "batches" not in fake.dipanggil  # direktori tidak memanggil endpoint pasokan
+    assert "CV Cipinang Boga Utama" in teks
+    assert "Jakarta" in teks and "beras" in teks
+    assert "2 batch" in teks and "840 kg" in teks
+    assert "dikecualikan di hub" in teks
+    assert "belum mengirim" in teks
 
 
 def test_komoditas_tanpa_keseimbangan_tidak_mematikan_seluruh_laporan():
@@ -349,3 +454,19 @@ def test_komoditas_tanpa_keseimbangan_tidak_mematikan_seluruh_laporan():
     assert "Keseimbangan tidak terbaca untuk: wortel" in teks
     assert "bukan berarti nol" in teks
     assert "tidak dapat" not in teks.lower(), "laporan tidak boleh jatuh ke pesan 'tidak tersedia'"
+
+
+def test_skill_po_mengirim_rincian_po_dan_tidak_menyentuh_pasokan():
+    fake = FakeClient()
+    events = _jalan(
+        server.MealchainExecutor(lambda: fake),
+        '{"skill": "purchase_order", "po_number": "MC-661695B2C685"}',
+    )
+    teks = _teks_artefak(events[1])
+
+    assert "Purchase order MC-661695B2C685" in teks
+    assert "Telur Berkah" in teks
+    assert "600 kg" in teks
+    assert "Rp10.800.000" in teks
+    assert "purchase_orders" in fake.dipanggil
+    assert "batches" not in fake.dipanggil, "skill PO tidak boleh membaca read model pasokan"

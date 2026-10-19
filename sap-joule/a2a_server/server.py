@@ -17,8 +17,14 @@ Kenapa hanya BACA dan kenapa angka tidak dihitung di sini:
 Pemilihan skill DETERMINISTIK (bukan LLM):
 
 1. pesan berbentuk JSON dengan field `skill` — kontrak eksplisit, dipakai test & A2A Editor; atau
-2. kata kunci pada teks pesan (`kpi`/`indikator` → KPI; `approval`/`persetujuan`/`usulan` → antrean
-   usulan), sisanya → situasi pasokan.
+2. nomor PO di dalam teks (`MC-661695B2C685`) → skill purchase order, sekalian membawa nomornya;
+3. kata kunci pada teks pesan (`kpi`/`indikator` → KPI; `po`/`purchase order`/`pesanan pembelian`
+   → purchase order; `approval`/`persetujuan`/`usulan` → antrean usulan; `pemasok`/`supplier`/
+   `direktori` → direktori pemasok), sisanya → situasi pasokan.
+
+Purchase order diperiksa SEBELUM antrean: pertanyaan "PO mana yang sudah disetujui?" memuat kata
+`setuju` (kata kunci antrean), padahal yang diminta adalah PO — urutan sebaliknya membuat Joule
+menjawab daftar usulan, bukan PO.
 
 Batas yang jujur: routing kata kunci bisa salah tebak kalau kalimat pengguna ambigu. Perbaikan
 yang lebih kuat (satu BTP Destination + satu agent card per skill) sengaja belum diambil supaya
@@ -30,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 from typing import Any, Callable, Mapping, Protocol
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
@@ -61,15 +68,29 @@ DEFAULT_PORT = "8080"
 SKILL_SUPPLY = "supply_situation"
 SKILL_KPI = "kpi_snapshot"
 SKILL_QUEUE = "approval_queue"
-SKILLS = (SKILL_SUPPLY, SKILL_KPI, SKILL_QUEUE)
+SKILL_PO = "purchase_order"
+SKILL_DIRECTORY = "supplier_directory"
+SKILLS = (SKILL_SUPPLY, SKILL_KPI, SKILL_QUEUE, SKILL_PO, SKILL_DIRECTORY)
 
 # Urutan penting: KPI diperiksa sebelum antrean, supaya "usulan KPI" tidak salah masuk antrean.
+# Direktori diperiksa SESUDAH antrean: "usulan eksklusi pemasok" adalah keputusan, bukan direktori.
 _KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (SKILL_KPI, ("kpi", "indikator", "kinerja", "metrik", "performance")),
     (
         SKILL_QUEUE,
         ("approval", "approve", "persetujuan", "setuju", "usulan", "keputusan", "antrean", "queue"),
     ),
+    (SKILL_DIRECTORY, ("pemasok", "supplier", "direktori", "vendor")),
+)
+
+#: Nomor PO kanonik: `MC-<12 hex>` (satu pembentuk, `backend/app/core/po_number`). Dibaca
+#: lebih dulu daripada kata kunci mana pun karena bentuknya tidak ambigu.
+_PO_NUMBER = re.compile(r"\b(MC-[0-9A-Fa-f]{6,})\b")
+
+#: Sebutan PO tanpa nomor. Batas kata dipakai supaya `po` di dalam "produk"/"pasokan" tidak
+#: ikut tertangkap — routing yang salah tebak lebih mahal daripada tidak menangkap.
+_PO_WORD = re.compile(
+    r"(?<![A-Za-z])(po|purchase[\s-]?orders?|pesanan[\s-]+pembelian)(?![A-Za-z])", re.IGNORECASE
 )
 
 
@@ -86,9 +107,21 @@ class ReadOnlyBackend(Protocol):
     def close(self) -> None: ...
     def health(self) -> dict[str, Any]: ...
     def batches(self) -> list[dict[str, Any]]: ...
+    def suppliers(self) -> list[dict[str, Any]]: ...
     def balance_map(self, commodity: str) -> dict[str, Any]: ...
     def kpi(self, days: int = ...) -> dict[str, Any]: ...
     def pending_decisions(self) -> list[dict[str, Any]]: ...
+    def purchase_orders(self) -> list[dict[str, Any]]: ...
+
+
+def _po_request(teks: str) -> Mapping[str, Any] | None:
+    """Permintaan PO bila pesan menyebut nomor PO atau kata `po`/`purchase order`."""
+    nomor = _PO_NUMBER.search(teks)
+    if nomor:
+        return {"po_number": nomor.group(1).upper()}
+    if _PO_WORD.search(teks):
+        return {}
+    return None
 
 
 def resolve_skill(user_input: str) -> tuple[str, Mapping[str, Any]]:
@@ -105,9 +138,16 @@ def resolve_skill(user_input: str) -> tuple[str, Mapping[str, Any]]:
             diminta = str(data.get("skill") or "").strip()
             return (diminta if diminta in SKILLS else SKILL_SUPPLY), data
     teks = pesan.lower()
-    for skill, keywords in _KEYWORDS:
-        if any(keyword in teks for keyword in keywords):
-            return skill, {}
+    if any(keyword in teks for keyword in dict(_KEYWORDS)[SKILL_KPI]):
+        return SKILL_KPI, {}
+    # PO sebelum antrean: "PO mana yang sudah disetujui?" memuat `setuju` milik antrean.
+    po = _po_request(pesan)
+    if po is not None:
+        return SKILL_PO, po
+    if any(keyword in teks for keyword in dict(_KEYWORDS)[SKILL_QUEUE]):
+        return SKILL_QUEUE, {}
+    if any(keyword in teks for keyword in dict(_KEYWORDS)[SKILL_DIRECTORY]):
+        return SKILL_DIRECTORY, {}
     return SKILL_SUPPLY, {}
 
 
@@ -128,7 +168,9 @@ def _data_source_note(client: ReadOnlyBackend) -> str | None:
     return f"Sumber data SAP pada backend: {sumber}{tambahan} — data mock ditandai mock, bukan klaim SAP nyata."
 
 
-def render_skill(client: ReadOnlyBackend, skill: str) -> str:
+def render_skill(
+    client: ReadOnlyBackend, skill: str, payload: Mapping[str, Any] | None = None
+) -> str:
     """Jalankan satu skill: ambil dari backend, render markdown. Tidak ada aritmetika di sini.
 
     Skill pasokan membaca dua read model: `/batches` (keamanan & kesegaran melekat pada batch)
@@ -140,6 +182,11 @@ def render_skill(client: ReadOnlyBackend, skill: str) -> str:
         return report.kpi_report(client.kpi(), note=note)
     if skill == SKILL_QUEUE:
         return report.approval_queue_report(client.pending_decisions(), note=note)
+    if skill == SKILL_PO:
+        nomor = str((payload or {}).get("po_number") or "").strip() or None
+        return report.purchase_order_report(client.purchase_orders(), po_number=nomor, note=note)
+    if skill == SKILL_DIRECTORY:
+        return report.supplier_directory_report(client.suppliers(), note=note)
 
     batches = client.batches()
     komoditas = sorted(
@@ -182,9 +229,9 @@ class MealchainExecutor(AgentExecutor):
     ) -> None:
         self._client_factory = client_factory
 
-    def _render(self, skill: str) -> str:
+    def _render(self, skill: str, payload: Mapping[str, Any] | None = None) -> str:
         with self._client_factory() as client:
-            return render_skill(client, skill)
+            return render_skill(client, skill, payload)
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         await event_queue.enqueue_event(
@@ -196,10 +243,10 @@ class MealchainExecutor(AgentExecutor):
             )
         )
 
-        skill, _payload = resolve_skill(context.get_user_input())
+        skill, payload = resolve_skill(context.get_user_input())
         try:
             loop = asyncio.get_running_loop()
-            body = await loop.run_in_executor(None, self._render, skill)
+            body = await loop.run_in_executor(None, self._render, skill, payload)
         except MealchainUnavailable as exc:
             # Diterbitkan sebagai ARTEFAK teks, bukan tugas `failed`: function Joule membaca
             # `artifacts[0].parts[0].text`, jadi hanya begini pengguna melihat penyebabnya.
@@ -253,11 +300,12 @@ def agent_card(app_url: str) -> AgentCard:
     return AgentCard(
         name="MealChain Guardian — jembatan Joule",
         description=(
-            "Membaca situasi pasokan, indikator kinerja, dan antrean usulan keputusan "
-            "MealChain Guardian (SPPG/BGN). Baca-saja: persetujuan tetap dilakukan manusia."
+            "Membaca situasi pasokan, indikator kinerja, antrean usulan keputusan, "
+            "purchase order (PO), dan direktori pemasok MealChain Guardian (SPPG/BGN). "
+            "Baca-saja: persetujuan tetap dilakukan manusia."
         ),
         url=app_url,
-        version="1.0.0",
+        version="1.1.0",
         capabilities=AgentCapabilities(streaming=False),
         skills=[
             AgentSkill(
@@ -291,6 +339,31 @@ def agent_card(app_url: str) -> AgentCard:
                     "beserta statusnya. Hanya untuk dilihat; persetujuan di UI MealChain."
                 ),
                 tags=["usulan", "approval", "persetujuan", "keputusan"],
+                inputModes=modalitas,
+                outputModes=["text/markdown"],
+            ),
+            AgentSkill(
+                id=SKILL_PO,
+                name="Purchase order (PO) mock SAP",
+                description=(
+                    "Purchase order yang terbit dari keputusan MealChain atau diimpor dari SAP: "
+                    "nomor PO, status, lokasi tujuan, pemasok, bahan, jumlah kg, harga per kg, "
+                    "total nilai, dan keputusan asalnya. Baca-saja; dokumen PDF-nya diunduh di "
+                    "UI MealChain, bukan dari chat."
+                ),
+                tags=["po", "purchase order", "pesanan pembelian", "pemasok", "sap"],
+                inputModes=modalitas,
+                outputModes=["text/markdown"],
+            ),
+            AgentSkill(
+                id=SKILL_DIRECTORY,
+                name="Direktori pemasok SPPG",
+                description=(
+                    "Daftar pemasok yang melayani tiap SPPG: komoditas, keandalan, "
+                    "kapasitas mingguan, dan status kiriman aktif. Termasuk penanda "
+                    "pemasok yang dikecualikan di hub-nya. Baca-saja."
+                ),
+                tags=["pemasok", "supplier", "direktori", "vendor", "sppg"],
                 inputModes=modalitas,
                 outputModes=["text/markdown"],
             ),

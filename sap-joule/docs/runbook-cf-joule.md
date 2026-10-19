@@ -342,7 +342,7 @@ curl -s https://mealchain-joule-bridge-4sehat3trio.cfapps.ap10.hana.ondemand.com
 
 - Destination `SWZ_JOULE` ada di cockpit, Proxy Type = Internet, Authentication = NoAuthentication.
   Nama harus **persis** — salah huruf → `destination not found`.
-- Agent card jembatan hidup: `curl -s https://<bridge>/.well-known/agent-card.json` → 3 skill.
+- Agent card jembatan hidup: `curl -s https://<bridge>/.well-known/agent-card.json` → 4 skill.
 - `capability.sapdas.yaml`: `schema_version: 3.28.0` dan `namespace: joule.ext`.
 
 **3. Deploy ulang dari folder `joule/`** (tempat `da.sapdas.yaml`):
@@ -368,10 +368,46 @@ cd sap-joule
 MEALCHAIN_READ_PASSWORD='<password akun baca demo>' bash scripts/uji-jembatan-lokal.sh
 ```
 
-Skrip itu memeriksa `/health`, tiga skill, dan **mencocokkan satu UUID keputusan dari laporan
-antrean dengan tabel `decisions`**. Kalau UUID-nya tidak ada di DB kita, jembatan menunjuk backend
+Skrip itu memeriksa `/health`, empat skill, dan **mencocokkan satu UUID keputusan dari laporan
+antrean dengan tabel `decisions`** (plus: total nilai PO di laporan == kolom
+`price * ordered_quantity`). Kalau UUID-nya tidak ada di DB kita, jembatan menunjuk backend
 lain — gejala yang pernah terjadi 18 Okt 2026 (tunnel mati, host di manifest sudah tidak resolve).
 
 Kontrak artefak Joule (DA, capability, fungsi, scenario, kata kunci) dikunci tes di
 `a2a_server/tests/test_kontrak_joule.py`, supaya perubahan/penghapusan berkas ketahuan sebelum
 deploy, bukan saat demo.
+
+---
+
+## 11. Skill purchase order (PO) — deploy 20 Okt 2026
+
+Jembatan sekarang punya **empat** skill; yang baru: `purchase_order` (baca PO mock SAP dari
+`/sap/purchase-orders`). Kode jembatan DAN artefak Joule berubah, jadi urutannya:
+
+```bash
+# 1) kode jembatan (server.py, report.py, mealchain_client.py)
+cd sap-joule
+cf push                     # pakai manifest yang sudah ada; tanpa perubahan env
+
+# 2) artefak Joule (capability 1.2.0 + scenario detail_purchase_order.yaml)
+cd joule
+joule lint
+joule deploy -c -n "mealchain_assistant_4sehat3trio"    # ganti bila nama DA-mu lain
+```
+
+Yang perlu diperiksa setelah deploy:
+
+1. `cf logs <app> --recent` tidak memuat galat saat start.
+2. Kartu agen memuat empat skill:
+   `curl -s https://<app-url>/.well-known/agent-card.json | jq '.skills[].id'`
+   → `supply_situation`, `kpi_snapshot`, `approval_queue`, `purchase_order`
+3. Di Joule chat, tanyakan **"Tampilkan PO MC-661695B2C685"**. Jawaban harus memuat nomor PO,
+   status, pemasok, jumlah, harga/kg, total, dan keputusan asalnya — bukan "system limitations".
+4. Tanyakan **"purchase order terbaru"** → tabel PO + catatan jumlah baris terbaca.
+5. Tanyakan nomor yang tidak ada (**"PO MC-000000000000"**) → jembatan menjawab "tidak
+   ditemukan di antara N PO", bukan tabel kosong.
+
+Batas yang tetap berlaku: **(a)** Joule hanya mengirim teks — dokumen PDF PO tetap diunduh dari
+UI MealChain; **(b)** routing masih berbasis kata kunci, jadi kalimat yang menyebut "PO" untuk
+maksud lain (mis. "usulan PO") akan masuk skill PO; **(c)** akun baca `bgn_monitor` melihat PO
+nasional, sedangkan akun SPPG hanya PO lokasinya.

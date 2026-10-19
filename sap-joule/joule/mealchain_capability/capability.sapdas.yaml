@@ -8,11 +8,12 @@ schema_version: 3.28.0
 metadata:
   namespace: joule.ext
   name: mealchain_capability
-  version: 1.1.0
+  version: 1.2.0
   display_name: MealChain_Guardian
   description: >-
-    Melihat situasi pasokan SPPG, indikator kinerja, dan antrean usulan keputusan
-    MealChain Guardian. Baca-saja: persetujuan tetap dilakukan manusia di UI MealChain.
+    Melihat situasi pasokan SPPG, indikator kinerja, antrean usulan keputusan, dan purchase
+    order (PO) MealChain Guardian — termasuk PO yang lahir dari keputusan yang sudah
+    dieksekusi. Baca-saja: persetujuan tetap dilakukan manusia di UI MealChain.
 
 system_aliases:
   # Kunci alias (MEALCHAIN_AGENT) dipakai di functions/*.yaml.

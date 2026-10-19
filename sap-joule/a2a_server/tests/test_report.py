@@ -134,6 +134,54 @@ def test_supply_report_selisih_tidak_dikirim_backend_jadi_strip():
     assert "SEIMBANG" in teks
 
 
+# --- direktori pemasok -------------------------------------------------------------------
+
+
+def test_supplier_directory_menampilkan_hub_komoditas_dan_kiriman():
+    teks = report.supplier_directory_report(
+        [
+            {
+                "name": "CV Cipinang Boga Utama",
+                "location": "Jakarta",
+                "commodity": "beras",
+                "reliability": 0.92,
+                "capacityKgPerWeek": 4200.0,
+                "shippingCount": 2,
+                "shippingKg": 840.0,
+                "excludedAtHub": False,
+            },
+            {
+                "name": "UD Cipanas Telur Sejahtera",
+                "location": "Cianjur",
+                "commodity": "telur",
+                "reliability": 0.86,
+                "capacityKgPerWeek": 2100.0,
+                "shippingCount": None,
+                "shippingKg": None,
+                "excludedAtHub": True,
+            },
+        ]
+    )
+
+    assert "CV Cipinang Boga Utama" in teks
+    assert "Jakarta" in teks and "beras" in teks
+    assert "0,92" in teks and "4.200 kg" in teks
+    assert "2 batch" in teks and "840 kg" in teks
+    assert "belum mengirim" in teks
+    assert "dikecualikan di hub" in teks
+
+
+def test_supplier_directory_kosong_jujur_dan_membatasi_baris():
+    assert "Belum ada data pemasok" in report.supplier_directory_report([])
+
+    banyak = [
+        {"name": f"Pemasok-{i:02d}", "location": "Jakarta", "commodity": "beras"}
+        for i in range(30)
+    ]
+    teks = report.supplier_directory_report(banyak, limit=25)
+    assert "5 baris lain tidak ditampilkan." in teks
+
+
 # --- KPI ----------------------------------------------------------------------------------
 
 
@@ -218,3 +266,95 @@ def test_unavailable_report_jujur_bahwa_tidak_ada_angka():
     assert "belum bisa diambil" in teks
     assert "backend tidak bisa dihubungi" in teks
     assert "bukan berarti kondisinya aman" in teks
+
+
+# --- purchase order: angka apa adanya, nomor dicocokkan persis ---------------------------
+
+
+def _po(**ubah):
+    baris = {
+        "poNumber": "MC-661695B2C685",
+        "status": "confirmed",
+        "createdAt": "2026-10-20T02:20:00+00:00",
+        "locationName": "SPPG Jakarta Pusat",
+        "supplierName": "Telur Berkah",
+        "materialNumber": "MAT-BERA",
+        "commodityName": "telur",
+        "quantityKg": 600.0,
+        "pricePerKg": 18000.0,
+        "totalValue": 10800000.0,
+        "decisionId": "9f1c0a52-2b6e-4b31-91f5-3c0a1d5e7a11",
+        "decisionStatus": "executed",
+        "origin": "execution",
+    }
+    baris.update(ubah)
+    return baris
+
+
+def test_po_detail_menampilkan_kolom_dari_backend_dan_waktu_wib():
+    teks = report.purchase_order_report([_po()], po_number="mc-661695b2c685")
+
+    assert "Purchase order MC-661695B2C685" in teks
+    assert "dikonfirmasi" in teks            # status PO diterjemahkan, id API tetap dikenal
+    assert "20 Okt 2026 09.20 WIB" in teks   # 02.20 UTC -> 09.20 WIB
+    assert "SPPG Jakarta Pusat" in teks
+    assert "Telur Berkah" in teks
+    assert "MAT-BERA" in teks
+    assert "600 kg" in teks
+    assert "Rp18.000" in teks
+    assert "Rp10.800.000" in teks
+    assert "dieksekusi" in teks
+    assert "lahir dari eksekusi keputusan" in teks
+    # PDF bukan lampiran chat — keterbatasan itu disebut, bukan disembunyikan.
+    assert "tidak melampirkan berkas" in teks
+
+
+def test_po_total_dari_backend_tidak_dihitung_ulang():
+    """Harga x jumlah sengaja dibuat tidak konsisten: perender WAJIB memakai `totalValue`."""
+    teks = report.purchase_order_report(
+        [_po(quantityKg=2.0, pricePerKg=1000.0, totalValue=999.0)], po_number="MC-661695B2C685"
+    )
+
+    assert "Rp999" in teks
+    assert "Rp2.000" not in teks, "jembatan tidak boleh mengalikan harga x jumlah"
+
+
+def test_po_daftar_menandai_baris_impor_sap_tanpa_keputusan():
+    teks = report.purchase_order_report(
+        [_po(), _po(poNumber="4500000001", decisionId=None, decisionStatus=None, origin="demo")]
+    )
+
+    assert "2 PO terbaca" in teks
+    assert "| impor SAP |" in teks or "impor SAP |" in teks
+    assert "dieksekusi" in teks
+
+
+def test_po_nomor_tidak_dikenal_disebut_jujur_bukan_tabel_kosong():
+    teks = report.purchase_order_report([_po()], po_number="MC-000000000000")
+
+    assert "MC-000000000000 tidak ditemukan" in teks
+    assert "1 PO" in teks
+    assert "bukan berarti PO-nya fiktif" in teks
+
+
+def test_po_kosong_disebut_kosong():
+    teks = report.purchase_order_report([])
+
+    assert "Belum ada purchase order" in teks
+
+
+def test_po_daftar_membatasi_baris_dan_menyebut_sisanya():
+    rows = [_po(poNumber=f"MC-00000000{i:04X}") for i in range(12)]
+
+    teks = report.purchase_order_report(rows, limit=10)
+
+    assert "12 PO terbaca" in teks
+    assert "2 baris lain tidak ditampilkan." in teks
+
+
+def test_wib_tidak_mengarang_zona_bila_offset_hilang():
+    assert report.wib("2026-10-20T02:20:00+00:00") == "20 Okt 2026 09.20 WIB"
+    assert report.wib("2026-10-20T02:20:00Z") == "20 Okt 2026 09.20 WIB"
+    # Tanpa offset: dikembalikan apa adanya, TIDAK diasumsikan UTC.
+    assert report.wib("2026-10-20T02:20:00") == "2026-10-20T02:20:00"
+    assert report.wib(None) == report.MISSING

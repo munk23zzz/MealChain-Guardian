@@ -92,3 +92,24 @@ def test_tidak_ada_jalan_tulis_di_klien():
     metode = {nama for nama in dir(MealchainClient) if not nama.startswith("_")}
     terlarang = {"approve", "execute", "propose", "post", "put", "patch", "delete", "create"}
     assert not (metode & terlarang), f"klien punya jalan tulis: {sorted(metode & terlarang)}"
+
+
+def test_purchase_orders_terbaca_dari_backend_hidup(klien):
+    """PO nyata dari tabel mock SAP: nomor ada, jumlah > 0, dan total konsisten.
+
+    Konsistensi `total = harga x jumlah` diperiksa DI TES (bukan di jembatan): jembatan hanya
+    menampilkan `totalValue` dari backend, jadi kalau backend suatu saat mengirim total yang
+    tidak cocok dengan kolomnya, tes inilah yang menangkapnya.
+    """
+    rows = klien.purchase_orders(limit=50)
+
+    assert rows, "tabel mock SAP kosong — seeder demo belum dijalankan?"
+    for row in rows[:5]:
+        assert str(row.get("poNumber") or "").strip(), "PO tanpa nomor tidak boleh tampil"
+        assert float(row["quantityKg"]) > 0
+        assert abs(float(row["totalValue"]) - float(row["pricePerKg"]) * float(row["quantityKg"])) < 0.01
+    assert any(row.get("decisionId") for row in rows), (
+        "PO demo harus punya asal keputusan; kalau tidak, klaim 'PO terbit dari eksekusi' kosong"
+    )
+    # Asal baris disebut eksplisit — PO impor SAP tidak boleh tampil seolah dari eksekusi.
+    assert {row.get("origin") for row in rows} <= {"execution", "demo"}

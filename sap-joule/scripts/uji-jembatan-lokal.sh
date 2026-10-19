@@ -3,9 +3,11 @@
 #
 # Yang diperiksa:
 #   1. /health jembatan sehat DAN backend-nya terjangkau (reachable: true)
-#   2. tiga skill menjawab "completed" dengan laporan markdown yang berisi data, bukan pesan
+#   2. empat skill menjawab "completed" dengan laporan markdown yang berisi data, bukan pesan
 #      "tidak tersedia" — ini yang membedakan jembatan benar dari jembatan yang cuma hidup
 #   3. antrean yang dilaporkan memuat ID keputusan yang benar-benar ada di database
+#   4. rincian PO yang dilaporkan memuat total nilai yang SAMA dengan kolom
+#      `price * ordered_quantity` di database
 #
 # Pakai:
 #   MEALCHAIN_READ_PASSWORD='<password demo>' bash scripts/uji-jembatan-lokal.sh
@@ -72,6 +74,7 @@ tanya() { # $1 = teks pertanyaan, $2 = penanda yang harus muncul di laporan
 tanya "situasi pasokan SPPG" "Keseimbangan pasokan"
 tanya "indikator kinerja KPI" "Indikator kinerja"
 tanya "antrean usulan keputusan" "Antrean usulan"
+tanya "purchase order" "Purchase order"
 
 # ID keputusan yang dilaporkan harus benar-benar ada di database demo.
 ANTREAN=$(curl -sS -m 60 -X POST "http://127.0.0.1:$PORT/" -H "Content-Type: application/json" \
@@ -91,6 +94,36 @@ else
     1) echo "OK   antrean: ID $ID benar-benar ada di database demo" ;;
     0) echo "GAGAL: ID $ID dari jembatan TIDAK ada di database demo (jembatan menunjuk backend lain)"; GAGAL=1 ;;
     *) echo "LEWAT: tidak bisa memeriksa database (docker compose/psql tidak menjawab) — ID $ID tidak diverifikasi" ;;
+  esac
+fi
+
+# Total nilai PO yang dilaporkan harus SAMA dengan kolom database (bukan hasil hitung jembatan).
+PO=$(curl -sS -m 60 -X POST "http://127.0.0.1:$PORT/" -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":"uji","method":"message/send","params":{"message":{"role":"user","messageId":"uji","parts":[{"kind":"text","text":"purchase order"}]}}}' \
+  | "$PY" -c "import sys,json;print(json.load(sys.stdin)['result']['artifacts'][0]['parts'][0]['text'])" 2>/dev/null \
+  | grep -oE "MC-[0-9A-Fa-f]{6,}" | head -1)
+if [ -z "$PO" ]; then
+  echo "GAGAL: laporan PO tidak memuat satu pun nomor PO"; GAGAL=1
+else
+  RINCIAN=$(curl -sS -m 60 -X POST "http://127.0.0.1:$PORT/" -H "Content-Type: application/json" \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":\"uji\",\"method\":\"message/send\",\"params\":{\"message\":{\"role\":\"user\",\"messageId\":\"uji\",\"parts\":[{\"kind\":\"text\",\"text\":\"PO $PO\"}]}}}" \
+    | "$PY" -c "import sys,json;print(json.load(sys.stdin)['result']['artifacts'][0]['parts'][0]['text'])" 2>/dev/null || echo "")
+  TOTAL_LAPORAN=$(printf '%s' "$RINCIAN" | grep -oE "Total nilai:\*\* Rp[0-9.]+" | grep -oE "[0-9.]+$" | tr -d '.')
+  COMPOSE_DIR="${COMPOSE_DIR:-$(cd "$SAP_JOULE/.." && pwd -W)}"
+  TOTAL_DB=$(docker compose -f "$COMPOSE_DIR/docker-compose.yml" --project-directory "$COMPOSE_DIR" \
+    exec -T postgres psql -U mealchain -d mealchain -t -A \
+    -c "SELECT round((price*ordered_quantity)::numeric,0)::bigint FROM sap_mock_purchase_orders WHERE po_number='$PO';" 2>/dev/null | tr -d ' \r\n')
+  case "${TOTAL_DB:-}" in
+    "")
+      echo "LEWAT: total PO $PO tidak bisa dibandingkan (database tidak menjawab); laporan menyebut Rp${TOTAL_LAPORAN:-?}"
+      ;;
+    *)
+      if [ "$TOTAL_LAPORAN" = "$TOTAL_DB" ]; then
+        echo "OK   PO $PO: total Rp$TOTAL_LAPORAN sama dengan database"
+      else
+        echo "GAGAL: total PO $PO di laporan (Rp${TOTAL_LAPORAN:-kosong}) != database (Rp$TOTAL_DB)"; GAGAL=1
+      fi
+      ;;
   esac
 fi
 

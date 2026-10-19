@@ -42,11 +42,11 @@ tabel kosong atau angka 0 yang terbaca seolah tidak ada masalah.
 
 | Berkas | Isi |
 |---|---|
-| `a2a_server/server.py` | Aplikasi A2A (kartu agen, 3 skill, `/health`) + executor |
-| `a2a_server/mealchain_client.py` | Klien HTTP baca-saja ke API v0.2.0 (`/batches`, `/balance/map`, `/kpi`, `/decisions`), kegagalan eksplisit |
+| `a2a_server/server.py` | Aplikasi A2A (kartu agen, 5 skill, `/health`) + executor |
+| `a2a_server/mealchain_client.py` | Klien HTTP baca-saja ke API v0.2.0 (`/batches`, `/suppliers`, `/balance/map`, `/kpi`, `/decisions`, `/sap/purchase-orders`), kegagalan eksplisit |
 | `a2a_server/report.py` | Perender markdown murni (tabel, format angka Indonesia) |
 | `a2a_server/manifest.yml`, `runtime.txt`, `.cfignore` | Deklarasi deploy Cloud Foundry |
-| `joule/` | Capability Joule: `da.sapdas.yaml`, `capability.sapdas.yaml`, 3 scenario, 1 function |
+| `joule/` | Capability Joule: `da.sapdas.yaml`, `capability.sapdas.yaml`, 4 scenario, 1 function |
 | `scripts/probe_ai_core.py` | Probe kredensial + model AI Core (`gpt-5.4`, `sap-rpt-1.6`) — jalur terpisah |
 | `docs/runbook-cf-joule.md` | **Langkah manual Roy**: CF CLI → keybroker → `cf push` → Destination → `joule deploy` |
 | `docs/rpt-forecast-notes.md` | Rencana memakai `sap-rpt-1.6` untuk peramalan kebutuhan (belum diintegrasikan) |
@@ -72,17 +72,23 @@ MEALCHAIN_READ_PASSWORD='Demo#BGN2026' \
 python -m uvicorn server:app --host 127.0.0.1 --port 8098
 ```
 
-## Tiga skill yang tersedia untuk Joule
+## Lima skill yang tersedia untuk Joule
 
 | Skill | Endpoint backend | Isi |
 |---|---|---|
 | `supply_situation` | `/batches` + `/balance/map` (satu panggilan per komoditas yang ada di inventaris) | dua tabel: keseimbangan pasokan/kebutuhan per lokasi (yang KURANG lebih dulu) dan inventaris batch dengan status keamanan + skor kesegaran apa adanya |
 | `kpi_snapshot` | `/kpi` (jendela waktu diminta jembatan, default 7 hari) | 7 indikator dengan nama & satuan dari backend; yang tak bisa dihitung tampil `—` + alasannya |
 | `approval_queue` | `/decisions` + `/decisions/{id}/approval-summary` (maks 12 baris) | antrean usulan lengkap asal→tujuan + komoditas (nama, bukan id) + catatan bahwa persetujuan dilakukan manusia di UI |
+| `purchase_order` | `/sap/purchase-orders` (satu panggilan, plafon 200 baris) | daftar PO (nomor, status, lokasi, bahan, jumlah, total, status keputusan) atau rincian satu PO bila nomornya disebut; PO impor SAP ditandai `impor SAP` |
+| `supplier_directory` | `/suppliers` (satu panggilan, plafon 200 baris; 60 pemasok demo) | direktori pemasok per SPPG: komoditas, keandalan, kapasitas/minggu, kiriman aktif (batch + kg), penanda dikecualikan di hub; tanpa baris kiriman = belum mengirim, bukan nol |
 
-Pemilihan skill **deterministik** (bukan LLM): pesan JSON dengan field `skill`, atau kata kunci
-pada kalimat pengguna (`kpi`/`indikator` → KPI; `usulan`/`persetujuan`/`approval` → antrean;
-sisanya → pasokan). Batas jujur: kalimat yang ambigu bisa memilih skill yang bukan maksud
+Pemilihan skill **deterministik** (bukan LLM): pesan JSON dengan field `skill`, nomor PO di dalam
+teks (`MC-661695B2C685`), atau kata kunci pada kalimat pengguna (`kpi`/`indikator` → KPI;
+`po`/`purchase order`/`pesanan pembelian` → PO; `usulan`/`persetujuan`/`approval` → antrean;
+`pemasok`/`supplier`/`direktori` → direktori pemasok; sisanya → pasokan). PO sengaja diperiksa
+**sebelum** antrean: "PO mana yang sudah disetujui?" memuat kata `setuju` milik antrean.
+Direktori diperiksa **sesudah** antrean: "usulan eksklusi pemasok" adalah keputusan, bukan
+permintaan direktori. Batas jujur: kalimat yang ambigu bisa memilih skill yang bukan maksud
 pengguna; perbaikan yang lebih kuat adalah satu BTP Destination + satu kartu agen per skill —
 sengaja belum diambil agar konfigurasi tidak melebar sebelum dipakai di panggung.
 
@@ -111,6 +117,25 @@ Semua kredensial diisi lewat `cf set-env` / environment lokal — **tidak pernah
   (`Cianjur → Jakarta | telur | 600 kg | pending_approval`) + catatan persetujuan tidak lewat Joule.
 - `scripts/probe_ai_core.py` diuji pada jalur gagal: tanpa kredensial ia berhenti dengan pesan
   jelas + exit 2 (bukan jejak galat). Jalur live menunggu kredensial tim.
+
+### Status verifikasi (20 Okt 2026) — skill PO
+
+- `pytest tests -q` → **69 passed, 4 skipped** (sebelumnya 54). Tambahan: routing nomor PO,
+  prioritas PO di atas antrean, batas kata (`produk`/`pasokan` bukan PO), renderer PO,
+  kontrak YAML 4 scenario, protokol klien nyata, dan artefak skill PO.
+- Tes integrasi backend hidup (`test_integrasi_backend_hidup.py`) → **6 passed** setelah
+  ditambah satu tes PO; tes itu memeriksa `total = harga × jumlah` pada baris yang SAMA
+  (konsistensi backend, bukan hitungan jembatan).
+- Uji ujung-ke-ujung: jembatan lokal (uvicorn :8099, akun `bgn.monitor@demo.local`) menerima
+  `message/send` "Tampilkan PO MC-661695B2C685" → `completed` dengan rincian
+  `beras 600 kg, Rp13.300/kg, total Rp7.980.000, keputusan dieksekusi, Jakarta`.
+  Angka yang sama dibaca langsung dari Postgres (`sap_mock_purchase_orders`), dan jumlah baris
+  yang disebut laporan (23) sama dengan `SELECT count(*)`.
+- `{"skill": "purchase_order"}` tanpa nomor → tabel 10 baris pertama + catatan sisa;
+  nomor tak dikenal (`MC-000000000000`) → pesan jujur "tidak ditemukan di antara 23 PO",
+  bukan tabel kosong.
+- **Belum diverifikasi:** panggilan dari tenant Joule (butuh `cf push` + `joule deploy` oleh
+  pemilik akun). Sampai itu dijalankan, kemampuan ini hanya terbukti di jembatan lokal.
 
 ## Yang sengaja BELUM ada
 

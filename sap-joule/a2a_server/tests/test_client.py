@@ -249,3 +249,147 @@ def test_health_tanpa_token():
 
     with _client(handler) as client:
         assert client.health()["sap"]["data_source"] == "MOCK"
+
+
+# --- purchase order: satu panggilan baca, kolom dipetakan apa adanya ---------------------
+
+
+def test_purchase_orders_membaca_items_dan_memetakan_kolom():
+    panggilan: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        panggilan.append(request)
+        if request.url.path == "/auth/login":
+            return httpx.Response(200, json={"access_token": "t"})
+        assert request.url.path == "/sap/purchase-orders"
+        return httpx.Response(
+            200,
+            json={
+                "items": [
+                    {
+                        "po_number": "MC-661695B2C685",
+                        "status": "confirmed",
+                        "created_at": "2026-10-20T02:20:00+00:00",
+                        "decision_id": "9f1c0a52-2b6e-4b31-91f5-3c0a1d5e7a11",
+                        "decision_status": "executed",
+                        "location_name": "SPPG Jakarta Pusat",
+                        "supplier_name": "Telur Berkah",
+                        "material_number": "MAT-BERA",
+                        "commodity_name": "telur",
+                        "ordered_quantity_kg": 600.0,
+                        "price_per_kg": 18000.0,
+                        "total_value": 10800000.0,
+                        "origin": "execution",
+                    }
+                ],
+                "count": 1,
+            },
+        )
+
+    with _client(handler) as client:
+        rows = client.purchase_orders()
+
+    assert [r["poNumber"] for r in rows] == ["MC-661695B2C685"]
+    assert rows[0]["totalValue"] == 10800000.0, "total dibaca dari backend, bukan dihitung klien"
+    assert rows[0]["decisionStatus"] == "executed"
+    assert rows[0]["origin"] == "execution"
+
+
+def test_purchase_orders_meminta_batas_yang_masuk_akal():
+    diminta: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/login":
+            return httpx.Response(200, json={"access_token": "t"})
+        diminta.update(dict(request.url.params))
+        return httpx.Response(200, json={"items": []})
+
+    with _client(handler) as client:
+        assert client.purchase_orders() == []          # plafon 200
+        client.purchase_orders(limit=5000)             # di atas plafon -> dijepit, bukan ditolak
+        assert diminta["limit"] == "200"
+
+        client.purchase_orders(limit=0)                # nol/negatif -> minimal 1
+        assert diminta["limit"] == "1"
+
+
+def test_purchase_orders_menolak_diteruskan_apa_adanya():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/login":
+            return httpx.Response(200, json={"access_token": "t"})
+        return httpx.Response(403, json={"detail": "peran ini tidak berhak membaca PO"})
+
+    with _client(handler) as client, pytest.raises(MealchainRejected) as excinfo:
+        client.purchase_orders()
+
+    assert "tidak berhak membaca PO" in str(excinfo.value)
+
+
+def test_suppliers_membaca_items_dan_memetakan_kolom():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/login":
+            return httpx.Response(200, json={"access_token": "t1"})
+        assert request.url.path == "/suppliers"
+        assert request.url.params["limit"] == "200"
+        return httpx.Response(
+            200,
+            json={
+                "items": [
+                    {
+                        "name": "CV Cipinang Boga Utama",
+                        "location": "Jakarta",
+                        "commodity": "beras",
+                        "reliability_score": 0.92,
+                        "capacity_kg_per_week": 4200.0,
+                        "certification_status": "haccp",
+                        "address": "Jl. Cipinang Besar No. 12",
+                        "contact_name": "Budi Santoso",
+                        "excluded_at_hub": False,
+                        "shipping": {
+                            "count": 2,
+                            "total_kg": 840.0,
+                            "until": "2026-10-22T00:00:00+00:00",
+                        },
+                    },
+                    {
+                        "name": "UD Cipanas Telur Sejahtera",
+                        "location": "Cianjur",
+                        "commodity": "telur",
+                        "reliability_score": 0.86,
+                        "capacity_kg_per_week": 2100.0,
+                        "certification_status": "hygiene",
+                        "address": "Jl. Raya Cipanas No. 4",
+                        "contact_name": "Asep",
+                        "excluded_at_hub": True,
+                        "shipping": None,
+                    },
+                ]
+            },
+        )
+
+    with _client(handler) as client:
+        hasil = client.suppliers()
+
+    assert [row["name"] for row in hasil] == [
+        "CV Cipinang Boga Utama",
+        "UD Cipanas Telur Sejahtera",
+    ]
+    assert hasil[0]["reliability"] == 0.92
+    assert hasil[0]["shippingCount"] == 2 and hasil[0]["shippingKg"] == 840.0
+    assert hasil[1]["shippingCount"] is None and hasil[1]["excludedAtHub"] is True
+
+
+def test_suppliers_meminta_limit_masuk_akal():
+    batas: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/login":
+            return httpx.Response(200, json={"access_token": "t1"})
+        batas.append(request.url.params["limit"])
+        return httpx.Response(200, json={"items": []})
+
+    with _client(handler) as client:
+        client.suppliers(limit=99999)
+        client.suppliers(limit=0)
+
+    assert batas == ["200", "1"]
