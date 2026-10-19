@@ -65,7 +65,7 @@ Detail muncul dengan evidence → Approve → status di peta berubah
 | 5 | Agent Activity Log (`/agent-log`) | Tab **Agent Log** — trace console + provider panel, pilih decision via dropdown ✓ | Wajib |
 | 6 | Approval Modal/Flow | Di dalam Decision Detail ✓ | Wajib |
 | 7 | KPI Dashboard (`/kpi`) + *(acuan app)* Kualitas Agen (`/quality`) | Tab **KPI & Kualitas Agen** — **digabung 2026-10-15 atas keputusan pemilik** (dua tab lama "KPI" + "Kualitas Agen" jadi satu, urutan KPI dulu lalu mutu agen). Bagian 1: 7 KPI live jujur dari `/kpi` (strip **Target KPI Demo Day** dihapus hari yang sama). Bagian 2: skor agregat mutu agen (langkah/run, kesesuaian verifikator, tingkat fallback, keputusan diubah manusia, rata-rata durasi) + rincian per run dari jejak agen nyata ✓. Komposisi ada di `components/KpiQualityBoard.tsx`; isi kedua bagian tidak diubah | Wajib |
-| 8 | Demo Control Panel (`/demo-control`) | Tab **Demo Control** (approver-only) — skenario via API resmi: seed kasus + konsol analisis Event 1/2/3 ✓ | Wajib (demo) |
+| 8 | Demo Control Panel (`/demo-control`) | Tab **Demo Control** (approver-only) — **sejak 2026-10-19 tiga blok sederhana** (1) siapkan data demo, (2) jalankan agent: satu tombol, komoditas dari dropdown (nama yang ADA di DB) + SPPG akun sendiri sebagai tujuan; yang dinilai adalah PEMASOK yang sudah memasok SPPG itu (stok batch di SPPG, penawaran harga untuk SPPG, jarak pemasok → SPPG), bukan surplus SPPG lain, (3) bukti agent dibaca ulang dari DB: langkah yang tercatat beserta alatnya, provider yang menjawab, status keputusan, narasi supervisor terlipat. OpsConsole/ChaosPanel (Event 1/2/3) tidak lagi dipasang di tab ini; komponennya tetap ada di repo. ✓ | Wajib (demo) |
 | 9 | Settings/Admin | Nice-to-have |
 
 > Penyesuaian dari PRD 2.4 (keputusan Roy): **arsitektur & backend tetap
@@ -564,9 +564,37 @@ diganti; **strukturnya** yang diperbaiki.
   ("Alihkan 492 kg telur: Bogor → Jakarta"); strip metrik (`decisionMetrics`) —
   kuantitas, biaya aman terkirim, selisih dari harga beli, tujuan; blok
   **"Perlu diperhatikan (N)"** (`attentionFlags` — triase, bukan alarm: keputusan sehat
-  = daftar kosong); strip "Langkah berikutnya" (`nextStep`, kini BIRU accent-soft karena
+  = daftar kosong; **tile strip** di grid `auto-fit minmax(260px, 1fr)` — satu temuan
+  memakai lebar penuh, tiga temuan tiga kolom, jadi tidak ada bar selebar halaman yang
+  separuh kanannya kosong; blok baru dirender setelah ringkasan persetujuan tiba,
+  supaya tidak muncul "(1) Belum diverifikasi" palsu saat data masih dimuat); strip "Langkah berikutnya" (`nextStep`, kini BIRU accent-soft karena
   instruksi ≠ bahaya); blok **"Kalau disetujui / Kalau ditolak"** (`consequences`,
   deterministik dari `can_execute`, `blocking_reasons`, `execution_target`, `iteration`).
+- **Tata letak kepala = grid ber-area (19 Okt 2026):** label + judul di kolom kiri,
+  "Langkah berikutnya" di kolom kanannya, metrik & blok temuan selebar kartu, akibat
+  dan tautan jejak selebar kartu di bawahnya. Dulu setiap baris memakai lebar 909 px
+  padahal isinya 140-167 px (separuh kanan kosong) dan kartunya ~527 px; sekarang
+  ~370-410 px. Di ≤900 px kembali satu kolom (urutan baca tetap: status → ringkasan →
+  angka → temuan → langkah → akibat → jejak).
+- **Bukti = dua kolom koran**, bukan baris grid 3 × 4/12: tinggi kartu sangat
+  bergantung keputusan yang dibuka (Biaya bisa 615 px sementara Keamanan 355 px dan
+  Identitas 335 px), sehingga baris setinggi kartu terpanjang menyisakan 260-400 px
+  kosong. `columns: 2` + `break-inside: avoid` menyeimbangkan kolom sendiri
+  (966 px → 665 px pada data itu; 236 px pada data 110/110/222), satu kolom di ≤900 px.
+- **Jejak & bukti tersimpan ditumpuk** (satu kolom selebar kartu): 5/7 membuat kartu
+  riwayat 217 px di samping panel 546 px → 329 px kosong. Penumpukan: riwayat 947×166 +
+  panel 947×265, dan dua bukti (Merkle Ledger & Dossier) berdampingan
+  (`repeat(auto-fit, minmax(260px, 1fr))` di `.integrity-trust`).
+- **Fakta di kartu bukti sebaris label→nilai (≥721 px), nilai rata kanan.** Ada override
+  lama `.evidence-grid .fact-row { grid-template-columns: minmax(0, 1fr) }` yang
+  menumpuk label di atas nilai: tiap fakta 56 px dua baris dan separuh kanan kartu
+  kosong. Bentuk baru 38% / 62% + `text-align: right` pada `dd` (kolom angka sejajar
+  seperti lembar spesifikasi) → baris 32-34 px. Di ≤720 px tetap menumpuk (angka
+  panjang tidak terpecah di tengah).
+- **Lencana status + meter persetujuan satu baris** (`.gov-status` grid
+  `max-content minmax(0,1fr)`; `.gov-progress` `max-width: none`): dulu lencana 162 px
+  dan meter 420 px bertumpuk di baris 909 px, meter kini mengisi 731 px; baris peran,
+  penunggu, dan penghambat melebar penuh (`grid-column: 1 / -1`).
 - **Jalur persetujuan** (`approvalRoute`): empat langkah tetap Diajukan → Verifikasi agent
   → Persetujuan → Eksekusi, tiap langkah membawa "siapa/waktu/apa berikutnya"
   (mis. "1 dari 2 · berikutnya: Ahli Gizi SPPG"); keadaan langkah **selalu ada teksnya**
@@ -1835,3 +1863,393 @@ kembali 28–38 px di ponsel. Ditambahkan media block eksplisit 44 px + tes yang
 
 Artefak: `ui-audit/p23-kartu-peta.png` (chrome terang), `p24-panel-terang.png` (legenda + panel),
 `p25-popup-terang.png`.
+
+## 16. Panel "Integritas Bukti": permukaan gelap terakhir → tema terang (19 Okt 2026)
+
+Permintaan pemilik (verbatim): *"pada halaman evidence … saya kurang suka terkait desain bagian
+integrasi bukti, tolong gunakan skill untuk memperbaikinya terutama pada warna gunakan palet warna
+yang cocok dengan tema light mealchainguardian"*. Lanjutan langsung dari §15 (chrome peta) — setelah
+peta, `.integrity-trust` adalah **satu-satunya permukaan gelap** yang tersisa di konsol terang, jadi
+sekarang ikut terang.
+
+Cara: nama token `--trust-*` **tidak diubah** (seperti §15), hanya nilainya; aturan lama, tes lama,
+dan `docs/design.md` §4 tetap berlaku tanpa penulisan ulang.
+
+| Token | Gelap (sebelum) | Terang (sesudah) | Kontras |
+|---|---|---|---|
+| `--trust-bg` | `#0F172A` | `#FFFFFF` | dasar kartu |
+| `--trust-surface` | `rgba(255,255,255,.06)` | `#F1F5F9` | chip hash/alamat |
+| `--trust-line` | `rgba(148,163,184,.32)` | `#E2E8F0` | garis rambut |
+| `--trust-ink` | `#E2E8F0` | `#0F172A` | 17,85:1 |
+| `--trust-ink-muted` | `#94A3B8` | `#475569` | 7,58:1 |
+| `--trust-accent` | `#7DD3FC` | `#1D4ED8` | 6,12:1 di atas `--trust-surface` |
+
+Perubahan yang **bukan** sekadar tukar token:
+
+- **Dua kotak bukti** (`.integrity-proof`: Merkle Ledger, Dossier Keputusan) dengan **nada keadaan**
+  dari `data-tone` → tiga variabel (`--tone-bg/-line/-ink`) memakai token status sistemik:
+  `ok` = teal `#ECFDF5/#A7F3D0/#065F46` (7,29:1) untuk rantai valid & segel terverifikasi;
+  `warn` = amber `#FFFBEB/#FDE68A/#8A5A00` (5,72:1) untuk unsigned; `danger` = rose
+  `#FEF2F2/#FECACA/#991B1B` (7,60:1) untuk rantai putus / segel tidak cocok; `plain` = netral
+  `#F1F5F9/#CBD5E1/#475569` untuk "belum ada data". Garis kiri **3 px** = nada keadaan.
+- **Lencana keadaan** (`.integrity-chip`): titik 6 px + kata, jadi keadaan tidak pernah bergantung
+  pada warna saja (WCAG 1.4.1). Emoji ✅/❌/⚠️ dihapus — diganti bentuk (titik) + tint + teks.
+- **Label→nilai rapi**: `Blok` (mono tabular) dan `Head`/`Alamat konten` sebagai chip mono;
+  sebelumnya semuanya satu paragraf yang dipisah "·" sehingga angka bercampur kalimat.
+  `reason` rantai putus punya baris sendiri (`.integrity-reason`), tidak lagi dikurung dalam paragraf
+  status bersama `broken_at`.
+- **Daftar pengukuran & tombol ekspor tetap netral** (tidak ikut tint): itu dokumen kerja, bukan
+  bukti kripto — alasan yang sama seperti sebelumnya, hanya arah warnanya yang berbalik.
+- **Papan "Bukti integrasi per komponen"** (Agent Log, `.integration-*`): lencana tidak lagi memakai
+  `rgba` ad hoc (ok `#2A722E`, warn tanpa warna teks, danger `--status-danger`) melainkan pasangan
+  token `--ok/--warn/--danger/--neutral-{bg,border,ink}` + titik; baris dapat garis kiri 3 px sesuai
+  nada (`integration-tone-*`). Nol nilai warna baru — semua dari `:root`.
+
+Batas yang **tidak** berubah: endpoint (`GET /ledger/verify`, `GET /decisions/{id}/dossier`), angka
+yang ditampilkan, aturan kejujuran "hijau hanya bila backend menyatakan valid", lipatan rincian,
+`data-testid` (`ledger-status`, `dossier-status`, `dossier-address`, `dossier-signature`,
+`btn-verify-ledger`, `ledger-coverage`), dan teks "Dossier Keputusan".
+
+Gerbang: vitest **1359 lulus / 119 berkas**, `tsc --noEmit` 0, `npm run build` 0. **Terukur di aplikasi
+hidup** (:3010, akun demo SPPG Head, 19 Okt 12.22 WIB): `.integrity-trust` = `rgb(255,255,255)`, kotak
+ledger `data-tone="ok"` dengan lencana "Rantai valid" dan dossier "tersegel & terverifikasi" — data
+nyata, bukan contoh. Papan Agent Log (7 komponen): 4 netral `rgb(241,245,249)`/`rgb(71,85,105)`,
+1 amber `rgb(255,251,235)`/`rgb(138,90,0)`, 1 rose `rgb(254,242,242)`/`rgb(153,27,27)`, tiap lencana
+bertitik via `::before`, garis kiri baris ikut nada (`rgb(203,213,225)` / `rgb(249,168,37)` /
+`rgb(198,40,40)`); tidak ada baris hijau karena panel itu memang tidak menjalankan probe.
+Pratinjau statis (375/768/1440 px) yang dirender dari `globals.css` yang sama: nol luapan mendatar;
+di ≤460 px kepala kotak dan baris label→nilai menumpuk (label di atas nilai).
+
+### 16.1 Jarak ke panel PO (revisi pemilik, 19 Okt 2026: "jarak ke po kok spacenya banyak bener")
+
+Slack 72 px untuk bar pintasan yang menempel di bawah layar dipasang pada `.evidence-page`, padahal
+panel **Purchase order (mock lokal)** dirender SESUDAH `.evidence-page` sebagai saudara di `.app-body`.
+Akibatnya slack itu jatuh di TENGAH halaman: **88 px** ruang kosong (72 slack + 16 margin) tepat di
+antara kartu terakhir dan panel PO, sementara halaman tidak punya slack di ujung bawahnya sendiri.
+
+Perbaikan: slack dipindah ke anak terakhir halaman — `.app-body:has(.evidence-actionbar) > :last-child
+{ margin-bottom: 72px }` (jadi tetap tidak ada tambahan tinggi saat bar pintasan tidak dirender) — dan
+`.po-panel { margin-top: 16px → 13px }` mengikuti gap halaman. Terukur di aplikasi hidup: jarak kartu
+terakhir → PO **88 px → 13 px**; `.evidence-page` `padding-bottom` 72 px → 0; margin bawah panel PO
+72 px (slack bar pintasan kini di ujung halaman, bukan di tengah).
+
+
+## 17. Popup "Governance & persetujuan": kartu fakta + latar blur 20% (19 Okt 2026)
+
+Permintaan pemilik (verbatim): *"pada halaman pop up "Governance & persetujuan" ubah tampilan ui dan
+bacgraud di buat blur 20% saja"*, lalu *"untuk blur nya mungkin bisa 15% saja"*, lalu *"blur nya itu
+masih samar samar untuk tampilan di belakangnya, berarti di turunin lagi"*. Ini **membalik**
+keputusan latar pagi hari yang sama (scrim kabut 66% + blur + `saturate(140%)`): pemilik ingin blur
+saja, bukan panel yang nyaris pekat, dan kadarnya diturunkan bertahap 20 → 15 → **8 px**.
+
+**Latar (`.popup-backdrop`).** `background: rgba(248,250,252,.2)` + `backdrop-filter: blur(8px)`
+tanpa `saturate()`. Di 8 px bentuk panel di belakang masih terbaca **samar** (blob, bukan huruf) —
+itu yang diminta; di bawah ~6 px huruf di belakang mulai terbaca, jadi 6 px adalah lantainya. Teks di belakang tetap tidak terbaca karena blur-nya, bukan karena ditutup cat
+(glassmorphism: blur 10-20 px, translucent white 15-30%). Dua jaring pengaman tidak berubah: browser
+tanpa `backdrop-filter` jatuh ke scrim gelap `rgba(15,23,42,.55)`, dan `prefers-reduced-transparency`
+memakai latar `rgba(248,250,252,.97)` tanpa blur. `tests/popup-backdrop.test.ts` diperbarui ke
+kontrak baru (blur **6-10 px** tanpa saturasi, alpha tint 0,15-0,30) — tes lama memang memaku angka
+0,66, dan blur dipaku sebagai rentang karena pemilik menala kadarnya tiga kali.
+
+**Isi popup (`className="popup-governance"`).** `Popup` dapat prop opsional `className`; hanya dialog
+ini yang memakai tata letak baru, sedangkan dua dialog lain yang berbagi cangkang (pemilih tanggal,
+karantina) tidak berubah kecuali latar blur tadi.
+
+- Panel `min(720px, 100%)`, `max-height: min(92vh, 900px)` (86vh memotong kartu di tengah fakta).
+- Chip status tidak lagi menyelip antara deskripsi dan ringkasan: jadi **strip** sendiri di atas isi
+  (chip kiri, meter progres 240 px kanan). Track progres memakai `--line-strong`, bukan
+  `--surface-sunken` — di atas strip yang juga sunken, track sunken tidak terlihat (temuan saat
+  verifikasi layar). Track lebar penuh terbaca seperti garis pemisah, jadi meter dibatasi 240 px.
+- Ringkasan bukti: `<ul>` bullet padat → `<dl>` kartu fakta (`dt` label 12 px `--ink-subtle` di kolom
+  152 px, `dd` nilai 13 px); pemisah `--line` antar baris; id panjang dipatahkan (`overflow-wrap:
+  anywhere`). Label biru 4 px di tepi kartu dibuang — di dalam panel bershadow ia terbaca sebagai
+  kartu di dalam kartu.
+- Emoji ⛔ di `blocking_reasons` diganti ikon SVG `aria-hidden` (aturan skill: ikon SVG, bukan emoji)
+  dan blok itu diberi judul "Tertahan".
+- Tiap pilihan tindakan jadi kartu ber-stripe **3 px** sesuai dampaknya: tolak `--status-danger`,
+  ajukan/re-propose `--accent-strong`, verifikasi `--navy-700`, eksekusi `--status-safe`. Stripe
+  pertama kali dipasang dengan `--danger-border` (#FECACA) dan **tidak terlihat** di atas putih —
+  diukur dari piksel layar, lalu diganti `--status-danger`. Warna hanya penguat: nama tindakan dan
+  akibatnya tetap tertulis (tidak pernah warna saja, WCAG 1.4.1).
+- Kaki sticky: hint "Tekan Esc untuk menutup jendela ini." + tombol Tutup.
+- ≤720 px: fakta satu kolom (label di atas nilai) supaya kolom 152 px tidak memakan separuh layar.
+
+Batas yang tidak berubah: teks tiap fakta, gating `can_approve`/`can_reject`/`can_execute` dari
+server, tidak ada approve massal, `data-action` tiap tombol, `aria-modal`/`aria-labelledby`, dan
+`prefers-reduced-motion`.
+
+Gerbang: vitest **1359 lulus / 119 berkas**, `tsc --noEmit` 0, `npm run build` 0. Terukur di aplikasi
+hidup (:3010, akun demo SPPG Head, 19 Okt 12.2x WIB): `.popup-backdrop` = `rgba(248,250,252,0.2)` +
+`blur(8px)`, panel `class="popup popup-governance"` lebar 720 px, 10 baris `.approval-fact`, strip
+progres 240 px, stripe kiri baris tolak `rgb(198,40,40)` dan verifikasi `rgb(51,65,85)` (sampel piksel
+screenshot, bukan perkiraan).
+
+Terukur untuk kadar blur (sampel wilayah sidebar di belakang backdrop, screenshot :3010 pada 1262 px):
+`blur(15px)` → simpangan baku luminans **6,32**; `blur(8px)` → **9,07** (≈+44% detail yang masih
+terbaca) dengan teks di belakang tetap tidak terbaca. Angka inilah dasar "samar-samar", bukan selera.
+
+
+## 18. Dock "Ke zona keputusan": pil toast → pintasan keputusan (19 Okt 2026)
+
+Permintaan pemilik (verbatim): *"untuk popup ke zona keputusan anda redesign lagi deh soalnya rada
+kurang menurut gua pakai ui ux pro max susun rencana lalu jalnkan"*. Yang dimaksud "popup" adalah
+`.evidence-actionbar` — bar melayang di bawah layar selama zona keputusan belum terlihat.
+
+Keadaan sebelumnya (terukur di :3010): pil 720 x 57 px, `border-radius: 999px`, satu baris teks abu-abu
+`"menunggu persetujuan · 0 dari 2 persetujuan"`, CTA biru bertanda garis bawah bawaan `<a>`. Tiga
+masalah: (a) bentuk pil + teks tunggal membuatnya terbaca seperti toast, bukan pintasan kerja;
+(b) keadaan dan hitungan approval — dua informasi berbeda bobot — disamakan dalam satu baris abu-abu,
+padahal keadaan yang menentukan apakah ada yang bisa dikerjakan; (c) CTA tidak punya tanda arah,
+sementara tautan kembarnya di kepala keputusan memakai "↓".
+
+Sesudah:
+
+- **Dock 560 px, radius 14 px**, border `--line`, `--shadow-2` + satu lapis bayangan 40 px. Bukan lagi
+  999 px karena radius penuh milik pil status, bukan panel kerja.
+- **Titik nada keadaan** (8 px + cincin tint) dari `data-tone` yang dipetakan ke `STATUS_TONES` yang
+  sudah ada: `warning`/`safe`/`danger`/`neutral`. Warna hanya penguat — kata keadaannya tetap tertulis
+  di baris pertama (WCAG 1.4.1).
+- **Hierarki dua baris**: "menunggu persetujuan" 13 px/600 `--ink`, di bawahnya "0 dari 2 persetujuan"
+  12 px `--ink-muted`; keduanya di-ellipsis, bukan membungkus bar.
+- **CTA** "Ke zona keputusan ↓" — `min-height: 40px`, radius 8 px, `text-decoration: none` (label putih
+  di atas biru dengan garis bawah terbaca seperti tautan teks, bukan tombol).
+- **Posisi: tetap di TENGAH layar.** Sempat dicoba "rata kanan kiri mengikuti sidebar buka/tutup"
+  (`left: calc(var(--side-w, 256px) + 22px); right: 22px`), lalu pemilik mengoreksi: *"eh salah tetap
+  kaya di buat rata tengah maksudnya"*. Jadi lebar tetap `min(560px, 100vw - 24px)` dan `left: 50%` +
+  `translateX(-50%)`; buka/tutup sidebar tidak menggeser dock. Terukur: delta pusat dock vs pusat
+  layout viewport = **0 px** (560 px pada 1247 px).
+- **Perilaku**: animasi masuk `actionbar-in` 240 ms (`--dur-3`, `--ease-standard`), dimatikan
+  `prefers-reduced-motion`; `bottom: calc(16px + env(safe-area-inset-bottom))` di iOS; disembunyikan
+  saat cetak; ≤560 px hitungan approval dilepas dan CTA mengisi sisa lebar (informasi tidak dibuang,
+  hanya dipadatkan — sebelumnya seluruh teks di-`display:none`).
+
+Batas yang tidak berubah: teks status/hitungan, `href="#zona-keputusan"` + `id="zona-keputusan"`,
+`role="region"` + `aria-label="Pintasan ke zona keputusan"`, logika tampil (`selected && bolehBertindak
+&& !zonaTerlihat`), dan slack 72 px pada anak terakhir `.app-body`.
+
+Gerbang: vitest 120 berkas / 1368 tes lulus, `tsc --noEmit` 0, `npm run build` 0. Terukur di :3010:
+dock 560 x 58 px, `border-radius: 14px`, `animation-name: actionbar-in`, titik `rgb(249,168,37)` untuk
+tone `warning`, dua baris teks hasil pemisahan `<strong>` + `<span>`.
+Koreksi posisi (dicatat supaya tidak diulang): percobaan full-width sempat terpasang dan terukur
+`x=278, w=947` (tepi isi halaman, mengikuti rail 256 px) — pemilik menolaknya, jadi kembali ke dock
+tengah. Jangan mengubah ke full-width tanpa permintaan eksplisit.
+
+---
+
+## 19. Pemilih keputusan: `<select>` → pemilih yang bisa dicari (19 Okt 2026)
+
+**Permintaan pemilik:** *"tolong ubah redesign dropdown dari 'pilih keputusan' di halaman Agent
+Activity Log dan halaman Decision & Evidence — Keputusan yang diperiksa"* — dikerjakan dengan
+skill `frontend-design`, `design-system`, dan `ui-ux-pro-max`.
+
+### 19.1 Masalah pada `<select>` lama
+
+- **Tidak bisa dicari.** Satu akun bisa melihat 48–126 keputusan; mencari satu nomor berarti
+  menggulir daftar sepanjang layar di dalam popup OS yang tidak bisa digayakan.
+- **Satu baris per keputusan.** Label `"<jenis> · <status> · <id 8>"` harus muat dalam satu baris
+  sempit, jadi yang terpotong justru bagian pembeda (sisa waktu vs status).
+- **Tidak ada konteks jumlah.** Pengguna tidak tahu ada berapa yang menunggu tindakan dan berapa
+  yang disembunyikan karena lewat tenggat.
+- **Tidak konsisten dengan sisa konsol.** Semua kontrol lain di repo memakai token, cincin fokus,
+  dan target sentuh 44 px; `<select>` bawaan tidak bisa mengikuti itu.
+
+### 19.2 Bentuk baru (`components/DecisionPicker.tsx`)
+
+- **Pemicu** (`button`, `aria-haspopup="listbox"`, `aria-expanded`, `aria-controls`): dua baris —
+  judul keputusan (`--fs-2`, tebal) dan baris meta (`--fs-1`: sisa waktu/status · nomor).
+  Nomor 8 heksa memakai `--font-data` lewat `.dpick-nomor`, kata tetap sans — supaya nomor
+  mudah dibedakan tanpa membuat seluruh baris terasa seperti log.
+- **Panel** (`hidden` saat tertutup, jadi `aria-controls` selalu menunjuk elemen yang ada):
+  kotak cari ("Cari jenis, status, atau nomor…") + `ul[role="listbox"]` datar berisi header grup
+  `li[role="presentation"]` dan opsi `li[role="option"]`. Satu listbox datar dipilih supaya
+  `aria-activedescendant` tetap sederhana; tidak ada listbox bersarang.
+- **Grup** tetap dari `lib/decision-picker.ts` (`Menunggu tindakan` / `Diusulkan, belum masuk
+  persetujuan` / `Tidak menunggu tindakan`) — hanya jumlahnya **dihitung ulang dari hasil saring**.
+  Angka yang salah lebih buruk daripada tanpa angka: pada kueri "alokasi", `(4)` menjadi `(1)`.
+- **Keyboard**: fokus otomatis ke kotak cari saat panel dibuka (lewat `requestAnimationFrame`,
+  karena klik tombol menaruh fokus kembali ke pemicu setelah efek React), `↑`/`↓` memindah
+  sorotan (`aria-activedescendant`), `Home`/`End`, `Enter` memilih, `Esc` menutup dan
+  mengembalikan fokus ke pemicu, klik di luar menutup.
+- **Keadaan**: sorotan keyboard = latar `--accent-soft` + garis aksen; pilihan aktif = garis kiri
+  3 px `--accent-strong` + centang. Bedakan sorotan dari pilihan supaya "sedang di sini" dan
+  "yang sedang dilihat" tidak tertukar.
+- **Token**: hanya `--surface`, `--surface-sunken`, `--line`, `--line-input`, `--ink`,
+  `--ink-muted`, `--ink-subtle`, `--accent`, `--accent-strong`, `--accent-soft`, `--font-data`,
+  `--fs-1`, `--fs-2`. Tidak ada hex baru.
+- **≤640 px**: `min-width` dilepas, `max-width: none`, panel selebar pemicu.
+- `prefers-reduced-motion` tidak perlu aturan baru: tidak ada animasi masuk, hanya perubahan
+  `hidden`/latar (tidak ada gerak yang harus dimatikan).
+
+### 19.3 Kesalahan yang ditemukan saat verifikasi live (dan perbaikannya)
+
+| Gejala terukur | Sebab | Perbaikan |
+|---|---|---|
+| Panel muncul **43 px** di bawah pemicu | `top: calc(100% + 6px)` dihitung dari `.dpick` yang ikut memuat label + baris hint | pembungkus `.dpick-anchor` (hanya pemicu) jadi acuan `position: relative`; jarak **6 px** |
+| Dua pemilih memakai `id="pilih-keputusan"` | id bawaan dipakai di dua halaman | Agent Log memakai `id="pilih-keputusan-log"` |
+| Pemicu di Agent Log hanya **130 px** → judul dua baris | `.page-header-meta` menyusut mengikuti isi | `.dpick { min-width: 300px }` (dilepas ≤640 px); terukur **300 px**, judul satu baris |
+| Angka grup tidak berubah saat mencari | jumlah dibekukan di `lib/decision-picker.ts` | dihitung ulang dari `group.options.length` setelah saring |
+| Angka "0 keputusan" sempat tampil lama | daftar keputusan tiba setelah tab dibuka | efek jaring kedua di `app/page.tsx`: begitu `decisions` tersedia, `defaultEvidenceId`/`defaultAgentLogId` dipilih |
+
+### 19.4 Bukti terukur di :3010 (akun SPPG Head, 1× zoom)
+
+- Decision & Evidence: pemicu **340 × 45 px**, panel **340 × 341 px**, jarak **6 px**, daftar
+  bergulir 255 px dari 2.642 px isi, **0** overflow horizontal.
+- Agent Log: pemicu **300 × 44 px** rata kanan ke tepi isi (**1.225 px**), panel **300 px**,
+  opsi dua baris **53 px**, pencarian "alokasi" → 27 opsi (1 + 22 + 4).
+- Keyboard (event keyboard nyata lewat CDP): `↓` memindah sorotan, `Enter` memilih
+  (`#e1871b42`… → `#3036af23`), panel tertutup, fokus kembali ke pemicu, URL berubah ke
+  `?tab=evidence&keputusan=…`, isi keputusan berganti.
+- `Esc` menutup, kotak cari bersih, fokus kembali ke pemicu.
+
+Batas yang tidak berubah: logika pengelompokan & kata status tetap di `lib/decision-picker.ts`,
+sakelar "Tampilkan yang lewat tenggat" tetap di kepala halaman bukti, gating approval tidak
+disentuh, dan `?keputusan=<id>` tetap bisa dibagikan.
+
+Gerbang: vitest **1.388 lulus / 123 berkas**, `tsc --noEmit` 0, `npm run build` 0.
+
+---
+
+## 20. Dokumen PO sebagai PDF — hanya untuk yang sudah disetujui (20 Okt 2026)
+
+Permintaan pemilik (verbatim): *"untuk bagian yang sudah disetujui untuk po anda bisa buat pdf po nya
+yang bisa di download"* — di tab **Decision & Evidence**, PO yang approval-nya sudah tercatat harus
+menghasilkan berkas PDF yang bisa diunduh, dicetak, dan diserahkan ke bagian keuangan.
+
+### Keputusan
+
+1. **PDF dibuat di backend, bukan di browser.** `GET /sap/purchase-orders/{po_number}/pdf`
+   (`app/api/sap_orders.py` → `app/services/po_document.py`). Alasannya: angka dan jejak persetujuan
+   harus dibaca dari DB pada detik unduh. Dokumen yang dirakit di klien bisa lebih baru atau lebih
+   lama daripada datanya, dan tidak ada tempat untuk memagari "PO ini sudah disetujui atau belum".
+2. **Pagar persetujuan.** PDF hanya terbit untuk PO yang lahir dari keputusan `approved`/`executed`
+   (`po_document.STATUS_BOLEH_PDF`). PO impor tanpa keputusan (`4500000001`) → **409** "tidak lahir
+   dari keputusan"; keputusan yang masih menunggu → **409** "keputusan menunggu persetujuan — PDF PO
+   diterbitkan setelah keputusan disetujui". Tidak ada dokumen kosong, tidak ada PDF untuk pembelian
+   yang belum disetujui.
+3. **Cakupan = cakupan daftar.** Peran SPPG meminta PO lokasi lain → **404**, sama seperti daftar yang
+   memang tidak memuatnya; pesan galat tidak membocorkan keberadaan PO lokasi lain.
+4. **Isi dokumen (satu halaman A4, satu halaman kecuali isi memanjang):** kop (nomor PO, status,
+   tanggal terbit WIB), pihak & bahan (lokasi tujuan, pemasok, nama bahan, nomor bahan), rincian
+   pesanan + total, dasar persetujuan (ID, jenis, status, versi, jendela berlaku), jejak persetujuan
+   (peran, nama, setuju/menolak, waktu WIB, catatan) + kalimat "N persetujuan tercatat dari M yang
+   disyaratkan matriks persetujuan — syarat terpenuhi/belum", lalu catatan kaki. Setiap halaman
+   menyebut **"SAP simulasi"** (Rules.md §4) dan menuliskan bahwa sumbernya tabel mock di DB aplikasi,
+   bukan SAP S/4HANA produksi.
+5. **Satu aturan angka.** `total = harga × kuantitas` (rumus yang sama dengan endpoint daftar),
+   kuantitas/harga dibaca apa adanya, nilai tak diketahui ditulis "—". Status PO dijelaskan artinya
+   (`catatan_status`): "Terkonfirmasi" = baris impor SAP, bukan konfirmasi yang dikirim aplikasi.
+6. **UI: aksi sekunder per baris.** Tombol "Unduh PDF" (ikon garis 12 px + label, 30 px tinggi;
+   44 px di `(pointer: coarse)`) hanya pada baris yang memenuhi pagar; baris lain mendapat **kalimat
+   sebabnya** — tombol yang hilang tanpa penjelasan terbaca sebagai fitur rusak, tombol yang selalu
+   ada padahal backend menolak 409 terbaca sebagai janji palsu. Keadaan: `Menyiapkan PDF…`
+   (`aria-busy`) → `Dokumen terunduh sebagai PO-<nomor>.pdf` (`role="status"`) atau
+   `Dokumen tidak bisa diunduh: <alasan server>` (`role="alert"`, memakai `ApiError.detail`).
+   Nama berkas satu aturan dengan backend (`poFileName` di `lib/export.ts` ↔ `po_document.nama_berkas`),
+   disalin karena `Content-Disposition` tidak terbaca lintas-origin tanpa ekspos CORS.
+
+### Jebakan yang terukur
+
+- **Tes lama memanggil komponen sebagai fungsi.** `renderToStaticMarkup(PurchaseOrderList({...}))`
+  (dan `root.render(PurchaseOrderList({...}))` di tes tautan) meledak begitu komponen memegang hook:
+  `Cannot read properties of null (reading 'useState')`. Kedua helper tes diubah merender **elemen**;
+  perilaku aplikasi tidak pernah terpengaruh (aplikasi selalu merender elemen).
+- **Kolom "Keputusan" terpotong** jadi "Keputus an" saat lebarnya 11% → 14% (kolom Peran/Nama/Waktu
+  digeser sedikit). Ditemukan dari render PNG halaman 1 + `vision_analyze`, bukan dari tes.
+- **`align-items: baseline` menurunkan tombol 30 px ~4 px** dari tautan di sebelahnya →
+  `.po-row-foot .po-pdf-button { align-self: center; }`. Perataan teks lain tidak diubah.
+- **`reportlab` + `pypdf` masuk `backend/requirements.txt`** dan image backend di-`build` ulang.
+  Tanpa itu PDF hanya hidup sampai kontainer dibuat ulang (pip di dalam kontainer bersifat sementara);
+  `pypdf` khusus dipakai tes untuk mengekstrak ulang teks PDF.
+
+### Gerbang
+
+- `pytest tests/test_po_document_pdf.py` → **11 lulus** (pagar status, 404 cakupan, 409 tanpa
+  keputusan & belum disetujui, isi PDF diekstrak ulang dan dibandingkan dengan ground truth DB,
+  label "SAP simulasi").
+- Suite backend penuh: **1.167 lulus / 15 gagal / 5 dilewati** — 15 kegagalan itu di lima berkas yang
+  **nol** menyebut identifier perubahan ini; 9 di antaranya hijau saat dijalankan sendiri
+  (interferensi antar-berkas), 6 merah karena kondisi data demo hasil penyemaian sesi sebelumnya
+  (`test_demo_completed_decisions_konsisten` 5, `test_suppliers_api` 1). Bukan regresi fitur ini.
+- `ruff check` empat berkas tersentuh → bersih (repo-wide masih 17 pelanggaran di berkas lain).
+- Frontend: **vitest 1.410 lulus / 126 berkas**, `tsc --noEmit` 0. `next build` tidak dijalankan
+  karena dev server :3010 memegang `.next` (dokumentasi jebakan build repo ini).
+- Hidup di :3010 (SPPG Head): 9 PO → 9 tombol; klik baris pertama → server 200
+  `application/pdf`, 3.768 byte, awalan `%PDF-`, dan UI menulis
+  "Dokumen terunduh sebagai PO-MC-661695B2C685.pdf"; sesudah image backend di-build ulang
+  (`reportlab 5.0.1 | pypdf 6.21.1` di dalam kontainer) unduhan tetap 200.
+
+## 20. Judul keputusan di Decision & Evidence: 24px → 18px (19 Okt 2026)
+
+Permintaan pemilik: *"kurang kecil untuk ini 'Alihkan 712 kg telur: Cianjur → Jakarta'"*.
+
+Judul itu memakai `.evidence-hero-title` dengan `--fs-7` (24px) — tangga token untuk **angka
+metrik**, bukan kalimat. Kalimat 60 karakter pada 24px menimpa kartu di sekitarnya dan membuat
+satu baris judul lebih berat daripada angka keputusan di bawahnya.
+
+Sekarang `--fs-5` (18px, tangga judul seksi) di desktop dan `--fs-4` (16px) di ≤760px. 18px tetap
+mengalahkan `.card h2` (14px) dan `.evidence-page .card > h2` (16px), jadi hierarki "judul
+keputusan = aksi" tetap utuh.
+
+Bukti hidup (:3010, SPPG Head): `getComputedStyle` → `font-size: 18px`, `line-height: 23,4px`,
+tinggi judul 23px di dalam kartu 432px; tidak ada teks terpotong; satu-satunya elemen di 10 tab
+yang memuat frasa ini adalah kartu hero (18px).
+
+## 21. Kartu 7 agen: latar hijau saat benar-benar jalan + slug alat disembunyikan (19 Okt 2026)
+
+Dua permintaan pemilik sekaligus: *"bagian 7 agent jika jalan kasih indikator background hijau"*
+dan *"untuk bagian seperti ini `evaluate_safety` hapus atau tidak usah ditampilkan"*.
+
+1. **Latar hijau memakai token yang ada**, bukan warna baru: `.swarm-card[data-state="ok"]` →
+   `background: var(--ok-bg)` (#ECFDF5), `border-color: var(--ok-border)` (#A7F3D0), chip status
+   `var(--ok-ink)`. Keadaan tetap terbaca tanpa warna: titik terisi, kata "Selesai", dan angka
+   durasi. Kartu `degraded`/`error`/`skipped` tidak berubah.
+2. **`AgentTraceViewer` tidak lagi mencetak `tool_called` mentah.** Baris alat memakai
+   `toolLabel()`; bila slug tidak punya padanan manusia, barisnya tidak dirender sama sekali —
+   jadi `evaluate_safety` hilang, bukan berubah menjadi teks lain yang tetap teknis.
+
+Bukti hidup (:3010, keputusan `4191797f`, run `ccf2b4bd`): 7 kartu `.swarm-card[data-state="ok"]`
+dengan `background-color: rgb(236, 253, 245)` dan `border-color: rgb(167, 243, 208)`, chip
+"Selesai"; `.trace-tool` hanya berisi "Layanan verifikator", "Penyedia perkiraan", "Buat
+keputusan"; pencarian `evaluate_safety` di seluruh teks Agent Log → 0.
+
+## 22. Panel 7 agen: roster + tiga keadaan — HANYA di Demo Control
+
+Klarifikasi pemilik (2026-10-19): *"ku malah ubah yang di agent log, balikin desainnya;
+yang saya maksud adalah yang di Demo Control yang di-redesign."*
+
+**Agent Log dikembalikan ke desain semula.** Tidak ada legenda, tidak ada latar hijau,
+ringkasan tetap `N/7 tercatat`, kartu tanpa baris tetap "Belum tercatat", dan tab Agent
+Log kembali memilih keputusan terbaru yang punya review (perilaku P4). Kelas `.swarm-card`
+tidak lagi punya varian `ok`/`running`/`not_recorded`.
+
+**Redesign dipindah ke Demo Control → blok "Bukti agent".** Tujuh kartu selalu tampil
+begitu ada putaran; sumbernya `/demo/agent/last-run` yang kini mengirim `agents` (tujuh
+kunci tetap) dan `agents_run_id`.
+
+| Keadaan | Kapan | Tampilan |
+|---|---|---|
+| **Selesai** | baris review tersimpan, status `ok` | latar `--ok-bg`, tepi `--ok-border`, titik hijau, chip "Selesai" |
+| **Berjalan** | putaran baru sedang berjalan (`busy === "agent"`) | latar `--accent-soft`, tepi `--accent-strong`, titik biru berdenyut (dimatikan pada `prefers-reduced-motion`), chip "Berjalan", durasi/peringatan "—" |
+| **Tidak dijalankan** | belum ada baris untuk agen itu | latar `--neutral-bg`, tepi putus-putus, chip "Tidak dijalankan" |
+| **Terbatas / Gagal** | status `degraded` / `error` | `--warn-*` / `--danger-*` |
+
+Aturan data yang dipaku:
+- Status hanya dari baris review tersimpan; agen tanpa baris tidak diberi angka (durasi
+  dan peringatan "—", bukan 0).
+- Selama putaran berjalan ketujuh kartu "Berjalan" — bukan hasil putaran sebelumnya.
+- Bukti pipeline (DETECT/OPTIMIZE) diambil dari baris **tanpa** `agent_name`, karena baris
+  review worker memakai nama langkah yang sama (`agent.supply` di DETECT, dst.).
+- `last-run` memilih keputusan terbaru yang punya langkah SUPERVISE (bukan sekadar DETECT,
+  yang juga ditulis data seed).
+
+Bukti hidup (:3010, SPPG Head, putaran 30f6a79f):
+- saat berjalan: 7 kartu `data-state="running"`, chip "Berjalan", `rgb(239,246,255)`, tepi `rgb(37,99,235)`, animasi `dc-agent-pulse`;
+- sesudah selesai: 7 kartu `data-state="ok"`, `rgb(236,253,245)`, tepi `rgb(167,243,208)`, durasi 256 md … 2,8 dtk, peringatan 0/1;
+- Agent Log: `7/7 tercatat`, latar `rgb(255,255,255)`, tanpa legenda.
+**Daftar langkah pipeline dilipat.** 15 chip langkah (`DETECT agent.supply` … `SUPERVISE agent.review_summary`)
+memakan ±195 px tinggi blok, jadi dibungkus `<details class="dc-steps-fold">` dengan segitiga bawaan peramban
+(`display: list-item`, bukan `flex` — `flex` menghapus `::marker`). Ringkasan `Langkah pipeline · 15` tetap
+membawa jumlahnya di luar lipatan; isi langkah tetap ada di DOM (15 `<li>`), hanya tidak digambar.
+Terukur di :3010: tertutup 28 px (dokumen 1.235 px), terbuka 195 px (dokumen 1.402 px); `innerText` daftar
+saat tertutup = kosong.
+

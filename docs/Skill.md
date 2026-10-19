@@ -98,6 +98,15 @@ supplier_exclusions.restore(exclusion_id, reason, evidence_refs)
 supplier_exclusions.list(filters) → { items[], count }
 supplier_exclusions.context(decision_id)
     → { suppliers[], scope_location_id, can_propose, reason_unavailable, exclusions[] }
+demo.agent.run(commodity?) → { decision_id, mode='supplier_procurement', trace_steps[], verifier, forecast, supervisor, suppliers{candidates[],ranked[],chosen}, detect{supply_kg,demand_kg,gap_kg,suppliers_total,suppliers_eligible}, agent_review }
+    # tanpa payload: commodity='beras', target = lokasi SPPG akun pemanggil; tanpa approve/execute
+    # yang DINILAI = pemasok yang sudah memasok SPPG itu (suppliers.location_id = lokasi SPPG,
+    # stok batches di lokasi itu, price_signals 'supplier_quote' untuk lokasi itu,
+    # jarak supplier_leg_km dari koordinat pemasok → koordinat SPPG). Bukan surplus SPPG lain.
+    # 409 = tidak ada pemasok layak; alasannya disebut per pemasok (stok/kesegaran/pengecualian).
+demo.agent.last_run() → { found, mode, decision_id, supplier{supplier_id,name,leg_km,available_kg,quote_price_per_kg,reliability,capacity_kg_per_week,rank,candidates_total}, supply_gap{supply_kg,demand_kg,gap_kg,suppliers_total,suppliers_eligible}, steps[], supervisor{status,provider,fallback_used}, agent_review{status} }
+    # bukti dibaca dari DB (keputusan terakhir yang punya langkah DETECT); source_location NULL untuk pengadaan
+demo.agent.commodities() → { commodities[] }   # nama komoditas yang ADA di DB (dropdown)
 ```
 
 ## 6. Mock SAP — field reference (supaya mirip real SAP kalau nanti diganti)

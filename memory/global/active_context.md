@@ -325,3 +325,34 @@ Parameter `max_distance_km` + cakupan jarak di UI dijadikan fase tersendiri sete
   Verifikasi hidup 1262 px: 5 tile @181 px, bento 2×465,5 px, kartu agenda 947 px, luapan 0; probe 331 px: 0 luapan.
   Bug tertangkap saat pengukuran (bukan oleh tes): kartu agenda sempat 64 px karena `span 12` hilang → diperbaiki.
 - **Menunggu pemilik:** (a) deploy agent ke AgentCore (butuh ARN/Gateway), (b) perbaikan `.env` yang belum dieksekusi: `INFERHUB_URL` kurang suffix `/chat/completions` (25 slot 404), model id verifier `cb/gpt-6-astra` → `cx/gpt-6-astra`, supervisor `fallback_1` Bedrock `claude-sonnet-4` (Legacy/mati), serta 4 tes host-only yang merah (`test_verify_agentcore_access.py`, `test_verify_bedrock_access.py`, `test_compose_contract.py`, `test_environment_contract.py`), (c) commit/push Fase 11 & Fase 12 (belum ada commit).
+
+
+- **19 Okt — popup "Governance & persetujuan" di-restyle (permintaan pemilik).**
+  Latar `.popup-backdrop`: `rgba(248,250,252,.2)` + `backdrop-filter: blur(8px)` (tanpa saturasi; diturunkan bertahap 20→15→8 karena pemilik ingin latar masih samar-samar) —
+  menggantikan kabut 66% + saturasi dari keputusan pagi hari yang sama; tes CSS diperbarui ke kontrak
+  baru. Isi: ringkasan bukti jadi kartu fakta `<dl>` (10 baris), chip status jadi strip + meter 240 px,
+  tiap pilihan tindakan jadi kartu ber-stripe sesuai dampak, emoji ⛔ → ikon SVG, kaki sticky dengan
+  hint Esc. Hanya dialog ini yang berubah (`Popup` dapat prop `className="popup-governance"`);
+  pemilih tanggal & karantina tetap. Gerbang: vitest 1359/119, tsc 0, build 0; diukur di :3010.
+  Rincian + angka terukur: `docs/design.md` §17.
+
+- **19 Okt — dock "Ke zona keputusan" di-redesign** (permintaan pemilik). Pil 720 px radius 999 →
+  dock 560 px radius 14 dengan titik nada keadaan, hierarki dua baris (keadaan → hitungan approval),
+  CTA "↓" sepadan dengan tautan kepala keputusan, safe-area iOS, animasi 240 ms (dimatikan
+  `prefers-reduced-motion`), cetak disembunyikan, ≤560 px memadatkan tanpa membuang informasi.
+  Posisi TETAP DI TENGAH (sempat dicoba full-width mengikuti sidebar, dikoreksi pemilik).
+  Gerbang: vitest 120/1368, tsc 0, build 0. Rincian: `docs/design.md` §18.
+
+- **19 Okt — sesi demo langkah 2 selesai: jam sistem terpusat.** `app/core/clock.py`
+  (murni) + `demo_clock_service.py` (DB) + `ClockMiddleware` (header `X-Sim-As-Of`/
+  `X-Sim-Mode`) + tabel `demo_clock`/`demo_session` (migrasi `023_demo_clock_session`).
+  25 situs `datetime.now(timezone.utc)` → `clock.now()`; body enam endpoint gerbang
+  membawa `sim_as_of`. Gate: lihat laporan langkah. Berikutnya: generator + skrip
+  timeline (langkah 3 rencana di `E:\hackathon\HackathonAWS\_qa\rencana-sesi-demo-1jam.md`).
+
+- **19 Okt — sesi demo langkah 3 selesai.** Kolom `session_id` di 12 tabel
+  (migrasi `024_session_scope`), generator deterministik
+  `app/seed/demo_session_seed.py` (1.454 baris/sesi, 0,40 s, idempoten), skrip
+  `app/seed/data/demo_timeline.json` + validator `demo_timeline.py`. Gate di klon
+  `mealchain_sim`: 15 tes lulus, sidik data reguler identik, klon sudah di-drop.
+  Berikutnya: tick engine (langkah 4).

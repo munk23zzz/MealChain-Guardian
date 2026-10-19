@@ -221,3 +221,72 @@
 - Diganti uji sifat dengan ground truth dihitung saat tes berjalan: lot gagal uji tetap DILAPORKAN
   (`safety_fail_count == sql["fails"]`), lot lewat tenggat tetap DIKECUALIKAN
   (`total > layak`, `(shipping is None) == (sql["count"] == 0)`).
+
+## 19 Okt 2026 — "Integritas Bukti": permukaan gelap terakhir menjadi terang
+
+- Arah pemilik: panel bukti di halaman Decision & Evidence kurang disukai, minta palet yang cocok
+  dengan tema terang. Setelah §15 (`map-console.css`), `.integrity-trust` adalah **satu-satunya
+  permukaan gelap** yang tersisa — jadi ini penutup konversi gelap→terang, bukan tema kedua.
+- **Pola yang dipakai ulang (dan harus dipakai lagi):** pertahankan NAMA token (`--trust-*`), ganti
+  nilainya. Aturan lama + tes lama + `docs/design.md` §4 tetap sah; tidak ada penulisan ulang selektor.
+- **Warna = keadaan, bukan suasana.** `data-tone` (ok/warn/danger/plain) memetakan ke token
+  `--ok/--warn/--danger/--neutral-*` yang sudah ada; tidak ada hex baru. Lencana wajib titik + kata,
+  supaya keadaan tidak bergantung pada warna saja; emoji ✅/❌/⚠️ dihapus dari panel ini.
+- **Angka jangan dicampur kalimat:** "Blok 3301 · head 9f2c…" satu paragraf itu susah dibaca —
+  dipisah jadi baris label→nilai, angka mono `tabular-nums`, hash/alamat sebagai chip mono.
+- Gerbang sesi: vitest 1359 lulus / 119 berkas, `tsc --noEmit` 0, `npm run build` 0.
+  Rujukan lengkap: `docs/design.md` §16.
+
+## 19 Okt 2026 — popup "Governance & persetujuan": latar blur 20% + kartu fakta
+
+- Arah pemilik (verbatim): "pada halaman pop up 'Governance & persetujuan' ubah tampilan ui dan
+  bacgraud di buat blur 20% saja", lalu "untuk blur nya mungkin bisa 15% saja", lalu "blur nya itu
+  masih samar samar untuk tampilan di belakangnya, berarti di turunin lagi". Membalik keputusan latar
+  pagi hari yang sama: kabut putih 66% + `saturate(140%)` dibuang, tinggal `rgba(248,250,252,.2)` +
+  `backdrop-filter: blur(8px)`. Lantainya 6 px: di bawah itu huruf di belakang mulai terbaca.
+  Konsekuensi yang diuji: tes CSS lama memaku 0,66 dan saturasi → tes diubah, bukan kode yang
+  dipaksa cocok.
+- **Satu dialog, bukan semua.** `Popup` dapat prop `className`; tata letak baru hidup di
+  `popup-governance` supaya pemilih tanggal & dialog karantina tidak ikut berubah (hanya latarnya,
+  karena `.popup-backdrop` milik cangkang bersama).
+- Ringkasan bukti jadi `<dl>` label→nilai: bullet padat dengan id panjang membuat mata harus membaca
+  prosa; sekarang satu fakta satu baris. Teks tidak diubah karena tes mem-pin sebagian kalimatnya.
+- Pelajaran yang bisa dipakai lagi: (a) `--danger-border` (#FECACA) tidak layak jadi stripe 3 px di
+  atas putih — pakai `--status-danger`; (b) track progres ber-`--surface-sunken` hilang di atas strip
+  sunken; (c) bar progres selebar panel terbaca seperti garis pemisah, batasi ~240 px.
+- Gerbang: vitest 1359 lulus / 119 berkas, `tsc --noEmit` 0, `npm run build` 0. Rujukan lengkap:
+  `docs/design.md` §17.
+
+## 19 Okt 2026 — dock "Ke zona keputusan": bentuk pil diganti dock ber-hierarki
+
+- Arah pemilik: "popup ke zona keputusan rada kurang, redesign pakai ui ux pro max". Bar melayang itu
+  dulu pil 720 px radius 999 dengan satu baris abu-abu "status · hitungan" — terbaca seperti toast dan
+  menyamakan bobot dua informasi.
+- Sekarang: dock 560 px radius 14, titik nada keadaan (`data-tone` dari `STATUS_TONES`, bukan palet
+  baru), keadaan 13 px/600 di atas hitungan 12 px muted, CTA "↓" sepadan dengan tautan di kepala
+  keputusan, safe-area iOS, animasi 240 ms yang dimatikan `prefers-reduced-motion`, disembunyikan saat
+  cetak, dan ≤560 px memadatkan (bukan menghapus) informasi.
+- Jebakan kecil yang terulang di repo ini: `<a class="button">` tetap menampilkan garis bawah bawaan —
+  label putih di atas biru jadi terbaca seperti tautan teks. Selalu set `text-decoration: none` pada
+  tautan bergaya tombol.
+- Gerbang: vitest 120/1368, tsc 0, build 0. Rujukan: `docs/design.md` §18.
+- Jebakan build di mesin ini (exFAT): `next build` sesekali gagal
+  `ENOENT ... .next/server/pages-manifest.json` walau build sebelumnya lulus. Obatnya `rm -rf .next`
+  lalu build ulang — bukan bug kode, melainkan sisa `.next` yang tidak lengkap. Jangan langsung
+  menyimpulkan regresi dari error ini.
+- Posisi dock "Ke zona keputusan" DIPUTUSKAN TETAP DI TENGAH. Sempat diminta "rata kanan kiri
+  mengikuti sidebar buka/tutup" dan sudah dipasang (`left: rail + 22px; right: 22px`, terukur 947 px
+  di layar 1262), lalu dikoreksi pemilik: "eh salah tetap kaya di buat rata tengah maksudnya".
+  Jangan ulangi full-width; lebar 560 px + `left: 50%` + `translateX(-50%)` adalah kontraknya
+  (delta pusat 0 px terhadap layout viewport).
+
+- [2026-10-20] Dokumen PO = PDF dari BACKEND, bukan rakit di browser — angka & jejak persetujuan harus dibaca dari DB pada detik unduh, dan hanya backend yang bisa memagari "sudah disetujui". — rute `GET /sap/purchase-orders/{po_number}/pdf`, pembangun `app/services/po_document.py`.
+- [2026-10-20] PDF PO hanya untuk PO dari keputusan `approved`/`executed`; PO impor tanpa keputusan & keputusan yang belum disetujui ditolak 409 dengan alasan, PO lokasi lain 404 (cakupan daftar). — dokumen yang dibawa keluar aplikasi tidak boleh ada untuk pembelian yang approval-nya belum tercatat.
+- [2026-10-20] `reportlab` (runtime) + `pypdf` (khusus tes) masuk `backend/requirements.txt`; image WAJIB di-build ulang, karena `pip install` di kontainer hilang saat kontainer dibuat ulang. — sebelumnya PDF hanya hidup sampai `docker compose up` berikutnya.
+- [2026-10-20] Tombol "Unduh PDF" hanya muncul di baris yang berhak, baris lain mendapat kalimat sebabnya — tombol yang hilang tanpa penjelasan terbaca sebagai fitur rusak, tombol yang selalu ada padahal 409 terbaca sebagai janji palsu. — pola yang dipakai juga untuk aksi ber-pagar lain.
+- [2026-10-20] Komponen yang memegang hook TIDAK boleh dipanggil sebagai fungsi di tes (`renderToStaticMarkup(Komponen({...}))`, `root.render(Komponen({...}))`); render sebagai elemen. — dua berkas tes lama pecah `Cannot read properties of null (reading 'useState')` saat `PurchaseOrderList` mulai memegang state unduhan.
+- [2026-10-20] Joule membaca PO lewat skill keempat di jembatan A2A (`purchase_order`), bukan lewat model: rute deterministik mendahulukan nomor `MC-…` dan kata `po`/`purchase order` SEBELUM kata kunci antrean, karena "PO mana yang sudah disetujui?" memuat `setuju` milik skill antrean. Angka PO (harga, total) dibaca apa adanya dari `/sap/purchase-orders`; jembatan tidak mengalikan. PDF PO tetap hanya di UI MealChain — artefak Joule berupa teks, tidak bisa melampirkan berkas.
+- [2026-10-20] Data pemasok dirapikan menyeluruh: 60 nama usaha unik bergaya Indonesia nyata (CV/UD/Koperasi/PT) menggantikan nama lama yang berulang; setiap pemasok WAJIB ≤150 km dari SPPG tujuannya (validator `backend/app/seed/validate_supplier_data.py`, 8 tes); `role_hint` 10 lokasi diseragamkan `sppg`; batch demo WAJIB dipasok pemasok di hub yang SAMA + komoditas yang SAMA (`jakarta_lengkap.seed_batches`). Volume Postgres di-reset lalu di-seed ulang karena DB lama menyisakan 119 baris (60 lama + 59 baru). — pemasok yang tidak terjangkau/aneh membuat klaim peta dan keputusan pengadaan tidak bisa dipertahankan di depan juri.
+- [2026-10-20] Joule mendapat skill kelima `supplier_directory` (baca `GET /suppliers`): direktori pemasok per SPPG + kiriman aktif; rute deterministik `pemasok`/`supplier`/`direktori` diperiksa SETELAH antrean agar "usulan eksklusi pemasok" tetap masuk antrean. — klaim "Joule bisa memanggil data pemasok" harus terbukti lewat skill, bukan hanya lewat batch/PO.
+- [2026-10-20] `jakarta_lengkap` menulis `verifier_note="consistent"` (bukan "konsisten") karena `approval_summary` memetakan teks lain ke verdict `unavailable`; tes keputusan KPI dibatasi ke ID `demo_decision_id` agar tidak mencampur 30 baris riwayat `jakarta_lengkap`. — verdict layar dan gate harus membaca kontrak yang sama.
+- [2026-10-20] `seed_demo_activity` hanya menghapus batch milik namespace `demo_batch_id`-nya sendiri (bukan semua `origin='demo'`), supaya 40 batch kaya `jakarta_lengkap` tidak ikut terhapus saat suite menjalankan penyemai ini; `test_demo_activity._bersihkan` memakai himpunan ID yang sama. — seeder demo harus komposabel; filter `origin` terlalu luas dan merusak data seeder lain.
