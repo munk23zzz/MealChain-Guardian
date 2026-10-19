@@ -180,6 +180,16 @@ export function hiddenFactsLabel(jumlah: number): string {
 }
 
 /**
+ * Label untuk baris TERISI yang dilipat karena kartu terlalu panjang.
+ * Bedanya dengan `hiddenFactsLabel`: ini bukan data kosong, hanya sekunder —
+ * karena itu kalimatnya netral ("rincian lainnya"), bukan "belum ada datanya".
+ */
+export function hiddenRowsLabel(jumlah: number): string {
+  if (!Number.isFinite(jumlah) || jumlah <= 0) return "";
+  return jumlah === 1 ? "1 rincian lainnya" : `${jumlah} rincian lainnya`;
+}
+
+/**
  * Peran yang boleh menyetujui/menolak/mengeksekusi — CERMINAN dari
  * `visibleActions()` di `components/DecisionActions.tsx` (satu-satunya pemanggil
  * API-nya). Kesamaan keduanya dijaga tes paritas di

@@ -145,15 +145,18 @@ export default function IntegrityPanel({
       </div>
 
       {/* Dua blok di bawah sengaja TIDAK ikut gelap: daftar pengukuran dan
-          tombol ekspor adalah dokumen kerja, bukan bukti kripto. */}
+          tombol ekspor adalah dokumen kerja, bukan bukti kripto. Keduanya
+          dilipat (F4) karena panjang, bukan karena kosong — ringkasan tombol
+          menyebut isinya, dan tidak ada data yang dibuang. */}
       {dossier !== null && (
-        <>
+        <details className="integrity-more" data-testid="integrity-features">
+          <summary>Rincian pengukuran &amp; ekspor bukti</summary>
           <ComplianceEvidencePanel dossier={dossier} />
           <div className="integrity-export-actions" data-testid="dossier-export-actions">
             <button type="button" onClick={() => downloadText(`dossier-${dossier.decision_id}.json`, dossierToJson(dossier), "application/json;charset=utf-8")}>Export JSON dossier</button>
             <button type="button" onClick={() => downloadText(`evidence-${dossier.decision_id}.csv`, dossierToCsv(dossier), "text/csv;charset=utf-8")}>Export CSV bukti</button>
           </div>
-        </>
+        </details>
       )}
 
       {error && <p className="integrity-error">{error}</p>}

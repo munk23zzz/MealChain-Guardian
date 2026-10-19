@@ -5386,6 +5386,153 @@ a:focus-visible {
   gap: var(--space-3);
 }
 
+/* ── Kepala "Governance & persetujuan" (19 Okt 2026) ───────────────────────
+   Sebelumnya kartu ini hanya daftar fakta 5 baris + tombol di bawah: status
+   "Belum/Belum" harus dibaca dari dua baris berbeda, tidak ada progres, dan
+   aksi terpisah jauh dari statusnya. Sekarang: kepala (judul + aksi) di atas,
+   lalu chip status, progres peran syarat, rel peran, dan callout alasan
+   tertahan. Semua angka berasal dari read model server (lib/governance.ts). */
+.evidence-decide-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.evidence-decide-head .decision-actions {
+  margin-left: auto;
+}
+
+.gov-status {
+  display: grid;
+  gap: 8px;
+}
+.gov-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin: 0;
+  padding: 2px 10px 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  font-weight: 600;
+}
+/* Bentuk + teks + warna: penanda bentuk berbeda tiap keadaan, jadi pengguna
+   buta warna tetap bisa membedakan (ui-ux-pro-max prioritas 1). */
+.gov-chip[data-state="sebagian"] {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+.gov-chip[data-state="siap"],
+.gov-chip[data-state="selesai"] {
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+  color: var(--ok-ink);
+}
+.gov-chip[data-state="ditolak"] {
+  border-color: rgba(198, 40, 40, 0.4);
+  background: rgba(198, 40, 40, 0.1);
+  color: var(--status-danger);
+}
+.gov-chip-mark {
+  font-size: var(--fs-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.gov-progress {
+  display: grid;
+  gap: 4px;
+  max-width: 420px;
+}
+.gov-progress-text {
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+.gov-progress-track {
+  height: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+.gov-progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent-strong);
+}
+.gov-status[data-state="siap"] .gov-progress-fill,
+.gov-status[data-state="selesai"] .gov-progress-fill {
+  background: var(--ok-ink);
+}
+
+.gov-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.gov-roles li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+}
+.gov-roles li[data-done="true"] {
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+  color: var(--ok-ink);
+}
+.gov-role-mark {
+  font-variant-numeric: tabular-nums;
+}
+.gov-wait {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+.gov-blocker {
+  border: 1px solid var(--warn-border);
+  border-radius: 6px;
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  padding: 8px 10px;
+  font-size: var(--fs-2);
+}
+.gov-blocker-title {
+  display: block;
+  margin-bottom: 2px;
+  font-size: var(--fs-1);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.gov-blocker ul {
+  margin: 0;
+  padding-left: 16px;
+}
+@media (pointer: coarse), (max-width: 720px) {
+  /* Chip status dan rel peran bukan kontrol, tetapi tetap diberi tinggi
+     sentuh yang nyaman saat disentuh untuk membaca. */
+  .gov-roles li,
+  .gov-chip {
+    min-height: 32px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+}
+
 /* ── Langkah 2 (17 Okt 2026): lini masa audit + umur jendela + ekspor ────── */
 .evidence-usage {
   padding: 2px 8px;
@@ -7240,8 +7387,32 @@ button:active:not(:disabled),
   align-items: center;
   justify-content: center;
   padding: var(--space-4);
-  background: rgba(15, 23, 42, 0.5);
+  /* 19 Okt 2026 — permintaan pemilik: "jangan transparan tapi blur smooth".
+     Sebelumnya scrim datar rgba(15,23,42,.5): isi halaman di belakang TEMBUS
+     dan terbaca, hanya digelapkan. Sekarang: kabut terang 66% + blur 20 px
+     (glassmorphism, styles.csv: blur 10-20 px). Tint 66% dipilih supaya teks
+     di belakang TIDAK terbaca (bukan cuma buram) sementara tepi panel tetap
+     terasa halus. Panel `.popup` sendiri tetap solid `--surface`. */
+  background: rgba(248, 250, 252, 0.66);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
   animation: popup-fade var(--dur-2) var(--ease-standard);
+}
+/* Browser tanpa backdrop-filter (Firefox lama, WebView tertentu): tanpa blur,
+   tint 66% membuat teks di belakang masih terbaca samar — jadi jatuh ke scrim
+   gelap pekat supaya lapisan tetap jelas dan kontras teks panel tetap aman. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .popup-backdrop {
+    background: rgba(15, 23, 42, 0.55);
+  }
+}
+/* Transparansi diminta dikurangi: blur dimatikan, latar jadi pekat. */
+@media (prefers-reduced-transparency: reduce) {
+  .popup-backdrop {
+    background: rgba(248, 250, 252, 0.97);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 .popup {
   display: flex;
@@ -8978,4 +9149,28 @@ p, li, dd { text-wrap: pretty; }
    (WCAG 2.2 SC 1.4.3, teks 13 px butuh ≥4.5:1). */
 .integrity-trust .integrity-warning {
   color: var(--warning-ink, #92400e);
+}
+
+/* Rincian pengukuran & ekspor di kartu Integritas — gaya sama dengan
+   `.fact-more` supaya dua mekanisme lipat terbaca sebagai satu pola. */
+.integrity-more {
+  margin-top: 10px;
+}
+.integrity-more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 2px 0;
+  font-size: var(--fs-2);
+  color: var(--accent-strong);
+  cursor: pointer;
+  border-radius: 6px;
+}
+.integrity-more > summary:hover {
+  text-decoration: underline;
+}
+.integrity-more > summary:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
 }

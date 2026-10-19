@@ -104,8 +104,9 @@ def test_agentcore_memory_mengikuti_env(client, monitor_headers, monkeypatch):
     monkeypatch.setenv("AGENTCORE_MEMORY_ID", "mem-0123456789abcdef")
     memory = _komponen(_payload(client, monitor_headers), "agentcore_memory")
     assert memory["category"] == "provisioned"
-    # Provisioned BUKAN berarti dipakai aplikasi — catatannya harus jujur.
+    # Provisioned BUKAN berarti dipakai aplikasi — catatan DAN labelnya harus jujur.
     assert "adapter" in memory["note"].lower()
+    assert "belum dipakai" in memory["category_label"]
 
 
 def test_sap_ai_core_mengikuti_env(client, monitor_headers, monkeypatch):

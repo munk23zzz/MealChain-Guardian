@@ -96,6 +96,18 @@ NTFS/Linux patch ini tidak berpengaruh.
 Catatan operasional: `npm ci` menghapus `node_modules` — matikan dulu yang memegang folder itu
 (container frontend sudah memakai volume sendiri, tapi LSP/tsserver Hermes bisa mengunci).
 
+**Build saat `next dev` sedang jalan (T6).** `next dev` memegang `.next/trace`; di Windows file itu
+terkunci sehingga `next build` gagal `EPERM`. Jangan hentikan dev server orang lain — arahkan build
+ke folder lain:
+
+```bash
+NEXT_DIST_DIR=.next-build npm run build
+```
+
+`frontend/next.config.js` membaca `distDir: process.env.NEXT_DIST_DIR || ".next"`, jadi build
+menulis ke `.next-build` dan dev server tetap hidup. Jangan menjalankan perintah dari dalam folder
+output build (Windows mengunci folder itu dan build menggantung) — selalu dari `frontend/`.
+
 ## 3c. Agen di AgentCore Runtime (agar review 7 agen hidup)
 
 1. `.env` (root): `MULTI_AGENT_REVIEW=true`, `AGENTCORE_RUNTIME_ARN=<arn runtime>`.

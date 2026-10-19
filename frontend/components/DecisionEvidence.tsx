@@ -50,6 +50,8 @@ import {
 } from "../lib/evidence";
 import { downloadDossier } from "../lib/export";
 import FactList from "./FactList";
+import GovernanceStatus from "./GovernanceStatus";
+import { governanceView } from "../lib/governance";
 import { useEffect, useState } from "react";
 
 // Nada lencana status memakai kelas `.status-*` yang sudah ada — jangan bikin
@@ -478,14 +480,25 @@ export default function DecisionEvidence({
 
           {/* ── C. ZONA KEPUTUSAN ───────────────────────────────────────────── */}
           <article className="card evidence-decide" id="zona-keputusan">
-            <h2>Governance &amp; persetujuan</h2>
-            <FactList rows={approvalFacts(summary)} />
-            <DecisionActions
-              decisionId={selected.decision_id}
-              role={role}
-              status={selected.status}
-              token={token}
-              summary={summary}
+            {/* Kepala: judul + aksi berdampingan supaya aksi menempel pada
+                statusnya, bukan menggantung di bawah daftar fakta. */}
+            <div className="evidence-decide-head">
+              <h2>Governance &amp; persetujuan</h2>
+              <DecisionActions
+                decisionId={selected.decision_id}
+                role={role}
+                status={selected.status}
+                token={token}
+                summary={summary}
+              />
+            </div>
+            <GovernanceStatus view={governanceView(summary)} />
+            {/* "Alasan tertahan" & "Peran penyetuju" pindah ke GovernanceStatus
+                (satu fakta satu tempat); sisanya tetap dari approvalFacts. */}
+            <FactList
+              rows={approvalFacts(summary).filter(
+                (row) => row.label !== "Alasan tertahan" && row.label !== "Peran penyetuju"
+              )}
             />
           </article>
 
@@ -498,7 +511,18 @@ export default function DecisionEvidence({
 
             <article className="card">
               <h2>Keamanan &amp; pemasok</h2>
-              <FactList rows={[...safetyFacts(summary), supplierFact(summary)]} collapseEmpty />
+              {/* Pemasok sengaja di urutan ke-4 supaya tetap terlihat saat kartu
+                  dilipat (foldAfter=4); yang masuk rincian hanya baris pendukung:
+                  verifikator, nomor material, target eksekusi. */}
+              <FactList
+                rows={[
+                  ...safetyFacts(summary).slice(0, 3),
+                  supplierFact(summary),
+                  ...safetyFacts(summary).slice(3),
+                ]}
+                collapseEmpty
+                foldAfter={4}
+              />
             </article>
 
             <article className="card">

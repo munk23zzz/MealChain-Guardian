@@ -7,7 +7,7 @@
 // balik SATU klik (`<details>` natif — bisa dioperasikan keyboard & pembaca
 // layar tanpa JS tambahan). Isinya tidak dibuang: jumlahnya tetap disebut.
 import type { FactRow } from "../lib/evidence";
-import { hiddenFactsLabel, splitFacts } from "../lib/evidence";
+import { hiddenFactsLabel, hiddenRowsLabel, splitFacts } from "../lib/evidence";
 
 export type { FactRow };
 
@@ -30,17 +30,35 @@ function Rows({ rows, empty = false }: { rows: FactRow[]; empty?: boolean }) {
 export default function FactList({
   rows,
   collapseEmpty = false,
+  foldAfter,
 }: {
   rows: FactRow[];
   /** Sembunyikan baris "—" di balik rincian yang bisa dibuka (bawaan: tampil semua). */
   collapseEmpty?: boolean;
+  /**
+   * Setelah berapa baris TERISI kartu mulai melipat sisanya (bawaan: tidak pernah).
+   * Dipakai untuk kartu yang isinya panjang tetapi sebagian hanya rincian
+   * pendukung — bukan untuk menyembunyikan data kosong (itu tugas collapseEmpty).
+   */
+  foldAfter?: number;
 }) {
-  if (!collapseEmpty) return <Rows rows={rows} />;
+  if (!collapseEmpty && foldAfter === undefined) return <Rows rows={rows} />;
 
-  const { filled, empty } = splitFacts(rows);
+  // Pisahkan baris kosong hanya kalau diminta; kalau tidak, jangan buang apa pun.
+  const { filled, empty } = collapseEmpty ? splitFacts(rows) : { filled: rows, empty: [] as FactRow[] };
+  const batas = foldAfter === undefined ? filled.length : Math.max(0, foldAfter);
+  const tampak = filled.slice(0, batas);
+  const dilipat = filled.slice(batas);
+
   return (
     <>
-      <Rows rows={filled} />
+      <Rows rows={tampak} />
+      {dilipat.length > 0 && (
+        <details className="fact-more">
+          <summary>{hiddenRowsLabel(dilipat.length)}</summary>
+          <Rows rows={dilipat} />
+        </details>
+      )}
       {empty.length > 0 && (
         <details className="fact-more">
           <summary>{hiddenFactsLabel(empty.length)}</summary>

@@ -44,7 +44,9 @@ KATEGORI = (
 #: Label Indonesia untuk UI; satu sumber supaya backend & panel tidak menyimpang.
 LABEL_KATEGORI = {
     "configured": "terkonfigurasi",
-    "provisioned": "tersedia (provisioned)",
+    # T5: resource AWS ada, tetapi aplikasi MASIH memakai adapter lokal. Label
+    # "tersedia" saja membuat panel terbaca seolah Memory sudah dipakai.
+    "provisioned": "tersedia, belum dipakai aplikasi",
     "contract_tested": "kontrak diuji",
     "artifacts_ready": "artefak siap",
     "fail_closed": "gagal-tertutup",
