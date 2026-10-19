@@ -25,6 +25,7 @@ Semua angka konsisten dengan seed sintetis (telur, SDC Rp16,2 jt,
 freshness 0,90). Tidak ada auto-approve — loop manusia tetap wajib.
 """
 
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -37,7 +38,15 @@ from app.api.auth import require_roles
 from app.api.dependencies import get_db
 from app.core.config import settings
 from app.core.scope import assert_in_scope
-from app.models import AgentTrace, Commodity, Decision, Location, User
+from app.models import (
+    AgentTrace,
+    Batch,
+    Commodity,
+    Decision,
+    DecisionEvidence,
+    Location,
+    User,
+)
 from app.seed.timeseries import (
     DEFAULT_END,
     DEFAULT_INTERVAL_HOURS,
@@ -106,6 +115,58 @@ async def _commodity_id(db: AsyncSession, name: str):
         await db.execute(select(Commodity).where(Commodity.name == name))
     ).scalar_one_or_none()
     return row.id if row else None
+
+
+async def _ikat_sumber(db: AsyncSession, decision: Decision, sekarang: datetime) -> bool:
+    """Tulis bukti `allocation_binding` untuk satu kasus demo. True bila terikat.
+
+    Kenapa perlu: `resolve_binding` sengaja TIDAK menebak pemasok ketika satu
+    pasangan (lokasi, komoditas) punya lebih dari satu pemasok. Dataset kanonik
+    19 Okt 2026 membuat pasangan seperti itu biasa (Cianjur×telur = dua
+    pemasok), jadi kasus demo yang dibuat tanpa bukti binding langsung tertahan
+    dengan "pemasok tidak dikenal: keputusan lama perlu binding batch eksplisit"
+    — kartu unggulan demo tidak bisa dieksekusi.
+
+    Aturan pemilihan (deterministik, bukan tebakan tersembunyi): batch di lokasi
+    ASAL keputusan + komoditas yang sama, masih layak pakai (`usable_until` di
+    masa depan), kuantitas TERBESAR; seri dipecah oleh id terkecil. Bila tidak
+    ada batch layak, TIDAK ada binding — layar lalu menampilkan alasan sebenarnya
+    alih-alih pemasok karangan.
+    """
+    batch = (
+        await db.execute(
+            select(Batch)
+            .where(
+                Batch.location_id == decision.source_location_id,
+                Batch.commodity_id == decision.commodity_id,
+                Batch.usable_until.is_not(None),
+                Batch.usable_until >= sekarang,
+            )
+            .order_by(Batch.quantity_kg.desc(), Batch.id.asc())
+            .limit(1)
+        )
+    ).scalars().first()
+    if batch is None:
+        return False
+    db.add(
+        DecisionEvidence(
+            # Id deterministik: menyemai ulang tidak menggandakan bukti binding.
+            id=uuid.uuid5(decision.id, "bukti:allocation_binding"),
+            decision_id=decision.id,
+            evidence_type="human_inspection",
+            payload={
+                "allocation_binding": True,
+                "supplier_id": str(batch.supplier_id),
+                "batch_ids": [str(batch.id)],
+                "demo": True,
+            },
+            # Dinilai dari baris `batches` yang baru dibaca: supplier, lokasi,
+            # dan komoditas diambil dari batch itu sendiri.
+            is_consistent=True,
+            recorded_at=sekarang,
+        )
+    )
+    return True
 
 
 async def _add_trace(
@@ -238,6 +299,7 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
         return loc[_nama_sumber(kandidat)]
 
     created: list[str] = []
+    sekarang = datetime.now(timezone.utc)
 
     # ---- Kasus 1: rejection-loop-kuota (v1 ditolak → v2 ditolak → v3 fresh)
     v1 = _decision(
@@ -289,6 +351,9 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
     db.add(v3)
     await db.flush()
     created.append(v3.id)
+    # Bukti binding: tanpa ini v3 tertahan "pemasok tidak dikenal" pada dataset
+    # yang punya >1 pemasok untuk pasangan (lokasi asal, komoditas).
+    await _ikat_sumber(db, v3, sekarang)
     await _add_trace(db, v3.id, "PREDICT", 25, "forecast.daily",
         {"model": "chain-11-slot", "horizon_days": 7},
         {"method": "provider_forecast", "note": "skema bertahap 2×300 kg"})
@@ -308,6 +373,7 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
     db.add(s1)
     await db.flush()
     created.append(s1.id)
+    await _ikat_sumber(db, s1, sekarang)
     await _add_trace(db, s1.id, "DETECT", 20, "demand.snapshot",
         {"location": target.name, "shortage": 780},
         {"severity": "CRITICAL", "safety_window_minutes": 30})
@@ -329,6 +395,10 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
     db.add(j1)
     await db.flush()
     created.append(j1.id)
+    # SENGAJA tanpa binding: kasus ini menuduh HARGA sebuah kutipan pemasok
+    # janggal, dan pemasok itu tidak selalu pemilik batch terbesar di lokasi
+    # asal. Mengikat batch terbesar = menampilkan pemasok yang bukan subjek
+    # tuduhan (tebakan), jadi lebih jujur membiarkan `resolve_binding` menolak.
     await _add_trace(db, j1.id, "DETECT", 40, "price.signal",
         {"commodity": "telur", "source": "Cianjur"},
         {"anomaly": "harga 40% di bawah referensi pihps"})
@@ -369,6 +439,7 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
     db.add(g2)
     await db.flush()
     created.append(g2.id)
+    await _ikat_sumber(db, g2, sekarang)
     await _add_trace(db, g2.id, "OPTIMIZE", 40, "logistics.reroute",
         {"candidates": ["Cianjur", "Sukabumi"]},
         {"selected_source": "Cianjur", "eta_ok": True})

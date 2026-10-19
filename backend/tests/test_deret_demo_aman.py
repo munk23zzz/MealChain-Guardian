@@ -22,7 +22,9 @@ Kontrak yang dikunci di sini:
 """
 
 import asyncio
+from datetime import UTC, datetime
 
+import pytest
 from sqlalchemy import create_engine, text
 
 from app.seed.timeseries import (
@@ -101,7 +103,17 @@ def _kanonik() -> dict[str, int]:
 
 
 def test_pulihkan_deret_kanonik_yang_terhapus():
-    """Purge habis → `pastikan_deret_demo` memulihkan PERSIS seperti semula."""
+    """Purge habis → `pastikan_deret_demo` memulihkan PERSIS seperti semula.
+
+    Snapshot diambil SETELAH satu siklus purge+pulih, bukan dari keadaan DB
+    apa adanya: `pastikan_deret_demo` hanya MENAMBAH yang hilang, jadi baris
+    sisa generasi lama (mis. 2 `disposal_events` dari seed sebelumnya) tidak
+    pernah dibuang dan membuat tes merah karena riwayat DB, bukan karena
+    pemulihannya salah. Dengan begini yang diuji: pemulihan DETERMINISTIK.
+    """
+    asyncio.run(purge_demo_rows())
+    asyncio.run(pastikan_deret_demo())
+
     sebelum = _status()
     assert sebelum["supply_records"] > 0, "prasyarat: deret kanonik harus ada"
     kanonik_sebelum = _kanonik()
@@ -157,3 +169,44 @@ def test_melaporkan_kekurangan_sebagai_data_bukan_tebakan():
         "deliveries",
         "disposals",
     }
+
+
+@pytest.fixture(scope="module", autouse=True)
+def pulihkan_kegiatan_demo_setelah_purge():
+    """Kembalikan batch & keputusan demo yang ikut terhapus `purge_demo_rows()`.
+
+    Kenapa wajib (terukur 19 Okt 2026): `purge_demo_rows()` menghapus SELURUH
+    baris `origin='demo'`, termasuk 40 batch kiriman ber-harvest hari ini.
+    Batch kanonik seed dijangkar `CANONICAL_REF` 8 Okt, jadi tanpa batch demo
+    kesegaran telur jatuh di bawah `PASS_THRESHOLD` 0,85 dan pipeline Event 1
+    menjawab `tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta)`.
+    Berkas tes yang berjalan SESUDAH modul ini (test_event1_*, test_event3_api,
+    test_kpi_act_trace, test_s4_verifier_*, test_supervisor_narration) lalu
+    gagal berantai walau kodenya tidak berubah.
+
+    Dipulihkan lewat fungsi modul langsung (bukan HTTP ber-token), dan setelah
+    SEMUA tes di berkas ini selesai supaya tidak menggeser angka yang dihitung
+    oleh tes di atas.
+    """
+    yield
+
+    async def _semai() -> None:
+        from app.core.config import settings as _settings
+        from app.db import create_engine as _engine
+        from app.db import create_session_maker as _maker
+        from app.seed.demo_activity import (
+            seed_demo_activity,
+            seed_demo_completed_decisions,
+        )
+
+        eng = _engine(_settings.database_url)
+        maker = _maker(eng)
+        try:
+            async with maker() as sesi:
+                await seed_demo_activity(sesi, datetime.now(UTC))
+                await seed_demo_completed_decisions(sesi, datetime.now(UTC))
+                await sesi.commit()
+        finally:
+            await eng.dispose()
+
+    asyncio.run(_semai())

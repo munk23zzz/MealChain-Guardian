@@ -451,3 +451,108 @@ def jaring_deret_demo(kunci_gerbang):
         "[conftest] deret demo kanonik dipulihkan: "
         f"{hasil['sebelum']} -> {hasil['sesudah']} (harapan {hasil['harapan']})"
     )
+
+
+# ---------------------------------------------------------------------------
+# Jaring pengaman KIRIMAN DEMO (batch), bukan cuma deret timeseries.
+#
+# `purge_demo_rows()` dan tes yang menghapus batch demo (`test_demo_activity`,
+# `test_seed_load_db`, `test_perluasan_kirim_limbah`, ...) membuang seluruh baris
+# `origin='demo'` di tengah suite. Batch kanonik seed dijangkar `CANONICAL_REF`
+# 8 Okt 12:00 UTC (lihat app/seed/seed_data.py), jadi beberapa hari setelah REF
+# kesegaran telur turun di bawah `PASS_THRESHOLD` 0,85 (shelf 28 hari) dan TIDAK
+# ada kandidat eligible. Tes yang memanggil Event 1 sesudahnya gagal dengan
+# "tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta)" — padahal tidak
+# ada kode yang berubah (terukur 19 Okt 2026: 28 gagal, lalu 9 gagal setelah
+# urutan purge pertama diperbaiki).
+#
+# Karena itu tes yang menuntut kandidat menyemai ulang kiriman demo lebih dulu,
+# memakai generator resmi yang sama dengan tombol "Segarkan ke hari ini".
+# ---------------------------------------------------------------------------
+
+_MODUL_BUTUH_KANDIDAT = frozenset(
+    {
+        "test_action_boundary_e2e.py",
+        "test_decision_read_endpoints.py",
+        "test_demo_event1_api.py",
+        "test_event1_e2e_acceptance.py",
+        "test_event1_supervisor_flow.py",
+        "test_event3_api.py",
+        "test_evidence_consistency_wiring.py",
+        "test_kpi_act_trace.py",
+        "test_kpi_safe_delivered_cost.py",
+        "test_peran_lanjutan_head_only.py",
+        "test_s4_verifier_independence.py",
+        "test_scope_matrix.py",
+        "test_supervisor_narration.py",
+    }
+)
+
+
+def _ada_kiriman_demo() -> bool:
+    """True bila masih ada batch `origin='demo'`; True juga bila DB tak terjangkau."""
+    import os
+
+    try:
+        dsn = dsn_psycopg(
+            os.environ.get(
+                "DATABASE_URL",
+                "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain",
+            )
+        )
+        engine = create_engine(dsn, pool_pre_ping=True)
+        try:
+            with engine.begin() as conn:
+                n = conn.execute(
+                    text("SELECT count(*) FROM batches WHERE origin = 'demo'")
+                ).scalar_one()
+            return int(n) > 0
+        finally:
+            engine.dispose()
+    except Exception as exc:  # host tanpa Postgres: jangan menghalangi tes
+        print(f"[conftest] cek kiriman demo dilewati: {exc}")
+        return True
+
+
+def _semai_kiriman_demo() -> None:
+    """Semai kiriman demo (batch segar) + keputusan selesai, sekali jalan."""
+    import asyncio
+    from datetime import UTC, datetime
+
+    async def _jalankan() -> None:
+        from app.core.config import settings as _settings
+        from app.db import create_engine as _engine
+        from app.db import create_session_maker
+        from app.seed.demo_activity import (
+            seed_demo_activity,
+            seed_demo_completed_decisions,
+        )
+
+        eng = _engine(_settings.database_url)
+        try:
+            async with create_session_maker(eng)() as sesi:
+                sekarang = datetime.now(UTC)
+                await seed_demo_activity(sesi, sekarang)
+                await seed_demo_completed_decisions(sesi, sekarang)
+                await sesi.commit()
+        finally:
+            await eng.dispose()
+
+    try:
+        asyncio.run(_jalankan())
+        print("[conftest] kiriman demo disemai ulang (batch segar untuk Event 1)")
+    except Exception as exc:  # biarkan tes melaporkan sendiri kegagalannya
+        print(f"[conftest] semai kiriman demo dilewati: {exc}")
+
+
+@pytest.fixture(autouse=True)
+def jaga_kiriman_demo(request):
+    """Pastikan batch demo ada SEBELUM tes yang menuntut kandidat Event 1."""
+    import os
+
+    if os.path.basename(str(request.path)) not in _MODUL_BUTUH_KANDIDAT:
+        yield
+        return
+    if not _ada_kiriman_demo():
+        _semai_kiriman_demo()
+    yield
