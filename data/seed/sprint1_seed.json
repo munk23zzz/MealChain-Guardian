@@ -1,124 +1,2539 @@
 {
   "locations": [
-    {"name": "Jakarta", "region": "DKI Jakarta", "latitude": -6.2088, "longitude": 106.8456, "role_hint": "sppg"},
-    {"name": "Bogor", "region": "Jawa Barat", "latitude": -6.595, "longitude": 106.816, "role_hint": "sppg"},
-    {"name": "Cianjur", "region": "Jawa Barat", "latitude": -6.8219, "longitude": 107.1444, "role_hint": "supplier"},
-    {"name": "Bandung", "region": "Jawa Barat", "latitude": -6.9175, "longitude": 107.6191, "role_hint": "supplier"},
-    {"name": "Semarang", "region": "Jawa Tengah", "latitude": -6.9667, "longitude": 110.4167, "role_hint": "sppg"},
-    {"name": "Yogyakarta", "region": "DI Yogyakarta", "latitude": -7.7956, "longitude": 110.3695, "role_hint": "sppg"},
-    {"name": "Surabaya", "region": "Jawa Timur", "latitude": -7.2575, "longitude": 112.7521, "role_hint": "sppg"},
-    {"name": "Makassar", "region": "Sulawesi Selatan", "latitude": -5.1477, "longitude": 119.4327, "role_hint": "sppg"},
-    {"name": "Palembang", "region": "Sumatera Selatan", "latitude": -2.9761, "longitude": 104.7754, "role_hint": "sppg"},
-    {"name": "Medan", "region": "Sumatera Utara", "latitude": 3.5952, "longitude": 98.6722, "role_hint": "sppg"}
+    {
+      "name": "Jakarta",
+      "region": "DKI Jakarta",
+      "latitude": -6.2088,
+      "longitude": 106.8456,
+      "role_hint": "sppg"
+    },
+    {
+      "name": "Bogor",
+      "region": "Jawa Barat",
+      "latitude": -6.595,
+      "longitude": 106.816,
+      "role_hint": "sppg"
+    },
+    {
+      "name": "Cianjur",
+      "region": "Jawa Barat",
+      "latitude": -6.8219,
+      "longitude": 107.1444,
+      "role_hint": "sppg"
+    },
+    {
+      "name": "Bandung",
+      "region": "Jawa Barat",
+      "latitude": -6.9175,
+      "longitude": 107.6191,
+      "role_hint": "sppg"
+    },
+    {
+      "name": "Semarang",
+      "region": "Jawa Tengah",
+      "latitude": -6.9667,
+      "longitude": 110.4167,
+      "role_hint": "sppg"
+    },
+    {
+      "name": "Yogyakarta",
+      "region": "DI Yogyakarta",
+      "latitude": -7.7956,
+      "longitude": 110.3695,
+      "role_hint": "sppg"
+    },
+    {
+      "name": "Surabaya",
+      "region": "Jawa Timur",
+      "latitude": -7.2575,
+      "longitude": 112.7521,
+      "role_hint": "sppg"
+    },
+    {
+      "name": "Makassar",
+      "region": "Sulawesi Selatan",
+      "latitude": -5.1477,
+      "longitude": 119.4327,
+      "role_hint": "sppg"
+    },
+    {
+      "name": "Palembang",
+      "region": "Sumatera Selatan",
+      "latitude": -2.9761,
+      "longitude": 104.7754,
+      "role_hint": "sppg"
+    },
+    {
+      "name": "Medan",
+      "region": "Sumatera Utara",
+      "latitude": 3.5952,
+      "longitude": 98.6722,
+      "role_hint": "sppg"
+    }
   ],
   "commodities": [
-    {"name": "telur", "unit": "kg", "shelf_life_days": 28},
-    {"name": "ayam", "unit": "kg", "shelf_life_days": 5},
-    {"name": "wortel", "unit": "kg", "shelf_life_days": 21},
-    {"name": "beras", "unit": "kg", "shelf_life_days": 180}
+    {
+      "name": "telur",
+      "unit": "kg",
+      "shelf_life_days": 28
+    },
+    {
+      "name": "ayam",
+      "unit": "kg",
+      "shelf_life_days": 5
+    },
+    {
+      "name": "wortel",
+      "unit": "kg",
+      "shelf_life_days": 21
+    },
+    {
+      "name": "beras",
+      "unit": "kg",
+      "shelf_life_days": 180
+    }
   ],
   "suppliers": [
-    {"name": "Supplier A Cianjur", "location": "Cianjur", "reliability_score": 0.92},
-    {"name": "Supplier B Cianjur", "location": "Cianjur", "reliability_score": 0.88},
-    {"name": "Supplier C Cianjur", "location": "Cianjur", "reliability_score": 0.81},
-    {"name": "Supplier D Cianjur", "location": "Cianjur", "reliability_score": 0.85},
-    {"name": "Supplier Jakarta-1", "location": "Jakarta", "reliability_score": 0.90},
-    {"name": "Supplier Bogor-1", "location": "Bogor", "reliability_score": 0.89},
-    {"name": "Supplier Bandung-1", "location": "Bandung", "reliability_score": 0.91},
-    {"name": "Supplier Semarang-1", "location": "Semarang", "reliability_score": 0.87},
-    {"name": "Supplier Yogyakarta-1", "location": "Yogyakarta", "reliability_score": 0.86},
-    {"name": "Supplier Surabaya-1", "location": "Surabaya", "reliability_score": 0.90},
-    {"name": "Supplier Surabaya-2", "location": "Surabaya", "reliability_score": 0.84},
-    {"name": "Supplier Makassar-1", "location": "Makassar", "reliability_score": 0.83},
-    {"name": "Supplier Palembang-1", "location": "Palembang", "reliability_score": 0.82},
-    {"name": "Supplier Medan-1", "location": "Medan", "reliability_score": 0.80},
-    {"name": "Beras Pandan Wangi Cianjur", "location": "Cianjur", "reliability_score": 0.94},
-    {"name": "Beras Sari Bogor", "location": "Bogor", "reliability_score": 0.89},
-    {"name": "Beras Makmur Jakarta", "location": "Jakarta", "reliability_score": 0.87}
+    {
+      "name": "CV Cipinang Boga Utama",
+      "location": "Jakarta",
+      "reliability_score": 0.87
+    },
+    {
+      "name": "Toko Sayur Bu Endang",
+      "location": "Jakarta",
+      "reliability_score": 0.82
+    },
+    {
+      "name": "PT Nusantara Prima Ayam",
+      "location": "Jakarta",
+      "reliability_score": 0.44
+    },
+    {
+      "name": "UD Sumber Rejeki Telur",
+      "location": "Jakarta",
+      "reliability_score": 0.89
+    },
+    {
+      "name": "CV Berkah Telur Bekasi",
+      "location": "Jakarta",
+      "reliability_score": 0.85
+    },
+    {
+      "name": "UD Tani Sayur Depok",
+      "location": "Jakarta",
+      "reliability_score": 0.8
+    },
+    {
+      "name": "PT Tangerang Ayam Sentosa",
+      "location": "Jakarta",
+      "reliability_score": 0.79
+    },
+    {
+      "name": "CV Karawang Ayam Jaya",
+      "location": "Jakarta",
+      "reliability_score": 0.86
+    },
+    {
+      "name": "UD H. Ujang Serang",
+      "location": "Jakarta",
+      "reliability_score": 0.87
+    },
+    {
+      "name": "CV Hortikultura Subang Lestari",
+      "location": "Jakarta",
+      "reliability_score": 0.9
+    },
+    {
+      "name": "UD Puncak Sayur Asri",
+      "location": "Jakarta",
+      "reliability_score": 0.83
+    },
+    {
+      "name": "CV Cengkareng Protein Mandiri",
+      "location": "Jakarta",
+      "reliability_score": 0.76
+    },
+    {
+      "name": "UD Rorotan Jaya Beras",
+      "location": "Jakarta",
+      "reliability_score": 0.86
+    },
+    {
+      "name": "CV Beras Sari Bogor",
+      "location": "Bogor",
+      "reliability_score": 0.89
+    },
+    {
+      "name": "PT Bogor Prima Ayam",
+      "location": "Bogor",
+      "reliability_score": 0.91
+    },
+    {
+      "name": "UD Cibinong Telur Berkah",
+      "location": "Bogor",
+      "reliability_score": 0.87
+    },
+    {
+      "name": "CV Puncak Sayur Sejahtera",
+      "location": "Bogor",
+      "reliability_score": 0.86
+    },
+    {
+      "name": "PD Cibinong Beras Mandiri",
+      "location": "Bogor",
+      "reliability_score": 0.52
+    },
+    {
+      "name": "CV Pandan Wangi Cianjur",
+      "location": "Cianjur",
+      "reliability_score": 0.94
+    },
+    {
+      "name": "Koperasi Telur Cipanas Bersama",
+      "location": "Cianjur",
+      "reliability_score": 0.92
+    },
+    {
+      "name": "UD H. Asep Cianjur",
+      "location": "Cianjur",
+      "reliability_score": 0.88
+    },
+    {
+      "name": "CV Barokah Telur Cianjur",
+      "location": "Cianjur",
+      "reliability_score": 0.85
+    },
+    {
+      "name": "UD Cipanas Telur Sejahtera",
+      "location": "Cianjur",
+      "reliability_score": 0.43
+    },
+    {
+      "name": "CV Ayam Kampung Cugenang",
+      "location": "Cianjur",
+      "reliability_score": 0.81
+    },
+    {
+      "name": "CV Lestari Sayur Cugenang",
+      "location": "Cianjur",
+      "reliability_score": 0.85
+    },
+    {
+      "name": "CV Lembang Sayur Makmur",
+      "location": "Bandung",
+      "reliability_score": 0.88
+    },
+    {
+      "name": "UD Caringin Sayur Induk",
+      "location": "Bandung",
+      "reliability_score": 0.84
+    },
+    {
+      "name": "UD Rancaekek Beras Sejahtera",
+      "location": "Bandung",
+      "reliability_score": 0.86
+    },
+    {
+      "name": "CV Lembang Telur Segar",
+      "location": "Bandung",
+      "reliability_score": 0.85
+    },
+    {
+      "name": "PT Cileunyi Ayam Segar",
+      "location": "Bandung",
+      "reliability_score": 0.89
+    },
+    {
+      "name": "CV Bandungan Sayur Lestari",
+      "location": "Semarang",
+      "reliability_score": 0.92
+    },
+    {
+      "name": "UD Demak Beras Makmur",
+      "location": "Semarang",
+      "reliability_score": 0.84
+    },
+    {
+      "name": "CV Ambarawa Telur Utama",
+      "location": "Semarang",
+      "reliability_score": 0.86
+    },
+    {
+      "name": "CV Kendal Ayam Utama",
+      "location": "Semarang",
+      "reliability_score": 0.83
+    },
+    {
+      "name": "UD Johar Beras Semarang",
+      "location": "Semarang",
+      "reliability_score": 0.79
+    },
+    {
+      "name": "CV Kaliurang Sayur Lestari",
+      "location": "Yogyakarta",
+      "reliability_score": 0.94
+    },
+    {
+      "name": "UD Bantul Beras Utama",
+      "location": "Yogyakarta",
+      "reliability_score": 0.86
+    },
+    {
+      "name": "CV Sleman Telur Lestari",
+      "location": "Yogyakarta",
+      "reliability_score": 0.85
+    },
+    {
+      "name": "PT Kulon Progo Ayam Jaya",
+      "location": "Yogyakarta",
+      "reliability_score": 0.9
+    },
+    {
+      "name": "UD Giwangan Sayur Pasar",
+      "location": "Yogyakarta",
+      "reliability_score": 0.87
+    },
+    {
+      "name": "UD Surabaya Telur Jaya",
+      "location": "Surabaya",
+      "reliability_score": 0.62
+    },
+    {
+      "name": "CV Keputran Sayur Utama",
+      "location": "Surabaya",
+      "reliability_score": 0.89
+    },
+    {
+      "name": "PT Osowilangun Beras Utama",
+      "location": "Surabaya",
+      "reliability_score": 0.87
+    },
+    {
+      "name": "UD Blitar Telur Makmur",
+      "location": "Surabaya",
+      "reliability_score": 0.8
+    },
+    {
+      "name": "CV Sidoarjo Ayam Utama",
+      "location": "Surabaya",
+      "reliability_score": 0.88
+    },
+    {
+      "name": "CV Berastagi Sayur Makmur",
+      "location": "Medan",
+      "reliability_score": 0.86
+    },
+    {
+      "name": "CV Deli Serdang Beras",
+      "location": "Medan",
+      "reliability_score": 0.85
+    },
+    {
+      "name": "UD Medan Telur Sumber",
+      "location": "Medan",
+      "reliability_score": 0.78
+    },
+    {
+      "name": "PT Sunggal Ayam Utama",
+      "location": "Medan",
+      "reliability_score": 0.88
+    },
+    {
+      "name": "UD Pusat Pasar Beras",
+      "location": "Medan",
+      "reliability_score": 0.47
+    },
+    {
+      "name": "CV Kenten Sayur Asri",
+      "location": "Palembang",
+      "reliability_score": 0.66
+    },
+    {
+      "name": "UD Ogan Ilir Beras",
+      "location": "Palembang",
+      "reliability_score": 0.83
+    },
+    {
+      "name": "CV Palembang Telur Makmur",
+      "location": "Palembang",
+      "reliability_score": 0.74
+    },
+    {
+      "name": "PT Banyuasin Ayam Jaya",
+      "location": "Palembang",
+      "reliability_score": 0.81
+    },
+    {
+      "name": "CV Jakabaring Sayur",
+      "location": "Palembang",
+      "reliability_score": 0.84
+    },
+    {
+      "name": "CV Malino Sayur Segar",
+      "location": "Makassar",
+      "reliability_score": 0.95
+    },
+    {
+      "name": "UD Maros Beras Lestari",
+      "location": "Makassar",
+      "reliability_score": 0.85
+    },
+    {
+      "name": "CV Gowa Telur Segar",
+      "location": "Makassar",
+      "reliability_score": 0.81
+    },
+    {
+      "name": "PT Malino Ayam Segar",
+      "location": "Makassar",
+      "reliability_score": 0.87
+    },
+    {
+      "name": "UD Pasar Terong Sayur",
+      "location": "Makassar",
+      "reliability_score": 0.88
+    }
   ],
   "supply": [
-    {"location": "Cianjur", "commodity": "telur", "quantity_kg": 1400, "source": "mock_sap"},
-    {"location": "Cianjur", "commodity": "ayam", "quantity_kg": 500, "source": "mock_sap"},
-    {"location": "Cianjur", "commodity": "wortel", "quantity_kg": 900, "source": "mock_sap"},
-    {"location": "Jakarta", "commodity": "telur", "quantity_kg": 300, "source": "mock_sap"},
-    {"location": "Jakarta", "commodity": "ayam", "quantity_kg": 200, "source": "mock_sap"},
-    {"location": "Jakarta", "commodity": "wortel", "quantity_kg": 150, "source": "mock_sap"},
-    {"location": "Bogor", "commodity": "telur", "quantity_kg": 800, "source": "mock_sap"},
-    {"location": "Bogor", "commodity": "ayam", "quantity_kg": 300, "source": "mock_sap"},
-    {"location": "Bogor", "commodity": "wortel", "quantity_kg": 400, "source": "mock_sap"},
-    {"location": "Bandung", "commodity": "telur", "quantity_kg": 400, "source": "mock_sap"},
-    {"location": "Bandung", "commodity": "ayam", "quantity_kg": 250, "source": "mock_sap"},
-    {"location": "Bandung", "commodity": "wortel", "quantity_kg": 350, "source": "mock_sap"},
-    {"location": "Semarang", "commodity": "telur", "quantity_kg": 350, "source": "mock_sap"},
-    {"location": "Semarang", "commodity": "ayam", "quantity_kg": 200, "source": "mock_sap"},
-    {"location": "Semarang", "commodity": "wortel", "quantity_kg": 300, "source": "mock_sap"},
-    {"location": "Yogyakarta", "commodity": "telur", "quantity_kg": 300, "source": "mock_sap"},
-    {"location": "Yogyakarta", "commodity": "ayam", "quantity_kg": 180, "source": "mock_sap"},
-    {"location": "Yogyakarta", "commodity": "wortel", "quantity_kg": 250, "source": "mock_sap"},
-    {"location": "Surabaya", "commodity": "telur", "quantity_kg": 600, "source": "mock_sap"},
-    {"location": "Surabaya", "commodity": "ayam", "quantity_kg": 220, "source": "mock_sap"},
-    {"location": "Surabaya", "commodity": "wortel", "quantity_kg": 260, "source": "mock_sap"},
-    {"location": "Makassar", "commodity": "telur", "quantity_kg": 300, "source": "mock_sap"},
-    {"location": "Makassar", "commodity": "ayam", "quantity_kg": 150, "source": "mock_sap"},
-    {"location": "Makassar", "commodity": "wortel", "quantity_kg": 200, "source": "mock_sap"},
-    {"location": "Palembang", "commodity": "telur", "quantity_kg": 250, "source": "mock_sap"},
-    {"location": "Palembang", "commodity": "ayam", "quantity_kg": 120, "source": "mock_sap"},
-    {"location": "Palembang", "commodity": "wortel", "quantity_kg": 180, "source": "mock_sap"},
-    {"location": "Medan", "commodity": "telur", "quantity_kg": 200, "source": "mock_sap"},
-    {"location": "Medan", "commodity": "ayam", "quantity_kg": 100, "source": "mock_sap"},
-    {"location": "Medan", "commodity": "wortel", "quantity_kg": 140, "source": "mock_sap"},
-    {"location": "Cianjur", "commodity": "beras", "quantity_kg": 2400, "source": "mock_sap"},
-    {"location": "Bogor", "commodity": "beras", "quantity_kg": 1500, "source": "mock_sap"},
-    {"location": "Jakarta", "commodity": "beras", "quantity_kg": 900, "source": "mock_sap"},
-    {"location": "Bandung", "commodity": "beras", "quantity_kg": 1200, "source": "mock_sap"},
-    {"location": "Semarang", "commodity": "beras", "quantity_kg": 800, "source": "mock_sap"},
-    {"location": "Yogyakarta", "commodity": "beras", "quantity_kg": 700, "source": "mock_sap"},
-    {"location": "Surabaya", "commodity": "beras", "quantity_kg": 1600, "source": "mock_sap"},
-    {"location": "Makassar", "commodity": "beras", "quantity_kg": 600, "source": "mock_sap"},
-    {"location": "Palembang", "commodity": "beras", "quantity_kg": 900, "source": "mock_sap"},
-    {"location": "Medan", "commodity": "beras", "quantity_kg": 1000, "source": "mock_sap"}
+    {
+      "location": "Cianjur",
+      "commodity": "telur",
+      "quantity_kg": 1400,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "ayam",
+      "quantity_kg": 500,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "wortel",
+      "quantity_kg": 900,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "telur",
+      "quantity_kg": 300,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "ayam",
+      "quantity_kg": 200,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "wortel",
+      "quantity_kg": 150,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Bogor",
+      "commodity": "telur",
+      "quantity_kg": 800,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Bogor",
+      "commodity": "ayam",
+      "quantity_kg": 300,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Bogor",
+      "commodity": "wortel",
+      "quantity_kg": 400,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Bandung",
+      "commodity": "telur",
+      "quantity_kg": 400,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Bandung",
+      "commodity": "ayam",
+      "quantity_kg": 250,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Bandung",
+      "commodity": "wortel",
+      "quantity_kg": 350,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Semarang",
+      "commodity": "telur",
+      "quantity_kg": 350,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Semarang",
+      "commodity": "ayam",
+      "quantity_kg": 200,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Semarang",
+      "commodity": "wortel",
+      "quantity_kg": 300,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Yogyakarta",
+      "commodity": "telur",
+      "quantity_kg": 300,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Yogyakarta",
+      "commodity": "ayam",
+      "quantity_kg": 180,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Yogyakarta",
+      "commodity": "wortel",
+      "quantity_kg": 250,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Surabaya",
+      "commodity": "telur",
+      "quantity_kg": 600,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Surabaya",
+      "commodity": "ayam",
+      "quantity_kg": 220,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Surabaya",
+      "commodity": "wortel",
+      "quantity_kg": 260,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Makassar",
+      "commodity": "telur",
+      "quantity_kg": 300,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Makassar",
+      "commodity": "ayam",
+      "quantity_kg": 150,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Makassar",
+      "commodity": "wortel",
+      "quantity_kg": 200,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Palembang",
+      "commodity": "telur",
+      "quantity_kg": 250,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Palembang",
+      "commodity": "ayam",
+      "quantity_kg": 120,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Palembang",
+      "commodity": "wortel",
+      "quantity_kg": 180,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Medan",
+      "commodity": "telur",
+      "quantity_kg": 200,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Medan",
+      "commodity": "ayam",
+      "quantity_kg": 100,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Medan",
+      "commodity": "wortel",
+      "quantity_kg": 140,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "beras",
+      "quantity_kg": 2400,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Bogor",
+      "commodity": "beras",
+      "quantity_kg": 1500,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "beras",
+      "quantity_kg": 900,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Bandung",
+      "commodity": "beras",
+      "quantity_kg": 1200,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Semarang",
+      "commodity": "beras",
+      "quantity_kg": 800,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Yogyakarta",
+      "commodity": "beras",
+      "quantity_kg": 700,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Surabaya",
+      "commodity": "beras",
+      "quantity_kg": 1600,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Makassar",
+      "commodity": "beras",
+      "quantity_kg": 600,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Palembang",
+      "commodity": "beras",
+      "quantity_kg": 900,
+      "source": "mock_sap"
+    },
+    {
+      "location": "Medan",
+      "commodity": "beras",
+      "quantity_kg": 1000,
+      "source": "mock_sap"
+    }
   ],
   "demand": [
-    {"location": "Jakarta", "commodity": "telur", "observations_kg": [1000, 1050, 980, 1020, 1100, 1000, 1080], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Jakarta", "commodity": "ayam", "observations_kg": [200, 210, 195, 205, 220, 200, 215], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Jakarta", "commodity": "wortel", "observations_kg": [150, 155, 148, 152, 160, 150, 158], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Bogor", "commodity": "telur", "observations_kg": [300, 310, 295, 305, 320, 300, 308], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Bogor", "commodity": "ayam", "observations_kg": [300, 305, 298, 302, 310, 300, 306], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Bogor", "commodity": "wortel", "observations_kg": [400, 405, 398, 402, 410, 400, 408], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Semarang", "commodity": "telur", "observations_kg": [350, 355, 348, 352, 360, 350, 358], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Semarang", "commodity": "ayam", "observations_kg": [200, 205, 198, 202, 210, 200, 206], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Semarang", "commodity": "wortel", "observations_kg": [300, 305, 298, 302, 310, 300, 306], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Yogyakarta", "commodity": "telur", "observations_kg": [300, 310, 298, 305, 315, 300, 312], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Yogyakarta", "commodity": "ayam", "observations_kg": [180, 185, 178, 182, 190, 180, 186], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Yogyakarta", "commodity": "wortel", "observations_kg": [250, 255, 248, 252, 260, 250, 256], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Surabaya", "commodity": "telur", "observations_kg": [600, 610, 598, 605, 615, 600, 612], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Surabaya", "commodity": "ayam", "observations_kg": [220, 225, 218, 222, 230, 220, 226], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Surabaya", "commodity": "wortel", "observations_kg": [260, 265, 258, 262, 270, 260, 266], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Makassar", "commodity": "telur", "observations_kg": [300, 305, 298, 302, 310, 300, 306], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Makassar", "commodity": "ayam", "observations_kg": [150, 155, 148, 152, 160, 150, 156], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Makassar", "commodity": "wortel", "observations_kg": [200, 205, 198, 202, 210, 200, 206], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Palembang", "commodity": "telur", "observations_kg": [250, 255, 248, 253, 260, 250, 256], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Palembang", "commodity": "ayam", "observations_kg": [120, 125, 118, 122, 130, 120, 126], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Palembang", "commodity": "wortel", "observations_kg": [180, 185, 178, 182, 190, 180, 186], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Medan", "commodity": "telur", "observations_kg": [200, 205, 198, 202, 210, 200, 206], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Medan", "commodity": "ayam", "observations_kg": [100, 105, 98, 102, 110, 100, 106], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Medan", "commodity": "wortel", "observations_kg": [140, 145, 138, 142, 150, 140, 146], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Jakarta", "commodity": "beras", "observations_kg": [2900, 2950, 2980, 3000, 3020, 2990, 3010], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Bogor", "commodity": "beras", "observations_kg": [1150, 1180, 1190, 1200, 1210, 1195, 1205], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Semarang", "commodity": "beras", "observations_kg": [1050, 1070, 1080, 1090, 1100, 1085, 1095], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Yogyakarta", "commodity": "beras", "observations_kg": [900, 920, 930, 940, 950, 935, 945], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Surabaya", "commodity": "beras", "observations_kg": [1750, 1770, 1780, 1790, 1800, 1785, 1795], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Makassar", "commodity": "beras", "observations_kg": [800, 820, 830, 840, 850, 835, 845], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Palembang", "commodity": "beras", "observations_kg": [950, 970, 980, 990, 1000, 985, 995], "interval_days": 7, "needed_by_offset_days": 3},
-    {"location": "Medan", "commodity": "beras", "observations_kg": [1100, 1120, 1130, 1140, 1150, 1135, 1145], "interval_days": 7, "needed_by_offset_days": 3}
+    {
+      "location": "Jakarta",
+      "commodity": "telur",
+      "observations_kg": [
+        1000,
+        1050,
+        980,
+        1020,
+        1100,
+        1000,
+        1080
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "ayam",
+      "observations_kg": [
+        200,
+        210,
+        195,
+        205,
+        220,
+        200,
+        215
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "wortel",
+      "observations_kg": [
+        150,
+        155,
+        148,
+        152,
+        160,
+        150,
+        158
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Bogor",
+      "commodity": "telur",
+      "observations_kg": [
+        300,
+        310,
+        295,
+        305,
+        320,
+        300,
+        308
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Bogor",
+      "commodity": "ayam",
+      "observations_kg": [
+        300,
+        305,
+        298,
+        302,
+        310,
+        300,
+        306
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Bogor",
+      "commodity": "wortel",
+      "observations_kg": [
+        400,
+        405,
+        398,
+        402,
+        410,
+        400,
+        408
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Semarang",
+      "commodity": "telur",
+      "observations_kg": [
+        350,
+        355,
+        348,
+        352,
+        360,
+        350,
+        358
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Semarang",
+      "commodity": "ayam",
+      "observations_kg": [
+        200,
+        205,
+        198,
+        202,
+        210,
+        200,
+        206
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Semarang",
+      "commodity": "wortel",
+      "observations_kg": [
+        300,
+        305,
+        298,
+        302,
+        310,
+        300,
+        306
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Yogyakarta",
+      "commodity": "telur",
+      "observations_kg": [
+        300,
+        310,
+        298,
+        305,
+        315,
+        300,
+        312
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Yogyakarta",
+      "commodity": "ayam",
+      "observations_kg": [
+        180,
+        185,
+        178,
+        182,
+        190,
+        180,
+        186
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Yogyakarta",
+      "commodity": "wortel",
+      "observations_kg": [
+        250,
+        255,
+        248,
+        252,
+        260,
+        250,
+        256
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Surabaya",
+      "commodity": "telur",
+      "observations_kg": [
+        600,
+        610,
+        598,
+        605,
+        615,
+        600,
+        612
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Surabaya",
+      "commodity": "ayam",
+      "observations_kg": [
+        220,
+        225,
+        218,
+        222,
+        230,
+        220,
+        226
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Surabaya",
+      "commodity": "wortel",
+      "observations_kg": [
+        260,
+        265,
+        258,
+        262,
+        270,
+        260,
+        266
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Makassar",
+      "commodity": "telur",
+      "observations_kg": [
+        300,
+        305,
+        298,
+        302,
+        310,
+        300,
+        306
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Makassar",
+      "commodity": "ayam",
+      "observations_kg": [
+        150,
+        155,
+        148,
+        152,
+        160,
+        150,
+        156
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Makassar",
+      "commodity": "wortel",
+      "observations_kg": [
+        200,
+        205,
+        198,
+        202,
+        210,
+        200,
+        206
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Palembang",
+      "commodity": "telur",
+      "observations_kg": [
+        250,
+        255,
+        248,
+        253,
+        260,
+        250,
+        256
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Palembang",
+      "commodity": "ayam",
+      "observations_kg": [
+        120,
+        125,
+        118,
+        122,
+        130,
+        120,
+        126
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Palembang",
+      "commodity": "wortel",
+      "observations_kg": [
+        180,
+        185,
+        178,
+        182,
+        190,
+        180,
+        186
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Medan",
+      "commodity": "telur",
+      "observations_kg": [
+        200,
+        205,
+        198,
+        202,
+        210,
+        200,
+        206
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Medan",
+      "commodity": "ayam",
+      "observations_kg": [
+        100,
+        105,
+        98,
+        102,
+        110,
+        100,
+        106
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Medan",
+      "commodity": "wortel",
+      "observations_kg": [
+        140,
+        145,
+        138,
+        142,
+        150,
+        140,
+        146
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "beras",
+      "observations_kg": [
+        2900,
+        2950,
+        2980,
+        3000,
+        3020,
+        2990,
+        3010
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Bogor",
+      "commodity": "beras",
+      "observations_kg": [
+        1150,
+        1180,
+        1190,
+        1200,
+        1210,
+        1195,
+        1205
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Semarang",
+      "commodity": "beras",
+      "observations_kg": [
+        1050,
+        1070,
+        1080,
+        1090,
+        1100,
+        1085,
+        1095
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Yogyakarta",
+      "commodity": "beras",
+      "observations_kg": [
+        900,
+        920,
+        930,
+        940,
+        950,
+        935,
+        945
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Surabaya",
+      "commodity": "beras",
+      "observations_kg": [
+        1750,
+        1770,
+        1780,
+        1790,
+        1800,
+        1785,
+        1795
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Makassar",
+      "commodity": "beras",
+      "observations_kg": [
+        800,
+        820,
+        830,
+        840,
+        850,
+        835,
+        845
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Palembang",
+      "commodity": "beras",
+      "observations_kg": [
+        950,
+        970,
+        980,
+        990,
+        1000,
+        985,
+        995
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Medan",
+      "commodity": "beras",
+      "observations_kg": [
+        1100,
+        1120,
+        1130,
+        1140,
+        1150,
+        1135,
+        1145
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "telur",
+      "observations_kg": [
+        700,
+        720,
+        690,
+        710,
+        730,
+        705,
+        715
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "ayam",
+      "observations_kg": [
+        260,
+        250,
+        265,
+        255,
+        270,
+        260,
+        268
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "wortel",
+      "observations_kg": [
+        420,
+        430,
+        415,
+        425,
+        440,
+        430,
+        435
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "beras",
+      "observations_kg": [
+        1100,
+        1120,
+        1090,
+        1110,
+        1130,
+        1105,
+        1115
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Bandung",
+      "commodity": "telur",
+      "observations_kg": [
+        520,
+        540,
+        510,
+        530,
+        545,
+        525,
+        538
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Bandung",
+      "commodity": "ayam",
+      "observations_kg": [
+        300,
+        295,
+        305,
+        300,
+        310,
+        302,
+        308
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Bandung",
+      "commodity": "wortel",
+      "observations_kg": [
+        380,
+        390,
+        375,
+        385,
+        395,
+        388,
+        392
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    },
+    {
+      "location": "Bandung",
+      "commodity": "beras",
+      "observations_kg": [
+        950,
+        970,
+        940,
+        960,
+        975,
+        955,
+        965
+      ],
+      "interval_days": 7,
+      "needed_by_offset_days": 3
+    }
   ],
   "batches": [
     {
-      "code": "BATCH-CIANJUR-TELUR-001",
+      "code": "BDG-AYM-20261008-01",
+      "location": "Bandung",
+      "commodity": "ayam",
+      "supplier": "PT Cileunyi Ayam Segar",
+      "quantity_kg": 150,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 5,
+      "freshness_score": 0.9,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 3.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "BDG-AYM-20261008-02",
+      "location": "Bandung",
+      "commodity": "ayam",
+      "supplier": "PT Cileunyi Ayam Segar",
+      "quantity_kg": 100.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": null,
+      "shelf_life_days": 5,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 3.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "BGR-AYM-20261008-01",
+      "location": "Bogor",
+      "commodity": "ayam",
+      "supplier": "PT Bogor Prima Ayam",
+      "quantity_kg": 180,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 5,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 3.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "BGR-AYM-20261008-02",
+      "location": "Bogor",
+      "commodity": "ayam",
+      "supplier": "PT Bogor Prima Ayam",
+      "quantity_kg": 120.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 5,
+      "freshness_score": 0.96,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 3.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "CJR-AYM-20261008-01",
+      "location": "Cianjur",
+      "commodity": "ayam",
+      "supplier": "CV Ayam Kampung Cugenang",
+      "quantity_kg": 300,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 5,
+      "freshness_score": 0.9,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 3.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "none"
+    },
+    {
+      "code": "CJR-AYM-20261008-02",
+      "location": "Cianjur",
+      "commodity": "ayam",
+      "supplier": "CV Ayam Kampung Cugenang",
+      "quantity_kg": 200.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": null,
+      "shelf_life_days": 5,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 3.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "none"
+    },
+    {
+      "code": "JKT-AYM-20261008-01",
+      "location": "Jakarta",
+      "commodity": "ayam",
+      "supplier": "UD H. Ujang Serang",
+      "quantity_kg": 120,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": null,
+      "shelf_life_days": 5,
+      "freshness_score": 0.88,
+      "freshness_status": "pass",
+      "safety_status": "fail",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -11,
+          "temperature_c": 11.8
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "JKT-AYM-20261008-02",
+      "location": "Jakarta",
+      "commodity": "ayam",
+      "supplier": "CV Karawang Ayam Jaya",
+      "quantity_kg": 80.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -3.0833333333333335,
+      "shelf_life_days": 5,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 3.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "MKS-AYM-20261008-01",
+      "location": "Makassar",
+      "commodity": "ayam",
+      "supplier": "PT Malino Ayam Segar",
+      "quantity_kg": 90,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 5,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 3.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "MKS-AYM-20261008-02",
+      "location": "Makassar",
+      "commodity": "ayam",
+      "supplier": "PT Malino Ayam Segar",
+      "quantity_kg": 60.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 5,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 3.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "MDN-AYM-20261008-01",
+      "location": "Medan",
+      "commodity": "ayam",
+      "supplier": "PT Sunggal Ayam Utama",
+      "quantity_kg": 100.0,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 5,
+      "freshness_score": 0.91,
+      "freshness_status": "pass",
+      "safety_status": "pending",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 3.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "PLM-AYM-20261008-01",
+      "location": "Palembang",
+      "commodity": "ayam",
+      "supplier": "PT Banyuasin Ayam Jaya",
+      "quantity_kg": 120.0,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 5,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 3.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "SMG-AYM-20261008-01",
+      "location": "Semarang",
+      "commodity": "ayam",
+      "supplier": "CV Kendal Ayam Utama",
+      "quantity_kg": 120,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 5,
+      "freshness_score": 0.42,
+      "freshness_status": "fail",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 3.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "SMG-AYM-20261008-02",
+      "location": "Semarang",
+      "commodity": "ayam",
+      "supplier": "CV Kendal Ayam Utama",
+      "quantity_kg": 80.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 5,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 3.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "SBY-AYM-20261008-01",
+      "location": "Surabaya",
+      "commodity": "ayam",
+      "supplier": "CV Sidoarjo Ayam Utama",
+      "quantity_kg": 132,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 5,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 3.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "SBY-AYM-20261008-02",
+      "location": "Surabaya",
+      "commodity": "ayam",
+      "supplier": "CV Sidoarjo Ayam Utama",
+      "quantity_kg": 88.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 5,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 3.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "YOG-AYM-20261008-01",
+      "location": "Yogyakarta",
+      "commodity": "ayam",
+      "supplier": "PT Kulon Progo Ayam Jaya",
+      "quantity_kg": 108,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 5,
+      "freshness_score": 0.96,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 3.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "YOG-AYM-20261008-02",
+      "location": "Yogyakarta",
+      "commodity": "ayam",
+      "supplier": "PT Kulon Progo Ayam Jaya",
+      "quantity_kg": 72.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": null,
+      "shelf_life_days": 5,
+      "freshness_score": 0.9,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 3.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 3.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 2.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "BDG-BRS-20261008-01",
+      "location": "Bandung",
+      "commodity": "beras",
+      "supplier": "UD Rancaekek Beras Sejahtera",
+      "quantity_kg": 720,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 180,
+      "freshness_score": 0.9,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "BDG-BRS-20261008-02",
+      "location": "Bandung",
+      "commodity": "beras",
+      "supplier": "UD Rancaekek Beras Sejahtera",
+      "quantity_kg": 480.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": null,
+      "shelf_life_days": 180,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "BGR-BRS-20261008-01",
+      "location": "Bogor",
+      "commodity": "beras",
+      "supplier": "CV Beras Sari Bogor",
+      "quantity_kg": 900,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 180,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "BGR-BRS-20261008-02",
+      "location": "Bogor",
+      "commodity": "beras",
+      "supplier": "PD Cibinong Beras Mandiri",
+      "quantity_kg": 600.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 180,
+      "freshness_score": 0.96,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "none"
+    },
+    {
+      "code": "CJR-BRS-20261008-01",
+      "location": "Cianjur",
+      "commodity": "beras",
+      "supplier": "CV Pandan Wangi Cianjur",
+      "quantity_kg": 1440,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 180,
+      "freshness_score": 0.9,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "CJR-BRS-20261008-02",
+      "location": "Cianjur",
+      "commodity": "beras",
+      "supplier": "CV Pandan Wangi Cianjur",
+      "quantity_kg": 960.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": null,
+      "shelf_life_days": 180,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "JKT-BRS-20261008-01",
+      "location": "Jakarta",
+      "commodity": "beras",
+      "supplier": "UD Rorotan Jaya Beras",
+      "quantity_kg": 540,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -3.0833333333333335,
+      "shelf_life_days": 180,
+      "freshness_score": 0.9,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "JKT-BRS-20261008-02",
+      "location": "Jakarta",
+      "commodity": "beras",
+      "supplier": "CV Cipinang Boga Utama",
+      "quantity_kg": 360.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -3.0,
+      "shelf_life_days": 180,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "MKS-BRS-20261008-01",
+      "location": "Makassar",
+      "commodity": "beras",
+      "supplier": "UD Maros Beras Lestari",
+      "quantity_kg": 360,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 180,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "MKS-BRS-20261008-02",
+      "location": "Makassar",
+      "commodity": "beras",
+      "supplier": "UD Maros Beras Lestari",
+      "quantity_kg": 240.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 180,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "MDN-BRS-20261008-01",
+      "location": "Medan",
+      "commodity": "beras",
+      "supplier": "CV Deli Serdang Beras",
+      "quantity_kg": 600,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 180,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "MDN-BRS-20261008-02",
+      "location": "Medan",
+      "commodity": "beras",
+      "supplier": "UD Pusat Pasar Beras",
+      "quantity_kg": 400.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 180,
+      "freshness_score": 0.96,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "none"
+    },
+    {
+      "code": "PLM-BRS-20261008-01",
+      "location": "Palembang",
+      "commodity": "beras",
+      "supplier": "UD Ogan Ilir Beras",
+      "quantity_kg": 540,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 180,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "PLM-BRS-20261008-02",
+      "location": "Palembang",
+      "commodity": "beras",
+      "supplier": "UD Ogan Ilir Beras",
+      "quantity_kg": 360.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 180,
+      "freshness_score": 0.96,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "SMG-BRS-20261008-01",
+      "location": "Semarang",
+      "commodity": "beras",
+      "supplier": "UD Demak Beras Makmur",
+      "quantity_kg": 480,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 180,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "SMG-BRS-20261008-02",
+      "location": "Semarang",
+      "commodity": "beras",
+      "supplier": "UD Johar Beras Semarang",
+      "quantity_kg": 320.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 180,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "SBY-BRS-20261008-01",
+      "location": "Surabaya",
+      "commodity": "beras",
+      "supplier": "PT Osowilangun Beras Utama",
+      "quantity_kg": 960,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 180,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "SBY-BRS-20261008-02",
+      "location": "Surabaya",
+      "commodity": "beras",
+      "supplier": "PT Osowilangun Beras Utama",
+      "quantity_kg": 640.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 180,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "YOG-BRS-20261008-01",
+      "location": "Yogyakarta",
+      "commodity": "beras",
+      "supplier": "UD Bantul Beras Utama",
+      "quantity_kg": 420,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 180,
+      "freshness_score": 0.96,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "YOG-BRS-20261008-02",
+      "location": "Yogyakarta",
+      "commodity": "beras",
+      "supplier": "UD Bantul Beras Utama",
+      "quantity_kg": 280.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": null,
+      "shelf_life_days": 180,
+      "freshness_score": 0.9,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 27.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 27.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 26.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "BDG-TLR-20261008-01",
+      "location": "Bandung",
+      "commodity": "telur",
+      "supplier": "CV Lembang Telur Segar",
+      "quantity_kg": 240,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 28,
+      "freshness_score": 0.69,
+      "freshness_status": "needs_verification",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 4.1
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "BDG-TLR-20261008-02",
+      "location": "Bandung",
+      "commodity": "telur",
+      "supplier": "CV Lembang Telur Segar",
+      "quantity_kg": 160.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": null,
+      "shelf_life_days": 28,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 4.1
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "BGR-TLR-20261008-01",
+      "location": "Bogor",
+      "commodity": "telur",
+      "supplier": "UD Cibinong Telur Berkah",
+      "quantity_kg": 480,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 28,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 4.1
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "BGR-TLR-20261008-02",
+      "location": "Bogor",
+      "commodity": "telur",
+      "supplier": "UD Cibinong Telur Berkah",
+      "quantity_kg": 320.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 28,
+      "freshness_score": 0.96,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 4.1
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "CJR-TLR-20261008-01",
       "location": "Cianjur",
       "commodity": "telur",
-      "supplier": "Supplier A Cianjur",
-      "quantity_kg": 500,
+      "supplier": "Koperasi Telur Cipanas Bersama",
+      "quantity_kg": 840,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 28,
+      "freshness_score": 0.9,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 4.1
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "CJR-TLR-20261008-02",
+      "location": "Cianjur",
+      "commodity": "telur",
+      "supplier": "UD H. Asep Cianjur",
+      "quantity_kg": 560.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": null,
+      "shelf_life_days": 28,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 4.1
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "JKT-TLR-20261008-01",
+      "location": "Jakarta",
+      "commodity": "telur",
+      "supplier": "CV Berkah Telur Bekasi",
+      "quantity_kg": 180,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -3.3333333333333335,
+      "shelf_life_days": 28,
+      "freshness_score": 0.9,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 4.1
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "JKT-TLR-20261008-02",
+      "location": "Jakarta",
+      "commodity": "telur",
+      "supplier": "UD Sumber Rejeki Telur",
+      "quantity_kg": 120.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -3.1666666666666665,
+      "shelf_life_days": 28,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 4.1
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "MKS-TLR-20261008-01",
+      "location": "Makassar",
+      "commodity": "telur",
+      "supplier": "CV Gowa Telur Segar",
+      "quantity_kg": 180,
       "harvested_at_offset_hours": -18,
       "dispatch_offset_hours": -15.5,
       "shelf_life_days": 28,
@@ -126,327 +2541,1971 @@
       "freshness_status": "pass",
       "safety_status": "pass",
       "temperature_log": [
-        {"timestamp_offset_hours": -18, "temperature_c": 4.2},
-        {"timestamp_offset_hours": -10, "temperature_c": 4.0},
-        {"timestamp_offset_hours": -2, "temperature_c": 4.1}
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 4.1
+        }
       ],
-      "certification_status": "haccp"
+      "certification_status": "hygiene"
     },
     {
-      "code": "BATCH-BOGOR-TELUR-001",
-      "location": "Bogor",
+      "code": "MKS-TLR-20261008-02",
+      "location": "Makassar",
       "commodity": "telur",
-      "supplier": "Supplier A Cianjur",
-      "quantity_kg": 500,
+      "supplier": "CV Gowa Telur Segar",
+      "quantity_kg": 120.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 28,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 4.1
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "MDN-TLR-20261008-01",
+      "location": "Medan",
+      "commodity": "telur",
+      "supplier": "UD Medan Telur Sumber",
+      "quantity_kg": 120,
       "harvested_at_offset_hours": -18,
-      "dispatch_offset_hours": -16.5,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 28,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 4.1
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "MDN-TLR-20261008-02",
+      "location": "Medan",
+      "commodity": "telur",
+      "supplier": "UD Medan Telur Sumber",
+      "quantity_kg": 80.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 28,
+      "freshness_score": 0.96,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 4.1
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "PLM-TLR-20261008-01",
+      "location": "Palembang",
+      "commodity": "telur",
+      "supplier": "CV Palembang Telur Makmur",
+      "quantity_kg": 150,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 28,
+      "freshness_score": 0.42,
+      "freshness_status": "fail",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 4.1
+        }
+      ],
+      "certification_status": "none"
+    },
+    {
+      "code": "PLM-TLR-20261008-02",
+      "location": "Palembang",
+      "commodity": "telur",
+      "supplier": "CV Palembang Telur Makmur",
+      "quantity_kg": 100.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 28,
+      "freshness_score": 0.96,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 4.1
+        }
+      ],
+      "certification_status": "none"
+    },
+    {
+      "code": "SMG-TLR-20261008-01",
+      "location": "Semarang",
+      "commodity": "telur",
+      "supplier": "CV Ambarawa Telur Utama",
+      "quantity_kg": 210,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
       "shelf_life_days": 28,
       "freshness_score": 0.92,
       "freshness_status": "pass",
       "safety_status": "pass",
       "temperature_log": [
-        {"timestamp_offset_hours": -18, "temperature_c": 4.2},
-        {"timestamp_offset_hours": -10, "temperature_c": 4.0},
-        {"timestamp_offset_hours": -2, "temperature_c": 4.1}
-      ],
-      "certification_status": "haccp"
-    },
-    {
-      "code": "BATCH-BANDUNG-TELUR-VERIFY",
-      "location": "Bandung",
-      "commodity": "telur",
-      "supplier": "Supplier A Cianjur",
-      "quantity_kg": 400,
-      "harvested_at_offset_hours": -210,
-      "dispatch_offset_hours": null,
-      "shelf_life_days": 28,
-      "freshness_score": 0.69,
-      "freshness_status": "needs_verification",
-      "safety_status": "pass",
-      "temperature_log": [
-        {"timestamp_offset_hours": -210, "temperature_c": 4.5},
-        {"timestamp_offset_hours": -120, "temperature_c": 4.2},
-        {"timestamp_offset_hours": -30, "temperature_c": 4.4}
-      ],
-      "certification_status": "haccp"
-    },
-    {
-      "code": "BATCH-SEMARANG-AYAM-FAIL",
-      "location": "Semarang",
-      "commodity": "ayam",
-      "supplier": "Supplier B Cianjur",
-      "quantity_kg": 200,
-      "harvested_at_offset_hours": -96,
-      "dispatch_offset_hours": -90,
-      "shelf_life_days": 5,
-      "freshness_score": 0.15,
-      "freshness_status": "fail",
-      "safety_status": "pass",
-      "temperature_log": [
-        {"timestamp_offset_hours": -96, "temperature_c": 3.8},
-        {"timestamp_offset_hours": -60, "temperature_c": 3.9},
-        {"timestamp_offset_hours": -24, "temperature_c": 4.0}
-      ],
-      "certification_status": "haccp"
-    },
-    {
-      "code": "BATCH-PALEMBANG-TELUR-FAIL",
-      "location": "Palembang",
-      "commodity": "telur",
-      "supplier": "Supplier C Cianjur",
-      "quantity_kg": 250,
-      "harvested_at_offset_hours": -672,
-      "dispatch_offset_hours": -670,
-      "shelf_life_days": 28,
-      "freshness_score": 0.0,
-      "freshness_status": "fail",
-      "safety_status": "pass",
-      "temperature_log": [
-        {"timestamp_offset_hours": -672, "temperature_c": 4.0},
-        {"timestamp_offset_hours": -500, "temperature_c": 4.1},
-        {"timestamp_offset_hours": -300, "temperature_c": 4.0}
-      ],
-      "certification_status": "haccp"
-    },
-    {
-      "code": "BATCH-SURABAYA-TELUR-EXCURSION",
-      "location": "Surabaya",
-      "commodity": "telur",
-      "supplier": "Supplier B Cianjur",
-      "quantity_kg": 600,
-      "harvested_at_offset_hours": -24,
-      "dispatch_offset_hours": -5,
-      "shelf_life_days": 28,
-      "freshness_score": 0.90,
-      "freshness_status": "pass",
-      "safety_status": "fail",
-      "temperature_log": [
-        {"timestamp_offset_hours": -24, "temperature_c": 4.0},
-        {"timestamp_offset_hours": -23.25, "temperature_c": 12.0},
-        {"timestamp_offset_hours": -22.5, "temperature_c": 12.5},
-        {"timestamp_offset_hours": -21.75, "temperature_c": 4.0},
-        {"timestamp_offset_hours": 0, "temperature_c": 4.0}
-      ],
-      "certification_status": "haccp"
-    },
-    {
-      "code": "BATCH-JAKARTA-TELUR-CIANJUR",
-      "location": "Jakarta",
-      "commodity": "telur",
-      "supplier": "Supplier A Cianjur",
-      "quantity_kg": 800,
-      "harvested_at_offset_hours": -36,
-      "dispatch_offset_hours": -0.35,
-      "shelf_life_days": 35,
-      "freshness_score": 0.90,
-      "freshness_status": "pass",
-      "safety_status": "pass",
-      "temperature_log": [
-        {"timestamp_offset_hours": -36, "temperature_c": 4.1},
-        {"timestamp_offset_hours": -24, "temperature_c": 4.0},
-        {"timestamp_offset_hours": -8, "temperature_c": 4.2},
-        {"timestamp_offset_hours": 0, "temperature_c": 4.0}
-      ],
-      "certification_status": "haccp"
-    },
-    {
-      "code": "BATCH-JAKARTA-TELUR-BOGOR-1",
-      "location": "Jakarta",
-      "commodity": "telur",
-      "supplier": "Supplier Bogor-1",
-      "quantity_kg": 120,
-      "harvested_at_offset_hours": -20,
-      "dispatch_offset_hours": -2.5,
-      "shelf_life_days": 28,
-      "freshness_score": 0.86,
-      "freshness_status": "pass",
-      "safety_status": "pass",
-      "temperature_log": [
-        {"timestamp_offset_hours": -20, "temperature_c": 3.4},
-        {"timestamp_offset_hours": -14, "temperature_c": 2.9},
-        {"timestamp_offset_hours": -6, "temperature_c": 3.1},
-        {"timestamp_offset_hours": 0, "temperature_c": 3.2}
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 4.1
+        }
       ],
       "certification_status": "hygiene"
     },
     {
-      "code": "BATCH-JAKARTA-TELUR-D",
-      "location": "Jakarta",
+      "code": "SMG-TLR-20261008-02",
+      "location": "Semarang",
       "commodity": "telur",
-      "supplier": "Supplier D Cianjur",
-      "quantity_kg": 90,
-      "harvested_at_offset_hours": -26,
-      "dispatch_offset_hours": null,
+      "supplier": "CV Ambarawa Telur Utama",
+      "quantity_kg": 140.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
       "shelf_life_days": 28,
-      "freshness_score": 0.80,
-      "freshness_status": "pass",
-      "safety_status": "pass",
-      "temperature_log": [
-        {"timestamp_offset_hours": -26, "temperature_c": 5.2},
-        {"timestamp_offset_hours": -18, "temperature_c": 5.0},
-        {"timestamp_offset_hours": -6, "temperature_c": 5.4}
-      ],
-      "certification_status": "none"
-    },
-    {
-      "code": "BATCH-CIANJUR-BERAS-001",
-      "location": "Cianjur",
-      "commodity": "beras",
-      "supplier": "Beras Pandan Wangi Cianjur",
-      "quantity_kg": 2400,
-      "harvested_at_offset_hours": -96,
-      "dispatch_offset_hours": -72,
-      "shelf_life_days": 180,
-      "freshness_score": 0.95,
-      "freshness_status": "pass",
-      "safety_status": "pass",
-      "temperature_log": [
-        {"timestamp_offset_hours": -96, "temperature_c": 26.0},
-        {"timestamp_offset_hours": -48, "temperature_c": 26.4},
-        {"timestamp_offset_hours": -6, "temperature_c": 26.2}
-      ],
-      "certification_status": "haccp"
-    },
-    {
-      "code": "BATCH-JAKARTA-BERAS-TRANSIT",
-      "location": "Jakarta",
-      "commodity": "beras",
-      "supplier": "Beras Pandan Wangi Cianjur",
-      "quantity_kg": 1200,
-      "harvested_at_offset_hours": -60,
-      "dispatch_offset_hours": -2.0,
-      "shelf_life_days": 180,
       "freshness_score": 0.94,
       "freshness_status": "pass",
       "safety_status": "pass",
       "temperature_log": [
-        {"timestamp_offset_hours": -60, "temperature_c": 26.1},
-        {"timestamp_offset_hours": -30, "temperature_c": 26.6},
-        {"timestamp_offset_hours": -1, "temperature_c": 26.3}
-      ],
-      "certification_status": "haccp"
-    },
-    {
-      "code": "BATCH-BANDUNG-BERAS-001",
-      "location": "Bandung",
-      "commodity": "beras",
-      "supplier": "Beras Sari Bogor",
-      "quantity_kg": 800,
-      "harvested_at_offset_hours": -40,
-      "dispatch_offset_hours": null,
-      "shelf_life_days": 180,
-      "freshness_score": 0.93,
-      "freshness_status": "pass",
-      "safety_status": "pass",
-      "temperature_log": [
-        {"timestamp_offset_hours": -40, "temperature_c": 25.8},
-        {"timestamp_offset_hours": -20, "temperature_c": 26.0},
-        {"timestamp_offset_hours": -2, "temperature_c": 25.9}
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 4.1
+        }
       ],
       "certification_status": "hygiene"
     },
     {
-      "code": "BATCH-JAKARTA-BERAS-MAKMUR",
-      "location": "Jakarta",
-      "commodity": "beras",
-      "supplier": "Beras Makmur Jakarta",
-      "quantity_kg": 900,
-      "harvested_at_offset_hours": -50,
-      "dispatch_offset_hours": -28,
-      "shelf_life_days": 180,
+      "code": "SBY-TLR-20261008-01",
+      "location": "Surabaya",
+      "commodity": "telur",
+      "supplier": "UD Surabaya Telur Jaya",
+      "quantity_kg": 360,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 28,
+      "freshness_score": 0.88,
+      "freshness_status": "pass",
+      "safety_status": "fail",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -11,
+          "temperature_c": 11.8
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 4.1
+        }
+      ],
+      "certification_status": "none"
+    },
+    {
+      "code": "SBY-TLR-20261008-02",
+      "location": "Surabaya",
+      "commodity": "telur",
+      "supplier": "UD Blitar Telur Makmur",
+      "quantity_kg": 240.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 28,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 4.1
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "YOG-TLR-20261008-01",
+      "location": "Yogyakarta",
+      "commodity": "telur",
+      "supplier": "CV Sleman Telur Lestari",
+      "quantity_kg": 180,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 28,
       "freshness_score": 0.96,
       "freshness_status": "pass",
       "safety_status": "pass",
       "temperature_log": [
-        {"timestamp_offset_hours": -50, "temperature_c": 26.2},
-        {"timestamp_offset_hours": -24, "temperature_c": 26.5},
-        {"timestamp_offset_hours": -4, "temperature_c": 26.1}
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 4.1
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "YOG-TLR-20261008-02",
+      "location": "Yogyakarta",
+      "commodity": "telur",
+      "supplier": "CV Sleman Telur Lestari",
+      "quantity_kg": 120.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": null,
+      "shelf_life_days": 28,
+      "freshness_score": 0.9,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.6
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 4.1
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "BDG-WRT-20261008-01",
+      "location": "Bandung",
+      "commodity": "wortel",
+      "supplier": "CV Lembang Sayur Makmur",
+      "quantity_kg": 210,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 21,
+      "freshness_score": 0.9,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "BDG-WRT-20261008-02",
+      "location": "Bandung",
+      "commodity": "wortel",
+      "supplier": "UD Caringin Sayur Induk",
+      "quantity_kg": 140.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": null,
+      "shelf_life_days": 21,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "BGR-WRT-20261008-01",
+      "location": "Bogor",
+      "commodity": "wortel",
+      "supplier": "CV Puncak Sayur Sejahtera",
+      "quantity_kg": 240,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 21,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "BGR-WRT-20261008-02",
+      "location": "Bogor",
+      "commodity": "wortel",
+      "supplier": "CV Puncak Sayur Sejahtera",
+      "quantity_kg": 160.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 21,
+      "freshness_score": 0.96,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "CJR-WRT-20261008-01",
+      "location": "Cianjur",
+      "commodity": "wortel",
+      "supplier": "CV Lestari Sayur Cugenang",
+      "quantity_kg": 540,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 21,
+      "freshness_score": 0.9,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "CJR-WRT-20261008-02",
+      "location": "Cianjur",
+      "commodity": "wortel",
+      "supplier": "CV Lestari Sayur Cugenang",
+      "quantity_kg": 360.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": null,
+      "shelf_life_days": 21,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "JKT-WRT-20261008-01",
+      "location": "Jakarta",
+      "commodity": "wortel",
+      "supplier": "CV Hortikultura Subang Lestari",
+      "quantity_kg": 90,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -0.4666666666666667,
+      "shelf_life_days": 21,
+      "freshness_score": 0.9,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 3.8
+        }
       ],
       "certification_status": "haccp"
+    },
+    {
+      "code": "JKT-WRT-20261008-02",
+      "location": "Jakarta",
+      "commodity": "wortel",
+      "supplier": "UD Puncak Sayur Asri",
+      "quantity_kg": 60.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -3.1666666666666665,
+      "shelf_life_days": 21,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "MKS-WRT-20261008-01",
+      "location": "Makassar",
+      "commodity": "wortel",
+      "supplier": "CV Malino Sayur Segar",
+      "quantity_kg": 120,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 21,
+      "freshness_score": 0.69,
+      "freshness_status": "needs_verification",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "MKS-WRT-20261008-02",
+      "location": "Makassar",
+      "commodity": "wortel",
+      "supplier": "UD Pasar Terong Sayur",
+      "quantity_kg": 80.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 21,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "MDN-WRT-20261008-01",
+      "location": "Medan",
+      "commodity": "wortel",
+      "supplier": "CV Berastagi Sayur Makmur",
+      "quantity_kg": 84,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 21,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "MDN-WRT-20261008-02",
+      "location": "Medan",
+      "commodity": "wortel",
+      "supplier": "CV Berastagi Sayur Makmur",
+      "quantity_kg": 56.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 21,
+      "freshness_score": 0.96,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "PLM-WRT-20261008-01",
+      "location": "Palembang",
+      "commodity": "wortel",
+      "supplier": "CV Kenten Sayur Asri",
+      "quantity_kg": 108,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 21,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "PLM-WRT-20261008-02",
+      "location": "Palembang",
+      "commodity": "wortel",
+      "supplier": "CV Jakabaring Sayur",
+      "quantity_kg": 72.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 21,
+      "freshness_score": 0.96,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "SMG-WRT-20261008-01",
+      "location": "Semarang",
+      "commodity": "wortel",
+      "supplier": "CV Bandungan Sayur Lestari",
+      "quantity_kg": 180,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 21,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "SMG-WRT-20261008-02",
+      "location": "Semarang",
+      "commodity": "wortel",
+      "supplier": "CV Bandungan Sayur Lestari",
+      "quantity_kg": 120.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 21,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "SBY-WRT-20261008-01",
+      "location": "Surabaya",
+      "commodity": "wortel",
+      "supplier": "CV Keputran Sayur Utama",
+      "quantity_kg": 156,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 21,
+      "freshness_score": 0.92,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "SBY-WRT-20261008-02",
+      "location": "Surabaya",
+      "commodity": "wortel",
+      "supplier": "CV Keputran Sayur Utama",
+      "quantity_kg": 104.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": -39.5,
+      "shelf_life_days": 21,
+      "freshness_score": 0.94,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "hygiene"
+    },
+    {
+      "code": "YOG-WRT-20261008-01",
+      "location": "Yogyakarta",
+      "commodity": "wortel",
+      "supplier": "CV Kaliurang Sayur Lestari",
+      "quantity_kg": 150,
+      "harvested_at_offset_hours": -18,
+      "dispatch_offset_hours": -15.5,
+      "shelf_life_days": 21,
+      "freshness_score": 0.96,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -18,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -12,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": 0,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "haccp"
+    },
+    {
+      "code": "YOG-WRT-20261008-02",
+      "location": "Yogyakarta",
+      "commodity": "wortel",
+      "supplier": "UD Giwangan Sayur Pasar",
+      "quantity_kg": 100.0,
+      "harvested_at_offset_hours": -42,
+      "dispatch_offset_hours": null,
+      "shelf_life_days": 21,
+      "freshness_score": 0.9,
+      "freshness_status": "pass",
+      "safety_status": "pass",
+      "temperature_log": [
+        {
+          "timestamp_offset_hours": -42,
+          "temperature_c": 4.0
+        },
+        {
+          "timestamp_offset_hours": -36,
+          "temperature_c": 4.3
+        },
+        {
+          "timestamp_offset_hours": -24,
+          "temperature_c": 3.8
+        }
+      ],
+      "certification_status": "hygiene"
     }
   ],
   "prices": [
-    {"location": "Jakarta", "commodity": "telur", "source": "pihps_reference", "price_per_kg": 30500},
-    {"location": "Jakarta", "commodity": "ayam", "source": "pihps_reference", "price_per_kg": 41500},
-    {"location": "Jakarta", "commodity": "wortel", "source": "pihps_reference", "price_per_kg": 23500},
-    {"location": "Bogor", "commodity": "telur", "source": "pihps_reference", "price_per_kg": 28500},
-    {"location": "Bogor", "commodity": "ayam", "source": "pihps_reference", "price_per_kg": 38200},
-    {"location": "Bogor", "commodity": "wortel", "source": "pihps_reference", "price_per_kg": 19800},
-    {"location": "Cianjur", "commodity": "telur", "source": "pihps_reference", "price_per_kg": 26500},
-    {"location": "Cianjur", "commodity": "ayam", "source": "pihps_reference", "price_per_kg": 34800},
-    {"location": "Cianjur", "commodity": "wortel", "source": "pihps_reference", "price_per_kg": 16500},
-    {"location": "Bandung", "commodity": "telur", "source": "pihps_reference", "price_per_kg": 27200},
-    {"location": "Bandung", "commodity": "ayam", "source": "pihps_reference", "price_per_kg": 36500},
-    {"location": "Bandung", "commodity": "wortel", "source": "pihps_reference", "price_per_kg": 17800},
-    {"location": "Semarang", "commodity": "telur", "source": "pihps_reference", "price_per_kg": 28800},
-    {"location": "Semarang", "commodity": "ayam", "source": "pihps_reference", "price_per_kg": 37400},
-    {"location": "Semarang", "commodity": "wortel", "source": "pihps_reference", "price_per_kg": 21500},
-    {"location": "Yogyakarta", "commodity": "telur", "source": "pihps_reference", "price_per_kg": 29200},
-    {"location": "Yogyakarta", "commodity": "ayam", "source": "pihps_reference", "price_per_kg": 37900},
-    {"location": "Yogyakarta", "commodity": "wortel", "source": "pihps_reference", "price_per_kg": 22300},
-    {"location": "Surabaya", "commodity": "telur", "source": "pihps_reference", "price_per_kg": 28200},
-    {"location": "Surabaya", "commodity": "ayam", "source": "pihps_reference", "price_per_kg": 35800},
-    {"location": "Surabaya", "commodity": "wortel", "source": "pihps_reference", "price_per_kg": 20800},
-    {"location": "Makassar", "commodity": "telur", "source": "pihps_reference", "price_per_kg": 27600},
-    {"location": "Makassar", "commodity": "ayam", "source": "pihps_reference", "price_per_kg": 35200},
-    {"location": "Makassar", "commodity": "wortel", "source": "pihps_reference", "price_per_kg": 18600},
-    {"location": "Palembang", "commodity": "telur", "source": "pihps_reference", "price_per_kg": 31200},
-    {"location": "Palembang", "commodity": "ayam", "source": "pihps_reference", "price_per_kg": 42600},
-    {"location": "Palembang", "commodity": "wortel", "source": "pihps_reference", "price_per_kg": 26200},
-    {"location": "Medan", "commodity": "telur", "source": "pihps_reference", "price_per_kg": 32600},
-    {"location": "Medan", "commodity": "ayam", "source": "pihps_reference", "price_per_kg": 44200},
-    {"location": "Medan", "commodity": "wortel", "source": "pihps_reference", "price_per_kg": 27900},
-    {"location": "Cianjur", "commodity": "telur", "source": "supplier_quote", "supplier": "Supplier A Cianjur", "price_per_kg": 26200},
-    {"location": "Cianjur", "commodity": "telur", "source": "supplier_quote", "supplier": "Supplier B Cianjur", "price_per_kg": 27000},
-    {"location": "Cianjur", "commodity": "telur", "source": "supplier_quote", "supplier": "Supplier C Cianjur", "price_per_kg": 32000},
-    {"location": "Cianjur", "commodity": "telur", "source": "supplier_quote", "supplier": "Supplier D Cianjur", "price_per_kg": 25400},
-    {"location": "Jakarta", "commodity": "telur", "source": "supplier_quote", "supplier": "Supplier Jakarta-1", "price_per_kg": 30200},
-    {"location": "Bogor", "commodity": "ayam", "source": "supplier_quote", "supplier": "Supplier Bogor-1", "price_per_kg": 38500},
-    {"location": "Bandung", "commodity": "telur", "source": "supplier_quote", "supplier": "Supplier Bandung-1", "price_per_kg": 26900},
-    {"location": "Semarang", "commodity": "wortel", "source": "supplier_quote", "supplier": "Supplier Semarang-1", "price_per_kg": 21000},
-    {"location": "Yogyakarta", "commodity": "telur", "source": "supplier_quote", "supplier": "Supplier Yogyakarta-1", "price_per_kg": 29600},
-    {"location": "Surabaya", "commodity": "ayam", "source": "supplier_quote", "supplier": "Supplier Surabaya-1", "price_per_kg": 36100},
-    {"location": "Surabaya", "commodity": "telur", "source": "supplier_quote", "supplier": "Supplier Surabaya-2", "price_per_kg": 28500},
-    {"location": "Makassar", "commodity": "wortel", "source": "supplier_quote", "supplier": "Supplier Makassar-1", "price_per_kg": 18200},
-    {"location": "Palembang", "commodity": "telur", "source": "supplier_quote", "supplier": "Supplier Palembang-1", "price_per_kg": 31500},
-    {"location": "Medan", "commodity": "telur", "source": "supplier_quote", "supplier": "Supplier Medan-1", "price_per_kg": 32900},
-    {"location": "Jakarta", "commodity": "beras", "source": "pihps_reference", "price_per_kg": 13400},
-    {"location": "Bogor", "commodity": "beras", "source": "pihps_reference", "price_per_kg": 12900},
-    {"location": "Cianjur", "commodity": "beras", "source": "pihps_reference", "price_per_kg": 11800},
-    {"location": "Bandung", "commodity": "beras", "source": "pihps_reference", "price_per_kg": 12400},
-    {"location": "Semarang", "commodity": "beras", "source": "pihps_reference", "price_per_kg": 13100},
-    {"location": "Yogyakarta", "commodity": "beras", "source": "pihps_reference", "price_per_kg": 13300},
-    {"location": "Surabaya", "commodity": "beras", "source": "pihps_reference", "price_per_kg": 13600},
-    {"location": "Makassar", "commodity": "beras", "source": "pihps_reference", "price_per_kg": 13900},
-    {"location": "Palembang", "commodity": "beras", "source": "pihps_reference", "price_per_kg": 14200},
-    {"location": "Medan", "commodity": "beras", "source": "pihps_reference", "price_per_kg": 14500},
-    {"location": "Cianjur", "commodity": "beras", "source": "supplier_quote", "supplier": "Beras Pandan Wangi Cianjur", "price_per_kg": 12200},
-    {"location": "Bogor", "commodity": "beras", "source": "supplier_quote", "supplier": "Beras Sari Bogor", "price_per_kg": 12700},
-    {"location": "Jakarta", "commodity": "beras", "source": "supplier_quote", "supplier": "Beras Makmur Jakarta", "price_per_kg": 13200}
+    {
+      "location": "Jakarta",
+      "commodity": "telur",
+      "source": "pihps_reference",
+      "price_per_kg": 30500
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "ayam",
+      "source": "pihps_reference",
+      "price_per_kg": 41500
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "wortel",
+      "source": "pihps_reference",
+      "price_per_kg": 23500
+    },
+    {
+      "location": "Bogor",
+      "commodity": "telur",
+      "source": "pihps_reference",
+      "price_per_kg": 28500
+    },
+    {
+      "location": "Bogor",
+      "commodity": "ayam",
+      "source": "pihps_reference",
+      "price_per_kg": 38200
+    },
+    {
+      "location": "Bogor",
+      "commodity": "wortel",
+      "source": "pihps_reference",
+      "price_per_kg": 19800
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "telur",
+      "source": "pihps_reference",
+      "price_per_kg": 26500
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "ayam",
+      "source": "pihps_reference",
+      "price_per_kg": 34800
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "wortel",
+      "source": "pihps_reference",
+      "price_per_kg": 16500
+    },
+    {
+      "location": "Bandung",
+      "commodity": "telur",
+      "source": "pihps_reference",
+      "price_per_kg": 27200
+    },
+    {
+      "location": "Bandung",
+      "commodity": "ayam",
+      "source": "pihps_reference",
+      "price_per_kg": 36500
+    },
+    {
+      "location": "Bandung",
+      "commodity": "wortel",
+      "source": "pihps_reference",
+      "price_per_kg": 17800
+    },
+    {
+      "location": "Semarang",
+      "commodity": "telur",
+      "source": "pihps_reference",
+      "price_per_kg": 28800
+    },
+    {
+      "location": "Semarang",
+      "commodity": "ayam",
+      "source": "pihps_reference",
+      "price_per_kg": 37400
+    },
+    {
+      "location": "Semarang",
+      "commodity": "wortel",
+      "source": "pihps_reference",
+      "price_per_kg": 21500
+    },
+    {
+      "location": "Yogyakarta",
+      "commodity": "telur",
+      "source": "pihps_reference",
+      "price_per_kg": 29200
+    },
+    {
+      "location": "Yogyakarta",
+      "commodity": "ayam",
+      "source": "pihps_reference",
+      "price_per_kg": 37900
+    },
+    {
+      "location": "Yogyakarta",
+      "commodity": "wortel",
+      "source": "pihps_reference",
+      "price_per_kg": 22300
+    },
+    {
+      "location": "Surabaya",
+      "commodity": "telur",
+      "source": "pihps_reference",
+      "price_per_kg": 28200
+    },
+    {
+      "location": "Surabaya",
+      "commodity": "ayam",
+      "source": "pihps_reference",
+      "price_per_kg": 35800
+    },
+    {
+      "location": "Surabaya",
+      "commodity": "wortel",
+      "source": "pihps_reference",
+      "price_per_kg": 20800
+    },
+    {
+      "location": "Makassar",
+      "commodity": "telur",
+      "source": "pihps_reference",
+      "price_per_kg": 27600
+    },
+    {
+      "location": "Makassar",
+      "commodity": "ayam",
+      "source": "pihps_reference",
+      "price_per_kg": 35200
+    },
+    {
+      "location": "Makassar",
+      "commodity": "wortel",
+      "source": "pihps_reference",
+      "price_per_kg": 18600
+    },
+    {
+      "location": "Palembang",
+      "commodity": "telur",
+      "source": "pihps_reference",
+      "price_per_kg": 31200
+    },
+    {
+      "location": "Palembang",
+      "commodity": "ayam",
+      "source": "pihps_reference",
+      "price_per_kg": 42600
+    },
+    {
+      "location": "Palembang",
+      "commodity": "wortel",
+      "source": "pihps_reference",
+      "price_per_kg": 26200
+    },
+    {
+      "location": "Medan",
+      "commodity": "telur",
+      "source": "pihps_reference",
+      "price_per_kg": 32600
+    },
+    {
+      "location": "Medan",
+      "commodity": "ayam",
+      "source": "pihps_reference",
+      "price_per_kg": 44200
+    },
+    {
+      "location": "Medan",
+      "commodity": "wortel",
+      "source": "pihps_reference",
+      "price_per_kg": 27900
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "beras",
+      "source": "pihps_reference",
+      "price_per_kg": 13400
+    },
+    {
+      "location": "Bogor",
+      "commodity": "beras",
+      "source": "pihps_reference",
+      "price_per_kg": 12900
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "beras",
+      "source": "pihps_reference",
+      "price_per_kg": 11800
+    },
+    {
+      "location": "Bandung",
+      "commodity": "beras",
+      "source": "pihps_reference",
+      "price_per_kg": 12400
+    },
+    {
+      "location": "Semarang",
+      "commodity": "beras",
+      "source": "pihps_reference",
+      "price_per_kg": 13100
+    },
+    {
+      "location": "Yogyakarta",
+      "commodity": "beras",
+      "source": "pihps_reference",
+      "price_per_kg": 13300
+    },
+    {
+      "location": "Surabaya",
+      "commodity": "beras",
+      "source": "pihps_reference",
+      "price_per_kg": 13600
+    },
+    {
+      "location": "Makassar",
+      "commodity": "beras",
+      "source": "pihps_reference",
+      "price_per_kg": 13900
+    },
+    {
+      "location": "Palembang",
+      "commodity": "beras",
+      "source": "pihps_reference",
+      "price_per_kg": 14200
+    },
+    {
+      "location": "Medan",
+      "commodity": "beras",
+      "source": "pihps_reference",
+      "price_per_kg": 14500
+    },
+    {
+      "location": "Bandung",
+      "commodity": "ayam",
+      "source": "supplier_quote",
+      "supplier": "PT Cileunyi Ayam Segar",
+      "price_per_kg": 35400
+    },
+    {
+      "location": "Bandung",
+      "commodity": "beras",
+      "source": "supplier_quote",
+      "supplier": "UD Rancaekek Beras Sejahtera",
+      "price_per_kg": 12200
+    },
+    {
+      "location": "Bandung",
+      "commodity": "telur",
+      "source": "supplier_quote",
+      "supplier": "CV Lembang Telur Segar",
+      "price_per_kg": 27200
+    },
+    {
+      "location": "Bandung",
+      "commodity": "wortel",
+      "source": "supplier_quote",
+      "supplier": "CV Lembang Sayur Makmur",
+      "price_per_kg": 17100
+    },
+    {
+      "location": "Bandung",
+      "commodity": "wortel",
+      "source": "supplier_quote",
+      "supplier": "UD Caringin Sayur Induk",
+      "price_per_kg": 17800
+    },
+    {
+      "location": "Bogor",
+      "commodity": "ayam",
+      "source": "supplier_quote",
+      "supplier": "PT Bogor Prima Ayam",
+      "price_per_kg": 37100
+    },
+    {
+      "location": "Bogor",
+      "commodity": "beras",
+      "source": "supplier_quote",
+      "supplier": "CV Beras Sari Bogor",
+      "price_per_kg": 12600
+    },
+    {
+      "location": "Bogor",
+      "commodity": "beras",
+      "source": "supplier_quote",
+      "supplier": "PD Cibinong Beras Mandiri",
+      "price_per_kg": 13200
+    },
+    {
+      "location": "Bogor",
+      "commodity": "telur",
+      "source": "supplier_quote",
+      "supplier": "UD Cibinong Telur Berkah",
+      "price_per_kg": 28500
+    },
+    {
+      "location": "Bogor",
+      "commodity": "wortel",
+      "source": "supplier_quote",
+      "supplier": "CV Puncak Sayur Sejahtera",
+      "price_per_kg": 19000
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "ayam",
+      "source": "supplier_quote",
+      "supplier": "CV Ayam Kampung Cugenang",
+      "price_per_kg": 33800
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "beras",
+      "source": "supplier_quote",
+      "supplier": "CV Pandan Wangi Cianjur",
+      "price_per_kg": 12200
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "telur",
+      "source": "supplier_quote",
+      "supplier": "Koperasi Telur Cipanas Bersama",
+      "price_per_kg": 26200
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "telur",
+      "source": "supplier_quote",
+      "supplier": "UD H. Asep Cianjur",
+      "price_per_kg": 27000
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "telur",
+      "source": "supplier_quote",
+      "supplier": "CV Barokah Telur Cianjur",
+      "price_per_kg": 25400
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "telur",
+      "source": "supplier_quote",
+      "supplier": "UD Cipanas Telur Sejahtera",
+      "price_per_kg": 32000
+    },
+    {
+      "location": "Cianjur",
+      "commodity": "wortel",
+      "source": "supplier_quote",
+      "supplier": "CV Lestari Sayur Cugenang",
+      "price_per_kg": 15800
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "ayam",
+      "source": "supplier_quote",
+      "supplier": "PT Nusantara Prima Ayam",
+      "price_per_kg": 40300
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "ayam",
+      "source": "supplier_quote",
+      "supplier": "PT Tangerang Ayam Sentosa",
+      "price_per_kg": 41500
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "ayam",
+      "source": "supplier_quote",
+      "supplier": "CV Karawang Ayam Jaya",
+      "price_per_kg": 42700
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "ayam",
+      "source": "supplier_quote",
+      "supplier": "UD H. Ujang Serang",
+      "price_per_kg": 40300
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "beras",
+      "source": "supplier_quote",
+      "supplier": "CV Cipinang Boga Utama",
+      "price_per_kg": 13100
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "beras",
+      "source": "supplier_quote",
+      "supplier": "UD Rorotan Jaya Beras",
+      "price_per_kg": 13700
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "telur",
+      "source": "supplier_quote",
+      "supplier": "UD Sumber Rejeki Telur",
+      "price_per_kg": 30500
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "telur",
+      "source": "supplier_quote",
+      "supplier": "CV Berkah Telur Bekasi",
+      "price_per_kg": 31100
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "telur",
+      "source": "supplier_quote",
+      "supplier": "CV Cengkareng Protein Mandiri",
+      "price_per_kg": 32000
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "wortel",
+      "source": "supplier_quote",
+      "supplier": "Toko Sayur Bu Endang",
+      "price_per_kg": 22600
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "wortel",
+      "source": "supplier_quote",
+      "supplier": "UD Tani Sayur Depok",
+      "price_per_kg": 23500
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "wortel",
+      "source": "supplier_quote",
+      "supplier": "CV Hortikultura Subang Lestari",
+      "price_per_kg": 24900
+    },
+    {
+      "location": "Jakarta",
+      "commodity": "wortel",
+      "source": "supplier_quote",
+      "supplier": "UD Puncak Sayur Asri",
+      "price_per_kg": 26300
+    },
+    {
+      "location": "Makassar",
+      "commodity": "ayam",
+      "source": "supplier_quote",
+      "supplier": "PT Malino Ayam Segar",
+      "price_per_kg": 34100
+    },
+    {
+      "location": "Makassar",
+      "commodity": "beras",
+      "source": "supplier_quote",
+      "supplier": "UD Maros Beras Lestari",
+      "price_per_kg": 13600
+    },
+    {
+      "location": "Makassar",
+      "commodity": "telur",
+      "source": "supplier_quote",
+      "supplier": "CV Gowa Telur Segar",
+      "price_per_kg": 27600
+    },
+    {
+      "location": "Makassar",
+      "commodity": "wortel",
+      "source": "supplier_quote",
+      "supplier": "CV Malino Sayur Segar",
+      "price_per_kg": 17900
+    },
+    {
+      "location": "Makassar",
+      "commodity": "wortel",
+      "source": "supplier_quote",
+      "supplier": "UD Pasar Terong Sayur",
+      "price_per_kg": 18600
+    },
+    {
+      "location": "Medan",
+      "commodity": "ayam",
+      "source": "supplier_quote",
+      "supplier": "PT Sunggal Ayam Utama",
+      "price_per_kg": 42900
+    },
+    {
+      "location": "Medan",
+      "commodity": "beras",
+      "source": "supplier_quote",
+      "supplier": "CV Deli Serdang Beras",
+      "price_per_kg": 14200
+    },
+    {
+      "location": "Medan",
+      "commodity": "beras",
+      "source": "supplier_quote",
+      "supplier": "UD Pusat Pasar Beras",
+      "price_per_kg": 14800
+    },
+    {
+      "location": "Medan",
+      "commodity": "telur",
+      "source": "supplier_quote",
+      "supplier": "UD Medan Telur Sumber",
+      "price_per_kg": 32600
+    },
+    {
+      "location": "Medan",
+      "commodity": "wortel",
+      "source": "supplier_quote",
+      "supplier": "CV Berastagi Sayur Makmur",
+      "price_per_kg": 26800
+    },
+    {
+      "location": "Palembang",
+      "commodity": "ayam",
+      "source": "supplier_quote",
+      "supplier": "PT Banyuasin Ayam Jaya",
+      "price_per_kg": 41300
+    },
+    {
+      "location": "Palembang",
+      "commodity": "beras",
+      "source": "supplier_quote",
+      "supplier": "UD Ogan Ilir Beras",
+      "price_per_kg": 13900
+    },
+    {
+      "location": "Palembang",
+      "commodity": "telur",
+      "source": "supplier_quote",
+      "supplier": "CV Palembang Telur Makmur",
+      "price_per_kg": 31200
+    },
+    {
+      "location": "Palembang",
+      "commodity": "wortel",
+      "source": "supplier_quote",
+      "supplier": "CV Kenten Sayur Asri",
+      "price_per_kg": 25200
+    },
+    {
+      "location": "Palembang",
+      "commodity": "wortel",
+      "source": "supplier_quote",
+      "supplier": "CV Jakabaring Sayur",
+      "price_per_kg": 26200
+    },
+    {
+      "location": "Semarang",
+      "commodity": "ayam",
+      "source": "supplier_quote",
+      "supplier": "CV Kendal Ayam Utama",
+      "price_per_kg": 36300
+    },
+    {
+      "location": "Semarang",
+      "commodity": "beras",
+      "source": "supplier_quote",
+      "supplier": "UD Demak Beras Makmur",
+      "price_per_kg": 12800
+    },
+    {
+      "location": "Semarang",
+      "commodity": "beras",
+      "source": "supplier_quote",
+      "supplier": "UD Johar Beras Semarang",
+      "price_per_kg": 13400
+    },
+    {
+      "location": "Semarang",
+      "commodity": "telur",
+      "source": "supplier_quote",
+      "supplier": "CV Ambarawa Telur Utama",
+      "price_per_kg": 28800
+    },
+    {
+      "location": "Semarang",
+      "commodity": "wortel",
+      "source": "supplier_quote",
+      "supplier": "CV Bandungan Sayur Lestari",
+      "price_per_kg": 20600
+    },
+    {
+      "location": "Surabaya",
+      "commodity": "ayam",
+      "source": "supplier_quote",
+      "supplier": "CV Sidoarjo Ayam Utama",
+      "price_per_kg": 34700
+    },
+    {
+      "location": "Surabaya",
+      "commodity": "beras",
+      "source": "supplier_quote",
+      "supplier": "PT Osowilangun Beras Utama",
+      "price_per_kg": 13300
+    },
+    {
+      "location": "Surabaya",
+      "commodity": "telur",
+      "source": "supplier_quote",
+      "supplier": "UD Surabaya Telur Jaya",
+      "price_per_kg": 28200
+    },
+    {
+      "location": "Surabaya",
+      "commodity": "telur",
+      "source": "supplier_quote",
+      "supplier": "UD Blitar Telur Makmur",
+      "price_per_kg": 28800
+    },
+    {
+      "location": "Surabaya",
+      "commodity": "wortel",
+      "source": "supplier_quote",
+      "supplier": "CV Keputran Sayur Utama",
+      "price_per_kg": 20000
+    },
+    {
+      "location": "Yogyakarta",
+      "commodity": "ayam",
+      "source": "supplier_quote",
+      "supplier": "PT Kulon Progo Ayam Jaya",
+      "price_per_kg": 36800
+    },
+    {
+      "location": "Yogyakarta",
+      "commodity": "beras",
+      "source": "supplier_quote",
+      "supplier": "UD Bantul Beras Utama",
+      "price_per_kg": 13000
+    },
+    {
+      "location": "Yogyakarta",
+      "commodity": "telur",
+      "source": "supplier_quote",
+      "supplier": "CV Sleman Telur Lestari",
+      "price_per_kg": 29200
+    },
+    {
+      "location": "Yogyakarta",
+      "commodity": "wortel",
+      "source": "supplier_quote",
+      "supplier": "CV Kaliurang Sayur Lestari",
+      "price_per_kg": 21400
+    },
+    {
+      "location": "Yogyakarta",
+      "commodity": "wortel",
+      "source": "supplier_quote",
+      "supplier": "UD Giwangan Sayur Pasar",
+      "price_per_kg": 22300
+    }
   ],
   "mock_sap": {
     "material_stock": [
-      {"material_number": "1000", "plant": "CIANJ", "storage_location": "FG01", "batch": "BATCH-CIANJUR-TELUR-001", "quantity": 1400, "unit": "KG"},
-      {"material_number": "1000", "plant": "BOGOR", "storage_location": "FG01", "batch": "BATCH-BOGOR-TELUR-001", "quantity": 800, "unit": "KG"},
-      {"material_number": "1000", "plant": "JKRTA", "storage_location": "FG01", "batch": "BATCH-JAKARTA-TELUR", "quantity": 300, "unit": "KG"},
-      {"material_number": "1001", "plant": "CIANJ", "storage_location": "FG01", "batch": "BATCH-CIANJUR-AYAM", "quantity": 500, "unit": "KG"},
-      {"material_number": "1001", "plant": "JKRTA", "storage_location": "FG01", "batch": "BATCH-JAKARTA-AYAM", "quantity": 200, "unit": "KG"},
-      {"material_number": "1002", "plant": "CIANJ", "storage_location": "FG01", "batch": "BATCH-CIANJUR-WORTEL", "quantity": 900, "unit": "KG"},
-      {"material_number": "1001", "plant": "BOGOR", "storage_location": "FG01", "batch": "BATCH-BOGOR-AYAM", "quantity": 250, "unit": "KG"},
-      {"material_number": "1002", "plant": "JKRTA", "storage_location": "FG01", "batch": "BATCH-JAKARTA-WORTEL", "quantity": 300, "unit": "KG"},
-      {"material_number": "1002", "plant": "BOGOR", "storage_location": "FG01", "batch": "BATCH-BOGOR-WORTEL", "quantity": 450, "unit": "KG"},
-      {"material_number": "1003", "plant": "CIANJ", "storage_location": "FG01", "batch": "BATCH-CIANJUR-BERAS-001", "quantity": 2400, "unit": "KG"},
-      {"material_number": "1003", "plant": "BOGOR", "storage_location": "FG01", "batch": "BATCH-BOGOR-BERAS", "quantity": 1500, "unit": "KG"},
-      {"material_number": "1003", "plant": "JKRTA", "storage_location": "FG01", "batch": "BATCH-JAKARTA-BERAS", "quantity": 900, "unit": "KG"}
+      {
+        "material_number": "1000",
+        "plant": "CIANJ",
+        "storage_location": "FG01",
+        "batch": "CJR-TLR-20261008-01",
+        "quantity": 1400,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1001",
+        "plant": "CIANJ",
+        "storage_location": "FG01",
+        "batch": "CJR-AYM-20261008-01",
+        "quantity": 500,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1002",
+        "plant": "CIANJ",
+        "storage_location": "FG01",
+        "batch": "CJR-WRT-20261008-01",
+        "quantity": 900,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1000",
+        "plant": "JKRTA",
+        "storage_location": "FG01",
+        "batch": "JKT-TLR-20261008-01",
+        "quantity": 300,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1001",
+        "plant": "JKRTA",
+        "storage_location": "FG01",
+        "batch": "JKT-AYM-20261008-01",
+        "quantity": 200,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1002",
+        "plant": "JKRTA",
+        "storage_location": "FG01",
+        "batch": "JKT-WRT-20261008-01",
+        "quantity": 150,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1000",
+        "plant": "BOGOR",
+        "storage_location": "FG01",
+        "batch": "BGR-TLR-20261008-01",
+        "quantity": 800,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1001",
+        "plant": "BOGOR",
+        "storage_location": "FG01",
+        "batch": "BGR-AYM-20261008-01",
+        "quantity": 300,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1002",
+        "plant": "BOGOR",
+        "storage_location": "FG01",
+        "batch": "BGR-WRT-20261008-01",
+        "quantity": 400,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1000",
+        "plant": "BDNG",
+        "storage_location": "FG01",
+        "batch": "BDG-TLR-20261008-01",
+        "quantity": 400,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1001",
+        "plant": "BDNG",
+        "storage_location": "FG01",
+        "batch": "BDG-AYM-20261008-01",
+        "quantity": 250,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1002",
+        "plant": "BDNG",
+        "storage_location": "FG01",
+        "batch": "BDG-WRT-20261008-01",
+        "quantity": 350,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1000",
+        "plant": "SMGG",
+        "storage_location": "FG01",
+        "batch": "SMG-TLR-20261008-01",
+        "quantity": 350,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1001",
+        "plant": "SMGG",
+        "storage_location": "FG01",
+        "batch": "SMG-AYM-20261008-01",
+        "quantity": 200,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1002",
+        "plant": "SMGG",
+        "storage_location": "FG01",
+        "batch": "SMG-WRT-20261008-01",
+        "quantity": 300,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1000",
+        "plant": "YGYK",
+        "storage_location": "FG01",
+        "batch": "YOG-TLR-20261008-01",
+        "quantity": 300,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1001",
+        "plant": "YGYK",
+        "storage_location": "FG01",
+        "batch": "YOG-AYM-20261008-01",
+        "quantity": 180,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1002",
+        "plant": "YGYK",
+        "storage_location": "FG01",
+        "batch": "YOG-WRT-20261008-01",
+        "quantity": 250,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1000",
+        "plant": "SRBY",
+        "storage_location": "FG01",
+        "batch": "SBY-TLR-20261008-01",
+        "quantity": 600,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1001",
+        "plant": "SRBY",
+        "storage_location": "FG01",
+        "batch": "SBY-AYM-20261008-01",
+        "quantity": 220,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1002",
+        "plant": "SRBY",
+        "storage_location": "FG01",
+        "batch": "SBY-WRT-20261008-01",
+        "quantity": 260,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1000",
+        "plant": "MKSR",
+        "storage_location": "FG01",
+        "batch": "MKS-TLR-20261008-01",
+        "quantity": 300,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1001",
+        "plant": "MKSR",
+        "storage_location": "FG01",
+        "batch": "MKS-AYM-20261008-01",
+        "quantity": 150,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1002",
+        "plant": "MKSR",
+        "storage_location": "FG01",
+        "batch": "MKS-WRT-20261008-01",
+        "quantity": 200,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1000",
+        "plant": "PLBG",
+        "storage_location": "FG01",
+        "batch": "PLM-TLR-20261008-01",
+        "quantity": 250,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1001",
+        "plant": "PLBG",
+        "storage_location": "FG01",
+        "batch": "PLM-AYM-20261008-01",
+        "quantity": 120,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1002",
+        "plant": "PLBG",
+        "storage_location": "FG01",
+        "batch": "PLM-WRT-20261008-01",
+        "quantity": 180,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1000",
+        "plant": "MDAN",
+        "storage_location": "FG01",
+        "batch": "MDN-TLR-20261008-01",
+        "quantity": 200,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1001",
+        "plant": "MDAN",
+        "storage_location": "FG01",
+        "batch": "MDN-AYM-20261008-01",
+        "quantity": 100,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1002",
+        "plant": "MDAN",
+        "storage_location": "FG01",
+        "batch": "MDN-WRT-20261008-01",
+        "quantity": 140,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1003",
+        "plant": "CIANJ",
+        "storage_location": "FG01",
+        "batch": "CJR-BRS-20261008-01",
+        "quantity": 2400,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1003",
+        "plant": "BOGOR",
+        "storage_location": "FG01",
+        "batch": "BGR-BRS-20261008-01",
+        "quantity": 1500,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1003",
+        "plant": "JKRTA",
+        "storage_location": "FG01",
+        "batch": "JKT-BRS-20261008-01",
+        "quantity": 900,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1003",
+        "plant": "BDNG",
+        "storage_location": "FG01",
+        "batch": "BDG-BRS-20261008-01",
+        "quantity": 1200,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1003",
+        "plant": "SMGG",
+        "storage_location": "FG01",
+        "batch": "SMG-BRS-20261008-01",
+        "quantity": 800,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1003",
+        "plant": "YGYK",
+        "storage_location": "FG01",
+        "batch": "YOG-BRS-20261008-01",
+        "quantity": 700,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1003",
+        "plant": "SRBY",
+        "storage_location": "FG01",
+        "batch": "SBY-BRS-20261008-01",
+        "quantity": 1600,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1003",
+        "plant": "MKSR",
+        "storage_location": "FG01",
+        "batch": "MKS-BRS-20261008-01",
+        "quantity": 600,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1003",
+        "plant": "PLBG",
+        "storage_location": "FG01",
+        "batch": "PLM-BRS-20261008-01",
+        "quantity": 900,
+        "unit": "KG"
+      },
+      {
+        "material_number": "1003",
+        "plant": "MDAN",
+        "storage_location": "FG01",
+        "batch": "MDN-BRS-20261008-01",
+        "quantity": 1000,
+        "unit": "KG"
+      }
     ],
     "purchase_orders": [
       {
         "po_number": "4500000001",
-        "supplier": "Supplier A Cianjur",
+        "supplier": "Koperasi Telur Cipanas Bersama",
         "material_number": "1000",
         "ordered_quantity": 500,
         "price": 26200,
         "status": "confirmed"
+      },
+      {
+        "po_number": "4500000002",
+        "supplier": "CV Beras Sari Bogor",
+        "material_number": "1003",
+        "ordered_quantity": 700,
+        "price": 12600,
+        "status": "confirmed"
+      },
+      {
+        "po_number": "4500000003",
+        "supplier": "Toko Sayur Bu Endang",
+        "material_number": "1002",
+        "ordered_quantity": 400,
+        "price": 22600,
+        "status": "confirmed"
+      },
+      {
+        "po_number": "4500000004",
+        "supplier": "PT Cileunyi Ayam Segar",
+        "material_number": "1001",
+        "ordered_quantity": 300,
+        "price": 35400,
+        "status": "confirmed"
+      },
+      {
+        "po_number": "4500000005",
+        "supplier": "UD Demak Beras Makmur",
+        "material_number": "1003",
+        "ordered_quantity": 600,
+        "price": 12800,
+        "status": "confirmed"
+      },
+      {
+        "po_number": "4500000006",
+        "supplier": "CV Kaliurang Sayur Lestari",
+        "material_number": "1002",
+        "ordered_quantity": 350,
+        "price": 21400,
+        "status": "confirmed"
+      },
+      {
+        "po_number": "4500000007",
+        "supplier": "UD Surabaya Telur Jaya",
+        "material_number": "1000",
+        "ordered_quantity": 800,
+        "price": 28200,
+        "status": "confirmed"
+      },
+      {
+        "po_number": "4500000008",
+        "supplier": "CV Deli Serdang Beras",
+        "material_number": "1003",
+        "ordered_quantity": 500,
+        "price": 14200,
+        "status": "submitted"
+      },
+      {
+        "po_number": "4500000009",
+        "supplier": "CV Kenten Sayur Asri",
+        "material_number": "1002",
+        "ordered_quantity": 300,
+        "price": 25200,
+        "status": "confirmed"
+      },
+      {
+        "po_number": "4500000010",
+        "supplier": "UD Maros Beras Lestari",
+        "material_number": "1003",
+        "ordered_quantity": 450,
+        "price": 13600,
+        "status": "confirmed"
+      },
+      {
+        "po_number": "4500000011",
+        "supplier": "CV Ayam Kampung Cugenang",
+        "material_number": "1001",
+        "ordered_quantity": 250,
+        "price": 33800,
+        "status": "confirmed"
+      },
+      {
+        "po_number": "4500000012",
+        "supplier": "UD Sumber Rejeki Telur",
+        "material_number": "1000",
+        "ordered_quantity": 300,
+        "price": 30500,
+        "status": "submitted"
       }
     ]
   }
