@@ -22,7 +22,9 @@ import AgentTraceViewer from "../components/AgentTraceViewer";
 import PurchaseOrderList, {
   formatKg,
   formatRupiah,
+  materialLabel,
   originLabel,
+  progressNote,
   sourceNote,
   statusLabel,
 } from "../components/PurchaseOrderList";
@@ -79,8 +81,12 @@ const RINGKAS = {
 };
 
 function render(props: Record<string, unknown> = {}) {
+  // 20 Okt 2026: panel ini kini memegang keadaan unduhan (PDF per PO), jadi ia
+  // WAJIB dirender sebagai elemen React. Memanggilnya sebagai fungsi biasa
+  // (`PurchaseOrderList({...})`) membuat hook berjalan di luar renderer dan
+  // React melempar "Cannot read properties of null (reading 'useState')".
   return renderToStaticMarkup(
-    PurchaseOrderList({ data: PAYLOAD, summary: RINGKAS, ...props } as any)
+    <PurchaseOrderList data={PAYLOAD} summary={RINGKAS} {...(props as any)} />
   );
 }
 
@@ -102,20 +108,33 @@ describe("label & format", () => {
     expect(formatKg(40)).toBe("40 kg");
   });
 
-  it("kalimat sumber menyebut mock dan menolak klaim SAP nyata", () => {
+  it("kalimat sumber menyebut simulasi dan menolak klaim SAP nyata", () => {
     const lokasi = sourceNote("lokasi");
-    expect(lokasi).toContain("tabel transaksi mock");
+    expect(lokasi).toContain("SAP simulasi");
     expect(lokasi).toContain("bukan SAP S/4HANA");
+    expect(lokasi).not.toContain("DB demo");
+    expect(lokasi).not.toContain("tabel transaksi");
     const nasional = sourceNote("nasional");
     expect(nasional).toContain("seluruh lokasi");
   });
 
-  it("membedakan PO hasil eksekusi dari PO data demo", () => {
+  it("membedakan PO yang terbit dari keputusan dan baris impor SAP", () => {
     // 18 Okt: semua baris dulu tampil seolah "terbit dari eksekusi". Padahal
     // baris seed (DEMO-PO-*, 4500000001) tidak pernah melewati approval.
-    expect(originLabel("execution")).toBe("dari eksekusi");
-    expect(originLabel("demo")).toBe("data demo");
+    // 19 Okt: "dari eksekusi" juga keliru — seeder demo menulis PO MC-* dengan
+    // decision_id tanpa lewat eksekusi, jadi kata yang benar adalah "dari
+    // keputusan" (fakta yang memang bisa dibuktikan) bukan klaim eksekusi.
+    expect(originLabel("execution")).toBe("dari keputusan");
+    expect(originLabel("demo")).toBe("impor SAP");
     expect(originLabel(null)).toBe("asal tidak tercatat");
+  });
+
+  it("bahan memakai nama komoditas dari DB, kode mentah hanya bila tak ada", () => {
+    // Jangan menebak dari kode: `MAT-BERA` (seeder memotong 4 huruf) bukan kata.
+    expect(materialLabel("Beras", "MAT-BERA")).toBe("Beras");
+    expect(materialLabel(null, "MAT-BERA")).toBe("MAT-BERA");
+    expect(materialLabel(null, "1000")).toBe("Bahan 1000");
+    expect(materialLabel(null, null)).toBe("bahan tidak tercatat");
   });
 });
 
@@ -128,16 +147,61 @@ describe("panel purchase order", () => {
     expect(html).toContain("terkirim");
     expect(html).toContain("terkonfirmasi");
     expect(html).toContain("Rp 5.719.250,00"); // total ringkasan
-    expect(html).toContain("tabel transaksi mock");
-    // Judul tidak boleh berbunyi "mock SAP" seolah ada integrasi SAP nyata.
-    expect(html).toContain("mock lokal");
+    expect(html).toContain("SAP simulasi");
+    // Judul harus berbunyi seperti aplikasi, bukan demo; penanda simulasi
+    // tetap ada di chip + kalimat sumber (aturan jujur repo ini).
+    expect(html).not.toContain("mock lokal");
+    expect(html).not.toContain("DB demo");
     expect(html).not.toContain("Purchase order (mock SAP)");
   });
 
-  it("setiap baris menyebut asalnya: eksekusi atau data demo", () => {
+  it("status tanpa baris tidak dipamerkan sebagai hitungan nol", () => {
+    // "draf 0" adalah status hantu: tidak ada satu pun penulis di backend yang
+    // pernah menulis status draft. Menampilkannya membuat pembaca mengira ada
+    // antrean draf yang menunggu sesuatu.
     const html = render();
-    expect(html).toContain("dari eksekusi");
-    expect(html).toContain("data demo");
+    expect(html).not.toContain("draf 0");
+    const tanpaKirim = render({
+      summary: { ...RINGKAS, by_status: { draft: 0, submitted: 0, confirmed: 2 } },
+    });
+    expect(tanpaKirim).not.toContain("terkirim 0");
+    expect(tanpaKirim).toContain("terkonfirmasi");
+  });
+
+  it("menjelaskan arti status terkonfirmasi tanpa mengaku aplikasi yang mengonfirmasi", () => {
+    const html = render();
+    expect(html).toContain("diimpor");
+    expect(html).toContain("Terkirim");
+  });
+
+  it("setiap baris menyebut asalnya: dari keputusan atau impor SAP", () => {
+    const html = render();
+    expect(html).toContain("dari keputusan");
+    expect(html).toContain("impor SAP");
+  });
+
+  it("PO untuk keputusan yang sedang dibuka ditandai, bukan disamarkan", () => {
+    const html = render({ decisionId: "11111111-1111-1111-1111-111111111111" });
+    expect(html).toContain("keputusan ini");
+    const lain = render({ decisionId: "99999999-9999-9999-9999-999999999999" });
+    expect(lain).not.toContain("keputusan ini");
+  });
+
+  it("ringkasan yang belum termuat tidak ditulis sebagai Rp 0,00", () => {
+    const html = render({ summary: null });
+    expect(html).not.toContain("Rp 0,00");
+    expect(html).toContain("DEMO-PO-JAKA-AYAM");
+  });
+
+  it("daftar yang terpotong batas limit mengatakannya", () => {
+    expect(progressNote(2, 2)).toBeNull();
+    expect(progressNote(200, 1234)).toContain("200");
+    expect(progressNote(200, 1234)).toContain("1.234");
+    const html = render({
+      data: { ...PAYLOAD, limit: 200 },
+      summary: { ...RINGKAS, count: 1234, total_value: 5719250 },
+    });
+    expect(html).toContain("dari 1.234");
   });
 
   it("PO berkeputusan menaut ke deep link, PO tanpa keputusan tidak", () => {

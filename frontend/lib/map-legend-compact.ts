@@ -86,6 +86,30 @@ export function compactLegendItems(input: CompactLegendInput): LegendItem[] {
   ];
 }
 
+/**
+ * Indeks butir yang HARUS mulai di baris baru (permintaan pemilik 2026-10-19).
+ *
+ * Baris legenda ringkas adalah satu `flex-wrap`, jadi patahannya ditentukan
+ * lebar layar — bukan makna. Terukur di 925 px dengan lapisan pemasok hidup:
+ * "Pemasok · Keandalan rendah · Dikecualikan" menempel di ujung baris 1,
+ * sedangkan "Di luar jangkauan · Sedang mengirim" menggantung di baris 2.
+ * Kelompok pemasok (5 butir) harus utuh di baris 2; baris 1 tetap milik status
+ * lokasi + jalur kiriman. Pemenggalan hanya di depan butir pemasok pertama —
+ * kelompok lain tidak dipenggal supaya tidak lahir baris ketiga.
+ */
+export function legendBreakIndexes(items: readonly LegendItem[]): number[] {
+  const penggal: number[] = [];
+  let asalSebelumnya: string | null = null;
+  items.forEach((item, urutan) => {
+    // Id selalu `asal:nada[:gaya]` (lihat `butir()`), jadi asalnya terbaca tanpa
+    // menambah field baru ke kontrak `LegendItem`.
+    const asal = item.id.split(":")[0];
+    if (asal === "pemasok" && asalSebelumnya !== "pemasok") penggal.push(urutan);
+    asalSebelumnya = asal;
+  });
+  return penggal;
+}
+
 /** Kelas tanda (dot/garis/bentuk) — memakai kelas kotak Info map yang sama. */
 export function legendMarkClass(item: LegendItem): [string, string] | [string, string, string] {
   switch (item.jenis) {

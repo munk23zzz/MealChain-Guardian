@@ -19,7 +19,8 @@
 //   E. JEJAK — riwayat iterasi + panel integritas (Merkle/ECDSA).
 //
 // Aturan lama yang TETAP: nilai tak diketahui ditulis "—" (tidak dikarang), gating
-// approval tidak diubah, kartu gelap `.integrity-trust` tetap, kelas tes-sensitif
+// approval tidak diubah, kotak bukti `.integrity-trust` tetap satu tempat (kini
+// bertema terang, 19 Okt 2026), kelas tes-sensitif
 // (`.map-*`, `.side-tab*`, `.board-table-wrap`) tidak disentuh.
 
 import DecisionActions from "./DecisionActions";
@@ -30,6 +31,7 @@ import PageHeader from "./PageHeader";
 import { SupplierExclusionView } from "./SupplierExclusionPanel";
 import { dueLabel, pendingDecisions, type TodayDecision } from "../lib/today";
 import { decisionGroups, statusWord } from "../lib/decision-picker";
+import DecisionPicker from "./DecisionPicker";
 import { countActionable, countExpiredActionable } from "../lib/topbar";
 import { shortId } from "../lib/agent-quality";
 import type { SupplierContext } from "../lib/supplier-exclusions";
@@ -81,6 +83,10 @@ const ROUTE_STATE_WORDS: Record<string, string> = {
   waiting: "menunggu",
   blocked: "terhalang",
 };
+
+// Urutan bagian halaman = urutan di navigasi "Bagian". Dipakai penanda
+// posisi (satu sumber, bukan dua daftar yang bisa menyimpang).
+const SECTION_IDS = ["ringkasan", "rute", "zona-keputusan", "bukti", "jejak"] as const;
 
 export default function DecisionEvidence({
   decisions,
@@ -140,7 +146,13 @@ export default function DecisionEvidence({
   const konsekuensi = consequences({ decision: selected, summary });
   const judul = decisionHeadline(selected, summary);
   const metrik = decisionMetrics(selected, summary, now);
-  const flags = attentionFlags({ decision: selected, summary });
+  // Ringkasan persetujuan datang dari API terpisah (ikut poll 5 detik). Saat
+  // belum tiba, `attentionFlags` hanya bisa menyimpulkan "belum diverifikasi"
+  // dan menampilkan "(1)" padahal data aslinya tiga temuan — angka karangan.
+  // Jadi daftar temuan baru disusun setelah ringkasan benar-benar ada.
+  const adaRingkasan =
+    Boolean(summary) && typeof summary === "object" && Object.keys(summary as object).length > 0;
+  const flags = adaRingkasan ? attentionFlags({ decision: selected, summary }) : [];
   const rute = approvalRoute({ decision: selected, summary, now });
   const audit = auditTimeline({ decision: selected, summary, chain });
   const umur = windowUsage({
@@ -179,6 +191,37 @@ export default function DecisionEvidence({
     return () => io.disconnect();
   }, [selected?.decision_id]);
 
+  // ── Navigasi bagian: tandai bagian yang sedang dibaca ─────────────────────
+  // Halaman ini 3.000+ px, jadi nav di atas hanya berguna sekali kalau ia
+  // ikut menempel DAN menyebut posisi. Scroll listener (bukan
+  // IntersectionObserver) karena bagian "bukti" lebih tinggi dari viewport:
+  // rasio irisannya selalu kecil sehingga ia tidak pernah "menang".
+  const [bagianAktif, setBagianAktif] = useState<string>(SECTION_IDS[0]);
+  useEffect(() => {
+    if (!selected?.decision_id) return;
+    let raf = 0;
+    const ukur = () => {
+      raf = 0;
+      let aktif: string = SECTION_IDS[0];
+      for (const id of SECTION_IDS) {
+        const el = document.getElementById(id);
+        if (el && el.getBoundingClientRect().top - 140 <= 0) aktif = id;
+      }
+      setBagianAktif((sebelum) => (sebelum === aktif ? sebelum : aktif));
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(ukur);
+    };
+    ukur();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [selected?.decision_id]);
+
   // Peran pengawas mendapat kalimat "bersifat pengawasan" (nextStep → tone muted);
   // untuk mereka bar aksi tidak muncul karena memang tidak ada aksi yang boleh.
   const bolehBertindak = langkah.tone !== "muted";
@@ -204,26 +247,24 @@ export default function DecisionEvidence({
           // jumlah di bawahnya menjawab itu, dan angkanya dari SATU sumber yang
           // sama dengan lonceng notifikasi (countActionable).
           <div className="evidence-picker">
-            <label className="evidence-picker-label" htmlFor="pilih-keputusan">
-              Keputusan yang diperiksa
-            </label>
-            <select
+            <DecisionPicker
               id="pilih-keputusan"
-              className="page-header-select"
-              value={selectedId ?? ""}
-              onChange={(event) => onSelect(event.target.value)}
-            >
-              <option value="">— pilih keputusan —</option>
-              {groups.map((group) => (
-                <optgroup key={group.id} label={group.label}>
-                  {group.options.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+              label="Keputusan yang diperiksa"
+              groups={groups}
+              value={selectedId}
+              onChange={onSelect}
+              hint={
+                <>
+                  {countActionable(decisions, now, role)} menunggu tindakan
+                  {expiredCount > 0
+                    ? showExpired
+                      ? ` · ${expiredCount} lewat tenggat ditampilkan`
+                      : ` · ${expiredCount} lewat tenggat disembunyikan`
+                    : ""}{" "}
+                  · {decisions.length} keputusan tersedia
+                </>
+              }
+            />
             {expiredCount > 0 && (
               <label className="evidence-picker-toggle">
                 <input
@@ -234,15 +275,6 @@ export default function DecisionEvidence({
                 Tampilkan yang lewat tenggat ({expiredCount})
               </label>
             )}
-            <span className="evidence-picker-hint">
-              {countActionable(decisions, now, role)} menunggu tindakan
-              {expiredCount > 0
-                ? showExpired
-                  ? ` · ${expiredCount} lewat tenggat ditampilkan`
-                  : ` · ${expiredCount} lewat tenggat disembunyikan`
-                : ""}{" "}
-              · {decisions.length} keputusan tersedia
-            </span>
           </div>
         }
       />
@@ -262,7 +294,11 @@ export default function DecisionEvidence({
               ["jejak", "Jejak & integritas"],
             ].map(([id, label]) => (
               <li key={id}>
-                <a className="badge evidence-jump-link" href={`#${id}`}>
+                <a
+                  className="badge evidence-jump-link"
+                  href={`#${id}`}
+                  aria-current={bagianAktif === id ? "true" : undefined}
+                >
                   {label}
                 </a>
               </li>
@@ -325,7 +361,7 @@ export default function DecisionEvidence({
       ) : (
         <>
           {/* ── A. KEPALA KEPUTUSAN ─────────────────────────────────────────── */}
-          <article className="card evidence-hero" id="ringkasan">
+          <article className="card evidence-hero" id="ringkasan" data-status={statusKey}>
             <div className="evidence-hero-bar">
               <span
                 className={`badge evidence-hero-status status-${STATUS_TONES[statusKey] ?? "neutral"}`}
@@ -383,9 +419,11 @@ export default function DecisionEvidence({
               </p>
             )}
 
-            <h2 className="evidence-hero-heading">Ringkasan keputusan</h2>
-            {/* Judul = AKTIONYA, bukan label jenis keputusan (aturan 3 detik). */}
-            <p className="evidence-hero-title">{judul}</p>
+            {/* Label kecil di atas judul: bukan heading — heading seksi ini adalah
+                aksinya sendiri (aturan 3 detik), supaya pembaca layar mendengar
+                "Alihkan 712 kg…", bukan kata "Ringkasan keputusan". */}
+            <p className="evidence-hero-eyebrow">Ringkasan keputusan</p>
+            <h2 className="evidence-hero-title">{judul}</h2>
 
             {metrik.length > 0 && (
               <dl className="evidence-metrics">
@@ -453,8 +491,12 @@ export default function DecisionEvidence({
             ) : null}
           </article>
 
-          {/* ── B. JALUR PERSETUJUAN ────────────────────────────────────────── */}
-          <article className="card evidence-route" id="rute">
+          {/* ── B + C. PERSETUJUAN: JALUR & KEPUTUSAN ────────────────────────
+              Satu panel, bukan dua kartu: "menunggu siapa" (jalur) dan "apa
+              yang bisa saya lakukan" (kontrol) adalah satu cerita. Bingkai
+              kedua hanya menambah garis dan jarak tanpa menambah arti. */}
+          <section className="evidence-block" id="rute">
+          <article className="card evidence-route">
             <h2>Jalur persetujuan</h2>
             {rute.length === 0 ? (
               <p className="evidence-note">
@@ -478,7 +520,6 @@ export default function DecisionEvidence({
             )}
           </article>
 
-          {/* ── C. ZONA KEPUTUSAN ───────────────────────────────────────────── */}
           <article className="card evidence-decide" id="zona-keputusan">
             {/* Kepala: judul + aksi berdampingan supaya aksi menempel pada
                 statusnya, bukan menggantung di bawah daftar fakta. */}
@@ -501,9 +542,12 @@ export default function DecisionEvidence({
               )}
             />
           </article>
+          </section>
 
           {/* ── D. BUKTI ────────────────────────────────────────────────────── */}
-          <div className="evidence-grid" id="bukti">
+          <section className="evidence-block" id="bukti">
+            <h2 className="evidence-block-title">Bukti</h2>
+            <div className="evidence-grid">
             <article className="card">
               <h2>Biaya</h2>
               <FactList rows={costFacts({ ...selected, summary })} collapseEmpty />
@@ -529,7 +573,8 @@ export default function DecisionEvidence({
               <h2>Identitas &amp; tenggat</h2>
               <FactList rows={decisionFacts({ ...selected, summary }, clock)} collapseEmpty />
             </article>
-          </div>
+            </div>
+          </section>
 
           {/* Form pengecualian pemasok (governance) tampil lebar penuh setelah bukti. */}
           {supplierContext && (
@@ -542,13 +587,13 @@ export default function DecisionEvidence({
             />
           )}
 
-          {/* ── E. JEJAK ────────────────────────────────────────────────────── */}
-          <div className="evidence-bottom">
+          {/* ── E. JEJAK & INTEGRITAS ───────────────────────────────────────── */}
+          <section className="evidence-block evidence-bottom" id="jejak">
             {/* "Jejak & riwayat" = SATU lini masa: iterasi keluarga, pengajuan,
                 verifikasi, dan tiap keputusan orang (siapa · kapan · versi mana).
                 Sebelumnya riwayat iterasi terpisah dari fakta governance sehingga
                 penyetuju harus menjahit ceritanya sendiri dari beberapa kartu. */}
-            <article className="card evidence-audit-card" id="jejak">
+            <article className="card evidence-audit-card">
               <h2>Jejak &amp; riwayat</h2>
               <DecisionAudit events={audit} />
             </article>
@@ -556,7 +601,7 @@ export default function DecisionEvidence({
             {/* Bukti tersimpan: daftar evidence + rantai Merkle + tanda tangan
                 ECDSA + tombol ekspor JSON/CSV. */}
             <IntegrityPanel token={token ?? ""} decisionId={selected.decision_id} />
-          </div>
+          </section>
         </>
       )}
 
@@ -564,13 +609,26 @@ export default function DecisionEvidence({
           #zona-keputusan. Disembunyikan saat zona itu terlihat, dan untuk peran
           pengawas yang memang tidak punya aksi. */}
       {selected && bolehBertindak && !zonaTerlihat && (
-        <div className="evidence-actionbar" role="region" aria-label="Pintasan ke zona keputusan">
-          <span className="evidence-actionbar-text">
-            {statusWord(selected.status)}
-            {hitunganSetuju ? ` · ${hitunganSetuju}` : ""}
+        <div
+          className="evidence-actionbar"
+          role="region"
+          aria-label="Pintasan ke zona keputusan"
+          data-tone={STATUS_TONES[statusKey] ?? "neutral"}
+        >
+          {/* Titik nada + dua baris teks: keadaan dulu (yang menentukan apakah
+              ada yang bisa dikerjakan), lalu hitungan approval sebagai detail.
+              Sebelumnya satu baris abu-abu "status · hitungan" — dua informasi
+              berbeda bobotnya disamakan. */}
+          <span className="evidence-actionbar-state">
+            <span className="evidence-actionbar-dot" aria-hidden="true" />
+            <span className="evidence-actionbar-text">
+              <strong>{statusWord(selected.status)}</strong>
+              {hitunganSetuju ? <span>{hitunganSetuju}</span> : null}
+            </span>
           </span>
           <a className="button button-primary evidence-actionbar-link" href="#zona-keputusan">
             Ke zona keputusan
+            <span aria-hidden="true"> ↓</span>
           </a>
         </div>
       )}

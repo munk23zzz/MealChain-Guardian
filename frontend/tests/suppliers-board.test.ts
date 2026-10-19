@@ -225,7 +225,7 @@ const JARAK = {
   items: [
     {
       id: "j1",
-      name: "Sayur Segar Kramat Jati",
+      name: "Toko Sayur Bu Endang",
       location: "Jakarta",
       commodity: "telur",
       reliability_score: 0.88,
@@ -237,7 +237,7 @@ const JARAK = {
     },
     {
       id: "j2",
-      name: "Wortel Lestari Subang",
+      name: "CV Hortikultura Subang Lestari",
       location: "Jakarta",
       commodity: "wortel",
       reliability_score: 0.83,
@@ -249,7 +249,7 @@ const JARAK = {
     },
     {
       id: "j3",
-      name: "Wortel Bandungan",
+      name: "CV Bandungan Sayur Lestari",
       location: "Semarang",
       commodity: "wortel",
       reliability_score: 0.9,
@@ -277,8 +277,8 @@ describe("kolom jarak & penyaring jangkauan (Fase 7b)", () => {
   it("menuliskan jarak dari server, \"—\" bila tidak dilaporkan", () => {
     const rows = supplierDirectory(JARAK);
     const byName = new Map(rows.map((row) => [row.name, row]));
-    expect(byName.get("Sayur Segar Kramat Jati")?.distanceLabel).toBe("8,6 km");
-    expect(byName.get("Wortel Lestari Subang")?.distanceLabel).toBe("109 km");
+    expect(byName.get("Toko Sayur Bu Endang")?.distanceLabel).toBe("8,6 km");
+    expect(byName.get("CV Hortikultura Subang Lestari")?.distanceLabel).toBe("109 km");
     expect(byName.get("Pemasok Tanpa Jarak")?.distanceLabel).toBe("—");
   });
 
@@ -294,8 +294,8 @@ describe("kolom jarak & penyaring jangkauan (Fase 7b)", () => {
     // Urutan tabel = risiko dulu (keandalan naik), bukan urutan jarak: Subang 0,83
     // tampil sebelum Kramat Jati 0,88.
     expect(filterDirectoryByReach(rows, 150).map((row) => row.name)).toEqual([
-      "Wortel Lestari Subang",
-      "Sayur Segar Kramat Jati",
+      "CV Hortikultura Subang Lestari",
+      "Toko Sayur Bu Endang",
     ]);
     expect(directoryMetrics(rows, 150).outOfReach).toBe(1);
     expect(directoryMetrics(rows, 150).unknownDistance).toBe(1);
@@ -306,8 +306,8 @@ describe("kolom jarak & penyaring jangkauan (Fase 7b)", () => {
 
   it("label baris & ringkasan menyebut rujukan apa adanya", () => {
     const rows = supplierDirectory(JARAK);
-    const subang = rows.find((row) => row.name === "Wortel Lestari Subang");
-    const bandungan = rows.find((row) => row.name === "Wortel Bandungan");
+    const subang = rows.find((row) => row.name === "CV Hortikultura Subang Lestari");
+    const bandungan = rows.find((row) => row.name === "CV Bandungan Sayur Lestari");
     expect(subang && directoryReachLabel(subang, 150)).toBe("dalam jangkauan (109 km)");
     expect(bandungan && directoryReachLabel(bandungan, 150)).toBe("di luar jangkauan (401 km)");
     expect(directoryReachSummary(rows, 150, "Jakarta")).toBe(

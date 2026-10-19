@@ -28,6 +28,7 @@ export default function Popup({
   description,
   labelledBy = "popup-title",
   returnFocusRef,
+  className,
   children,
 }: {
   open: boolean;
@@ -36,6 +37,12 @@ export default function Popup({
   description?: string;
   /** id elemen judul — dipakai aria-labelledby (harus unik per popup). */
   labelledBy?: string;
+  /**
+   * Kelas tambahan pada panel `.popup` (mis. `popup-governance`), supaya satu
+   * dialog bisa punya tata letak sendiri tanpa mengubah dialog lain yang
+   * memakai cangkang yang sama.
+   */
+  className?: string;
   /**
    * Elemen yang menerima fokus kembali saat popup ditutup. Disarankan diisi
    * dengan ref tombol pemicu: peramban yang TIDAK memfokuskan tombol saat
@@ -115,7 +122,7 @@ export default function Popup({
       }}
     >
       <div
-        className="popup"
+        className={className ? `popup ${className}` : "popup"}
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}

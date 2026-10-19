@@ -16,6 +16,7 @@ import {
 import { nodeGauges, pinTone } from "../lib/map-console";
 import { ALL_LOCATIONS } from "../lib/topbar";
 import { LoadingState } from "./LoadingState";
+import { kodeWilayah } from "../lib/wilayah";
 
 function coordinate(value: number | string | null | undefined): string {
   const numeric = Number(value);
@@ -59,7 +60,7 @@ export default function NodeTelemetry({
         {selected && gauges && (
           <>
             <div className="node-telemetry-title">
-              <span className="node-telemetry-name">{selected.location}</span>
+              <span className="node-telemetry-name">{kodeWilayah(selected.location)}</span>
               <span className={`node-badge node-badge-${pinTone(selected.status)}`}>
                 {formatBalanceStatus(selected.status)}
               </span>

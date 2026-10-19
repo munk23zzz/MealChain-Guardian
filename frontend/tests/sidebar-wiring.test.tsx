@@ -53,10 +53,13 @@ describe("wiring sidebar + map di app/page.tsx (S4-06 polish)", () => {
     expect(pageSrc).not.toMatch(/Recommendations\$\{decisions\.length/);
   });
 
-  it("fitur lama tetap ada: OpsConsole (dgn Event2Panel nested), feed, detail", () => {
-    // Event2Panel dirender DI DALAM OpsConsole (komposisi), page cukup
-    // memasang OpsConsole — kontrak fitur: kedua panel tetap ter-wire.
-    expect(pageSrc).toMatch(/<OpsConsole/);
+  it("fitur lama tetap ada: konsol agent di tab Demo Control + feed + detail", () => {
+    // 2026-10-19 (keputusan Roy): tab Demo Control disederhanakan jadi tiga
+    // blok (siapkan data → jalankan agent → bukti). OpsConsole/Event2Panel
+    // tidak lagi dipasang di page; komponennya tetap ada dan tetap diuji di
+    // tests/ops-console.test.tsx + tests/event2-panel.test.tsx.
+    expect(pageSrc).toMatch(/<DemoControlPanel/);
+    expect(pageSrc).not.toMatch(/<OpsConsole/);
     // Halaman bukti keputusan kini tab tersendiri (sidebar acuan halaman 3):
     expect(pageSrc).toMatch(/<DecisionEvidence/);
     expect(evidenceSrc).toMatch(/<DecisionActions/);

@@ -125,10 +125,14 @@ describe("Wiring Event 1 penuh di konsol", () => {
   const baca = (bagian: string[]) =>
     readFileSync(join(process.cwd(), ...bagian), "utf-8");
 
-  it("page meneruskan onDecisionCreated ke OpsConsole", () => {
+  it("page memakai DemoControlPanel, bukan OpsConsole (2026-10-19)", () => {
+    // Tab Demo Control disederhanakan: satu tombol agent + blok bukti.
+    // OpsConsole/ChaosPanel tidak lagi dipasang di page (Event 1/2/3 dilepas),
+    // tetapi komponennya tetap ada dan tetap diuji di berkas ini.
     const src = baca(["app", "page.tsx"]);
-    expect(src).toContain("<OpsConsole");
-    expect(src).toContain("onDecisionCreated=");
+    expect(src).toContain("<DemoControlPanel");
+    expect(src).not.toContain("<OpsConsole");
+    expect(src).toContain("onOpenAgentLog=");
   });
 
   it("handler Event 1 memakai onDecisionCreated, bukan onSubmitted", () => {

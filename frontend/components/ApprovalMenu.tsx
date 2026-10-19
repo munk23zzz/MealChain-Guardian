@@ -128,7 +128,7 @@ export default function ApprovalMenu({
           <h4 className="approval-menu-heading">Pilihan tindakan</h4>
           <ul className="action-menu">
             {actions.approve && canReject && (
-              <li className="action-menu-item">
+              <li className="action-menu-item" data-action="reject">
                 <div className="action-menu-text">
                   <strong>Tolak keputusan</strong>
                   <span>
@@ -175,7 +175,7 @@ export default function ApprovalMenu({
             )}
 
             {actions.verify && belumKedaluwarsa && (
-              <li className="action-menu-item">
+              <li className="action-menu-item" data-action="verify">
                 <div className="action-menu-text">
                   <strong>Catat hasil verifier</strong>
                   <span>
@@ -208,7 +208,7 @@ export default function ApprovalMenu({
             )}
 
             {actions.propose && !administrative && belumKedaluwarsa && (
-              <li className="action-menu-item">
+              <li className="action-menu-item" data-action="propose">
                 <div className="action-menu-text">
                   <strong>Ajukan untuk persetujuan</strong>
                   <span>
@@ -242,7 +242,7 @@ export default function ApprovalMenu({
             )}
 
             {actions.execute && canExecute && (
-              <li className="action-menu-item">
+              <li className="action-menu-item" data-action="execute">
                 <div className="action-menu-text">
                   <strong>Eksekusi ke SAP (mock)</strong>
                   <span>
@@ -276,7 +276,7 @@ export default function ApprovalMenu({
             )}
 
             {actions.repropose && !administrative && belumKedaluwarsa && (
-              <li className="action-menu-item">
+              <li className="action-menu-item" data-action="repropose">
                 <div className="action-menu-text">
                   <strong>Minta re-propose</strong>
                   <span>
@@ -364,6 +364,7 @@ export default function ApprovalMenu({
       )}
 
       <div className="approval-menu-foot">
+        <p className="approval-menu-hint">Tekan Esc untuk menutup jendela ini.</p>
         <button type="button" className="button button-secondary" onClick={onClose} disabled={busy !== null}>
           Tutup
         </button>

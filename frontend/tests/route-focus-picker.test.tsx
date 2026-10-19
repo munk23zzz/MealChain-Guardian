@@ -58,8 +58,8 @@ describe("RouteFocusPicker", () => {
       />
     );
     expect(html).toContain("Semua (2)");
-    expect(html).toContain("Supplier A → Jakarta");
-    expect(html).toContain("Supplier B → Bandung");
+    expect(html).toContain("Supplier A → JKT");
+    expect(html).toContain("Supplier B → BDG");
     expect(html).toContain("Di jalan · 20 menit lagi");
     expect(html).toContain("aria-label=\"Pilih kiriman yang disorot di peta\"");
   });
@@ -83,7 +83,7 @@ describe("RouteFocusPicker", () => {
     );
     expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
     const aktif = html.slice(html.indexOf("aria-pressed=\"true\""));
-    expect(aktif).toContain("Supplier A → Jakarta");
+    expect(aktif).toContain("Supplier A → JKT");
   });
 
   it("tidak ada kiriman → tidak ada bentuk kosong yang dirender", () => {

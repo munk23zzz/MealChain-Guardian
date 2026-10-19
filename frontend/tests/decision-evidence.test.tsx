@@ -250,6 +250,25 @@ describe("Decision & Evidence — dengan keputusan", () => {
     expect(html).toContain("v1");
     expect(html).toContain("alasan: Kuota penuh");
     expect(html).toContain("v1 diajukan");
+    // Temuan tidak boleh dikarang: dulu, sebelum ringkasan tiba, blok triase
+    // sudah tampil "Perlu diperhatikan (1) Belum diverifikasi" padahal data
+    // aslinya tiga temuan — angka karangan yang menyesatkan.
+    expect(html).not.toContain("Perlu diperhatikan");
+    expect(html).not.toContain("Belum diverifikasi");
+  });
+
+  it("tiga temuan nyata: judul (3) dan tiga tile dalam satu baris daftar", () => {
+    const html = render({
+      summary: {
+        ...SUMMARY,
+        verifier: { verdict: "unavailable", verified_by: null },
+        expiry: { expires_at: "2026-10-11T02:16:47.973521+00:00", valid: false, seconds_remaining: 0 },
+        safety: { worst_status: null, blocked: true, batches_checked: 0, reason: "safety revalidation gagal: tidak ada batch sumber" },
+      },
+    });
+    expect(html).toContain("Perlu diperhatikan (3)");
+    expect(html.match(/evidence-flag evidence-flag-/g)?.length).toBe(3);
+    expect(html).toContain("safety revalidation gagal: tidak ada batch sumber");
   });
 });
 
@@ -260,7 +279,10 @@ describe("Decision & Evidence — dengan keputusan", () => {
 describe("Decision & Evidence — pemilih keputusan", () => {
   it("dikelompokkan dan memakai bahasa manusia, bukan istilah backend mentah", () => {
     const html = render();
-    expect(html).toContain("<optgroup");
+    // 19 Okt 2026: penanda `<optgroup` diganti wadah milik DecisionPicker;
+    // inti kontraknya tetap "dikelompokkan + kata manusia", bukan satu daftar
+    // gepeng berisi istilah backend.
+    expect(html).toContain("dpick-group-label");
     expect(html).toContain("Menunggu tindakan (2)");
     expect(html).toContain("Alokasi regional direkomendasikan");
     expect(html).toContain("Pengalihan pasokan (gangguan keamanan)");
@@ -328,7 +350,11 @@ describe("Decision & Evidence — kerapian kartu fakta (17 Okt 2026)", () => {
     expect(html).toContain('for="pilih-keputusan"');
     expect(html).toContain("menunggu tindakan ·");
     expect(html).toContain("keputusan tersedia");
-    expect(html).toContain("<optgroup");
+    // 19 Okt 2026: <select> diganti pemilih yang bisa dicari (DecisionPicker).
+    // Inti yang dijaga tetap sama — pemicu yang menampilkan pilihan aktif dan
+    // jumlah konteks; `<optgroup` hanya penanda implementasi lama.
+    expect(html).toContain("dpick-trigger");
+    expect(html).toContain('aria-haspopup="listbox"');
   });
 
   it("baris kosong (\"—\") masuk rincian yang bisa dibuka; fakta terisi tetap tampil", () => {

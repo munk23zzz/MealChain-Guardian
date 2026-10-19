@@ -318,6 +318,7 @@ const HEADLINE_VERBS: Record<string, string> = {
   price_anomaly: "Sesuaikan harga",
   surplus_redistribution: "Redistribusikan",
   supplier_exclusion: "Keluarkan pemasok",
+  supplier_procurement: "Adakan dari pemasok",
   supplier_restoration: "Pulihkan pemasok",
 };
 
@@ -365,7 +366,12 @@ export function decisionHeadline(decision: unknown, summary: unknown): string {
   if (jumlah) bagian.push(jumlah);
   const komoditas = text(s.commodity) ?? text(d.commodity);
   if (komoditas) bagian.push(komoditas);
-  const asal = text(s.source_location) ?? text(d.source_location);
+  // Pengadaan: asal = PEMASOK (kolom source_location memang NULL), supaya
+  // judul tidak berbunyi seolah barang datang dari kota tujuan itu sendiri.
+  const asal =
+    type === "supplier_procurement"
+      ? supplierNameOf(s) ?? supplierNameOf(d)
+      : text(s.source_location) ?? text(d.source_location);
   const tujuan = text(s.target_location) ?? text(d.target_location);
   const rute = asal && tujuan ? `: ${asal} → ${tujuan}` : "";
   return `${bagian.join(" ")}${rute}`;
@@ -771,6 +777,21 @@ function text(value: unknown): string | null {
   return str === "" ? null : str;
 }
 
+/**
+ * Nama pemasok dari payload keputusan. Dua bentuk nyata di lapangan:
+ * `/decisions/{id}` mengirim objek `{id, name}`, `/approval-summary` juga
+ * mengirim objek, sedangkan beberapa panel lama mengirim string. `null` tetap
+ * `null` — nama pemasok tidak pernah ditebak dari lokasi atau quote.
+ */
+export function supplierNameOf(payload: unknown): string | null {
+  const p = (payload ?? {}) as Record<string, unknown>;
+  const supplier = p.supplier ?? p.supplier_name ?? null;
+  if (supplier && typeof supplier === "object") {
+    return text((supplier as Record<string, unknown>).name);
+  }
+  return text(supplier);
+}
+
 function idr(value: unknown): string {
   const num = Number(value);
   if (!Number.isFinite(num)) return DASH;
@@ -854,12 +875,24 @@ export function decisionFacts(decision: unknown, _now?: Date | null): FactRow[] 
   const merged: Record<string, unknown> = summary ? { ...decisionPayload, ...summary } : decisionPayload;
   const source = text(merged.source_location);
   const target = text(merged.target_location);
+  const type = text(merged.decision_type);
+  const pemasok = supplierNameOf(merged);
+  const pengadaan = type === "supplier_procurement";
   const iteration = Number(merged.iteration);
+  // Pengadaan menampilkan asalnya PEMASOK. Sebelum ini barisnya berbunyi
+  // "Rute —" karena source_location_id NULL — terbaca seperti data rusak,
+  // padahal asal yang benar memang pemasoknya.
+  const barisRute: FactRow = pengadaan
+    ? {
+        label: "Pemasok → SPPG",
+        value: pemasok && target ? `${pemasok} → ${target}` : DASH,
+      }
+    : {
+        label: "Rute",
+        value: source && target ? `${source} → ${target}` : DASH,
+      };
   return [
-    {
-      label: "Rute",
-      value: source && target ? `${source} → ${target}` : DASH,
-    },
+    barisRute,
     { label: "Komoditas", value: text(merged.commodity) ?? DASH },
     {
       label: "Iterasi",
@@ -895,24 +928,52 @@ export function supplierLegHint(breakdown: unknown): string | null {
   return null;
 }
 
-/** Biaya: rincian + total biaya aman terkirim. */
+/** Biaya: rincian enam komponen Safe Delivered Cost + total. */
 export function costFacts(decision: unknown): FactRow[] {
   const payload = (decision ?? {}) as Record<string, unknown>;
   const summary = (payload.summary ?? null) as Record<string, unknown> | null;
-  const breakdown = (summary?.cost_breakdown ?? payload.cost_breakdown ?? {}) as Record<string, unknown>;
-  const rows: FactRow[] = [
-    { label: "Harga beli", value: breakdown.purchase === undefined ? DASH : idr(breakdown.purchase) },
-    { label: "Logistik", value: breakdown.logistics === undefined ? DASH : idr(breakdown.logistics) },
-    { label: "Catatan", value: text(breakdown.note) ?? DASH },
+  // Sebagian baris lama menyimpan SELURUH payload rekomendasi di kolom ini
+  // (`{"cost_breakdown": {...}, "candidate_score": ...}`). Buka bungkusnya
+  // supaya komponennya terbaca, bukan tampil "—" semua.
+  const mentah = (summary?.cost_breakdown ?? payload.cost_breakdown ?? {}) as Record<string, unknown>;
+  const breakdown = (
+    mentah.cost_breakdown && typeof mentah.cost_breakdown === "object"
+      ? (mentah.cost_breakdown as Record<string, unknown>)
+      : mentah
+  ) as Record<string, unknown>;
+  const total = summary?.safe_delivered_cost ?? payload.safe_delivered_cost;
+  const ada = (k: string) => breakdown[k] !== undefined && breakdown[k] !== null;
+
+  // Enam komponen kontrak SDC (core/safe_delivered_cost.py). Baris yang tidak
+  // dikirim backend TETAP muncul dengan "—" dan alasannya — kalau disembunyikan,
+  // pembaca mengira total hanya terdiri dari dua komponen.
+  const komponen: Array<[string, string, string]> = [
+    ["purchase", "Harga beli", "harga/kg × jumlah"],
+    ["transport", "Logistik", "linehaul antar SPPG + angkut pemasok"],
+    ["handling", "Penanganan", "biaya bongkar-muat tetap"],
+    ["expected_loss", "Potensi susut", "purchase × laju susut × (1 − kesegaran)"],
+    ["freshness_risk", "Risiko kesegaran", "penalti bila kesegaran < 0,60"],
+    ["safety_penalty", "Penalti keamanan", "penalti bila status belum terverifikasi"],
   ];
-  // Fase 7d: biaya angkut dipecah jadi kaki pertama (pemasok → SPPG sumber) dan
-  // linehaul (SPPG → SPPG). Baris hanya muncul bila backend memang mengirim
-  // pecahannya — keputusan lama tidak diberi baris "—" palsu.
+  // `logistics` adalah alias lama untuk komponen angkut — dibaca sebagai
+  // fallback supaya keputusan sebelum Fase 7d tetap punya nilainya.
+  const nilai = (key: string): unknown =>
+    key === "transport" && !ada("transport") ? breakdown.logistics : breakdown[key];
+  const rows: FactRow[] = komponen.map(([key, label, alasan]) => ({
+    label,
+    value: nilai(key) === undefined || nilai(key) === null ? DASH : idr(nilai(key)),
+    hint: nilai(key) === undefined || nilai(key) === null
+      ? `tidak ada di data keputusan ini (${alasan})`
+      : null,
+  }));
+
+  // Pecahan angkut hanya muncul bila backend memang mengirimnya (keputusan baru).
   const leg = breakdown.transport_supplier_leg;
   const linehaul = breakdown.transport_linehaul;
   if (leg !== undefined || linehaul !== undefined) {
+    const at = rows.findIndex((r) => r.label === "Logistik");
     rows.splice(
-      2,
+      at + 1,
       0,
       {
         label: "Angkut pemasok → SPPG",
@@ -925,6 +986,31 @@ export function costFacts(decision: unknown): FactRow[] {
       }
     );
   }
+
+  // Total hanya sah bila rincian yang ada menjumlah ke sana. Kalau tidak
+  // (baris lama tanpa komponen), total ditandai — bukan ditampilkan seolah
+  // rekonsiliasi berhasil.
+  const enam = komponen.map(([key]) => nilai(key)).filter((v) => v !== undefined && v !== null);
+  const jumlah = enam.reduce((acc: number, v) => acc + Number(v ?? 0), 0);
+  const totalNum = Number(total);
+  const lengkap = enam.length === komponen.length;
+  const cocok = lengkap && Number.isFinite(totalNum) && Math.abs(jumlah - totalNum) < 0.01;
+  // Total sengaja TIDAK diulang di kartu (angka yang sama sudah ada di strip
+  // metrik). Yang ditampilkan hanya ketidakcocokan — itulah yang harus terlihat.
+  if (!lengkap || !cocok) {
+    rows.push({
+      label: "Rekonsiliasi rincian",
+      value: DASH,
+      hint: lengkap
+        ? `enam komponen berjumlah ${idr(jumlah)}, total tercatat ${idr(total)} — jangan dikutip sampai dihitung ulang`
+        : `${komponen.length - enam.length} dari ${komponen.length} komponen belum ada — rincian tidak bisa direkonsiliasi`,
+      tone: "danger",
+    });
+  }
+
+  // Dasar hitung: menggantikan catatan tulisan tangan lama.
+  const basis = text(breakdown.basis) ?? text(breakdown.note);
+  if (basis) rows.push({ label: "Dasar hitung", value: basis });
   return rows;
 }
 

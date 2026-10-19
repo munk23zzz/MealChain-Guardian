@@ -203,7 +203,7 @@ describe("kartu lokasi shortage", () => {
     expect(html).toContain('<span class="today-count">2</span>');
     expect(html).toContain("Total kekurangan 786 kg");
     expect(html).toContain("kurang 780 kg");
-    expect(html.indexOf("Jakarta")).toBeLessThan(html.indexOf("Medan"));
+    expect(html.indexOf("JKT")).toBeLessThan(html.indexOf("MDN"));
   });
 
   it("lebih dari 6 lokasi: sisanya dinyatakan, bukan disembunyikan", () => {
@@ -356,6 +356,20 @@ describe("susunan halaman setelah desain ulang (2026-10-17)", () => {
     for (const id of ["today-batches", "today-shortage", "today-kpi", "today-ledger"]) {
       expect(html.indexOf(`id="${id}"`)).toBeGreaterThan(mulai);
     }
+  });
+
+  it("kartu tinggi berpasangan dan kartu pendek berpasangan (tanpa sel menganga)", () => {
+    // Dulu urutannya batches-shortage-kpi-ledger: baris pertama setinggi 436 px
+    // sedangkan kartu shortage cuma 148 px, baris kedua 479 px vs ledger 133 px
+    // — sekitar 630 px ruang kosong di dalam grid. Sekarang kartu tinggi
+    // (batches, kpi) berbagi baris pertama dan kartu pendek (shortage, ledger)
+    // baris kedua, sehingga sisa kosong tiap sel tinggal beberapa puluh px.
+    const html = render(denganAgenda);
+    const posisi = ["today-batches", "today-kpi", "today-shortage", "today-ledger"].map((id) =>
+      html.indexOf(`id="${id}"`)
+    );
+    expect(posisi.every((n) => n > 0)).toBe(true);
+    expect([...posisi].sort((a, b) => a - b)).toEqual(posisi);
   });
 
   it("agenda harian hanya dirender bila halaman mengirim state kalender", () => {

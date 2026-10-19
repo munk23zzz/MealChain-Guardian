@@ -5,6 +5,7 @@
 // can_execute & blocking_reasons murni keputusan server; field yang
 // hilang tampil "unavailable", bukan default palsu (plan §S4-04).
 
+import type { ReactNode } from "react";
 import { formatIDR } from "../lib/auth";
 import { safetyLabel } from "../lib/bahasa";
 
@@ -18,6 +19,45 @@ function fmtNum(value: any): string {
   if (value === null || value === undefined) return "unavailable";
   const n = Number(value);
   return Number.isFinite(n) ? n.toLocaleString("id-ID") : String(value);
+}
+
+/** Satu baris fakta: label (dt) di kiri, nilai (dd) di kanan. */
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="approval-fact">
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  );
+}
+
+/** Ikon peringatan SVG — bukan emoji, supaya bentuknya sama di semua sistem. */
+function BlockerIcon() {
+  return (
+    <svg
+      className="approval-blocker-icon"
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M8 1.6 15 14H1L8 1.6Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8 6.2v3.4M8 11.6v.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }
 
 export default function ApprovalModal({
@@ -72,67 +112,116 @@ export default function ApprovalModal({
     // role="dialog" + aria-modal). Root-nya karena itu sebuah <section>: dialog
     // bersarang membuat pembaca layar mengumumkan dua konteks modal sekaligus.
     <section className="approval-modal" aria-label="Ringkasan approval">
-      <h3>Konfirmasi Approval</h3>
-      <ul>
-        <li>
-          Keputusan #{summary.decision_id} (v{summary.iteration ?? 1}) — status{" "}
-          <Show value={summary.status} />
-        </li>
-        {administrative ? <>
-          <li>{summary.decision_type === "supplier_exclusion_restoration" ? "Pemulihan supplier" : "Exclusion supplier"}</li>
-          <li>Supplier: <Show value={summary.supplier?.name} /></li>
-          <li>Scope SPPG: <Show value={summary.target_location} /></li>
-          <li>Alasan: <Show value={governance?.reason} /></li>
-          <li>Bukti: {(governance?.evidence_refs ?? []).map((ref: { type: string; id: string }) => `${ref.type}: ${ref.id}`).join(", ") || "unavailable"}</li>
-          <li>
-            Aktif sampai pemulihan terbukti dengan approval baru. Batch yang gagal pemeriksaan
-            tetap diblokir.
-          </li>
-        </> : <>
-        <li>
-          Alokasi: <Show value={summary.source_location} /> →{" "}
-          <Show value={summary.target_location} /> ({summary.decision_type})
-        </li>
-        <li>
-          Komoditas: <Show value={summary.commodity} /> — Jumlah:{" "}
-          {fmtNum(summary.quantity_kg)} kg
-        </li>
-        <li>
-          Supplier: <Show value={summary.supplier?.name ?? null} /> — Material:{" "}
-          <Show value={summary.material_number} />
-        </li>
-        <li>Total biaya: {formatIDR(summary.safe_delivered_cost)}</li>
-        </>}
-        <li>
-          Safety batch sumber:{" "}
+      <header className="approval-modal-head">
+        <div className="approval-modal-heading">
+          <p className="approval-modal-eyebrow">Ringkasan bukti</p>
+          <h3>Konfirmasi Approval</h3>
+        </div>
+        <p className="approval-modal-id">
+          #{summary.decision_id} · v{summary.iteration ?? 1}
+        </p>
+      </header>
+
+      <dl className="approval-facts">
+        <Fact label="Status">
+          <code>
+            <Show value={summary.status} />
+          </code>
+        </Fact>
+
+        {administrative ? (
+          <>
+            <Fact label="Jenis">
+              {summary.decision_type === "supplier_exclusion_restoration"
+                ? "Pemulihan supplier"
+                : "Exclusion supplier"}
+            </Fact>
+            <Fact label="Supplier">
+              <Show value={summary.supplier?.name} />
+            </Fact>
+            <Fact label="Scope SPPG">
+              <Show value={summary.target_location} />
+            </Fact>
+            <Fact label="Alasan">
+              <Show value={governance?.reason} />
+            </Fact>
+            <Fact label="Bukti">
+              {(governance?.evidence_refs ?? [])
+                .map((ref: { type: string; id: string }) => `${ref.type}: ${ref.id}`)
+                .join(", ") || "unavailable"}
+            </Fact>
+            <Fact label="Masa berlaku">
+              Aktif sampai pemulihan terbukti dengan approval baru. Batch yang gagal
+              pemeriksaan tetap diblokir.
+            </Fact>
+          </>
+        ) : (
+          <>
+            <Fact
+              label={
+                summary.decision_type === "supplier_procurement"
+                  ? "Pemasok → SPPG"
+                  : "Alokasi"
+              }
+            >
+              {/* Pengadaan: asal = pemasok (source_location memang null). */}
+              <Show
+                value={
+                  summary.decision_type === "supplier_procurement"
+                    ? summary.supplier?.name ?? null
+                    : summary.source_location
+                }
+              />{" "}
+              → <Show value={summary.target_location} />{" "}
+              <span className="approval-fact-note">({summary.decision_type})</span>
+            </Fact>
+            <Fact label="Komoditas">
+              <Show value={summary.commodity} />{" "}
+              <span className="approval-fact-note">·</span> {fmtNum(summary.quantity_kg)} kg
+            </Fact>
+            <Fact label="Supplier">
+              <Show value={summary.supplier?.name ?? null} />{" "}
+              <span className="approval-fact-note">· material</span>{" "}
+              <Show value={summary.material_number} />
+            </Fact>
+            <Fact label="Total biaya">{formatIDR(summary.safe_delivered_cost)}</Fact>
+          </>
+        )}
+
+        <Fact label="Safety batch sumber">
           <Show value={safetyLabel(safety.worst_status)} />
           {safety.blocked ? " — dikecualikan (gagal pemeriksaan)" : ""}
-        </li>
-        <li>
-          Verdict verifier: <Show value={verdict} /> (server-side)
-        </li>
-        <li>
-          Approval requirement: {req.min_approvals ?? "unavailable"} approval —{" "}
+        </Fact>
+        <Fact label="Verdict verifier">
+          <Show value={verdict} /> <span className="approval-fact-note">(server-side)</span>
+        </Fact>
+        <Fact label="Syarat approval">
+          {req.min_approvals ?? "unavailable"} approval —{" "}
           {missingRoles || (req.required_roles ?? []).flat().join(" + ") || "unavailable"}
-        </li>
-        <li>
-          Kedaluwarsa:{" "}
-          {summary.expiry?.valid
-            ? `valid (${summary.expiry.seconds_remaining}s)`
-            : "expired"}
-        </li>
-        <li>
-          Target eksekusi: <Show value={summary.execution_target} />
+        </Fact>
+        <Fact label="Kedaluwarsa">
+          {summary.expiry?.valid ? `valid (${summary.expiry.seconds_remaining}s)` : "expired"}
+        </Fact>
+        <Fact label="Target eksekusi">
+          <Show value={summary.execution_target} />
           {administrative ? " (administrasi lokal, tanpa PO)" : " (PO mock, berlabel Data Simulasi)"}
-        </li>
-      </ul>
+        </Fact>
+      </dl>
+
       {blocking.length > 0 && (
-        <ul className="approval-modal-blockers">
-          {blocking.map((reason: string) => (
-            <li key={reason}>⛔ {reason}</li>
-          ))}
-        </ul>
+        <div className="approval-modal-blockers">
+          <p className="approval-modal-blockers-title">Tertahan</p>
+          <ul>
+            {blocking.map((reason: string) => (
+              <li key={reason}>
+                <BlockerIcon />
+                <span>{reason}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
+
       {showActions && (
         <div className="approval-modal-actions">
           <button

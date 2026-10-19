@@ -26,7 +26,12 @@ describe("markup kontrak P4/P5 (file-level, tanpa render app penuh)", () => {
     // di tab agent-log (jejak agen vs bukti keputusan = dua halaman).
     expect(src).toContain("DecisionEvidence");
     expect(evidence).toContain("IntegrityPanel");
-    expect(src).toContain("ChaosPanel");
+    // Sejak 2026-10-19 (keputusan Roy) tab Demo Control TIDAK lagi memuat
+    // ChaosPanel/Event 2-3: panelnya diganti DemoControlPanel tiga blok
+    // (siapkan data → jalankan agent → bukti). Komponen ChaosPanel tetap
+    // ada di repo dan tetap diuji di berkas ini.
+    expect(src).toContain("DemoControlPanel");
+    expect(src).not.toContain("<ChaosPanel");
     // Banner telemetry dihapus dari login (arah Roy 2026-10-10).
     expect(src).not.toContain("telemetry-banner");
   });
@@ -60,9 +65,14 @@ describe("markup kontrak P4/P5 (file-level, tanpa render app penuh)", () => {
     expect(panel).toContain("resolveEventTarget");
     expect(panel).toContain("blockedReason");
     expect(panel).not.toMatch(/location_id\s*\?\?\s*""/);
-    // Lokasi pemakai datang dari identitas server (/auth/me), bukan tebakan.
-    expect(page).toMatch(/ownLocationId=\{me\?\.location_id/);
-    expect(page).toMatch(/ownLocationName=\{me\?\.location_name/);
+    // Penjaga cakupan itu milik KOMPONEN. Sejak 2026-10-19 ChaosPanel tidak
+    // lagi dipasang di page (tab Demo Control diganti DemoControlPanel), jadi
+    // yang dipaku di sini adalah kontrak komponennya — bukan wiring page yang
+    // sudah tidak ada. Kalau komponen ini dipasang lagi, penjaganya ikut
+    // karena tinggal di dalamnya.
+    expect(panel).toContain("ownLocationId");
+    expect(panel).toContain("ownLocationName");
+    expect(page).not.toContain("<ChaosPanel");
   });
 
   it("IntegrityPanel memanggil endpoint ledger & dossier", async () => {

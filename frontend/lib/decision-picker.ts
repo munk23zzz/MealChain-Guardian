@@ -194,3 +194,39 @@ export function decisionGroups(
 
   return groups;
 }
+
+/**
+ * Saring opsi pemilih berdasarkan kata kunci (redesign 19 Okt 2026).
+ *
+ * Kueri kosong mengembalikan array yang sama persis (bukan salinan) supaya
+ * pemanggil bisa memakai perbandingan identitas dan tidak menghitung ulang.
+ * Pencocokan hanya pada label yang tampil — jenis, status, waktu, dan #id —
+ * jadi apa yang bisa dicari selalu sama dengan apa yang terlihat.
+ */
+export function saringGrup(groups: PickerGroup[], kueri: string): PickerGroup[] {
+  const q = (kueri ?? "").trim().toLowerCase();
+  if (!q) return groups;
+  return groups
+    .map((group) => ({
+      ...group,
+      options: group.options.filter((option) =>
+        String(option.label ?? "")
+          .toLowerCase()
+          .includes(q)
+      ),
+    }))
+    .filter((group) => group.options.length > 0);
+}
+
+/**
+ * Pecah label opsi "judul · meta · meta" untuk tampilan dua baris.
+ * Bagian kosong dibuang; `value` tidak pernah ikut dipecah oleh pemanggil.
+ */
+export function pecahLabel(label: string): { judul: string; meta: string[] } {
+  const bagian = String(label ?? "")
+    .split(SEP)
+    .map((teks) => teks.trim())
+    .filter(Boolean);
+  if (bagian.length === 0) return { judul: "", meta: [] };
+  return { judul: bagian[0], meta: bagian.slice(1) };
+}

@@ -45,6 +45,7 @@ import {
   type SafetyRow,
 } from "../lib/food-safety";
 import { formatKg } from "../lib/overview-format";
+import { kodeWilayah } from "../lib/wilayah";
 import type { SupplierRoute } from "../lib/supplier-routes";
 import { LoadingState } from "./LoadingState";
 import Popup from "./Popup";
@@ -572,7 +573,7 @@ export default function FoodSafetyBoard({
                   return (
                     <li key={`${row.location}-${row.commodity}-${row.id}`}>
                       <span className="board-list-title">
-                        {row.location} · {row.commodity}
+                        {kodeWilayah(row.location)} · {row.commodity}
                       </span>
                       <span className="board-list-meta">
                         {row.kg === null ? "—" : formatKg(row.kg)} · {row.hoursLabel}
@@ -644,7 +645,7 @@ export default function FoodSafetyBoard({
             >
               {batchOpsi.map((row) => (
                 <option key={String(row.id)} value={String(row.id)}>
-                  {row.commodity} · {row.kg === null ? "—" : formatKg(row.kg)} · {row.location}
+                  {row.commodity} · {row.kg === null ? "—" : formatKg(row.kg)} · {kodeWilayah(row.location)}
                 </option>
               ))}
             </select>
@@ -778,7 +779,7 @@ export default function FoodSafetyBoard({
                     const state = expiryState(row.hoursLeft);
                     return (
                       <tr key={row.id ?? `${row.location}-${row.commodity}`}>
-                        <td>{ownLocation && !jaringan ? asal(row) : row.location}</td>
+                        <td>{ownLocation && !jaringan ? asal(row) : kodeWilayah(row.location)}</td>
                         <td>{row.commodity}</td>
                         <td className="num">{row.kg === null ? "—" : formatKg(row.kg)}</td>
                         <td>

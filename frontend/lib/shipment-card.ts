@@ -19,6 +19,7 @@
  * 3. Keadaan perjalanan diambil apa adanya dari server (`journey.state`), tidak
  *    diterjemahkan ulang di klien.
  */
+import { kodeWilayah } from "./wilayah";
 import { formatClockWib, formatDate, formatDateTime } from "./datetime";
 import { formatKg } from "./overview-format";
 import {
@@ -52,9 +53,9 @@ const STEP_LABELS: Record<ShipmentStepKey, string> = {
   arrive: "Tiba",
 };
 
-/** Judul kotak: "Supplier A → SPPG Cianjur". */
+/** Judul kotak: "CV Cipinang Boga Utama → SPPG JKT". */
 export function shipmentTitle(row: SupplierRoute): string {
-  return `${row.supplierName} → ${row.destinationName}`;
+  return `${row.supplierName} → ${kodeWilayah(row.destinationName)}`;
 }
 
 /** Alasan jalur belum ada dalam bahasa pengguna (fallback: apa yang server kirim). */

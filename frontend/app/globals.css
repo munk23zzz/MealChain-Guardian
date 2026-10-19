@@ -89,16 +89,17 @@
   --accent: #1D4ED8;            /* hover aksi primer (blue-700) */
   --accent-strong: #2563EB;     /* aksi primer (blue-600) */
   --accent-soft: #EFF6FF;       /* tint aksen: item rail aktif, chip peran (blue-50) */
-  /* Kartu kepercayaan (Fase 3, §5.6): SATU-SATUNYA permukaan gelap di tema
-     terang — wadah bukti kriptografis (Merkle + alamat konten + tanda tangan).
-     Kontras di atas #0F172A: --trust-ink 14,5:1 · --trust-ink-muted 7,0:1 ·
-     --trust-accent 10,8:1 (semua lolos AA, mayoritas AAA). */
-  --trust-bg: #0F172A;
-  --trust-surface: rgba(255, 255, 255, 0.06);
-  --trust-line: rgba(148, 163, 184, 0.32);
-  --trust-ink: #E2E8F0;
-  --trust-ink-muted: #94A3B8;
-  --trust-accent: #7DD3FC;
+  /* Kotak bukti (Fase 3 §5.6; tema terang 19 Okt 2026): dulu SATU-SATUNYA
+     permukaan gelap (#0F172A) di tema terang. Kini ikut tema terang dengan
+     nama token yang sama, supaya aturan lama tidak perlu ditulis ulang.
+     Kontras di atas --trust-bg putih: --trust-ink 17,9:1 · --trust-ink-muted
+     7,6:1 · --trust-accent 6,1:1 di atas --trust-surface (semua lolos AA). */
+  --trust-bg: #FFFFFF;
+  --trust-surface: #F1F5F9;
+  --trust-line: #E2E8F0;
+  --trust-ink: #0F172A;
+  --trust-ink-muted: #475569;
+  --trust-accent: #1D4ED8;
   /* Terminal tetap permukaan terang (keputusan lama), hanya ikut token baru */
   --terminal: #FFFFFF;
   --terminal-border: #E2E8F0;
@@ -2546,6 +2547,14 @@ a:focus-visible {
   align-items: center;
   gap: 4px;
 }
+/* Pemenggal baris ber-makna (permintaan pemilik 2026-10-19): kelompok pemasok
+   selalu mulai di baris 2, sebaris dengan tiga butir pemasok lainnya. Elemen ini
+   selebar baris dan setinggi 0 — ia hanya memaksa `flex-wrap` patah di situ,
+   tanpa menambah kotak, warna, atau tinggi baris. */
+.map-legend-compact-break {
+  flex-basis: 100%;
+  height: 0;
+}
 
 /* --- Bilah rincian lapisan peta (revisi 16 Okt, arah pemilik) --------------
    Sebelumnya dua kalimat penjelas selalu memakan dua baris penuh di bawah peta.
@@ -2844,14 +2853,29 @@ a:focus-visible {
    supaya tumpukan legenda peta (yang memakai `.reach-filter` sama) tidak ikut
    bergeser. */
 .board-page .reach-filter {
-  margin-bottom: var(--space-3);
+  /* Tombol "Hanya dalam jangkauan / Tampilkan semua pemasok" berdiri di ujung
+     kanan baris ini, tepat DI ATAS kolom cari (permintaan pemilik 19 Okt 2026),
+     dengan catatan penjelas di kiri. */
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.board-page .reach-filter-note {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.board-page .reach-filter .button {
+  flex: none;
 }
 
 .reach-filter-note {
   font-size: var(--fs-2);
   color: var(--ink-subtle);
   max-width: 72ch;
+  min-width: 0;
 }
+
 .map-legend-box-shape {
   display: inline-block;
   width: 7px;
@@ -3046,12 +3070,20 @@ a:focus-visible {
 .integration-status { display: grid; gap: 10px; }
 .integration-head { display: grid; gap: 4px; }
 .integration-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.integration-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: baseline; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.integration-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: baseline; padding: 10px 12px; border: 1px solid var(--line); border-left: 3px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); }
+/* Garis kiri = nada keadaan; teks lencana tetap penanggung arti. */
+.integration-tone-ok { border-left-color: var(--status-safe); }
+.integration-tone-warn { border-left-color: var(--status-warning); }
+.integration-tone-danger { border-left-color: var(--status-danger); }
+.integration-tone-plain { border-left-color: var(--line-strong); }
 .integration-name { font-weight: 600; font-size: var(--fs-3); overflow-wrap: anywhere; }
-.integration-badge { font-size: var(--fs-1); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
-.integration-badge-ok { color: var(--safe-ink-tint); border-color: rgba(46, 125, 50, 0.4); background: rgba(46, 125, 50, 0.1); }
-.integration-badge-warn { border-color: rgba(198, 124, 40, 0.4); background: rgba(198, 124, 40, 0.12); }
-.integration-badge-danger { color: var(--status-danger); border-color: rgba(198, 40, 40, 0.35); background: rgba(198, 40, 40, 0.1); }
+/* Lencana integrasi (19 Okt 2026): tint sistemik + titik, bukan rgba ad hoc. */
+.integration-badge { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-1); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--neutral-border); background: var(--neutral-bg); color: var(--neutral-ink); white-space: nowrap; }
+.integration-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.integration-badge-ok { color: var(--ok-ink); border-color: var(--ok-border); background: var(--ok-bg); }
+.integration-badge-warn { color: var(--warn-ink); border-color: var(--warn-border); background: var(--warn-bg); }
+.integration-badge-danger { color: var(--danger-ink); border-color: var(--danger-border); background: var(--danger-bg); }
+.integration-badge-plain { color: var(--neutral-ink); border-color: var(--neutral-border); background: var(--neutral-bg); }
 .integration-evidence, .integration-artifact, .integration-note { grid-column: 1 / -1; font-size: var(--fs-1); color: var(--muted); overflow-wrap: anywhere; }
 @container (min-width: 680px) {
   .map-card .map-row-btn { grid-template-columns: 8px minmax(90px, 1fr) auto 1fr 1fr 1.2fr; }
@@ -5032,15 +5064,48 @@ a:focus-visible {
   gap: 6px;
 }
 
-/* Pemilih di kepala halaman (pola acuan: select di kanan judul). */
-.page-header-select {
-  min-height: 34px;
-  max-width: 320px;
-  /* Lebar definitif: 100% dari `.page-header-meta` yang sudah dibatasi
-     `max-width: 100%`. Tanpa ini, di viewport 320px pilih ini meluap 22px
-     (lebar intrinsiknya 589px mengikuti opsi terpanjang). */
+/* ── Pemilih keputusan (redesign 19 Okt 2026) ──────────────────────────────
+   Pengganti <select> bawaan di Decision & Evidence dan Agent Activity Log.
+   Alasan: label keputusan butuh dua baris (jenis + status/waktu + nomor),
+   daftar bisa puluhan baris sehingga perlu pencarian, dan <select> memotong
+   label panjang di kepala halaman.
+   Semua warna memakai token sistem; status tetap dibaca dari kata, bukan
+   warna saja. Target sentuh 44px (WCAG 2.5.5). */
+/* Pembungkus di kepala halaman bukti: pemilih + sakelar "lewat tenggat".
+   Dulu punya gaya sendiri; sejak 19 Okt 2026 tampilannya milik `.dpick`,
+   jadi di sini hanya tata letak. */
+.evidence-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 340px;
+}
+
+.dpick {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  /* 300px: cukup untuk satu baris "jenis keputusan + sisa waktu + #id" tanpa
+     memotong judul. Di kepala halaman Agent Log wadahnya menyusut mengikuti
+     isi (130px) sehingga tanpa lantai ini judul terpotong jadi dua baris. */
+  min-width: 300px;
+  max-width: 340px;
+}
+.dpick-label {
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.dpick-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   min-width: 0;
+  min-height: 44px;
   padding: 6px 10px;
   border: 1px solid var(--line-input);
   border-radius: 10px;
@@ -5048,33 +5113,245 @@ a:focus-visible {
   color: var(--ink);
   font: inherit;
   font-size: var(--fs-2);
+  text-align: left;
+  cursor: pointer;
 }
-
-.page-header-select:focus-visible {
+.dpick-trigger:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-sunken);
+}
+.dpick-trigger:focus-visible {
   outline: 2px solid var(--accent-strong);
   outline-offset: 2px;
 }
-
-/* Pemilih keputusan di kepala halaman Decision & Evidence (17 Okt 2026):
-   dulu hanya <select> telanjang tanpa label & tanpa jumlah, jadi pengguna tidak
-   tahu ada berapa keputusan dan mana yang menunggu tindakan. */
-.evidence-picker {
+.dpick-value {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
-  width: 100%;
-  max-width: 320px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
 }
-.evidence-picker-label {
-  font-size: var(--fs-2);
+.dpick-value-text {
+  display: grid;
+  min-width: 0;
+  line-height: 1.25;
+}
+.dpick-value-title {
   font-weight: 600;
-  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.evidence-picker-hint {
+.dpick-meta {
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Nomor keputusan memakai huruf data supaya mudah dibedakan dari kata. */
+.dpick-nomor {
+  font-family: var(--font-data);
+  letter-spacing: 0.02em;
+}
+.dpick-placeholder {
+  flex: 1;
+  color: var(--ink-subtle);
+}
+/* Titik keadaan: menunggu tindakan = kuning peringatan, lainnya netral. */
+.dpick-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+.dpick-dot-action {
+  background: var(--status-warning);
+}
+.dpick-dot-rest {
+  background: var(--status-safe);
+}
+/* Chevron digambar dengan border supaya tidak perlu aset/ikon tambahan. */
+.dpick-chevron {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+  border-right: 2px solid var(--ink-muted);
+  border-bottom: 2px solid var(--ink-muted);
+  transform: translateY(-2px) rotate(45deg);
+}
+.dpick-trigger[aria-expanded="true"] .dpick-chevron {
+  transform: translateY(2px) rotate(-135deg);
+}
+.dpick-hint {
   font-size: var(--fs-1);
   color: var(--ink-subtle);
   line-height: 1.4;
+}
+
+.dpick-anchor {
+  position: relative;
+}
+.dpick-panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  min-width: 300px;
+  max-height: min(60vh, 380px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
+  overflow: hidden;
+}
+/* `[hidden]` hanya menang atas aturan BAWAAN peramban (display: none). Karena
+   aturan di atas menulis `display: flex`, atribut `hidden` yang dipasang
+   DecisionPicker tidak berpengaruh: panel 83 keputusan tetap tergambar dan
+   menutupi kartu ringkasan di halaman Decision & Evidence (laporan pemilik
+   19 Okt 2026: "masa kebuka terus"). Aturan eksplisit inilah yang menutupnya —
+   dijaga tests/decision-picker-collapsed.test.ts. */
+.dpick-panel[hidden] {
+  display: none;
+}
+.dpick-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.dpick-search {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 30px 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-sunken);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-2);
+}
+.dpick-search:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 1px;
+}
+.dpick-clear {
+  position: absolute;
+  right: 14px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.dpick-clear:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+.dpick-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.dpick-group-label {
+  margin: 8px 8px 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  color: var(--ink-muted);
+  list-style: none;
+}
+.dpick-group-label:first-child {
+  margin-top: 2px;
+  padding-top: 0;
+  border-top: none;
+}
+.dpick-option {
+  display: flex;
+  list-style: none;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+/* Sorotan keyboard (aria-selected) dan pilihan aktif dibedakan:
+   sorotan = latar, pilihan = garis kiri aksen + tanda centang. */
+.dpick-option[aria-selected="true"],
+.dpick-option-focus {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent-strong) 25%, var(--surface));
+}
+.dpick-option-active {
+  border-left: 3px solid var(--accent-strong);
+}
+.dpick-option-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.dpick-option-title {
+  font-size: var(--fs-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dpick-option-check {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-weight: 700;
+}
+.dpick-empty {
+  margin: 0;
+  padding: 16px 14px;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+}
+.dpick-foot {
+  display: flex;
+  gap: 12px;
+  margin: 0;
+  padding: 6px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-sunken);
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+}
+
+@media (max-width: 640px) {
+  .dpick {
+    min-width: 0;
+    max-width: none;
+  }
+  .dpick-panel {
+    min-width: 0;
+    max-height: 70vh;
+  }
 }
 
 /* Sakelar "Tampilkan yang lewat tenggat" (17 Okt 2026): pemilih menyembunyikan
@@ -5152,9 +5429,50 @@ a:focus-visible {
    bukti → jejak. Rujukan riset: `_qa/rencana-decision-evidence-v2.md`.
    Semua warna memakai token yang sudah ada; kontras teks ≥4.5:1 (AA). */
 
+/* Kepala keputusan = grid ber-area, bukan tumpukan bar selebar 909 px.
+   Sebelumnya tiap baris (eyebrow 140 px, judul 167 px, "Langkah berikutnya"
+   149 px) memakai lebar penuh 909 px sehingga separuh kanan menganga; kartu
+   kepala jadi ~340 px untuk isi yang sebenarnya ~250 px. Sekarang: judul di
+   kiri dengan "Langkah berikutnya" di kanannya, metrik selebar kartu (supaya
+   4 tile tidak pecah 3+1), akibat tiap pilihan bersanding dengan tautan jejak.
+   Urutan DOM tidak berubah — hanya penempatan grid (pembaca layar tetap
+   mendengar: status → ringkasan → angka → temuan → langkah → akibat → jejak). */
 .evidence-hero {
   display: grid;
-  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1.7fr) minmax(250px, 1fr);
+  grid-template-areas:
+    "bar         bar"
+    "eyebrow     next"
+    "title       next"
+    "metrics     metrics"
+    "flags       flags"
+    "consequence consequence"
+    "traces      traces";
+  gap: 10px 18px;
+  align-items: start;
+}
+.evidence-hero-bar { grid-area: bar; }
+.evidence-hero-eyebrow { grid-area: eyebrow; }
+.evidence-hero-title { grid-area: title; }
+.evidence-metrics { grid-area: metrics; }
+.evidence-flags { grid-area: flags; }
+.evidence-next { grid-area: next; margin: 0; }
+.evidence-consequence { grid-area: consequence; }
+.evidence-traces { grid-area: traces; margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.evidence-traces .evidence-note { flex: 1 1 320px; margin: 0; }
+@media (max-width: 900px) {
+  .evidence-hero {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "bar"
+      "eyebrow"
+      "title"
+      "metrics"
+      "flags"
+      "next"
+      "consequence"
+      "traces";
+  }
 }
 .evidence-hero-bar {
   display: flex;
@@ -5199,18 +5517,25 @@ a:focus-visible {
   outline-offset: 2px;
   border-radius: 4px;
 }
-.evidence-hero-heading {
+.evidence-hero-eyebrow {
   margin: 0;
-  font-size: var(--fs-2);
+  font-size: var(--fs-1);
   font-weight: 600;
   letter-spacing: var(--track-caps);
   text-transform: uppercase;
   color: var(--ink-subtle);
 }
-.evidence-hero-title {
+/* Judul keputusan = aksi (aturan 3 detik). Ia harus MENGALAHKAN `.card h2`
+   (--fs-3) dan `.evidence-page .card > h2` (--fs-4, 600): tanpa specificity
+   ini judulnya jatuh ke 16px dan kalah tegas dari label di atasnya. */
+.evidence-page .card > h2.evidence-hero-title {
   margin: 0;
-  font-size: var(--fs-7);
-  line-height: 1.25;
+  /* Judul ini satu kalimat panjang ("Alihkan 712 kg telur: Cianjur → Jakarta"),
+     bukan angka metrik. --fs-7 (24px) membuatnya menimpa kartu di sekitarnya;
+     judul seksi memakai tangga --fs-5. */
+  font-size: var(--fs-5);
+  font-weight: 600;
+  line-height: var(--lh-head);
   letter-spacing: var(--track-tight);
   color: var(--ink);
   text-wrap: balance;
@@ -5251,17 +5576,27 @@ a:focus-visible {
   font-weight: 600;
   color: var(--ink-muted);
 }
+/* Triase "Perlu diperhatikan": SATU baris tile, bukan tumpukan bar selebar
+   halaman. Bentuk lama selebar 909 px dengan teks pendek menyisakan separuh
+   kanan kosong (3 bar x 59 px = 216 px tinggi); tile sejajar mengisi lebar
+   yang sama dan turun ke ~70-100 px. auto-fit (bukan kolom tetap) supaya
+   satu temuan memakai lebar penuh, dua temuan dua kolom, tiga temuan tiga
+   kolom - tidak ada sel menganga. Label & teks tetap di lantai tipografi
+   proyek (13/12 px), nada dibawa border-left + latar, bukan ukuran. */
 .evidence-flags-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 6px;
 }
 .evidence-flag {
   display: grid;
   gap: 2px;
-  padding: 8px 10px;
+  align-content: start;
+  min-width: 0;
+  padding: 7px 10px;
   border: 1px solid var(--line);
   border-left-width: 3px;
   border-radius: 8px;
@@ -5270,10 +5605,17 @@ a:focus-visible {
 .evidence-flag-label {
   font-size: var(--fs-2);
   font-weight: 600;
+  line-height: 1.3;
 }
 .evidence-flag-text {
-  font-size: var(--fs-2);
+  font-size: var(--fs-1);
+  line-height: 1.45;
   color: var(--ink-muted);
+}
+@media (max-width: 767px) {
+  .evidence-flags-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .evidence-flag-warn {
   background: var(--warn-bg);
@@ -5404,8 +5746,23 @@ a:focus-visible {
 }
 
 .gov-status {
+  /* Lencana keadaan + meter persetujuan SATU baris: dulu keduanya bertumpuk
+     sehingga lencana 162 px dan meter 420 px berdiri sendiri di baris 909 px
+     (44% lebar kosong). Sisanya (peran, penunggu, penghambat) melebar penuh. */
   display: grid;
-  gap: 8px;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 16px;
+}
+.gov-roles,
+.gov-wait,
+.gov-blocker {
+  grid-column: 1 / -1;
+}
+@media (max-width: 560px) {
+  .gov-status {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .gov-chip {
   display: inline-flex;
@@ -5455,7 +5812,8 @@ a:focus-visible {
 .gov-progress {
   display: grid;
   gap: 4px;
-  max-width: 420px;
+  /* Meter mengisi kolom kanan (dulu dipatok 420 px sehingga sisa baris kosong). */
+  max-width: none;
 }
 .gov-progress-text {
   font-size: var(--fs-1);
@@ -5633,8 +5991,8 @@ a:focus-visible {
 }
 
 @media (max-width: 760px) {
-  .evidence-hero-title {
-    font-size: var(--fs-6);
+  .evidence-page .card > h2.evidence-hero-title {
+    font-size: var(--fs-4);
   }
   .evidence-consequence-row {
     grid-template-columns: 1fr;
@@ -6283,31 +6641,41 @@ a:focus-visible {
   display: grid;
   gap: 18px;
 }
+/* Bukti = dua kolom koran, bukan baris grid. Tinggi kartu sangat bergantung
+   pada keputusan yang dibuka (Biaya bisa 9 baris = 615 px, sementara Keamanan
+   355 px dan Identitas 335 px): setiap baris grid setinggi kartu terpanjang
+   menyisakan 260-400 px kosong di bawah dua kartu lainnya. Kolom mengalirkan
+   kartu dan menyeimbangkan tinggi kolom sendiri — 966 px → 665 px, tanpa
+   baris yang menganga. `break-inside: avoid` supaya satu kartu tidak terbelah
+   dua kolom. */
 .evidence-grid {
-  display: grid;
-  /* Fase 3: 12 kolom eksplisit, tiap kartu berbobot 4 — bobotnya tetap walau
-     lebar berubah, jadi Governance selalu sejajar dengan Biaya (auto-fit bisa
-     meninggalkan satu kartu sendirian di baris kedua). */
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 16px;
-  align-items: start;
+  display: block;
+  columns: 2;
+  column-gap: 16px;
 }
-.evidence-grid > .card { grid-column: span 4; }
-@media (max-width: 1180px) {
-  .evidence-grid > .card { grid-column: span 6; }
+.evidence-grid > .card {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin: 0 0 16px;
 }
-@media (max-width: 760px) {
-  .evidence-grid > .card { grid-column: span 12; }
+.evidence-grid > .card:last-child { margin-bottom: 0; }
+@media (max-width: 900px) {
+  .evidence-grid { columns: 1; }
 }
-/* Baris bento bawah: riwayat iterasi (5) bersanding bukti kriptografis (7). */
+/* Bento bukti: dua kartu pendek (Biaya, Keamanan & pemasok) bertumpuk di
+   kolom kiri, kartu panjang (Identitas & tenggat) mengisi dua baris di kanan.
+   Bentuk lama 3 x 4/12 membuat baris setinggi kartu terpanjang (222 px)
+   sedangkan dua kartu lain 110 px — 112 px kosong di bawah masing-masing. */
+/* Jejak & bukti tersimpan: satu kolom selebar kartu. Dua kolom 5/7 membuat
+   kartu riwayat (217 px) berdiri di samping panel bukti (546 px) → 329 px
+   kosong di bawah riwayat. Satu kolom: riwayat 947×166 (tanpa ruang mati),
+   panel 378 px dengan dua bukti berdampingan — total 559 px vs 546 px, jadi
+   tinggi hampir sama tetapi tanpa lubang. */
 .evidence-bottom {
   display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: start;
-}
-@media (max-width: 1180px) {
-  .evidence-bottom { grid-template-columns: minmax(0, 1fr); }
 }
 .evidence-bottom .integrity-panel { margin-top: 0; }
 /* Ringkasan (hero): kartu keputusan di kiri, fakta identitas & tenggat di
@@ -6922,7 +7290,6 @@ button:active:not(:disabled),
 .top-bar-notif-close:active,
 .top-bar-notif-open:active,
 .top-bar-select:active,
-.page-header-select:active,
 .filter-chip:active,
 .commodity-pill:active,
 .board-link:active,
@@ -6945,7 +7312,6 @@ button:active:not(:disabled),
 .top-bar-notif-close:focus-visible,
 .top-bar-notif-open:focus-visible,
 .top-bar-select:focus-visible,
-.page-header-select:focus-visible,
 .event2-quotes li label:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
@@ -6984,8 +7350,7 @@ button:active:not(:disabled),
     align-items: center;
   }
 
-  .top-bar-select,
-  .page-header-select {
+  .top-bar-select {
     height: 44px;
   }
   /* Sisa temuan audit: tombol aksi, tombol polos, dan pilih di panel kontrol
@@ -7395,15 +7760,17 @@ button:active:not(:disabled),
   align-items: center;
   justify-content: center;
   padding: var(--space-4);
-  /* 19 Okt 2026 — permintaan pemilik: "jangan transparan tapi blur smooth".
-     Sebelumnya scrim datar rgba(15,23,42,.5): isi halaman di belakang TEMBUS
-     dan terbaca, hanya digelapkan. Sekarang: kabut terang 66% + blur 20 px
-     (glassmorphism, styles.csv: blur 10-20 px). Tint 66% dipilih supaya teks
-     di belakang TIDAK terbaca (bukan cuma buram) sementara tepi panel tetap
-     terasa halus. Panel `.popup` sendiri tetap solid `--surface`. */
-  background: rgba(248, 250, 252, 0.66);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
-  backdrop-filter: blur(20px) saturate(140%);
+  /* 19 Okt 2026 — permintaan pemilik, tiga kali diturunkan: "blur 20% saja" →
+     "15% saja" → "masih samar-samar untuk tampilan di belakangnya, turunin
+     lagi". Kabut putih 66% + saturate() tidak dipakai lagi; yang tersisa blur
+     8 px + tint putih 20%. Di 8 px bentuk/warna panel di belakang masih
+     terbaca SAMAR (blob, bukan huruf) sementara teksnya tidak terbaca; panel
+     `.popup` sendiri solid `--surface` + border + shadow, jadi lapisan atas
+     tetap jelas. Turun di bawah ~6 px huruf di belakang mulai terbaca —
+     jangan tanpa izin pemilik. */
+  background: rgba(248, 250, 252, 0.2);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   animation: popup-fade var(--dur-2) var(--ease-standard);
 }
 /* Browser tanpa backdrop-filter (Firefox lama, WebView tertentu): tanpa blur,
@@ -7752,40 +8119,172 @@ button:active:not(:disabled),
   .feed > div { animation: none; }
 }
 
-/* --- 2. Kartu kepercayaan: bukti kriptografis di permukaan gelap ---------- */
+/* --- 2. Kotak bukti (tema terang, 19 Okt 2026) ------------------------------
+   Dulu permukaan gelap #0F172A. Sekarang: putih + tint nada keadaan, dengan
+   garis kiri 3px sebagai penanda keadaan. Nada datang dari data-tone lewat
+   tiga variabel, jadi markup tidak pernah menulis hex sendiri. */
+.integrity-sub {
+  margin: -4px 0 10px;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+  max-width: 68ch;
+}
+
 .integrity-trust {
   background: var(--trust-bg);
   border: 1px solid var(--trust-line);
-  border-radius: 12px;
-  padding: 14px 16px;
+  border-radius: var(--radius);
+  padding: 10px;
   display: grid;
-  gap: 12px;
+  /* Dua bukti (Merkle Ledger & Dossier) berdampingan saat ruang cukup. Dulu
+     selalu bertumpuk: di kartu selebar 543 px panelnya jadi 546 px, sedangkan
+     kartu "Jejak & riwayat" di sebelahnya cuma 217 px — 329 px menganga. */
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-items: start;
+  gap: 10px;
   color: var(--trust-ink);
 }
-.integrity-trust strong { display: block; margin-bottom: 4px; font-size: var(--fs-1); color: var(--trust-ink); }
-.integrity-trust p { margin: 0; font-size: var(--fs-2); color: var(--trust-ink-muted); }
-.integrity-trust dl { margin: 6px 0 0; }
-.integrity-trust dt { font-size: var(--fs-1); color: var(--trust-ink-muted); }
-/* Alamat konten & tanda tangan: mono di atas kaca gelap — menimpa gaya
-   "terminal terang" milik panel yang sama. */
-.integrity-trust dd {
-  background: var(--trust-surface);
-  border-color: var(--trust-line);
+
+.integrity-proof {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--tone-line);
+  border-left: 3px solid var(--tone-ink);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--tone-bg), var(--surface) 84%);
+}
+.integrity-proof[data-tone="ok"] {
+  --tone-bg: var(--ok-bg); --tone-line: var(--ok-border); --tone-ink: var(--ok-ink);
+}
+.integrity-proof[data-tone="warn"] {
+  --tone-bg: var(--warn-bg); --tone-line: var(--warn-border); --tone-ink: var(--warn-ink);
+}
+.integrity-proof[data-tone="danger"] {
+  --tone-bg: var(--danger-bg); --tone-line: var(--danger-border); --tone-ink: var(--danger-ink);
+}
+.integrity-proof[data-tone="plain"] {
+  --tone-bg: var(--neutral-bg); --tone-line: var(--neutral-border); --tone-ink: var(--neutral-ink);
+}
+
+.integrity-proof-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 10px;
+}
+.integrity-proof-titles { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
+.integrity-proof-name { font-size: var(--fs-3); font-weight: 650; color: var(--ink); }
+.integrity-proof-kind { font-size: var(--fs-1); color: var(--ink-muted); }
+.integrity-proof-head .integrity-chip { justify-self: end; }
+@media (max-width: 460px) {
+  .integrity-proof-head { grid-template-columns: minmax(0, 1fr); }
+  .integrity-proof-head .integrity-chip { justify-self: start; }
+  /* Konvensi yang sama dengan kartu fakta sempit: label DI ATAS nilai, supaya
+     "unsigned — kunci penandatangan tidak diset" tidak pecah tiga baris.
+     Spesifisitas dinaikkan (0,2,1) karena aturan dasar `.integrity-meta > div`
+     ditulis SESUDAH blok media ini di berkas. */
+  .integrity-proof .integrity-meta > div { grid-template-columns: minmax(0, 1fr); gap: 1px; }
+}
+
+/* Lencana keadaan: titik + kata, jadi tidak bergantung pada warna saja. */
+.integrity-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--tone-line, var(--line));
+  background: var(--tone-bg, var(--surface-sunken));
+  color: var(--tone-ink, var(--ink-muted));
+  font-size: var(--fs-1);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.integrity-chip::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.integrity-chip-ok {
+  --tone-bg: var(--ok-bg); --tone-line: var(--ok-border); --tone-ink: var(--ok-ink);
+}
+.integrity-chip-warn {
+  --tone-bg: var(--warn-bg); --tone-line: var(--warn-border); --tone-ink: var(--warn-ink);
+}
+.integrity-chip-danger {
+  --tone-bg: var(--danger-bg); --tone-line: var(--danger-border); --tone-ink: var(--danger-ink);
+}
+.integrity-chip-plain {
+  --tone-bg: var(--neutral-bg); --tone-line: var(--neutral-border); --tone-ink: var(--neutral-ink);
+}
+
+/* Baris label→nilai. Angka blok mono & tabular supaya tidak bergetar. */
+.integrity-meta { display: grid; gap: 6px; margin: 0; }
+.integrity-meta > div {
+  display: grid;
+  grid-template-columns: minmax(84px, auto) minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+.integrity-meta dt { font-size: var(--fs-1); color: var(--ink-muted); }
+.integrity-meta dd {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  display: block;
+  font-family: inherit;
+  font-size: var(--fs-2);
+  color: var(--ink);
+}
+.integrity-num {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+/* Hash & alamat konten: chip mono netral di atas --trust-surface (6,1:1). */
+.integrity-meta .integrity-hash {
+  justify-self: start;
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
   color: var(--trust-accent);
-}
-.integrity-trust button {
   background: var(--trust-surface);
-  border-color: var(--trust-line);
-  color: var(--trust-ink);
+  border: 1px solid var(--trust-line);
+  border-radius: 6px;
+  padding: 2px 8px;
+  overflow-wrap: anywhere;
 }
-.integrity-trust button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: var(--trust-ink-muted);
+
+.integrity-hint { margin: 0; font-size: var(--fs-2); color: var(--ink-muted); }
+.integrity-reason { margin: 0; font-size: var(--fs-2); font-weight: 600; color: var(--tone-ink); }
+
+.integrity-refresh {
+  justify-self: start;
+  margin: 0;
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--line-input);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--accent-strong);
+  font-size: var(--fs-2);
+  font-weight: 600;
+  cursor: pointer;
 }
-.integrity-trust button:focus-visible {
-  outline: 2px solid var(--trust-accent);
+.integrity-refresh:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+}
+.integrity-refresh:focus-visible {
+  outline: 2px solid var(--accent-strong);
   outline-offset: 2px;
 }
+.integrity-refresh:disabled { cursor: default; color: var(--ink-muted); }
+
 /* Tombol ekspor dossier tetap di permukaan terang (dokumen kerja). */
 .integrity-export-actions {
   display: flex;
@@ -7804,6 +8303,25 @@ button:active:not(:disabled),
   padding: 8px 0;
 }
 .evidence-grid .fact-row dt { font-size: var(--fs-1); }
+/* Kartu bukti di halaman ini selebar 466 px (dua kolom koran), jadi label dan
+   nilai BISA sebaris. Bentuk menumpuk (label di atas nilai) membuat tiap fakta
+   dua baris 56 px dan separuh kanan kartu kosong: kartu Biaya 9 baris jadi
+   615 px. Di ≥721 px label 38% + nilai 62% dengan nilai rata kanan (kolom angka
+   sejajar seperti lembar spesifikasi). Di ≤720 px tetap menumpuk. */
+@media (min-width: 721px) {
+  .evidence-grid .fact-row {
+    grid-template-columns: minmax(0, 38%) minmax(0, 1fr);
+    gap: 2px 12px;
+    padding: 6px 0;
+    align-items: baseline;
+  }
+  .evidence-grid .fact-row dd {
+    text-align: right;
+  }
+  .evidence-grid .fact-row .fact-hint {
+    display: block;
+  }
+}
 
 /* --- 3. Approval: modal & menu sebahasa dengan kartu bento ---------------- */
 .approval-modal {
@@ -8877,8 +9395,8 @@ p, li, dd { text-wrap: pretty; }
   background: var(--accent-strong);
 }
 
-/* --- 6. Lencana integrasi "warn" ikut bertinta (sebelumnya tanpa warna teks) --- */
-.integration-badge-warn { color: var(--warn-ink); }
+/* --- 6. Lencana integrasi "warn" (19 Okt): tint & tinta datang dari token
+   sistemik di atas — tidak perlu aturan tambahan. --- */
 
 /* --- 7. Strip KPI ringkas Overview: warna mengikuti arti --- */
 .kpi-card-hero:has(.is-shortage) {
@@ -8978,7 +9496,9 @@ p, li, dd { text-wrap: pretty; }
    Aturan visual: status memakai lencana netral-biru (PO bukan peringatan),
    dan kalimat sumber selalu terlihat (bukan tooltip) karena itu batas sistem. */
 .po-panel {
-  margin-top: 16px;
+  /* 16 → 13 px: sama dengan gap halaman Decision & Evidence, supaya jarak
+     kartu terakhir → PO terbaca sebagai satu irama, bukan lubang. */
+  margin-top: 13px;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -8987,27 +9507,157 @@ p, li, dd { text-wrap: pretty; }
   gap: 12px;
 }
 .po-panel-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.po-panel-titles { display: grid; gap: 2px; min-width: 0; }
+.po-panel-title-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .po-panel-head h3 { margin: 0; font-size: var(--fs-3); }
+/* Penanda simulasi: wajib ada (Rules.md §4), tapi berbentuk chip produk —
+   netral, bukan peringatan, karena ini keterangan asal data bukan galat. */
+.po-source-chip {
+  font-size: var(--fs-1);
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
 .po-panel-sub { margin: 4px 0 0; font-size: var(--fs-1); color: var(--muted); max-width: 68ch; }
 .po-panel-error { margin: 0; font-size: var(--fs-2); color: var(--status-danger); }
 .po-panel-loading { margin: 0; font-size: var(--fs-2); color: var(--ink-muted); }
 .po-summary { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.po-chip { font-size: var(--fs-1); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-sunken); white-space: nowrap; }
-.po-chip-confirmed { border-color: rgba(46, 125, 50, 0.35); background: rgba(46, 125, 50, 0.1); }
+.po-chip {
+  font-size: var(--fs-1);
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+/* Nada per status memakai token status sistem (bukan hex baru): terkirim biru
+   aksen, terkonfirmasi hijau aman, draf netral. Teks tetap berisi kata, jadi
+   status tidak bergantung pada warna saja. */
+.po-chip-submitted {
+  border-color: color-mix(in srgb, var(--accent-strong) 35%, var(--surface));
+  background: color-mix(in srgb, var(--accent-strong) 8%, var(--surface));
+  color: var(--accent);
+}
+.po-chip-confirmed {
+  border-color: color-mix(in srgb, var(--status-safe) 35%, var(--surface));
+  background: color-mix(in srgb, var(--status-safe) 10%, var(--surface));
+  color: var(--safe-ink-tint);
+}
 .po-total { font-size: var(--fs-1); color: var(--ink-muted); margin-left: auto; }
 .po-total b { font-family: var(--font-data); color: var(--ink); }
+/* Arti status: satu kalimat, bukan tooltip — pembaca harus tahu bahwa
+   "terkonfirmasi" berasal dari data impor, bukan aksi aplikasi. */
+.po-lifecycle {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  max-width: 82ch;
+}
+.po-progress { margin: 0; font-size: var(--fs-1); color: var(--ink-subtle); }
 .po-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .po-row { padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-sunken); display: grid; gap: 4px; }
+/* Baris milik keputusan yang sedang dibuka: garis kiri aksen + latar putih,
+   supaya menonjol tanpa mengubah warna status. */
+.po-row-current {
+  border-color: color-mix(in srgb, var(--accent-strong) 30%, var(--line));
+  border-left: 3px solid var(--accent-strong);
+  background: var(--surface);
+}
+.po-current-flag {
+  font-size: var(--fs-1);
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
 .po-row-main { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .po-number { font-family: var(--font-data); font-size: var(--fs-2); font-weight: 600; overflow-wrap: anywhere; }
 .po-status { font-size: var(--fs-1); padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line-strong, var(--line)); }
-.po-status-confirmed { border-color: rgba(46, 125, 50, 0.35); background: rgba(46, 125, 50, 0.1); }
+.po-status-confirmed { border-color: color-mix(in srgb, var(--status-safe) 35%, var(--surface)); background: color-mix(in srgb, var(--status-safe) 10%, var(--surface)); color: var(--safe-ink-tint); }
+.po-status-submitted { border-color: color-mix(in srgb, var(--accent-strong) 30%, var(--surface)); background: color-mix(in srgb, var(--accent-strong) 7%, var(--surface)); color: var(--accent); }
 .po-status-draft { color: var(--ink-muted); }
 .po-row-meta { font-size: var(--fs-1); color: var(--muted); overflow-wrap: anywhere; }
 .po-row-foot { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-size: var(--fs-1); }
 .po-value { font-family: var(--font-data); color: var(--ink); }
 .po-link { color: var(--accent-strong); text-underline-offset: 2px; }
 .po-note { color: var(--ink-subtle); }
+
+/* ── Dokumen PO: satu aksi unduh per baris (20 Okt 2026) ─────────────────────
+   Aksi SEKUNDER yang menempel pada barisnya: bentuknya mengikuti
+   `.button-secondary` (radius 6px, garis sistem) tetapi lebih rapat, karena
+   baris daftar bukan formulir. Tiga keadaan, tiga kata — tidak ada arti yang
+   hanya dibawa warna: tombol (aksi), "Dokumen terunduh sebagai …" (berhasil),
+   "Dokumen tidak bisa diunduh: …" (galat, `role="alert"`).
+   Sasaran sentuh: 30px di tetikus (kepadatan daftar dipertahankan), 44px di
+   perangkat sentuh — aturan 44×44 tetap dipenuhi di tempat yang membutuhkannya. */
+.po-pdf-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  min-height: 30px;
+  border: 1px solid color-mix(in srgb, var(--accent-strong) 32%, var(--line));
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--fs-1);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.po-pdf-button:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+}
+
+/* Non-interaktif harus TERBACA non-interaktif (opacity + kursor), bukan
+   tampak sama seperti tombol hidup. */
+.po-pdf-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.po-pdf-button svg { flex: none; }
+
+/* Baris kaki memakai `align-items: baseline` (benar untuk teks). Tombol 30px
+   yang ikut baseline turun ~4px dari tautan di sebelahnya, jadi ia dipusatkan
+   pada barisnya sendiri — sejajar mata, tanpa mengubah perataan teks lain. */
+.po-row-foot .po-pdf-button { align-self: center; }
+
+@media (pointer: coarse) {
+  .po-pdf-button {
+    min-height: 44px;
+    padding-inline: 14px;
+  }
+}
+
+.po-pdf-hint {
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+  max-width: 48ch;
+}
+
+.po-pdf-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--safe-ink-tint);
+  overflow-wrap: anywhere;
+}
+
+.po-pdf-error {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--status-danger);
+  overflow-wrap: anywhere;
+}
 .trace-po { margin-top: 2px; font-size: var(--fs-1); color: var(--accent-strong); font-family: var(--font-data); }
 
 /* ── F1–F3: pemadatan & orientasi halaman Decision & Evidence (18 Okt 2026) ──
@@ -9110,11 +9760,29 @@ p, li, dd { text-wrap: pretty; }
 
 /* Bar pintasan: menempel di bawah layar selama zona keputusan tidak terlihat.
    Ruang bawah halaman diberi slack supaya bar tidak menutupi baris terakhir. */
-/* Ruang bawah hanya disisihkan kalau bar pintasan memang ada — jangan
-   menambah tinggi halaman untuk elemen yang tidak dirender. */
-.evidence-page:has(.evidence-actionbar) {
-  padding-bottom: 72px;
+/* 19 Okt 2026 (keluhan pemilik: "jarak ke po kok spacenya banyak bener"):
+   slack 72 px itu DULU dipasang pada `.evidence-page`, padahal panel PO
+   dirender SESUDAHNYA sebagai saudara di `.app-body` — hasilnya 72 px + 16 px
+   margin = 88 px ruang kosong tepat di antara kartu terakhir dan panel PO.
+   Sekarang slack dipindah ke anak TERAKHIR halaman ini (panel PO bila ada,
+   `.evidence-page` bila tidak), dan jarak ke PO kembali ke irama halaman. */
+/* Slack 80 px = tinggi dock (58) + jarak bawah (16) + 6 px napas. 72 px
+   sempat dipakai saat bar masih pil 57 px; dock baru membuat baris terakhir
+   bisa tertutup 2 px. */
+.app-body:has(.evidence-actionbar) > :last-child {
+  margin-bottom: 80px;
 }
+/* Redesign 19 Okt 2026 (permintaan pemilik: "popup ke zona keputusan rada
+   kurang"). Sebelumnya pil putih 720 px ber-radius 999 dengan satu baris teks
+   abu-abu "status · hitungan" — bentuknya seperti toast, bukan pintasan
+   keputusan, dan dua informasi berbeda bobot disamakan. Sekarang: dock ramping
+   560 px, titik nada keadaan (warna + teks, jadi tidak warna saja), keadaan
+   sebagai baris utama, hitungan approval sebagai detail, CTA dengan tanda ↓
+   yang sama dengan tautan di kepala keputusan. */
+/* Posisi: TETAP di tengah layar (pemilik menegaskan "tetap dibuat rata tengah"
+   setelah sempat dicoba selebar kolom isi). Yang menentukan lebar adalah
+   `min(560px, 100vw - 24px)`, bukan lebar rail — jadi buka/tutup sidebar tidak
+   menggeser dock, dan di layar sempit ia menyusut sendiri. */
 .evidence-actionbar {
   position: fixed;
   left: 50%;
@@ -9124,39 +9792,114 @@ p, li, dd { text-wrap: pretty; }
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  width: min(720px, calc(100vw - 24px));
-  padding: 8px 10px 8px 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
+  width: min(560px, calc(100vw - 24px));
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 14px;
   background: var(--surface);
-  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.12);
+  box-shadow: var(--shadow-2), 0 16px 40px rgba(15, 23, 42, 0.1);
+  animation: actionbar-in var(--dur-3) var(--ease-standard) both;
 }
-.evidence-actionbar-text {
+@keyframes actionbar-in {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+.evidence-actionbar-state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   flex: 1;
   min-width: 0;
-  font-size: var(--fs-2);
+}
+/* Titik = nada keadaan. Cincin di sekeliling titik memakai latar tint yang
+   sama supaya tetap terlihat di atas putih tanpa perlu bayangan. */
+.evidence-actionbar-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--ink-subtle);
+  box-shadow: 0 0 0 3px var(--neutral-bg);
+}
+.evidence-actionbar[data-tone="warning"] .evidence-actionbar-dot {
+  background: var(--status-warning);
+  box-shadow: 0 0 0 3px var(--warn-bg);
+}
+.evidence-actionbar[data-tone="safe"] .evidence-actionbar-dot {
+  background: var(--status-safe);
+  box-shadow: 0 0 0 3px var(--ok-bg);
+}
+.evidence-actionbar[data-tone="danger"] .evidence-actionbar-dot {
+  background: var(--status-danger);
+  box-shadow: 0 0 0 3px var(--danger-bg);
+}
+.evidence-actionbar-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  font-size: var(--fs-1);
   color: var(--ink-muted);
+}
+.evidence-actionbar-text strong {
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.evidence-actionbar-text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .evidence-actionbar-link {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding-inline: var(--space-4);
+  border-radius: 8px;
+  /* Tautan bergaya tombol: garis bawah bawaan <a> membuat label putih di atas
+     biru terbaca seperti tautan teks, bukan tombol. */
+  text-decoration: none;
+}
+.evidence-actionbar-link:hover {
+  text-decoration: none;
+}
+/* iOS: bar tidak boleh menempel ke home indicator. */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .evidence-actionbar {
+    bottom: calc(16px + env(safe-area-inset-bottom));
+  }
 }
 @media (max-width: 560px) {
   .evidence-actionbar {
     bottom: 10px;
-    padding: 8px;
+    padding: var(--space-2);
+    gap: var(--space-2);
   }
-  .evidence-actionbar-text {
+  /* Di layar sempit informasi tidak dibuang, hanya dipadatkan: keadaan tetap
+     terbaca, hitungan approval dilepas supaya CTA tidak terhimpit. */
+  .evidence-actionbar-text span {
     display: none;
   }
   .evidence-actionbar-link {
-    width: 100%;
+    flex: 1;
     justify-content: center;
+  }
+}
+@media print {
+  .evidence-actionbar {
+    display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .evidence-jump-link,
   .evidence-actionbar {
     transition: none;
+    animation: none;
   }
 }
 
@@ -9190,4 +9933,984 @@ p, li, dd { text-wrap: pretty; }
 .integrity-more > summary:focus-visible {
   outline: 2px solid var(--accent-strong);
   outline-offset: 2px;
+}
+
+
+/* ===========================================================================
+   POPUP "GOVERNANCE & PERSETUJUAN" — REDESIGN 19 OKT 2026
+   Permintaan pemilik: "ubah tampilan UI dan background dibuat blur 20% saja".
+   1. Latar: blur 8 px + tint 20% (lihat `.popup-backdrop` di atas).
+   2. Panel lebih lebar; kepala popup tetap judul + deskripsi.
+   3. Chip status tidak lagi menyelip di antara deskripsi dan kartu — ia jadi
+      strip sendiri di atas isi, chip di kiri dan progres peran di kanan.
+   4. Ringkasan bukti: bullet padat → kartu fakta berlabel (dl), satu fakta
+      satu baris; id panjang dipatahkan, bukan melebarkan kalimat.
+   5. Tiap pilihan tindakan jadi kartu ber-stripe sesuai risikonya (merah =
+      tolak, biru = ajukan, hijau = eksekusi) — makna tetap dibawa teksnya.
+   6. Kaki sticky: hint Esc + tombol Tutup.
+   Semua warna dari token :root (tanpa hex mentah). Kontras teks >= 4,5:1,
+   target sentuh >= 44 px di layar sentuh, cincin fokus tetap terlihat, dan
+   gerak dihormati prefers-reduced-motion.
+   =========================================================================== */
+.popup-governance {
+  width: min(720px, 100%);
+  /* Ringkasan bukti bisa 10 baris; 86vh (aturan dasar) memotong kartu di
+     tengah fakta. 92vh memberi ruang satu baris lagi sebelum menggulir. */
+  max-height: min(92vh, 900px);
+  box-shadow: var(--shadow-3);
+}
+.popup-governance .popup-title {
+  font-size: var(--fs-5);
+  letter-spacing: -0.25px;
+}
+.popup-governance .popup-body {
+  display: grid;
+  gap: var(--space-4);
+  /* Kolom grid default `auto` memakai min-content anak: satu baris fakta yang
+     panjang bisa melebarkan panel melewati layar sempit. `minmax(0,1fr)`
+     memaksa isi menyesuaikan lebar, bukan sebaliknya. */
+  grid-template-columns: minmax(0, 1fr);
+}
+.popup-governance .approval-menu,
+.popup-governance .approval-menu-block,
+.popup-governance .approval-facts,
+.popup-governance .action-menu,
+.popup-governance .action-menu-item {
+  min-width: 0;
+}
+
+/* --- 1. Strip status persetujuan ---------------------------------------- */
+.popup-governance .gov-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-sunken);
+}
+.popup-governance .gov-progress {
+  /* Meter sempit di kanan strip: bar selebar panel terbaca seperti garis
+     pemisah, bukan progres. */
+  flex: 0 1 240px;
+  margin-left: auto;
+  gap: 4px;
+}
+.popup-governance .gov-progress-text {
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+/* Track ber-tint `--surface-sunken` tidak terlihat di atas strip yang juga
+   sunken — garisnya jadi kabur. Naikkan ke `--line-strong` supaya bar progres
+   terbaca sebagai bar, bukan hairline nyasar. */
+.popup-governance .gov-progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+.popup-governance .gov-chip {
+  background: var(--surface);
+}
+
+/* --- 2. Kartu ringkasan bukti ------------------------------------------- */
+.popup-governance .approval-modal {
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: none;
+}
+.popup-governance .approval-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+.popup-governance .approval-modal h3 {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: var(--fs-4);
+  letter-spacing: -0.2px;
+}
+.popup-governance .approval-modal-eyebrow {
+  margin: 0 0 2px;
+  font-size: var(--fs-1);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+.popup-governance .approval-modal-id {
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--neutral-border);
+  border-radius: 999px;
+  background: var(--neutral-bg);
+  color: var(--neutral-ink);
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  white-space: nowrap;
+}
+.popup-governance .approval-facts {
+  margin: 0;
+  display: grid;
+}
+.popup-governance .approval-fact {
+  display: grid;
+  grid-template-columns: 152px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: baseline;
+  padding: var(--space-2) 0;
+}
+.popup-governance .approval-fact + .approval-fact {
+  border-top: 1px solid var(--line);
+}
+.popup-governance .approval-fact dt {
+  font-size: var(--fs-1);
+  font-weight: 600;
+  color: var(--ink-subtle);
+}
+.popup-governance .approval-fact dd {
+  margin: 0;
+  font-size: var(--fs-2);
+  color: var(--ink);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+.popup-governance .approval-fact code {
+  padding: 0 4px;
+  border: 1px solid var(--neutral-border);
+  border-radius: 4px;
+  background: var(--neutral-bg);
+  color: var(--neutral-ink);
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+}
+.popup-governance .approval-fact-note {
+  color: var(--ink-muted);
+}
+
+/* --- 3. Penghalang (blocking reasons) ----------------------------------- */
+.popup-governance .approval-modal-blockers {
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--danger-border);
+  border-left: 3px solid var(--status-danger);
+  border-radius: 10px;
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+}
+.popup-governance .approval-modal-blockers-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--fs-1);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.popup-governance .approval-modal-blockers ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-1);
+}
+.popup-governance .approval-modal-blockers li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--fs-2);
+  line-height: var(--lh-body);
+}
+.popup-governance .approval-blocker-icon {
+  flex: none;
+  margin-top: 3px;
+  color: var(--status-danger);
+}
+
+/* --- 4. Aksi approve di dalam ringkasan --------------------------------- */
+.popup-governance .approval-modal-actions {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.popup-governance .approval-modal-actions .button {
+  min-height: 40px;
+}
+.popup-governance .approval-modal-actions .button:not(.button-secondary) {
+  padding-inline: var(--space-5);
+  font-weight: 600;
+}
+.popup-governance .approval-modal-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+/* --- 5. Pilihan tindakan ------------------------------------------------ */
+.popup-governance .approval-menu-heading {
+  margin: 0 0 var(--space-2);
+  letter-spacing: 0.06em;
+}
+.popup-governance .action-menu {
+  gap: var(--space-2);
+}
+.popup-governance .action-menu-item {
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--dur-1) var(--ease-standard),
+    box-shadow var(--dur-2) var(--ease-standard),
+    background var(--dur-1) var(--ease-standard);
+}
+/* Stripe kiri = tingkat dampak aksi. Warna hanya penguat: nama tindakan dan
+   akibatnya tetap tertulis di dalam kartu (tidak pernah warna saja). */
+.popup-governance .action-menu-item[data-action="reject"] {
+  border-left-color: var(--status-danger);
+}
+.popup-governance .action-menu-item[data-action="propose"],
+.popup-governance .action-menu-item[data-action="repropose"] {
+  border-left-color: var(--accent-strong);
+}
+.popup-governance .action-menu-item[data-action="verify"] {
+  border-left-color: var(--navy-700);
+}
+.popup-governance .action-menu-item[data-action="execute"] {
+  border-left-color: var(--status-safe);
+}
+.popup-governance .action-menu-item:hover {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+/* Baris keterangan (aksi belum tersedia): bukan kartu aksi — putus-putus. */
+.popup-governance .action-menu-note {
+  border-style: dashed;
+  border-left-width: 1px;
+  background: var(--surface-sunken);
+  box-shadow: none;
+}
+.popup-governance .action-menu-text strong {
+  font-size: var(--fs-3);
+}
+.popup-governance .action-menu-button {
+  min-width: 108px;
+}
+.popup-governance .action-menu-button[data-action="reject"] {
+  border-color: var(--status-danger);
+  background: var(--surface);
+  color: var(--danger-ink);
+}
+.popup-governance .action-menu-button[data-action="reject"]:hover:not(:disabled) {
+  background: var(--danger-bg);
+}
+
+/* Kotak alasan penolakan — muncul hanya setelah "Tolak" dipilih. */
+.popup-governance .reject-reason-box {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--danger-border);
+  border-left: 3px solid var(--status-danger);
+  border-radius: var(--radius);
+  background: var(--danger-bg);
+}
+.popup-governance .reject-reason-box .field span {
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--danger-ink);
+}
+.popup-governance .reject-reason-box textarea {
+  background: var(--surface);
+}
+.popup-governance .reject-reason-actions {
+  margin-top: var(--space-2);
+}
+
+/* --- 6. Kaki sticky ----------------------------------------------------- */
+.popup-governance .approval-menu-foot {
+  position: sticky;
+  bottom: calc(-1 * var(--space-4));
+  margin-top: var(--space-4);
+  padding: var(--space-3) 0 var(--space-4);
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.popup-governance .approval-menu-hint {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+@media (max-width: 720px) {
+  .popup-governance .popup-body {
+    gap: var(--space-3);
+  }
+  /* Satu kolom: label di atas nilainya — 152 px label memakan separuh layar. */
+  .popup-governance .approval-fact {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .popup-governance .approval-modal-head {
+    flex-wrap: wrap;
+  }
+  .popup-governance .action-menu-button {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .popup-governance .action-menu-item {
+    transition: none;
+  }
+}
+
+/* ── Paginasi daftar (19 Okt 2026) ──────────────────────────────────────────
+   "Daftar pemasok" dan "Papan kiriman" menampilkan 10 baris per halaman.
+   Pager memakai bahasa visual yang sudah ada (pil urutan papan kiriman, tombol
+   sekunder): garis --line, radius kecil, halaman aktif berisi --primary dengan
+   teks --ink-inverse. Halaman aktif dibedakan isian + ketebalan + aria-current,
+   bukan warna saja. Target sentuh 44 px hanya di perangkat sentuh / layar
+   sempit, supaya desktop tetap rapat. */
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-3);
+}
+.pager-range {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pager-range-solo {
+  color: var(--ink-subtle);
+}
+.pager-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+.pager-list {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pager-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-family: inherit;
+  font-size: var(--fs-1);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color var(--dur-1, 120ms) ease, color var(--dur-1, 120ms) ease,
+    background-color var(--dur-1, 120ms) ease;
+}
+.pager-btn:hover:not(:disabled) {
+  border-color: var(--line-input);
+  color: var(--navy-700);
+}
+.pager-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.pager-btn[aria-current="page"] {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--ink-inverse);
+  font-weight: 600;
+}
+.pager-btn[aria-current="page"]:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--ink-inverse);
+}
+.pager-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pager-gap {
+  padding: 0 2px;
+  color: var(--ink-subtle);
+  font-size: var(--fs-1);
+}
+@media (max-width: 640px) {
+  .pager {
+    justify-content: flex-start;
+  }
+  .pager-step {
+    padding: 0 10px;
+  }
+}
+@media (pointer: coarse), (max-width: 720px) {
+  .pager-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pager-btn {
+    transition: none;
+  }
+}
+
+
+/* ── Demo Control sederhana (keputusan Roy 2026-10-19) ─────────────────────
+   Tiga blok: siapkan data → jalankan agent → bukti. Menggantikan susunan lama
+   (skenario + panel data + OpsConsole + ChaosPanel) di tab Demo Control.
+   Semua nilai memakai token proyek; tidak ada palet atau ukuran huruf baru
+   (lantai tipografi tetap --fs-1 = 12px, target sentuh tetap milik .button). */
+.dc-block {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.dc-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.dc-stepno {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  border: 1px solid var(--line);
+  color: var(--accent-strong);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  line-height: 1;
+}
+.dc-title {
+  margin: 0;
+  font-size: var(--fs-4);
+  font-weight: 600;
+  color: var(--ink);
+}
+.dc-sub {
+  margin: 0;
+  max-width: 78ch;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+}
+.dc-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.dc-actions .button {
+  margin: 0;
+}
+.dc-status,
+.dc-result,
+.dc-progress,
+.dc-error,
+.dc-empty,
+.dc-readonly,
+.dc-line {
+  margin: 0;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+}
+.dc-result {
+  color: var(--ink);
+}
+.dc-error {
+  color: var(--status-danger);
+}
+.dc-readonly {
+  font-style: italic;
+}
+.dc-params {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+.dc-param {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-sunken);
+  color: var(--ink);
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  white-space: nowrap;
+}
+.dc-param-sep {
+  color: var(--ink-subtle);
+  font-size: var(--fs-1);
+}
+.dc-progress {
+  display: grid;
+  gap: 2px;
+  color: var(--ink);
+  animation: dc-fade-in var(--dur-2) var(--ease-standard);
+}
+.dc-progress-note {
+  color: var(--ink-muted);
+}
+.dc-note summary,
+.dc-narration summary {
+  cursor: pointer;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+}
+.dc-note summary:hover,
+.dc-narration summary:hover {
+  color: var(--accent-strong);
+}
+.dc-note p,
+.dc-narration p {
+  margin: 6px 0 0;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+  max-width: 96ch;
+}
+.dc-narration p {
+  white-space: pre-wrap;
+  max-height: 240px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface-sunken);
+  color: var(--ink);
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+}
+.dc-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 6px 16px;
+  margin: 0;
+}
+.dc-fact {
+  min-width: 0;
+}
+.dc-fact dt {
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+.dc-fact dd {
+  margin: 0;
+  font-size: var(--fs-3);
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.dc-id {
+  font-family: var(--font-data);
+  font-size: var(--fs-2);
+  font-weight: 500;
+}
+/* Tujuh agen review di Demo Control. Tiap kartu selalu hadir; keadaan dibaca
+   dari latar + tepi + kata di chip, bukan warna saja. */
+.dc-agents {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 10px;
+  margin: 14px 0 8px;
+}
+.dc-agent {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  background: var(--surface);
+}
+.dc-agent-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.dc-agent-head h3 {
+  margin: 0;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dc-agent-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-muted);
+}
+.dc-agent-status {
+  align-self: flex-start;
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  background: var(--surface);
+}
+.dc-agent-meta {
+  display: flex;
+  gap: 14px;
+  margin: 0;
+}
+.dc-agent-meta dt {
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+.dc-agent-meta dd {
+  margin: 0;
+  font-size: var(--fs-2);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.dc-agent[data-state="ok"] {
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+}
+.dc-agent[data-state="ok"] .dc-agent-dot {
+  background: var(--ok-ink);
+}
+.dc-agent[data-state="ok"] .dc-agent-status {
+  border-color: var(--ok-border);
+  color: var(--ok-ink);
+}
+.dc-agent[data-state="running"] {
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+}
+.dc-agent[data-state="running"] .dc-agent-dot {
+  background: var(--accent-strong);
+  animation: dc-agent-pulse 1.6s var(--ease-standard) infinite;
+}
+.dc-agent[data-state="running"] .dc-agent-status {
+  border-color: var(--accent-strong);
+  color: var(--accent);
+}
+@keyframes dc-agent-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+.dc-agent[data-state="idle"] {
+  background: var(--neutral-bg);
+  border-style: dashed;
+  border-color: var(--neutral-border);
+}
+.dc-agent[data-state="limited"] {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+.dc-agent[data-state="limited"] .dc-agent-dot { background: var(--warn-ink); }
+.dc-agent[data-state="failed"] {
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+}
+.dc-agent[data-state="failed"] .dc-agent-dot { background: var(--danger-ink); }
+@media (prefers-reduced-motion: reduce) {
+  .dc-agent[data-state="running"] .dc-agent-dot { animation: none; }
+}
+/* Daftar langkah pipeline dilipat dengan segitiga bawaan <details>. */
+.dc-steps-fold {
+  margin: 10px 0 6px;
+}
+.dc-steps-fold > summary {
+  /* list-item (bukan flex) supaya segitiga ::marker bawaan peramban tetap tampil. */
+  display: list-item;
+  width: fit-content;
+  padding: 3px 2px;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  list-style-position: inside;
+}
+.dc-steps-fold > summary:hover {
+  color: var(--accent);
+}
+.dc-steps-fold > summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-1);
+}
+.dc-fold-count {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  vertical-align: 1px;
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: var(--fs-1);
+  font-weight: 500;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.dc-steps-fold .dc-steps {
+  margin-top: 8px;
+}
+.dc-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dc-step {
+  display: grid;
+  gap: 1px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.dc-step-name {
+  font-size: var(--fs-1);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+.dc-step-tool {
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+.dc-line--muted {
+  color: var(--ink-subtle);
+}
+.dc-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dc-links .button {
+  margin: 0;
+}
+@keyframes dc-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dc-progress {
+    animation: none;
+  }
+}
+/* ── Pencarian daftar pemasok (19 Okt 2026 · redesain 2) ───────────────────
+   Kepala kartu SATU BARIS: judul + pil jumlah di kiri, "Cari pemasok" sebaris
+   dengan kolom pil di kanan. Versi pertama menumpuk label + kolom + status
+   (74 px) dan judul ikut rata-bawah, jadi judul tampak turun di samping kolom
+   cari. Jumlah hasil pindah ke pil di sebelah judul — tetap terbaca, sekaligus
+   jadi tempat pengumuman `role="status"`. */
+.directory-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-2);
+}
+.directory-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.directory-title h2 {
+  margin: 0;
+}
+.count-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  min-height: 20px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--neutral-bg);
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.count-pill-active {
+  border-color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent-strong) 10%, transparent);
+  color: var(--accent);
+}
+/* Kolom cari duduk di baris RINGKASAN jangkauan (di atas tabel, rata kanan).
+   Ia menumpang baris yang sudah ada, jadi tidak menambah pita kosong antara
+   catatan jangkauan dan kepala tabel lajur (permintaan pemilik 19 Okt 2026:
+   "jangan ada space di bagian ini"). */
+.board-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.board-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+.board-search-label {
+  font-size: var(--fs-1);
+  font-weight: 600;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.board-search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: clamp(220px, 24vw, 320px);
+}
+.board-search-icon {
+  position: absolute;
+  left: 11px;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: var(--ink-subtle);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.board-search-input {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 32px 6px 30px;
+  border: 1px solid var(--line-input);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--fs-2);
+}
+.board-search-input::placeholder {
+  color: var(--ink-subtle);
+}
+.board-search-input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* Tombol hapus milik kita sendiri (berlabel untuk pembaca layar) — tombol bawaan
+   WebKit disembunyikan supaya tidak ada dua kontrol yang sama. */
+.board-search-input::-webkit-search-cancel-button {
+  display: none;
+}
+.board-search-clear {
+  position: absolute;
+  right: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  font-family: inherit;
+  font-size: var(--fs-3);
+  line-height: 1;
+  cursor: pointer;
+}
+.board-search-clear:hover {
+  background: var(--neutral-bg);
+  color: var(--navy-700);
+}
+.board-search-clear:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.board-search-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+}
+@media (max-width: 720px) {
+  .directory-head {
+    align-items: stretch;
+  }
+  .board-search {
+    flex-wrap: wrap;
+    width: 100%;
+    margin-left: 0;
+  }
+  .board-search-label {
+    flex: 1 1 100%;
+  }
+  .board-search-field {
+    flex: 1 1 100%;
+    width: auto;
+  }
+}
+@media (pointer: coarse), (max-width: 720px) {
+  .board-search-input {
+    min-height: 44px;
+  }
+  .board-search-clear {
+    width: 44px;
+    height: 44px;
+    right: 1px;
+  }
 }

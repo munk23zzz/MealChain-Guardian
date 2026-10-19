@@ -42,8 +42,12 @@ describe("navigasi PRD 2.4 (7 screen → konsol tab)", () => {
     expect(pageSrc).toMatch(/<ProviderPanel/);
   });
 
-  it("demo-control menjalankan skenario via API resmi (seed + OpsConsole), bukan mock", () => {
-    expect(pageSrc).toMatch(/demo-control[\s\S]{0,400}OpsConsole|<OpsConsole/);
-    expect(pageSrc).toMatch(/onSeedDemo/);
+  it("demo-control memakai DemoControlPanel (jalankan agent lewat API resmi, bukan mock)", () => {
+    // 2026-10-19: skenario Event 1/2/3 dilepas dari tab; tombol pintas rail
+    // "Muat kasus demo" ikut dihapus supaya hanya ada SATU jalan menyiapkan data
+    // (blok 1 di panel).
+    expect(pageSrc).toContain("<DemoControlPanel");
+    expect(pageSrc).not.toContain("<OpsConsole");
+    expect(pageSrc).not.toContain("onSeedDemo");
   });
 });

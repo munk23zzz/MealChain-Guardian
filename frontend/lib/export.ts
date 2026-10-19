@@ -1,5 +1,5 @@
 import { evidenceRowsFromDossier, type ComplianceDossier } from "./evidence";
-import { fetchDossier } from "./api";
+import { fetchDossier, fetchPurchaseOrderPdf } from "./api";
 
 const FORBIDDEN = /^(token|access_token|refresh_token|credential|credentials|private_key|privatekey|secret)$/i;
 
@@ -56,6 +56,40 @@ export function downloadText(filename: string, content: string, mime = "text/pla
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+/** Unduh berkas biner yang sudah diterima (dipakai dokumen PO). */
+export function downloadBlob(filename: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Nama berkas dokumen PO — ATURAN YANG SAMA dengan `po_document.nama_berkas`
+ * di backend (`PO-` + nomor, karakter di luar `A-Za-z0-9-_.` jadi `-`).
+ *
+ * Disalin, bukan dibaca dari `Content-Disposition`: header itu hanya bisa
+ * dibaca lintas-origin bila server mengeksposnya, dan nama berkas tidak boleh
+ * bergantung pada konfigurasi CORS.
+ */
+export function poFileName(poNumber: string): string {
+  const bersih = poNumber.replace(/[^A-Za-z0-9\-_.]/g, "-");
+  return `PO-${bersih}.pdf`;
+}
+
+/**
+ * Unduh dokumen PO (PDF) satu nomor PO. Mengembalikan nama berkas supaya UI
+ * memberi umpan balik jujur ("terunduh sebagai …"), seperti ekspor dossier.
+ */
+export async function downloadPoPdf(poNumber: string, token: string): Promise<string> {
+  const blob = await fetchPurchaseOrderPdf(poNumber, token);
+  const nama = poFileName(poNumber);
+  downloadBlob(nama, blob);
+  return nama;
 }
 
 /**

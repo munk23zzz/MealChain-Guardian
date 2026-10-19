@@ -186,12 +186,30 @@ describe("AgentTraceViewer (activity log aktual)", () => {
     },
   ];
 
-  it("render langkah terurut + tool + timestamp", () => {
+  it("render langkah terurut + sebutan alat + timestamp", () => {
     const html = renderToStaticMarkup(<AgentTraceViewer steps={steps} />);
     expect(html.indexOf("DETECT")).toBeLessThan(html.indexOf("VERIFY"));
-    expect(html).toContain("supply.get+demand.get");
-    expect(html).toContain("verifier.rest");
+    // Slug internal tidak boleh tampil; yang dibaca pengguna adalah sebutannya.
+    expect(html).not.toContain("supply.get+demand.get");
+    expect(html).not.toContain("verifier.rest");
+    expect(html).toContain("Ambil pasokan &amp; permintaan");
+    expect(html).toContain("Layanan verifikator");
     expect(html).toContain("12:00:01");
+  });
+
+  it("slug alat yang dikenal diganti sebutan; yang tidak dikenal tidak ditampilkan", () => {
+    const dikenal = renderToStaticMarkup(
+      <AgentTraceViewer steps={[{ step_name: "VERIFY", tool_called: "evaluate_safety" }]} />
+    );
+    expect(dikenal).toContain("Periksa keamanan");
+    expect(dikenal).not.toContain("evaluate_safety");
+
+    // Slug teknis tanpa padanan manusia: baris alatnya tidak dirender sama sekali.
+    const asing = renderToStaticMarkup(
+      <AgentTraceViewer steps={[{ step_name: "ACT", tool_called: "sap_mock.create_purchase_order" }]} />
+    );
+    expect(asing).not.toContain("sap_mock.create_purchase_order");
+    expect(asing).not.toContain("trace-tool");
   });
 
   it("belum memilih keputusan → dikatakan apa adanya, bukan 'tidak ada langkah'", () => {

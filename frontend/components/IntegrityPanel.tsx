@@ -8,6 +8,15 @@
  * - Dossier: alamat konten (ala-CID offline) + tanda tangan ECDSA
  *   secp256k1 per keputusan; state unsigned ditampilkan apa adanya.
  * Tanpa angka karangan — semua dari endpoint backend deterministik.
+ *
+ * Tampilan (19 Okt 2026, permintaan pemilik: "desain bagian integrasi bukti …
+ * pakai palet yang cocok dengan tema terang"): panel ini DULU satu-satunya
+ * permukaan gelap (#0F172A) di tema terang. Kini tiap kotak bukti memakai nada
+ * yang menyampaikan keadaannya sendiri — teal = tersegel/valid, amber = belum
+ * ditandatangani, rose = putus/gagal, netral = belum ada data — dan lencananya
+ * selalu bertitik + berteks, jadi keadaan tidak pernah bergantung pada warna
+ * saja. Token `--trust-*` dipertahankan (nama sama, nilai terang) supaya aturan
+ * lama di globals.css dan tes lama tetap berlaku.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -37,6 +46,30 @@ type DossierResult = ComplianceDossier & {
   signature: { state: string; algorithm?: string; reason?: string };
   verify: boolean | null;
 };
+
+/** Nada kotak bukti — sama dengan sistem tint app (ok/warn/danger/netral). */
+export type ProofTone = "ok" | "warn" | "danger" | "plain";
+
+/** Keadaan rantai Merkle: nada aman HANYA bila backend menyatakan valid. */
+export function ledgerState(ledger: LedgerResult | null): { tone: ProofTone; label: string } {
+  if (ledger === null) return { tone: "plain", label: "memeriksa rantai…" };
+  return ledger.valid
+    ? { tone: "ok", label: "Rantai valid" }
+    : { tone: "danger", label: "Rantai putus" };
+}
+
+/** Keadaan dossier: tanda tangan yang TIDAK cocok tidak pernah diberi nada aman. */
+export function dossierState(
+  decisionId: string | null,
+  dossier: DossierResult | null
+): { tone: ProofTone; label: string } {
+  if (!decisionId) return { tone: "plain", label: "belum dipilih" };
+  if (dossier === null) return { tone: "plain", label: "memuat dossier…" };
+  if (dossier.signature.state !== "signed") return { tone: "warn", label: "belum ditandatangani" };
+  return dossier.verify
+    ? { tone: "ok", label: "tersegel & terverifikasi" }
+    : { tone: "danger", label: "segel tidak cocok" };
+}
 
 export default function IntegrityPanel({
   token,
@@ -73,44 +106,70 @@ export default function IntegrityPanel({
     void refresh();
   }, [refresh]);
 
+  const rantai = ledgerState(ledger);
+  const berkas = dossierState(decisionId, dossier);
+  // Audit A4: rantai valid ≠ bukti lengkap — blok yatim tetap disebut.
+  const sisaBukti = ledger === null ? null : coverageNote(ledger);
+
   return (
     <section className="integrity-panel card" data-testid="integrity-panel">
       <h3>Integritas Bukti</h3>
+      <p className="integrity-sub">
+        Rantai hash append-only, alamat konten, dan tanda tangan tiap keputusan — dibaca dari
+        endpoint deterministik, bukan dikarang.
+      </p>
 
       {/* Bukti kriptografis (rantai Merkle + alamat konten + tanda tangan ECDSA)
-          tampil di permukaan GELAP tipis — satu-satunya di tema terang — supaya
-          terbaca sebagai "bukti tak bisa diubah", bukan catatan biasa. Daftar
-          pengukuran (ComplianceEvidencePanel) tetap terang di bawahnya: tabel
-          pengukuran memang lebih enak dibaca di atas putih. */}
+          kini bertinta TERANG seperti sisa konsol: warna di sini membawa
+          keadaan, bukan suasana. Daftar pengukuran (ComplianceEvidencePanel)
+          tetap netral di bawahnya — tabel pengukuran lebih enak dibaca tanpa
+          tint. */}
       <div className="integrity-trust">
-    <div className="integrity-ledger" data-testid="ledger-status">
-      <strong>Merkle Ledger (append-only)</strong>
-        {ledger === null && <p>memeriksa rantai…</p>}
+    <div
+      className="integrity-proof integrity-ledger"
+      data-tone={rantai.tone}
+      data-testid="ledger-status"
+    >
+      <div className="integrity-proof-head">
+        <span className="integrity-proof-titles">
+          <span className="integrity-proof-name">Merkle Ledger</span>
+          <span className="integrity-proof-kind">append-only</span>
+        </span>
+        <span className={`integrity-chip integrity-chip-${rantai.tone}`}>{rantai.label}</span>
+      </div>
         {ledger !== null && (
-          <p>
-            {ledger.valid ? "✅ Rantai valid" : "❌ RANTAI PUTUS"} ·{" "}
-            {ledger.blocks} block
+          <dl className="integrity-meta">
+            <div>
+              <dt>Blok</dt>
+              <dd className="integrity-num">{ledger.blocks}</dd>
+            </div>
             {ledger.valid && ledger.head ? (
-              <span title={ledger.head}>
-                {" "}
-                · head {ledger.head.slice(0, 12)}…
-              </span>
+              <div>
+                <dt>Head</dt>
+                <dd className="integrity-hash" title={ledger.head}>
+                  {ledger.head.slice(0, 12)}…
+                </dd>
+              </div>
             ) : null}
             {!ledger.valid && ledger.broken_at ? (
-              <span>
-                {" "}
-                · putus di height {ledger.broken_at} ({ledger.reason})
-              </span>
+              <div>
+                <dt>Putus di</dt>
+                <dd className="integrity-num">blok {ledger.broken_at}</dd>
+              </div>
             ) : null}
-          </p>
+          </dl>
         )}
-        {ledger !== null && coverageNote(ledger) ? (
+        {ledger !== null && !ledger.valid && ledger.reason ? (
+          <p className="integrity-reason">{ledger.reason}</p>
+        ) : null}
+        {sisaBukti ? (
           <p className="integrity-warning" data-testid="ledger-coverage">
-            ⚠️ {coverageNote(ledger)}
+            {sisaBukti}
           </p>
         ) : null}
         <button
           type="button"
+          className="integrity-refresh"
           data-testid="btn-verify-ledger"
           onClick={() => void refresh()}
           disabled={busy}
@@ -119,27 +178,39 @@ export default function IntegrityPanel({
         </button>
       </div>
 
-      <div className="integrity-dossier" data-testid="dossier-status">
-        <strong>Dossier Keputusan</strong>
-        {!decisionId && <p>pilih keputusan untuk melihat dossier</p>}
-        {decisionId && dossier === null && <p>memuat dossier…</p>}
+      <div
+        className="integrity-proof integrity-dossier"
+        data-tone={berkas.tone}
+        data-testid="dossier-status"
+      >
+        <div className="integrity-proof-head">
+          <span className="integrity-proof-titles">
+            <span className="integrity-proof-name">Dossier Keputusan</span>
+            <span className="integrity-proof-kind">alamat konten + tanda tangan</span>
+          </span>
+          <span className={`integrity-chip integrity-chip-${berkas.tone}`}>{berkas.label}</span>
+        </div>
+        {!decisionId && <p className="integrity-hint">Pilih keputusan untuk melihat dossier.</p>}
+        {decisionId && dossier === null && <p className="integrity-hint">Memuat dossier…</p>}
         {dossier !== null && (
-          <>
-            <dl>
+          <dl className="integrity-meta">
+            <div>
               <dt>Alamat konten</dt>
-              <dd data-testid="dossier-address">
+              <dd className="integrity-hash" data-testid="dossier-address" title={dossier.content_address}>
                 {dossier.content_address.slice(0, 24)}…
               </dd>
+            </div>
+            <div>
               <dt>Tanda tangan</dt>
               <dd data-testid="dossier-signature">
                 {dossier.signature.state === "signed"
-                  ? `✅ ${dossier.signature.algorithm} · verifikasi ${
+                  ? `${dossier.signature.algorithm} · verifikasi ${
                       dossier.verify ? "BERHASIL" : "GAGAL"
                     }`
-                  : `⚠️ unsigned — ${dossier.signature.reason ?? "kunci tidak diset"}`}
+                  : `unsigned — ${dossier.signature.reason ?? "kunci tidak diset"}`}
               </dd>
-            </dl>
-          </>
+            </div>
+          </dl>
         )}
       </div>
       </div>

@@ -289,7 +289,7 @@ describe("shouldLoadSuppliers", () => {
 const JARAK_ITEMS = [
   {
     id: "j1",
-    name: "Sayur Segar Kramat Jati",
+    name: "Toko Sayur Bu Endang",
     location: "Jakarta",
     commodity: "telur",
     reliability_score: 0.88,
@@ -301,7 +301,7 @@ const JARAK_ITEMS = [
   },
   {
     id: "j2",
-    name: "Wortel Lestari Subang",
+    name: "CV Hortikultura Subang Lestari",
     location: "Jakarta",
     commodity: "wortel",
     reliability_score: 0.83,
@@ -313,7 +313,7 @@ const JARAK_ITEMS = [
   },
   {
     id: "j3",
-    name: "Wortel Bandungan",
+    name: "CV Bandungan Sayur Lestari",
     location: "Semarang",
     commodity: "wortel",
     reliability_score: 0.9,
@@ -405,8 +405,8 @@ describe("jarak & jangkauan (Fase 7b)", () => {
   it("peta hanya memasang pin dalam jangkauan (tanpa ambang: semua)", () => {
     const rows = supplierPinRows(PAYLOAD_JANGKAUAN);
     expect(supplierPinsForMap(rows, SUPPLIER_REACH_KM).map((row) => row.name)).toEqual([
-      "Sayur Segar Kramat Jati",
-      "Wortel Lestari Subang",
+      "Toko Sayur Bu Endang",
+      "CV Hortikultura Subang Lestari",
     ]);
     expect(supplierPinsForMap(rows, null)).toHaveLength(4);
   });

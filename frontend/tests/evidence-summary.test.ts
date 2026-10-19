@@ -30,6 +30,7 @@ import {
   evidenceTally,
   safetyFacts,
   supplierFact,
+  supplierNameOf,
 } from "../lib/evidence";
 
 const SUMMARY = {
@@ -166,13 +167,20 @@ describe("decisionFacts — identitas keputusan", () => {
 });
 
 describe("costFacts — biaya", () => {
-  it("harga beli, logistik, catatan (total ada di strip metrik, tidak diulang)", () => {
+  // 19 Okt 2026: kontrak berubah — kartu Biaya memuat ENAM komponen Safe
+  // Delivered Cost, bukan dua. Dulu hanya purchase+logistics sehingga
+  // total tidak bisa direkonsiliasi; komponen yang tidak dikirim backend
+  // tampil "—" beserta alasannya (bukan disembunyikan).
+  it("enam komponen SDC tampil; komponen yang tidak ada ditandai '—' + alasan", () => {
     const rows = costFacts(SUMMARY);
     expect(find(rows, "Harga beli").value).toBe("Rp15.720.000");
     expect(find(rows, "Logistik").value).toBe("Rp486.000");
-    expect(find(rows, "Catatan").value).toBe("seed demo — angka konsisten docs");
-    // F1 redesign: total pindah ke strip; kalau dipertahankan di sini, angka
-    // yang sama muncul dua kali dalam satu layar.
+    for (const label of ["Penanganan", "Potensi susut", "Risiko kesegaran", "Penalti keamanan"]) {
+      expect(find(rows, label).value).toBe("—");
+      expect(find(rows, label).hint).toMatch(/tidak ada di data keputusan ini/);
+    }
+    expect(find(rows, "Dasar hitung").value).toBe("seed demo — angka konsisten docs");
+    // F1 redesign: total tetap tidak diulang di kartu (sudah ada di strip).
     expect(rows.map((r) => r.label)).not.toContain("Biaya aman terkirim");
   });
 
@@ -220,7 +228,31 @@ describe("costFacts — biaya", () => {
     const labels = costFacts(SUMMARY).map((r) => r.label);
     expect(labels).not.toContain("Angkut pemasok → SPPG");
     expect(labels).not.toContain("Angkut antar SPPG");
-    expect(labels).toEqual(["Harga beli", "Logistik", "Catatan"]);
+    // Urutan komponen mengikuti kontrak SDC; "Rekonsiliasi rincian" muncul
+    // karena baris lama hanya punya dua dari enam komponen.
+    expect(labels).toEqual([
+      "Harga beli",
+      "Logistik",
+      "Penanganan",
+      "Potensi susut",
+      "Risiko kesegaran",
+      "Penalti keamanan",
+      "Rekonsiliasi rincian",
+      "Dasar hitung",
+    ]);
+  });
+
+  it("rincian lengkap yang menjumlah ke total: tidak memunculkan baris rekonsiliasi", () => {
+    const rows = costFacts({
+      cost_breakdown: {
+        purchase: "1000000", transport: "48600", handling: "150000",
+        expected_loss: "20000", freshness_risk: "0", safety_penalty: "0",
+        basis: "dihitung: kutipan pemasok Rp20.000/kg, linehaul 162 km",
+      },
+      safe_delivered_cost: "1218600",
+    });
+    expect(rows.map((r) => r.label)).not.toContain("Rekonsiliasi rincian");
+    expect(find(rows, "Penalti keamanan").value).toBe("Rp0");
   });
 });
 
@@ -742,5 +774,49 @@ describe("nextStep — temuan review_only (audit M6)", () => {
     expect(hasil.text).toContain("Temuan tinjauan");
     expect(hasil.text).not.toContain("Jendela berlaku");
     expect(hasil.tone).toBe("plain");
+  });
+});
+
+// --- pengadaan pemasok (19 Okt 2026) ---------------------------------------
+// Keputusan pengadaan punya source_location_id NULL (barang datang dari
+// pemasok, bukan dari stok SPPG lain). Sebelum diperbaiki, barisnya berbunyi
+// "Rute —" dan judulnya kehilangan asal — terbaca seperti data rusak.
+
+const PENGADAAN = {
+  decision_type: "supplier_procurement",
+  source_location: null,
+  target_location: "Jakarta",
+  commodity: "telur",
+  quantity_kg: 779.86,
+  iteration: 1,
+  supplier: { id: "036f2597-83e8-4985-81c2-47626a8a1395", name: "Telur Berkah Bekasi" },
+};
+
+describe("decisionFacts — pengadaan pemasok", () => {
+  it("menampilkan pemasok sebagai asal, bukan Rute kosong", () => {
+    const rows = decisionFacts(PENGADAAN, new Date("2026-10-19T14:41:00Z"));
+    expect(rows.map((r) => r.label)).not.toContain("Rute");
+    const baris = rows.find((r) => r.label === "Pemasok → SPPG");
+    expect(baris?.value).toBe("Telur Berkah Bekasi → Jakarta");
+  });
+
+  it("judul menyebut pemasok, bukan kota tujuan sebagai asal", () => {
+    const judul = decisionHeadline(PENGADAAN, null);
+    expect(judul).toContain("Adakan dari pemasok");
+    expect(judul).toContain("Telur Berkah Bekasi → Jakarta");
+  });
+
+  it("tanpa nama pemasok tetap jujur (—), bukan ditebak dari lokasi", () => {
+    const rows = decisionFacts({ ...PENGADAAN, supplier: null }, null);
+    const baris = rows.find((r) => r.label === "Pemasok → SPPG");
+    expect(baris?.value).toBe("—");
+  });
+
+  it("supplierNameOf menerima objek maupun string", () => {
+    expect(supplierNameOf({ supplier: { name: "Telur Berkah Bekasi" } })).toBe(
+      "Telur Berkah Bekasi"
+    );
+    expect(supplierNameOf({ supplier: "UD Beras Rancaekek" })).toBe("UD Beras Rancaekek");
+    expect(supplierNameOf({})).toBeNull();
   });
 });

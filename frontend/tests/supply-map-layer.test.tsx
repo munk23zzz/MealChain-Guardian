@@ -148,8 +148,18 @@ const fake = vi.hoisted(() => {
     popup: { node?: HTMLElement } | null = null;
     added = false;
     removed = false;
-    constructor(options: { element: HTMLElement }) {
+    constructor(options: { element: HTMLElement; anchor?: string }) {
       this.element = options.element;
+      // Tiruan perilaku MapLibre 4.7: konstruktor MENAMBAHKAN kelas pustaka ke
+      // elemen marker, dan `maplibregl-marker` itulah yang membawa
+      // `position: absolute`. Kalau komponen menyegarkan pin dengan menimpa
+      // `className` utuh, kelas ini ikut terhapus dan penanda jatuh ke alur
+      // normal — bug "pin pemasok bergeser dari koordinatnya saat zoom"
+      // (terukur sampai ±192 px di aplikasi hidup).
+      this.element.classList.add(
+        "maplibregl-marker",
+        `maplibregl-marker-anchor-${options.anchor ?? "center"}`
+      );
       // Tiruan perilaku MapLibre 4.7: konstruktor MENIMPA aria-label elemen
       // dengan "Map marker". Kalau komponen memasang keterangan aksesibilitas
       // sebelum marker dibuat, teksnya hilang — dan tes ini gagal.
@@ -513,6 +523,47 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     expect(supplierMarkers()).toHaveLength(0);
     // Pin SPPG tidak ikut terpengaruh.
     expect(locationMarkers()).toHaveLength(1);
+  });
+
+  it("kelas MapLibre tidak terhapus saat pin pemasok disegarkan (pin tetap di koordinatnya)", () => {
+    // Regresi 2026-10-18: `refreshSupplierPin` menimpa className utuh, sehingga
+    // kelas `maplibregl-marker` (pembawa position:absolute) hilang pada zoomend
+    // pertama. Pin lalu ikut alur tata letak penanda lain dan bergeser sampai
+    // ±192 px dari koordinat aslinya saat zoom in/out.
+    mount();
+    toggle();
+    zoomTo(6.5);
+    supplierMarkers().forEach((marker) => {
+      expect(marker.element.className).toContain("maplibregl-marker");
+    });
+    // Zoom berikutnya memicu `refreshSupplierPin` untuk pin yang sudah ada.
+    zoomTo(9);
+    supplierMarkers().forEach((marker) => {
+      expect(marker.element.className).toContain("maplibregl-marker");
+      expect(marker.element.className).toContain("maplibregl-marker-anchor-center");
+      // Nada & keadaan label tetap diperbarui oleh penyegaran itu.
+      expect(marker.element.className).toContain("map-pin-supplier");
+    });
+    zoomTo(7);
+    supplierMarkers().forEach((marker) => {
+      expect(marker.element.className).toContain("maplibregl-marker");
+      expect(marker.element.className).toContain("map-pin-supplier-compact");
+    });
+  });
+
+  it("pin SPPG juga mempertahankan kelas MapLibre saat data disinkronkan ulang", () => {
+    mount();
+    const awal = locationMarkers()[0].element;
+    expect(awal.className).toContain("maplibregl-marker");
+    act(() => {
+      root.render(
+        <SupplyMap locations={[{ ...LOCATIONS[0], supply_kg: 310 }]} suppliers={SUPPLIERS} />
+      );
+    });
+    const sesudah = locationMarkers().find((marker) => !marker.removed)?.element;
+    expect(sesudah?.className).toContain("maplibregl-marker");
+    // Anchor pin lokasi tetap di ujung ekor (bukan tengah), jadi tidak berubah.
+    expect(sesudah?.className).toContain("maplibregl-marker-anchor-bottom");
   });
 
   it("zoom dekat lebih dulu, lalu dinyalakan: pin langsung muncul", () => {
@@ -1320,7 +1371,7 @@ describe("SupplyMap — daftar Status Lokasi menyorot penanda", () => {
     const tombol = host.querySelector<HTMLButtonElement>(".map-row-btn")!;
     expect(tombol).not.toBeNull();
     expect(tombol.tagName).toBe("BUTTON");
-    expect(tombol.textContent).toContain("Jakarta");
+    expect(tombol.textContent).toContain("JKT");
     act(() => tombol.click());
     const fly = mapLog[0].flyLog as { center?: [number, number]; zoom?: number }[];
     expect(fly).toHaveLength(1);
@@ -1334,12 +1385,14 @@ describe("SupplyMap — daftar Status Lokasi menyorot penanda", () => {
     mount();
     act(() => root.render(<SupplyMap locations={dua} />));
     const surabaya = Array.from(host.querySelectorAll<HTMLButtonElement>(".map-row-btn")).find((b) =>
-      (b.textContent ?? "").includes("Surabaya")
+      (b.textContent ?? "").includes("SBY")
     )!;
     act(() => surabaya.click());
     const aktif = locationMarkers().filter((m) => m.element.classList.contains("map-pin-active"));
     expect(aktif).toHaveLength(1);
-    expect(aktif[0].element.getAttribute("aria-label")).toContain("Surabaya");
+    // Label penanda mengikuti teks yang DILIHAT operator (kode wilayah), bukan
+    // nama panjang: satu sumber label, tidak ada dua penamaan untuk satu pin.
+    expect(aktif[0].element.getAttribute("aria-label")).toContain("SBY");
   });
 
   it("tanpa peta (pemanggil tanpa onSorot) baris tetap statis, bukan tombol mati", () => {

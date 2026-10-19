@@ -287,6 +287,15 @@ describe("hitungan menunggu tindakan per peran (audit M7)", () => {
     expect(notifList(baris, undefined, "sppg_nutritionist").total).toBe(2);
   });
 
+  it("tanpa peran, angka LEBIH KECIL — jangan pernah memanggil tanpa peran", () => {
+    // Temuan audit 19 Okt 2026: kartu "Rekomendasi menunggu" memanggil
+    // notifList(decisions, 4) tanpa peran → 16, sementara lonceng menulis 24
+    // untuk hal yang sama. Tes ini mengunci bahwa selisih itu memang ada,
+    // supaya pemanggil baru tidak "menyederhanakan" dengan membuang peran.
+    expect(notifList(baris, undefined).total).toBe(2);
+    expect(notifList(baris, undefined, "sppg_head").total).toBe(3);
+  });
+
   it("review_only tidak pernah dihitung sebagai tindakan", () => {
     expect(isActionableForRole("review_only", "sppg_head")).toBe(false);
     expect(isActionableForRole("review_only", "sppg_nutritionist")).toBe(false);

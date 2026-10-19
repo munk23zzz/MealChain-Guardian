@@ -1,0 +1,437 @@
+/* ============================================================
+   DECISION & EVIDENCE — "dossier keputusan" (20 Okt 2026)
+   ============================================================
+   Permintaan pemilik: "redesign halaman ini, buat sebagus dan
+   semaksimal mungkin". Lapisan ini TIDAK menambah warna atau
+   komponen baru; ia menata ulang hierarki yang sudah ada:
+
+   1. Halaman dibaca sebagai DOKUMEN: empat panel berjudul
+      (keputusan · persetujuan · bukti · jejak), bukan delapan
+      kartu putih yang bobotnya sama.
+   2. Judul bagian = label editorial (kapital kecil + garis rambut),
+      sehingga mata jatuh ke KEPUTUSAN dulu, bukan ke judul kartu.
+   3. Angka kunci naik satu tingkat (16 → 24 px): di halaman bukti,
+      angka adalah isi; judul hanyalah penunjuk.
+   4. Jalur persetujuan jadi STEPPER bersambung (satu garis, satu
+      penanda per langkah) — bentuk yang menyatakan "jalan", bukan
+      empat kotak sejajar yang bisa dibaca dalam urutan apa pun.
+   5. Fakta di kartu governance memakai lembar spesifikasi yang sama
+      dengan kartu bukti (label kiri, nilai rata kanan) — sebelumnya
+      hanya kartu bukti yang dirapatkan sehingga kartu ini menyisakan
+      ~400 px kosong di kanan tiap baris.
+   6. Navigasi bagian menempel di bawah top bar + menandai bagian
+      yang sedang dibaca (halaman ini 3.000+ px: tanpa itu pembaca
+      kehilangan posisi).
+
+   Berkas ini diimpor SETELAH globals.css & theme-ext.css (lihat
+   app/layout.tsx) supaya aturannya menang tanpa !important dan
+   tanpa menyentuh berkas milik sesi lain.
+   Semua warna memakai token yang sudah ada; kontras teks ≥ 4,5:1.
+   ============================================================ */
+
+/* ---------- 1. Panel bagian: 8 kartu → 4 panel berjudul ------------- */
+
+.evidence-block {
+  display: grid;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+/* Kartu di dalam panel kehilangan bingkainya sendiri: satu bingkai
+   per bagian, bukan bingkai-di-dalam-bingkai. */
+.evidence-block > .card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.evidence-block > .card + .card {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.evidence-block > .integrity-panel { margin-top: 0; }
+
+/* ---------- 2. Judul bagian = label editorial ----------------------- */
+
+.evidence-page .card > h2:not(.evidence-hero-title),
+.evidence-page .evidence-decide-head > h2,
+.evidence-block-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: var(--fs-2);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.evidence-page .card > h2:not(.evidence-hero-title)::after,
+.evidence-block-title::after {
+  content: "";
+  flex: 1 1 auto;
+  min-width: 20px;
+  height: 1px;
+  background: var(--line);
+}
+/* Kepala governance sudah punya tombol di kanan: garis rambut akan
+   memanjang sampai tombol dan terbaca sebagai pemisah palsu. */
+.evidence-page .evidence-decide-head > h2::after { content: none; }
+
+/* ---------- 3. Kepala keputusan: satu pernyataan, bukan satu baris --- */
+
+.evidence-page .evidence-hero {
+  padding: 18px 20px;
+  gap: 12px 22px;
+  border-top-width: 3px;
+  border-top-color: var(--line);
+}
+/* Nada diambil dari status yang SUDAH tertulis di lencana: warna di sini
+   hanya mempercepat pembacaan, tidak menggantikan teks. */
+.evidence-hero[data-status="proposed"] { border-top-color: var(--accent-strong); }
+.evidence-hero[data-status="pending_approval"],
+.evidence-hero[data-status="verifier_flagged"],
+.evidence-hero[data-status="needs_verification"] { border-top-color: var(--warn-ink); }
+.evidence-hero[data-status="approved"],
+.evidence-hero[data-status="executed"] { border-top-color: var(--ok-ink); }
+.evidence-hero[data-status="rejected"],
+.evidence-hero[data-status="expired"] { border-top-color: var(--danger-ink); }
+
+.evidence-hero-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-muted);
+}
+.evidence-hero-eyebrow::before {
+  content: "";
+  flex: none;
+  width: 18px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent-strong);
+}
+
+/* Judul = tindakan yang diminta. Sebelumnya 18 px, sama dengan judul
+   kartu biasa, sehingga kalimat terpenting di halaman tidak menonjol. */
+.evidence-page .card > h2.evidence-hero-title {
+  font-size: var(--fs-7);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+@media (max-width: 900px) {
+  .evidence-page .card > h2.evidence-hero-title { font-size: var(--fs-6); }
+}
+
+/* ---------- 4. Deret angka kunci: isi halaman, bukan keterangan ------ */
+
+.evidence-metrics {
+  gap: 0 22px;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+.evidence-metric {
+  gap: 4px;
+  padding: 10px 0 0;
+  background: none;
+  /* Identitas warna per metrik tetap (permintaan 17 Okt: "banyak hal
+     yang harus berwarna malah tidak berwarna") tetapi dibawa SATU
+     saluran: garis atas + label. Tidak ada kotak tint kedua. */
+  box-shadow: inset 0 2px 0 var(--metrik-line, var(--line));
+}
+.evidence-metric dt {
+  font-size: var(--fs-1);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.evidence-metric dd {
+  font-size: var(--fs-7);
+  font-weight: 600;
+  line-height: var(--lh-num);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 720px) {
+  .evidence-metric dd { font-size: var(--fs-6); }
+}
+
+/* ---------- 5. Langkah berikutnya = instruksi, bukan keterangan ------ */
+
+.evidence-next {
+  gap: 4px;
+  padding: 10px 12px;
+  border-left-width: 3px;
+  border-radius: 8px;
+}
+.evidence-next-label { letter-spacing: 0.06em; }
+
+/* ---------- 6. Jalur persetujuan = STEPPER bersambung ---------------- */
+
+.evidence-route-steps {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin-top: 4px;
+}
+.evidence-route-step {
+  position: relative;
+  display: block;
+  padding: 0 22px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+/* Garis penghubung: melewati penanda satu langkah ke penanda berikutnya.
+   Warnanya mengikuti langkah yang SUDAH selesai, jadi panjang garis =
+   panjang progres yang benar-benar tercatat. */
+.evidence-route-step::before {
+  content: "";
+  position: absolute;
+  top: 11px;
+  left: 26px;
+  /* -22px = padding kanan langkah: garis berhenti tepat di tepi kiri
+     penanda langkah berikutnya, bukan 22 px sebelumya (celah). */
+  right: -22px;
+  height: 2px;
+  background: var(--line);
+}
+.evidence-route-step:last-child::before { content: none; }
+.evidence-route-done::before { background: var(--ok-border); }
+
+.evidence-route-mark {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-bottom: 8px;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-subtle);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+.evidence-route-done .evidence-route-mark {
+  border-color: var(--ok-ink);
+  background: var(--ok-ink);
+  color: var(--ink-inverse);
+}
+.evidence-route-current .evidence-route-mark {
+  border-color: var(--accent-strong);
+  color: var(--accent-strong);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.evidence-route-waiting .evidence-route-mark { border-style: dashed; }
+.evidence-route-blocked .evidence-route-mark {
+  border-color: var(--danger-ink);
+  background: var(--danger-ink);
+  color: var(--ink-inverse);
+}
+
+.evidence-route-body { gap: 2px; }
+.evidence-route-label { font-size: var(--fs-2); font-weight: 600; }
+.evidence-route-current .evidence-route-label { color: var(--accent-strong); }
+.evidence-route-detail { font-size: var(--fs-1); line-height: 1.4; }
+/* Kartu lama memberi latar tint per keadaan; pada stepper tint itu
+   memecah garis sambung. Keadaan sekarang dibawa penanda + teks. */
+.evidence-route-done,
+.evidence-route-waiting,
+.evidence-route-current,
+.evidence-route-blocked { background: none; }
+
+@media (max-width: 680px) {
+  .evidence-route-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
+  .evidence-route-step { padding-right: 12px; }
+  .evidence-route-step::before { content: none; }
+}
+
+/* ---------- 7. Governance: fakta sejajar dengan kartu bukti ---------- */
+
+.evidence-page .evidence-decide { gap: 14px; }
+.evidence-decide .fact-list { margin-top: 2px; }
+.evidence-decide .fact-row {
+  grid-template-columns: minmax(0, 34%) minmax(0, 1fr);
+  gap: 2px 14px;
+  align-items: baseline;
+  padding: 7px 0;
+}
+.evidence-decide .fact-row + .fact-row { border-top: 1px solid var(--line); }
+.evidence-decide .fact-row dd { text-align: right; }
+.evidence-decide .fact-row dt { font-size: var(--fs-2); }
+.evidence-decide .fact-row .fact-hint { display: block; }
+
+/* ---------- 8. Bukti: satu panel, dua kolom koran berkait ------------ */
+
+.evidence-block .evidence-grid {
+  columns: 2;
+  column-gap: 26px;
+  column-rule: 1px solid var(--line);
+}
+.evidence-block .evidence-grid > .card {
+  margin: 0 0 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.evidence-block .evidence-grid > .card:last-child { margin-bottom: 0; }
+@media (max-width: 900px) {
+  .evidence-block .evidence-grid { columns: 1; column-rule: 0; }
+}
+
+/* ---------- 9. Jejak & integritas: satu panel, dua bukti ------------- */
+
+.evidence-page .evidence-bottom { gap: 14px; }
+
+/* ---------- 10. Navigasi bagian: menempel + menandai posisi ---------- */
+
+.evidence-jump {
+  position: sticky;
+  top: 72px;                       /* tinggi top bar (64) + 8 */
+  z-index: 20;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.94);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  scrollbar-width: none;
+}
+.evidence-jump::-webkit-scrollbar { display: none; }
+.evidence-jump-list { flex-wrap: nowrap; }
+.evidence-jump-link {
+  min-height: 30px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.evidence-jump-link[aria-current="true"] {
+  border-color: var(--accent-strong);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+@media (pointer: coarse), (max-width: 720px) {
+  .evidence-jump-link { min-height: 44px; }
+}
+
+/* Tautan jangkar tidak boleh mendarat di balik top bar + nav menempel. */
+#ringkasan,
+#rute,
+#zona-keputusan,
+#bukti,
+#jejak { scroll-margin-top: 132px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .evidence-jump-link,
+  .evidence-route-mark { transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .evidence-jump { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (forced-colors: active) {
+  .evidence-jump-link[aria-current="true"] { border-color: Highlight; color: Highlight; }
+  .evidence-route-mark { forced-color-adjust: none; }
+}
+
+/* ---------- 11. Integritas: sub-judul, bukan judul kedua -------------- */
+/* Induk panel sudah berjudul "Jejak & riwayat" (label kapital). H3 di sini
+   satu tingkat di bawahnya, jadi hurufnya tetap besar tetapi garis bawahnya
+   dibuang: blok sudah dipisah garis dari kartu di atasnya. */
+.evidence-block .integrity-panel h3 {
+  margin: 0 0 6px;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+/* ---------- 12. Daftar Purchase order = tabel, bukan 7 kartu ---------- */
+/* Terukur: 7 baris x 100 px = 700 px, blok terbesar di halaman dan lebih
+   tinggi dari seluruh bukti keputusan. Isinya tiga baris teks pendek per PO,
+   jadi bentuk kartu bertumpuk menghabiskan ruang tanpa menambah keterbacaan.
+   Satu bingkai untuk daftar, garis rambut antar-baris, nilai & aksi di kolom
+   kanan: tinggi baris 100 → 58 px tanpa satu pun teks yang hilang. */
+.po-panel { padding: 16px 18px; }
+.po-panel h3 {
+  font-size: var(--fs-2);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.po-list {
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.po-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "main foot"
+    "meta foot";
+  align-items: center;
+  column-gap: 18px;
+  row-gap: 2px;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.po-row + .po-row { border-top: 1px solid var(--line); }
+.po-row:hover { background: var(--surface-sunken); }
+.po-row-main { grid-area: main; }
+.po-row-meta { grid-area: meta; }
+.po-row-foot { grid-area: foot; justify-content: flex-end; flex-wrap: nowrap; }
+/* Baris milik keputusan yang sedang dibuka: tint aksen + garis kiri, bukan
+   kartu putih di tengah daftar (bentuk lama memutus daftarnya). */
+.po-row-current {
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent-strong);
+  padding-left: 11px;
+}
+@media (max-width: 899px) {
+  .po-row {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "main"
+      "meta"
+      "foot";
+    row-gap: 4px;
+  }
+  .po-row-foot { justify-content: flex-start; flex-wrap: wrap; }
+}
+/* ---------- 13. Supplier governance: sejajar dengan panel lain --------- */
+/* Komponen ini dipakai DUA halaman (Decision & Evidence dan Pemasok), jadi
+   semua aturan dibatasi pada leluhur .evidence-page: tab Pemasok tidak ikut
+   berubah. Yang disamakan hanya bahasa visualnya — ukuran, bingkai, dan
+   label bagian — bukan perilaku formulirnya. */
+.evidence-page section[aria-label="Supplier exclusion"] {
+  padding: 16px 18px;
+  border-color: var(--line);
+}
+.evidence-page section[aria-label="Supplier exclusion"] h3 {
+  font-size: var(--fs-2);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+/* Tombol kirim tidak perlu selebar panel: aksi tunggal yang melebar
+   terbaca seperti status, bukan tombol. */
+.evidence-page section[aria-label="Supplier exclusion"] fieldset > button {
+  justify-self: start;
+}
+.evidence-page section[aria-label="Supplier exclusion"] textarea { min-height: 64px; }

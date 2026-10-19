@@ -94,11 +94,11 @@ describe("fokus kiriman (Arah C)", () => {
     const options = focusOptions({ routes: LANGSUNG });
     expect(options[0]).toMatchObject({
       id: "S1->L1",
-      label: "Supplier A → Jakarta",
+      label: "Supplier A → JKT",
       state: "Di jalan · 20 menit lagi",
       tone: "moving",
     });
-    expect(options[2].label).toBe("Supplier B → Bandung");
+    expect(options[2].label).toBe("Supplier B → BDG");
     expect(options[1].state).toBe("Belum berangkat");
   });
 
@@ -112,7 +112,7 @@ describe("fokus kiriman (Arah C)", () => {
   it("id yang ada mengembalikan kirimannya", () => {
     const row = focusPick({ routes: LANGSUNG }, "S3->L3");
     expect(row?.supplierName).toBe("Supplier C");
-    expect(focusLabel(row!)).toBe("Supplier C → Surabaya");
+    expect(focusLabel(row!)).toBe("Supplier C → SBY");
   });
 
   it("tanpa fokus: kalimat menyebut jumlah kiriman sebenarnya", () => {
@@ -124,10 +124,10 @@ describe("fokus kiriman (Arah C)", () => {
   it("dengan fokus: kalimat menyebut kiriman terpilih + sisanya disembunyikan", () => {
     const row = focusPick({ routes: LANGSUNG }, "S1->L1")!;
     expect(focusNote(row, 3)).toBe(
-      "Menampilkan kiriman terpilih di peta: Supplier A → Jakarta (2 kiriman lain disembunyikan)."
+      "Menampilkan kiriman terpilih di peta: Supplier A → JKT (2 kiriman lain disembunyikan)."
     );
     expect(focusNote(row, 1)).toBe(
-      "Menampilkan kiriman terpilih di peta: Supplier A → Jakarta (tidak ada kiriman lain)."
+      "Menampilkan kiriman terpilih di peta: Supplier A → JKT (tidak ada kiriman lain)."
     );
   });
 });
@@ -135,7 +135,7 @@ describe("fokus kiriman (Arah C)", () => {
 describe("chip saringan aktif di atas kanvas (celah C8, langkah 7b-2)", () => {
   it("menyebut kiriman yang sedang menyaring, memakai nama yang sama dengan pemilih", () => {
     const row = focusPick({ routes: LANGSUNG }, "S1->L1")!;
-    expect(focusFilterText(row)).toBe("Menyaring: Supplier A → Jakarta");
+    expect(focusFilterText(row)).toBe("Menyaring: Supplier A → JKT");
     // Nama kiriman datang dari SATU sumber (`focusLabel`), bukan dirangkai ulang
     // di komponen — supaya chip, pil pemilih, dan kartu tidak pernah beda sebut.
     expect(focusFilterText(row)).toContain(focusLabel(row));

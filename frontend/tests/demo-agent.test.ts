@@ -1,0 +1,300 @@
+// Tes murni peringkas blok bukti Demo Control (tanpa DOM, tanpa jaringan).
+//
+// Aturan yang dipaku di sini: tidak ada angka/keadaan karangan. Nilai kosong
+// tetap kosong ("—"/"tidak tercatat"), dan status review runtime yang mati
+// TIDAK boleh tampil seolah pipeline agent gagal.
+
+import { describe, expect, it } from "vitest";
+
+import {
+  agentReviewLine,
+  demoAgentCards,
+  defaultCommodity,
+  elapsedLine,
+  kmLabel,
+  proofFacts,
+  quantityLabel,
+  rupiahLabel,
+  routeLabel,
+  runButtonLabel,
+  stepChips,
+  supervisorLine,
+  type AgentRun,
+} from "../lib/demo-agent";
+
+const RUN: AgentRun = {
+  found: true,
+  decision_id: "590ce354-dff4-4a86-af13-1d01ecb05c5c",
+  status: "proposed",
+  created_at: "2026-10-19T13:53:39+00:00",
+  quantity_kg: "1257.14",
+  commodity: "beras",
+  source_location: "Cianjur",
+  target_location: "Jakarta",
+  verifier_note: "needs_verification",
+  steps: [
+    { step_name: "DETECT", tool_called: "supply.get+demand.get" },
+    { step_name: "SUPERVISE", tool_called: "supervisor.narration" },
+  ],
+  supervisor: {
+    status: "narrated",
+    provider: "fallback_1:sap_ai_core",
+    fallback_used: true,
+    summary: "ringkasan",
+  },
+  agent_review: { status: "unavailable", error: "AgentApiError: ...", run_id: null },
+};
+
+describe("defaultCommodity", () => {
+  it("memilih beras bila server memang punya beras", () => {
+    expect(defaultCommodity(["ayam", "beras", "telur", "wortel"])).toBe("beras");
+  });
+
+  it("daftar tanpa beras memakai pilihan pertama server, bukan tebakan", () => {
+    expect(defaultCommodity(["ayam", "telur"])).toBe("ayam");
+  });
+
+  it("daftar kosong tidak memaksa satu nama", () => {
+    expect(defaultCommodity([])).toBe("");
+    expect(defaultCommodity([] as string[])).toBe("");
+  });
+});
+
+describe("quantityLabel", () => {
+  it("memakai pemisah ribuan Indonesia dan membuang nol desimal yang tak bermakna", () => {
+    expect(quantityLabel("1257.14")).toBe("1.257,14 kg");
+    expect(quantityLabel("78")).toBe("78 kg");
+    expect(quantityLabel("2500.00")).toBe("2.500 kg");
+  });
+
+  it("nilai kosong tidak menjadi 0", () => {
+    expect(quantityLabel(null)).toBe("—");
+    expect(quantityLabel(undefined)).toBe("—");
+    expect(quantityLabel("")).toBe("—");
+    expect(quantityLabel("bukan-angka")).toBe("—");
+  });
+});
+
+describe("routeLabel", () => {
+  it("menyusun rute hanya dari sisi yang ada", () => {
+    expect(routeLabel("Cianjur", "Jakarta")).toBe("Cianjur → Jakarta");
+    expect(routeLabel("Cianjur", null)).toBe("Cianjur");
+    expect(routeLabel(null, null)).toBe("—");
+  });
+});
+
+describe("proofFacts", () => {
+  it("mengembalikan fakta berurutan dari payload, bukan karangan", () => {
+    const fakta = proofFacts(RUN);
+    expect(fakta.map((f) => f.label)).toEqual([
+      "Komoditas",
+      "Rute",
+      "Kuantitas",
+      "Status keputusan",
+      "Verdict verifier",
+    ]);
+    expect(fakta[0].value).toBe("beras");
+    expect(fakta[2].value).toBe("1.257,14 kg");
+    expect(fakta[4].value).toBe("NEEDS_VERIFICATION");
+  });
+
+  it("tanpa putaran agent tidak ada fakta yang ditampilkan", () => {
+    expect(proofFacts(null)).toEqual([]);
+    expect(proofFacts({ found: false })).toEqual([]);
+  });
+
+  it("verdict yang tidak tercatat dikatakan apa adanya", () => {
+    const fakta = proofFacts({ ...RUN, verifier_note: null });
+    expect(fakta[4].value).toBe("tidak tercatat");
+  });
+});
+
+describe("stepChips", () => {
+  it("hanya langkah yang benar-benar tercatat, urut dari server", () => {
+    expect(stepChips(RUN).map((s) => s.nama)).toEqual(["DETECT", "SUPERVISE"]);
+  });
+
+  it("tool kosong tidak dikarang menjadi nama palsu", () => {
+    expect(stepChips({ ...RUN, steps: [{ step_name: "TRACE", tool_called: null }] })[0].alat).toBe(
+      "—"
+    );
+  });
+});
+
+describe("supervisorLine", () => {
+  it("menyebut provider yang menjawab dan penanda jalur cadangan", () => {
+    const kalimat = supervisorLine(RUN.supervisor);
+    expect(kalimat).toContain("fallback_1:sap_ai_core");
+    expect(kalimat).toContain("jalur cadangan dipakai");
+  });
+
+  it("status tidak tercatat tidak disembunyikan", () => {
+    expect(supervisorLine(null)).toContain("tidak tercatat");
+  });
+});
+
+describe("agentReviewLine", () => {
+  it("unavailable dinyatakan sebagai runtime tidak terjangkau, bukan pipeline gagal", () => {
+    const kalimat = agentReviewLine(RUN.agent_review);
+    expect(kalimat).toContain("tidak terjangkau");
+    expect(kalimat).toContain("pipeline utama");
+    // Alamat runtime internal tidak boleh bocor ke layar.
+    expect(kalimat).not.toContain("AgentApiError");
+  });
+
+  it("selesai menyebut id run singkat bila ada", () => {
+    expect(
+      agentReviewLine({ status: "completed", run_id: "abcdef1234567890" })
+    ).toContain("abcdef12");
+  });
+
+  it("tidak tercatat tetap dikatakan", () => {
+    expect(agentReviewLine(undefined)).toContain("tidak tercatat");
+    expect(agentReviewLine({ status: "missing" })).toContain("tidak tercatat");
+  });
+});
+
+describe("elapsedLine & runButtonLabel", () => {
+  it("detik negatif/tidak sah tidak menghasilkan angka aneh", () => {
+    expect(elapsedLine(0)).toContain("mulai bekerja");
+    expect(elapsedLine(-5)).toContain("mulai bekerja");
+    expect(elapsedLine(Number.NaN)).toContain("mulai bekerja");
+    expect(elapsedLine(12)).toContain("12 detik");
+  });
+
+  it("label tombol tunggal untuk keadaan sibuk/idle", () => {
+    expect(runButtonLabel(false)).toBe("Jalankan agent");
+    expect(runButtonLabel(true)).toBe("Agent bekerja…");
+  });
+});
+
+// --- pengadaan pemasok (keputusan 2026-10-19) ------------------------------
+
+const RUN_PENGADAAN: AgentRun = {
+  found: true,
+  mode: "supplier_procurement",
+  decision_id: "e1ebe066-361f-4fdd-b19f-7f155055c640",
+  status: "proposed",
+  commodity: "telur",
+  quantity_kg: "779.86",
+  source_location: null,
+  target_location: "Jakarta",
+  verifier_note: "consistent",
+  supplier: {
+    supplier_id: "036f2597-83e8-4985-81c2-47626a8a1395",
+    name: "Telur Berkah Bekasi",
+    leg_km: "17.671",
+    available_kg: "900.00",
+    quote_price_per_kg: "30864.49",
+    rank: 1,
+    candidates_total: 3,
+  },
+  supply_gap: { supply_kg: "291.09", demand_kg: "1070.95", gap_kg: "779.86" },
+  steps: [],
+};
+
+describe("proofFacts — pengadaan pemasok", () => {
+  it("menampilkan pemasok, SPPG tujuan, dan jarak angkut dari DB", () => {
+    const fakta = proofFacts(RUN_PENGADAAN);
+    const peta = Object.fromEntries(fakta.map((f) => [f.label, f.value]));
+    expect(peta["Pemasok"]).toBe("Telur Berkah Bekasi");
+    expect(peta["SPPG"]).toBe("Jakarta");
+    expect(peta["Kuantitas"]).toBe("779,86 kg");
+    expect(peta["Kekurangan"]).toBe("779,86 kg");
+    expect(peta["Stok pemasok"]).toBe("900 kg");
+    expect(peta["Jarak pemasok → SPPG"]).toBe("17,671 km");
+    expect(peta["Harga penawaran"]).toBe("Rp 30.864,49 /kg");
+  });
+
+  it("tidak menampilkan rute antar SPPG untuk pengadaan", () => {
+    const label = proofFacts(RUN_PENGADAAN).map((f) => f.label);
+    expect(label).not.toContain("Rute");
+  });
+
+  it("nilai kosong tetap jujur, bukan 0 atau karangan", () => {
+    const tanpa: AgentRun = {
+      ...RUN_PENGADAAN,
+      supplier: { ...RUN_PENGADAAN.supplier, leg_km: null, quote_price_per_kg: null },
+    };
+    const peta = Object.fromEntries(proofFacts(tanpa).map((f) => [f.label, f.value]));
+    expect(peta["Jarak pemasok → SPPG"]).toBe("tidak tercatat");
+    expect(peta["Harga penawaran"]).toBe("tidak tercatat /kg");
+  });
+
+  it("putaran pemindahan lama tetap memakai format rute", () => {
+    const lama: AgentRun = {
+      found: true,
+      mode: "regional_balance",
+      commodity: "telur",
+      source_location: "Cianjur",
+      target_location: "Jakarta",
+      quantity_kg: "600",
+      status: "proposed",
+    };
+    const peta = Object.fromEntries(proofFacts(lama).map((f) => [f.label, f.value]));
+    expect(peta["Rute"]).toBe("Cianjur → Jakarta");
+    expect(peta["Pemasok"]).toBeUndefined();
+  });
+});
+
+describe("label angka & uang", () => {
+  it("rupiah memakai pemisah Indonesia dan menolak nilai kosong", () => {
+    expect(rupiahLabel("30864.49")).toBe("Rp 30.864,49");
+    expect(rupiahLabel(1500)).toBe("Rp 1.500");
+    expect(rupiahLabel(null)).toBe("tidak tercatat");
+    expect(rupiahLabel("bukan angka")).toBe("tidak tercatat");
+  });
+
+  it("km menyimpan tiga desimal koordinat", () => {
+    expect(kmLabel("17.671")).toBe("17,671 km");
+    expect(kmLabel(null)).toBe("tidak tercatat");
+  });
+});
+
+describe("kartu tujuh agen di Demo Control", () => {
+  const agen = [
+    { key: "supply", label: "Pasokan", status: "ok", duration_ms: 1250, warnings: 0 },
+    { key: "demand", label: "Permintaan", status: "degraded", duration_ms: 400, warnings: 2 },
+    { key: "freshness", label: "Kesegaran", status: "error", duration_ms: null },
+    { key: "safety", label: "Keamanan Pangan", status: "missing" },
+    { key: "price", label: "Harga", status: "ok", duration_ms: 90 },
+    { key: "logistics", label: "Logistik", status: "ok", duration_ms: 800 },
+    { key: "evidence", label: "Bukti", status: "ok", duration_ms: 300 },
+  ];
+
+  it("memetakan status tersimpan ke keadaan dan label manusia", () => {
+    const kartu = demoAgentCards({ found: true, agents_run_id: "r1", agents: agen } as any);
+    expect(kartu).toHaveLength(7);
+    expect(kartu.map((k) => k.state)).toEqual([
+      "ok",
+      "limited",
+      "failed",
+      "idle",
+      "ok",
+      "ok",
+      "ok",
+    ]);
+    expect(kartu[0].statusLabel).toBe("Selesai");
+    expect(kartu[1].statusLabel).toBe("Terbatas");
+    expect(kartu[2].statusLabel).toBe("Gagal");
+    expect(kartu[3].statusLabel).toBe("Tidak dijalankan");
+    expect(kartu[0].duration).toBe("1,3 dtk");
+    expect(kartu[4].duration).toBe("90 md");
+    // Agen tanpa baris tidak boleh mengarang angka.
+    expect(kartu[3].duration).toBe("—");
+    expect(kartu[3].warnings).toBe("—");
+    expect(kartu[1].warnings).toBe("2 peringatan");
+  });
+
+  it("putaran sedang berjalan → semua Berjalan, tanpa angka lama", () => {
+    const kartu = demoAgentCards({ found: true, agents_run_id: "r1", agents: agen } as any, true);
+    expect(kartu.every((k) => k.state === "running")).toBe(true);
+    expect(kartu.every((k) => k.duration === "—")).toBe(true);
+    expect(kartu[0].statusLabel).toBe("Berjalan");
+  });
+
+  it("tanpa daftar agen tidak mengarang tujuh kartu", () => {
+    expect(demoAgentCards({ found: false } as any)).toEqual([]);
+    expect(demoAgentCards(null)).toEqual([]);
+  });
+});

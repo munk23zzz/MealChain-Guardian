@@ -15,6 +15,7 @@
 
 import { useEffect, useState } from "react";
 import StatusBadge from "./StatusBadge";
+import { kodeWilayah } from "../lib/wilayah";
 import Event2Panel from "./Event2Panel";
 import { formatIDR } from "../lib/auth";
 import {
@@ -308,7 +309,7 @@ export default function OpsConsole({
         <div className="ops-snapshot card">
           <div className="card-header">
             <h4>
-              Kondisi {snapshot.location} · {snapshot.commodity}
+              Kondisi {kodeWilayah(snapshot.location)} · {snapshot.commodity}
             </h4>
             <StatusBadge status={snapshot.status} />
           </div>

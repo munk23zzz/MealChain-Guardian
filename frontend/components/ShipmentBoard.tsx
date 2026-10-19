@@ -25,6 +25,11 @@ import {
   supplierRoutes,
   type SupplierRoute,
 } from "../lib/supplier-routes";
+import Pager from "./Pager";
+import { paginate } from "../lib/pagination";
+
+/** Baris per halaman — permintaan pemilik 19 Okt 2026 (10 per halaman). */
+const KIRIMAN_PER_HALAMAN = 10;
 
 /**
  * "Papan kiriman" (Arah B riset 16 Okt 2026).
@@ -62,6 +67,10 @@ export default function ShipmentBoard({
   const semua = supplierRoutes(routes);
   const cakupan = hanya ? semua.filter((row) => hanya(row)) : semua;
   const rows = boardSort(cakupan, cara);
+  // Halaman papan kiriman: urutan berubah → kembali ke halaman 1 supaya baris
+  // paling mendesak tidak tersembunyi di halaman lain.
+  const [halaman, setHalaman] = useState(1);
+  const halamanKiriman = paginate(rows, halaman, KIRIMAN_PER_HALAMAN);
   if (!rows.length && empty === undefined) return null;
 
   return (
@@ -83,7 +92,10 @@ export default function ShipmentBoard({
                 type="button"
                 className={`board-sort-pill${cara === pilihan.id ? " is-active" : ""}`}
                 aria-pressed={cara === pilihan.id}
-                onClick={() => setCara(pilihan.id)}
+                onClick={() => {
+                  setCara(pilihan.id);
+                  setHalaman(1);
+                }}
               >
                 {pilihan.label}
               </button>
@@ -111,7 +123,7 @@ export default function ShipmentBoard({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => {
+                {halamanKiriman.items.map((row) => {
                   const keadaan = boardKeadaan(row);
                   const layak = boardLayakNote(row);
                   const sumber = boardSumber(row);
@@ -161,6 +173,7 @@ export default function ShipmentBoard({
               </tbody>
             </table>
           </div>
+          <Pager page={halamanKiriman} onChange={setHalaman} label={title.toLowerCase()} />
         </>
       )}
 

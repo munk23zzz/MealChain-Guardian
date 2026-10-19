@@ -7,7 +7,7 @@
 // Konsol operasi & analisis HANYA untuk role approver (bgn_monitor
 // read-only: tab analisis tidak ditampilkan).
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { MANAGE_ROLES } from "../lib/settings";
 
@@ -19,7 +19,6 @@ import {
   recordReceipt,
   ubahKarantina,
   reproposeAction,
-  seedDemo,
   triggerSafetyDisruption,
 } from "../lib/api";
 import { useBalanceMap } from "../lib/hooks/useBalanceMap";
@@ -88,7 +87,6 @@ import {
   ChevronIcon,
   LogoMark,
   LogoutIcon,
-  SeedIcon,
   type NavId,
 } from "../components/NavIcon";
 import SideNav from "../components/SideNav";
@@ -96,16 +94,15 @@ import { StatusLocationList } from "../components/SupplyMap";
 import RecommendationCard, { DECISION_TYPE_LABELS } from "../components/RecommendationCard";
 import AgentTraceViewer from "../components/AgentTraceViewer";
 import AgentSwarmPanel from "../components/AgentSwarmPanel";
+import DecisionPicker from "../components/DecisionPicker";
 import { defaultAgentLogId } from "../lib/agent-swarm";
-import ChaosPanel from "../components/ChaosPanel";
-import DemoDataPanel from "../components/DemoDataPanel";
+import DemoControlPanel from "../components/DemoControlPanel";
 import { mapHeaderSubtitle } from "../lib/overview-copy";
 import DecisionChain from "../components/DecisionChain";
 import ProviderPanel from "../components/ProviderPanel";
 import RoleHero from "../components/RoleHero";
 import PageHeader from "../components/PageHeader";
 import KpiQualityBoard from "../components/KpiQualityBoard";
-import OpsConsole from "../components/OpsConsole";
 import SupplyMap from "../components/SupplyMap";
 import NodeTelemetry from "../components/NodeTelemetry";
 import TodayDashboard from "../components/TodayDashboard";
@@ -309,6 +306,25 @@ export default function Home() {
     }
     linkSiap.current = true;
   }, []);
+  // Tautan "Lihat keputusan" di panel purchase order. Dulu tautan itu memuat
+  // ulang halaman (navigasi penuh): pengguna yang sedang di dasar halaman tetap
+  // melihat daftar PO yang sama sehingga terasa "tidak berfungsi" (laporan
+  // pemilik, 19 Okt 2026). Sekarang keputusan dipindahkan DI DALAM aplikasi,
+  // lalu digulir ke kepala keputusannya — pilihan harus terlihat, bukan hanya
+  // tersimpan di URL.
+  const bukaKeputusanDariPO = useCallback((decisionId: string) => {
+    setSelectedId(decisionId);
+    setTab("evidence");
+    // Dua frame: satu untuk commit React, satu untuk memastikan kartu keputusan
+    // sudah ada di DOM sebelum digulir.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document
+          .getElementById("ringkasan")
+          ?.scrollIntoView({ block: "start", behavior: "smooth" });
+      });
+    });
+  }, []);
   // Detail keputusan terpilih (jejak, rantai, ringkasan kanonik, konteks
   // pemasok) lewat React Query — lihat lib/hooks/useDecisionDetail.ts.
   const detail = useDecisionDetail(token, selectedId, identityScope);
@@ -332,6 +348,20 @@ export default function Home() {
   // Jam klien: null sampai komponen ter-mount supaya HTML server dan render
   // klien tidak berbeda (label waktu ditulis "—" sebelum jam siap).
   const [now, setNow] = useState<Date | null>(null);
+  // 19 Okt 2026: daftar keputusan sering tiba SETELAH tab dibuka (muat awal),
+  // sehingga handler SideNav di atas tidak menemukan apa pun dan tab terbuka
+  // dengan "Pilih keputusan" padahal daftarnya sudah berisi. Efek ini menjadi
+  // jaring kedua: begitu daftar tersedia, keputusan bawaan langsung dipilih.
+  useEffect(() => {
+    if (selectedId) return;
+    const bawaan =
+      tab === "evidence"
+        ? defaultEvidenceId(decisions, now ?? null)
+        : tab === "agent-log"
+          ? defaultAgentLogId(decisions, null)
+          : null;
+    if (bawaan) setSelectedId(bawaan);
+  }, [tab, decisions, selectedId, now]);
   // Kualitas Agen & Pemasok: sampel keputusan (jejak agen + ringkasan) dan
   // register eksklusi lewat React Query — dua siklus muat yang berbeda.
   const sampleIds = decisions.slice(0, EVALUATED_LIMIT).map((d) => d.decision_id);
@@ -589,16 +619,6 @@ export default function Home() {
 
 
 
-  async function onSeedDemo() {
-    if (!token) return;
-    try {
-      await seedDemo(token, true);
-      await decisionsQuery.refetch();
-    } catch (e: any) {
-      setTraceError(String(e.message ?? e));
-    }
-  }
-
   async function onLogin(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
@@ -770,8 +790,11 @@ export default function Home() {
     networkTotal.demandKg
   );
   // Antrean keputusan memakai sumber yang SAMA dengan lonceng top bar supaya
-  // kedua tempat tidak pernah menampilkan angka berbeda.
-  const notif = notifList(decisions, 4);
+  // kedua tempat tidak pernah menampilkan angka berbeda. Peran WAJIB ikut:
+  // `proposed` adalah pekerjaan Kepala SPPG (ia yang menekan "Ajukan"), jadi
+  // tanpa peran angka di sini 16 sementara lonceng menulis 24 — dua angka
+  // untuk hal yang sama (temuan audit 19 Okt 2026).
+  const notif = notifList(decisions, 4, role);
   const roleLabel = ROLE_LABEL[role ?? ""] ?? (role ?? "user");
 
   // Feed traceable (arah Roy 2026-10-09): EXPIRED TIDAK disembunyikan — semua
@@ -914,20 +937,6 @@ export default function Home() {
             }
           }}
         />
-        <div className="side-actions">
-          {isApprover && (
-            <button
-              type="button"
-              className="button-secondary button"
-              onClick={onSeedDemo}
-              aria-label="Muat kasus demo"
-              title="Muat ulang 4 kasus demo untuk kota SPPG Anda (idempotent)"
-            >
-              <SeedIcon />
-              <span className="side-action-label">Muat kasus demo</span>
-            </button>
-          )}
-        </div>
         <div className="side-user">
           <span className="side-avatar" aria-hidden="true">
             {initials}
@@ -1123,16 +1132,24 @@ export default function Home() {
 
               <div className="kpi-card kpi-card-keputusan">
                 <span className="kpi-card-label">Rekomendasi menunggu</span>
-                <span className="kpi-card-value">{notif.total}</span>
+                {/* Selama daftar keputusan belum tiba, "0" adalah klaim palsu:
+                    pembaca mengira tidak ada pekerjaan. Tampilkan "—". */}
+                <span className="kpi-card-value">
+                  {decisionsQuery.isLoading ? "—" : notif.total}
+                </span>
                 <span className="kpi-card-foot">
-                  {notif.expired > 0
-                    ? `${notif.expired} lewat tenggat — tetap terlihat, tidak disembunyikan`
-                    : `${decisions.length} keputusan dipantau`}
+                  {decisionsQuery.isLoading
+                    ? "memuat daftar keputusan"
+                    : notif.expired > 0
+                      ? `${notif.expired} lewat tenggat — tetap terlihat, tidak disembunyikan`
+                      : `${decisions.length} keputusan dipantau`}
                 </span>
                 <span className="kpi-card-mini">
-                  {notif.rest > 0
-                    ? `+${notif.rest} lain menunggu tindakan`
-                    : "semua sudah ditindaklanjuti"}
+                  {decisionsQuery.isLoading
+                    ? "menunggu data"
+                    : notif.rest > 0
+                      ? `+${notif.rest} lain menunggu tindakan`
+                      : "semua sudah ditindaklanjuti"}
                 </span>
               </div>
             </section>
@@ -1346,76 +1363,24 @@ export default function Home() {
         {tab === "settings" && <SettingsPanel token={token} />}
 
         {tab === "demo-control" && isApprover && (
-          /* PRD 2.4 Screen 7: harness demo — konsol analisis (Event 1/2/3)
-             + seed kasus. Aksi tetap via API resmi; tidak ada chaos
-             injection di luar kontrak backend (arsitektur tidak diubah). */
-          <section className="demo-control-section">
+          /* Demo Control sederhana (keputusan Roy 2026-10-19): tiga blok —
+             siapkan data, jalankan agent, bukti. OpsConsole/ChaosPanel (Event
+             1/2/3) sengaja dilepas dari tab ini: panel demo dipakai untuk
+             MEMBUKTIKAN agent berjalan, bukan untuk memilih skenario.
+             Komponen keduanya tetap ada di repo dan tetap diuji sendiri. */
+          <>
             <PageHeader
-              title="Demo Control Panel"
-              description="Skenario uji untuk hari demo — semuanya lewat layanan aplikasi yang sebenarnya (bukan tiruan): muat kasus, picu Event 2 (harga melonjak) &amp; Event 3 (suhu kiriman menyimpang) dari konsol, lalu lihat hasilnya di tab Recommendations &amp; Agent Log."
+              title="Demo Control"
+              description="Satu tombol menjalankan agent sungguhan (bukan tiruan) untuk komoditas yang Anda pilih: yang dinilai adalah pemasok yang sudah memasok SPPG Anda (stok batch, penawaran harga, jarak pemasok → SPPG). Bukti putaran itu dibaca ulang dari database — langkah yang tercatat, provider yang benar-benar menjawab, dan status keputusan."
             />
-            <section className="card demo-scenario" aria-label="Skenario demo">
-              <div className="card-header">
-                <h2>Skenario 00 — muat kasus demo</h2>
-                <span className="demo-step">Langkah 1 · siapkan kasus</span>
-              </div>
-              <p className="section-sub">
-                Memuat ulang empat kasus demo untuk <strong>kota SPPG Anda</strong> lewat
-                API resmi (idempotent, aman dijalankan berkali-kali sebelum demo day).
-                Kepala kota lain memuat kasusnya sendiri — tidak saling menghapus.
-                Hasilnya muncul di tab Recommendations &amp; Agent Log.
-              </p>
-              <button
-                type="button"
-                className="button button-secondary"
-                onClick={onSeedDemo}
-                title="Muat ulang 4 kasus demo untuk kota SPPG Anda (idempotent)"
-              >
-                Muat kasus demo
-              </button>
-            </section>
-            {/* Fase 5 (2026-10-15): data & rentang waktu — riwayat demo dibangun
-                dari sini. Ditaruh SEBELUM konsol analisis karena urutan demo
-                nyata: siapkan data dulu, baru picu skenario. */}
-            <DemoDataPanel
+            <DemoControlPanel
               token={token}
               role={role ?? "sppg_head"}
-              onDataChanged={() => {
-                if (!token) return;
-                // Peta, pemilih kiriman, dan garis jalur membaca sumber yang
-                // SAMA dengan keputusan. Tanpa ini, "Segarkan ke hari ini"
-                // mengubah isi DB tetapi peta tetap menampilkan waktu lama
-                // sampai halaman dimuat ulang — tombolnya tampak tidak bekerja.
-                void decisionsQuery.refetch();
-                void mapQuery.refetch();
-                void mapSupplierRoutesQuery.refetch();
-              }}
+              locationName={me?.location_name ?? null}
+              onOpenDecision={bukaKeputusanDariPO}
+              onOpenAgentLog={() => setTab("agent-log")}
             />
-            <OpsConsole
-              role={role ?? "sppg_head"}
-              token={token}
-              ownLocationName={me?.location_name ?? null}
-              asOf={(mapData as any)?.as_of ?? null}
-              onSubmitted={() => {
-                if (token) void decisionsQuery.refetch();
-                setTab("recommendations");
-              }}
-              /* Event 1 penuh: segarkan feed TANPA memindah tab — narasi
-                 supervisor harus terbaca di panel ini (lihat OpsConsole). */
-              onDecisionCreated={() => {
-                if (token) void decisionsQuery.refetch();
-              }}
-            />
-            <ChaosPanel
-              role={role ?? "sppg_head"}
-              token={token}
-              ownLocationId={me?.location_id ?? null}
-              ownLocationName={me?.location_name ?? null}
-              onDecisionCreated={() => {
-                if (token) void decisionsQuery.refetch();
-              }}
-            />
-          </section>
+          </>
         )}
 
         {tab === "recommendations" && (
@@ -1627,12 +1592,18 @@ export default function Home() {
           {/* W-5: purchase order yang benar-benar terbit setelah eksekusi.
               Dulu hanya toast sesaat, sehingga klaim "PO terbit di SAP" tidak
               bisa ditunjukkan. Panel ini membaca tabel mock SAP dan menyebut
-              sumbernya apa adanya. */}
+              sumbernya apa adanya. 19 Okt 2026: `decisionId` diteruskan supaya
+              baris milik keputusan yang sedang dibuka ditandai "keputusan ini" —
+              tanpa itu, panel di bawah detail keputusan terbaca seolah seluruh
+              daftar milik keputusan tersebut. */}
           <PurchaseOrderList
             data={purchaseOrders.data}
             summary={purchaseOrders.summary}
             loading={purchaseOrders.isFetching}
             error={purchaseOrders.error}
+            decisionId={selectedId}
+            token={token}
+            onOpenDecision={bukaKeputusanDariPO}
             onRetry={purchaseOrders.refetch}
           />
           </>
@@ -1742,23 +1713,13 @@ export default function Home() {
               title="Agent Activity Log"
               description="Jejak reasoning tiap langkah agen untuk satu keputusan — model, durasi, dan pesan apa adanya dari trace; tidak ada baris yang dikarang."
               meta={
-                <select
-                  className="page-header-select"
-                  aria-label="Pilih keputusan"
-                  value={selectedId ?? ""}
-                  onChange={(e) => setSelectedId(e.target.value)}
-                >
-                  <option value="">— pilih keputusan —</option>
-                  {decisionGroups(decisions, now).map((group) => (
-                    <optgroup key={group.id} label={group.label}>
-                      {group.options.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+                <DecisionPicker
+                  id="pilih-keputusan-log"
+                  ariaLabel="Pilih keputusan"
+                  groups={decisionGroups(decisions, now)}
+                  value={selectedId}
+                  onChange={(decisionId) => setSelectedId(decisionId)}
+                />
               }
             />
             {selected && (

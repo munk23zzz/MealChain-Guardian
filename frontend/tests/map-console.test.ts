@@ -26,12 +26,12 @@ describe("peta acuan — pin", () => {
   });
 
   it("label pin = nama + selisih (tanpa angka karangan)", () => {
-    expect(pinLabel(CIANJUR)).toBe("Cianjur +1.400 kg");
-    expect(pinLabel(JAKARTA)).toBe("Jakarta −780 kg");
-    expect(pinLabel(BOGOR)).toBe("Bogor seimbang");
+    expect(pinLabel(CIANJUR)).toBe("CJR +1.400 kg");
+    expect(pinLabel(JAKARTA)).toBe("JKT −780 kg");
+    expect(pinLabel(BOGOR)).toBe("BGR seimbang");
     // Angka tidak tersedia → jangan menulis 0 atau tebakan.
-    expect(pinLabel({ location: "Medan", status: "surplus" })).toBe("Medan");
-    expect(pinLabel({ location: "Makassar", status: "entah" })).toBe("Makassar");
+    expect(pinLabel({ location: "Medan", status: "surplus" })).toBe("MDN");
+    expect(pinLabel({ location: "Makassar", status: "entah" })).toBe("MKS");
   });
 });
 

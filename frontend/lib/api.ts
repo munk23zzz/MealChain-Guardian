@@ -107,10 +107,12 @@ export function fetchIntegrationStatus(token: string): Promise<any> {
   });
 }
 
-// /sap/purchase-orders — sisi BACA purchase order mock SAP (W-5, 2026-10-17).
+// /sap/purchase-orders — sisi BACA purchase order SAP simulasi (W-5, 2026-10-17).
 // PO-nya sendiri ditulis `actions.py` saat eksekusi; endpoint ini hanya membaca
 // tabel `sap_mock_purchase_orders`. Balasan selalu membawa `source`, dan UI
-// wajib menyebutnya apa adanya: ini tabel mock di DB demo, bukan SAP S/4HANA.
+// wajib menyebutnya apa adanya: data SAP simulasi, bukan SAP S/4HANA produksi.
+// (19 Okt 2026: penanda dipindah ke chip "SAP simulasi" — labelnya tetap, hanya
+// bahasanya tidak lagi menyebut tabel/DB internal.)
 export function fetchPurchaseOrders(
   token: string,
   opts: { status?: string; decisionId?: string; limit?: number } = {}
@@ -129,6 +131,28 @@ export function fetchPurchaseOrderSummary(token: string): Promise<any> {
   return request("/sap/purchase-orders/summary", {
     headers: { Authorization: `Bearer ${token}` },
   });
+}
+
+/**
+ * Dokumen PO (PDF) — berkas biner, jadi tidak lewat `request` yang membaca body
+ * sebagai teks. Alasannya tetap sama: alasan galat dari server harus sampai ke
+ * layar ("keputusan menunggu persetujuan"), bukan "gagal" tanpa sebab.
+ */
+export async function fetchPurchaseOrderPdf(poNumber: string, token: string): Promise<Blob> {
+  const path = `/sap/purchase-orders/${encodeURIComponent(poNumber)}/pdf`;
+  const resp = await fetch(`${API_URL}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!resp.ok) {
+    let detail: string | null = null;
+    try {
+      detail = pesanDetail(await resp.json());
+    } catch {
+      detail = null;
+    }
+    throw new ApiError(resp.status, path, detail);
+  }
+  return resp.blob();
 }
 
 export function fetchComplianceDossier(decisionId: string, token: string): Promise<any> {
@@ -773,4 +797,38 @@ export async function updateAdminLocation(
     body: JSON.stringify(payload),
   });
   return mapAdminLocation(body.location);
+}
+
+// --- Demo Control sederhana (keputusan Roy 2026-10-19) ---
+// Panel demo tidak lagi memilih skenario: satu tombol menjalankan agent, satu
+// endpoint membaca buktinya dari DB. Komoditas & lokasi TIDAK dikirim dari UI
+// secara bawaan — backend memakai `beras` + lokasi SPPG akun yang login, supaya
+// cakupan peran tidak bisa dilanggar lewat payload.
+
+/**
+ * `POST /demo/agent/run` — jalankan pipeline agent penuh (DETECT → SUPERVISE).
+ * Tidak ada approval/eksekusi: keputusan lahir `proposed`.
+ */
+export async function runDemoAgent(
+  token: string,
+  { commodity, ttlMinutes }: { commodity?: string; ttlMinutes?: number } = {}
+) {
+  const payload: Record<string, unknown> = {};
+  if (commodity) payload.commodity = commodity;
+  if (ttlMinutes) payload.ttl_minutes = ttlMinutes;
+  return request("/demo/agent/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(payload),
+  });
+}
+
+/** `GET /demo/agent/commodities` — pilihan dropdown: nama yang ADA di database. */
+export async function fetchDemoAgentCommodities(token: string) {
+  return request("/demo/agent/commodities", { headers: authHeaders(token) });
+}
+
+/** `GET /demo/agent/last-run` — bukti putaran agent terakhir, dibaca dari DB. */
+export async function fetchDemoAgentLastRun(token: string) {
+  return request("/demo/agent/last-run", { headers: authHeaders(token) });
 }

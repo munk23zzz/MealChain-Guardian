@@ -20,6 +20,7 @@ import { useState } from "react";
 
 import PageHeader from "./PageHeader";
 import FactList from "./FactList";
+import Pager from "./Pager";
 import ShipmentBoard from "./ShipmentBoard";
 import { SupplierExclusionView } from "./SupplierExclusionPanel";
 import {
@@ -56,6 +57,12 @@ function jarakDalamJangkauan(
 import type { SupplierContext } from "../lib/supplier-exclusions";
 import { LoadingState } from "./LoadingState";
 import ScrollHint from "./ScrollHint";
+import { kodeWilayah } from "../lib/wilayah";
+import { paginate } from "../lib/pagination";
+import { searchSuppliers } from "../lib/supplier-search";
+
+/** Baris per halaman — permintaan pemilik 19 Okt 2026 (10 per halaman). */
+const BARIS_PER_HALAMAN = 10;
 
 export default function SupplierBoard({
   suppliers,
@@ -99,6 +106,20 @@ export default function SupplierBoard({
   const [hanyaJangkauan, setHanyaJangkauan] = useState(false);
   const penyaringAktif = hanyaJangkauan && reachKm !== null;
   const shownRows = penyaringAktif ? filterDirectoryByReach(rows, reachKm) : rows;
+  // Halaman tabel pemasok: nomor halaman dijepit oleh `paginate`, jadi data yang
+  // menyusut (penyaring/segarkan) berakhir di halaman terakhir yang terisi —
+  // bukan tabel kosong. Penyaring mengembalikan pembaca ke halaman 1.
+  const [halamanPemasok, setHalamanPemasok] = useState(1);
+  // Pencarian "Daftar pemasok" (19 Okt 2026) menyaring daftar yang SUDAH dimuat,
+  // setelah penyaring jangkauan dan SEBELUM paginasi — angka di kartu Ringkasan
+  // tetap dihitung dari daftar penuh, jadi mencari tidak mengubah ringkasan.
+  const [kueri, setKueri] = useState("");
+  const dicari = searchSuppliers(shownRows, kueri);
+  const halaman = paginate(dicari, halamanPemasok, BARIS_PER_HALAMAN);
+  const hapusPencarian = () => {
+    setKueri("");
+    setHalamanPemasok(1);
+  };
   const reachSummary = directoryReachSummary(rows, reachKm, reference?.location);
   // `null` = register belum dimuat (endpoint belum dipanggil / gagal) — beda dari
   // array kosong yang berarti "sudah dimuat, memang tidak ada eksklusi".
@@ -224,7 +245,31 @@ export default function SupplierBoard({
       />
 
       <article className="card">
-        <h2>Daftar pemasok</h2>
+        {/* Kepala kartu: judul kiri, pencarian kanan (permintaan pemilik 19 Okt
+            2026). Kolom cari menyaring daftar yang SUDAH dimuat, sesudah
+            penyaring jangkauan dan SEBELUM paginasi — angka kartu Ringkasan
+            tetap dihitung dari daftar penuh. Label terlihat, ikon kaca pembesar
+            dekoratif (aria-hidden), hasil diumumkan lewat role="status". */}
+        <div className="card-header directory-head">
+          {/* Kepala kartu: judul + pil jumlah. Kolom cari pindah ke bilah di
+              ATAS TABEL (permintaan pemilik 19 Okt 2026) supaya berdiri dekat
+              daftar yang disaringnya, bukan di kepala kartu. */}
+          <div className="directory-title">
+            <h2>Daftar pemasok</h2>
+            {directoryDimuat ? (
+              <span
+                id="cari-pemasok-status"
+                className={`count-pill${kueri.trim() ? " count-pill-active" : ""}`}
+                role="status"
+                aria-live="polite"
+              >
+                {kueri.trim()
+                  ? `${dicari.length} dari ${shownRows.length} cocok`
+                  : `${shownRows.length} pemasok`}
+              </span>
+            ) : null}
+          </div>
+        </div>
         {!directoryDimuat ? (
           <p className="evidence-note">
             {loading
@@ -235,26 +280,105 @@ export default function SupplierBoard({
           <p className="evidence-note">Tidak ada pemasok yang terdaftar.</p>
         ) : (
           <>
-            <p className="evidence-note">{reachSummary}</p>
+            {/* Urutan (permintaan pemilik 19 Okt 2026): penyaring jangkauan
+                lebih dulu — tombol "Hanya dalam jangkauan / Tampilkan semua
+                pemasok" berdiri TEPAT DI ATAS kolom cari — lalu ringkasan +
+                kolom cari, lalu tabel. Tidak ada bilah kosong di antaranya. */}
             {reachKm !== null && metrics.outOfReach > 0 ? (
               <p className="reach-filter">
+                <span className="reach-filter-note">
+                  Menyembunyikan {metrics.outOfReach} pemasok yang jaraknya di atas {reachKm} km
+                  {reference ? ` dari ${kodeWilayah(reference.location)}` : ""}. Baris yang disembunyikan bukan
+                  dihapus — matikan penyaring untuk melihatnya lagi.
+                </span>
                 <button
                   type="button"
                   className="button button-secondary"
                   aria-pressed={penyaringAktif}
-                  onClick={() => setHanyaJangkauan((value) => !value)}
+                  onClick={() => {
+                    setHanyaJangkauan((value) => !value);
+                    setHalamanPemasok(1);
+                  }}
                 >
                   {penyaringAktif
                     ? "Tampilkan semua pemasok"
                     : `Hanya dalam jangkauan (${metrics.suppliers - metrics.outOfReach})`}
                 </button>
-                <span className="reach-filter-note">
-                  Menyembunyikan {metrics.outOfReach} pemasok yang jaraknya di atas {reachKm} km
-                  {reference ? ` dari ${reference.location}` : ""}. Baris yang disembunyikan bukan
-                  dihapus — matikan penyaring untuk melihatnya lagi.
-                </span>
               </p>
             ) : null}
+            <div className="board-summary-row">
+              <p className="evidence-note">{reachSummary}</p>
+              <div className="board-search">
+                <label className="board-search-label" htmlFor="cari-pemasok">
+                  Cari pemasok
+                </label>
+                <div className="board-search-field">
+                  <svg
+                    className="board-search-icon"
+                    viewBox="0 0 20 20"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <circle cx="8.5" cy="8.5" r="5.5" />
+                    <path d="M12.8 12.8 17 17" />
+                  </svg>
+                  <input
+                    id="cari-pemasok"
+                    className="board-search-input"
+                    type="search"
+                    value={kueri}
+                    placeholder="Nama, hub, komoditas, sertifikasi"
+                    aria-describedby="cari-pemasok-status"
+                    onChange={(event) => {
+                      setKueri(event.target.value);
+                      setHalamanPemasok(1);
+                    }}
+                  />
+                  {kueri ? (
+                    <button
+                      type="button"
+                      className="board-search-clear"
+                      onClick={hapusPencarian}
+                      aria-label="Hapus pencarian"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            {dicari.length === 0 ? (
+              <div className="board-search-empty">
+                {kueri.trim() ? (
+                  <>
+                    <p className="evidence-note">
+                      Tidak ada pemasok yang cocok dengan “{kueri.trim()}”. Pencarian memeriksa nama,
+                      hub, komoditas, dan sertifikasi.
+                    </p>
+                    <button type="button" className="button button-secondary" onClick={hapusPencarian}>
+                      Hapus pencarian
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="evidence-note">
+                      Semua pemasok dalam daftar ini disembunyikan penyaring jangkauan.
+                    </p>
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      onClick={() => {
+                        setHanyaJangkauan(false);
+                        setHalamanPemasok(1);
+                      }}
+                    >
+                      Tampilkan semua pemasok
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : (
+            <>
             <div className="board-table-wrap">
               <table className="location-table">
                 <thead>
@@ -273,7 +397,7 @@ export default function SupplierBoard({
                   </tr>
                 </thead>
                 <tbody>
-                  {shownRows.map((row) => {
+                  {halaman.items.map((row) => {
                     const jalur = jalurPerPemasok.get(row.id) ?? null;
                     return (
                     <tr key={row.id}>
@@ -366,7 +490,10 @@ export default function SupplierBoard({
                 </tbody>
               </table>
             </div>
+            <Pager page={halaman} onChange={setHalamanPemasok} label="daftar pemasok" />
             <ScrollHint />
+            </>
+            )}
           </>
         )}
       </article>

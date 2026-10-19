@@ -59,9 +59,9 @@ describe("SupplyMap (MapLibre GL)", () => {
     expect(pinTone("shortage")).toBe("shortage");
     expect(pinTone("surplus")).toBe("surplus");
     expect(pinTone("balanced")).toBe("balanced");
-    expect(pinLabel(LOCATIONS[0])).toBe("Jakarta −780 kg");
-    expect(pinLabel(LOCATIONS[1])).toBe("Cianjur +1.100 kg");
-    expect(pinLabel(LOCATIONS[2])).toBe("Bogor seimbang");
+    expect(pinLabel(LOCATIONS[0])).toBe("JKT −780 kg");
+    expect(pinLabel(LOCATIONS[1])).toBe("CJR +1.100 kg");
+    expect(pinLabel(LOCATIONS[2])).toBe("BGR seimbang");
   });
 
   it("peta terang: legenda memakai makna status aplikasi", () => {

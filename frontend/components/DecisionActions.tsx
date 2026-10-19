@@ -251,6 +251,7 @@ export default function DecisionActions({
       <Popup
         open={opened}
         onClose={() => setOpened(false)}
+        className="popup-governance"
         title={"Governance & persetujuan"}
         description={`Keputusan ${String(decisionId).slice(0, 8)} · ${String(
           summary?.decision_type ?? "keputusan"

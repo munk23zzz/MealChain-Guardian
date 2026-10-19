@@ -21,6 +21,7 @@ import { RANGE_MAX, RANGE_MIN } from "../lib/demo-data";
 import { fmtValue, unitLabel, STATE_LABEL } from "./KPIDashboard";
 import { DECISION_TYPE_LABELS } from "./RecommendationCard";
 import { formatKg } from "../lib/overview-format";
+import { kodeWilayah } from "../lib/wilayah";
 import {
   DUE_SOON_HOURS,
   batchExpiry,
@@ -370,7 +371,7 @@ export default function TodayDashboard({
                     >
                       <div className="today-row-main">
                         <span className="today-row-title">
-                          {batch.location ?? "—"} · {batch.commodity ?? "—"}
+                          {kodeWilayah(batch.location)} · {batch.commodity ?? "—"}
                         </span>
                         <span className="today-row-meta">
                           {[
@@ -398,50 +399,7 @@ export default function TodayDashboard({
           )}
         </article>
 
-        {/* 4. Lokasi yang kekurangan (komoditas aktif) */}
-        <article className="card today-card today-shortage" id="today-shortage" tabIndex={-1}>
-          <div className="today-card-head">
-            <h2>Lokasi shortage</h2>
-            <span className="today-count">{shortage.count}</span>
-          </div>
-          <p className="today-card-note">
-            {shortage.count === 0
-              ? "Tidak ada lokasi kekurangan untuk komoditas ini."
-              : `Total kekurangan ${formatKg(shortage.totalKg)} (komoditas ${commodity ?? "—"})`}
-          </p>
-          {shortage.items.length > 0 && (
-            <ul className="today-list">
-              {shortage.items.slice(0, 6).map((row) => (
-                <li key={String(row.location)} className="today-row">
-                  <div className="today-row-main">
-                    <span className="today-row-title">{row.location ?? "—"}</span>
-                    <span className="today-row-meta">{row.region ?? "—"}</span>
-                  </div>
-                  {/* Bukan label waktu: ini besar kekurangan. Kelasnya sendiri
-                      supaya "merah" di sini berarti "kekurangan", bukan "lewat
-                      tenggat" — dan jam klien belum siap tidak mengubahnya. */}
-                  <span className="today-due today-due-short">{row.label}</span>
-                  {onOpenLocation && row.location && (
-                    <button
-                      type="button"
-                      className="button today-row-action"
-                      onClick={() => onOpenLocation(String(row.location))}
-                    >
-                      Lihat di peta
-                    </button>
-                  )}
-                </li>
-              ))}
-              {shortage.items.length > 6 && (
-                <li className="today-more">
-                  +{shortage.items.length - 6} lokasi lain kekurangan (lihat peta)
-                </li>
-              )}
-            </ul>
-          )}
-        </article>
-
-        {/* 5. KPI 24 jam terakhir */}
+        {/* 4. KPI 24 jam terakhir */}
         <article className="card today-card today-kpi" id="today-kpi" tabIndex={-1}>
           <div className="today-card-head">
             <h2>KPI 24 jam</h2>
@@ -475,6 +433,49 @@ export default function TodayDashboard({
                   </li>
                 );
               })}
+            </ul>
+          )}
+        </article>
+
+        {/* 5. Lokasi yang kekurangan (komoditas aktif) */}
+        <article className="card today-card today-shortage" id="today-shortage" tabIndex={-1}>
+          <div className="today-card-head">
+            <h2>Lokasi shortage</h2>
+            <span className="today-count">{shortage.count}</span>
+          </div>
+          <p className="today-card-note">
+            {shortage.count === 0
+              ? "Tidak ada lokasi kekurangan untuk komoditas ini."
+              : `Total kekurangan ${formatKg(shortage.totalKg)} (komoditas ${commodity ?? "—"})`}
+          </p>
+          {shortage.items.length > 0 && (
+            <ul className="today-list">
+              {shortage.items.slice(0, 6).map((row) => (
+                <li key={String(row.location)} className="today-row">
+                  <div className="today-row-main">
+                    <span className="today-row-title">{kodeWilayah(row.location)}</span>
+                    <span className="today-row-meta">{row.region ?? "—"}</span>
+                  </div>
+                  {/* Bukan label waktu: ini besar kekurangan. Kelasnya sendiri
+                      supaya "merah" di sini berarti "kekurangan", bukan "lewat
+                      tenggat" — dan jam klien belum siap tidak mengubahnya. */}
+                  <span className="today-due today-due-short">{row.label}</span>
+                  {onOpenLocation && row.location && (
+                    <button
+                      type="button"
+                      className="button today-row-action"
+                      onClick={() => onOpenLocation(String(row.location))}
+                    >
+                      Lihat di peta
+                    </button>
+                  )}
+                </li>
+              ))}
+              {shortage.items.length > 6 && (
+                <li className="today-more">
+                  +{shortage.items.length - 6} lokasi lain kekurangan (lihat peta)
+                </li>
+              )}
             </ul>
           )}
         </article>

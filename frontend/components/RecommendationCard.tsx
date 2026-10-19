@@ -44,6 +44,9 @@ export const DECISION_TYPE_LABELS: Record<string, string> = {
   price_anomaly: "Penyesuaian harga direkomendasikan",
   surplus_redistribution: "Redistribusi surplus direkomendasikan",
   supplier_exclusion: "Usulan pengecualian pemasok",
+  // Demo Control 2026-10-19: pengadaan dari pemasok yang memasok SPPG itu —
+  // jangan diberi label "Alokasi regional" yang artinya pemindahan antar SPPG.
+  supplier_procurement: "Pengadaan dari pemasok",
 };
 
 // Catatan yang isinya hanya kata penanda: bukan narasi, jangan dicetak.

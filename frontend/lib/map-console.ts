@@ -2,6 +2,7 @@
 // proporsi bar telemetri node. Dipisah dari komponen supaya bisa diuji tanpa
 // DOM — dan supaya tidak ada angka/label yang dikarang di dalam JSX.
 import { formatKg, type BalanceMapLocation } from "./overview-format";
+import { kodeWilayah } from "./wilayah";
 
 export type PinTone = "surplus" | "balanced" | "shortage" | "unknown";
 
@@ -19,11 +20,12 @@ function finiteOrNull(value: number | string | null | undefined): number | null 
 /** Label pin: nama lokasi + selisih yang benar-benar ada di data. */
 export function pinLabel(row: BalanceMapLocation): string {
   const tone = pinTone(row.status);
-  if (tone === "balanced") return `${row.location} seimbang`;
+  const nama = kodeWilayah(row.location);
+  if (tone === "balanced") return `${nama} seimbang`;
   const value =
     tone === "shortage" ? finiteOrNull(row.shortage_kg) : tone === "surplus" ? finiteOrNull(row.surplus_kg) : null;
-  if (value === null) return row.location;
-  return tone === "shortage" ? `${row.location} −${formatKg(value)}` : `${row.location} +${formatKg(value)}`;
+  if (value === null) return nama;
+  return tone === "shortage" ? `${nama} −${formatKg(value)}` : `${nama} +${formatKg(value)}`;
 }
 
 export type Gauge = { value: number | null; share: number };

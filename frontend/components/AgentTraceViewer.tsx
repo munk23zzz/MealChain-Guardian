@@ -10,6 +10,7 @@ import {
   stepAgeLabel,
   stepDurationLabel,
 } from "../lib/agent-trace";
+import { toolLabel } from "../lib/bahasa";
 
 // Icon status langkah — inline SVG, bukan emoji (DESIGN.md).
 function StepIcon({ done }: { done?: boolean }) {
@@ -79,6 +80,7 @@ export default function AgentTraceViewer({
           const baru =
             !berjalan && i === steps.length - 1 && isNewStep(s.step_at, now);
           const durasi = stepDurationLabel(s);
+          const toolHuman = toolLabel(s.tool_called);
           return (
             <li
               key={i}
@@ -97,7 +99,13 @@ export default function AgentTraceViewer({
                 {durasi ? <span className="trace-duration">{durasi}</span> : null}
                 <time>{formatClockUtc(s.step_at)} UTC</time>
               </div>
-              <div className="trace-tool">{s.tool_called ?? "-"}</div>
+              {/* Alat internal hanya ditampilkan bila punya sebutan manusia.
+                  Slug seperti `evaluate_safety` dulu tampil apa adanya dan
+                  terbaca sebagai kebocoran istilah teknis; yang tidak dikenal
+                  disembunyikan, bukan dibiarkan. */}
+              {toolHuman !== null && toolHuman !== s.tool_called ? (
+                <div className="trace-tool">{toolHuman}</div>
+              ) : null}
               {/* W-5: nomor PO yang diterbitkan langkah ACT. Sebelumnya hanya
                   nama tool yang tampil, sehingga PO yang terbit tidak bisa
                   ditunjukkan dari jejak agent. */}

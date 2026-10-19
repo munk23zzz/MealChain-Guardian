@@ -12,8 +12,9 @@
 // kanan-bawah. Tanpa kepala panel mengapung dan tanpa kaki panel.
 // Warna pin & legenda memakai token status aplikasi (`--status-*`), sama dengan
 // badge di permukaan terang; tidak ada hex di komponen ini.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
+import { kodeWilayah } from "../lib/wilayah";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
   dataSourceNote,
@@ -42,7 +43,7 @@ import {
 } from "../lib/map-view";
 // Baris legenda ringkas di bawah kanvas (C2, langkah 7b-2): aturan isinya
 // (status selalu ada, keterangan ikut sakelar lapisan) hidup di lib murni.
-import { compactLegendItems, legendMarkClass } from "../lib/map-legend-compact";
+import { compactLegendItems, legendBreakIndexes, legendMarkClass } from "../lib/map-legend-compact";
 import {
   KLASTER_JARAK_PIKSEL,
   KLASTER_ZOOM_MAKS,
@@ -499,7 +500,7 @@ export function StatusLocationList({
           const isiBaris = (
             <>
               <i className={`map-dot map-dot-${l.status}`} aria-hidden="true" />
-              <span className="map-row-name">{l.location}</span>
+              <span className="map-row-name">{kodeWilayah(l.location)}</span>
               <span className="map-row-status">{formatBalanceStatus(l.status)}</span>
               <span className="map-row-supply">Pasokan: {formatKg(l.supply_kg)}</span>
               <span className="map-row-demand">Kebutuhan: {formatKg(l.demand_kg)}</span>
@@ -517,7 +518,7 @@ export function StatusLocationList({
                 <button
                   type="button"
                   className="map-row-btn"
-                  title={`Sorot ${l.location} di peta`}
+                  title={`Sorot ${kodeWilayah(l.location)} di peta`}
                   onClick={() => sorot(l.location)}
                 >
                   {isiBaris}
@@ -702,6 +703,14 @@ export default function SupplyMap({
         pemasok: showSuppliers ? SUPPLIER_PIN_LEGEND : [],
       }),
     [routePinRows, showRoutes, showSuppliers]
+  );
+  // Pemenggalan baris ditentukan MAKNA, bukan lebar layar: kelompok pemasok
+  // selalu mulai di baris 2 (permintaan pemilik 2026-10-19). Tanpa ini, di lebar
+  // ~925 px "Pemasok · Keandalan rendah · Dikecualikan" menempel di ujung baris 1
+  // dan sisanya menggantung di baris 2.
+  const legendBreaks = useMemo(
+    () => new Set(legendBreakIndexes(legendCompact)),
+    [legendCompact]
   );
   // K3: padanan teks penanda — dihitung dari data yang SAMA dengan pin peta.
   const penanda = useMemo(() => penandaPeta(locations), [locations]);
@@ -1458,14 +1467,21 @@ export default function SupplyMap({
             dan angka jumlahnya tetap di tag bilah rincian. */}
         <div className="map-legend-compact" role="group" aria-label="Legenda peta">
           <span className="map-legend-compact-title">Legenda:</span>
-          {legendCompact.map((butir) => {
+          {legendCompact.map((butir, urutan) => {
             // SEMUA kelas dipakai: nada (warna) + gaya (padat/putus) untuk garis.
             const kelas = legendMarkClass(butir).join(" ");
             return (
-              <span key={butir.id} className="map-legend-compact-item">
-                <i className={kelas} aria-hidden="true" />{" "}
-                {butir.label}
-              </span>
+              <Fragment key={butir.id}>
+                {/* Pemenggal baris: elemen dekoratif setinggi 0 selebar baris,
+                    jadi tidak menambah makna apa pun untuk pembaca layar. */}
+                {legendBreaks.has(urutan) && (
+                  <span className="map-legend-compact-break" aria-hidden="true" />
+                )}
+                <span className="map-legend-compact-item">
+                  <i className={kelas} aria-hidden="true" />{" "}
+                  {butir.label}
+                </span>
+              </Fragment>
             );
           })}
         </div>
