@@ -186,3 +186,38 @@
 - **Jangan pasang `min-height` kelas lebih kecil dari 44 px tanpa blok sentuh**: kelas 0,3,0 menang
   atas `button` (0,0,1), jadi pil pemilih turun ke 28 px di ponsel. Selalu tambahkan
   `@media (pointer: coarse), (max-width: 720px)` yang menaikkannya lagi.
+
+
+## 19 Okt 2026 — bukti binding ditulis penyemai kasus demo, bukan `resolve_binding`
+
+- **Gejala:** setelah dataset diperluas, 21/21 `demo_case` tanpa `allocation_binding` → kartu unggulan
+  menulis "pemasok tidak dikenal" dan `can_execute=false`. Aturan "jangan menebak pemasok" tetap
+  dipertahankan; yang berubah adalah penyemainya kini MENULIS bukti sendiri
+  (`_ikat_sumber` di `app/api/demo.py`, `human_inspection` + payload `allocation_binding`).
+- **Aturan pemilihan batch:** batch di lokasi asal + komoditas, `usable_until >= now`, kuantitas terbesar,
+  seri → id terkecil; tidak ada batch layak → tidak ada binding (alasan tetap jujur).
+- **Kasus `verifier_flagged` sengaja TIDAK diikat:** tuduhannya soal HARGA sebuah kutipan, dan pemasok
+  itu bukan selalu pemilik batch terbesar — mengikat batch terbesar = menampilkan pemasok yang bukan
+  subjek tuduhan. Alasan "pemasok tidak dikenal" di kartu itu diterima apa adanya.
+
+## 19 Okt 2026 — batch demo adalah prasyarat gerbang, dan dijaga fixture `conftest`
+
+- **Batch kanonik seed dijangkar `CANONICAL_REF` 8 Okt**; dengan `PASS_THRESHOLD` 0,85 dan shelf telur
+  28 hari, batch seed gugur sebagai kandidat sekitar 4 hari setelah REF. Satu-satunya sumber kandidat
+  segar adalah batch `origin='demo'` (harvest relatif `now`).
+- **Karena itu jangan menyemai manual sekali di awal gerbang.** `purge_demo_rows()` dan tes yang
+  menghapus batch demo membuang 40 baris itu di tengah suite → 37 lalu 28 lalu 9 kegagalan beruntun
+  dengan satu kalimat "tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta)".
+- **Perbaikan permanen:** fixture autouse `jaga_kiriman_demo` di `tests/conftest.py`, menyemai ulang
+  hanya bila `count(origin='demo') = 0` dan hanya untuk 13 modul yang menuntut kandidat; ditambah
+  teardown modul di `tests/test_deret_demo_aman.py`. Verifikasi: hapus 40 batch demo → satu modul
+  dijalankan → hijau dan hitungan kembali 40 dengan `max(harvested_at)` hari ini.
+
+## 19 Okt 2026 — tes pemasok: jumlah lot dipaku dari DB, bukan dari ingatan penulis tes
+
+- `test_shipping_reports_batch_that_failed_testing` (`count == 1`) dan `test_expired_batch_is_not_counted`
+  (`count == 0`) merah begitu penyemai demo membuat lot baru untuk pemasok yang sama — bukan regresi,
+  melainkan asersi yang memaku keadaan dataset sehari.
+- Diganti uji sifat dengan ground truth dihitung saat tes berjalan: lot gagal uji tetap DILAPORKAN
+  (`safety_fail_count == sql["fails"]`), lot lewat tenggat tetap DIKECUALIKAN
+  (`total > layak`, `(shipping is None) == (sql["count"] == 0)`).
