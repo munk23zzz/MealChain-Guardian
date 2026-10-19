@@ -24,6 +24,8 @@ import {
   verifyAction,
 } from "../lib/api";
 import ApprovalMenu from "./ApprovalMenu";
+import GovernanceStatus from "./GovernanceStatus";
+import { governanceView } from "../lib/governance";
 import { humanizeBlocker } from "../lib/bahasa";
 import Popup from "./Popup";
 
@@ -100,6 +102,19 @@ export default function DecisionActions({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   const actions = visibleActions(role, status);
+  // Satu turunan status untuk label pemicu DAN chip di kepala popup — jangan
+  // menghitung dua kali dengan dua aturan berbeda.
+  const view = governanceView(summary);
+  // Langkah 4 (19 Okt 2026): label mengikuti keadaan. "Kelola persetujuan"
+  // pada keputusan final menjanjikan pekerjaan yang tidak ada, dan pada
+  // keputusan yang baru disetujui sebagian yang ditunggu adalah REKAN.
+  // Semua keadaan tetap bisa dibuka — popup tetap satu-satunya gerbang aksi.
+  const triggerLabel =
+    view.state === "selesai" || view.state === "ditolak"
+      ? "Lihat hasil"
+      : view.state === "sebagian"
+        ? "Menunggu rekan"
+        : "Kelola persetujuan";
   const administrative = [
     "supplier_exclusion",
     "supplier_exclusion_restoration",
@@ -217,13 +232,16 @@ export default function DecisionActions({
         onClick={() => setOpened(true)}
         aria-haspopup="dialog"
         aria-expanded={opened}
+        aria-describedby="governance-action-hint"
       >
-        Kelola persetujuan
+        {triggerLabel}
         <span aria-hidden="true">…</span>
       </button>
-      <span className="decision-actions-hint">
-        Ringkasan bukti &amp; pilihan tindakan dibuka di jendela terpisah — tidak ada aksi satu
-        klik.
+      {/* Dulu ini teks terlihat di bawah tombol dan mengulang isi deskripsi
+          popup — satu baris noise di kartu yang sempit. Janji "tidak ada aksi
+          satu klik" tetap diumumkan ke pembaca layar lewat aria-describedby. */}
+      <span className="sr-only" id="governance-action-hint">
+        Ringkasan bukti dan pilihan tindakan dibuka di jendela terpisah. Tidak ada aksi satu klik.
       </span>
       {message && (
         <p className="action-message" role="status">
@@ -240,6 +258,9 @@ export default function DecisionActions({
         labelledBy="approval-popup-title"
         returnFocusRef={triggerRef}
       >
+        {/* Chip status di kepala popup: pengguna yang menggulir ringkasan
+            panjang tetap tahu posisi persetujuan tanpa menutup popup. */}
+        <GovernanceStatus view={view} variant="chip" />
         <ApprovalMenu
           summary={summary}
           actions={actions}

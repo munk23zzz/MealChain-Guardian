@@ -5428,6 +5428,14 @@ a:focus-visible {
   background: var(--warn-bg);
   color: var(--warn-ink);
 }
+/* Semua peran setuju tetapi eksekusi TERTAHAN: bukan hijau (hijau milik
+   "siap"/"selesai"), bukan amber (amber milik "sebagian"). Biru informasi
+   supaya terbaca "persyaratan beres, tunggu kelayakan lain". */
+.gov-chip[data-state="lengkap"] {
+  border-color: rgba(29, 78, 216, 0.35);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
 .gov-chip[data-state="siap"],
 .gov-chip[data-state="selesai"] {
   border-color: var(--ok-border);
@@ -7509,6 +7517,15 @@ button:active:not(:disabled),
   display: flex;
   justify-content: flex-end;
   margin-top: var(--space-4);
+  /* Kaki sticky (Langkah 5, 19 Okt 2026): ringkasan bisa panjang, jadi tombol
+     Tutup harus tetap terjangkau tanpa menggulir balik. Offset -space-4
+     menutup padding bawah `.popup-body` supaya menempel ke tepi panel; latar
+     solid wajib — kalau tembus, isi yang lewat di belakangnya terbaca. */
+  position: sticky;
+  bottom: calc(-1 * var(--space-4));
+  padding-block: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
 }
 /* Menu pilihan: nama tindakan + akibatnya + tombol, satu baris per tindakan. */
 .action-menu {
