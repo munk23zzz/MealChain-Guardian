@@ -221,6 +221,15 @@ async def _run_event1(
             safe_delivered_cost=Decimal(chosen["safe_delivered_cost"]),
             cost_breakdown=chosen.get("cost_breakdown"),
             expires_at=expires_at,
+            # Identitas pemasok ikut tersimpan. Tanpa ini keputusan hasil
+            # Event 1 lahir tanpa supplier_id dan kartu Identitas menulis
+            # "tanpa identitas pemasok" untuk transfer yang jelas berasal dari
+            # satu pemasok (temuan audit 19 Okt 2026).
+            supplier_id=(
+                uuid.UUID(chosen["candidate"]["supplier_id"])
+                if chosen["candidate"].get("supplier_id")
+                else None
+            ),
         )
         session.add(decision)
         await session.flush()

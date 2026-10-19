@@ -107,11 +107,55 @@ def _login(client, user) -> dict:
     return {"Authorization": f"Bearer {resp.json()['access_token']}"}
 
 
+def _ikat_binding(decision_id: str) -> None:
+    """Ikat keputusan ke SATU batch Cianjur/telur lewat bukti `allocation_binding`.
+
+    Sejak dataset 19 Okt 2026 Cianjur punya EMPAT pemasok telur, jadi
+    `resolve_binding` — yang memang menolak menebak pemasok — menjawab
+    `supplier_unknown` untuk keputusan tanpa binding. Tes ini menguji alur
+    approve/execute, bukan penebakan itu, jadi batch sumbernya diikat eksplisit
+    dengan bentuk yang SAMA seperti penulis produksi (`allocation_binding: true`
+    di akar payload + `supplier_id`/`batch_ids`).
+    """
+    engine = _db()
+    try:
+        with engine.begin() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT b.id, b.supplier_id FROM batches b "
+                    "JOIN commodities c ON c.id = b.commodity_id "
+                    "JOIN locations l ON l.id = b.location_id "
+                    "WHERE c.name = 'telur' AND l.name = 'Cianjur' "
+                    "AND b.origin = 'seed' ORDER BY b.id LIMIT 1"
+                )
+            ).one()
+            conn.execute(
+                text(
+                    "INSERT INTO decision_evidence (decision_id, evidence_type, payload) "
+                    "VALUES (:d, 'human_inspection', CAST(:p AS jsonb))"
+                ),
+                {
+                    "d": decision_id,
+                    "p": __import__("json").dumps(
+                        {
+                            "allocation_binding": True,
+                            "supplier_id": str(row[1]),
+                            "batch_ids": [str(row[0])],
+                        }
+                    ),
+                },
+            )
+    finally:
+        engine.dispose()
+
+
 def _mk_decision(client, user) -> str:
     headers = _login(client, user)
     resp = client.post("/decisions", json={"recommendation": RECOMMENDATION}, headers=headers)
     assert resp.status_code == 201, resp.text
-    return resp.json()["decision_id"]
+    did = resp.json()["decision_id"]
+    _ikat_binding(did)
+    return did
 
 
 def _propose(client, decision_id: str, user) -> None:

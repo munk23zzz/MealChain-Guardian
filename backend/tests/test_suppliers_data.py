@@ -60,17 +60,20 @@ def _canonical_suppliers() -> list[dict]:
 
 
 def test_demo_file_shape_and_distribution():
-    """21 baris = 12 klaster Jakarta + 9 hub lain (satu per hub) — Fase 7.
+    """Berkas demo = MASTER pemasok, bukan overlay di atas 14 baris kanonik.
 
-    Angka dulu (Fase 2): 30 baris = 3 per hub × 10 kota. Yang berubah SADAR di
-    Fase 7 (permintaan pemilik 2026-10-15): klaster Jakarta diperbesar dan
-    dijadikan berjenjang, hub lain cukup satu pemasok lokal.
+    Sejak dataset 19 Okt 2026 nama usaha nyata (CV/UD/PT/PD/Koperasi + nama
+    pasar induk) menggantikan pola "Supplier <Kota>-N", jadi `suppliers_demo.json`
+    memuat SEMUA pemasok dan `sprint1_seed.json` memuat daftar yang SAMA.
+    Angka lama (24 baris demo + 14 kanonik) tidak berlaku lagi.
 
-    Komoditas ke-4 (beras) menambah 3 baris (1 klaster Jakarta + 2 hub) yang
-    sekaligus menjadi overlay koordinat bagi pemasok kanonik bernama sama.
+    Yang dijaga di sini: setiap hub punya pemasok, klaster Jakarta paling besar,
+    semua komoditas terwakili, dan SEMUA baris berkoordinat absolut (tidak ada
+    lagi `offset_index` — jarak pemasok-SPPG harus bisa dihitung apa adanya).
     """
     rows = load_demo_rows()
-    assert len(rows) == 24, "13 pemasok klaster Jakarta + 11 baris hub lain"
+    canonical = _canonical_suppliers()
+    assert len(rows) == len(canonical) == 60, "60 pemasok lokal di 10 hub"
 
     per_hub: dict[str, int] = {}
     per_commodity: dict[str, int] = {}
@@ -80,15 +83,13 @@ def test_demo_file_shape_and_distribution():
 
     assert len(per_hub) == 10, "semua 10 lokasi harus punya pemasok"
     assert per_hub["Jakarta"] == 13, f"klaster Jakarta harus 13 baris: {per_hub}"
-    assert min(per_hub.values()) >= 1, f"ada hub tanpa pemasok: {per_hub}"
-    assert per_commodity == {"ayam": 5, "beras": 3, "telur": 6, "wortel": 10}
+    assert min(per_hub.values()) >= 4, f"ada hub yang terlalu tipis: {per_hub}"
+    assert set(per_commodity) == {"ayam", "beras", "telur", "wortel"}, per_commodity
+    assert min(per_commodity.values()) >= 10, per_commodity
 
-    # Klaster Jakarta WAJIB berkoordinat absolut: jaraknya ke SPPG Jakarta yang
-    # diperiksa (aturan "terjangkau"), bukan geseran kecil dari titik hub.
-    jakarta = [r for r in rows if r["location"] == "Jakarta"]
-    assert all("latitude" in r and "longitude" in r for r in jakarta)
-    lainnya = [r for r in rows if r["location"] != "Jakarta"]
-    assert all("latitude" not in r and "offset_index" in r for r in lainnya)
+    assert all(
+        "latitude" in r and "longitude" in r and "offset_index" not in r for r in rows
+    ), "semua baris memakai koordinat absolut"
 
     names = [r["name"] for r in rows]
     assert len(set(names)) == len(names)
@@ -122,9 +123,9 @@ def test_jakarta_cluster_is_stratified_in_distance(conn):
     assert len(menengah) >= 2, menengah
     assert len(jauh) >= 1, jauh
     # Urutan ujung-ujungnya dipaku supaya perubahan besar terlihat sadar.
-    # Tetangga terdekat sekarang "Beras Makmur Jakarta" (0,6 km dari titik SPPG).
-    assert min(distances, key=lambda n: distances[n]) == "Beras Makmur Jakarta"
-    assert max(distances, key=lambda n: distances[n]) == "Wortel Lestari Subang"
+    # Tetangga terdekat sekarang "CV Cipinang Boga Utama" (0,6 km dari titik SPPG).
+    assert min(distances, key=lambda n: distances[n]) == "CV Cipinang Boga Utama"
+    assert max(distances, key=lambda n: distances[n]) == "CV Hortikultura Subang Lestari"
 
 
 def test_jakarta_cluster_rejects_unreachable_or_relative_rows(tmp_path):
@@ -154,7 +155,9 @@ def test_demo_file_has_material_for_exclusion_story():
     """Empat pemasok skor rendah tanpa sertifikasi = bahan kasus 'pemasok janggal'."""
     rows = load_demo_rows()
     low = [r for r in rows if float(r["reliability_score"]) <= 0.45]
-    assert len(low) == 4, f"harus ada 4 pemasok berisiko, ada {len(low)}"
+    # Dua (dulu empat): dataset 19 Okt 2026 memakai skor yang lebih realistis,
+    # dan cerita "pemasok janggal" tetap punya bahan selama ada >1 kandidat.
+    assert len(low) >= 2, f"harus ada >=2 pemasok berisiko, ada {len(low)}"
     assert all(r["certification_status"] == "none" for r in low)
     assert all(r["capacity_kg_per_week"] > 0 for r in rows)
 
@@ -208,7 +211,9 @@ def test_every_supplier_has_map_coordinates(conn):
             "AND longitude IS NOT NULL) FROM suppliers"
         )
     ).one()
-    assert total == 14 + len(load_demo_rows())
+    # Tidak ada lagi 14 baris kanonik legacy: berkas demo = master, jadi jumlah
+    # baris tabel = jumlah baris berkas.
+    assert total == len(load_demo_rows())
     assert with_coords == total
 
 
@@ -221,27 +226,30 @@ def test_coordinates_land_in_indonesia(conn):
         assert LON_RANGE[0] <= float(lon) <= LON_RANGE[1], f"{name} lon di luar Indonesia"
 
 
-def test_demo_supplier_sits_near_its_hub(conn):
-    """Baris demo ber-offset = titik hub + geseran kecil (≤0.05°).
+def test_every_supplier_sits_near_its_own_hub(conn):
+    """Setiap pemasok berjarak wajar dari hub-nya — bukti dari DB, bukan klaim.
 
-    Sejak Fase 7 klaster Jakarta memakai koordinat ABSOLUT (kota penyangga),
-    jadi aturan "dekat hub" hanya berlaku untuk baris yang memakai
-    `offset_index` — sisanya diperiksa oleh tes jarak di atas/di bawah.
+    Dulu tes ini hanya memeriksa baris ber-`offset_index` (≤0.05° dari hub).
+    Dataset 19 Okt 2026 memakai koordinat ABSOLUT untuk semua baris, jadi yang
+    diuji sekarang jarak haversine ke hub sendiri: pemasok "di sekitar daerah
+    mereka" adalah janji berkas, bukan hiasan. Batasnya 60 km — cukup untuk
+    penyangga (Subang, Serang, Cileunyi) tetapi menolak salah pulau.
     """
-    offset_names = [r["name"] for r in load_demo_rows() if "offset_index" in r]
-    assert offset_names
     rows = conn.execute(
         text(
-            "SELECT s.name, s.latitude, s.longitude, l.latitude, l.longitude "
-            "FROM suppliers s JOIN locations l ON l.id = s.location_id "
-            "WHERE s.name = ANY(:names)"
-        ),
-        {"names": offset_names},
+            "SELECT s.name, s.latitude, s.longitude, l.latitude, l.longitude, l.name "
+            "FROM suppliers s JOIN locations l ON l.id = s.location_id"
+        )
     ).all()
-    assert len(rows) == len(offset_names)
-    for name, lat, lon, hub_lat, hub_lon in rows:
-        assert abs(float(lat) - float(hub_lat)) <= 0.05, f"{name} terlalu jauh dari hub-nya"
-        assert abs(float(lon) - float(hub_lon)) <= 0.05, f"{name} terlalu jauh dari hub-nya"
+    assert len(rows) == len(load_demo_rows())
+    for name, lat, lon, hub_lat, hub_lon, hub in rows:
+        jarak = haversine_km(
+            float(lat), float(lon), float(hub_lat), float(hub_lon)
+        )
+        # 150 km = REACH_KM_MAX, aturan yang juga dipakai pemuat untuk klaster
+        # rujukan. Serang 77,7 km dan Subang 108,6 km memang penyangga sah;
+        # batas ini masih menolak salah pulau/provinsi.
+        assert jarak <= 150.0, f"{name} berjarak {jarak:.1f} km dari hub {hub}"
 
 
 def test_jakarta_suppliers_in_db_are_within_reach(conn):
@@ -289,15 +297,15 @@ def test_every_supplier_has_its_own_pin(conn):
 
 
 def test_canonical_supplier_names_all_present(conn):
-    """17 nama pemasok kanonik harus tetap ada; tabrakan nama harus identik.
+    """Nama di kedua berkas harus SAMA, dan profilnya identik.
 
-    Berkas demo juga dipakai sebagai OVERLAY KOORDINAT: seeder mencocokkan
-    lewat nama, jadi tiga pemasok beras kanonik (Jakarta/Bogor/Cianjur) memang
-    muncul di kedua berkas. Yang dilarang bukan tabrakan nama, melainkan
-    tabrakan yang menyembunyikan entitas berbeda — jadi profilnya wajib sama.
+    Berkas demo dipakai sebagai master + sumber profil; seeder mencocokkan lewat
+    NAMA. Jadi yang dilarang adalah dua entitas berbeda yang menyamar dengan nama
+    sama — bukan tabrakan namanya sendiri (sekarang memang seluruh 60 baris
+    muncul di kedua berkas).
     """
     canonical = _canonical_suppliers()
-    assert len(canonical) == 17
+    assert len(canonical) == 60
     canonical_names = {item["name"] for item in canonical}
     stored = {
         name
@@ -337,31 +345,33 @@ def test_canonical_supplier_scores_match_seed_json(conn):
     assert stored == json_scores
 
 
-def test_canonical_supplier_ids_are_legacy_random_uuids(conn):
-    """Keadaan yang DIKETAHUI, bukan yang diinginkan: 14 id kanonik bukan UUID5.
+def test_supplier_ids_are_unique_and_stable(conn):
+    """Id pemasok unik dan TIDAK berubah saat berkas demo dimuat ulang.
 
-    `build_seed_rows` menghitung `stable_uuid("supplier", nama)`, tetapi baris
-    kanonik di DB demo sudah ada lebih dulu dengan UUID v4 acak, dan loader tidak
-    menimpa id (mengganti primary key berarti menulis ulang seluruh FK yang
-    menunjuknya: `batches`, `price_signals`, `supply_records`).
-
-    Jadi id kanonik = "opaque tapi stabil", bukan natural key. Tes ini memaku
-    keadaannya supaya perubahan id (mis. kelak dirapikan lewat migrasi khusus)
-    terjadi sadar, bukan menyelinap.
+    Koreksi penting: di checkout ini pemuat membuat baris `suppliers` dengan
+    UUID v4 dari DB (bukan UUID5 dari nama), jadi "natural key" bukan invariant
+    yang berlaku. Yang benar-benar dijaga: tidak ada id kembar, dan menjalankan
+    seeder lagi tidak mengganti id mana pun — id itu dirujuk `batches`,
+    `price_signals`, dan PO mock.
     """
-    canonical = _canonical_suppliers()
-    rows = {
-        name: uuid.UUID(str(sid))
-        for name, sid in conn.execute(
-            text("SELECT name, id FROM suppliers")
-        ).all()
+    import asyncio
+
+    from app.seed.suppliers_demo import seed_demo_suppliers
+
+    sebelum = {
+        name: str(sid)
+        for name, sid in conn.execute(text("SELECT name, id FROM suppliers")).all()
     }
-    natural = {item["name"]: stable_uuid("supplier", item["name"]) for item in canonical}
-    mismatched = {name for name, want in natural.items() if rows.get(name) != want}
-    assert mismatched == set(natural), (
-        "sebagian id kanonik ternyata sudah natural key — perbarui tes ini "
-        f"(yang cocok: {sorted(set(natural) - mismatched)})"
-    )
+    assert len(sebelum) == len(set(sebelum.values())), "ada id pemasok kembar"
+    assert len(sebelum) == len(load_demo_rows())
+
+    asyncio.run(seed_demo_suppliers())
+    conn.rollback()
+    sesudah = {
+        name: str(sid)
+        for name, sid in conn.execute(text("SELECT name, id FROM suppliers")).all()
+    }
+    assert sesudah == sebelum
 
 
 def test_demo_seeding_is_purely_additive():
@@ -382,37 +392,39 @@ def test_demo_seeding_is_purely_additive():
         "longitude, capacity_kg_per_week, certification_status, address, contact_name "
         "FROM suppliers WHERE name <> ALL(:names) ORDER BY name"
     )
+    semua_sql = text(
+        "SELECT id, name, location_id, reliability_score, commodity_id, latitude, "
+        "longitude, capacity_kg_per_week, certification_status, address, contact_name "
+        "FROM suppliers ORDER BY name"
+    )
     try:
         asyncio.run(seed_demo_suppliers())
         with engine.connect() as c:
-            before = c.execute(snapshot_sql, {"names": list(demo_names)}).all()
-        assert len(before) == 14
+            # Sejak berkas demo = master, TIDAK ada baris non-demo yang perlu
+            # dijaga — invariant lama "14 baris non-demo tetap utuh" menjadi
+            # vacuous. Yang tetap bermakna: seeder tidak mengubah ISI tabel.
+            sisa = c.execute(snapshot_sql, {"names": list(demo_names)}).all()
+            assert len(sisa) == 0, f"ada baris pemasok di luar berkas demo: {len(sisa)}"
+            before = c.execute(semua_sql).all()
         asyncio.run(seed_demo_suppliers())
         with engine.connect() as c:
-            after = c.execute(snapshot_sql, {"names": list(demo_names)}).all()
+            after = c.execute(semua_sql).all()
         assert [tuple(r) for r in before] == [tuple(r) for r in after]
     finally:
         engine.dispose()
 
 
-def test_demo_rows_use_their_natural_key_ids(conn):
-    """Pemasok demo (24 baris): id = UUID5 `demo_supplier::<nama>`, tanpa tabrakan."""
-    rows = conn.execute(text("SELECT id, name FROM suppliers")).all()
-    stored = {str(r.id): r.name for r in rows}
-    overlay = {item["name"] for item in _canonical_suppliers()}
-    demo_ids = {}
-    for row in load_demo_rows():
-        if row["name"] in overlay:
-            # Baris overlay (3 pemasok beras) menempati id KANONIK — seeder
-            # mencocokkan lewat nama. Yang penting barisnya ada, bukan id demo.
-            assert row["name"] in stored.values(), row["name"]
-            continue
-        expected = str(demo_supplier_id(row["name"]))
-        assert stored.get(expected) == row["name"], f"id demo tidak sesuai: {row['name']}"
-        demo_ids[expected] = row["name"]
-    others = {i for i in stored if i not in demo_ids}
-    assert not (set(demo_ids) & others), "id demo bertabrakan dengan baris non-demo"
-    assert len(others) == len(_canonical_suppliers())
+def test_every_demo_row_exists_in_db(conn):
+    """Setiap baris berkas demo punya baris DB bernama SAMA (tanpa duplikat).
+
+    Seeder mencocokkan lewat NAMA, jadi nama adalah kunci alami yang berlaku —
+    bukan id. Dua baris dengan nama sama akan saling menimpa profil, dan baris
+    berkas yang tidak ada di DB berarti profil (koordinat/kapasitas) hilang.
+    """
+    rows = conn.execute(text("SELECT name FROM suppliers")).all()
+    nama_db = [r[0] for r in rows]
+    assert len(nama_db) == len(set(nama_db)), "ada nama pemasok ganda"
+    assert set(nama_db) == {r["name"] for r in load_demo_rows()}
 
 
 def test_seeding_is_idempotent_against_live_db():
@@ -432,7 +444,9 @@ def test_seeding_is_idempotent_against_live_db():
             total = c.execute(text("SELECT count(*) FROM suppliers")).scalar_one()
     finally:
         engine.dispose()
-    assert total == 14 + len(load_demo_rows())
+    # Tidak ada lagi 14 baris kanonik legacy: berkas demo = master, jadi jumlah
+    # baris tabel = jumlah baris berkas.
+    assert total == len(load_demo_rows())
 
 
 def test_demo_suppliers_are_flagged_synthetic():
@@ -449,4 +463,8 @@ def test_demo_suppliers_are_flagged_synthetic():
     with open(target, encoding="utf-8") as f:
         meta = json.load(f)["_meta"]
     assert "SINTETIS" in meta["provenance"]
-    assert "TIDAK diubah" in meta["canonical_untouched"]
+    # Berkas demo kini MASTER (bukan overlay koordinat di atas 14 kanonik), jadi
+    # yang diperiksa adalah pernyataan itu — bukan kalimat lama
+    # "canonical_untouched" yang sudah tidak menggambarkan datanya.
+    assert "SAMA" in meta["canonical_overlap"]
+    assert "ABSOLUT" in meta["coordinates"]

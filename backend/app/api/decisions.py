@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import get_current_user
 from app.api.dependencies import get_db
 from app.core.scope import apply_location_scope, assert_in_scope
-from app.models import AgentTrace, Commodity, Decision, Location, User
+from app.models import AgentTrace, Commodity, Decision, Location, Supplier, User
 from app.services.approval_summary import build_approval_summary
 
 router = APIRouter()
@@ -382,6 +382,25 @@ async def get_decision(
         raise HTTPException(status_code=404, detail="decision tidak ditemukan")
     await _assert_decision_readable(db, user, row)
     validity = _validity(row.expires_at)
+    # Nama manusiawi + pemasok: halaman bukti tidak boleh menebak rute dari id.
+    # Pengadaan pemasok punya `source_location_id = NULL` (barang datang dari
+    # pemasok, bukan dari stok SPPG lain), jadi asal yang benar adalah pemasok.
+    sumber = (
+        await db.get(Location, row.source_location_id)
+        if row.source_location_id
+        else None
+    )
+    tujuan = (
+        await db.get(Location, row.target_location_id)
+        if row.target_location_id
+        else None
+    )
+    komoditas = (
+        await db.get(Commodity, row.commodity_id) if row.commodity_id else None
+    )
+    pemasok = (
+        await db.get(Supplier, row.supplier_id) if row.supplier_id else None
+    )
     return {
         "decision_id": str(row.id),
         "decision_type": row.decision_type,
@@ -390,6 +409,16 @@ async def get_decision(
         "source_location_id": str(row.source_location_id) if row.source_location_id else None,
         "target_location_id": str(row.target_location_id) if row.target_location_id else None,
         "commodity_id": str(row.commodity_id) if row.commodity_id else None,
+        # Nama (bukan id) supaya UI tidak perlu menebak; null tetap null.
+        "source_location": sumber.name if sumber is not None else None,
+        "target_location": tujuan.name if tujuan is not None else None,
+        "commodity": komoditas.name if komoditas is not None else None,
+        "supplier_id": str(row.supplier_id) if row.supplier_id else None,
+        "supplier": (
+            {"id": str(pemasok.id), "name": pemasok.name}
+            if pemasok is not None
+            else None
+        ),
         "quantity_kg": float(row.quantity_kg) if row.quantity_kg is not None else None,
         "safe_delivered_cost": (
             float(row.safe_delivered_cost) if row.safe_delivered_cost is not None else None

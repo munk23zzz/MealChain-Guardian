@@ -138,12 +138,53 @@ def _cleanup(decision_id: str | None) -> None:
         engine.dispose()
 
 
+def _ikat_binding(decision_id: str) -> None:
+    """Ikat keputusan ke SATU batch Cianjur/telur lewat bukti `allocation_binding`.
+
+    Sejak dataset 19 Okt 2026 Cianjur punya EMPAT pemasok telur, jadi
+    `resolve_binding` (yang menolak menebak pemasok) menjawab `supplier_unknown`
+    untuk keputusan tanpa binding. Tes ini menguji status `approved` +
+    eksekusi, bukan penebakan, jadi batch sumbernya diikat eksplisit.
+    """
+    engine = _db()
+    try:
+        with engine.begin() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT b.id, b.supplier_id FROM batches b "
+                    "JOIN commodities c ON c.id = b.commodity_id "
+                    "JOIN locations l ON l.id = b.location_id "
+                    "WHERE c.name = 'telur' AND l.name = 'Cianjur' "
+                    "AND b.origin = 'seed' ORDER BY b.id LIMIT 1"
+                )
+            ).one()
+            conn.execute(
+                text(
+                    "INSERT INTO decision_evidence (decision_id, evidence_type, payload) "
+                    "VALUES (:d, 'human_inspection', CAST(:p AS jsonb))"
+                ),
+                {
+                    "d": decision_id,
+                    "p": __import__("json").dumps(
+                        {
+                            "allocation_binding": True,
+                            "supplier_id": str(row[1]),
+                            "batch_ids": [str(row[0])],
+                        }
+                    ),
+                },
+            )
+    finally:
+        engine.dispose()
+
+
 def _siapkan(client: TestClient, kepala: dict) -> str:
     """Buat keputusan lewat API, ajukan, lalu tandai terverifikasi."""
     headers = _login(client, kepala)
     resp = client.post("/decisions", json={"recommendation": RECOMMENDATION}, headers=headers)
     assert resp.status_code == 201, resp.text
     decision_id = resp.json()["decision_id"]
+    _ikat_binding(decision_id)
     resp = client.post(
         "/actions/propose",
         json={"decision_id": decision_id, "material_number": "MAT-TELUR-JKT"},

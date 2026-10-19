@@ -25,7 +25,6 @@ from app.seed.seed_data import build_seed_rows
 
 REF = datetime(2026, 10, 17, 5, 0, tzinfo=UTC)
 SEED_JSON = Path("/data/seed/sprint1_seed.json")
-PEMASOK_BERAS = {"Beras Pandan Wangi Cianjur", "Beras Sari Bogor", "Beras Makmur Jakarta"}
 
 
 def _rows() -> dict:
@@ -67,7 +66,14 @@ def test_beras_punya_permintaan_di_lokasi_sppg() -> None:
 def test_beras_punya_kiriman_dari_pemasok_beras() -> None:
     batches = [b for b in _rows()["batches"] if b["commodity"] == "beras"]
     assert len(batches) >= 3, batches
-    assert {b["supplier"] for b in batches} <= PEMASOK_BERAS
+    # Sejak dataset 19 Okt 2026 tiap hub punya pemasok beras lokal (bukan tiga
+    # nama tetap), jadi himpunannya DITURUNKAN dari daftar pemasok ber-commodity
+    # beras — bukan dari daftar yang diketik di tes.
+    pemasok_beras = {
+        s["name"] for s in _rows()["suppliers"] if s["commodity"] == "beras"
+    }
+    assert len(pemasok_beras) >= 6, pemasok_beras
+    assert {b["supplier"] for b in batches} <= pemasok_beras
     assert all(float(b["quantity_kg"]) > 0 for b in batches)
 
 

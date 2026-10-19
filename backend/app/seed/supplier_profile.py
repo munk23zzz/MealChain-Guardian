@@ -1,6 +1,6 @@
 """Profil pemasok kanonik DITURUNKAN dari batch kiriman (keputusan pemilik 2026-10-16).
 
-Kenapa ada modul ini: `data/seed/sprint1_seed.json` mendefinisikan 14 pemasok
+Kenapa ada modul ini: `data/seed/sprint1_seed.json` mendefinisikan 60 pemasok
 kanonik hanya dengan `name`/`location`/`reliability_score`, sehingga
 `commodity_id`, `certification_status`, dan `capacity_kg_per_week` mereka NULL di
 DB. Tab Pemasok karena itu menampilkan baris dengan Komoditas/Sertifikasi kosong,

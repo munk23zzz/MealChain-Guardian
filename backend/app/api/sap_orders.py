@@ -33,16 +33,20 @@ Modul ini menutup celah itu dengan tiga aturan:
 """
 
 import uuid
+from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import text
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import get_current_user
 from app.api.dependencies import get_db
+from app.core.approval_matrix import evaluate_approvals
 from app.core.scope import is_national_scope, scope_location_id
-from app.models import User
+from app.models import Decision, User
+from app.services import po_document
+from app.services.approval_summary import syarat_persetujuan
 
 router = APIRouter()
 
@@ -61,11 +65,16 @@ _SELECT = (
     "SELECT po.po_number, po.status, po.created_at, po.decision_id, "
     "d.status AS decision_status, d.target_location_id AS location_id, "
     "l.name AS location_name, po.supplier_id, s.name AS supplier_name, "
-    "po.material_number, po.ordered_quantity, po.price "
+    "po.material_number, po.ordered_quantity, po.price, "
+    # Nama bahan dari keputusan (relasi commodities). Baris impor SAP tanpa
+    # keputusan memang tidak punya nama — frontend menulis "bahan tidak
+    # tercatat", bukan menebak dari kode `MAT-BERA`.
+    "c.name AS commodity_name "
     "FROM sap_mock_purchase_orders po "
     "LEFT JOIN decisions d ON d.id = po.decision_id "
     "LEFT JOIN locations l ON l.id = d.target_location_id "
     "LEFT JOIN suppliers s ON s.id = po.supplier_id "
+    "LEFT JOIN commodities c ON c.id = d.commodity_id "
 )
 
 
@@ -84,6 +93,7 @@ def _baris(row) -> dict:
         "supplier_id": str(row["supplier_id"]) if row["supplier_id"] else None,
         "supplier_name": row["supplier_name"],
         "material_number": row["material_number"],
+        "commodity_name": row["commodity_name"],
         "ordered_quantity_kg": qty,
         "price_per_kg": harga,
         "total_value": round(harga * qty, 2),
@@ -172,3 +182,140 @@ async def ringkas_purchase_order(
         "scope": "nasional" if is_national_scope(user) else "lokasi",
         "source": SUMBER,
     }
+
+
+# ── Dokumen PO (PDF) ────────────────────────────────────────────────────────
+# Hanya untuk PO yang LAHIR DARI KEPUTUSAN YANG SUDAH DISETUJUI. Alasannya
+# bukan teknis: PDF adalah dokumen yang dibawa keluar aplikasi dan diserahkan
+# ke orang lain, jadi ia hanya boleh ada untuk pembelian yang approval-nya
+# benar-benar tercatat. PO impor tanpa keputusan dan PO dari keputusan yang
+# masih menunggu ditolak 409 dengan alasan — bukan diberi dokumen kosong.
+
+_SELECT_SATU = (
+    "SELECT po.po_number, po.status, po.created_at, po.ordered_quantity, po.price, "
+    "po.decision_id, po.material_number, "
+    "l.name AS location_name, s.name AS supplier_name, c.name AS commodity_name "
+    "FROM sap_mock_purchase_orders po "
+    "LEFT JOIN decisions d ON d.id = po.decision_id "
+    "LEFT JOIN locations l ON l.id = d.target_location_id "
+    "LEFT JOIN suppliers s ON s.id = po.supplier_id "
+    "LEFT JOIN commodities c ON c.id = d.commodity_id "
+    "WHERE po.po_number = :nomor"
+)
+
+_SELECT_PERSETUJUAN = (
+    "SELECT a.approved, a.comment, a.approved_at, u.name, u.role "
+    "FROM approvals a JOIN users u ON u.id = a.approved_by "
+    "WHERE a.decision_id = :keputusan "
+    "ORDER BY a.approved_at ASC, a.id ASC"
+)
+
+
+@router.get("/sap/purchase-orders/{po_number}/pdf")
+async def unduh_purchase_order_pdf(
+    po_number: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    """Unduh satu purchase order sebagai PDF, lengkap dengan dasar persetujuannya.
+
+    Cakupan sama dengan daftar (`core/scope.py`): PO di luar lokasi peran SPPG
+    dijawab 404 — sama seperti daftar yang tidak memuatnya, supaya keberadaan
+    PO lokasi lain tidak bocor lewat pesan galat.
+    """
+    lokasi = scope_location_id(user)
+    sql = _SELECT_SATU
+    params: dict = {"nomor": po_number}
+    if lokasi is not None:
+        sql += " AND d.target_location_id = :lokasi"
+        params["lokasi"] = str(lokasi)
+
+    row = (await db.execute(text(sql), params)).mappings().first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="purchase order tidak ditemukan")
+
+    if row["decision_id"] is None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"PO {row['po_number']} tidak lahir dari keputusan — PDF hanya "
+                "diterbitkan untuk PO yang sudah disetujui"
+            ),
+        )
+
+    keputusan = (
+        await db.execute(select(Decision).where(Decision.id == row["decision_id"]))
+    ).scalar_one_or_none()
+    if keputusan is None:
+        raise HTTPException(status_code=404, detail="purchase order tidak ditemukan")
+    if not po_document.boleh_pdf(keputusan.status):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"keputusan {po_document.status_keputusan_label(keputusan.status).lower()} "
+                "— PDF PO diterbitkan setelah keputusan disetujui"
+            ),
+        )
+
+    persetujuan = [
+        {
+            "role": r["role"],
+            "name": r["name"],
+            "approved": bool(r["approved"]),
+            "comment": r["comment"],
+            "approved_at": r["approved_at"],
+        }
+        for r in (await db.execute(text(_SELECT_PERSETUJUAN), {"keputusan": str(keputusan.id)}))
+        .mappings()
+        .all()
+    ]
+    syarat = syarat_persetujuan(keputusan)
+    hasil = evaluate_approvals(
+        syarat, [{"role": b["role"], "approved": b["approved"]} for b in persetujuan]
+    )
+
+    qty = float(row["ordered_quantity"])
+    harga = float(row["price"])
+    pdf = po_document.bangun_pdf(
+        {
+            "po_number": row["po_number"],
+            "status": row["status"],
+            "created_at": row["created_at"],
+            "ordered_quantity": qty,
+            "price": harga,
+            # Satu aturan dengan endpoint daftar: total = harga × kuantitas.
+            "total": round(harga * qty, 2),
+            "material_number": row["material_number"],
+            "commodity_name": row["commodity_name"],
+            "location_name": row["location_name"],
+            "supplier_name": row["supplier_name"],
+            "keputusan": {
+                "id": str(keputusan.id),
+                "jenis": keputusan.decision_type,
+                "status": keputusan.status,
+                "iteration": keputusan.iteration,
+                "proposed_by": keputusan.proposed_by,
+                "created_at": keputusan.created_at,
+                "expires_at": keputusan.expires_at,
+            },
+            "persetujuan": persetujuan,
+            "syarat": {
+                "min_approvals": syarat.get("min_approvals"),
+                "required_roles": syarat.get("required_roles"),
+                "satisfied": hasil["satisfied"],
+            },
+            "dibuat_pada": datetime.now(timezone.utc),
+        }
+    )
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{po_document.nama_berkas(row["po_number"])}"'
+            ),
+            # Dokumen dibuat per permintaan dari baris DB terbaru; cache bisa
+            # menyajikan PDF lama setelah status PO/approval berubah.
+            "Cache-Control": "no-store",
+        },
+    )

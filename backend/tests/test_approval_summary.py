@@ -319,20 +319,19 @@ def test_approval_summary_canonical_fields(client):
     """
     did = _mk_decision(_jakarta_id(), _jakarta_id())
     try:
-        # Kanonik 8 Okt punya TIGA batch telur → Jakarta (Supplier A, Bogor-1, D Cianjur),
-        # jadi pemasok memang TIDAK boleh ditebak dari data sumber — aturan produk
-        # menuntut "satu pemasok ATAU binding eksplisit". Keputusan kanonik ini
-        # diikat eksplisit ke batch Supplier A supaya pemasoknya terdefinisi tanpa
-        # menebak (dan `supplier_unknown` tetap tidak muncul).
+        # Dataset 19 Okt 2026 punya BEBERAPA pemasok telur lokal di Jakarta, jadi
+        # pemasok TIDAK boleh ditebak dari data sumber — aturan produk menuntut
+        # "satu pemasok ATAU binding eksplisit". Keputusan ini diikat eksplisit ke
+        # satu batch, dan pemasok yang diharapkan DIBACA dari baris itu (bukan
+        # nama yang ditulis di tes), supaya memperluas dataset tidak memerahkan tes.
         baris = _db_all(
-            "SELECT b.id, b.supplier_id FROM batches b "
+            "SELECT b.id, b.supplier_id, s.name FROM batches b "
             "JOIN suppliers s ON s.id=b.supplier_id "
             "JOIN commodities c ON c.id=b.commodity_id "
             "JOIN locations l ON l.id=b.location_id "
-            "WHERE s.name='Supplier A Cianjur' AND c.name='telur' "
-            "AND l.name='Jakarta' LIMIT 1"
+            "WHERE c.name='telur' AND l.name='Jakarta' LIMIT 1"
         )
-        assert baris, "batch kanonik Supplier A → Jakarta (telur) tidak ada"
+        assert baris, "batch telur → Jakarta tidak ada di dataset kanonik"
         _ikat_batch(did, str(baris[0][1]), [str(baris[0][0])])
         # Verifikasi server-side dengan verdict terkunci (FLAGGED → dua grup).
         _kunci_verdict("FLAGGED")
@@ -361,12 +360,12 @@ def test_approval_summary_canonical_fields(client):
         assert body["cost_breakdown"] is not None
         assert body["execution_target"] == "MOCK"
         assert body["material_number"] == "MAT-TELUR"
-        # Sejak Fase 10 ada kiriman kanonik Supplier A Cianjur → Jakarta (telur), jadi
+        # Sejak Fase 10 ada kiriman kanonik Koperasi Telur Cipanas Bersama → Jakarta (telur), jadi
         # pemasok untuk keputusan telur Jakarta BISA disimpulkan dari batch sumber
         # (satu pemasok, tidak ambigu). Aturan "jangan menebak pemasok" tetap berlaku
         # dan diuji di test_approval_summary_or_complete_then_execute_parity[missing]
         # lewat komoditas yang memang belum punya kiriman ke Jakarta.
-        assert body["supplier"]["name"] == "Supplier A Cianjur"
+        assert body["supplier"]["name"] == baris[0][2]
         assert not any("supplier_unknown" in r for r in body["blocking_reasons"])
         # Verifier hasil server (bukan karangan UI).
         assert body["verifier"]["verdict"] in {

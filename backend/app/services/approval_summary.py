@@ -53,6 +53,16 @@ def _requirement_for(decision: Decision) -> dict:
     return approval_requirement(_verdict_of(decision), dua_role_wajib=operasional)
 
 
+def syarat_persetujuan(decision: Decision) -> dict:
+    """Requirement approval satu keputusan, untuk pemakai di luar modul ini.
+
+    Wrapper publik dari `_requirement_for`: dokumen PO perlu menyebut syarat
+    yang sama dengan gate /actions/approve, dan menyalin aturan matriks ke
+    modul lain akan membuat keduanya bisa menyimpang.
+    """
+    return _requirement_for(decision)
+
+
 async def _supplier_for(db: AsyncSession, decision: Decision) -> Supplier | None:
     """Supplier yang akan dipakai execute (logika sama, hasil parity)."""
     if decision.decision_type in exclusions.ADMIN_TYPES:
@@ -71,6 +81,19 @@ async def _supplier_for(db: AsyncSession, decision: Decision) -> Supplier | None
         return (
             await db.execute(select(Supplier).where(Supplier.id == exclusion.supplier_id))
         ).scalar_one_or_none()
+    # Pengadaan pemasok (Demo Control 2026-10-19): identitas pemasok ADA di
+    # kolom `decisions.supplier_id`. Menebaknya lewat resolve_binding salah
+    # jalur — pengadaan tidak punya batch di lokasi ASAL (source_location_id
+    # NULL), jadi binding akan 409 dan summary kehilangan nama pemasok.
+    if decision.decision_type == "supplier_procurement":
+        if decision.supplier_id is None:
+            return None
+        return (
+            await db.execute(
+                select(Supplier).where(Supplier.id == decision.supplier_id)
+            )
+        ).scalar_one_or_none()
+
     from app.services.supplier_eligibility import resolve_binding
 
     supplier_id, _ = await resolve_binding(db, decision)

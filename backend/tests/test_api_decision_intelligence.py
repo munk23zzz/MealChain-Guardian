@@ -113,22 +113,45 @@ def test_balance_endpoint_returns_gap_facts(client):
     assert body["status"] == expected_status
 
 
+def _pasangan_tanpa_demand() -> tuple[str, str] | None:
+    """Pasangan (lokasi, komoditas) yang punya PASOKAN tetapi belum ada demand."""
+    with _db().connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT l.name, c.name FROM supply_records s "
+                "JOIN locations l ON l.id = s.location_id "
+                "JOIN commodities c ON c.id = s.commodity_id "
+                "WHERE NOT EXISTS ("
+                "  SELECT 1 FROM demand_records d "
+                "  WHERE d.location_id = s.location_id "
+                "  AND d.commodity_id = s.commodity_id"
+                ") ORDER BY l.name, c.name LIMIT 1"
+            )
+        ).first()
+    return (row[0], row[1]) if row else None
+
+
 def test_balance_endpoint_surplus_city_without_demand(client, monitor_headers):
-    """Cianjur tanpa demand rows → demand 0, surplus murni.
+    """Pasokan tanpa baris permintaan → demand 0, surplus murni.
 
-    Dibaca sebagai bgn_monitor: Cianjur bukan lokasi kepala SPPG Jakarta
-    (Ruling 2026-10-14), dan tes ini menguji arti surplus, bukan cakupan.
-
-    Pasokan acuan diambil dari baris TERBARU di DB (deret aktual kini sampai
-    5 Nov), bukan angka panel demo lama 1400.0 — surplus = supply - 0.
+    Dulu kasus ini dipaku ke Cianjur/telur ("Cianjur sengaja tanpa demand").
+    Sejak deret permintaan 19 Okt 2026 mencakup SEMUA pasangan lokasi×komoditas,
+    keadaan itu tidak ada lagi di dataset — jadi pasangannya DICARI saat tes
+    berjalan, dan tes SKIP bila memang mustahil dibentuk. Melonggarkan asersinya
+    (mis. "demand 0 itu opsional") akan menghapus arti tes ini.
     """
-    supply_ref = _db_latest_quantity_kg("supply", "Cianjur", "telur")
-    demand_ref = _db_latest_quantity_kg("demand", "Cianjur", "telur")
-    assert supply_ref is not None, "seed wajib punya supply Cianjur/telur"
-    assert demand_ref is None, "Cianjur sengaja tanpa baris demand"
+    pasangan = _pasangan_tanpa_demand()
+    if pasangan is None:
+        pytest.skip("semua lokasi×komoditas punya baris demand; kasus ini mustahil")
+
+    lokasi, komoditas = pasangan
+    supply_ref = _db_latest_quantity_kg("supply", lokasi, komoditas)
+    demand_ref = _db_latest_quantity_kg("demand", lokasi, komoditas)
+    assert supply_ref is not None, f"seed wajib punya supply {lokasi}/{komoditas}"
+    assert demand_ref is None, f"{lokasi}/{komoditas} harus tanpa baris demand"
     expected_surplus, expected_shortage, _ = _gap_from_refs(supply_ref, 0)
 
-    resp = client.get("/balance/Cianjur/telur", headers=monitor_headers)
+    resp = client.get(f"/balance/{lokasi}/{komoditas}", headers=monitor_headers)
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["supply_kg"] == float(supply_ref)

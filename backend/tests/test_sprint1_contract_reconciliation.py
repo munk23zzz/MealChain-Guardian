@@ -10,11 +10,21 @@ Dua test lainnya adalah pengaman regresi: migration rekonsiliasi TIDAK
 boleh mengubah jumlah baris maupun kontrak source/supplier.
 """
 
+import json
+from pathlib import Path
+
 from sqlalchemy import create_engine, text
 
 from app.seed.suppliers_demo import load_demo_rows
 
 DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+SEED_JSON = Path("/data/seed/sprint1_seed.json")
+
+
+def _harga_seed() -> list[dict]:
+    """Baris `prices` dari berkas seed — sumber angka, bukan konstanta tes."""
+    with open(SEED_JSON, encoding="utf-8") as f:
+        return json.load(f)["prices"]
 
 
 def test_price_signals_has_no_seed_key_column():
@@ -64,18 +74,16 @@ def test_reconciliation_preserves_row_counts():
                     "WHERE source='supplier_quote' AND origin='seed'"
                 )
             ).scalar()
-        # Komoditas ke-4 (beras) menambah 10 referensi + 3 quote; angka kanonik
-        # telur/ayam/wortel tidak berubah.
-        assert prices == 57
-        # Fase 2 (2026-10-14): pemasok DEMO (data/seed/suppliers_demo.json)
-        # supaya pemasok bisa ditampilkan di peta. `suppliers` = kanonik (17 di
-        # sprint1_seed.json, kini termasuk 3 pemasok beras) + demo; keutuhan nama,
-        # skor, dan id diverifikasi terpisah di tests/test_suppliers_data.py.
-        # 3 baris demo beras = overlay koordinat pemasok kanonik bernama sama,
-        # jadi jumlah baris = kanonik + demo − 3 (bukan penjumlahan mentah).
-        assert suppliers == 17 + len(load_demo_rows()) - 3
-        assert refs == 40
-        assert quotes == 17
+        # Angka TURUNAN dari berkas seed, bukan konstanta: dataset 19 Okt 2026
+        # memuat 40 pasangan lokasi×komoditas (10 referensi + kutipan lokal per
+        # kota). Dulu 40 referensi + 17 kutipan = 57.
+        harga = _harga_seed()
+        assert refs == sum(1 for r in harga if r["source"] == "pihps_reference")
+        assert quotes == sum(1 for r in harga if r["source"] == "supplier_quote")
+        assert prices == refs + quotes
+        # Berkas demo kini MASTER: jumlah baris = jumlah baris berkas (tidak ada
+        # lagi 17 kanonik legacy + overlay).
+        assert suppliers == len(load_demo_rows())
     finally:
         engine.dispose()
 

@@ -31,6 +31,7 @@ from app.models import (
     PriceSignal,
     Supplier,
 )
+from app.services.demo_cost import hitung_biaya_demo
 
 DEMO_TAG = "demo-aktivitas"
 
@@ -46,8 +47,48 @@ ROTASI = (
     {"state": "di_jalan", "berangkat_menit": -12, "panen_jam": -20},
 )
 
-MUTU = ("pass", "pass", "pending", "needs_verification")
+MUTU = ("pass", "pass", "needs_verification")
 SERTIFIKASI = ("haccp", "hygiene", "none")
+
+# ── Log suhu batch demo (19 Okt 2026) ──────────────────────────────────────
+# Dulu `temperature_log` selalu `[]` padahal `safety_status` dirotasi
+# pass/pending/needs_verification. Akibatnya kartu keamanan menampilkan batch
+# tanpa satu pun pembacaan, dan status FAIL/PASS tidak punya bukti. Log ini
+# deterministik (dari id batch, bukan acak) dan KONSISTEN dengan statusnya.
+SUHU_AMAN_C = 4.0
+SUHU_EXCURSION_C = 12.0
+
+
+def _log_suhu(batch_id, panen: datetime, status: str) -> list[dict]:
+    """Pembacaan suhu yang KONSISTEN dengan status batch.
+
+    Kontrak mesin (`core/temperature.py`): menit-di-luar dihitung dari jarak
+    ke sampel berikutnya. Karena itu:
+      - pass               → 6 sampel per jam di 4,0–4,4 °C (0 menit di luar).
+      - needs_verification → satu simpangan 12 °C yang ditutup 10 menit
+        kemudian: 10 menit di luar, di bawah ambang FAIL 30 menit.
+    Status `pending` tidak dipakai untuk batch demo: tanpa evaluasi, log-nya
+    akan berbunyi "pass" dan status tersimpan jadi bertentangan.
+    """
+    benih = abs(hash(str(batch_id))) % 100
+    dasar = round(SUHU_AMAN_C + (benih % 5) / 10, 1)  # 4,0–4,4 °C
+
+    def titik(menit: float, suhu: float) -> dict:
+        return {
+            "timestamp": (panen + timedelta(minutes=menit)).isoformat(),
+            "temperature_c": suhu,
+        }
+
+    if status == "fail":
+        log = [titik(60 * h, dasar) for h in range(3)]
+        log += [titik(180, SUHU_EXCURSION_C), titik(240, SUHU_EXCURSION_C)]
+        log += [titik(300, dasar)]
+        return log
+    if status == "needs_verification":
+        log = [titik(60 * h, dasar) for h in range(3)]
+        log += [titik(180, SUHU_EXCURSION_C), titik(190, dasar), titik(240, dasar)]
+        return log
+    return [titik(60 * h, dasar) for h in range(6)]
 
 #: Harga PO demo per komoditas (Rp/kg). Satu angka untuk semua komoditas membuat
 #: beras tercatat Rp25.132/kg — 89% di atas pasar — dan itu terbaca sebagai
@@ -150,7 +191,7 @@ async def seed_demo_activity(session: AsyncSession, now: datetime) -> dict:
                 ),
                 "quantity_kg": Decimal(200 + ((i * 7 + j * 13) % 9) * 100),
                 "harvested_at": panen,
-                "temperature_log": [],
+                "temperature_log": _log_suhu(id_batch, panen, MUTU[(i + j) % len(MUTU)]),
                 "certification_status": SERTIFIKASI[(i + j) % len(SERTIFIKASI)],
                 "freshness_score": Decimal("0.82"),
                 "safety_status": MUTU[(i + j) % len(MUTU)],
@@ -166,9 +207,18 @@ async def seed_demo_activity(session: AsyncSession, now: datetime) -> dict:
             else:
                 for k, v in nilai.items():
                     setattr(ada, k, v)
-    # Buang kiriman demo yang tidak lagi punya slot (mis. lokasi/pemasok berubah).
+    # Buang HANYA batch milik namespace penyemai ini yang tidak lagi punya slot
+    # (mis. lokasi/pemasok berubah). `origin='demo'` juga dipakai
+    # `jakarta_lengkap`; filter origin saja akan menghapus 40 batch kaya itu dan
+    # membuat tes/suite lain kehabisan batch segar.
+    id_milik = {
+        demo_batch_id(loc.name, sup.name, kom)
+        for loc in lokasi
+        for sup in pemasok
+        for kom in tersedia
+    }
     usang = delete(Batch).where(
-        Batch.origin == "demo", Batch.id.notin_(id_dipakai)
+        Batch.id.in_(id_milik), Batch.id.notin_(id_dipakai)
     )
     hasil_usang = await session.execute(usang)
     dihapus = hasil_usang.rowcount or 0
@@ -300,7 +350,12 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
             "target_location_id": loc.id,
             "commodity_id": komoditas[nama_komoditas],
             "quantity_kg": Decimal(600),
-            "safe_delivered_cost": Decimal("15079436.39"),
+            #: Biaya TIDAK ditulis tangan: `hitung_biaya_demo` menghitungnya
+            #: dari batch, kutipan pemasok, rute, kesegaran, dan status
+            #: keamanan setelah baris ini tersimpan (audit 19 Okt 2026).
+            "safe_delivered_cost": None,
+            "cost_breakdown": None,
+            "supplier_id": sup.id,
             #: Baris ini RIWAYAT yang sudah dieksekusi, bukan pekerjaan tertunda.
             #: Tenggat 2 jam dulu membuatnya tampil "decision expired" dua jam
             #: setelah disemai — penghalang palsu pada keputusan yang sudah tutup.
@@ -311,7 +366,8 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
         }
         ada = await db.get(Decision, did)
         if ada is None:
-            db.add(Decision(**nilai))
+            keputusan = Decision(**nilai)
+            db.add(keputusan)
             dibuat += 1
         else:
             for k, v in nilai.items():
@@ -356,9 +412,24 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
                 freshness_score=Decimal("0.92"),
                 origin="demo",
                 generated_at=now,
-                temperature_log=[],
+                temperature_log=_log_suhu(
+                    demo_batch_id(nama_kota, sup.name, nama_komoditas), panen, "pass"
+                ),
             )
             db.add(batch_sumber)
+        elif batch_sumber.supplier_id != sup.id:
+            # Batch lama bisa berasal dari pemasok lain. Keputusan, batch, dan
+            # biaya harus menunjuk pemasok yang SAMA; menambah batch baru untuk
+            # pasangan yang sudah punya stok akan menggandakan persediaan dan
+            # id deterministiknya bentrok saat disemai ulang.
+            batch_sumber.supplier_id = sup.id
+
+        # Biaya dihitung dari baris yang baru saja dipastikan ada
+        # pemasok, harga, rute, kesegaran, status keamanan) — bukan angka
+        # literal. `hitung_biaya_demo` mengembalikan False bila bahannya tidak
+        # ada; dalam hal itu kolom biaya dibiarkan kosong, bukan dikarang.
+        await db.flush()
+        await hitung_biaya_demo(db, ada if ada is not None else keputusan, now)
 
         for etype, menit in BUKTI_SEBELUM_APPROVAL:
             bukti_id = uuid.uuid5(did, f"bukti:{etype}")

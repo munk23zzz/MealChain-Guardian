@@ -101,10 +101,10 @@ def test_supplier_quotes_persisted_as_price_signals(sync_engine):
             )
         ).fetchall()
         prices = {r[0]: float(r[1]) for r in rows}
-        assert prices["Supplier A Cianjur"] == 26200.0
-        assert prices["Supplier B Cianjur"] == 27000.0
-        assert prices["Supplier C Cianjur"] == 32000.0
-        assert prices["Supplier D Cianjur"] == 25400.0
+        assert prices["Koperasi Telur Cipanas Bersama"] == 26200.0
+        assert prices["UD H. Asep Cianjur"] == 27000.0
+        assert prices["UD Cipanas Telur Sejahtera"] == 32000.0
+        assert prices["CV Barokah Telur Cianjur"] == 25400.0
 
 
 def test_seed_batches_bands_and_safety_fail(sync_engine):

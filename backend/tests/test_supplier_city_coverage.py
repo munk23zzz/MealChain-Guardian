@@ -35,15 +35,23 @@ def test_every_city_has_local_supplier_quote():
     )
 
 
-def test_local_suppliers_named_after_their_city():
-    """Supplier lokal memakai nama wilayah (mis. 'Supplier Semarang-1')."""
-    rows = build_seed_rows(REF)["price_signals"]
-    for r in rows:
+def test_local_suppliers_are_registered_at_their_city():
+    """Kutipan pemasok harus berasal dari pemasok yang TERDAFTAR di kota itu.
+
+    Versi lama tes ini menuntut nama pemasok memuat nama kota ("Supplier
+    Semarang-1"). Sejak dataset 19 Okt 2026 nama memakai nama usaha nyata
+    (CV/UD/PT/Koperasi + nama pasar/sentra), jadi yang diuji adalah FAKTA
+    keanggotaannya — bukan pola nama. Aturannya tetap: kutipan lokal harus
+    datang dari pemasok lokal, bukan dari pemasok kota lain.
+    """
+    data = build_seed_rows(REF)
+    lokasi_pemasok = {s["name"]: s["location"] for s in data["suppliers"]}
+    for r in data["price_signals"]:
         if r["source"] != "supplier_quote":
             continue
-        city = r["location"]
-        assert city in r["supplier"], (
-            f"nama supplier '{r['supplier']}' tidak memuat wilayah '{city}'"
+        assert lokasi_pemasok[r["supplier"]] == r["location"], (
+            f"kutipan {r['supplier']} di {r['location']} berasal dari pemasok "
+            f"yang terdaftar di {lokasi_pemasok[r['supplier']]}"
         )
 
 
@@ -56,17 +64,21 @@ def test_quotes_reference_still_forty_city_prices():
 
 def test_cianjur_locked_quotes_still_exact():
     rows = build_seed_rows(REF)["price_signals"]
+    # Hanya telur + beras yang dikunci; ayam/wortel Cianjur ikut punya kutipan
+    # lokal sejak dataset 19 Okt 2026, dan nilai keduanya tidak dijadikan jangkar.
     cianjur_quotes = {
         r["supplier"]: float(r["price_per_kg"])
         for r in rows
-        if r["location"] == "Cianjur" and r["source"] == "supplier_quote"
+        if r["location"] == "Cianjur"
+        and r["source"] == "supplier_quote"
+        and r["commodity"] in {"telur", "beras"}
     }
     assert cianjur_quotes == {
-        "Supplier A Cianjur": 26200.0,
-        "Supplier B Cianjur": 27000.0,
-        "Supplier C Cianjur": 32000.0,
-        "Supplier D Cianjur": 25400.0,
-        "Beras Pandan Wangi Cianjur": 12200.0,
+        "Koperasi Telur Cipanas Bersama": 26200.0,
+        "UD H. Asep Cianjur": 27000.0,
+        "UD Cipanas Telur Sejahtera": 32000.0,
+        "CV Barokah Telur Cianjur": 25400.0,
+        "CV Pandan Wangi Cianjur": 12200.0,
     }
 
 

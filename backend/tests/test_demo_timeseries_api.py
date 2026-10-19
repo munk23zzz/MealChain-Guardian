@@ -495,8 +495,21 @@ def test_data_status_membaca_db(demo_state, auth_headers):
     # Permintaan ikut dilaporkan: tanpa ini panel hanya melihat 3 tabel dan
     # menyembunyikan 864 baris permintaan demo.
     demand = body["tables"]["demand_records"]
-    assert demand["seed"] == 224
-    assert demand["demo"] == 864
+    # Angka seed TURUN dari DB (40 pasangan × 7 observasi), bukan konstanta:
+    # deret permintaan bertambah saat dataset diperluas.
+    with create_engine(DB_URL).connect() as conn:
+        seed_demand = int(
+            conn.execute(
+                text("SELECT count(*) FROM demand_records WHERE origin='seed'")
+            ).scalar()
+        )
+        demo_demand = int(
+            conn.execute(
+                text("SELECT count(*) FROM demand_records WHERE origin='demo'")
+            ).scalar()
+        )
+    assert demand["seed"] == seed_demand
+    assert demand["demo"] == demo_demand
     assert demand["demo_from"].startswith("2026-10-09T00:00:00")
     menu = body["tables"]["menu_plans"]
     assert menu["demo_to"].startswith("2026-11-05")
@@ -564,6 +577,31 @@ def _terbaru_semua(lokasi: str = "Cianjur", komoditas: str = "telur") -> str:
         engine.dispose()
     assert row is not None, "tidak ada baris supply untuk pasangan itu"
     return row.isoformat()
+
+
+def _batch_duplikat() -> int:
+    """Jumlah (pemasok, lokasi, komoditas, panen) dengan lebih dari satu batch.
+
+    Invariant setelah "Segarkan ke hari ini": batch di-UPDATE di tempat (id tidak
+    bergantung waktu referensi), jadi menyegarkan tidak boleh MELIPATKAN batch
+    yang sama. Jumlah baris boleh bertambah hanya karena pasangan yang tadinya
+    satu lot kini punya lot kedua di berkas seed.
+    """
+    engine = create_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            return int(
+                conn.execute(
+                    text(
+                        "SELECT coalesce(sum(n - 1), 0) FROM ("
+                        "SELECT count(*) AS n FROM batches "
+                        "GROUP BY supplier_id, location_id, commodity_id, harvested_at "
+                        "HAVING count(*) > 1) d"
+                    )
+                ).scalar()
+            )
+    finally:
+        engine.dispose()
 
 
 def _menu_duplikat() -> int:
@@ -729,7 +767,11 @@ def test_refresh_hari_ini_bergeser_dan_bisa_dikembalikan(
         # Batch memakai id yang TIDAK bergantung waktu referensi → ia di-UPDATE di
         # tempat (tanggal panen ikut pindah), bukan ditambah. Menambah baris di sini
         # akan berarti dua snapshot batch sekaligus.
-        assert sesudah_counts["batches"]["seed"] == before_counts["batches"]["seed"]
+        # Batch tidak boleh MENYUSUT; bertambah satu-dua lot sah bila berkas
+        # seed punya lot kedua untuk pasangan itu. Yang dilarang: batch ganda
+        # untuk (pemasok, lokasi, komoditas, panen) yang sama.
+        assert sesudah_counts["batches"]["seed"] >= before_counts["batches"]["seed"]
+        assert _batch_duplikat() == 0
 
         # Snapshot kanonik terbaru kini bertanggal HARI INI, nilainya tetap kanonik.
         recorded_seed, kg_sesudah = _seed_supply_terbaru()
@@ -759,6 +801,13 @@ def test_refresh_hari_ini_bergeser_dan_bisa_dikembalikan(
     sesudah_counts = _origin_counts()
     sebelum_keputusan = before_counts.pop("decisions", None)
     sesudah_keputusan = sesudah_counts.pop("decisions", None)
+    # `batches` dikecualikan dari perbandingan ketat: "Segarkan ke hari ini"
+    # memang MENYEMAI ULANG aktivitas demo (40 batch `origin='demo'`) — saat
+    # fixture tes mem-purge baris demo lebih dulu, jumlahnya sah berubah dari 0
+    # menjadi 40. Invariant yang dijaga tetap: batch kanonik tidak menyusut dan
+    # tidak ada batch ganda (diperiksa di dalam blok try di atas).
+    before_counts.pop("batches", None)
+    sesudah_counts.pop("batches", None)
     assert sesudah_counts == before_counts
     if sebelum_keputusan and sesudah_keputusan:
         assert sesudah_keputusan["demo"] >= sebelum_keputusan["demo"]

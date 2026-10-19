@@ -115,7 +115,7 @@ def test_biaya_dan_kelayakan_tidak_menghitung_ulang(monkeypatch):
         "quantity_kg": 600.0,
         "safe_delivered_cost": 9200000.0,
         "cost_breakdown": {"purchase": "15720000", "logistics": "486000"},
-        "supplier": {"name": "Supplier A Cianjur", "reliability_score": 0.92},
+        "supplier": {"name": "Koperasi Telur Cipanas Bersama", "reliability_score": 0.92},
         "safety": {"worst_status": "pass", "blocked": False, "batches_checked": 1},
         "verifier": {"verdict": "consistent", "verified_by": "verifier_agent"},
         "can_execute": False,
@@ -125,7 +125,7 @@ def test_biaya_dan_kelayakan_tidak_menghitung_ulang(monkeypatch):
     )
     hasil = tools.get_cost_eligibility("d-1")
     assert hasil["safe_delivered_cost"] == 9200000.0
-    assert hasil["supplier"] == "Supplier A Cianjur"
+    assert hasil["supplier"] == "Koperasi Telur Cipanas Bersama"
     assert hasil["can_execute"] is False
     assert hasil["safety_blocked"] is False
     assert hasil["sumber"].endswith("/approval-summary")

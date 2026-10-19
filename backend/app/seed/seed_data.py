@@ -825,7 +825,7 @@ def main() -> None:
 
         added = asyncio.run(seed_demo_suppliers())
         print(
-            f"Pemasok demo siap (30 baris, idempoten): baru {added['created']}, "
+            f"Pemasok demo siap (60 baris, idempoten): baru {added['created']}, "
             f"diperbarui {added['updated']}."
         )
     if not args.skip_routes:

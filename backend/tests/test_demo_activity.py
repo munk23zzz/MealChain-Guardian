@@ -22,10 +22,29 @@ from sqlalchemy import delete, select
 
 from app.core.config import settings
 from app.db import create_engine, create_session_maker
-from app.models import Batch
-from app.seed.demo_activity import seed_demo_activity
+from app.models import Batch, Commodity, Location, Supplier
+from app.seed.demo_activity import demo_batch_id, seed_demo_activity
 
 NOW = datetime(2026, 10, 17, 5, 0, tzinfo=UTC)
+
+
+async def _id_batch_demo(s) -> set:
+    """ID batch yang LAHIR dari `seed_demo_activity` untuk isi DB saat ini.
+
+    Pembersih lama menghapus SEMUA `origin='demo'`, termasuk 40 batch kaya
+    `jakarta_lengkap` yang dipakai tes pengadaan; suite penuh lalu kehabisan
+    batch segar dan gagal di berkas lain. `demo_batch_id` deterministik, jadi
+    himpunannya bisa dihitung tanpa menebak.
+    """
+    lokasi = (await s.execute(select(Location))).scalars().all()
+    pemasok = (await s.execute(select(Supplier))).scalars().all()
+    komoditas = (await s.execute(select(Commodity))).scalars().all()
+    return {
+        demo_batch_id(lok.name, sup.name, kom.name)
+        for lok in lokasi
+        for sup in pemasok
+        for kom in komoditas
+    }
 
 
 async def _jalankan(now: datetime = NOW) -> tuple[dict, list[Batch]]:
@@ -36,8 +55,15 @@ async def _jalankan(now: datetime = NOW) -> tuple[dict, list[Batch]]:
             hasil = await seed_demo_activity(s, now)
             await s.commit()
         async with maker() as s:
+            ids = await _id_batch_demo(s)
             baris = list(
-                (await s.execute(select(Batch).where(Batch.origin == "demo"))).scalars()
+                (
+                    await s.execute(
+                        select(Batch).where(
+                            Batch.origin == "demo", Batch.id.in_(ids)
+                        )
+                    )
+                ).scalars()
             )
         return hasil, baris
     finally:
@@ -49,7 +75,8 @@ async def _bersihkan() -> None:
     maker = create_session_maker(engine)
     try:
         async with maker() as s:
-            await s.execute(delete(Batch).where(Batch.origin == "demo"))
+            ids = await _id_batch_demo(s)
+            await s.execute(delete(Batch).where(Batch.id.in_(ids)))
             await s.commit()
     finally:
         await engine.dispose()

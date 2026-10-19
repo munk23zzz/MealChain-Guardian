@@ -88,7 +88,7 @@ def _price_api(
                 "quantity_kg": 600.0,
                 "safe_delivered_cost": 16206000.0,
                 "can_execute": valid,
-                "supplier": supplier if supplier is not None else {"name": "Supplier A Cianjur"},
+                "supplier": supplier if supplier is not None else {"name": "Koperasi Telur Cipanas Bersama"},
                 "expiry": {"valid": valid},
             },
         },

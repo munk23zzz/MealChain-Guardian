@@ -92,7 +92,7 @@ def _price_get() -> dict[str, object]:
             "quantity_kg": 600.0,
             "safe_delivered_cost": 16206000.0,
             "can_execute": False,
-            "supplier": {"id": "s1", "name": "Supplier A Cianjur", "reliability_score": 0.92},
+            "supplier": {"id": "s1", "name": "Koperasi Telur Cipanas Bersama", "reliability_score": 0.92},
             "expiry": {"valid": True, "seconds_remaining": 1000},
         },
     }
@@ -235,7 +235,7 @@ def test_logistics_membaca_rute_dan_jarak() -> None:
             path: {
                 "routes": [
                     {
-                        "supplier_name": "Supplier A Cianjur",
+                        "supplier_name": "Koperasi Telur Cipanas Bersama",
                         "destination_name": "Jakarta",
                         "commodity": "telur",
                         "road": {

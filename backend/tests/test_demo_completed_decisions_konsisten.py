@@ -36,7 +36,11 @@ from sqlalchemy import delete, select
 from app.core.config import settings
 from app.db import create_engine, create_session_maker
 from app.models import Approval, Batch, Decision, DecisionEvidence, User
-from app.seed.demo_activity import seed_demo_completed_decisions
+from app.seed.demo_activity import (
+    KOTA_DEMO,
+    demo_decision_id,
+    seed_demo_completed_decisions,
+)
 from app.services.approval_summary import build_approval_summary
 
 ROLE_WAJIB = {"sppg_head", "sppg_nutritionist"}
@@ -53,11 +57,22 @@ async def _jalankan() -> tuple[dict, list[Decision], dict]:
             await sesi.commit()
 
         async with maker() as sesi:
+            # Cakup HANYA baris yang lahir dari penyemai KPI ini. `jakarta_lengkap`
+            # juga menulis keputusan `origin='demo'`/`demo_case IS NULL`/`executed`
+            # (riwayat umum, bukan kasus penyemai ini), dan baris itu tidak punya
+            # jaminan dua approval + allocation_binding. Id penyemai deterministik
+            # (`demo_decision_id`), jadi himpunannya bisa dihitung tanpa menebak.
+            id_penyemai = {
+                demo_decision_id(nama, komoditas)
+                for nama in KOTA_DEMO
+                for komoditas in ("telur", "ayam", "wortel", "beras")
+            }
             keputusan = list(
                 (
                     await sesi.execute(
                         select(Decision)
                         .where(
+                            Decision.id.in_(id_penyemai),
                             Decision.origin == "demo",
                             Decision.demo_case.is_(None),
                             Decision.status == "executed",

@@ -35,7 +35,7 @@ from app.core.road_route import (
 
 FIXTURE = Path(__file__).parent / "fixtures" / "osrm_cianjur_jakarta.json"
 
-# Koordinat nyata: Supplier A Cianjur (7a/Fase 9) -> SPPG Jakarta (seed)
+# Koordinat nyata: Koperasi Telur Cipanas Bersama (7a/Fase 9) -> SPPG Jakarta (seed)
 ORIGIN = (-6.8420, 107.1426)
 DEST = (-6.2088, 106.8456)
 
@@ -211,7 +211,7 @@ def _kiriman(**ubah) -> dict:
     row = {
         "batch_id": "b-1",
         "supplier_id": "s-1",
-        "supplier_name": "Supplier A Cianjur",
+        "supplier_name": "Koperasi Telur Cipanas Bersama",
         "origin": {"latitude": ORIGIN[0], "longitude": ORIGIN[1], "name": "Cianjur"},
         "destination_id": "l-1",
         "destination_name": "Jakarta",

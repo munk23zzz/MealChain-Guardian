@@ -226,8 +226,14 @@ def test_baris_batch_aktif_hanya_yang_masih_layak():
         # kiriman kanonik ke Jakarta (ditambahkan Fase 10 atas keputusan pemilik)
         tujuan = {r["destination_name"] for r in rows}
         assert "Jakarta" in tujuan
-        # kedaluwarsa tidak ikut
-        assert "Palembang" not in tujuan  # C→Palembang habis 10 Sep 2026
+        # Kedaluwarsa tidak ikut — diuji PER BATCH, bukan per kota. Sejak beras
+        # (umur simpan 180 hari) ada di semua hub, tidak ada lagi kota yang
+        # seluruh batch-nya basi, jadi "kota X tidak muncul" bukan invarian.
+        semua = await batch_route_rows(db, NOW_UJI, semua_batch=True)
+        aktif = {r["batch_id"] for r in rows}
+        gugur = [r for r in semua if r["batch_id"] not in aktif]
+        assert gugur, "prasyarat: ada batch yang sudah lewat masa layak"
+        assert all(r["usable_until"] < NOW_UJI for r in gugur)
 
     asyncio.run(_kasus())
 

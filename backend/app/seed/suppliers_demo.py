@@ -1,28 +1,24 @@
-"""Seed pemasok demo Fase 2 + Fase 7 — 21 pemasok deterministik.
+"""Seed pemasok demo Fase 2 + Fase 7 — 60 pemasok deterministik.
 
 Latar: permintaan pemilik proyek (2026-10-14) agar pemasok bisa ditampilkan di
 peta, lalu (2026-10-15) agar pemasok contoh untuk SPPG Jakarta benar-benar
 terjangkau dari Jakarta — bukan perusahaan di Medan/Makassar yang berjarak
-ratusan kilometer. Data 14 pemasok kanonik tidak cukup (dan tidak punya
-koordinat/kapasitas), jadi ditambah 21 pemasok demo dari
-`data/seed/suppliers_demo.json`:
+ratusan kilometer. Profil 60 pemasok ada di `data/seed/suppliers_demo.json`;
+`data/seed/sprint1_seed.json` memuat daftar nama yang SAMA (sumber identitas).
 
 - **13 pemasok hub Jakarta** dengan koordinat ABSOLUT (`latitude`/`longitude`)
-  di Jakarta + kota penyangga (Bekasi, Depok, Tangerang, Bogor, Karawang,
-  Cisarua, Serang, Subang, Cianjur), jarak berjenjang 0-25 / 25-60 / 60-150 km.
-- **9 hub lain**: satu pemasok lokal per hub (jaring nasional untuk
-  `bgn_monitor` dan SPPG kota itu sendiri).
+  di Jakarta + kota penyangga (Bekasi, Depok, Tangerang, Karawang, Serang,
+  Subang, Puncak), jarak berjenjang 0-25 / 25-60 / 60-150 km.
+- **9 hub lain**: 5–7 pemasok lokal per hub (jaring nasional untuk
+  `bgn_monitor` dan SPPG kota itu sendiri), total 60 baris.
 
 Aturan yang dijaga modul ini:
 
-- **Aditif untuk kanonik, dan membersihkan sisanya.** 14 pemasok kanonik dari
-  `sprint1_seed.json` tidak pernah di-UPDATE di sini; sebaliknya baris demo yang
-  sudah tidak ada di berkas (mis. karena kotanya dipindah) DIHAPUS, supaya
-  database tidak menyimpan pemasok hantu yang tidak bisa dijelaskan.
-  SATU pengecualian yang disengaja: tiga pemasok beras (Beras Makmur Jakarta,
-  Beras Sari Bogor, Beras Pandan Wangi Cianjur) memang SENAMA dengan baris
-  kanonik, dan baris di berkas ini yang mengisi koordinat/kapasitas keduanya —
-  tanpa itu pin beras tidak punya lokasi dan "jarak dari SPPG" kosong. Penghapusan
+- **Satu daftar nama untuk kedua berkas.** 60 pemasok di berkas ini adalah
+  daftar yang SAMA dengan `sprint1_seed.json` (nama unik, tanpa duplikat), jadi
+  pemuat profil hanya MENGISI baris kanonik — bukan menggandakannya. Baris demo
+  yang sudah tidak ada di berkas (mis. karena kotanya dipindah) DIHAPUS, supaya
+  database tidak menyimpan pemasok hantu yang tidak bisa dijelaskan. Penghapusan
   ditolak keras bila ada baris lain yang menunjuknya (`batches`, `price_signals`,
   PO mock, eksklusi) - lebih baik gagal berisik daripada mencacah data.
 - **Deterministik.** Id = UUID5 dari natural key (`demo_supplier::<nama>`),
@@ -30,8 +26,8 @@ Aturan yang dijaga modul ini:
   tabel `OFFSETS` (tanpa random, tanpa panggilan geocoding).
 - **Idempoten.** Dijalankan berulang: baris yang sudah ada hanya diperbarui
   kolom profilnya, jumlah baris tidak bertambah.
-- **Terjangkau.** Setiap pemasok hub Jakarta wajib punya koordinat absolut dan
-  jaraknya dari SPPG Jakarta <= `REACH_KM_MAX` (150 km); baris yang melanggar
+- **Terjangkau.** Setiap pemasok wajib punya koordinat absolut dan jaraknya dari
+  hub tempat ia terdaftar <= `REACH_KM_MAX` (150 km); baris yang melanggar
   ditolak saat dimuat, bukan diam-diam tampil di peta.
 
 Jalankan: `python -m app.seed.suppliers_demo` (atau lewat
@@ -92,11 +88,11 @@ OFFSETS: tuple[tuple[float, float], ...] = (
 
 CERTIFICATIONS = {"none", "hygiene", "haccp"}
 
-# Ambang "terjangkau" untuk klaster Jakarta (keputusan pemilik 2026-10-15:
-# Jabodetabek + penyangga Jawa Barat <= 150 km). Ini aturan DATA, bukan aturan
-# API: penyaringan per peran di endpoint ada di Fase 7b dan bersifat relevansi.
+# Ambang "terjangkau" untuk SEMUA hub (keputusan pemilik 2026-10-15, diperluas
+# 2026-10-20): pemasok harus <= 150 km dari hub tempat ia terdaftar. Ini aturan
+# DATA, bukan aturan API: penyaringan per peran di endpoint ada di Fase 7b dan
+# bersifat relevansi.
 REACH_KM_MAX = 150.0
-REACH_REFERENCE_HUB = "Jakarta"
 
 # Batas Indonesia (longgar) - menangkap koordinat tertukar lat/long atau salah benua.
 INDONESIA_LAT = (-11.5, 6.5)
@@ -162,22 +158,23 @@ def load_demo_rows(
         elif "offset_index" not in row or row["offset_index"] not in range(len(OFFSETS)):
             raise ValueError(f"offset_index tidak dikenal: {name}")
 
-        if hub_coords is not None and row["location"] == REACH_REFERENCE_HUB:
-            if lat is None:
-                raise ValueError(
-                    f"Pemasok hub {REACH_REFERENCE_HUB} wajib berkoordinat absolut: {name}"
-                )
-            ref = hub_coords.get(REACH_REFERENCE_HUB)
-            if ref is None:
-                raise ValueError(
-                    f"Titik hub {REACH_REFERENCE_HUB} tidak tersedia untuk memeriksa jarak: {name}"
-                )
-            distance = haversine_km(float(lat), float(lon), ref[0], ref[1])
-            if distance > REACH_KM_MAX:
-                raise ValueError(
-                    f"Pemasok hub {REACH_REFERENCE_HUB} di luar jangkauan "
-                    f"{REACH_KM_MAX:.0f} km: {name} ({distance:.1f} km)"
-                )
+        # Aturan jangkauan berlaku untuk SEMUA hub (bukan hanya Jakarta):
+        # pemasok yang terdaftar di sebuah hub harus bisa dijangkau dari hub itu.
+        # Baris tanpa koordinat absolut DITOLAK saat pemeriksaan jarak aktif —
+        # pin tanpa titik tidak bisa dibuktikan dekat, jadi tidak boleh lolos.
+        if hub_coords is not None:
+            ref = hub_coords.get(row["location"])
+            if ref is not None:
+                if lat is None:
+                    raise ValueError(
+                        f"Pemasok hub {row['location']} wajib berkoordinat absolut: {name}"
+                    )
+                distance = haversine_km(float(lat), float(lon), ref[0], ref[1])
+                if distance > REACH_KM_MAX:
+                    raise ValueError(
+                        f"Pemasok hub {row['location']} di luar jangkauan "
+                        f"{REACH_KM_MAX:.0f} km: {name} ({distance:.1f} km)"
+                    )
     return rows
 
 

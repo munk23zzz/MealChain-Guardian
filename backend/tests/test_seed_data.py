@@ -88,10 +88,10 @@ def test_build_seed_rows_price_signals_suppliers() -> None:
         for r in rows["price_signals"]
         if r["source"] == "supplier_quote"
     }
-    assert quotes["Supplier A Cianjur"] == 26200.0
-    assert quotes["Supplier B Cianjur"] == 27000.0
-    assert quotes["Supplier C Cianjur"] == 32000.0
-    assert quotes["Supplier D Cianjur"] == 25400.0
+    assert quotes["Koperasi Telur Cipanas Bersama"] == 26200.0
+    assert quotes["UD H. Asep Cianjur"] == 27000.0
+    assert quotes["UD Cipanas Telur Sejahtera"] == 32000.0
+    assert quotes["CV Barokah Telur Cianjur"] == 25400.0
     refs_cianjur = [
         r
         for r in rows["price_signals"]

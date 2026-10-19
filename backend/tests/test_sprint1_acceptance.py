@@ -60,10 +60,17 @@ def test_acceptance_2_safety_fail_not_overridable_via_api(client):
                     # filter dulu mengambil batch hasil penyemai demo (tanpa
                     # excursion) begitu sesi lain menambah baris, sehingga tes
                     # merah walau aturan safety-nya benar.
+                    # Batch yang PROFILNYA memang gagal safety: pasangan
+                    # (Surabaya, telur) ber-`safety_fail` di generator dan lot
+                    # 1-nya ber-`safety_status='fail'`. Memilih batch Surabaya
+                    # pertama (ORDER BY id) kini bisa lot sehat → evaluasi
+                    # menjawab PASS dan tes gagal walau aturannya benar.
                     "SELECT b.id FROM batches b "
                     "JOIN locations l ON l.id=b.location_id "
-                    "WHERE l.name='Surabaya' AND b.origin='seed' "
-                    "ORDER BY b.id LIMIT 1"
+                    "JOIN commodities c ON c.id=b.commodity_id "
+                    "WHERE l.name='Surabaya' AND c.name='telur' "
+                    "AND b.origin='seed' AND b.safety_status='fail' "
+                    "ORDER BY b.harvested_at, b.id LIMIT 1"
                 )
             ).scalar_one()
         )

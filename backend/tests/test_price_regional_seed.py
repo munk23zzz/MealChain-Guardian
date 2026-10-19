@@ -107,9 +107,9 @@ def test_locked_quotes_have_unique_supplier_sources():
     by_supplier = {
         r["supplier"]: float(r["price_per_kg"]) for r in quotes
     }
-    assert by_supplier["Supplier A Cianjur"] == 26200.0
-    assert by_supplier["Supplier B Cianjur"] == 27000.0
-    assert by_supplier["Supplier C Cianjur"] == 32000.0
+    assert by_supplier["Koperasi Telur Cipanas Bersama"] == 26200.0
+    assert by_supplier["UD H. Asep Cianjur"] == 27000.0
+    assert by_supplier["UD Cipanas Telur Sejahtera"] == 32000.0
 
 
 def test_cianjur_reference_still_locked():

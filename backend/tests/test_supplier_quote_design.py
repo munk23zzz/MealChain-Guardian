@@ -17,10 +17,10 @@ def test_seed_defines_four_suppliers_including_d():
     suppliers = build_seed_rows(REF)["suppliers"]
     names = {s["name"] for s in suppliers}
     assert {
-        "Supplier A Cianjur",
-        "Supplier B Cianjur",
-        "Supplier C Cianjur",
-        "Supplier D Cianjur",
+        "Koperasi Telur Cipanas Bersama",
+        "UD H. Asep Cianjur",
+        "UD Cipanas Telur Sejahtera",
+        "CV Barokah Telur Cianjur",
     } <= names
 
 
@@ -40,10 +40,10 @@ def test_quotes_use_generic_source_with_supplier_name():
         for r in quotes
         if r["commodity"] == "telur"
     }
-    assert by_supplier["Supplier A Cianjur"] == 26200.0
-    assert by_supplier["Supplier B Cianjur"] == 27000.0
-    assert by_supplier["Supplier C Cianjur"] == 32000.0
-    assert by_supplier["Supplier D Cianjur"] == 25400.0
+    assert by_supplier["Koperasi Telur Cipanas Bersama"] == 26200.0
+    assert by_supplier["UD H. Asep Cianjur"] == 27000.0
+    assert by_supplier["UD Cipanas Telur Sejahtera"] == 32000.0
+    assert by_supplier["CV Barokah Telur Cianjur"] == 25400.0
 
 
 def test_quotes_carry_no_supplier_initials_in_source():

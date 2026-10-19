@@ -48,6 +48,10 @@ FIELDS = {
     "supplier_id",
     "supplier_name",
     "material_number",
+    # Nama komoditas dari relasi keputusan (bukan tebakan dari kode bahan:
+    # seeder memakai `MAT-{nama[:4]}` sehingga `MAT-BERA` bukan kata yang layak
+    # ditampilkan). NULL untuk baris impor tanpa keputusan.
+    "commodity_name",
     "ordered_quantity_kg",
     "price_per_kg",
     "total_value",
@@ -155,6 +159,40 @@ def test_filter_status_dan_validasi(client, monitor_headers):
     assert resp.status_code == 200, resp.text
     assert {r["status"] for r in resp.json()["items"]} == {"confirmed"}
     assert _get(client, monitor_headers, status="hilang").status_code == 422
+
+
+def test_nama_komoditas_dari_keputusan_bukan_tebakan_kode(client, monitor_headers):
+    """Baris ber-keputusan membawa nama komoditas relasional; baris impor tidak.
+
+    Panel tidak boleh menebak dari `material_number`: seeder memakai
+    `MAT-{nama[:4]}` (`MAT-BERA`), sehingga tebakan menghasilkan kata rusak
+    ("Bera") di layar.
+    """
+    items = _get(client, monitor_headers, limit=200).json()["items"]
+    ber_keputusan = [r for r in items if r["decision_id"]]
+    assert ber_keputusan, "seed demo punya PO ber-keputusan"
+    for row in ber_keputusan:
+        assert row["commodity_name"], row["po_number"]
+        assert row["commodity_name"] != row["material_number"]
+    # ground truth: nama itu memang nama komoditas keputusannya, bukan karangan
+    contoh = ber_keputusan[0]
+    engine = create_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            harap = conn.execute(
+                text(
+                    "SELECT c.name FROM decisions d JOIN commodities c "
+                    "ON c.id = d.commodity_id WHERE d.id = :id"
+                ),
+                {"id": contoh["decision_id"]},
+            ).scalar_one()
+    finally:
+        engine.dispose()
+    assert contoh["commodity_name"] == harap
+    # baris tanpa keputusan tidak punya komoditas — jangan dikarang
+    for row in items:
+        if row["decision_id"] is None:
+            assert row["commodity_name"] is None, row["po_number"]
 
 
 def test_filter_decision_id(client, monitor_headers):

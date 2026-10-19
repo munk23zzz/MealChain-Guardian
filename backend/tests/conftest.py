@@ -485,6 +485,9 @@ _MODUL_BUTUH_KANDIDAT = frozenset(
         "test_s4_verifier_independence.py",
         "test_scope_matrix.py",
         "test_supervisor_narration.py",
+        "test_supplier_procurement_eval.py",
+        "test_demo_batch_pemasok_tunggal.py",
+        "test_api_domain_tools.py",
     }
 )
 
@@ -527,6 +530,8 @@ def _semai_kiriman_demo() -> None:
             seed_demo_activity,
             seed_demo_completed_decisions,
         )
+        from app.seed.jakarta_lengkap import seed_batches as _seed_batches
+        from app.seed.jakarta_lengkap import seed_prices as _seed_prices
 
         eng = _engine(_settings.database_url)
         try:
@@ -534,6 +539,11 @@ def _semai_kiriman_demo() -> None:
                 sekarang = datetime.now(UTC)
                 await seed_demo_activity(sesi, sekarang)
                 await seed_demo_completed_decisions(sesi, sekarang)
+                # Batch kaya `jakarta_lengkap` (mis. telur Jakarta dari pemasok
+                # yang TIDAK dikecualikan) ikut dipulihkan; tanpa ini modul
+                # pengadaan hanya melihat batch kanonik 8 Okt yang sudah basi.
+                await _seed_batches(sesi, sekarang)
+                await _seed_prices(sesi, sekarang)
                 await sesi.commit()
         finally:
             await eng.dispose()
@@ -545,14 +555,18 @@ def _semai_kiriman_demo() -> None:
         print(f"[conftest] semai kiriman demo dilewati: {exc}")
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="module", autouse=True)
 def jaga_kiriman_demo(request):
     """Pastikan batch demo ada SEBELUM tes yang menuntut kandidat Event 1."""
     import os
 
-    if os.path.basename(str(request.path)) not in _MODUL_BUTUH_KANDIDAT:
+    nama = os.path.basename(str(request.path))
+    if nama not in _MODUL_BUTUH_KANDIDAT:
         yield
         return
-    if not _ada_kiriman_demo():
+    # Modul pengadaan butuh batch SEGAR, bukan sekadar "ada batch demo": suite
+    # lain mem-purge/membasi-kan batch, dan batch lama tetap terhitung ada.
+    # Selalu semai ulang (idempoten, tanggal diperbarui) untuk modul ini.
+    if nama == "test_supplier_procurement_eval.py" or not _ada_kiriman_demo():
         _semai_kiriman_demo()
     yield

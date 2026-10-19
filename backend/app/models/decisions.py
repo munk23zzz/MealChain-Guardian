@@ -31,7 +31,7 @@ class Decision(Base):
         CheckConstraint(
             "decision_type IN ('regional_balance','price_anomaly',"
             "'safety_disruption','supplier_exclusion',"
-            "'supplier_exclusion_restoration')",
+            "'supplier_exclusion_restoration','supplier_procurement')",
             name="decisions_decision_type_check",
         ),
         CheckConstraint(
@@ -78,6 +78,14 @@ class Decision(Base):
     )
     target_location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("locations.id"), nullable=True
+    )
+    # Pengadaan pemasok (Demo Control 2026-10-19): identitas pemasok yang
+    # DINILAI, bukan ditebak dari lokasi atau quote. NULL untuk pemindahan
+    # antar SPPG yang supplier-nya terikat lewat decision_evidence.
+    supplier_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("suppliers.id", ondelete="SET NULL"),
+        nullable=True,
     )
     commodity_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("commodities.id"), nullable=True

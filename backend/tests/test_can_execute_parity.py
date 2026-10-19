@@ -102,11 +102,15 @@ def _siapkan(approver_email: str) -> str:
         {
             "d": did,
             "p": (
-                '{"allocation_binding": {"supplier_id": "'
+                # Bentuk FLAT — sama dengan penulis produksi
+                # (`supplier_eligibility`): flag di akar payload. Bentuk
+                # bersarang tidak pernah dibaca `resolve_binding`, dan dulu
+                # lolos hanya karena Cianjur/telur punya satu pemasok.
+                '{"allocation_binding": true, "supplier_id": "'
                 + supplier_id
                 + '", "batch_ids": ["'
                 + batch_id
-                + '"]}}'
+                + '"]}'
             ),
         },
     )

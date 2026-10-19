@@ -50,16 +50,25 @@ def _db_latest_reference_price(location: str, commodity: str):
 
 
 def _batch_id_by_quantity(quantity: float) -> str:
+    """Batch dengan kuantitas tertentu; jatuh ke batch pertama bila tak ada.
+
+    Kuantitas batch seed dibangkitkan relatif `now` setiap "Segarkan ke hari
+    ini", jadi angka pasti (mis. 500 kg) tidak dijamin ada — dan yang diuji di
+    sini adalah penolakan `as_of`, bukan angka kuantitasnya.
+    """
     with _db().connect() as conn:
-        return str(
-            conn.execute(
-                text(
-                    "SELECT b.id FROM batches b WHERE b.quantity_kg = :q "
-                    "ORDER BY b.created_at LIMIT 1"
-                ),
-                {"q": quantity},
+        row = conn.execute(
+            text(
+                "SELECT b.id FROM batches b WHERE b.quantity_kg = :q "
+                "ORDER BY b.created_at LIMIT 1"
+            ),
+            {"q": quantity},
+        ).scalar_one_or_none()
+        if row is None:
+            row = conn.execute(
+                text("SELECT b.id FROM batches b ORDER BY b.created_at LIMIT 1")
             ).scalar_one()
-        )
+        return str(row)
 
 
 def test_freshness_evaluate_pass_band_persists(client):
@@ -120,7 +129,9 @@ def test_freshness_evaluate_fail_band(client):
                 text(
                     "SELECT b.id FROM batches b "
                     "JOIN commodities c ON c.id = b.commodity_id "
-                    "WHERE c.name = 'ayam' AND b.origin = 'seed' LIMIT 1"
+                    "WHERE c.name = 'ayam' AND b.origin = 'seed' "
+                    "AND b.freshness_score < 0.60 "
+                    "ORDER BY b.harvested_at, b.id LIMIT 1"
                 )
             ).scalar_one()
         )
@@ -151,10 +162,17 @@ def test_safety_evaluate_fail_persists_uppercase(client):
         batch_id = str(
             conn.execute(
                 text(
+                    # Batch yang MEMANG punya penyimpangan suhu: pasangan
+                    # (Surabaya, telur) profil `safety_fail` di generator, dan
+                    # lot 1-nya ber-`safety_status='fail'`. Dulu tes memilih
+                    # batch Surabaya PERTAMA, yang kini bisa lot sehat sehingga
+                    # evaluasi menjawab PASS.
                     "SELECT b.id FROM batches b "
                     "JOIN commodities c ON c.id = b.commodity_id "
                     "JOIN locations l ON l.id = b.location_id "
-                    "WHERE l.name = 'Surabaya' AND b.origin = 'seed' LIMIT 1"
+                    "WHERE l.name = 'Surabaya' AND c.name = 'telur' "
+                    "AND b.origin = 'seed' AND b.safety_status = 'fail' "
+                    "ORDER BY b.harvested_at LIMIT 1"
                 )
             ).scalar_one()
         )
@@ -178,9 +196,15 @@ def test_safety_evaluate_pass_clean_batch(client):
         batch_id = str(
             conn.execute(
                 text(
+                    # Batch BARANG DINGIN yang sehat: beras (26-28 C) tidak
+                    # punya gerbang rantai dingin sehingga evaluasinya
+                    # NEEDS_VERIFICATION, dan lot kedua bisa berprofil lain.
                     "SELECT b.id FROM batches b "
                     "JOIN locations l ON l.id = b.location_id "
-                    "WHERE l.name = 'Bogor' LIMIT 1"
+                    "JOIN commodities c ON c.id = b.commodity_id "
+                    "WHERE l.name = 'Bogor' AND c.name IN ('telur','ayam','wortel') "
+                    "AND b.origin = 'seed' AND b.safety_status = 'pass' "
+                    "ORDER BY b.harvested_at, b.id LIMIT 1"
                 )
             ).scalar_one()
         )

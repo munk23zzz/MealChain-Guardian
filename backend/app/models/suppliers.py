@@ -4,8 +4,8 @@ Profil pemasok (Ruling 2026-10-14 / Fase 2 rencana scope-pemasok-peta): kolom
 koordinat + fokus komoditas + kapasitas + sertifikasi + alamat, supaya pemasok
 bisa ditampilkan di peta sebagai titik (permintaan pemilik proyek).
 
-Kolom profil SEMUA nullable dengan sengaja: 14 pemasok kanonik dari
-`data/seed/sprint1_seed.json` memang tidak punya data ini, dan kolom yang
+Kolom profil SEMUA nullable dengan sengaja: pemasok kanonik dari
+`data/seed/sprint1_seed.json` bisa ada tanpa profil lengkap, dan kolom yang
 diisi nilai tebakan lebih buruk daripada NULL yang jujur. Yang di-backfill saat
 migrasi hanya KOORDINAT (diturunkan dari titik hub SPPG-nya) karena peta tidak
 bisa menampilkan pemasok tanpa posisi.

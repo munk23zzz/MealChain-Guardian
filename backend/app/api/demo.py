@@ -38,6 +38,7 @@ from app.api.auth import require_roles
 from app.api.dependencies import get_db
 from app.core.config import settings
 from app.core.scope import assert_in_scope
+from app.services.demo_cost import hitung_biaya_demo
 from app.models import (
     AgentTrace,
     Batch,
@@ -45,6 +46,7 @@ from app.models import (
     Decision,
     DecisionEvidence,
     Location,
+    Supplier,
     User,
 )
 from app.seed.timeseries import (
@@ -58,10 +60,25 @@ from app.seed.timeseries import (
     validate_range,
 )
 from app.services.agent_review_client import AgentReviewResult, review_decision
+from app.services.demo_procurement_orchestrator import (
+    run_supplier_procurement,
+)
 from app.services.event1_orchestrator import run_event1
 from app.services.trace_persistence import persist_agent_review
 
 router = APIRouter()
+
+# Tujuh worker review advisory, urutan tampil di panel "Bukti agent".
+# Kunci harus sama dengan agent_name yang ditulis runtime AgentCore.
+SWARM_AGENTS: tuple[tuple[str, str], ...] = (
+    ("supply", "Pasokan"),
+    ("demand", "Permintaan"),
+    ("freshness", "Kesegaran"),
+    ("safety", "Keamanan Pangan"),
+    ("price", "Harga"),
+    ("logistics", "Logistik"),
+    ("evidence", "Bukti"),
+)
 
 DEMO_CASES = (
     "rejection-loop-kuota",
@@ -227,12 +244,11 @@ def _decision(
         target_location_id=tgt,
         commodity_id=commodity_id,
         quantity_kg=qty,
+        # Biaya diisi sesudah baris ini ada: `_lengkapi_biaya` menghitung dari
+        # batch terikat + kutipan pemasok + jarak. Angka `sdc` di sini hanya
+        # cadangan bila bahan hitung tidak tersedia, dan selalu ditandai.
         safe_delivered_cost=sdc,
-        cost_breakdown={
-            "purchase": "15720000",
-            "logistics": "486000",
-            "note": "seed demo — angka konsisten docs",
-        },
+        cost_breakdown=None,
         expires_at=datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes),
     )
 
@@ -446,6 +462,19 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
     await _add_trace(db, g2.id, "DECIDE", 39, "supply_balance.propose",
         {"source": "Cianjur", "target": target.name, "qty": 600},
         {"sdc": 16206000, "reroute_from": "Bogor"})
+
+    # ---- Biaya: dihitung dari data, bukan angka tulisan tangan --------------
+    for decision_id in created:
+        baris = await db.get(Decision, decision_id)
+        if baris is None:
+            continue
+        terisi = await hitung_biaya_demo(db, baris, sekarang)
+        if not terisi:
+            # Bahan hitung tidak ada: jangan tinggalkan rincian karangan.
+            baris.cost_breakdown = {
+                "note": "biaya belum bisa dihitung: harga/batch/lokasi tidak tersedia"
+            }
+            baris.safe_delivered_cost = None
 
     await db.commit()
     return {
@@ -788,3 +817,354 @@ async def _catat_review_gagal(
             await db.rollback()
         except Exception:
             pass
+
+
+# ---------------------------------------------------------------------------
+# Demo Control sederhana (keputusan Roy 2026-10-19).
+#
+# Tab Demo Control dipakai untuk MEMBUKTIKAN agent berjalan, bukan untuk memilih
+# skenario. Karena itu dua endpoint di bawah ini sengaja sempit:
+#   POST /demo/agent/run      satu klik, tanpa payload wajib: komoditas `beras`
+#                             dan lokasi SPPG milik akun sendiri (bukan lokasi
+#                             yang diketik klien — cakupan peran jadi mustahil
+#                             dilanggar dari UI).
+#   GET  /demo/agent/last-run bukti yang dibaca dari DB: keputusan terakhir yang
+#                             punya langkah DETECT (hanya pipeline agent yang
+#                             menulisnya — kasus seed tidak), seluruh langkahnya,
+#                             provider yang benar-benar menjawab, dan status
+#                             review 7-worker kalau ada.
+#
+# Tidak ada angka karangan: setiap field berasal dari baris DB. Bila belum ada
+# jejak agent sama sekali, jawabannya `found: false` — bukan potret kosong yang
+# dibuat-buat.
+# ---------------------------------------------------------------------------
+
+#: Komoditas bawaan tombol "Jalankan agent".
+DEFAULT_AGENT_COMMODITY = "beras"
+
+#: Urutan langkah pipeline. `step_at` TIDAK bisa dipakai mengurutkan: seluruh
+#: langkah satu putaran ditulis dalam satu transaksi, dan Postgres `now()`
+#: mengembalikan waktu MULAI transaksi — jadi semua barisnya ber-`step_at` sama.
+STEP_ORDER = (
+    "DETECT",
+    "VERIFY",
+    "TRACE",
+    "PREDICT",
+    "OPTIMIZE",
+    "DECIDE",
+    "SUPERVISE",
+    "ACT",
+    "LEARN",
+)
+
+
+class AgentRunRequest(BaseModel):
+    """Payload opsional; UI sederhana cukup memanggil tanpa body."""
+
+    commodity: str = DEFAULT_AGENT_COMMODITY
+    ttl_minutes: int = Field(default=30, ge=1, le=1440)
+
+
+async def _lokasi_akun(db: AsyncSession, user: User) -> Location:
+    """Lokasi SPPG milik akun pemanggil — satu-satunya target yang sah."""
+    if not user.location_id:
+        raise HTTPException(
+            status_code=400,
+            detail="akun ini tidak terikat lokasi SPPG; jalankan agent dari akun kepala SPPG",
+        )
+    lokasi = await db.get(Location, user.location_id)
+    if lokasi is None:
+        raise HTTPException(
+            status_code=400, detail="lokasi akun tidak ditemukan di database"
+        )
+    return lokasi
+
+
+@router.post("/demo/agent/run", status_code=201)
+async def run_demo_agent(
+    payload: AgentRunRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles("sppg_head")),
+) -> dict:
+    """Jalankan pipeline agent penuh untuk lokasi akun sendiri (DETECT → SUPERVISE).
+
+    Objek penilaian = pemasok yang SUDAH memasok SPPG akun ini: stok batch,
+    penawaran harga untuk SPPG itu, jarak pemasok→SPPG, reliabilitas, dan
+    status pengecualian. Tidak ada pemasok dari kota lain yang ditebak.
+
+    Batas jujur yang sama dengan `/demo/event1`: tidak ada approve/execute.
+    Keputusan lahir `proposed` dan tetap menunggu loop approval manusia.
+    """
+    isi = payload or AgentRunRequest()
+    lokasi = await _lokasi_akun(db, user)
+    try:
+        # Sejak 2026-10-19 panel ini menilai PEMASOK yang memasok SPPG akun
+        # sendiri (bukan surplus SPPG lain): lihat supplier_procurement.py.
+        outcome = await run_in_threadpool(
+            run_supplier_procurement,
+            isi.commodity,
+            lokasi.name,
+            ttl_minutes=isi.ttl_minutes,
+        )
+    except ValueError as exc:
+        # Tidak ada kandidat eligible = keadaan data, bukan kerusakan server.
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    outcome["commodity"] = isi.commodity
+    outcome["target_location"] = lokasi.name
+    outcome["agent_review"] = await _jalankan_agent_review(db, outcome)
+    return outcome
+
+
+def _urut_langkah(trace: AgentTrace) -> tuple[int, str]:
+    posisi = (
+        STEP_ORDER.index(trace.step_name)
+        if trace.step_name in STEP_ORDER
+        else len(STEP_ORDER)
+    )
+    return (posisi, str(trace.id))
+
+
+@router.get("/demo/agent/commodities")
+async def list_agent_commodities(
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
+) -> dict:
+    """Pilihan dropdown komoditas — nama yang ADA di database, bukan daftar karangan.
+
+    Panel demo tidak boleh menawarkan komoditas yang tidak punya data: memilihnya
+    hanya akan berakhir `409 tidak ada kandidat eligible`.
+    """
+    nama = (
+        (await db.execute(select(Commodity.name).order_by(Commodity.name)))
+        .scalars()
+        .all()
+    )
+    return {"commodities": list(nama)}
+
+
+@router.get("/demo/agent/last-run")
+async def get_last_agent_run(
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
+) -> dict:
+    """Bukti putaran agent terakhir, dibaca ulang dari DB (tahan reload halaman)."""
+    kosong = {
+        "found": False,
+        "decision_id": None,
+        "steps": [],
+        "agents": [],
+        "agents_run_id": None,
+        "supervisor": {
+            "status": "missing",
+            "provider": None,
+            "fallback_used": False,
+            "summary": None,
+        },
+        "agent_review": {"status": "missing", "error": None, "run_id": None},
+        "mode": None,
+        "supplier": None,
+        "supply_gap": None,
+    }
+
+    # Putaran agent yang sesungguhnya = keputusan yang punya langkah SUPERVISE.
+    # Baris DETECT saja bisa berasal dari data seed, jadi jangan dipakai
+    # sebagai penanda "putaran terakhir" bila ada SUPERVISE.
+    terakhir = (
+        await db.execute(
+            select(AgentTrace.decision_id)
+            .where(AgentTrace.step_name == "SUPERVISE")
+            .order_by(AgentTrace.step_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if terakhir is None:
+        terakhir = (
+            await db.execute(
+                select(AgentTrace.decision_id)
+                .where(AgentTrace.step_name == "DETECT")
+                .order_by(AgentTrace.step_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+    if terakhir is None:
+        return kosong
+
+    keputusan = await db.get(Decision, terakhir)
+    if keputusan is None:
+        return kosong
+
+    traces = (
+        (
+            await db.execute(
+                select(AgentTrace).where(AgentTrace.decision_id == terakhir)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    langkah = sorted(traces, key=_urut_langkah)
+
+    # Tujuh worker review (advisory). Kartu di panel Demo Control selalu
+    # menampilkan ketujuhnya; status per agen dibaca dari baris trace putaran
+    # review yang benar-benar tersimpan (bukan ditebak dari langkah pipeline).
+    # Run id review bisa datang dari baris worker (kolom run_id) atau dari
+    # ringkasan SUPERVISE. Dua-duanya sah; jangan hanya bergantung pada satu
+    # nama alat supaya status tidak tampak "belum tercatat" padahal ada.
+    run_review = next((t.run_id for t in langkah if t.agent_name), None)
+    if run_review is None:
+        run_review = next(
+            (
+                (t.output_summary or {}).get("run_id")
+                for t in langkah
+                if t.step_name == "SUPERVISE" and t.run_id
+            ),
+            None,
+        )
+    baris_agen: dict[str, AgentTrace] = {}
+    for t in langkah:
+        nama_agen = (t.agent_name or "").strip().lower()
+        if nama_agen and (run_review is None or t.run_id == run_review):
+            baris_agen[nama_agen] = t
+    agen = []
+    for kunci, label in SWARM_AGENTS:
+        baris = baris_agen.get(kunci)
+        keluaran = dict(baris.output_summary or {}) if baris is not None else {}
+        peringatan = keluaran.get("warnings")
+        agen.append(
+            {
+                "key": kunci,
+                "label": label,
+                "status": (keluaran.get("status") or ("ok" if baris else "missing")),
+                "duration_ms": baris.duration_ms if baris is not None else None,
+                "warnings": (
+                    len([p for p in peringatan if isinstance(p, str)])
+                    if isinstance(peringatan, list)
+                    else None
+                ),
+                "summary": keluaran.get("summary"),
+            }
+        )
+
+    narasi = next(
+        (
+            t
+            for t in langkah
+            if t.step_name == "SUPERVISE" and t.tool_called == "supervisor.narration"
+        ),
+        None,
+    )
+    review = next(
+        (
+            t
+            for t in langkah
+            if t.step_name == "SUPERVISE"
+            and str(t.tool_called or "").startswith("agent.review")
+        ),
+        None,
+    )
+    keluaran_narasi = dict(narasi.output_summary or {}) if narasi is not None else {}
+    keluaran_review = dict(review.output_summary or {}) if review is not None else {}
+
+    komoditas = (
+        await db.get(Commodity, keputusan.commodity_id)
+        if keputusan.commodity_id
+        else None
+    )
+    sumber = (
+        await db.get(Location, keputusan.source_location_id)
+        if keputusan.source_location_id
+        else None
+    )
+    tujuan = (
+        await db.get(Location, keputusan.target_location_id)
+        if keputusan.target_location_id
+        else None
+    )
+
+    pemasok = (
+        await db.get(Supplier, keputusan.supplier_id)
+        if keputusan.supplier_id
+        else None
+    )
+    # Baris review worker memakai nama langkah yang sama (agent.supply dst.),
+    # jadi bukti pipeline harus diambil dari baris TANPA agent_name.
+    optimasi = next(
+        (t for t in langkah if t.step_name == "OPTIMIZE" and t.agent_name is None),
+        None,
+    )
+    keluaran_optimasi = dict(optimasi.output_summary or {}) if optimasi else {}
+    deteksi = next(
+        (t for t in langkah if t.step_name == "DETECT" and t.agent_name is None),
+        None,
+    )
+    keluaran_deteksi = dict(deteksi.output_summary or {}) if deteksi else {}
+
+    return {
+        "found": True,
+        "decision_id": str(keputusan.id),
+        "status": keputusan.status,
+        "decision_type": keputusan.decision_type,
+        "proposed_by": keputusan.proposed_by,
+        "created_at": (
+            keputusan.created_at.isoformat() if keputusan.created_at else None
+        ),
+        "expires_at": (
+            keputusan.expires_at.isoformat() if keputusan.expires_at else None
+        ),
+        "quantity_kg": (
+            str(keputusan.quantity_kg) if keputusan.quantity_kg is not None else None
+        ),
+        "commodity": komoditas.name if komoditas is not None else None,
+        "mode": (
+            "supplier_procurement"
+            if keputusan.decision_type == "supplier_procurement"
+            else "regional_balance"
+        ),
+        "source_location": sumber.name if sumber is not None else None,
+        "target_location": tujuan.name if tujuan is not None else None,
+        # Bukti pengadaan: pemasok yang DINILAI (bukan tebakan dari lokasi),
+        # jarak pemasok→SPPG, harga penawaran, dan kekurangan yang dipenuhi.
+        "supplier": {
+            "supplier_id": str(pemasok.id) if pemasok is not None else None,
+            "name": pemasok.name if pemasok is not None else None,
+            "leg_km": keluaran_optimasi.get("leg_km"),
+            "available_kg": keluaran_optimasi.get("available_kg"),
+            "quote_price_per_kg": keluaran_optimasi.get("quote_price_per_kg"),
+            "reliability": keluaran_optimasi.get("reliability"),
+            "capacity_kg_per_week": keluaran_optimasi.get("capacity_kg_per_week"),
+            "rank": keluaran_optimasi.get("rank"),
+            "candidates_total": keluaran_optimasi.get("candidates_total"),
+        },
+        "supply_gap": {
+            "supply_kg": keluaran_deteksi.get("supply_kg"),
+            "demand_kg": keluaran_deteksi.get("demand_kg"),
+            "gap_kg": keluaran_deteksi.get("gap_kg"),
+            "suppliers_total": keluaran_deteksi.get("suppliers_total"),
+            "suppliers_eligible": keluaran_deteksi.get("suppliers_eligible"),
+        },
+        "verifier_note": keputusan.verifier_note,
+        "steps": [
+            {
+                "step_name": t.step_name,
+                "tool_called": t.tool_called,
+                "duration_ms": t.duration_ms,
+            }
+            for t in langkah
+        ],
+        "agents": agen,
+        "agents_run_id": run_review,
+        "supervisor": {
+            "status": keluaran_narasi.get(
+                "status", "missing" if narasi is None else "unknown"
+            ),
+            "provider": keluaran_narasi.get("provider"),
+            "fallback_used": bool(keluaran_narasi.get("fallback_used")),
+            "summary": keluaran_narasi.get("summary"),
+        },
+        "agent_review": {
+            "status": keluaran_review.get("status", "missing"),
+            "error": keluaran_review.get("error"),
+            "run_id": keluaran_review.get("run_id"),
+        },
+    }
