@@ -21,19 +21,23 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
 from app.main import app
-from app.seed.seed_data import DEMO_USERS
+from app.seed.seed_data import DEMO_USERS, build_seed_rows
 from app.seed.suppliers_demo import load_demo_rows
 
 DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
 
-# dari data/seed/sprint1_seed.json (diverifikasi utuh di test_suppliers_data.py)
-CANONICAL_SUPPLIERS = 17  # 14 semula + 3 pemasok beras (komoditas ke-4)
-DEMO_SUPPLIERS = len(load_demo_rows())
-# Tiga baris demo beras memakai nama pemasok kanonik yang sama: berkas demo
-# berperan sebagai overlay koordinat, seeder mencocokkan lewat nama dan
-# MENG-UPDATE baris kanonik, bukan menambah baris baru.
-DEMO_OVERLAY = 3
-TOTAL_SUPPLIERS = CANONICAL_SUPPLIERS + DEMO_SUPPLIERS - DEMO_OVERLAY
+# Dihitung dari data, bukan dipaku: dataset demo 19 Okt 2026 berisi 59 pemasok
+# lokal (berkas kanonik dan berkas profil memakai nama yang SAMA, jadi berkas
+# demo adalah overlay profil — bukan baris tambahan).
+_CANONICAL_NAMES = {
+    row["name"]
+    for row in build_seed_rows(datetime(2026, 10, 8, 12, tzinfo=UTC))["suppliers"]
+}
+_DEMO_NAMES = {row["name"] for row in load_demo_rows()}
+CANONICAL_SUPPLIERS = len(_CANONICAL_NAMES)
+DEMO_SUPPLIERS = len(_DEMO_NAMES)
+DEMO_OVERLAY = len(_CANONICAL_NAMES & _DEMO_NAMES)
+TOTAL_SUPPLIERS = len(_CANONICAL_NAMES | _DEMO_NAMES)
 
 
 @pytest.fixture()
@@ -86,7 +90,8 @@ def test_suppliers_readable_by_every_role(client, tokens, role):
     keputusan/eksklusi, bukan profil pemasok. Tes ini mengunci keputusan itu
     supaya perubahan cakupan di masa depan tidak menyempit tanpa disadari.
     """
-    resp = client.get("/suppliers", headers=tokens[role])
+    # limit=200: bawa SELURUH tabel, bukan halaman pertama (default 50).
+    resp = client.get("/suppliers?limit=200", headers=tokens[role])
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["total"] == TOTAL_SUPPLIERS
@@ -95,14 +100,14 @@ def test_suppliers_readable_by_every_role(client, tokens, role):
 
 def test_supplier_item_carries_map_profile(client, tokens):
     """Tiap baris wajib membawa profil yang dibutuhkan peta/halaman pemasok."""
-    resp = client.get("/suppliers?q=Wortel%20Lestari%20Cianjur", headers=tokens["bgn_monitor"])
+    resp = client.get("/suppliers?q=Wortel%20Lestari%20Subang", headers=tokens["bgn_monitor"])
     assert resp.status_code == 200, resp.text
     item = resp.json()["items"][0]
-    assert item["name"] == "Wortel Lestari Cianjur"
-    assert item["location"] == "Cianjur"
+    assert item["name"] == "Wortel Lestari Subang"
+    assert item["location"] == "Jakarta"
     assert item["commodity"] == "wortel"
-    assert item["reliability_score"] == pytest.approx(0.93)
-    assert item["capacity_kg_per_week"] == pytest.approx(3000)
+    assert item["reliability_score"] == pytest.approx(0.90)
+    assert item["capacity_kg_per_week"] == pytest.approx(2800)
     assert item["certification_status"] == "haccp"
     assert item["address"] and item["contact_name"]
     assert -7.0 < item["latitude"] < -6.0  # sekitar Cianjur
@@ -117,26 +122,38 @@ def test_supplier_without_profile_reports_null_not_zero(client, tokens):
     NULL berarti "tidak diketahui"; 0 akan berbohong (seolah kapasitasnya nol)
     dan bisa memicu perhitungan yang salah di UI.
 
-    Perubahan sadar 2026-10-16 (keputusan pemilik): profil yang BISA diturunkan
-    dari batch kiriman kini terisi — `Supplier A Cianjur` (3 batch telur) jadi
-    `commodity=telur`, `certification_status=haccp`. Yang tidak punya batch
-    (mis. `Supplier Medan-1`) tetap kosong, dan `capacity_kg_per_week` selalu
-    kosong karena tidak ada satu pun sumber datanya.
+    Sejak dataset 19 Okt 2026 SEMUA pemasok demo punya profil lengkap, jadi
+    keadaan "tanpa profil" dibuat oleh tes ini sendiri (baris sementara), bukan
+    dicari dari seed — kalau dicari dari seed, tes ini akan merah setiap kali
+    dataset dilengkapi, padahal aturannya tidak berubah.
     """
-    telur = client.get(
-        "/suppliers?q=Supplier%20A%20Cianjur", headers=tokens["bgn_monitor"]
-    ).json()["items"][0]
-    assert telur["commodity"] == "telur"
-    assert telur["certification_status"] == "haccp"
-    assert telur["capacity_kg_per_week"] is None
-    assert telur["latitude"] is not None  # koordinat di-backfill migrasi 012
+    nama = "CV Uji Tanpa Profil"
+    engine = create_engine(DB_URL)
+    try:
+        with engine.begin() as conn:
+            loc_id = conn.execute(
+                text("SELECT id FROM locations WHERE name='Bogor'")
+            ).scalar_one()
+            conn.execute(text("DELETE FROM suppliers WHERE name=:n"), {"n": nama})
+            conn.execute(
+                text(
+                    "INSERT INTO suppliers (id, name, location_id, reliability_score) "
+                    "VALUES (gen_random_uuid(), :n, :l, 0.80)"
+                ),
+                {"n": nama, "l": loc_id},
+            )
 
-    tanpa_batch = client.get(
-        "/suppliers?q=Supplier%20Medan-1", headers=tokens["bgn_monitor"]
-    ).json()["items"][0]
-    assert tanpa_batch["commodity"] is None
-    assert tanpa_batch["certification_status"] is None
-    assert tanpa_batch["capacity_kg_per_week"] is None
+        item = client.get(
+            "/suppliers?q=CV%20Uji%20Tanpa%20Profil", headers=tokens["bgn_monitor"]
+        ).json()["items"][0]
+        assert item["commodity"] is None
+        assert item["certification_status"] is None
+        assert item["capacity_kg_per_week"] is None
+        assert item["latitude"] is None
+        assert item["distance_km"] is None
+    finally:
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM suppliers WHERE name=:n"), {"n": nama})
 
 
 def test_suppliers_filter_by_commodity(client, tokens):
@@ -148,17 +165,17 @@ def test_suppliers_filter_by_commodity(client, tokens):
     """
     resp = client.get("/suppliers?commodity=telur", headers=tokens["bgn_monitor"])
     body = resp.json()
-    assert body["count"] == 9
+    assert body["count"] == 16
     assert {i["commodity"] for i in body["items"]} == {"telur"}
     # Kanonik yang kini ikut tersaring membuktikan profilnya memang terisi.
-    assert "Supplier A Cianjur" in {i["name"] for i in body["items"]}
+    assert "Koperasi Peternak Telur Cipanas" in {i["name"] for i in body["items"]}
 
 
 def test_suppliers_filter_by_location(client, tokens):
     """Cianjur: 5 pemasok kanonik (termasuk beras) + 1 pemasok demo."""
     resp = client.get("/suppliers?location=cianjur", headers=tokens["bgn_monitor"])
     body = resp.json()
-    assert body["count"] == 6
+    assert body["count"] == 7
     assert {i["location"] for i in body["items"]} == {"Cianjur"}
 
 
@@ -194,7 +211,7 @@ def test_suppliers_rejects_out_of_range_window(client, tokens, query):
 def test_exclusion_flag_is_scope_local(client, tokens):
     """Eksklusi bersifat lokal-cakupan: dilaporkan BESERTA nama lokasinya.
 
-    Pemasok demo "Telur Berkah Cianjur" dikecualikan di Cianjur (hub-nya) dan di
+    Pemasok demo "UD Telur Cipanas Sejahtera" dikecualikan di Cianjur (hub-nya) dan di
     Jakarta. Baris tetap muncul di daftar (daftar = data sumber, tidak
     disaring), tetapi membawa dua nama cakupan itu supaya UI bisa menyatakan
     "dikecualikan di ..." tanpa mengklaim eksklusi nasional.
@@ -204,7 +221,7 @@ def test_exclusion_flag_is_scope_local(client, tokens):
     try:
         with engine.begin() as conn:
             supplier_id = conn.execute(
-                text("SELECT id FROM suppliers WHERE name = 'Telur Berkah Cianjur'")
+                text("SELECT id FROM suppliers WHERE name = 'UD Telur Cipanas Sejahtera'")
             ).scalar_one()
             scope_ids = dict(
                 conn.execute(
@@ -227,14 +244,18 @@ def test_exclusion_flag_is_scope_local(client, tokens):
                     {"s": supplier_id, "l": scope_ids[name], "d": decision_id, "u": user_id},
                 )
 
-        resp = client.get("/suppliers?q=Telur%20Berkah%20Cianjur", headers=tokens["bgn_monitor"])
+        resp = client.get(
+            "/suppliers?q=UD%20Telur%20Cipanas%20Sejahtera", headers=tokens["bgn_monitor"]
+        )
         assert resp.status_code == 200, resp.text
         item = resp.json()["items"][0]
         assert item["excluded_at_hub"] is True
         assert item["excluded_scope_locations"] == ["Cianjur", "Jakarta"]
 
         # Pemasok lain di hub yang sama tidak ikut tertandai.
-        other = client.get("/suppliers?q=Wortel%20Lestari%20Cianjur", headers=tokens["bgn_monitor"])
+        other = client.get(
+            "/suppliers?q=CV%20Telur%20Cianjur%20Barokah", headers=tokens["bgn_monitor"]
+        )
         assert other.json()["items"][0]["excluded_at_hub"] is False
     finally:
         if supplier_id is not None:
@@ -300,7 +321,7 @@ def test_distance_is_measured_from_the_users_own_location(client, tokens):
     # (diuji terpisah di test_suppliers_data.py) — di sini yang diperiksa:
     # endpoint mengembalikan jarak yang bisa dicocokkan akal sehat.
     assert by_name["Sayur Segar Kramat Jati"] < 10
-    assert 40 < by_name["Telur Berkah Bogor"] < 50
+    assert 25 < by_name["UD Telur Berkah Cibinong"] < 40
     assert 100 < by_name["Wortel Lestari Subang"] < 120
     assert by_name["Wortel Bandungan"] > 300  # Semarang, memang jauh
 
@@ -319,7 +340,7 @@ def test_monitor_can_use_location_filter_as_reference(client, tokens):
         "/suppliers?location=Jakarta&limit=200", headers=tokens["bgn_monitor"]
     ).json()
     assert body["distance_reference"]["location"] == "Jakarta"
-    jakarta = next(i for i in body["items"] if i["name"] == "Telur Berkah Jakarta")
+    jakarta = next(i for i in body["items"] if i["name"] == "Sayur Segar Kramat Jati")
     assert jakarta["distance_km"] < 15
 
 
@@ -338,7 +359,7 @@ def test_max_distance_filters_and_reports_what_it_hid(client, tokens):
 
     names = {i["name"] for i in near["items"]}
     assert "Prima Ayam Sejahtera Jakarta" in names  # 13,4 km
-    assert "Telur Berkah Bogor" in names  # 43,4 km
+    assert "UD Telur Berkah Cibinong" in names  # ~43 km
     assert "Wortel Lestari Subang" in names  # 108,6 km
     assert "Wortel Bandungan" not in names  # Semarang, ~400 km
 
@@ -396,53 +417,101 @@ def _sql_shipping(supplier_name: str) -> dict:
     return {"count": total, "total_kg": float(kg), "until": until, "fails": fails}
 
 
+def _sql_lot_supplier(supplier_name: str) -> dict:
+    """Total lot pemasok vs yang masih layak — dasar uji "lot lewat tenggat tidak dihitung".
+
+    Dipakai, bukan `count == 0`, karena DB demo dipakai bersama: penyemai aktivitas
+    (`seed_demo_activity`) menambah lot ber-harvest hari ini untuk pemasok kanonik,
+    sehingga lot kedaluwarsa bisa berdampingan dengan lot hidup. Yang diuji adalah
+    EKSKLUSI lot lewat tenggat, bukan "pemasok ini tidak punya lot sama sekali".
+    """
+    engine = create_engine(DB_URL)
+    now = datetime.now(UTC)
+    with engine.connect() as conn:
+        total, layak = conn.execute(
+            text(
+                """
+                SELECT count(*),
+                       count(*) FILTER (WHERE b.usable_until >= :now)
+                FROM batches b
+                JOIN suppliers s ON s.id = b.supplier_id
+                WHERE s.name = :name
+                """
+            ),
+            {"name": supplier_name, "now": now},
+        ).one()
+    return {"total": int(total), "layak": int(layak)}
+
+
 def test_item_carries_shipping_field(client, tokens):
     """Setiap baris membawa kunci `shipping` (null bila tidak sedang mengirim)."""
     body = client.get("/suppliers?limit=200", headers=tokens["sppg_head"]).json()
 
     assert all("shipping" in item for item in body["items"])
-    no_batch = next(i for i in body["items"] if i["name"] == "Telur Berkah Jakarta")
+    no_batch = next(i for i in body["items"] if i["name"] == "CV Sumber Pangan Cengkareng")
     assert no_batch["shipping"] is None
 
 
 def test_shipping_matches_sql_for_active_supplier(client, tokens):
-    """Supplier A Cianjur: 4 kiriman layak, 2.200 kg, semuanya telur — sama dengan SQL.
+    """Koperasi Peternak Telur Cipanas: 1 lot telur 840 kg yang masih layak — sama dengan SQL.
 
-    Sebelum Fase 10 angkanya 3 kiriman / 1.400 kg. Kiriman kanonik ke SPPG Jakarta
-    (800 kg, keputusan pemilik 2026-10-16) menambah satu kiriman layak, jadi angka
-    tes ini berubah SADAR karena data berubah — bukan karena aturannya dilonggarkan.
+    Angka ini berasal dari dataset 19 Okt 2026 (satu lot per pasangan kota x
+    komoditas). Yang diuji bukan angkanya, melainkan bahwa endpoint menghitung
+    dari baris yang SAMA dengan SQL — jadi bila dataset berubah lagi, sumber
+    kebenarannya tetap `_sql_shipping`, bukan ingatan penulis tes.
     """
+    nama = "Koperasi Peternak Telur Cipanas"
     body = client.get(
-        "/suppliers?q=Supplier%20A%20Cianjur", headers=tokens["sppg_head"]
+        f"/suppliers?q={nama.replace(' ', '%20')}", headers=tokens["sppg_head"]
     ).json()
-    item = next(i for i in body["items"] if i["name"] == "Supplier A Cianjur")
-    sql = _sql_shipping("Supplier A Cianjur")
+    item = next(i for i in body["items"] if i["name"] == nama)
+    sql = _sql_shipping(nama)
 
-    assert sql["count"] == 4, "prasyarat: seed kanonik utuh (Fase 10 menambah kiriman Jakarta)"
+    assert sql["count"] == 1, "prasyarat: lot Koperasi untuk Cianjur masih di dataset"
     assert item["shipping"]["count"] == sql["count"]
-    assert item["shipping"]["total_kg"] == sql["total_kg"] == 2200.0
+    assert item["shipping"]["total_kg"] == sql["total_kg"] == 840.0
     assert item["shipping"]["commodities"] == ["telur"]
     assert item["shipping"]["safety_fail_count"] == 0
     assert datetime.fromisoformat(item["shipping"]["until"]) == sql["until"]
 
 
 def test_shipping_reports_batch_that_failed_testing(client, tokens):
-    """Supplier B Cianjur mengirim telur 600 kg yang gagal uji - dilaporkan, bukan disembunyikan."""
-    body = client.get(
-        "/suppliers?q=Supplier%20B%20Cianjur", headers=tokens["sppg_head"]
-    ).json()
-    item = next(i for i in body["items"] if i["name"] == "Supplier B Cianjur")
+    """Telur Berkah Surabaya mengirim lot yang gagal uji suhu — dilaporkan, bukan disembunyikan.
 
-    assert item["shipping"]["count"] == 1
-    assert item["shipping"]["safety_fail_count"] == 1
+    Asersi "count == 1" diganti ground truth `_sql_shipping` (20 Okt 2026): penyemai
+    aktivitas demo menambah lot ber-harvest hari ini untuk pemasok kanonik, sehingga
+    pemasok yang sama bisa punya dua lot aktif. Yang diuji tetap intinya — endpoint
+    MENGHITUNG lot ber-`safety_status='fail'` alih-alih menyembunyikannya.
+    """
+    nama = "Telur Berkah Surabaya"
+    body = client.get(
+        "/suppliers?q=Telur%20Berkah%20Surabaya", headers=tokens["sppg_head"]
+    ).json()
+    item = next(i for i in body["items"] if i["name"] == nama)
+    sql = _sql_shipping(nama)
+
+    assert sql["fails"] >= 1, "prasyarat: ada lot Telur Berkah Surabaya yang gagal uji"
+    assert item["shipping"]["count"] == sql["count"]
+    assert item["shipping"]["safety_fail_count"] == sql["fails"]
 
 
 def test_expired_batch_is_not_counted(client, tokens):
-    """Supplier C Cianjur: kirimannya layak sampai 10 Sep → tidak dihitung hari ini."""
-    body = client.get(
-        "/suppliers?q=Supplier%20C%20Cianjur", headers=tokens["sppg_head"]
-    ).json()
-    item = next(i for i in body["items"] if i["name"] == "Supplier C Cianjur")
+    """PT Ayam Potong Cileunyi: lot ayamnya (umur simpan 5 hari) sudah lewat → tidak dihitung.
 
-    assert _sql_shipping("Supplier C Cianjur")["count"] == 0
-    assert item["shipping"] is None
+    Diuji sebagai EKSKLUSI (`total > layak`, dan `shipping` cocok dengan hitungan
+    SQL yang menyaring `usable_until >= now`), bukan `count == 0`: begitu penyemai
+    demo membuat lot ayam baru untuk pemasok ini, "tidak sedang mengirim" berhenti
+    menjadi pernyataan yang benar — padahal lot kedaluwarsanya tetap harus diabaikan.
+    """
+    nama = "PT Ayam Potong Cileunyi"
+    body = client.get(
+        "/suppliers?q=PT%20Ayam%20Potong%20Cileunyi", headers=tokens["sppg_head"]
+    ).json()
+    item = next(i for i in body["items"] if i["name"] == nama)
+    sql = _sql_shipping(nama)
+    semua = _sql_lot_supplier(nama)
+
+    assert semua["total"] > semua["layak"], "prasyarat: ada lot yang lewat tenggat"
+    assert (item["shipping"] is None) == (sql["count"] == 0)
+    if item["shipping"] is not None:
+        assert item["shipping"]["count"] == sql["count"]
