@@ -1232,20 +1232,6 @@ a:focus-visible {
   color: var(--ink);
 }
 
-.feed-more {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  margin-top: 14px;
-}
-
-.feed-more p {
-  margin: 0;
-  font-size: var(--fs-2);
-  color: var(--ink-muted);
-}
-
 .detail-section {
   margin-top: 20px;
   padding-top: 14px;

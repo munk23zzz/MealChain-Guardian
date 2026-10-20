@@ -70,6 +70,8 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { formatDateTime } from "../lib/datetime";
 import SettingsPanel from "../components/SettingsPanel";
+import Pager from "../components/Pager";
+import { paginate } from "../lib/pagination";
 import IntegrationStatusPanel from "../components/IntegrationStatusPanel";
 import PurchaseOrderList from "../components/PurchaseOrderList";
 import TopBar from "../components/TopBar";
@@ -129,6 +131,10 @@ import { defaultEvidenceId } from "../lib/evidence";
 import { decisionGroups, statusWord, typeWord } from "../lib/decision-picker";
 
 const APPROVER_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
+
+// Recommendation Feed: 10 kartu per halaman, sama seperti Daftar Pemasok dan
+// Papan Kiriman. Semua kartu yang lolos filter tetap bisa dijangkau lewat Pager.
+const FEED_PAGE_SIZE = 10;
 
 // Halaman Kualitas Agen & Pemasok menilai SAMPEL keputusan terakhir dalam
 // cakupan: jejak agen + putusan verifikator dipanggil per keputusan, jadi
@@ -469,12 +475,10 @@ export default function Home() {
   const [feedScope, setFeedScope] = useState<string>(FEED_SCOPE_ALL);
   const [feedQuery, setFeedQuery] = useState("");
   const [feedSort, setFeedSort] = useState<FeedSort>("urgency");
-  // Feed berisi puluhan keputusan; tampilkan bertahap supaya halaman tidak
-  // menjadi gulungan panjang. Jumlah tersisa selalu dinyatakan terang-terangan.
-  // 10 kartu pertama (dari 24): halaman 4.100 px menjadi ±1.800 px. Tombol
-  // "Tampilkan 24 lagi" tetap ada, jadi tidak ada informasi yang hilang —
-  // hanya tidak lagi dirender sekaligus (permintaan pemilik 17 Okt: "kebesaran").
-  const [feedLimit, setFeedLimit] = useState(10);
+  // Feed berisi puluhan keputusan; tampilkan 10 kartu per halaman supaya
+  // halaman tidak menjadi gulungan panjang. Pager menyebut rentang ("1–10 dari
+  // 24") dan semua kartu tetap bisa dijangkau — tidak ada yang disembunyikan.
+  const [feedPage, setFeedPage] = useState(1);
 
   const isApprover = APPROVER_ROLES.has(role ?? "");
 
@@ -806,7 +810,8 @@ export default function Home() {
   const feedChipList = feedChips(decisions);
   const feedRows = sortFeed(feedVisible(decisions, feedFilter), feedSort, now);
   const feedTotal = feedRows.length;
-  const feedCards = feedRows.slice(0, feedLimit);
+  const feedPageData = paginate(feedRows, feedPage, FEED_PAGE_SIZE);
+  const feedCards = feedPageData.items;
   const feedFilterActive = hasActiveFilter(feedFilter);
   // Keputusan yang menunggu tindakan manusia — satu definisi dengan lonceng
   // notifikasi top bar (dulu dihitung sendiri di sini dari statusCounts).
@@ -1448,7 +1453,7 @@ export default function Home() {
                         placeholder="Jenis, status, kasus, atau ID keputusan…"
                         onChange={(e) => {
                           setFeedQuery(e.target.value);
-                          setFeedLimit(24);
+                          setFeedPage(1);
                         }}
                       />
                     </div>
@@ -1457,7 +1462,10 @@ export default function Home() {
                       <select
                         id="feed-sort"
                         value={feedSort}
-                        onChange={(e) => setFeedSort(e.target.value as FeedSort)}
+                        onChange={(e) => {
+                          setFeedSort(e.target.value as FeedSort);
+                          setFeedPage(1);
+                        }}
                       >
                         {(["urgency", "due", "newest"] as FeedSort[]).map((mode) => (
                           <option key={mode} value={mode}>
@@ -1483,7 +1491,7 @@ export default function Home() {
                         }`}
                         onClick={() => {
                           setFeedScope(feedScope === chip.id ? FEED_SCOPE_ALL : chip.id);
-                          setFeedLimit(24);
+                          setFeedPage(1);
                         }}
                       >
                         {chip.label}
@@ -1508,7 +1516,7 @@ export default function Home() {
                         onClick={() => {
                           setFeedScope(FEED_SCOPE_ALL);
                           setFeedQuery("");
-                          setFeedLimit(24);
+                          setFeedPage(1);
                         }}
                       >
                         Kosongkan filter
@@ -1544,21 +1552,11 @@ export default function Home() {
                     </div>
                   )}
 
-                  {feedTotal > feedLimit && (
-                    <div className="feed-more">
-                      <p>
-                        Menampilkan {feedCards.length} dari {feedTotal} rekomendasi
-                        yang lolos filter.
-                      </p>
-                      <button
-                        type="button"
-                        className="button button-secondary"
-                        onClick={() => setFeedLimit(feedLimit + 24)}
-                      >
-                        Tampilkan {Math.min(24, feedTotal - feedLimit)} lagi
-                      </button>
-                    </div>
-                  )}
+                  <Pager
+                    page={feedPageData}
+                    onChange={setFeedPage}
+                    label="rekomendasi"
+                  />
                 </>
               )}
             </section>
