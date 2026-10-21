@@ -34,7 +34,7 @@ class FreshnessWorker(ReadOnlyWorker):
             return self._error(str(exc), latency_ms=self._latency_ms(started))
 
         try:
-            payload = api.get("/batches")
+            batches = api.semua_batch()
         except AgentApiError as exc:
             latency = self._latency_ms(started)
             if exc.status_code == 404:
@@ -52,10 +52,6 @@ class FreshnessWorker(ReadOnlyWorker):
                     latency_ms=latency,
                 )
             return self._error(str(exc), latency_ms=latency)
-
-        batches = payload.get("batches") if isinstance(payload, dict) else None
-        if not isinstance(batches, list):
-            return self._error("respons /batches tidak memuat daftar 'batches'", latency_ms=self._latency_ms(started))
 
         selected = [
             batch

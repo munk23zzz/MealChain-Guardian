@@ -21,7 +21,7 @@ class SafetyWorker(ReadOnlyWorker):
             return self._error(str(exc), latency_ms=self._latency_ms(started))
 
         try:
-            batches_payload = api.get("/batches")
+            batches = api.semua_batch()
         except AgentApiError as exc:
             latency = self._latency_ms(started)
             if exc.status_code == 404:
@@ -43,10 +43,6 @@ class SafetyWorker(ReadOnlyWorker):
                     latency_ms=latency,
                 )
             return self._error(str(exc), latency_ms=latency)
-
-        batches = batches_payload.get("batches") if isinstance(batches_payload, dict) else None
-        if not isinstance(batches, list):
-            return self._error("respons /batches tidak memuat daftar 'batches'", latency_ms=self._latency_ms(started))
 
         selected = [
             batch

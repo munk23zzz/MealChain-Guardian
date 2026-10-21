@@ -116,6 +116,36 @@ def get_supply_demand(location: str, commodity: str) -> dict:
     }
 
 
+_BATAS_HALAMAN = 500  # plafon /batches per halaman (backend: BATAS_MAKS)
+_PLAFON_BATCH = 5000  # pagar: jangan pernah menarik lebih dari ini
+
+
+def _semua_batch() -> list[dict]:
+    """Ambil SEMUA batch lewat paginasi.
+
+    `/batches` berplafon 500 per halaman dengan bawaan 50 baris. Dulu tool ini
+    memanggil sekali lalu menyaring di memori, sehingga batch lokasi/komoditas
+    yang jatuh di halaman kedua tidak pernah terlihat: agen kesegaran/keamanan
+    melaporkan "0 batch" padahal datanya ADA (terukur: Jakarta/telur punya 3
+    batch, tapi agen melaporkan 0). `total` dipakai supaya halaman berikutnya
+    benar-benar diambil, bukan ditebak dari panjang halaman.
+    """
+    hasil: list[dict] = []
+    offset = 0
+    while True:
+        data = _request(f"/batches?limit={_BATAS_HALAMAN}&offset={offset}")
+        baris = data.get("batches") or []
+        if not isinstance(baris, list):
+            raise ToolError("respons /batches tidak memuat daftar 'batches'")
+        hasil.extend(baris)
+        total = data.get("total")
+        offset += len(baris)
+        if not baris or not isinstance(total, int) or offset >= total:
+            return hasil
+        if offset >= _PLAFON_BATCH:
+            return hasil
+
+
 def get_safety_freshness(location: str, commodity: str | None = None) -> dict:
     """Ringkas keamanan dan kesegaran batch di satu lokasi (opsional per komoditas).
 
@@ -123,10 +153,7 @@ def get_safety_freshness(location: str, commodity: str | None = None) -> dict:
         location: Nama lokasi, mis. "Jakarta".
         commodity: Nama komoditas; kosongkan untuk semua komoditas di lokasi itu.
     """
-    data = _request("/batches")
-    batches = data.get("batches") or []
-    if not isinstance(batches, list):
-        raise ToolError("respons /batches tidak memuat daftar 'batches'")
+    batches = _semua_batch()
 
     lokasi = location.strip().lower()
     komoditas = (commodity or "").strip().lower()

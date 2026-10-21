@@ -216,3 +216,37 @@ menimbulkan biaya penyimpanan kecil.
 - [ ] Inline policy `MealChainAgentCoreDeploy` menempel pada user `megu`
 - [ ] `simulate-principal-policy` → semua `allowed`
 - [ ] Kabari agen "izin sudah ditambahkan" → deploy + verifikasi dijalankan
+
+---
+
+## Kalau 7 agen berstatus "Tidak dijalankan" (review `unavailable`)
+
+Gejala: satu putaran Event 1 selesai (pipeline 200/201), tetapi `/demo/agent/last-run`
+memperlihatkan `agent_review.status = unavailable` dan `agents_run_id = null`, dengan pesan
+`AgentApiError: tidak dapat menghubungi API di https://….trycloudflare.com (… Name or service not known)`.
+Penyebabnya bukan panel: runtime AgentCore memanggil backend lewat `MEALCHAIN_API_URL`, dan
+Quick Tunnel lama sudah mati.
+
+Perbaikan (terbukti 20 Okt 2026, runtime v19 → v20):
+
+1. Nyalakan tunnel baru dan biarkan terminalnya terbuka:
+   `cloudflared tunnel --url http://localhost:8000`
+   Catat URL `https://<acak>.trycloudflare.com`; `curl <URL>/health` harus 200.
+2. Tulis URL ke environment runtime — pakai container backend (boto3 + kredensial sudah ada):
+   ```
+   docker cp .env mealchain-backend:/.env
+   docker cp agent/set_runtime_env.py mealchain-backend:/tmp/set_runtime_env.py
+   docker compose exec -T backend python /tmp/set_runtime_env.py --api-url https://<acak>.trycloudflare.com
+   docker compose exec -T backend python /tmp/set_runtime_env.py --tampilkan   # READY + versi naik
+   docker exec mealchain-backend rm -f /.env /tmp/set_runtime_env.py
+   ```
+   Skrip menunggu status READY (default 180 dtk) dan tidak mencetak token.
+   Catatan: `.env` yang ditulis skrip adalah salinan di dalam container; perbarui juga
+   `MEALCHAIN_API_URL` di `.env` repo supaya konsisten.
+3. Verifikasi: sesi demo aktif → Demo Control → **Jalankan agent** → tujuh kartu harus
+   "Selesai" dan `agent_review.status = completed`.
+
+Quick Tunnel berubah URL setiap proses cloudflared berhenti (PC restart, terminal ditutup).
+Untuk demo, biarkan terminalnya hidup; untuk jangka panjang pakai named tunnel/domain lalu
+`--api-url https://api.domain` sekali saja.
+

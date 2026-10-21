@@ -65,6 +65,37 @@ class MealChainClient:
     def get(self, path: str, params: dict[str, object] | None = None) -> dict:
         return self._request("GET", path, params=params)
 
+    def semua_batch(self, page_size: int = 500, max_rows: int = 5000) -> list[dict]:
+        """Ambil SEMUA batch lewat paginasi.
+
+        `GET /batches` berplafon 500 baris per halaman dengan bawaan 50. Worker
+        kesegaran/keamanan dulu memanggilnya sekali lalu menyaring di memori,
+        sehingga batch lokasi/komoditas yang jatuh di halaman berikutnya tidak
+        pernah terlihat — terukur di demo: Jakarta/telur punya 3 batch, worker
+        melaporkan "0 batch". `total` dipakai supaya halaman berikutnya benar-
+        benar diambil, dan `max_rows` menjadi pagar agar tidak menarik tanpa
+        batas.
+        """
+        hasil: list[dict] = []
+        offset = 0
+        while True:
+            data = self.get("/batches", params={"limit": page_size, "offset": offset})
+            baris = data.get("batches") if isinstance(data, dict) else None
+            if not isinstance(baris, list):
+                raise AgentApiError(
+                    "respons /batches tidak memuat daftar 'batches'", path="/batches"
+                )
+            hasil.extend(baris)
+            total = data.get("total") if isinstance(data, dict) else None
+            offset += len(baris)
+            if (
+                not baris
+                or not isinstance(total, int)
+                or offset >= total
+                or offset >= max_rows
+            ):
+                return hasil
+
     def post_compute(self, path: str, body: dict[str, object]) -> dict:
         """POST hanya untuk endpoint komputasi murni yang ada di allowlist."""
         if path not in COMPUTE_ALLOWLIST:
