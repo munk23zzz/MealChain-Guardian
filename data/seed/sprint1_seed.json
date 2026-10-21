@@ -429,7 +429,7 @@
     {
       "location": "Jakarta",
       "commodity": "wortel",
-      "quantity_kg": 150,
+      "quantity_kg": 360,
       "source": "mock_sap"
     },
     {
@@ -447,7 +447,7 @@
     {
       "location": "Bogor",
       "commodity": "wortel",
-      "quantity_kg": 400,
+      "quantity_kg": 200,
       "source": "mock_sap"
     },
     {
@@ -2925,7 +2925,7 @@
       "location": "Bogor",
       "commodity": "wortel",
       "supplier": "CV Puncak Sayur Sejahtera",
-      "quantity_kg": 240,
+      "quantity_kg": 120,
       "harvested_at_offset_hours": -18,
       "dispatch_offset_hours": -15.5,
       "shelf_life_days": 21,
@@ -2953,7 +2953,7 @@
       "location": "Bogor",
       "commodity": "wortel",
       "supplier": "CV Puncak Sayur Sejahtera",
-      "quantity_kg": 160.0,
+      "quantity_kg": 80.0,
       "harvested_at_offset_hours": -42,
       "dispatch_offset_hours": -39.5,
       "shelf_life_days": 21,
@@ -3037,7 +3037,7 @@
       "location": "Jakarta",
       "commodity": "wortel",
       "supplier": "CV Hortikultura Subang Lestari",
-      "quantity_kg": 90,
+      "quantity_kg": 170,
       "harvested_at_offset_hours": -18,
       "dispatch_offset_hours": -0.4666666666666667,
       "shelf_life_days": 21,
@@ -3065,7 +3065,7 @@
       "location": "Jakarta",
       "commodity": "wortel",
       "supplier": "UD Puncak Sayur Asri",
-      "quantity_kg": 60.0,
+      "quantity_kg": 190.0,
       "harvested_at_offset_hours": -42,
       "dispatch_offset_hours": -3.1666666666666665,
       "shelf_life_days": 21,
