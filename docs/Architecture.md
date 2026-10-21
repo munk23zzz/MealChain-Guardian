@@ -219,6 +219,27 @@ Jakarta → `VERIFY` → panggil `/freshness/evaluate` & `/safety/evaluate` untu
 mengaudit → tampil di Recommendation Feed → SPPG Head/SPPG Nutritionist approve → `/actions/execute` → tulis
 ke SAP mock (purchase order) → `LEARN` (update Memory untuk siklus berikutnya)
 
+Alur di atas berlaku untuk **telur, beras, ayam** — Jakarta tetap shortage di tiga
+komoditas itu sehingga Cianjur tetap menjadi sumber surplusnya. Untuk **wortel arahnya
+terbalik**: Jakarta sendiri surplus (seed kanonik `data/seed/sprint1_seed.json`:
+pasokan 360 kg vs kebutuhan 158 kg) karena kelebihan kiriman dari pemasok Subang
+(CV Hortikultura Subang Lestari) dan Puncak (UD Puncak Sayur Asri), sementara **Bogor
+kekurangan ~205 kg** karena kiriman CV Puncak Sayur Sejahtera dipotong (batch 240→120
+dan 160→80 kg). Jadi Event 1 untuk wortel memakai **Jakarta sebagai sumber dan Bogor
+sebagai tujuan**.
+
+Ukuran lotnya dijaga agar wajar, bukan sekadar "ada selisih":
+`quantity = min(surplus sumber, shortage tujuan, batch tersedia)`
+(`app/core/candidate_generation.py:200`) menghasilkan **±189 kg**, setara satu truk
+kecil untuk 50 km. Biaya penanganan tetap Rp 150.000 (`HANDLING_FLAT`) hanya 3,2% dari
+nilai barang (189 kg × Rp 24.900 = Rp 4,7 juta). Sebagai pembanding, memindahkan
+selisih kecil seperti Bandung (−36 kg) akan membuat biaya tetap itu 16,7% nilai
+barang — secara ekonomi tidak layak, dan itulah sebabnya defisit tujuan dibuat pada
+skala satu muatan. Invarian `supply_kg = Σ batch` juga dijaga karena rekomendasi
+memakai jumlah batch, bukan angka pasokan.
+
+
+
 ### Event 2: Price anomaly
 `Supervisor DETECT` → panggil `/price/deviation` → deviasi > threshold → `TRACE` → panggil
 `/evidence/fuse` untuk konteks tambahan → status "Procurement price deviation detected —

@@ -60,7 +60,7 @@ Detail muncul dengan evidence → Approve → status di peta berubah
 | 3 | Recommendation Feed (`/recommendations`) | Tab **Recommendations** + Decision Detail digabung ✓ | Wajib |
 | 4 | Decision Detail & Evidence | Tab **Decision & Evidence** (Langkah 4, permintaan Roy 2026-10-11) — halaman tersendiri seperti sidebar acuan: ringkasan + identitas/tenggat, biaya, keamanan & pemasok, governance, riwayat iterasi, bukti tersimpan/ledger/ttd; klik kartu di feed membawa ke sini ✓ | Wajib |
 | — | *(acuan app)* **Keamanan Pangan** | Tab **Keamanan Pangan** (Langkah 5, permintaan Roy 2026-10-11) — halaman `/compliance` di acuan: ringkasan pengawasan batch (aman/gagal uji/perlu verifikasi), blokir batch gagal, daftar batch perlu segera dipakai, tabel status per batch (status, kesegaran, sisa masa layak) ✓ | Tambahan demo |
-| — | *(acuan app)* **Surplus & Limbah** | Tab **Surplus & Limbah** (Langkah 5) — halaman `/surplus` di acuan: neraca surplus/kekurangan komoditas aktif, rencana alokasi surplus→kekurangan (greedy, jarak dari koordinat), keadaan pencatatan limbah ✓ (hanya peran SPPG, seperti acuan) | Tambahan demo |
+| — | *(acuan app)* **Surplus & Limbah** | Tab **Surplus & Limbah** (Langkah 5) — halaman `/surplus` di acuan: neraca surplus/kekurangan komoditas aktif, rencana alokasi surplus→kekurangan (greedy, jarak dari koordinat; sejak 20 Okt 2026 dihitung server lintas lokasi lewat `GET /surplus/allocations` + kolom biaya tetap), keadaan pencatatan limbah ✓ (hanya peran SPPG, seperti acuan) | Tambahan demo |
 | — | *(acuan app)* **Pemasok** | Tab **Pemasok** (Langkah 5) — halaman `/suppliers` di acuan: daftar pemasok + keandalan dari keputusan terakhir, register eksklusi, form usul eksklusi ✓ | Tambahan demo |
 | 5 | Agent Activity Log (`/agent-log`) | Tab **Agent Log** — trace console + provider panel, pilih decision via dropdown ✓ | Wajib |
 | 6 | Approval Modal/Flow | Di dalam Decision Detail ✓ | Wajib |
@@ -126,14 +126,18 @@ Detail muncul dengan evidence → Approve → status di peta berubah
   Sedang mengirim".
   Pemasok **tanpa koordinat tidak dipin** (tidak ada titik karangan) dan jumlahnya dinyatakan di
   samping tombol.
-- **Penanda "sedang mengirim" (keputusan pemilik 2026-10-16):** pemasok yang punya batch kiriman
-  **masih layak** (`usable_until >= sekarang`, dihitung backend dan dikirim sebagai kunci
-  `shipping` pada `GET /suppliers`) mendapat **cincin** di sekeliling titiknya
-  (`map-pin-supplier-shipping`, cincin `--status-safe`) — **bukan nada kelima**: warna pin tetap
-  berarti keandalan/jangkauan, cincin berarti kiriman berjalan, jadi dua fakta berbeda bisa
-  terbaca bersamaan dan tidak saling menutup. Label (`aria-label`) dan popup menambah
-  "sedang mengirim N kiriman"; kiriman yang gagal uji disebut terpisah (`safety_fail_count`),
-  tidak disembunyikan di balik kata "sedang mengirim".
+- **Penanda "sedang mengirim" (revisi 2026-10-20):** pemasok yang punya kiriman **`di_jalan`
+  sekarang** (`journey.state === "di_jalan"` dari `GET /supplier-routes`, dihitung di peta)
+  digambar sebagai **lingkaran PENUH violet `--status-live`** dengan **satu halo yang melebar
+  2,2 dtk** (`@keyframes pin-kirim-halo`) — bukan cincin `--status-safe`. Dua alasan revisi:
+  (a) cincin tipis di sekitar garis tepi pin hanya terbaca sebagai border tebal, bukan status;
+  (b) kunci `shipping` dari `GET /suppliers` menghitung **semua** kiriman termasuk yang sudah
+  tiba, sehingga 6 pemasok menyala saat hanya 2 yang benar-benar di jalan. `--status-live`
+  khusus penanda "hidup/bergerak" (juga dipakai puck mobil), bukan nada status — warna pin
+  biasa tetap berarti keandalan/jangkauan. `prefers-reduced-motion` mematikan denyut dan
+  menyisakan halo diam, jadi statusnya tetap terbaca. Label (`aria-label`) dan popup tetap
+  menyebut "sedang mengirim N kiriman"; kiriman yang gagal uji disebut terpisah
+  (`safety_fail_count`), tidak disembunyikan di balik kata "sedang mengirim".
 - **Garis jalur kiriman (`ship-route`).** Garis putus-putus di peta menandai rute kiriman
   pemasok → tujuan **mengikuti jalan** (geometri OSRM, disimpan di tabel `road_routes`), bukan
   garis lurus. Warna garis memakai token yang sama dengan nada mutu kiriman
@@ -141,6 +145,20 @@ Detail muncul dengan evidence → Approve → status di peta berubah
   WebGL tidak bisa membaca CSS var, jadi `ROUTE_LINE_COLORS` di
   `frontend/lib/supplier-routes.ts` dikunci tes yang **membaca `app/globals.css`** — token
   berubah tanpa menyentuh modul itu akan memerahkan tes.
+- **Tiga keadaan garis, satu palet (audit 21 Okt 2026).** Peta menggambar tiga keadaan dengan
+  warna yang semuanya berasal dari token status, bukan warna baru:
+  *berjalan* = satu keluarga violet dengan ikon truk: bagian yang sudah ditempuh
+  `--route-live-strong` `#7C3AED` (kontras 4,97:1 di tile OSM terang), sisa perjalanan
+  `--route-live-soft` `#8B5CF6` (3,69:1, lolos ambang grafik 3:1) dibedakan oleh pola putus,
+  tebal 5 / 4,5 px dengan alas putih 7,2 px;
+  *sudah tiba* = abu netral `--route-arrived` `#475569`, tebal 3,6 px, opasitas 0,75, putus 7/5,
+  alas putih 6,5 px; *gagal uji* = `--status-danger` putus.
+  Riwayat singkat: versi pertama memakai hijau `--status-safe` + biru `--accent-strong`, lalu
+  versi kedua abu 2,5 px opasitas 0,32 — keduanya dinilai pemilik "tidak terlihat" di basemap
+  terang. Karena itu warna sekarang dipilih dengan kontras terukur, bukan selera, dan alas putih
+  tetap wajib: tanpa ia garis tipis bertabrakan dengan jalan peta. Ikon mobil tetap HANYA untuk
+  keadaan berjalan, supaya "ada yang bergerak" tidak pernah salah dibaca.
+
 - **Kontrol layer sejajar, tidak menumpuk.** Sakelar pemasok dan sakelar jalur duduk dalam satu
   wadah `.map-overlay-toggles` (pil putih, `gap: 2px`) — dua kotak yang saling menimpa di pojok kiri
   atas pernah jadi masalah nyata. Sejak revisi 16 Okt (permintaan pemilik: "2 tombol di atas dibuat
@@ -245,8 +263,13 @@ Detail muncul dengan evidence → Approve → status di peta berubah
   `safetyFacts`, `supplierFact`, `approvalFacts`, `dossierMeta`, `evidenceTally`).
 
 ### 3.4 Agent Activity Log
-- Timeline vertikal: DETECT → VERIFY → TRACE → PREDICT → OPTIMIZE → DECIDE → ACT → LEARN
-- Tiap step: tool yang dipanggil, input ringkas, output ringkas, timestamp, durasi
+- Timeline vertikal: DETECT → VERIFY → TRACE → PREDICT → OPTIMIZE → DECIDE → ACT → LEARN.
+  Urutan itu *kemungkinan*, bukan janji: `ACT` hanya tercatat saat aksi benar-benar
+  dieksekusi (`executed`), dan `LEARN` hanya tercatat oleh loop penolakan
+  (`POST /actions/repropose`) setelah keputusan ditolak lalu diajukan ulang.
+  Pipeline yang baru dijalankan berhenti di `DECIDE`/`SUPERVISE` (status `proposed`).
+- Tiap step: tool yang dipanggil (ditulis dengan sebutan manusia), output ringkas
+  (`output_summary`) apa adanya, fakta turunan (nomor PO, model penyedia), timestamp, durasi.
 - Data ditarik dari AgentCore Observability trace (bukan log buatan sendiri)
 - Bisa filter per decision_id
 - Ini screen yang PALING PENTING untuk demo juri — harus terlihat jelas dan real-time
@@ -328,7 +351,26 @@ Aturan yang dipegang (sama seperti halaman lain): angka yang tidak ada ditulis
 `lib/food-safety.ts`, `lib/surplus.ts`, `lib/suppliers-board.ts`, `lib/agent-quality.ts`
 (diuji) dan markup ke `components/*Board.tsx` (kontrak markup diuji). Halaman
 **Surplus & Limbah** dibatasi peran SPPG (`sppg_head`, `sppg_nutritionist`) seperti
-acuan; sisanya semua peran.
+acuan; sisanya semua peran. Konsekuensinya (ditemukan 20 Okt 2026): panel
+"Rencana alokasi surplus" tidak boleh lagi merakit pasangannya dari
+`/balance/map` — endpoint itu dibatasi cakupan peran (Ruling 2026-10-14), jadi
+peran SPPG hanya menerima lokasinya sendiri dan panel selalu kosong. Rencana
+sekarang dihitung server lintas lokasi (`GET /surplus/allocations`, pasangan
+`from/to/kg/distance_km` + `cost_share_pct`), dan panel menulis sebabnya bila
+kosong (`available: false` + `reason`).
+
+**Ambang 150 kg (permintaan pemilik 20 Okt 2026).** "Jangan rencanakan surplus
+jika di bawah 150 kg." Dua ambang ditegakkan di server (`MIN_SURPLUS_KG`):
+lokasi hanya menjadi sumber bila surplusnya ≥150 kg, dan tiap baris pengiriman
+hanya tampil bila kg-nya ≥150 kg. Alasan ambang kedua: penanganan tetap
+Rp150.000 selalu kena berapa pun kg-nya, jadi alokasi 5 kg lintas kota bukan
+rencana yang masuk akal. Respons membawa `min_surplus_kg`, `surplus_locations`
+(kini hanya sumber yang lolos), `totals.surplus_below_min_kg` (bagian yang
+sengaja tidak direncanakan), dan `reason`
+`surplus_di_bawah_ambang`/`alokasi_di_bawah_ambang`; panel menulis ambang itu
+di bawah judul. Terukur: telur menyisakan satu baris `Cianjur → Jakarta
+622,17 kg`; ayam tidak punya rencana karena semua pasangannya <150 kg; beras
+tetap tiga baris (1.344,06 / 269,47 / 183,64 kg).
 
 Konvensi tabel baru: tabel lebar WAJIB dibungkus `<div className="board-table-wrap">`
 (geser di dalam kartu) + petunjuk `.board-scroll-hint` yang hanya tampil ≤640px —
@@ -377,6 +419,7 @@ bukan dari mencerahkan tinta yang akan merusak kontras teks.
 --accent:         #1D4ED8   /* hover aksi (blue-700) */
 --bg-page:        #F8FAFC   /* latar halaman (slate-50) */
 --status-safe:    #2E7D32   /* PASS / surplus (tetap — AA) */
+--status-live:    #8B5CF6   /* penanda AKTIF (pin pemasok mengirim + puck mobil) — bukan status */
 --status-warning: #F9A825   /* tight — hanya tint; teks badge pakai --warn-ink */
 --status-danger:  #C62828   /* FAIL / shortage (tetap — AA) */
 ```
@@ -2253,3 +2296,539 @@ membawa jumlahnya di luar lipatan; isi langkah tetap ada di DOM (15 `<li>`), han
 Terukur di :3010: tertutup 28 px (dokumen 1.235 px), terbuka 195 px (dokumen 1.402 px); `innerText` daftar
 saat tertutup = kosong.
 
+## 23. Kartu "Penerimaan barang": opsi batch, gerbang, dan kalimat (20 Okt 2026)
+
+Audit pemilik: *"untuk bagian 'Penerimaan barang' pada halaman 'Keamanan Pangan' tolong anda periksa
+apakah semuanya sudah sesuai atau belum, terutama bagian kalimatnya dan opsi pilihan"*. Hasil periksa
+diukur di aplikasi hidup (:3010, SPPG Head, dapur Jakarta), bukan dari kesan tangkapan layar.
+
+**Opsi batch tidak boleh ikut cakupan tabel.** Daftar "Batch yang diterima" dulu memakai baris yang
+sudah disaring cakupan (`urut`), sehingga saat cakupan diubah ke "Semua lokasi (pengawasan)" dropdown
+menawarkan 50+ batch kota lain. Memilih salah satunya dijawab `403 "lokasi batch di cakupan lokasi di
+luar SPPG Anda"` (`assert_in_scope` di `POST /receipts`, ruling 2026-10-14: barang diterima di dapur
+sendiri). Sekarang penyaringnya `receivingBatchOptions(rows, ownLocation)` di `lib/food-safety.ts`:
+lokasi sendiri, hanya baris ber-`id`, **batch yang masih layak didahulukan** (urutan tenggat menaruh
+nilai negatif paling atas, sehingga pilihan default bisa jatuh ke batch kedaluwarsa — bukan sasaran yang
+masuk akal untuk barang datang hari ini; batch kedaluwarsa tetap bisa dipilih karena kiriman bisa
+terlambat). Terukur sesudah: cakupan jaringan tetap 5 opsi, semuanya JKT.
+
+**Tahun selalu ikut di tanggal layak pakai.** Batch beras demo layak sampai Maret tahun berikutnya; tanpa tahun, labelnya "19 Mar" — terbaca seolah bulan depan, dan di kartu penerimaan label itu dipakai memilih batch. `usableLabel` sekarang menulis "19 Mar 2027, 01.00" (juga membuatnya deterministik: tidak bergantung tahun berjalan). Di 375 px tanggal dibungkus `span.safety-nobr` supaya tidak pecah antara bulan dan tahun. Terukur: tabel batch 1440 & kartu 375 tanpa luapan, kolom "Layak sampai" membungkus dua baris dengan rapi.
+
+**Keadaan batch terbaca tanpa membuka daftar.** Opsi di dalam `<select>` hanya identitas
+(`komoditas · kg · kode wilayah`) karena teks panjang terpotong di 375 px (301 px). Keamanan + masa layak
+ditaruh di baris `Keadaan batch: <status> · layak s/d <tanggal>` **di luar `<label>`** — kalau di dalam,
+teks itu ikut menjadi nama field bagi pembaca layar.
+
+**Gerbang yang tidak ada jangan dijanjikan.** Kalimat lama "0 dari 5 titik periksa sudah ditandai —
+tandai sisanya sebelum barang dipakai" memerintah sesuatu yang tidak ditegakkan: tombol aktif di 0/5
+(`disabled: false`, terukur) dan `POST /receipts` menerima snapshot kosong. Yang dipilih: mencatat
+sebagian tetap boleh (memaksa 5/5 membuat orang mencentang tanpa memeriksa — bukti jadi palsu), tetapi
+kalimatnya jujur: "… — N belum diperiksa. Boleh disimpan sebagian." Pesan sesudah simpan dipisah
+(`receiptSavedSentence`) dan memakai bentuk lampau, karena versi lama menyuruh menandai ulang tepat
+setelah catatannya tersimpan.
+
+**Kalimat lain yang dirapikan.** Pembuka kartu kehilangan pengulangan "hitung ulang … yang dihitung
+server" dan menyebut urutan tulisnya (catatan periksa → hitung ulang server). Contoh "Lainnya" tidak lagi
+muncul tiga kali (label, placeholder, catatan bawah) melainkan sekali; catatan bawah kini bicara status
+simpan. Label suhu menyebut batas yang benar-benar dipakai mesin — 0–8 °C untuk telur/ayam/wortel dan
+15–30 °C untuk beras (`_SAFE_TEMP_BY_COMMODITY`, `backend/app/api/freshness.py`), bukan "sesuai" yang
+harus ditebak petugas.
+
+**Kendaraan berpendingin sengaja BUKAN titik periksa ke-6.** Rantai dingin sudah dihitung deterministik
+oleh `/safety/evaluate` + `/freshness/evaluate` dari log suhu tersimpan (`excursion_minutes`), dan satu
+titik periksa generik akan salah untuk beras yang justru butuh 15–30 °C. Keadaan khusus tetap bisa
+ditulis di "Lainnya" — contohnya memang menyebut "kendaraan tanpa pendingin".
+
+**Snapshot titik periksa memang tersimpan** sejak migrasi `016_batch_receipts` (`checked` JSONB,
+`other_note`, `recorded_by`, `recorded_at`). Komentar lama di `lib/food-safety.ts` yang menyebut "sengaja
+tidak dipersistensikan: backend tidak punya kolom" dikoreksi karena bertentangan dengan kartunya sendiri.
+Id titik `warna` diganti `bau_warna` supaya sepadan dengan labelnya; baris lama tetap menyimpan kunci
+lamanya (snapshot disimpan apa adanya).
+
+**Aksesibilitas.** Lima kotak centang kini satu kelompok bernama (`<fieldset><legend>Titik periksa</legend>`,
+bingkai bawaan dimatikan di CSS) dan penghitung "N dari 5" memakai `aria-live="polite"` supaya perubahan
+terdengar tanpa memindahkan fokus.
+
+Bukti: `_qa/penerimaan-barang/` (`probe-kartu.py`, `probe-opsi.py`, `probe-403.py`, `probe-sesudah.py`,
+`probe-375.py`, `kartu-1440.png`, `kartu-sesudah-375.png`). Simpan nyata di :3010 → 201, `checked` berisi
+`bau_warna`, `checked_count` 5, riwayat "5 titik · SPPG Head Demo" muncul tanpa memuat ulang halaman.
+
+## Sesi demo (migrasi 024 & 025, 20 Okt 2026)
+
+Permintaan pemilik: tampilan default **kosong**; tombol **"Siapkan data demo"** memanggil data dan mengaktifkannya
+selama satu jendela waktu (bawaan 2 jam, maksimum 4 jam); ada **hitungan mundur**; perpanjangan menambah waktu
+tanpa mengubah data berjalan; data **hanya bisa diubah selama sesi**; sesudah sesi habis data kembali kosong dan
+perubahan hilang (mulai lagi dari template); waktu & tanggal disinkronkan saat tombol ditekan.
+
+### Bentuk data
+
+`demo_sessions` (satu baris per jendela): `status` (`active`/`expired`/`ended`), `started_at`, `expires_at`,
+`anchor_now`, `ended_at`, `template_version`, `created_by`. `anchor_now` mencatat waktu server saat tombol
+ditekan — jam **tidak** dibekukan, karena membekukan waktu membuat log suhu dan umur panen berhenti masuk akal.
+
+`demo_session_id` (nullable, FK `demo_sessions.id`, `ON DELETE SET NULL`) ada di 13 tabel operasional: `batches`,
+`decisions`, `batch_receipts`, `demand_records`, `supply_records`, `price_signals`, `menu_plans`, `delivery_events`,
+`disposal_events`, `road_routes`, `supplier_exclusions`, `sap_mock_material_stock`, `sap_mock_purchase_orders`.
+Tabel referensi (`users`, `locations`, `commodities`, `suppliers`) **tidak** diberi stempel: login dan peta harus
+tetap jalan tanpa sesi.
+
+### Kosong-secara-default dijaga oleh siklus data, bukan filter kueri
+
+Percobaan pertama memakai `with_loader_criteria` untuk menyaring SELECT. Itu **dibuang** setelah terukur gagal:
+banyak endpoint memilih kolom (`select(Batch.id, ...)`) atau memakai Core/bulk, sehingga kriteria ORM hanya
+sebagian berlaku — `/batches` menjawab 0 padahal 118 baris ada, sementara `count` menjawab 118. Sekarang:
+
+- **Mulai sesi** → kosongkan semua baris operasional (semua sesi, termasuk sisa sesi lain) → semai ulang → stempel
+  massal (`tandai_sesi`) untuk baris yang lahir lewat bulk insert yang tidak melewati event flush.
+- **Sesi berakhir / kedaluwarsa** → semua baris operasional dihapus; tabel referensi utuh.
+- **Tanpa sesi sama sekali** → `sapu_tanpa_sesi()` menghapus baris `origin='demo'` yang **belum ber-stempel**, dijeda
+  10 detik agar tidak menjadi DELETE di setiap request dan dipanggil dari jalur baca (`aktif()`). Ini menutup celah
+  yang terukur 21 Okt 2026: 25 keputusan demo lahir lewat jalur lama (`/demo/seed`, `/demo/refresh`) tanpa stempel;
+  karena tidak ada sesi untuk ditutup, `kosongkan_bertanda()` tidak pernah berjalan dan data itu hidup selamanya.
+  Batas amannya `origin='demo'` — baris kanonik (`origin='seed'`) tidak pernah disentuh, jadi peta, KPI, dan suite
+  backend tetap punya data.
+- **Boot** → bila mode sesi menyala dan tidak ada sesi aktif, hanya baris **ber-stempel** (milik sesi) yang
+  dibersihkan. Sebelum 21 Okt 2026 boot memanggil `bersihkan_warisan()` = hapus SELURUH baris operasional, dan
+  efeknya terukur: setiap `uvicorn --reload` saat menyunting kode memusnahkan template demo (121 batch → 0) tanpa
+  sesi. Tampilan tetap kosong tanpa sesi karena UI menyembunyikan data, jadi pembersihan menyeluruh tidak pernah
+  dibutuhkan untuk perilaku itu. Restart di tengah sesi juga tidak menyentuh data.
+- **Membangun template** (`app.seed.demo_template`, dipakai tombol *Bangun ulang data*) selalu memastikan ada sesi
+  aktif lebih dulu (`pastikan_sesi`). Alasannya bukan kosmetik: baris hasil semai ber-`origin='demo'` dan belum
+  ber-stempel sampai pembekuan selesai, sehingga penyapu di proses aplikasi bisa menghapusnya di tengah build
+  (terukur: build "sukses" tetapi berakhir 0 batch saat UI sedang polling).
+
+Konsekuensi yang dinyatakan terbuka: bukti sesi yang sudah berakhir tidak disimpan sebagai arsip di DB. Itu
+konsekuensi langsung dari "kembali kosong" yang diminta; kalau kelak perlu audit pasca-demo, langkahnya adalah
+menulis dump sebelum pembersihan, bukan mempertahankan baris di tabel utama.
+
+### Penjagaan mutasi
+
+`butuh_sesi_aktif` (dependency FastAPI) membalas **409** untuk `POST /demo/seed`, `/demo/timeseries`,
+`/demo/timeseries/purge`, `/demo/refresh`, `/demo/event1`, dan `POST /receipts` saat mode sesi menyala tanpa sesi
+aktif. Dengan `DEMO_SESSION_ENFORCE=false` (bawaan repo/CI) dependency itu tidak melakukan apa pun, sehingga
+1.200+ tes lama tetap sah.
+
+### UI
+
+- `DemoControlPanel` menampilkan kartu sesi: status (`Belum ada sesi` / `Sesi demo berjalan`), **hitungan mundur**
+  dari `remaining_seconds` server (tick lokal 1 detik, diselaraskan ulang tiap 20 detik), tombol
+  **Perpanjang 30 menit** dan **Akhiri sesi**. Tombol "Siapkan data demo" memulai sesi (menyemai + menyalakan jam),
+  lalu memuat ulang halaman supaya semua tab membaca data sesi.
+- `DemoSessionBanner` muncul di semua tab saat `enforced && !active`: menjelaskan bahwa data memang kosong dan
+  menyediakan tombol "Buka Demo Control" (atau petunjuk menghubungi Kepala SPPG untuk peran non-penyetuju).
+- Hitungan mundur tidak memakai jam browser untuk memutuskan apa pun; sesi yang lewat waktu tetap ditutup server.
+
+### Verifikasi
+
+E2E di :3010 (Kepala SPPG): kosong → banner + kartu "Belum ada sesi" → klik **Siapkan data demo** → sesi berjalan
+`1 j 59 m`, banner hilang, 13 tabel terisi dan **0 baris tanpa stempel** → **Perpanjang 30 menit** menjadi
+`2 j 29 m`, id sesi sama, data utuh → **Akhiri sesi** → 13 tabel kembali 0 dan banner kosong muncul lagi.
+`POST /receipts` saat sesi = 201 (batch sendiri) / 403 (batch luar cakupan, aturan lama); tanpa sesi = 409.
+Backend: gerbang penuh **1.213 lulus / 15 dilewati / 0 gagal** (20 Okt, DB kanonik 8 Okt + deret waktu); frontend: **142 berkas / 1.589 tes**, `tsc` 0, `next lint` 0.
+Bukti: `_qa/sesi-demo/` (`diagnosa-sesi.py`, `e2e-sesi-penuh.py`, `e2e-ui.py`, `ui-1-kosong.png` … `ui-4-kosong-lagi.png`).
+
+
+### Kalimat kartu sesi (revisi 20 Okt, sore)
+
+Tiga kalimat lama dibuang karena menyesatkan atau mengulang: (a) pengingat "Data demo hanya bisa diubah selama sesi — tekan Siapkan data demo" yang tampil tepat di bawah `pesanSesi` yang sudah mengatakan hal yang sama untuk keadaan kosong/habis; (b) status yang menyuruh menekan "Buat/perbarui data" — tombol itu milik panel DATA, bukan kartu sesi; (c) judul tombol "Seeder relatif hari ini + muat ulang 4 kasus skrip" (istilah internal). Gantinya: subjudul "Mengisi data demo untuk satu jendela waktu … menekan lagi saat sesi berjalan tidak memuat ulang data", dan baris status "Data demo siap dipakai selama sesi ini." / "Data demo belum dimuat — mulai dengan Siapkan data demo." Tes sumber `frontend/tests/demo-session.test.ts` mengunci ketiganya (`not.toContain` untuk kalimat lama) supaya tidak kembali.
+
+### Prasyarat gerbang backend di checkout ini
+
+Suite memakai database demo bersama: `docker compose exec -T -e DEMO_SESSION_ENFORCE=false backend pytest -q`. Flag harus dimatikan lewat env, bukan `.env`, karena `.env` lokal menyalakannya untuk demo. Data kanonik yang diharapkan tes (menu 2 Okt, rencana 20 Okt–5 Nov) berasal dari `python -m app.seed.seed_data --reference-time 2026-10-08T12:00:00+00:00 --with-demo-users --with-demo-suppliers` lalu `generate_timeseries()`; menjalankan `seed_data` dengan referensi "hari ini" menggeser jangkar dan membuat `test_agenda_api` merah. Setelah gerbang, semai ulang sebelum demo bila sesi demo sedang mati.
+
+
+### Riwayat 30 hari di sesi demo + label periode bulan (20 Okt 2026, malam)
+
+**Masalah yang dilaporkan:** pemilih periode KPI (24 jam / 7 hari / 1 bulan) menampilkan angka yang sama. Terukur: `period.start` berbeda (19 Okt / 13 Okt / 20 Sep) tetapi hampir semua nilai identik, karena penyemai sesi menaruh fakta di satu hari — jendela 7 hari dan 30 hari memuat himpunan baris yang sama.
+
+**Perbaikan backend.** `/demo/session/start` kini menyemai riwayat `DEMO_SESSION_HISTORY_DAYS` (bawaan **30**) lewat `generate_timeseries(now-30h, now, interval_hours=24)` — pasokan, harga, permintaan 30 hari; rencana menu/kiriman/limbah tetap mulai `EVENT_DEMO_START` (8 Okt) supaya Meal Continuity tidak jatuh hanya karena hari lama belum punya kiriman. Biaya: start **36,8 s** (sebelumnya ±35 s), 2.916 baris distempel, 0 baris tanpa stempel. `generate_timeseries`/`preview_timeseries`/`plan_all` mendapat parameter opsional `menu_start` (default `None` = perilaku lama).
+
+Hasil KPI (DB sesi, 20 Okt):
+
+| Metrik | 24 jam | 7 hari | 1 bulan (Oktober) |
+|---|---|---|---|
+| Meal Continuity | 100,00% | 100,00% | 98,41% |
+| Avoidable Food Loss | **1,64%** | **0,42%** | **0,17%** |
+| Procurement Price Deviation | **2,66%** | **2,92%** | **3,41%** |
+| Safe Delivered Cost | Rp18.062.478 | sama | sama |
+| Decision Time / Evidence | 20 mnt / 100% | sama | sama |
+
+Tiga metrik terakhir tetap sama secara jujur: SDC/waktu keputusan/kelengkapan bukti dihitung dari keputusan + PO yang semuanya bertanggal hari ini (`kpi_service.py`), bukan dari jendela fakta.
+
+**Jendela "1 bulan".** Tombol ketiga bukan lagi "30 hari" bergulir: `kpiWindowRange("30d")` mengembalikan awal **bulan berjalan menurut WIB** (1 Okt 00.00 WIB = 30 Sep 17.00 UTC) sampai sekarang, sehingga label periode menulis satu bulan ("Oktober 2026"). Riwayat semai 30 hari tetap cukup untuk menutup bulan berjalan (maksimal 31 hari).
+
+**Perbaikan UI.** `periodeBulan(start, end)` di `lib/kpi.ts` menggantikan tanggal persis: "Periode Oktober 2026" (satu bulan) dan "Periode September – Oktober 2026" (lintas bulan, tahun ditulis sekali; lintas tahun ditulis dua kali). Format memakai zona Asia/Jakarta — 31 Okt 20.00 UTC = 1 Nov WIB.
+
+
+### Semantik penutupan sesi (koreksi 20 Okt 2026, menjelang gate)
+
+`akhiri()` semula menghapus **semua** baris operasional (`kosongkan_kecuali(db, None)`). Itu benar untuk demo (semua baris berstempel) tetapi mematikan isolasi suite: 58 tes backend lain kehilangan data ketika satu tes sesi berjalan lebih dulu. Kini `akhiri()` memakai `kosongkan_bertanda()` — menghapus baris yang **punya stempel sesi mana pun**, menyisakan data kerja tanpa stempel (kanonik). Start sesi dan boot tanpa sesi tetap mengosongkan total, jadi janji "default kosong" tidak berubah; yang berubah hanya efek samping "Akhiri" terhadap data non-sesi. Tes `test_demo_session.py` diberi `pytestmark` skip saat `DEMO_SESSION_ENFORCE=false` karena berkas itu memang mengubah seluruh tabel; jalankan terpisah dengan flag menyala.
+### Skala kanonik: radius, bayangan, label ringkas, font (20 Okt 2026)
+
+Hasil audit konsistensi seluruh halaman (10 tab + login, computed style di aplikasi hidup).
+Sebelumnya berkas CSS memuat 12 nilai radius mentah, 17 literal bayangan dengan 11 alpha,
+dan lencana status dengan tiga tinggi berbeda. Sekarang hanya token di bawah yang sah;
+penjaganya tes kontrak (`tests/radius-scale-css`, `tests/token-bayangan`,
+`tests/label-ringkas-geometri`, `tests/token-alias-css`, `tests/token-warna-komponen`,
+`tests/sisa-audit-desain`).
+
+| Peran | Token | Nilai |
+|---|---|---|
+| Kartu | `--radius` | 12 px |
+| Dock/panel melayang | `--radius-dock` | 14 px |
+| Kontrol besar (input, select, modal) | `--radius-control` | 10 px |
+| Kontrol kecil, tombol, item rail | `--radius-control-sm` | 8 px |
+| Chip, lencana, penanda peta | `--radius-chip` | 4 px |
+| Pil / bulat | literal | 999px / 50% |
+
+Bayangan: `--shadow-1..3` (elevasi umum) + peran `--shadow-pin`, `--shadow-pin-hover`,
+`--shadow-pin-soft`, `--shadow-pin-core`, `--shadow-pin-active`, `--shadow-cluster`,
+`--shadow-pop`, `--shadow-float`, `--shadow-control`, `--shadow-dock`, `--ring-hairline`.
+Tidak ada lagi `rgba(15, 23, 42, …)` yang ditulis langsung di `box-shadow`.
+
+Label ringkas (lencana status): satu geometri `padding: 2px 8px; line-height: 16px;
+min-height: 22px; font-size: var(--fs-1); white-space: nowrap` untuk `.board-badge`,
+`.kpi-state`, `.safety-state`, `.shipping-tag`, `.shipping-tag-fail`, `.integration-badge`,
+`.shipment-pill`, `.shipment-chip`, `.route-tag`, `.reach-tag` — diukur tinggi 22 px seragam,
+teks tidak terpotong. Kendali pil (`.commodity-pill`, `.board-sort-pill`,
+`.route-focus-pill`) dikecualikan: tombol dengan target sentuh sendiri. `.shipment-event-tag`
+juga dikecualikan karena tag inline di dalam baris teks.
+
+Font: `--font-ui` (Fira Sans) dan `--font-data` (Fira Code). `code`/`kbd`/`samp`/`pre`
+wajib memakai `--font-data`; sebelumnya `code` jatuh ke `monospace` bawaan peramban.
+
+Alias warisan `--primary` / `--danger` kini dideklarasikan (`var(--accent-strong)` /
+`var(--status-danger)`), karena tanpa deklarasi itu blok agenda, pil periode KPI, dan pil
+urutan papan jatuh ke teal `#005C55` — di luar tema.
+
+
+### Persetujuan penerimaan → stok → Overview (migrasi 026, 20 Okt 2026)
+
+**Yang dilaporkan pemilik:** demo "barang sampai → ada approve barang diterima → data yang diperlukan (mis. Overview) berubah". Sebelumnya kartu Penerimaan barang hanya mencatat daftar periksa lalu menghitung ulang keamanan/kesegaran; tidak ada keputusan dan tidak ada tulisan stok, sehingga Overview (dibaca dari `supply_records`) tidak bergerak.
+
+**Bentuk yang dibangun.** Dua lapis, dipisah tegas:
+
+1. `POST /receipts` — petugas mencatat. Status lahir `menunggu`, **belum** menambah stok.
+2. `POST /receipts/{id}/approve` — hanya `sppg_head`, scope lokasi sendiri. Menulis SATU baris `supply_records` (source `manual`) sebesar `stok terakhir + batch.quantity_kg`, lalu menandai catatan `disetujui`.
+   `POST /receipts/{id}/reject` — alasan wajib (≥3 karakter), tidak menulis stok.
+
+Aturan yang ditegakkan server (bukan UI):
+- batch `safety_status='fail'` → 409 "barang berstatus TIDAK AMAN";
+- batch lewat `usable_until` → 409 "barang sudah kedaluwarsa";
+- satu batch paling banyak satu penerimaan disetujui — unique index parsial `uq_batch_receipts_satu_disetujui` (klik ganda tidak menggandakan stok);
+- approve idempoten: balasan kedua `sudah: true` dengan `supply_record_id` yang sama;
+- approve oleh peran lain → 403; batch lokasi lain → 403.
+
+**Kenapa stok = terakhir + kg, bukan kg saja.** Overview membaca baris supply TERBARU per lokasi. Menulis hanya `batch.quantity_kg` membuat pasokan turun bila stok sebelumnya lebih besar. Terukur: ayam Jakarta 200 kg → approve 145 kg = **345 kg**; approve 213 kg berikutnya = **558 kg**.
+
+**Bukti angka (sesi demo 20 Okt).** Ayam Jakarta: `supply 200 → 345 → 558`, `demand 215`, status peta `shortage → surplus`; kartu Overview: "Selisih pasokan Jakarta +343 kg · lebih 160% dari kebutuhan · Pasokan terpantau 558 kg (260%)". Tangkapan: `_qa/sesi-demo/penerimaan/overview-setelah-approve.png`.
+
+**UI.** Badge status di riwayat (`Menunggu persetujuan` / `Disetujui` / `Ditolak`), baris keputusan terpisah ("Disetujui SPPG Head Demo · waktu · +196 kg stok"), panel `.safety-approve` dengan tombol "Setujui & masukkan stok" dan "Tolak penerimaan" (textarea alasan). Batch kedaluwarsa menampilkan peringatan dan tombol setujui disembunyikan. Setelah approve, `page.tsx` mengambil ulang `todayQuery`, `mapQuery`, `decisionsQuery` — angka baru datang dari server.
+
+**Tes.** `backend/tests/test_receipts_approval.py` (7 tes): catat tidak menulis stok; approve menambah tepat sebesar kg dan idempoten; reject wajib alasan dan tidak menulis stok; peran lain 403; lokasi lain 403; barang gagal aman 409; barang kedaluwarsa 409. Frontend: `receiptStatusLabel`, `receiptRows` status/kg/alasan, badge & baris riwayat.
+
+### Redesign tata letak "Keamanan Pangan" (20 Okt 2026)
+
+**Masalah terukur.** Halaman setinggi 5.400 px di 1440x900; tabel "Status keamanan per batch"
+memuat 40+ baris sekaligus tanpa saringan, sehingga batch gagal tenggelam di antara batch aman
+dan pengguna harus menggulir jauh. Di 768 px delapan kolom memaksa tanggal "Layak sampai"
+pecah tiga baris; di 375 px tabel hanya bisa digeser mendatar.
+
+**Perubahan.**
+1. **Toolbar saringan** di atas daftar: chip `Perlu tindakan`, `Gagal uji`, `Perlu verifikasi`,
+   `Aman`, `Semua` — masing-masing membawa jumlah, sehingga isi saringan diketahui sebelum
+   diklik. `Perlu tindakan` = gagal + perlu verifikasi + ditahan. Kotak cari menyaring
+   lokasi/komoditas tanpa peduli huruf besar/kecil; saringan dan pencarian digabung.
+2. **Paginasi 8 baris** memakai `Pager` yang sama dengan Pemasok/Kiriman; rentang "1–8 dari N"
+   selalu tertulis dan `aria-live`.
+3. **Tombol prioritas** di kartu Ringkasan: "Tinjau N batch gagal" memindahkan saringan ke
+   `gagal` lalu menggulir ke daftar.
+4. **Kartu berlabel di ≤860 px**: `thead` disembunyikan, setiap `td` memakai `data-label`
+   sehingga baris menjadi kartu "Asal / Komoditas / Jumlah / Status keamanan / Kesegaran /
+   Layak sampai / Sisa masa", tombol tindakan turun ke bawah kartu. Ambang 860 px dipilih
+   karena pada 768 px tabel masih pecah tiga baris.
+5. **Daftar periksa dua kolom** di ≥900 px — lima titik periksa terlihat tanpa menggulir.
+6. **Perbaikan token**: `.commodity-pill-active` kini punya aturan dasar (sebelumnya hanya
+   berlaku di dalam `.filter-card`, sehingga pil aktif di luar filter tampil putih-di-putih).
+   Radius baru memakai `var(--radius)` / `var(--radius-control)`, bukan px lepas.
+
+**Hasil terukur (sesi demo 20 Okt, 1440x900).** Tinggi halaman 5.400 → 2.775 px; default
+"Semua" menampilkan 8 baris pertama dari N; klik `Gagal uji` → "1–1 dari 1"; cari "beras" →
+"1–2 dari 2"; 375 px dan 768 px `docOverflow = 0`; 768 px `thead` `display:none` dan kartu
+berlabel tampil. Gerbang frontend **146 berkas / 1612 tes lulus**, `tsc` 0, `next lint` 0.
+
+**Yang TIDAK berubah (kontrak halaman).** Sumber angka tetap `GET /batches` (satu sumber),
+cakupan tetap "lokasi saya" default, aksi Uji ulang / Ajukan keputusan / Tahan tetap di baris,
+dan penerimaan barang tetap dua langkah (catat → setujui). Redesign hanya menyusun ulang
+penyajian; tidak ada endpoint atau angka baru.
+
+### Penerimaan dua langkah + titik periksa per komoditas (20 Okt 2026)
+
+**Permintaan pemilik.** "Pilihan di bagian Penerimaan barang mungkin bisa dibuat pilihan
+komoditasnya baru memilih batchnya" dan "titik periksa mungkin bisa disesuaikan ceklisnya
+dengan komoditasnya".
+
+**Pemilih dua langkah — revisi setelah riset (20 Okt 2026).** Versi pertama memakai dua
+`<select>` bertingkat (komoditas → batch). Itu dibuang karena riset menunjukkan pola tersebut
+justru sumber kebingungan:
+
+- NN/g, *Dropdowns: Design Guidelines*: "avoid interacting menus, wherein the options in one
+  menu change when users select something in another menu — users get very confused when
+  options come and go".
+- NN/g, *Does Your Form Really Need a Dropdown List?*: dropdown menyembunyikan pilihan,
+  menambah dua klik, dan bermasalah untuk pengguna keyboard/motorik; GOV.UK menyarankan select
+  hanya sebagai pilihan terakhir.
+- DWP Design System, *Filters*: "use radios, not dropdowns" untuk memilih satu dari daftar
+  pendek; GOV.UK *Radios*: radio di kiri label, semua opsi terlihat, jangan bergantung warna.
+
+Karena itu sekarang: **Langkah 1 — Komoditas** berupa pil yang terlihat semua (dengan jumlah
+batch), dan **Langkah 2 — Barang yang belum diuji** berupa daftar kartu radio (1–3 kartu),
+bukan dropdown. Tiap kartu menampilkan berat · kode lokasi, "belum diperiksa · layak s/d …",
+dan lencana **Belum diuji**.
+
+**Hanya barang yang BELUM dinilai (revisi 20 Okt 2026).** Pemilik memilih tegas: "hanya untuk
+barang yang belum dinilai; yang sudah dinilai jangan dimasukkan situ." Artinya filter bukan
+`receipt_status`, melainkan `safety_status === "pending"` (ditambah `receipt_status === null`).
+Batch **Aman**, **Gagal uji**, dan **Perlu verifikasi** sudah punya hasil penilaian, jadi tidak
+pernah muncul di form penerimaan. Konsekuensinya, setelah "Catat hasil terima & hitung ulang"
+status berubah dari `pending` menjadi `pass`/`needs_verification`/`fail` dan batch **langsung
+hilang** dari pilihan — bukan kembali dengan label "menunggu persetujuan".
+
+**Antrean "Menunggu persetujuan" terpisah.** Karena barang yang sudah dicatat keluar dari form,
+persetujuan tidak lagi menumpang di riwayat batch terpilih. `GET /receipts/menunggu` (baru)
+mengembalikan catatan `menunggu` terbaru per batch, ter-scope lokasi pengguna; kartu
+**Menunggu persetujuan** menampilkan komoditas · kg · lokasi, jumlah titik periksa, pencatat,
+waktu, serta tombol "Setujui & masukkan stok" / "Tolak". Setelah diputuskan, item hilang dari
+antrean dan stok/Overview diambil ulang dari server. Tanpa antrean ini, approval akan
+kehilangan pintu masuknya begitu filter "belum dinilai" diberlakukan.
+
+**Data demo.** Seed `jakarta_lengkap.seed_batches` menambah tiga barang baru datang berstatus
+`pending` (ayam 90 kg, beras 300 kg, wortel 120 kg; log suhu ayam/wortel 4 °C, beras 27 °C).
+Status `pending` tidak lagi dibuat oleh rotasi batch kanonik, supaya kartu Penerimaan hanya
+berisi kedatangan yang memang belum dinilai. `GET /batches` juga diminta dengan `limit=500`
+(plafon server) — tanpa itu, 50 baris terbaru membuat barang baru datang tidak terkirim.
+
+Mengganti komoditas atau batch mengosongkan centang karena kalimat titik periksa bergantung
+komoditas dan batch berbeda = barang berbeda. Mengganti komoditas memilih batch pertama
+kelompoknya (paling mendesak); urutan kelompok mengikuti kemunculan pertama pada daftar yang
+diurutkan tenggat.
+
+**Batas suhu safety = freshness (perbaikan 20 Okt 2026).** `/safety/evaluate` sebelumnya memakai
+`settings` 0–8 °C untuk semua komoditas, sedangkan `/freshness/evaluate` sudah memakai
+15–30 °C untuk beras. Akibatnya mencatat penerimaan beras pada 27 °C langsung `fail` dan
+approval ditolak 409. Peta kini dipusatkan di `app/core/commodity_limits.py` dan dipakai kedua
+endpoint.
+
+**Bukti UI (sesi demo, 1440).** Pil hanya `ayam 1`, `beras 1`, `wortel 1`; kartu menampilkan
+`90 kg · JKT` dengan lencana **Belum diuji**, tanpa satu pun batch Aman/Gagal uji. Mencatat
+beras 300 kg → pil beras hilang, kartu **Menunggu persetujuan** muncul; Setujui → pesan
+"300 kg masuk stok", `/balance/Jakarta/beras` `881,97 → 1.181,97 kg` (kekurangan
+`2.070,14 → 1.770,14 kg`). Di 375 px `docOverflow = 0`. Tangkapan:
+`_qa/keamanan-pangan/penerimaan-hanya-pending-1440.png`, `penerimaan-hanya-pending-375.png`,
+`penerimaan-antrean-beras-1440.png`.
+
+**Titik periksa per komoditas.** `receivingChecks(komoditas)` mempertahankan **lima id yang
+sama** (`kemasan`, `suhu`, `bau_warna`, `timbang`, `lot`) supaya catatan lama tetap terbaca
+dan penghitung "N dari 5" tidak berubah; yang berbeda hanya kalimatnya:
+
+| Komoditas | Kemasan | Suhu | Ciri khas |
+|---|---|---|---|
+| ayam | kemasan/segel utuh | 0–8 °C | tidak berbau asam/amis, warna tidak pucat |
+| telur | rak/tray utuh | 0–8 °C | tidak retak atau pecah, permukaan bersih |
+| beras | karung utuh | 15–30 °C | tidak berjamur/apek, butir tidak berkutu |
+| wortel | krat utuh | 0–8 °C | tidak layu/berlendir, warna cerah |
+| lain | kemasan utuh | 0–8 °C | bau & warna normal |
+
+Rentang suhu menyalin `_SAFE_TEMP_BY_COMMODITY` di `backend/app/api/freshness.py` — satu
+sumber, bukan angka baru di layar. Isian "Lainnya" dan dua field tetap (timbangan, nomor lot)
+tidak berubah, dan server tetap menerima snapshot `checked` seperti sebelumnya (tanpa migrasi).
+
+**Bukti UI (sesi demo, 1440).** Opsi komoditas: `ayam · 2 batch · 200 kg`,
+`wortel · 1 batch · 170 kg`, `beras · 2 batch · 900 kg`. Memilih beras → batch
+`540 kg · JKT · Aman` / `360 kg · JKT · Aman`, dan lima titik periksa berubah menjadi
+karung, 15–30 °C, apek, timbangan, nomor lot. Tangkapan:
+`_qa/keamanan-pangan/penerimaan-beras-1440.png`.
+
+## 24. Navigasi "lompat ke bagian" jadi komponen bersama (20 Okt 2026)
+
+Nav menempel yang dipakai halaman **Decision & Evidence** dipindahkan keluar dari komponen
+itu supaya halaman lain memakai komponen yang **sama**, bukan salinan. Permintaan pemilik:
+"jangan di semua halaman — ke halaman yang benar-benar butuh saja".
+
+**Yang dipakai bersama.**
+
+| Berkas | Isi |
+|---|---|
+| `components/SectionJump.tsx` | `<nav class="section-jump" aria-label>` + daftar tautan `<a href="#id">`; tautan, **bukan** tombol, supaya bisa dibuka di tab baru dan terbaca pembaca layar sebagai daftar tujuan |
+| `lib/hooks/useActiveSection.ts` | pengukur "bagian yang sedang dibaca": listener gulir di-throttle `requestAnimationFrame`, bagian **terakhir** yang tepinya melewati ambang 140 px |
+| `lib/section-jump.ts` | daftar tujuan per halaman (`evidenceSections`, `overviewSections`, `safetySections`) — dibangun dari kondisi render yang sama dengan bagiannya |
+| `app/globals.css` | `.section-jump`, `.section-jump-link`, `.section-jump-link[aria-current="true"]`, `.jump-target` |
+
+**Aturan pemakaian (kenapa tidak semua halaman).** Nav hanya dipasang bila halaman
+**≥ ±2,5 layar** dan punya **≥ 3 bagian tetap**; maksimum **lima** tujuan; hanya muncul bila
+datanya sudah ada. Halaman yang panjangnya sudah dipecahkan cara lain tidak diberi nav:
+
+| Halaman | Keputusan | Alasan |
+|---|---|---|
+| Decision & Evidence | nav (5 tujuan) | sudah; kini memakai komponen bersama |
+| Keamanan Pangan | nav (3–5 tujuan) | lima bagian panjang, aksi tulis tersebar di beberapa bagian |
+| Overview | nav (4–5 tujuan) | delapan blok satu gulungan; sudah ada `scrollIntoView` ke `#overview-map` |
+| Hari Ini | **tidak** | sudah punya jalur pintas yang lebih baik: lima tile tombol yang menggulir **dan** memindahkan fokus (`TodaySummary.jumpToSection`) |
+| Recommendations | **tidak** | pencarian + filter status + urutan + "tampilkan 24 lagi" sudah memendekkan halaman |
+| Pemasok, KPI & Kualitas, Agent Log, Demo Control | **tidak** | tiga bagian atau kurang, dan/atau halamannya pendek |
+
+**Tautan mati dilarang.** Halaman yang bagiannya bergantung pada data membangun daftar nav
+dari kondisi render yang sama: "Penerimaan barang" (Keamanan Pangan) hanya bila peran punya
+SPPG sendiri **dan** batch selesai dimuat; "Keputusan keamanan lokasi ini" hanya bila daftar
+keputusan tersedia; "Kiriman" (Overview) hanya bila kartu kiriman benar-benar dirender
+(kartu itu tidak merender apa pun saat daftar kiriman kosong).
+
+**Gaya (semua dari token, tanpa palet baru).** Satu baris `nowrap` yang bisa digulir mendatar;
+menempel `top: 72px` (top bar 64 + 8) dengan latar `rgba(255,255,255,.94)` + `backdrop-filter:
+blur(8px)`; teks 12 px (`--fs-1`, lantai teks); pil `border-radius: 999px`, batas transparan,
+`--line-strong` saat hover; keadaan aktif = `--accent-soft` + `--accent-strong` + tinta
+`--accent`; target sentuh 44 px di `(pointer: coarse)`/≤720 px; cincin fokus 2 px `--accent`;
+gerak 120 ms dimatikan saat `prefers-reduced-motion`; latar padat saat
+`prefers-reduced-transparency`; `Highlight` saat `forced-colors`; **disembunyikan saat
+`@media print`** (kertas tidak punya gulir).
+
+**Jangkar tidak boleh tertutup.** `.jump-target` (`scroll-margin-top: 132px`) dipasang sebagai
+kelas pada elemen tujuan, bukan daftar id — sebelumnya daftar lima id ditulis manual di
+`evidence-dossier.css`, sehingga halaman baru harus menambah selektor (WCAG 2.2 SC 2.4.11).
+
+**Tes yang mengunci bentuk ini.**
+
+- `tests/section-jump.test.tsx` — markup, tepat satu `aria-current="true"`, posisi mengikuti
+  gulir (rect di-stub), tujuan yang tidak ada di DOM dilewati, isi daftar tiap halaman.
+- `tests/food-safety-board.test.tsx` — nav hanya memuat tujuan yang bagiannya dirender;
+  setiap tujuan punya tepat satu sasaran ber-id.
+- `tests/overview-section-jump.test.tsx` — halaman memakai komponen + daftar bersama, tiap
+  tujuan punya sasaran `jump-target`.
+- `tests/evidence-dossier.test.tsx` — nav memakai `.section-jump` di `globals.css`
+  (`position: sticky`, `top: 72px`, `--accent-soft`) dan `.jump-target` 132 px.
+
+## 25. Panel "Bukti integrasi per komponen" dicabut dari Agent Log (21 Okt 2026)
+
+**Keputusan.** Tab **Agent Log** berhenti di jejak langkah agen (`.agent-console`).
+Papan "Bukti integrasi per komponen" (`IntegrationStatusPanel`, W-3 2026-10-17) tidak
+lagi dipasang di sana — permintaan pemilik 21 Okt: bagian itu yang dihapus, bukan
+output jejak per langkah.
+
+**Yang TIDAK berubah.** `components/IntegrationStatusPanel.tsx`, hook
+`useIntegrationStatus`, endpoint `/integrations/status`, dan tes kontraknya
+(`tests/integration-status.test.tsx`) tetap utuh: panelnya hanya tidak dimount.
+Kalau nanti dibutuhkan lagi (mis. di Pengaturan), pasang kembali di sana dan ubah
+tes `tests/prd-nav.test.tsx` yang memaku "tidak dipasang di page.tsx".
+
+**Jejak per langkah tetap apa adanya.** `<pre class="trace-output">` berisi
+`output_summary` TIDAK dihapus; §3.4 tetap berlaku ("output ringkas"). Keputusan
+sementara 20 Okt untuk menyembunyikannya dibatalkan pemilik 21 Okt.
+
+**Salinan label Demo Control.** Lipatan narasi supervisor berjudul **"Hasil
+supervisor"** — keterangan "(apa adanya dari model)" dibuang karena itu catatan
+internal, bukan bahasa layar (`components/DemoControlPanel.tsx`, dipaku di
+`tests/demo-control-panel.test.tsx`).
+
+**Daftar "Langkah pipeline" hanya nama langkah.** `stepChips` → **`stepNames`**
+(`lib/demo-agent.ts`): tiap baris menampilkan `step_name` saja (DETECT, VERIFY,
+…, LEARN). Slug `tool_called` seperti `evaluate_safety`, `supplier.evaluate`,
+atau `supervisor.narration` tidak dicetak lagi — itu istilah internal, dan
+pemilik menolaknya 21 Okt ("saya mau menghapus seperti ini `evaluate_safety`").
+CSS `.dc-step-tool` ikut dihapus. Konsekuensi: langkah yang sama (mis. dua DETECT)
+tampil dua baris tanpa pembeda alat; urutannya tetap urutan server, dan jumlahnya
+tetap dinyatakan di lencana lipatan.
+
+
+
+## 26. Kartu popup peta: SPPG, pemasok, truk (21 Okt 2026)
+
+**Permintaan pemilik (verbatim).** *"pada maps itu kalo di klik icon nya seperti mobil,
+suplier dan sppg kan bakal muncul informasi tuh, tolong di design ui ux yang sebagun
+mungkin gunakan skil buat eye catching"*.
+
+**Masalah yang diukur.** Popup lama adalah gelembung putih berisi 2–5 baris teks tanpa
+hierarki; warna hanya dipakai untuk pin. Ikon mobil bahkan tidak bisa diklik karena
+`.map-truck { pointer-events: none; }` — jadi "klik mobil" tidak pernah membuka apa pun.
+Setiap marker juga memasang popup sendiri, sehingga mengklik pemasok kedua meninggalkan
+popup pertama terbuka (terukur: dua sampai tiga gelembung sekaligus).
+
+**Satu bahasa desain, empat jenis penanda.** `lib/map-popup.ts` membangun model tampilan
+MURNI (tanpa DOM); `SupplyMap.tsx` merendernya menjadi node (bukan `innerHTML`, karena nama
+lokasi/pemasok datang dari DB). Semua kartu memakai urutan yang sama:
+
+1. **Kepala** — ikon SVG dalam tile 38 px, kicker kecil (jenis penanda), judul tebal, chip
+   status berteks.
+2. **Angka utama** — satu hal yang paling ingin diketahui: selisih pasokan (SPPG),
+   keandalan (pemasok), progres perjalanan (truk/jalur).
+3. **Metrik** — 2–3 angka pendek (pasokan/permintaan, komoditas/sertifikasi/jarak,
+   muatan/jarak/ETA).
+4. **Meter** — bar pasokan atau progres/keandalan.
+5. **Fakta & callout** — jalur, masa layak, kiriman aktif, exclusion, atau peringatan
+   mutu. Callout memakai kata, bukan warna saja.
+
+**Warna = jenis + nada, arti tetap ditulis.** `.map-popup[data-kind]` memberi aksen biru
+(SPPG/truk/jalur) atau teal (pemasok); `.map-popup[data-tone="danger|safe|warning|neutral"]`
+menimpanya untuk shortage/surplus/seimbang dan gagal uji. Chip selalu berisi kata
+("Shortage", "Dikecualikan", "Sedang mengirim") sehingga WCAG 1.4.1 tidak bergantung pada
+warna. Semua radius memakai token (`--radius-dock`, `--radius`, `--radius-control`,
+`--radius-control-sm`, `999px`) dan bayangan memakai `--shadow-3`; tes `radius-scale-css`
+dan `token-bayangan` mengunci ini.
+
+**Perilaku peta.**
+
+- **Satu popup pada satu waktu.** `jagaPopup()` menutup popup sebelumnya saat popup baru
+  dibuka.
+- **Tidak terpotong.** Setelah autoPan MapLibre selesai, popup digeser pada sumbu Y dan X
+  (penting di 375 px: penanda di tepi membuat kartu terpotong kiri/kanan). Geseran dibatasi
+  tinggi/lebar peta, dan popup yang seluruhnya di luar viewport tidak memicu pan (dulu bisa
+  melempar peta ribuan piksel sampai terlihat seperti laut).
+- **Bar tab ponsel.** Di ≤480 px diberi inset atas 82 px agar kepala kartu tidak tertutup
+  bar tab lengket.
+- **Truk bisa diklik.** `pointer-events: auto` + `cursor: pointer` + cincin hover/focus.
+  Ada jaring pengaman `requestAnimationFrame` bila klik jatuh pada `<path>` SVG; klik truk
+  juga tidak tembus ke layer garis di bawahnya (`trukKlikTerakhir`), supaya yang muncul
+  tetap "Kiriman", bukan "Jalur kiriman".
+- **Keyboard.** Enter/Space pada marker membuka popup; tombol tutup tetap bisa difokus
+  dan berlabel Indonesia "Tutup informasi" (MapLibre menulis "Close popup" dalam bahasa
+  Inggris).
+
+**Kepadatan 375 px.** Kartu truk dipadatkan: fakta "Sisa …" yang mengulang meter
+disembunyikan, teks meter supplier/truk disembunyikan karena angka besar sudah menyatakannya,
+dan padding dirapatkan. Fakta **"Layak dipakai s/d …"** tetap tampil — itu satu-satunya
+batas keamanan di popup. Tinggi kartu turun dari 304 px (terpotong 212 px) menjadi 217 px.
+
+**Bukti terukur (aplikasi hidup :3010, sesi demo aktif, akun SPPG Head).**
+
+| Viewport | Kartu | Tinggi | Jarak ke tepi peta (atas/bawah) | Overflow dokumen |
+|---|---|---|---|---|
+| 1440×1000 | SPPG Jakarta | 224 px | 164 / 12 px | 0 |
+| 1440×1000 | Pemasok CV Barokah Telur Cianjur | 267 px | 35 / 98 px | 0 |
+| 1440×1000 | Truk CV Hortikultura Subang Lestari → Jakarta | 272 px | 116 / 12 px | 0 |
+| 768×900 | Truk | 272 px | 95 / 13 px | 0 |
+| 375×812 | SPPG | 193 px | 115 / 12 px | 0 |
+| 375×812 | Pemasok | 217 px | 82 / 21 px | 0 |
+| 375×812 | Truk | 217 px | 91 / 12 px | 0 |
+
+Klik SPPG lalu pemasok: tepat **1** popup, judul berganti ke pemasok. Tombol tutup
+menghapus popup; Enter pada marker truk membuka popup kembali.
+
+**Berkas.**
+
+- `frontend/lib/map-popup.ts` — model tampilan murni (SPPG/pemasok/truk/jalur).
+- `frontend/components/SupplyMap.tsx` — `renderPopup`, `jagaPopup`, popup truk, guard klik.
+- `frontend/app/map-console.css` — kartu, aksen/tone, meter, callout, responsif 375 px.
+- `frontend/app/globals.css` — `.map-truck` dapat diklik + cincin fokus.
+- `frontend/tests/map-popup.test.ts` (7), `map-popup-css.test.ts` (3),
+  `supply-map-layer.test.tsx` (assertion popup pemasok & truk).
+
+**Gerbang.** `tsc -p tsconfig.json --noEmit` 0 error; vitest **160 berkas / 1.746 tes
+lulus**; `next lint` **0 peringatan/error** (dua peringatan lama `react-hooks/exhaustive-deps`
+di `SupplyMap.tsx` ikut dibereskan: `geserTruk` masuk dependency dan ref truk disalin untuk
+cleanup). Artefak: `_qa/map-popup/final-sppg-1440.png`,
+`final-supplier-1440.png`, `final-truck-1440.png`, `final-sppg-375.png`,
+`final-supplier-375.png`, `final-truck-375.png`, `final-truck-768-page.png`.
+
+**Sekalian diperbaiki.** `ROUTE_LINE_COLORS.ok` sempat bernilai `#8B5CF6` (violet terang),
+padahal token `--route-live-strong` = `#7C3AED`; tes `supplier-routes` dan
+`supply-map-layer` menuntut pasangan yang sama. Nilai dikembalikan ke `#7C3AED`; sisa
+perjalanan tetap `#8B5CF6` (`ROUTE_TODO_COLORS`).
