@@ -29,10 +29,13 @@ Yang dipaku di berkas ini, dan alasannya:
 Tabel PO dipakai bersama suite lain (eksekusi keputusan menambah baris), jadi
 semua pembanding diambil dari DB saat tes berjalan, bukan angka mati.
 """
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
+from app.core.po_number import nomor_po
 from app.main import app
 from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 
@@ -162,7 +165,92 @@ def test_filter_status_dan_validasi(client, monitor_headers):
     assert _get(client, monitor_headers, status="hilang").status_code == 422
 
 
-def test_nama_komoditas_dari_keputusan_bukan_tebakan_kode(client, monitor_headers):
+@pytest.fixture()
+def po_ber_keputusan():
+    """Pastikan ADA satu PO yang lahir dari keputusan selama tes ini berjalan.
+
+    Dua tes di berkas ini butuh contoh PO ber-`decision_id`, dan dulu keduanya
+    mengambil "sisa" baris milik suite lain: begitu tes lain membuang keputusan
+    demo (FK `ON DELETE CASCADE`), baris itu ikut hilang dan `next(...)` melempar
+    StopIteration — merah yang tidak ada hubungannya dengan endpoint.
+
+    Fixture ini membuat pasangan keputusan+PO sendiri bila DB tidak punya, lalu
+    menghapusnya kembali; bila sudah ada baris milik tes lain, fixture tidak
+    menyentuhnya.
+    """
+    kunci = uuid.uuid5(uuid.NAMESPACE_URL, "mealchain:uji-po-filter")
+    nomor = nomor_po(kunci)
+    engine = create_engine(DB_URL)
+    dibuat = False
+    try:
+        with engine.begin() as conn:
+            ada = conn.execute(
+                text(
+                    "SELECT decision_id FROM sap_mock_purchase_orders "
+                    "WHERE decision_id IS NOT NULL LIMIT 1"
+                )
+            ).scalar_one_or_none()
+            if ada is None:
+                komoditas = conn.execute(
+                    text("SELECT id FROM commodities ORDER BY name LIMIT 1")
+                ).scalar_one()
+                pemasok = conn.execute(
+                    text("SELECT id FROM suppliers ORDER BY name LIMIT 1")
+                ).scalar_one()
+                # Sisa percobaan sebelumnya (bila tes pernah terhenti) dibersihkan
+                # lewat NOMOR + id tetap, bukan tebakan.
+                conn.execute(
+                    text("DELETE FROM sap_mock_purchase_orders WHERE po_number = :n"),
+                    {"n": nomor},
+                )
+                conn.execute(
+                    text("DELETE FROM decisions WHERE id = CAST(:id AS uuid)"),
+                    {"id": str(kunci)},
+                )
+                conn.execute(
+                    text(
+                        "INSERT INTO decisions (id, decision_type, status, proposed_by, "
+                        "commodity_id, supplier_id, quantity_kg, safe_delivered_cost, "
+                        "expires_at, created_at, origin) VALUES (CAST(:id AS uuid), "
+                        "'supplier_procurement', 'executed', 'supervisor_agent', "
+                        ":komoditas, :pemasok, 100, 2500000, now() + interval '1 hour', "
+                        "now(), 'demo')"
+                    ),
+                    {"id": str(kunci), "komoditas": komoditas, "pemasok": pemasok},
+                )
+                conn.execute(
+                    text(
+                        "INSERT INTO sap_mock_purchase_orders (id, po_number, supplier_id, "
+                        "material_number, ordered_quantity, price, status, decision_id, "
+                        "created_at) VALUES (CAST(:id AS uuid), :n, :pemasok, 'MAT-UJI', "
+                        "100, 25000, 'confirmed', CAST(:dec AS uuid), now())"
+                    ),
+                    {
+                        "id": str(uuid.uuid5(uuid.NAMESPACE_URL, "mealchain:uji-po-filter:po")),
+                        "n": nomor,
+                        "pemasok": pemasok,
+                        "dec": str(kunci),
+                    },
+                )
+                dibuat = True
+        yield str(kunci) if dibuat else str(ada)
+    finally:
+        if dibuat:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("DELETE FROM sap_mock_purchase_orders WHERE po_number = :n"),
+                    {"n": nomor},
+                )
+                conn.execute(
+                    text("DELETE FROM decisions WHERE id = CAST(:id AS uuid)"),
+                    {"id": str(kunci)},
+                )
+        engine.dispose()
+
+
+def test_nama_komoditas_dari_keputusan_bukan_tebakan_kode(
+    client, monitor_headers, po_ber_keputusan
+):
     """Baris ber-keputusan membawa nama komoditas relasional; baris impor tidak.
 
     Panel tidak boleh menebak dari `material_number`: seeder memakai
@@ -196,7 +284,7 @@ def test_nama_komoditas_dari_keputusan_bukan_tebakan_kode(client, monitor_header
             assert row["commodity_name"] is None, row["po_number"]
 
 
-def test_filter_decision_id(client, monitor_headers):
+def test_filter_decision_id(client, monitor_headers, po_ber_keputusan):
     semua = _get(client, monitor_headers, limit=200).json()["items"]
     target = next(r for r in semua if r["decision_id"])
     resp = _get(client, monitor_headers, decision_id=target["decision_id"])
@@ -204,6 +292,33 @@ def test_filter_decision_id(client, monitor_headers):
     items = resp.json()["items"]
     assert [r["po_number"] for r in items] == [target["po_number"]]
     assert _get(client, monitor_headers, decision_id="bukan-uuid").status_code == 422
+
+
+def test_tidak_ada_po_artefak_tanpa_keputusan():
+    """PO bernomor `MC-...` wajib punya keputusan induk (S4-37).
+
+    Nomor `MC-` hanya lahir dari `nomor_po(decision_id)`, jadi baris `MC-`
+    dengan `decision_id IS NULL` pasti artefak penghapusan keputusan (FK lama
+    `ON DELETE SET NULL`), bukan data. Baris impor SAP bernomor numerik
+    (`4500000xxx`) memang tanpa keputusan — itu sah dan dibiarkan.
+    """
+    engine = create_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            yatim = (
+                conn.execute(
+                    text(
+                        "SELECT po_number FROM sap_mock_purchase_orders "
+                        "WHERE decision_id IS NULL AND po_number LIKE 'MC-%' "
+                        "ORDER BY po_number"
+                    )
+                )
+                .scalars()
+                .all()
+            )
+    finally:
+        engine.dispose()
+    assert not yatim, "PO artefak tanpa keputusan: " + ", ".join(yatim)
 
 
 def test_limit_dijepit(client, monitor_headers):
