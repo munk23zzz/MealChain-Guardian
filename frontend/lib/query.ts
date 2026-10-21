@@ -46,6 +46,10 @@ export const queryKeys = {
   // Limbah + mitra pengolahan (18 Okt 2026): satu angka per panel Surplus &
   // Limbah. Kunci memuat scope karena SPPG hanya melihat lokasinya.
   wasteSummary: (scope: string) => ["waste-summary", scope] as const,
+  // Rencana alokasi surplus lintas lokasi (20 Okt 2026). Kunci TIDAK memuat
+  // scope: rencananya memang lintas lokasi (server yang menghitung), jadi
+  // jangan dibuat berbeda per peran — hasilnya sama untuk komoditas yang sama.
+  surplusPlan: (commodity: string) => ["surplus-plan", commodity] as const,
   // Kalender agenda (langkah 2, 2026-10-16): rentang grid bulan masuk kunci
   // query supaya berpindah bulan memakai cache yang benar dan bulan yang sama
   // tidak diambil dua kali.

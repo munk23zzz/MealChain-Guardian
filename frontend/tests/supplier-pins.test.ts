@@ -17,7 +17,6 @@ import {
   shippingMetaLine,
   SUPPLIER_LABEL_MIN_ZOOM,
   SUPPLIER_PIN_LEGEND,
-  SUPPLIER_PIN_MIN_ZOOM,
   SUPPLIER_REACH_KM,
   SPPG_ROLES,
   distanceLabel,
@@ -41,9 +40,6 @@ import {
   supplierPinRows,
   supplierPinTone,
   supplierPopupLines,
-  supplierPinsVisible,
-  supplierToggleLabel,
-  supplierToggleAction,
   suppliersForCommodity,
   shouldLoadSuppliers,
 } from "../lib/supplier-pins";
@@ -225,25 +221,13 @@ describe("ringkasan layer & gerbang zoom", () => {
       ok: 2,
       unknown: 0,
     });
-    // Teks yang TERLIHAT ringkas (jumlah saja); kalimat lengkap laporan
-    // tampil/sembunyi pindah ke `supplierToggleAction` (tooltip tombol).
-    expect(supplierToggleLabel(rows)).toBe("Pemasok (3)");
-    expect(supplierToggleAction(rows, false)).toBe("Tampilkan pemasok (3)");
-    expect(supplierToggleAction(rows, true)).toBe("Sembunyikan pemasok (3)");
-    expect(supplierToggleLabel([])).toBe("Pemasok (0)");
+    // Tombol sakelar lapisan sudah dihapus (20 Okt 2026): pin pemasok selalu
+    // tampil, jadi tidak ada lagi label aksi yang diuji di sini.
   });
 
-  it("pin hanya tampil saat zoom cukup dekat", () => {
-    expect(SUPPLIER_PIN_MIN_ZOOM).toBe(6);
-    expect(supplierPinsVisible(4.5)).toBe(false);
-    expect(supplierPinsVisible(5.99)).toBe(false);
-    expect(supplierPinsVisible(6)).toBe(true);
-    expect(supplierPinsVisible(12)).toBe(true);
-    expect(supplierPinsVisible(Number.NaN)).toBe(false);
-  });
-
-  it("nama pemasok muncul lebih lambat daripada titiknya", () => {
-    expect(SUPPLIER_LABEL_MIN_ZOOM).toBeGreaterThan(SUPPLIER_PIN_MIN_ZOOM);
+  it("nama pemasok muncul mulai zoom 8; titiknya tidak digerbang zoom", () => {
+    // Pin tidak lagi digerbang zoom (20 Okt 2026): yang tersisa hanya ambang NAMA.
+    expect(SUPPLIER_LABEL_MIN_ZOOM).toBe(8);
     expect(supplierLabelsVisible(6)).toBe(false); // titik saja
     expect(supplierLabelsVisible(7.99)).toBe(false);
     expect(supplierLabelsVisible(8)).toBe(true);

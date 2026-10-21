@@ -166,13 +166,13 @@ export function proofFacts(run: AgentRun | null): Fact[] {
   ];
 }
 
-/** Langkah pipeline yang BENAR-BENAR tercatat; urutannya dari server. */
-export function stepChips(run: AgentRun | null): { nama: string; alat: string }[] {
+/** Nama langkah pipeline yang BENAR-BENAR tercatat; urutannya dari server.
+ *  Slug alat (`tool_called`) sengaja TIDAK ikut: pemilik 21 Okt meminta daftar
+ *  ini hanya menampilkan nama langkah/agent, bukan istilah internal seperti
+ *  `evaluate_safety` atau `supervisor.narration`. */
+export function stepNames(run: AgentRun | null): string[] {
   const langkah = run?.steps ?? [];
-  return langkah.map((s) => ({
-    nama: s.step_name,
-    alat: s.tool_called && s.tool_called.trim() ? s.tool_called : "—",
-  }));
+  return langkah.map((s) => (s.step_name && s.step_name.trim() ? s.step_name : "—"));
 }
 
 /** Kalimat narasi supervisor — menyebut provider yang benar-benar menjawab. */

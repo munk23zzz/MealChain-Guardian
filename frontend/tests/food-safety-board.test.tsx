@@ -1,4 +1,6 @@
 // Kontrak markup halaman "Keamanan Pangan" (halaman sidebar acuan /compliance).
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -64,6 +66,55 @@ describe("FoodSafetyBoard", () => {
   });
 });
 
+// ── Navigasi "lompat ke bagian" (20 Okt 2026) ───────────────────────────────
+// Halaman ini lima bagian dan panjang; nav dipasang lewat komponen bersama
+// (components/SectionJump.tsx). Kontrak yang dijaga di sini: nav hanya memuat
+// tujuan yang bagiannya BENAR-BENAR dirender — "Penerimaan barang" hanya untuk
+// peran yang punya SPPG sendiri, "Keputusan keamanan lokasi ini" hanya bila
+// daftar keputusan tersedia. Tautan mati lebih buruk daripada tanpa nav.
+describe("FoodSafetyBoard — navigasi bagian", () => {
+  function tujuan(html: string): string[] {
+    // Loop exec, bukan matchAll + spread: target TS proyek ini tidak
+    // mengaktifkan downlevelIteration untuk iterator RegExp.
+    const hasil: string[] = [];
+    const pola = /class="section-jump-link" href="#([^"]+)"/g;
+    let cocok: RegExpExecArray | null;
+    while ((cocok = pola.exec(html)) !== null) hasil.push(cocok[1]);
+    return hasil;
+  }
+
+  it("tanpa lokasi sendiri dan tanpa keputusan: tiga tujuan yang pasti ada", () => {
+    expect(tujuan(render())).toEqual(["safety-ringkasan", "safety-segera", "safety-batch"]);
+  });
+
+  it("kepala SPPG mendapat tujuan penerimaan barang", () => {
+    const html = render({ ownLocation: "Jakarta", ownLocationId: "loc-jkt" });
+    expect(tujuan(html)).toEqual([
+      "safety-ringkasan",
+      "safety-segera",
+      "safety-terima",
+      "safety-batch",
+    ]);
+  });
+
+  it("setiap tujuan punya tepat satu sasaran ber-id di halaman", () => {
+    const html = render({ ownLocation: "Jakarta", ownLocationId: "loc-jkt", decisions: [] });
+    const nav = tujuan(html);
+    expect(nav).toContain("safety-keputusan");
+    for (const id of nav) {
+      expect((html.match(new RegExp(`id="${id}"`, "g")) ?? []).length).toBe(1);
+    }
+  });
+
+  it("bagian tanpa sumber tetap punya sasaran (nav tidak menunjuk ruang kosong)", () => {
+    // Batch gagal dimuat: ringkasan & tabel tetap dirender sebagai keadaan kosong.
+    const html = render({ batches: null, error: "batches 500" });
+    for (const id of tujuan(html)) {
+      expect((html.match(new RegExp(`id="${id}"`, "g")) ?? []).length).toBe(1);
+    }
+  });
+});
+
 // ── Fase 11 — cakupan kepala SPPG (permintaan pemilik: "data harus akurat,
 //    fitur harus jalan dengan backend") ───────────────────────────────────────
 describe("FoodSafetyBoard — cakupan lokasi sendiri", () => {
@@ -73,7 +124,8 @@ describe("FoodSafetyBoard — cakupan lokasi sendiri", () => {
       location: "Jakarta",
       commodity: "telur",
       quantity_kg: 800,
-      safety_status: "pass",
+      // Barang baru datang: kartu Penerimaan hanya menampilkan batch `pending`.
+      safety_status: "pending",
       freshness_score: 0.9,
       usable_until: "2026-11-07T12:00:00Z",
     },
@@ -234,6 +286,35 @@ describe("FoodSafetyBoard — cakupan lokasi sendiri", () => {
     expect(html).toContain("Nomor lot");
   });
 
+  it("kalimat kemajuan tidak memerintah dan tidak menjanjikan gerbang", () => {
+    const html = renderOwn({ canMutate: true, onRecheck: async () => null as never });
+    expect(html).toContain("Boleh disimpan sebagian");
+    expect(html).not.toContain("tandai sisanya sebelum barang dipakai");
+    // Penghitung berubah setiap kotak dicentang — pembaca layar harus dengar.
+    expect(html).toContain('aria-live="polite"');
+  });
+
+  it("lima kotak centang dibungkus satu kelompok bernama 'Titik periksa'", () => {
+    const html = renderOwn({ canMutate: true, onRecheck: async () => null as never });
+    expect(html).toContain("<fieldset");
+    expect(html).toContain("<legend>Titik periksa</legend>");
+  });
+
+  it("komoditas & batch tampil sebagai pilihan terlihat, bukan dua dropdown bertingkat", () => {
+    const html = renderOwn({ canMutate: true, onRecheck: async () => null as never });
+    expect(html).toContain("Keadaan batch:");
+    expect(html).toMatch(/(Aman|Gagal uji|Belum)[^<]*layak s\/d/);
+    // Tanggal tidak boleh pecah antara bulan dan tahun di 375 px.
+    expect(html).toContain('class="safety-nobr"');
+    // Revisi 20 Okt: tidak ada <select> untuk batch (opsi datang/menghilang)
+    // dan tidak ada keadaan yang dijejalkan ke dalam <option>.
+    expect(html).not.toContain("<select");
+    expect(html).not.toContain("<option");
+    expect(html).toContain('type="radio"');
+    expect(html).toContain("1. Komoditas");
+    expect(html).toContain("2. Barang yang belum diuji");
+  });
+
   it("opsi Lainnya: petugas bisa menulis keadaan di luar daftar, bukan titik periksa ke-6", () => {
     const html = renderOwn({
       canMutate: true,
@@ -243,18 +324,20 @@ describe("FoodSafetyBoard — cakupan lokasi sendiri", () => {
     });
     expect(html).toContain("Lainnya — tuliskan keadaan yang tidak ada di daftar");
     expect(html).toContain("<textarea");
-    // Contoh keadaan nyata, supaya petugas tahu apa yang boleh ditulis.
+    // Contoh keadaan nyata, supaya petugas tahu apa yang boleh ditulis — dan
+    // HANYA sekali (dulu muncul tiga kali: label, placeholder, catatan bawah).
     expect(html).toContain("karung lapis kedua basah");
+    expect(html.match(/karung lapis kedua basah/g)?.length).toBe(1);
     // Hitungan titik periksa TIDAK ikut bertambah oleh opsi ini.
     expect(html).toContain("0 dari 5 titik periksa sudah ditandai");
     // Kartu menyatakan terang-terangan apa yang disimpan.
-    expect(html).toContain("menyimpan DUA hal ke database");
+    expect(html).toContain("dua hal ke database");
   });
 
   it("tanpa jalur simpan, kartu tidak menjanjikan catatan tersimpan", () => {
     const html = renderOwn({ canMutate: true, onRecheck: async () => null as never });
     expect(html).toContain("<textarea");
-    expect(html).toContain("Catatan ini tersimpan ke database");
+    expect(html).toContain("Ikut tersimpan ke database");
   });
 
   it("tanpa izin menulis, kartu penerimaan menyatakan batasnya (bukan tombol mati)", () => {
@@ -310,5 +393,19 @@ describe("FoodSafetyBoard — cakupan lokasi sendiri", () => {
       usable_until: "2026-10-20T12:00:00Z",
     });
     expect(aman).not.toContain("Ajukan keputusan");
+  });
+});
+
+// Opsi penerimaan barang tidak boleh ikut cakupan tabel (audit 20 Okt 2026):
+// batch kota lain pasti ditolak server (403 "lokasi batch di cakupan lokasi di
+// luar SPPG Anda"). Penyaringnya harus lewat `receivingBatchOptions`, bukan
+// baris yang sudah disaring cakupan (`tampil` / `urut`).
+describe("FoodSafetyBoard — opsi penerimaan terpisah dari cakupan tabel", () => {
+  const sumber = readFileSync(join(__dirname, "..", "components", "FoodSafetyBoard.tsx"), "utf8");
+
+  it("daftar opsi memakai receivingBatchOptions(rows, ownLocation)", () => {
+    expect(sumber).toContain("receivingBatchOptions(rows, ownLocation)");
+    expect(sumber).not.toMatch(/batchOpsi\s*=\s*urut/);
+    expect(sumber).not.toMatch(/incomingBatchId\(rows,/);
   });
 });

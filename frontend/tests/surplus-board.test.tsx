@@ -50,6 +50,52 @@ describe("SurplusBoard", () => {
   it("tidak ada catatan internal (path API) di layar", () => {
     const html = render();
     expect(html).not.toContain("/balance/map");
+    expect(html).not.toContain("/surplus/allocations");
     expect(html).not.toContain("Catatan sumber");
+  });
+
+  // Regresi 20 Okt 2026: peta peran SPPG hanya memuat lokasinya sendiri, jadi
+  // rencana yang dirakit dari peta selalu kosong. Baris dari server harus tetap
+  // tampil walau `locations` cuma berisi satu kota yang kekurangan.
+  it("rencana dari server tampil walau peta hanya memuat satu lokasi", () => {
+    const html = render({
+      locations: [
+        { location: "Bandung", region: "Jawa Barat", surplus_kg: 0, shortage_kg: 138, status: "shortage" },
+      ],
+      plan: {
+        available: true,
+        reason: null,
+        pairs: [
+          { from: "Cianjur", to: "Bandung", kg: 138, distance_km: 90, region: "Jawa Barat" },
+        ],
+      },
+    });
+    expect(html).toContain("Cianjur");
+    expect(html).toContain("138 kg");
+    expect(html).not.toContain("Tidak ada pasangan");
+  });
+
+  it("rencana kosong menyebut sebab dari server", () => {
+    const html = render({
+      locations: [{ location: "Bandung", shortage_kg: 138, status: "shortage" }],
+      plan: { available: false, reason: "tidak_ada_surplus_terukur", pairs: [] },
+    });
+    expect(html).toContain("Tidak ada lokasi bersurplus terukur");
+  });
+
+  it("lencana surplus memakai angka jaringan, bukan peta yang terbatas", () => {
+    const html = render({
+      locations: [{ location: "Bandung", surplus_kg: 0, shortage_kg: 138, status: "shortage" }],
+      plan: {
+        available: true,
+        surplus_locations: 3,
+        shortage_locations: 7,
+        pairs: [
+          { from: "Cianjur", to: "Bandung", kg: 138, distance_km: 90, region: "Jawa Barat", cost_share_pct: 4.4 },
+        ],
+      },
+    });
+    expect(html).toContain("3 lokasi surplus jaringan");
+    expect(html).toContain("4,4%");
   });
 });

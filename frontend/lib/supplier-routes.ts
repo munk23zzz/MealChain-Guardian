@@ -56,9 +56,16 @@ export type RouteJourney = {
  * definisi warna yang bisa menyimpang tanpa ketahuan.
  */
 export const ROUTE_LINE_COLORS: Record<RouteLineTone, string> = {
-  ok: "#2E7D32",
+  // Bagian yang SUDAH ditempuh memakai violet tua (--route-live-strong).
+  // Sisa perjalanan memakai violet lebih terang (--route-live-soft) di
+  // ROUTE_TODO_COLORS, jadi dua bagian satu kiriman tetap satu keluarga warna
+  // tetapi bisa dibedakan. Nilai ini WAJIB sama dengan --route-live-strong;
+  // tes supplier-routes mengunci pasangan CSS ↔ konstanta.
+  ok: "#7C3AED",
   fail: "#C62828",
 };
+
+
 
 /**
  * Warna untuk potongan yang BELUM ditempuh (masih perkiraan).
@@ -70,11 +77,20 @@ export const ROUTE_LINE_COLORS: Record<RouteLineTone, string> = {
  * "rute berjalan", dan ia tidak menabrak merah (gagal uji) maupun hijau (tiba).
  */
 export const ROUTE_TODO_COLORS: Record<RouteLineTone, string> = {
-  ok: "#2563EB",
+  // Sisa perjalanan = violet lebih terang (--route-live-soft), bukan biru:
+  // satu kiriman tetap satu keluarga warna.
+  ok: "#8B5CF6",
   fail: "#C62828",
 };
 
 /** Nada legenda jalur: nada garis + satu nada tampilan untuk "sisa perjalanan". */
+/**
+ * Nada legenda garis.
+ *
+ * Tanpa nada "menyala" lagi (redesign 20 Okt 2026): garis kiriman berjalan tidak
+ * memakai warna kelima — penekanannya halo sewarna, dan penanda bergeraknya
+ * ikon mobil. Legenda yang menyebut warna yang tidak ada hanya menambah beban.
+ */
 export type RouteLegendTone = RouteLineTone | "sisa";
 
 export type SupplierRouteRoad = {
@@ -128,6 +144,17 @@ export type RouteFeature = {
     roadKm: number;
     durationMin: number;
     safetyStatus: string | null;
+    /**
+     * `true` = kiriman yang sudah tiba: digambar redup tanpa animasi/ikon.
+     * Dipakai filter layer peta supaya garis terang tetap berarti "bergerak".
+     */
+    quiet: boolean;
+    /**
+     * Keadaan perjalanan kiriman (`di_jalan`, `tiba`, …) atau `null` bila
+     * server belum mengirim blok perjalanan. Peta memakainya untuk menyalakan
+     * garis kiriman yang SEDANG berjalan — bukan untuk menyembunyikan yang lain.
+     */
+    state: string | null;
   };
 };
 
@@ -469,20 +496,6 @@ export function routeLineClass(row: SupplierRoute): string {
   return `ship-route ship-route-${routeLineTone(row)}`;
 }
 
-/**
- * Teks sakelar yang TERLIHAT — ringkas, hanya jumlah jalurnya (arah pemilik
- * 2026-10-16: tombol lapisan dibuat kecil). Keadaan hidup/mati dibawa
- * `aria-pressed`; kalimat lengkapnya jadi tooltip lewat `routeToggleAction`.
- */
-export function routeToggleLabel(routes: readonly SupplierRoute[]): string {
-  return `Jalur kiriman (${routes.length})`;
-}
-
-/** Kalimat lengkap sakelar jalur kiriman — dipakai sebagai tooltip/title. */
-export function routeToggleAction(routes: readonly SupplierRoute[], show: boolean): string {
-  return `${show ? "Sembunyikan" : "Tampilkan"} jalur kiriman (${routes.length})`;
-}
-
 /** Label pendek: \"Supplier A Cianjur → Jakarta · 110,4 km jalan · 800 kg telur\". */
 export function routeLabel(row: SupplierRoute): string {
   const parts = [
@@ -529,7 +542,21 @@ export function routeGeoJson(raw: unknown): RouteFeatureCollection {
   const features: RouteFeature[] = [];
   for (const row of supplierRoutes(raw)) {
     if (!row.road) continue;
-    const bagian = journeyLineParts(row.road.coordinates, row.journey);
+    // Sejak 21 Okt 2026 kiriman yang SUDAH TIBA juga digambar, tetapi redup
+    // (permintaan pemilik: "dimasukkan ke peta juga tidak apa-apa"). Sebelumnya
+    // peta hanya menampilkan yang sedang berjalan, sehingga sore hari tinggal
+    // satu-dua garis dan terlihat seperti data hilang.
+    //
+    // Tetap dibedakan supaya arti "garis terang = ada yang bergerak" tidak
+    // rusak: kiriman yang sudah tiba menghasilkan SATU fitur utuh dengan
+    // `quiet: true` (tanpa animasi, tanpa ikon mobil), sedangkan yang berjalan
+    // tetap dipecah "done" + "todo" dan mendapat ikon.
+    const berjalan = row.journey?.state === "di_jalan";
+    if (row.journey === null) continue;
+    if (!berjalan && row.journey.state !== "sudah_tiba") continue;
+    const bagian = berjalan
+      ? journeyLineParts(row.road.coordinates, row.journey)
+      : { done: row.road.coordinates, todo: [] as [number, number][] };
     if (!bagian) continue;
     const properti = {
       id: row.id,
@@ -542,6 +569,8 @@ export function routeGeoJson(raw: unknown): RouteFeatureCollection {
       roadKm: row.road.distanceKm,
       durationMin: row.road.durationMin,
       safetyStatus: row.safetyStatus,
+      state: row.journey?.state ?? null,
+      quiet: !berjalan,
     };
     // Satu kiriman bisa menyumbang DUA fitur (ditempuh + sisa). Geometri < 2 titik
     // tidak digambar — bagian kosong dilewati, bukan dibuat jadi garis nol panjang.
@@ -602,16 +631,18 @@ export function routeLayerTag(
 ): string {
   if (rows.length === 0) return "belum ada jalur kiriman";
   const diJalan = rows.filter((row) => row.journey?.state === "di_jalan");
-  const bagian = [`${rows.length} jalur kiriman`];
-  if (diJalan.length) {
-    bagian.push(`${diJalan.length} di jalan`);
-    const terdekat = nearestEta(diJalan);
-    if (terdekat) bagian.push(`tiba terdekat ± ${formatClockWib(terdekat)}`);
-  } else if (summary.missing) {
-    bagian.push(`${summary.missing} belum disinkronkan`);
-  } else {
-    bagian.push("jalur jalan OSRM");
+  // Peta hanya menggambar jalur yang SEDANG berjalan (keputusan pemilik
+  // 20 Okt 2026). Kalau tidak ada, tag tidak boleh mengklaim "N jalur" —
+  // angka itu akan membuat orang mencari garis yang memang tidak ada.
+  const tiba = rows.filter((row) => row.journey?.state === "sudah_tiba");
+  if (diJalan.length === 0) {
+    return tiba.length > 0 ? `${tiba.length} kiriman sudah tiba` : "tidak ada kiriman berjalan";
   }
+  const bagian = [`${diJalan.length} kiriman berjalan`];
+  const terdekat = nearestEta(diJalan);
+  if (terdekat) bagian.push(`tiba terdekat ± ${formatClockWib(terdekat)}`);
+  else if (summary.missing) bagian.push(`${summary.missing} belum disinkronkan`);
+  if (tiba.length > 0) bagian.push(`${tiba.length} sudah tiba`);
   return bagian.join(" · ");
 }
 
@@ -631,11 +662,21 @@ export function routeLegendEntries(
   // menggambar semua kiriman putus-putus — termasuk yang sudah tiba.
   // Nada "sisa" = warna amber di legenda, SAMA dengan warna layer `todo` di peta;
   // legenda yang memakai hijau untuk estimasi akan menyesatkan.
-  const entries: { tone: RouteLegendTone; label: string; gaya: "padat" | "putus" }[] = [
-    { tone: "ok", label: "Sudah ditempuh", gaya: "padat" },
-    { tone: "sisa", label: "Sisa perjalanan (perkiraan)", gaya: "putus" },
-  ];
-  if (rows.some((row) => routeLineTone(row) === "fail")) {
+  // Sejak 20 Okt 2026 lapisan dasar hanya menggambar kiriman yang sedang
+  // berjalan, jadi legenda pun hanya boleh menyebut nada dari baris itu.
+  const bergerak = rows.filter((row) => row.journey?.state === "di_jalan");
+  const entries: { tone: RouteLegendTone; label: string; gaya: "padat" | "putus" }[] = [];
+  if (bergerak.length > 0) {
+    entries.push(
+      { tone: "ok", label: "Sudah ditempuh", gaya: "padat" },
+      { tone: "sisa", label: "Sisa perjalanan (perkiraan)", gaya: "putus" }
+    );
+  }
+  const tibaEntries = rows.filter((row) => row.journey?.state === "sudah_tiba");
+  if (tibaEntries.length > 0) {
+    entries.push({ tone: "ok", label: "Sudah tiba (redup)", gaya: "putus" });
+  }
+  if (bergerak.some((row) => routeLineTone(row) === "fail")) {
     entries.push({ tone: "fail", label: "Jalur kiriman gagal uji", gaya: "putus" });
   }
   return entries;

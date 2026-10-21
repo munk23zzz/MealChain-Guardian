@@ -99,6 +99,11 @@ export type Allocation = {
   kg: number;
   distanceKm: number | null;
   region: string | null;
+  /**
+   * (penanganan Rp150.000 + angkut) ÷ nilai barang, dalam persen. `null` bila
+   * harga acuan komoditas atau jarak lokasi tidak tersedia — bukan 0.
+   */
+  costSharePct?: number | null;
 };
 
 /**
@@ -141,6 +146,106 @@ export function allocationPlan(locations: unknown, limit = 5): Allocation[] {
     }
   }
   return rows;
+}
+
+export type AllocationPlan = {
+  rows: Allocation[];
+  /** Server bilang ada pasangan DAN barisnya terurai. */
+  available: boolean;
+  /** `tidak_ada_sisi_terukur` | `tidak_ada_surplus_terukur` | … | null */
+  reason: string | null;
+  /**
+   * Jumlah lokasi bersurplus / berkekurangan di SELURUH jaringan (bukan hanya
+   * yang lolos cakupan peta akun ini). Dipakai lencana halaman supaya angka
+   * "0 lokasi surplus" tidak berdampingan dengan rencana yang punya sumber.
+   */
+  surplusLocations: number | null;
+  shortageLocations: number | null;
+  /** Ambang surplus per lokasi agar layak masuk rencana (server: 150 kg). */
+  minSurplusKg: number | null;
+};
+
+type AllocationPairWire = {
+  from?: string | null;
+  to?: string | null;
+  kg?: number | string | null;
+  distance_km?: number | string | null;
+  region?: string | null;
+  cost_share_pct?: number | string | null;
+};
+
+/**
+ * Rencana alokasi dari `GET /surplus/allocations` (dihitung server, lintas
+ * lokasi). Baris tanpa `from`/`to` atau tanpa kg positif dibuang: yang tidak
+ * terurai tidak boleh tampil sebagai pasangan.
+ */
+export function planFromServer(payload: unknown, limit = 6): AllocationPlan {
+  const data = (payload ?? {}) as {
+    available?: unknown;
+    reason?: unknown;
+    pairs?: unknown;
+    surplus_locations?: unknown;
+    shortage_locations?: unknown;
+    min_surplus_kg?: unknown;
+  };
+  const pairs = Array.isArray(data.pairs) ? (data.pairs as AllocationPairWire[]) : [];
+  const rows: Allocation[] = [];
+  for (const pair of pairs) {
+    const from = String(pair?.from ?? "").trim();
+    const to = String(pair?.to ?? "").trim();
+    const kg = number(pair?.kg);
+    if (!from || !to || kg <= 0) continue;
+    rows.push({
+      from,
+      to,
+      kg,
+      distanceKm:
+        pair?.distance_km === null || pair?.distance_km === undefined
+          ? null
+          : number(pair.distance_km),
+      region: pair?.region ? String(pair.region) : null,
+      costSharePct:
+        pair?.cost_share_pct === null || pair?.cost_share_pct === undefined
+          ? null
+          : number(pair.cost_share_pct),
+    });
+    if (rows.length >= limit) break;
+  }
+  return {
+    rows,
+    available: Boolean(data.available) && rows.length > 0,
+    reason: typeof data.reason === "string" ? data.reason : null,
+    surplusLocations:
+      data.surplus_locations === null || data.surplus_locations === undefined
+        ? null
+        : number(data.surplus_locations),
+    shortageLocations:
+      data.shortage_locations === null || data.shortage_locations === undefined
+        ? null
+        : number(data.shortage_locations),
+    minSurplusKg:
+      data.min_surplus_kg === null || data.min_surplus_kg === undefined
+        ? null
+        : number(data.min_surplus_kg),
+  };
+}
+
+/** Kalimat sebab saat rencana kosong — bukan "kosong" tanpa penjelasan. */
+export function alasanTanpaRencana(reason?: string | null): string {
+  switch (reason) {
+    case "tidak_ada_sisi_terukur":
+      return "Belum ada catatan pasokan dan permintaan yang bisa dipasangkan pada komoditas ini.";
+    case "tidak_ada_surplus_terukur":
+      return "Tidak ada lokasi bersurplus terukur pada komoditas ini — surplus hanya dihitung bila permintaannya tercatat.";
+    case "tidak_ada_kekurangan_terukur":
+      return "Tidak ada lokasi berkekurangan terukur pada komoditas ini — kekurangan hanya dihitung bila pasokannya tercatat.";
+    case "surplus_di_bawah_ambang":
+      return "Tidak ada lokasi dengan surplus 150 kg atau lebih. Surplus yang lebih kecil tidak direncanakan karena biaya tetap pengirimannya tidak sebanding.";
+    case "alokasi_di_bawah_ambang":
+      return "Pasangan yang terbentuk semuanya di bawah 150 kg per pengiriman, jadi belum layak direncanakan.";
+    default:
+      return "Tidak ada pasangan surplus→kekurangan yang bisa dialokasikan saat ini.";
+  }
 }
 
 export type SurplusFact = { label: string; value: string; hint?: string | null };

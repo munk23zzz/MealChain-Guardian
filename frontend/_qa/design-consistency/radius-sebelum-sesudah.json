@@ -1,0 +1,41 @@
+{
+  "langkah": "skala-radius",
+  "aturan": "docs/design.md §853 (kartu 16→12), §521/§725 (kontrol 10), §2014 (CTA 8), §2007 (dock 14)",
+  "sebelum": {
+    "waktu": "2026-10-20 14.07 WIB",
+    "tabDiperiksa": 9,
+    "jumlahNilaiUnikDOM": 10,
+    "nilaiUnikDOM": ["999px", "50%", "14px", "12px", "10px", "9px", "8px", "6px", "4px", "3px"],
+    "distribusiDOM": [["999px", 222], ["4px", 102], ["9px", 99], ["12px", 79], ["10px", 77], ["8px", 39], ["50%", 27], ["3px", 3], ["6px", 1], ["14px", 1]],
+    "deklarasiCSSMentah": 129,
+    "tokenHantu": ["--r-1 (border-radius .dc-steps-fold summary)", "--r-2 (.dc-agent) -> radius 0 / bersudut tajam"],
+    "pelanggaranKontrakPadaHEAD": "127 dari 245 deklarasi"
+  },
+  "sesudah": {
+    "waktu": "2026-10-20 14.12 WIB",
+    "tabDiperiksa": 9,
+    "jumlahNilaiUnikDOM": 7,
+    "nilaiUnikDOM": ["999px", "50%", "14px", "12px", "10px", "8px", "4px"],
+    "distribusiDOM": [["999px", 323], ["8px", 188], ["4px", 152], ["12px", 107], ["10px", 85], ["50%", 31], ["14px", 1]],
+    "deklarasiDitokenkan": 142,
+    "luapanHorizontal": "0 px di 9 tab",
+    "dcAgentRadius": "8px (sebelumnya 0)"
+  },
+  "pemetaan": {
+    "12px -> var(--radius)": 8,
+    "var(--radius, 10px) -> var(--radius)": 5,
+    "14px -> var(--radius-dock)": 2,
+    "10px -> var(--radius-control)": 35,
+    "9px -> var(--radius-control-sm)": 3,
+    "8px -> var(--radius-control-sm)": 31,
+    "7px -> var(--radius-control-sm)": 1,
+    "6px -> var(--radius-control-sm)": 29,
+    "4px -> var(--radius-chip)": 24,
+    "3px -> var(--radius-chip)": 2,
+    "2px -> var(--radius-chip)": 2,
+    "var(--r-1)/var(--r-2) -> var(--radius-control-sm)": 2,
+    "0 3px 3px 0 -> 0 var(--radius-chip) var(--radius-chip) 0": 1
+  },
+  "catatanTinggi": "Tinggi dokumen TIDAK dipakai sebagai metrik (radius hanya menyentuh sudut). Angka sebelum/sesudah berbeda karena dataset demo di-seed ulang alur kerja lain (Recommendations 0 -> 4 item). Tab Pengaturan yang datanya tidak berubah: 1469 px sebelum dan sesudah (identik).",
+  "tes": { "berkas": "tests/radius-scale-css.test.ts", "isi": 4, "hasil": "4 passed", "merahPadaVersiLama": "127 pelanggaran" }
+}

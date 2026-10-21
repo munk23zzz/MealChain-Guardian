@@ -1,0 +1,21 @@
+{
+  "audit": "konsistensi design system MealChain Guardian",
+  "cakupan": "10 tab konsol + halaman login, computed style di aplikasi hidup (viewport 1262 px), 2 peran (BGN Monitor, Kepala SPPG)",
+  "sumberKebenaran": ["docs/design.md", "frontend/app/globals.css :root"],
+  "langkahSelesai": [
+    { "no": 1, "masalah": "token hantu --primary/--danger -> teal #005C55 bocor di 2 elemen", "perbaikan": "alias token + 14 cadangan hex dihapus", "bukti": "warna warisan 6 -> 0; pil KPI & Pemasok rgb(37,99,235); kontras 5,17:1", "tes": "tests/token-alias-css.test.ts (6)" },
+    { "no": 2, "masalah": "12 nilai border-radius mentah + token hantu --r-1/--r-2 (sudut tajam)", "perbaikan": "7 nilai kanonik bertoken; 142 deklarasi ditokenkan", "bukti": "nilai radius unik di DOM 10 -> 7; .dc-agent 0 -> 8px; luapan 0", "tes": "tests/radius-scale-css.test.ts (4)" },
+    { "no": 3, "masalah": "hex mentah di StockChart (5) + ComplianceEvidencePanel (7)", "perbaikan": "semua ke var(); radius batang 3->4 (--radius-chip)", "bukti": "batang = --status-danger/--status-safe; tick #64748B -> --ink-muted (4,76 -> 7,58:1)", "tes": "tests/token-warna-komponen.test.ts (4)" },
+    { "no": 4, "masalah": "17 literal box-shadow, 11 alpha, 3 peran sama", "perbaikan": "11 token peran; 0 literal rgba(15,23,42) di box-shadow", "bukti": "pin/cluster/label/map-body terukur sesuai token", "tes": "tests/token-bayangan.test.ts (4)" },
+    { "no": 5, "masalah": "lencana status 3 tinggi berbeda (20/22/24)", "perbaikan": "satu geometri 2px 8px + line-height 16 + min-height 22 untuk 10 kelas", "bukti": "semua label 22 px; teks terpotong 0", "tes": "tests/label-ringkas-geometri.test.ts (3)" },
+    { "no": 6, "masalah": "aturan .maplibregl-ctrl-group kalah dari stylesheet MapLibre; code jatuh ke monospace", "perbaikan": "spesifisitas 0,3,0 + radius token; rule code/kbd/samp/pre -> --font-data; token --font-ui", "bukti": "shadow kontrol = --shadow-control, radius 4px; <code> Fira Code 13px tabular", "tes": "tests/sisa-audit-desain.test.ts (3)" }
+  ],
+  "sweepAkhir": { "var(--primary, #hex)": 0, "var(--danger, #hex)": 0, "token hantu --r-1/--r-2": 0, "radius non-token": 0, "box-shadow rgba(15,23,42)": 0 },
+  "gerbang": { "suite": "142+ berkas / 1599 tes lulus", "tsc": "0 galat", "lint": "bersih", "dokumentasi": "docs/design.md: bagian 'Skala kanonik' ditambahkan" },
+  "artefak": "frontend/_qa/design-consistency/",
+  "belumDikerjakan": {
+    "datasetDemo": "batches 158->78, batch_receipts 0, ledger orphan_blocks 138 (efek run pytest backend). TIDAK dipulihkan: alur kerja lain aktif menyemai ulang data demo (data berubah antar-jam selama audit); restore bisa menghapus status demo mereka dan keputusan (a)restore/(b)biarkan belum dijawab user.",
+    "deployScenarioJoule": "6 scenario baru belum di-deploy ke tenant Joule; butuh login IAS yang harus diketik user.",
+    "commit": "belum dilakukan: working tree dipakai bersama (hunk bukti/food-safety di globals.css & evidence-dossier.css). Commit perlu dibatasi ke berkas/hunk milik audit ini."
+  }
+}

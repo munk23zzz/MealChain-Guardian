@@ -19,6 +19,8 @@ import { describe, expect, it } from "vitest";
 import DecisionEvidence from "../components/DecisionEvidence";
 
 const css = readFileSync(join(__dirname, "..", "app", "evidence-dossier.css"), "utf8");
+// Nav "lompat ke bagian" kini komponen bersama: gayanya di globals.css.
+const globals = readFileSync(join(__dirname, "..", "app", "globals.css"), "utf8");
 const layout = readFileSync(join(__dirname, "..", "app", "layout.tsx"), "utf8");
 
 function blok(selector: string): string {
@@ -26,6 +28,13 @@ function blok(selector: string): string {
   const aman = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const cocok = new RegExp(`^${aman}\\s*\\{([^}]*)\\}`, "ms").exec(css);
   if (!cocok) throw new Error(`blok CSS tidak ditemukan: ${selector}`);
+  return cocok[1];
+}
+
+function blokGlobals(selector: string): string {
+  const aman = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const cocok = new RegExp(`(?:^|\\n)\\s*${aman}\\s*\\{([^}]*)\\}`, "s").exec(globals);
+  if (!cocok) throw new Error(`blok CSS globals tidak ditemukan: ${selector}`);
   return cocok[1];
 }
 
@@ -72,7 +81,7 @@ describe("dossier keputusan — satu panel per bagian", () => {
 
 describe("dossier keputusan — hierarki teks", () => {
   it("judul keputusan satu tingkat di atas judul kartu (--fs-7)", () => {
-    const judul = blok(".evidence-page .card > h2.evidence-hero-title");
+    const judul = blok(".evidence-page .card .evidence-hero-title");
     expect(judul).toContain("font-size: var(--fs-7)");
     expect(judul).toContain("line-height: 1.2");
   });
@@ -115,12 +124,14 @@ describe("dossier keputusan — fakta & navigasi", () => {
   });
 
   it("navigasi bagian menempel dan menandai bagian aktif", () => {
-    const nav = blok(".evidence-jump");
+    // Nav = komponen bersama (components/SectionJump.tsx); gayanya di globals.css
+    // supaya halaman lain tidak menyalin blok CSS ini.
+    const nav = blokGlobals(".section-jump");
     expect(nav).toContain("position: sticky");
     expect(nav).toContain("top: 72px");
-    expect(blok('.evidence-jump-link[aria-current="true"]')).toContain("var(--accent-soft)");
+    expect(blokGlobals('.section-jump-link[aria-current="true"]')).toContain("var(--accent-soft)");
     // Jangkar tidak mendarat di balik top bar + nav menempel.
-    expect(css).toMatch(/#ringkasan,[\s\S]{0,120}scroll-margin-top: 132px/);
+    expect(blokGlobals(".jump-target")).toContain("scroll-margin-top: 132px");
   });
 });
 
@@ -197,11 +208,12 @@ function render() {
 describe("dossier keputusan — struktur", () => {
   it("keputusan, persetujuan, bukti, dan jejak jadi panel ber-id", () => {
     const html = render();
-    expect(html).toContain('class="card evidence-hero" id="ringkasan"');
-    expect(html).toMatch(/<section class="evidence-block" id="rute">/);
-    expect(html).toMatch(/<section class="evidence-block" id="bukti">/);
+    // `jump-target` = sasaran nav bagian (scroll-margin-top dari globals.css).
+    expect(html).toContain('class="card evidence-hero jump-target" id="ringkasan"');
+    expect(html).toMatch(/<section class="evidence-block jump-target" id="rute">/);
+    expect(html).toMatch(/<section class="evidence-block jump-target" id="bukti">/);
     expect(html).toContain('class="evidence-block-title">Bukti</h2>');
-    expect(html).toMatch(/<section class="evidence-block evidence-bottom" id="jejak">/);
+    expect(html).toMatch(/<section class="evidence-block evidence-bottom jump-target" id="jejak">/);
   });
 
   it("tidak ada id ganda (navigasi menunjuk satu sasaran)", () => {

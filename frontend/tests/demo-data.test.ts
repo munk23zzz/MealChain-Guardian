@@ -17,6 +17,7 @@ import {
   formatShortDate,
   honestNote,
   previewLine,
+  adaBaris,
   purgeLine,
   purgeWarning,
   rangeError,
@@ -210,6 +211,21 @@ describe("status data", () => {
 
   it("statusLine tidak menebak saat bentuk payload tidak dikenali", () => {
     expect(statusLine(null)).toBe("Status data belum bisa dibaca.");
+  });
+
+  it("adaBaris membedakan 'kosong' dari 'status berhasil dibaca'", () => {
+    // Badge kartu sesi memakai ini: setelah sesi berakhir semua tabel 0, tetapi
+    // `status` tetap objek — badge "data siap" saat itu adalah kebohongan.
+    expect(adaBaris(null)).toBe(false);
+    const kosong = {
+      tables: {
+        supply_records: { seed: 0, demo: 0 },
+        price_signals: { seed: 0, demo: 0 },
+        menu_plans: { seed: 0, demo: 0 },
+      },
+    };
+    expect(adaBaris(kosong)).toBe(false);
+    expect(adaBaris(STATUS)).toBe(true);
   });
 });
 

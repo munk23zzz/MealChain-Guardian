@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import {
   MISSING_REASON_LABEL,
   ROUTE_LINE_COLORS,
+  ROUTE_TODO_COLORS,
   durationLabel,
   journeyTone,
   nearestEta,
@@ -31,8 +32,6 @@ import {
   routeCellLabel,
   routeCellTitle,
   routePopupLines,
-  routeToggleLabel,
-  routeToggleAction,
   shipmentKey,
   supplierRouteSummaries,
   supplierRoutes,
@@ -88,6 +87,29 @@ function kiriman(ubah: Record<string, unknown> = {}) {
     ...ubah,
   };
 }
+
+describe("state perjalanan ikut ke fitur GeoJSON (20 Okt 2026)", () => {
+  it("setiap fitur membawa state perjalanan yang SAMA dengan barisnya", () => {
+    // Peta memfilter glow dengan `["==", ["get","state"], "di_jalan"]`. Kalau
+    // properti ini hilang, tidak ada garis yang menyala walau kirimannya jalan.
+    const [row] = supplierRoutes({ routes: [kiriman()] });
+    const fitur = routeGeoJson({ routes: [kiriman()] }).features;
+    expect(fitur.length).toBeGreaterThan(0);
+    const harapan = row.journey?.state ?? null;
+    expect(harapan).not.toBeNull();
+    expect(fitur.every((f) => f.properties.state === harapan)).toBe(true);
+  });
+
+  it("kiriman tanpa blok perjalanan: state null dan TIDAK digambar", () => {
+    const tanpaJourney = { ...kiriman(), journey: null };
+    const [row] = supplierRoutes({ routes: [tanpaJourney] });
+    expect(row.journey).toBeNull();
+    // Sejak 20 Okt 2026 peta hanya menggambar kiriman yang sedang berjalan.
+    // Tanpa blok perjalanan, statusnya tidak diketahui — jadi tidak ditebak
+    // dan tidak muncul sebagai garis.
+    expect(routeGeoJson({ routes: [tanpaJourney] }).features).toHaveLength(0);
+  });
+});
 
 describe("supplierRoutes", () => {
   it("membaca amplop {routes} maupun array langsung", () => {
@@ -147,8 +169,11 @@ describe("warna garis", () => {
       expect(match, `token ${nama} tidak ditemukan di app/globals.css`).not.toBeNull();
       return (match as RegExpMatchArray)[1].toUpperCase();
     };
-    expect(ROUTE_LINE_COLORS.ok.toUpperCase()).toBe(token("--status-safe"));
+    // Sejak audit 21 Okt 2026 garis berjalan memakai violet --status-live
+    // (sama dengan ikon truk), bukan hijau --status-safe.
+    expect(ROUTE_LINE_COLORS.ok.toUpperCase()).toBe(token("--route-live-strong"));
     expect(ROUTE_LINE_COLORS.fail.toUpperCase()).toBe(token("--status-danger"));
+    expect(ROUTE_TODO_COLORS.ok.toUpperCase()).toBe(token("--route-live-soft"));
   });
 });
 
@@ -170,10 +195,19 @@ describe("nada & kelas garis", () => {
     // yang menyebut warna yang tidak dipakai membuat pembaca mencarinya.
     const entri = routeLegendEntries(supplierRoutes({ routes: [kiriman()] }));
     // K1: dua butir untuk satu nada — padat (sudah ditempuh) & putus (sisa).
+    // Sejak 20 Okt 2026 ada butir ketiga saat ada kiriman yang sedang berjalan:
+    // glow di peta wajib punya keterangan, bukan hiasan tanpa arti.
     expect(entri.map((e) => e.tone)).toEqual(["ok", "sisa"]);
     expect(entri.map((e) => e.gaya)).toEqual(["padat", "putus"]);
     expect(entri[0].label).toContain("Sudah ditempuh");
     expect(entri[1].label).toContain("Sisa perjalanan");
+
+    // Sejak 21 Okt 2026 kiriman yang sudah tiba tetap digambar (redup), jadi
+    // legenda menyebut satu butir untuk keadaan itu — bukan kosong lagi.
+    const tiba = supplierRoutes({
+      routes: [{ ...kiriman(), journey: { ...kiriman().journey, state: "sudah_tiba" } }],
+    });
+    expect(routeLegendEntries(tiba).map((e) => e.label)).toEqual(["Sudah tiba (redup)"]);
 
     const denganGagal = routeLegendEntries(
       supplierRoutes({ routes: [kiriman(), kiriman({ safety_status: "fail", destination_name: "Bogor" })] })
@@ -181,8 +215,8 @@ describe("nada & kelas garis", () => {
     expect(denganGagal.map((e) => e.tone)).toEqual(["ok", "sisa", "fail"]);
     expect(denganGagal[2].label).toContain("gagal uji");
 
-    // Tanpa data kiriman sama sekali: hanya butir dasar, tidak mengarang entri.
-    expect(routeLegendEntries().map((e) => e.tone)).toEqual(["ok", "sisa"]);
+    // Tanpa data kiriman sama sekali: tidak ada garis, jadi tidak ada butir.
+    expect(routeLegendEntries()).toEqual([]);
   });
 });
 
@@ -202,27 +236,29 @@ describe("layer GeoJSON", () => {
     for (const fitur of fc.features) expect(fitur.geometry.type).toBe("LineString");
   });
 
-  it("keadaan perjalanan menentukan bentuk garis (K1: padat = ditempuh)", () => {
+  it("hanya kiriman yang SEDANG berjalan yang digambar di peta", () => {
     const dengan = (ubah: Record<string, unknown>) => {
       const dasar = kiriman();
       return { ...dasar, journey: { ...dasar.journey, ...ubah } };
     };
 
-    // Sudah tiba → satu garis padat penuh, tanpa bagian putus-putus.
+    // Di jalan → dua potong: padat (ditempuh) + putus-putus (sisa).
+    const jalan = routeGeoJson({ routes: [kiriman()] });
+    expect(jalan.features.map((f) => f.properties.kind)).toEqual(["done", "todo"]);
+
+    // Sejak 21 Okt 2026 "sudah tiba" DIGAMBAR, tetapi ditandai `quiet` (redup,
+    // tanpa ikon mobil) — permintaan pemilik agar jalur yang sudah ditempuh
+    // tetap terlihat di peta. Keadaan lain tetap tidak digambar.
     const tiba = routeGeoJson({ routes: [dengan({ state: "sudah_tiba", progress: null })] });
     expect(tiba.features).toHaveLength(1);
-    expect(tiba.features[0].properties.kind).toBe("done");
-    expect(tiba.features[0].geometry.coordinates).toEqual(GEOMETRI);
-
-    // Belum berangkat → satu garis putus-putus penuh (belum ada yang ditempuh).
-    const belum = routeGeoJson({ routes: [dengan({ state: "belum_berangkat", progress: null })] });
-    expect(belum.features).toHaveLength(1);
-    expect(belum.features[0].properties.kind).toBe("todo");
-    expect(belum.features[0].geometry.coordinates).toEqual(GEOMETRI);
-
-    // Perjalanan tidak dilaporkan → putus-putus (perkiraan), bukan padat palsu.
-    const tanpaJourney = routeGeoJson({ routes: [{ ...kiriman(), journey: null }] });
-    expect(tanpaJourney.features.map((f) => f.properties.kind)).toEqual(["todo"]);
+    expect(tiba.features[0].properties.quiet).toBe(true);
+    for (const ubah of [
+      { state: "belum_berangkat", progress: null },
+      { state: "tiba", progress: null },
+    ]) {
+      expect(routeGeoJson({ routes: [dengan(ubah)] }).features).toHaveLength(0);
+    }
+    expect(routeGeoJson({ routes: [{ ...kiriman(), journey: null }] }).features).toHaveLength(0);
   });
 
   it("bagian garis yang ditempuh dimulai di asal, sisanya berakhir di tujuan", () => {
@@ -333,14 +369,6 @@ describe("ringkasan layer", () => {
     expect(ringkasan.label).toBe("1 jalur kiriman · semua lewat jalur jalan");
   });
 
-  it("label sakelar memuat jumlah jalur", () => {
-    const [row] = supplierRoutes({ routes: [kiriman()] });
-    // Yang terlihat ringkas; kalimat lengkapnya jadi tooltip tombol.
-    expect(routeToggleLabel([row])).toBe("Jalur kiriman (1)");
-    expect(routeToggleAction([row], false)).toBe("Tampilkan jalur kiriman (1)");
-    expect(routeToggleAction([row], true)).toBe("Sembunyikan jalur kiriman (1)");
-  });
-
   it("tag ringkas menyebut jumlah jalur + estimasi tiba terdekat", () => {
     // Bilah lapisan memakai tag ini supaya angkanya tetap terbaca walau kalimat
     // penjelasnya dilipat (keputusan pemilik 2026-10-16). Sejak Fase 12, saat ada
@@ -348,7 +376,7 @@ describe("ringkasan layer", () => {
     // "ketika mengaktifkan jalur kiriman tampilkan juga waktu estimasi sampai".
     expect(
       routeLayerTag(routeLayerSummary({ routes: [kiriman()] }), supplierRoutes({ routes: [kiriman()] }))
-    ).toBe("1 jalur kiriman · 1 di jalan · tiba terdekat ± 22.54");
+    ).toBe("1 kiriman berjalan · tiba terdekat ± 22.54");
 
     // Tanpa kiriman berjalan: jatuh kembali ke keterangan asal geometri / jumlah
     // yang belum disinkronkan — bukan jam yang dikarang.
@@ -360,8 +388,10 @@ describe("ringkasan layer", () => {
         remaining_min: -60,
       },
     });
+    // Sejak 21 Okt 2026 kiriman yang sudah tiba tetap digambar (redup), jadi
+    // tag menyebut keadaannya, bukan "tidak ada".
     expect(routeLayerTag(routeLayerSummary({ routes: [tiba] }), supplierRoutes({ routes: [tiba] }))).toBe(
-      "1 jalur kiriman · jalur jalan OSRM"
+      "1 kiriman sudah tiba"
     );
 
     const tanpaRute = kiriman({
@@ -375,10 +405,10 @@ describe("ringkasan layer", () => {
         routeLayerSummary({ routes: [kiriman(), tanpaRute] }),
         supplierRoutes({ routes: [kiriman(), tanpaRute] })
       )
-    ).toBe("2 jalur kiriman · 1 di jalan · tiba terdekat ± 22.54");
+    ).toBe("1 kiriman berjalan · tiba terdekat ± 22.54");
     expect(
       routeLayerTag(routeLayerSummary({ routes: [tanpaRute] }), supplierRoutes({ routes: [tanpaRute] }))
-    ).toBe("1 jalur kiriman · 1 belum disinkronkan");
+    ).toBe("tidak ada kiriman berjalan");
 
     // Tanpa baris sama sekali: tidak ada jam, tidak ada klaim.
     expect(routeLayerTag(routeLayerSummary({ routes: [] }))).toBe("belum ada jalur kiriman");

@@ -18,9 +18,11 @@
 //   - Masa layak diterjemahkan jadi keadaan (Kedaluwarsa / ≤48 jam / ≤7 hari),
 //     bukan sekadar angka "kesegaran 0%".
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import PageHeader from "./PageHeader";
+import SectionJump from "./SectionJump";
+import { safetySections } from "../lib/section-jump";
 import FactList from "./FactList";
 import {
   balanceForLocation,
@@ -31,8 +33,11 @@ import {
   incomingShipments,
   ownLocationRows,
   receiptRows,
-  RECEIVING_CHECKS,
+  receivingChecks,
   RECEIVING_OTHER,
+  receivingBatchOptions,
+  receivingCommodityGroups,
+  receiptSavedSentence,
   receivingSentence,
   receivingState,
   safetyDecisions,
@@ -40,6 +45,9 @@ import {
   safetySummaryOfRows,
   quarantineTone,
   sortByDeadline,
+  filterSafetyRows,
+  safetyFilterCounts,
+  type SafetyFilter,
   usableLabel,
   type ReceiptCardRow,
   type SafetyRow,
@@ -51,6 +59,24 @@ import { LoadingState } from "./LoadingState";
 import Popup from "./Popup";
 import ShipmentCard from "./ShipmentCard";
 import ScrollHint from "./ScrollHint";
+import Pager from "./Pager";
+import type { PendingReceiptRow } from "../lib/api";
+
+/** Waktu catatan (WIB) untuk antrean persetujuan — bukan tanggal mentah ISO. */
+function waktuCatat(iso: string): string {
+  const parsed = Date.parse(iso);
+  if (!Number.isFinite(parsed)) return "—";
+  return new Date(parsed).toLocaleString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Jakarta",
+  });
+}
+import styles from "./FoodSafetyBoard.module.css";
+import { paginate } from "../lib/pagination";
 
 // Baris batch yang ditampilkan di kartu ringkas; dipakai di slice DAN kalimat
 // "Menampilkan N dari M" supaya keduanya tidak bisa menyimpang (audit angka
@@ -86,6 +112,10 @@ export default function FoodSafetyBoard({
   onTriggerDisruption,
   onRecordReceipt,
   loadReceipts,
+  loadPendingReceipts,
+  onApproveReceipt,
+  onRejectReceipt,
+  canApprove = false,
   onOpenDecisions,
   onKarantina,
 }: {
@@ -123,6 +153,14 @@ export default function FoodSafetyBoard({
   ) => Promise<unknown>;
   /** Riwayat catatan penerimaan sebuah batch (dibaca dari server). */
   loadReceipts?: (batchId: string) => Promise<unknown>;
+  /** Antrean catatan yang sudah dibuat tetapi belum disetujui. */
+  loadPendingReceipts?: () => Promise<{ items: PendingReceiptRow[]; total?: number }>;
+  /** Kepala SPPG menyetujui penerimaan → stok masuk (server menulis supply). */
+  onApproveReceipt?: (receiptId: string) => Promise<{ stock_kg?: number | null }>;
+  /** Kepala SPPG menolak penerimaan; alasan wajib diisi. */
+  onRejectReceipt?: (receiptId: string, note: string) => Promise<unknown>;
+  /** Hanya kepala SPPG yang boleh memutuskan penerimaan (026). */
+  canApprove?: boolean;
   onOpenDecisions?: () => void;
   /** Karantina: menahan/melapas/menggagalkan batch = keputusan manusia. */
   onKarantina?: (
@@ -138,7 +176,15 @@ export default function FoodSafetyBoard({
   const [centang, setCentang] = useState<Record<string, boolean>>({});
   const [catatan, setCatatan] = useState("");
   const [riwayat, setRiwayat] = useState<ReceiptCardRow[]>([]);
+  const [antrean, setAntrean] = useState<PendingReceiptRow[]>([]);
   const [terimaId, setTerimaId] = useState<string | null>(null);
+  // Penolakan: satu catatan + satu alasan pada satu waktu (026).
+  const [tolakId, setTolakId] = useState<string | null>(null);
+  const [alasanTolak, setAlasanTolak] = useState("");
+  // Saringan daftar batch: pengguna memilih prioritas, bukan menggulir semua.
+  const [saring, setSaring] = useState<SafetyFilter>("semua");
+  const [cari, setCari] = useState("");
+  const [halaman, setHalaman] = useState(1);
   // Dialog alasan karantina: satu batch + satu aksi pada satu waktu.
   const [karantina, setKarantina] = useState<{
     batchId: string;
@@ -166,6 +212,9 @@ export default function FoodSafetyBoard({
   const jaringan = Boolean(ownLocation) && scope === "all";
   const tampil = jaringan ? rows : ownLocation ? ownLocationRows(rows, ownLocation) : rows;
   const urut = sortByDeadline(tampil);
+  const jumlahPerSaringan = safetyFilterCounts(urut);
+  const tersaring = filterSafetyRows(urut, saring, cari);
+  const halamanData = paginate(tersaring, halaman, 8);
   const summary = safetySummaryOfRows(tampil);
   const summaryJaringan = safetySummaryOfRows(rows);
 
@@ -201,15 +250,24 @@ export default function FoodSafetyBoard({
   const keamanan = safetyDecisions(decisions);
   const kedaluwarsaJumlah = urut.filter((row) => expiryState(row.hoursLeft).key === "expired").length;
 
-  // Batch yang jadi sasaran "Penerimaan barang": kiriman pertama yang bisa
-  // dipasangkan dengan batch nyata (rute sering tidak membawa batch_id), kalau
-  // tidak ada → batch paling mendesak di cakupan yang sedang dilihat.
-  const batchOpsi = urut.filter((row) => Boolean(row.id));
+  // Batch yang jadi sasaran "Penerimaan barang": SELALU milik dapur sendiri
+  // (audit 20 Okt 2026 — cakupan tabel tidak boleh ikut menentukan, sebab batch
+  // kota lain ditolak server dengan 403). Kiriman pertama yang bisa dipasangkan
+  // dengan batch nyata menentukan pilihan awal; kalau tidak ada, batch paling
+  // mendesak di dapur ini.
+  const batchOpsi = receivingBatchOptions(rows, ownLocation);
+  const grupKomoditas = receivingCommodityGroups(rows, ownLocation);
   const terkirim = shipments[0] ?? null;
   const batchKiriman = terkirim
-    ? incomingBatchId(rows, { commodity: terkirim.commodity ?? "", kg: terkirim.kg ?? 0 })
+    ? incomingBatchId(batchOpsi, { commodity: terkirim.commodity ?? "", kg: terkirim.kg ?? 0 })
     : null;
   const idTerima = terimaId ?? batchKiriman ?? batchOpsi[0]?.id ?? null;
+  const batchTerpilih = batchOpsi.find((row) => row.id === idTerima) ?? null;
+  // Dua langkah: komoditas dulu, baru batch. Nilai komoditas mengikuti batch
+  // yang sedang terpilih supaya kedua <select> tidak pernah saling bertentangan.
+  const komoditasTerpilih = batchTerpilih?.commodity ?? grupKomoditas[0]?.commodity ?? "";
+  const batchSatuKomoditas =
+    grupKomoditas.find((grup) => grup.commodity === komoditasTerpilih)?.rows ?? [];
 
   // Riwayat catatan dimuat dari server setiap batch sasaran berganti (termasuk
   // saat identitas selesai dimuat dan pilihan default baru terbentuk). Hasil
@@ -412,9 +470,23 @@ export default function FoodSafetyBoard({
           tersimpan.includes("TIDAK")
             ? "danger"
             : "ok",
-        teks: `${tersimpan}. ${receivingSentence(receivingState(centang))} Hasil dari server: ${bagian.join(" · ")}.`,
+        // Kalau catatan gagal disimpan, yang perlu dibaca adalah sebabnya + apa
+        // yang belum diperiksa. Kalau tersimpan, kalimatnya memakai bentuk
+        // lampau (`receiptSavedSentence`) — bukan perintah menandai ulang.
+        teks: `${
+          tersimpan.includes("TIDAK")
+            ? `${tersimpan}. ${receivingSentence(receivingState(centang))}`
+            : receiptSavedSentence(receivingState(centang))
+        } Hasil dari server: ${bagian.join(" · ")}.`,
       });
-      await muatRiwayat(idTerima);
+      // Batch yang baru dicatat sudah dinilai → keluar dari daftar "belum
+      // dinilai" dan muncul di kartu "Menunggu persetujuan". Form pindah ke
+      // batch berikutnya supaya tidak menunjuk batch yang sudah tidak ada.
+      setCentang({});
+      setCatatan("");
+      setRiwayat([]);
+      setTerimaId(null);
+      await muatAntrean();
     } catch (err) {
       setAksi({
         where: "terima",
@@ -436,6 +508,99 @@ export default function FoodSafetyBoard({
     }
   }
 
+  /** Kepala SPPG menyetujui penerimaan → server menulis stok, lalu angka
+   *  Overview/Hari Ini diambil ulang oleh pemanggil (bukan dihitung di layar). */
+  const muatAntrean = useCallback(async () => {
+    if (!loadPendingReceipts) return;
+    try {
+      const hasil = await loadPendingReceipts();
+      setAntrean(Array.isArray(hasil?.items) ? hasil.items : []);
+    } catch {
+      // Antrean gagal dimuat tidak boleh menjatuhkan kartu penerimaan;
+      // form tetap bisa dipakai dan galatnya tampil lewat tombol setujui.
+      setAntrean([]);
+    }
+  }, [loadPendingReceipts]);
+
+  useEffect(() => {
+    void muatAntrean();
+  }, [muatAntrean]);
+
+  async function setujuiTerima(receiptId: string) {
+    if (!onApproveReceipt) return;
+    setSibuk("setujui");
+    try {
+      const hasil = await onApproveReceipt(receiptId);
+      const kg = typeof hasil?.stock_kg === "number" ? hasil.stock_kg : null;
+      setAksi({
+        where: "terima",
+        nada: "ok",
+        teks: kg === null
+          ? "Penerimaan disetujui. Angka pasokan di Overview dan Hari Ini ikut diperbarui."
+          : `Penerimaan disetujui — ${kg.toLocaleString("id-ID")} kg masuk stok. Angka pasokan di Overview dan Hari Ini ikut diperbarui.`,
+      });
+      setTolakId(null);
+      // Batch yang disetujui keluar dari daftar "perlu diperiksa/dicatat".
+      // Pindah ke batch berikutnya supaya <select> tidak menunjuk nilai yang
+      // sudah tidak ada; kalimat sukses tetap tampil.
+      setCentang({});
+      setCatatan("");
+      const berikut = batchOpsi.find((row) => row.id !== idTerima);
+      setTerimaId(null);
+      if (berikut?.id) await muatRiwayat(String(berikut.id));
+      else setRiwayat([]);
+      await muatAntrean();
+    } catch (err) {
+      setAksi({
+        where: "terima",
+        nada: "danger",
+        teks: `Tidak bisa menyetujui penerimaan: ${pesan(err)}`,
+      });
+    } finally {
+      setSibuk(null);
+    }
+  }
+
+  /** Tolak penerimaan: alasan wajib — server juga menolak alasan kosong. */
+  async function tolakTerima(receiptId: string) {
+    if (!onRejectReceipt) return;
+    const alasan = alasanTolak.trim();
+    if (alasan.length < 3) {
+      setAksi({
+        where: "terima",
+        nada: "danger",
+        teks: "Alasan penolakan wajib diisi (minimal 3 karakter) — petugas perlu tahu apa yang harus diperbaiki.",
+      });
+      return;
+    }
+    setSibuk("tolak");
+    try {
+      await onRejectReceipt(receiptId, alasan);
+      setAksi({
+        where: "terima",
+        nada: "ok",
+        teks: "Penerimaan ditolak dengan alasan tersimpan. Tidak ada stok yang ditambahkan.",
+      });
+      setTolakId(null);
+      setAlasanTolak("");
+      await muatAntrean();
+      setRiwayat([]);
+      setTerimaId(null);
+    } catch (err) {
+      setAksi({
+        where: "terima",
+        nada: "danger",
+        teks: `Tidak bisa menolak penerimaan: ${pesan(err)}`,
+      });
+    } finally {
+      setSibuk(null);
+    }
+  }
+
+  /** Catatan terbaru yang masih menunggu keputusan untuk batch terpilih. */
+  const menunggu = riwayat.find((r) => r.status === "menunggu") ?? null;
+  const sudahDisetujui = riwayat.find((r) => r.status === "disetujui") ?? null;
+
   /** Nama pemasok untuk batch yang cocok dengan kiriman (kolom "Asal"). */
   function asal(row: SafetyRow): string {
     const cocok = kirimanKe.find(
@@ -443,6 +608,17 @@ export default function FoodSafetyBoard({
     );
     return cocok ? cocok.supplierName : "Stok sendiri";
   }
+
+  // Nav "lompat ke bagian": tujuan dibangun dari kondisi render yang SAMA dengan
+  // bagiannya, supaya tidak ada tautan yang menunjuk bagian yang tidak dirender.
+  // - "Penerimaan barang" hanya untuk peran dengan SPPG sendiri, dan baru muncul
+  //   setelah batch selesai dimuat (kedua cabangnya butuh `batches`).
+  // - "Keputusan keamanan lokasi ini" hanya bila daftar keputusan tersedia.
+  const adaPenerimaan = Boolean(ownLocation) && !loading && Array.isArray(batches);
+  const bagianNav = safetySections({
+    ownLocation: adaPenerimaan,
+    hasDecisions: Boolean(decisions),
+  });
 
   return (
     <section className="board-page" aria-busy={loading || undefined}>
@@ -459,6 +635,12 @@ export default function FoodSafetyBoard({
         }
       />
 
+      {/* Navigasi bagian: halaman ini lima bagian yang tidak saling menggantikan
+          (ringkasan, batch mendesak, penerimaan, tabel status, keputusan), dan
+          aksi tulis tersebar di beberapa bagian — setelah satu aksi, pembaca
+          harus bisa kembali ke bagian yang tepat tanpa menggulir buta. */}
+      <SectionJump items={bagianNav} ariaLabel="Bagian halaman Keamanan Pangan" />
+
       {error ? (
         <article className="card">
           <h2>Tidak bisa memuat batch</h2>
@@ -472,7 +654,7 @@ export default function FoodSafetyBoard({
       ) : null}
 
       <div className="board-grid board-grid-2">
-        <article className="card">
+        <article className="card jump-target" id="safety-ringkasan">
           <h2>Ringkasan pengawasan</h2>
           {/* Fase 5: tiga keadaan yang paling sering ditanya jadi tile angka besar
               dengan tint status; sisanya tetap daftar fakta supaya tidak ada angka
@@ -533,6 +715,25 @@ export default function FoodSafetyBoard({
                 : []),
             ]}
           />
+          {summary.failed + summary.needsVerification + summary.quarantined > 0 ? (
+            <div className="safety-cta">
+              <button
+                type="button"
+                className="button"
+                onClick={() => {
+                  setSaring(summary.failed ? "gagal" : "tindakan");
+                  setHalaman(1);
+                  document
+                    .getElementById("safety-daftar")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              >
+                {summary.failed
+                  ? `Tinjau ${summary.failed} batch gagal`
+                  : "Tinjau batch perlu tindakan"}
+              </button>
+            </div>
+          ) : null}
           {summary.hasFail ? (
             ownLocation && !jaringan ? (
               <p className="board-alert">
@@ -557,7 +758,7 @@ export default function FoodSafetyBoard({
           )}
         </article>
 
-        <article className="card">
+        <article className="card jump-target" id="safety-segera">
           <h2>Batch perlu segera dipakai</h2>
           {urut.filter((row) => row.hoursLeft !== null && row.hoursLeft <= 48).length === 0 ? (
             <p className="evidence-note">
@@ -625,47 +826,125 @@ export default function FoodSafetyBoard({
         </>
       )}
 
+      {ownLocation && !loading && batches && batchOpsi.length === 0 ? (
+        <article className="card jump-target" id="safety-terima">
+          <h2>Penerimaan barang</h2>
+          <p className="evidence-note">
+            Tidak ada barang baru yang menunggu diuji di {ownLocation}. Barang yang sudah
+            dinilai tidak muncul di sini; catatan yang menunggu persetujuan ada di kartunya
+            sendiri.
+          </p>
+          {aksi?.where === "terima" ? (
+            <p className={aksi.nada === "danger" ? "board-alert" : "evidence-note"}>{aksi.teks}</p>
+          ) : null}
+        </article>
+      ) : null}
+
       {ownLocation && batchOpsi.length > 0 ? (
-        <article className="card">
+        <article className="card jump-target" id="safety-terima">
           <div className="board-card-head">
             <h2>Penerimaan barang</h2>
             <span className="board-badge board-badge-muted">daftar periksa petugas</span>
           </div>
           <p className="evidence-note">
-            Petugas memeriksa kiriman sebelum barang dipakai. Tombol di bawah menyimpan DUA hal ke
-            database: hasil periksa ini (titik yang dicentang + isian &quot;Lainnya&quot;) dan
-            hitung ulang keamanan &amp; kesegaran yang dihitung server dari log suhu serta umur
-            panen yang tersimpan.
+            Petugas memeriksa kiriman sebelum barang dipakai. Tombol di bawah menulis dua hal ke
+            database: catatan periksa ini (titik yang dicentang + isian &quot;Lainnya&quot;), lalu
+            hasil hitung ulang keamanan &amp; kesegaran dari log suhu dan umur panen yang tersimpan
+            — dihitung server, bukan layar.
           </p>
-          <label className="safety-pick">
-            Batch yang diterima
-            <select
-              value={idTerima ?? ""}
-              onChange={(event) => setTerimaId(event.target.value || null)}
-            >
-              {batchOpsi.map((row) => (
-                <option key={String(row.id)} value={String(row.id)}>
-                  {row.commodity} · {row.kg === null ? "—" : formatKg(row.kg)} · {kodeWilayah(row.location)}
-                </option>
+          <fieldset className={styles.pickStep}>
+            <legend>1. Komoditas</legend>
+            <div className={styles.commodityChips} role="group" aria-label="Pilih komoditas">
+              {grupKomoditas.map((grup) => {
+                const aktif = grup.commodity === komoditasTerpilih;
+                return (
+                  <button
+                    key={grup.commodity}
+                    type="button"
+                    className={`commodity-pill${aktif ? " commodity-pill-active" : ""}`}
+                    aria-pressed={aktif}
+                    onClick={() => {
+                      if (aktif) return;
+                      const pertama = grup.rows[0];
+                      setCentang({});
+                      if (pertama?.id) setTerimaId(String(pertama.id));
+                    }}
+                  >
+                    {grup.commodity}
+                    <span className="safety-filter-count">{grup.rows.length}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+          <fieldset className={styles.pickStep}>
+            <legend>2. Barang yang belum diuji</legend>
+            <p className={`evidence-note ${styles.stepHint}`}>
+              Satu batch = satu kiriman dengan berat dan masa layaknya sendiri. Yang sudah punya
+              hasil uji (Aman, Gagal uji, Perlu verifikasi) tidak muncul di sini; begitu dicatat,
+              barang pindah ke antrean &ldquo;Menunggu persetujuan&rdquo;.
+            </p>
+            <ul className={styles.batchList}>
+              {batchSatuKomoditas.map((row) => (
+                <li key={String(row.id)}>
+                  <label className={styles.batchItem}>
+                    <input
+                      type="radio"
+                      name="batch-terima"
+                      value={String(row.id)}
+                      checked={idTerima === row.id}
+                      onChange={() => {
+                        setCentang({});
+                        setTerimaId(String(row.id));
+                      }}
+                    />
+                    <span className={styles.batchBody}>
+                      <span className={styles.batchTitle}>
+                        {row.kg === null ? "—" : formatKg(row.kg)} · {kodeWilayah(row.location)}
+                      </span>
+                      <span className={styles.batchMeta}>
+                        belum diperiksa · layak s/d {row.usableUntil}
+                      </span>
+                    </span>
+                    <span className={`board-badge board-badge-${row.tone}`}>
+                      {row.statusLabel}
+                    </span>
+                  </label>
+                </li>
               ))}
-            </select>
-          </label>
-          <ul className="board-list safety-checks">
-            {RECEIVING_CHECKS.map((item) => (
-              <li key={item.id}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={centang[item.id] === true}
-                    onChange={(event) =>
-                      setCentang((lama) => ({ ...lama, [item.id]: event.target.checked }))
-                    }
-                  />
-                  <span>{item.label}</span>
-                </label>
-              </li>
-            ))}
-          </ul>
+            </ul>
+          </fieldset>          {/* Keadaan batch terpilih ditaruh DI LUAR <label>: kalau di dalam, teks
+              ini ikut terbaca sebagai nama field. Di ponsel (301 px) pilihan di
+              dalam <select> terpotong, jadi keadaan yang membedakan batch
+              (keamanan + masa layak) harus terbaca tanpa membuka daftar. */}
+          {batchTerpilih ? (
+            <p className="evidence-note safety-pick-state">
+              Keadaan batch: {batchTerpilih.statusLabel} · layak s/d{" "}
+              <span className="safety-nobr">{batchTerpilih.usableUntil}</span>
+              {batchTerpilih.hoursLeft !== null && batchTerpilih.hoursLeft < 0
+                ? " · sudah kedaluwarsa"
+                : ""}
+            </p>
+          ) : null}
+          <fieldset className="safety-checks-set">
+            <legend>Titik periksa</legend>
+            <ul className="board-list safety-checks">
+              {receivingChecks(komoditasTerpilih).map((item) => (
+                <li key={item.id}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={centang[item.id] === true}
+                      onChange={(event) =>
+                        setCentang((lama) => ({ ...lama, [item.id]: event.target.checked }))
+                      }
+                    />
+                    <span>{item.label}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </fieldset>
           {/* Permintaan pemilik: keadaan yang tidak ada di daftar harus bisa
               ditulis sendiri. Berdiri sendiri (bukan titik periksa ke-6), dan
               isinya disimpan ke `batch_receipts.other_note` — bukan hilang saat
@@ -683,10 +962,12 @@ export default function FoodSafetyBoard({
             <span className="evidence-note">
               {catatan.trim()
                 ? `${catatan.trim().length} karakter — ikut tersimpan saat dicatat.`
-                : `Catatan ini tersimpan ke database. Contoh: ${RECEIVING_OTHER.hint}.`}
+                : "Ikut tersimpan ke database bersama catatan penerimaan ini."}
             </span>
           </div>
-          <p className="evidence-note">{receivingSentence(receivingState(centang))}</p>
+          <p className="evidence-note" aria-live="polite">
+            {receivingSentence(receivingState(centang))}
+          </p>
           {canMutate && onRecheck && idTerima ? (
             <button
               type="button"
@@ -704,6 +985,82 @@ export default function FoodSafetyBoard({
           {aksi?.where === "terima" ? (
             <p className={aksi.nada === "danger" ? "board-alert" : "evidence-note"}>{aksi.teks}</p>
           ) : null}
+          {menunggu ? (
+            <p className="evidence-note">
+              Catatan terbaru berstatus <strong>menunggu persetujuan kepala SPPG</strong> — stok
+              belum bertambah sampai disetujui.
+            </p>
+          ) : null}
+          {menunggu && batchTerpilih?.hoursLeft != null && batchTerpilih.hoursLeft < 0 ? (
+            <p className="board-alert">
+              Batch ini sudah kedaluwarsa — tidak bisa disetujui masuk stok. Tolak penerimaan dan
+              minta barang pengganti.
+            </p>
+          ) : null}
+          {canApprove &&
+          menunggu &&
+          onApproveReceipt &&
+          !(batchTerpilih?.hoursLeft != null && batchTerpilih.hoursLeft < 0) ? (
+            <div className="safety-approve">
+              <p className="evidence-note">
+                Menyetujui berarti barang ini masuk stok (dihitung server dari berat batch) dan
+                angka pasokan di Overview ikut berubah. Menolak tidak menambah stok.
+              </p>
+              <div className="safety-approve-actions">
+                <button
+                  type="button"
+                  className="button button-primary"
+                  disabled={sibuk !== null}
+                  onClick={() => void setujuiTerima(menunggu.id)}
+                >
+                  {sibuk === "setujui" ? "Menyetujui…" : "Setujui & masukkan stok"}
+                </button>
+                <button
+                  type="button"
+                  className="button"
+                  disabled={sibuk !== null}
+                  aria-expanded={tolakId === menunggu.id}
+                  onClick={() => {
+                    setTolakId(tolakId === menunggu.id ? null : menunggu.id);
+                    setAlasanTolak("");
+                  }}
+                >
+                  Tolak penerimaan
+                </button>
+              </div>
+              {tolakId === menunggu.id ? (
+                <div className="safety-other">
+                  <label htmlFor={`alasan-${menunggu.id}`}>Alasan penolakan (wajib)</label>
+                  <textarea
+                    id={`alasan-${menunggu.id}`}
+                    value={alasanTolak}
+                    maxLength={500}
+                    rows={2}
+                    placeholder="Contoh: kemasan penyok dan suhu 12 °C — minta ganti barang."
+                    onChange={(event) => setAlasanTolak(event.target.value)}
+                  />
+                  <span className="evidence-note">
+                    Tersimpan bersama keputusan; petugas membacanya di riwayat.
+                  </span>
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    disabled={sibuk !== null}
+                    onClick={() => void tolakTerima(menunggu.id)}
+                  >
+                    {sibuk === "tolak" ? "Mengirim…" : "Kirim penolakan"}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {canApprove && !menunggu && sudahDisetujui ? (
+            <p className="evidence-note">
+              Penerimaan batch ini sudah disetujui
+              {sudahDisetujui.reviewedByName ? ` oleh ${sudahDisetujui.reviewedByName}` : ""} — stok
+              sudah tercatat dan tidak bertambah lagi bila disetujui ulang.
+            </p>
+          ) : null}
           {riwayat.length > 0 ? (
             <>
               <p className="board-subhead">Catatan penerimaan tersimpan (dari database)</p>
@@ -712,11 +1069,25 @@ export default function FoodSafetyBoard({
                   <li key={r.id}>
                     <span className="board-list-title">
                       {r.note ?? <em>tanpa catatan tambahan</em>}
+                      <span className={`board-badge board-badge-${r.statusNada}`}>
+                        {r.statusLabel}
+                      </span>
                     </span>
                     <span className="board-list-meta">
-                      {r.checkedCount === null ? "—" : `${r.checkedCount} titik`} ·{" "}
+                      {r.checkedCount === null ? "—" : `${r.checkedCount} titik`} · dicatat{" "}
                       {r.byName ?? "—"} · {r.waktuLabel}
                     </span>
+                    {r.status !== "menunggu" ? (
+                      <span className="board-list-meta">
+                        {r.statusLabel}
+                        {r.reviewedByName ? ` ${r.reviewedByName}` : ""}
+                        {r.reviewedLabel ? ` · ${r.reviewedLabel}` : ""}
+                        {r.stockKg !== null
+                          ? ` · +${r.stockKg.toLocaleString("id-ID")} kg stok`
+                          : ""}
+                        {r.reviewNote ? ` · alasan: ${r.reviewNote}` : ""}
+                      </span>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -725,7 +1096,95 @@ export default function FoodSafetyBoard({
         </article>
       ) : null}
 
-      <article className="card">
+      {canApprove && onApproveReceipt && antrean.length > 0 ? (
+        <article className="card">
+          <div className="board-card-head">
+            <h2>Menunggu persetujuan</h2>
+            <span className="board-badge board-badge-warn">{antrean.length} catatan</span>
+          </div>
+          <p className="evidence-note">
+            Barang sudah diperiksa petugas, tetapi stok belum bertambah. Setujui untuk memasukkan
+            beratnya ke stok; tolak dengan alasan bila barang tidak sesuai.
+          </p>
+          {aksi?.where === "terima" ? (
+            <p className={aksi.nada === "danger" ? "board-alert" : "evidence-note"} aria-live="polite">
+              {aksi.teks}
+            </p>
+          ) : null}
+          <ul className={styles.approvalList}>
+            {antrean.map((row) => (
+              <li key={row.id} className={styles.approvalItem}>
+                <div className={styles.approvalHead}>
+                  <span className={styles.batchTitle}>
+                    {row.commodity} · {formatKg(row.quantity_kg)} · {kodeWilayah(row.location)}
+                  </span>
+                  <span className="board-badge board-badge-warn">menunggu</span>
+                </div>
+                <span className={styles.batchMeta}>
+                  {row.checked_count} titik · dicatat {row.recorded_by_name ?? "—"} ·{" "}
+                  {waktuCatat(row.recorded_at)}
+                </span>
+                <div className="safety-row-actions">
+                  <button
+                    type="button"
+                    className="button"
+                    disabled={sibuk !== null}
+                    onClick={() => void setujuiTerima(row.id)}
+                  >
+                    {sibuk === "setujui" ? "Menyetujui…" : "Setujui & masukkan stok"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    disabled={sibuk !== null}
+                    onClick={() => {
+                      setTolakId(row.id);
+                      setAlasanTolak("");
+                    }}
+                  >
+                    Tolak
+                  </button>
+                </div>
+                {tolakId === row.id ? (
+                  <div className="safety-other">
+                    <label htmlFor={`alasan-antrean-${row.id}`}>Alasan penolakan (wajib)</label>
+                    <textarea
+                      id={`alasan-antrean-${row.id}`}
+                      value={alasanTolak}
+                      maxLength={500}
+                      rows={2}
+                      placeholder="Contoh: kemasan penyok dan suhu 12 °C — minta ganti barang."
+                      onChange={(event) => setAlasanTolak(event.target.value)}
+                    />
+                    <div className="safety-row-actions">
+                      <button
+                        type="button"
+                        className="button button-primary"
+                        disabled={sibuk !== null}
+                        onClick={() => void tolakTerima(row.id)}
+                      >
+                        {sibuk === "tolak" ? "Mengirim…" : "Kirim penolakan"}
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        onClick={() => {
+                          setTolakId(null);
+                          setAlasanTolak("");
+                        }}
+                      >
+                        Batal
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </article>
+      ) : null}
+
+      <article className="card jump-target" id="safety-batch">
         <div className="board-card-head">
           <h2>Status keamanan per batch</h2>
           {ownLocation ? (
@@ -750,14 +1209,59 @@ export default function FoodSafetyBoard({
             </div>
           ) : null}
         </div>
-        {urut.length === 0 ? (
+        <div className="safety-toolbar" id="safety-daftar">
+          <div className="safety-filter" role="group" aria-label="Saring batch menurut keadaan">
+            {(
+              [
+                ["tindakan", "Perlu tindakan"],
+                ["gagal", "Gagal uji"],
+                ["verifikasi", "Perlu verifikasi"],
+                ["aman", "Aman"],
+                ["semua", "Semua"],
+              ] as const
+            ).map(([kunci, label]) => (
+              <button
+                key={kunci}
+                type="button"
+                className={`commodity-pill${saring === kunci ? " commodity-pill-active" : ""}`}
+                aria-pressed={saring === kunci}
+                onClick={() => {
+                  setSaring(kunci);
+                  setHalaman(1);
+                }}
+              >
+                {label}
+                <span className="safety-filter-count">{jumlahPerSaringan[kunci]}</span>
+              </button>
+            ))}
+          </div>
+          <label className="safety-search">
+            <span className="sr-only">Cari lokasi atau komoditas</span>
+            <input
+              type="search"
+              value={cari}
+              placeholder="Cari lokasi atau komoditas…"
+              onChange={(e) => {
+                setCari(e.target.value);
+                setHalaman(1);
+              }}
+            />
+          </label>
+        </div>
+        {tersaring.length === 0 ? (
           <p className="evidence-note">
-            {loading ? <LoadingState label="Memuat batch…" /> : "Belum ada batch pada cakupan Anda."}
+            {loading ? (
+              <LoadingState label="Memuat batch…" />
+            ) : urut.length === 0 ? (
+              "Belum ada batch pada cakupan Anda."
+            ) : (
+              "Tidak ada batch yang cocok dengan saringan ini."
+            )}
           </p>
         ) : (
           <>
             <div className="board-table-wrap">
-              <table className="location-table">
+              <table className="location-table safety-table">
                 <thead>
                   <tr>
                     <th scope="col">{ownLocation && !jaringan ? "Asal" : "Lokasi"}</th>
@@ -775,14 +1279,18 @@ export default function FoodSafetyBoard({
                   </tr>
                 </thead>
                 <tbody>
-                  {urut.map((row: SafetyRow) => {
+                  {halamanData.items.map((row: SafetyRow) => {
                     const state = expiryState(row.hoursLeft);
                     return (
                       <tr key={row.id ?? `${row.location}-${row.commodity}`}>
-                        <td>{ownLocation && !jaringan ? asal(row) : kodeWilayah(row.location)}</td>
-                        <td>{row.commodity}</td>
-                        <td className="num">{row.kg === null ? "—" : formatKg(row.kg)}</td>
-                        <td>
+                        <td data-label={ownLocation && !jaringan ? "Asal" : "Lokasi"}>
+                          {ownLocation && !jaringan ? asal(row) : kodeWilayah(row.location)}
+                        </td>
+                        <td data-label="Komoditas">{row.commodity}</td>
+                        <td className="num" data-label="Jumlah">
+                          {row.kg === null ? "—" : formatKg(row.kg)}
+                        </td>
+                        <td data-label="Status keamanan">
                           <span className={`board-badge board-badge-${row.tone}`}>{row.statusLabel}</span>
                           {row.quarantine !== "none" ? (
                             <>
@@ -796,9 +1304,9 @@ export default function FoodSafetyBoard({
                             </>
                           ) : null}
                         </td>
-                        <td className="num">{row.freshness}</td>
-                        <td>{row.usableUntil}</td>
-                        <td>
+                        <td className="num" data-label="Kesegaran">{row.freshness}</td>
+                        <td data-label="Layak sampai">{row.usableUntil}</td>
+                        <td data-label="Sisa masa">
                           {state.key === "expired" || state.key === "urgent" || state.key === "watch" ? (
                             <>
                               <span className={`safety-state safety-state-${state.key}`}>{state.label}</span>{" "}
@@ -807,7 +1315,7 @@ export default function FoodSafetyBoard({
                           {state.detail}
                         </td>
                         {canMutate && (onRecheck || onTriggerDisruption || onKarantina) ? (
-                          <td>
+                          <td data-label="Tindakan">
                             <div className="safety-row-actions">
                               {row.id && onRecheck ? (
                                 <button
@@ -873,6 +1381,7 @@ export default function FoodSafetyBoard({
                 </tbody>
               </table>
             </div>
+            <Pager page={halamanData} onChange={setHalaman} label="status keamanan batch" />
             <ScrollHint />
           </>
         )}
@@ -920,7 +1429,7 @@ export default function FoodSafetyBoard({
       ) : null}
 
       {decisions ? (
-        <article className="card">
+        <article className="card jump-target" id="safety-keputusan">
           <div className="board-card-head">
             <h2>Keputusan keamanan lokasi ini</h2>
             {onOpenDecisions ? (

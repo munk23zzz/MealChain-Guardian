@@ -117,7 +117,7 @@
 
 /* Judul = tindakan yang diminta. Sebelumnya 18 px, sama dengan judul
    kartu biasa, sehingga kalimat terpenting di halaman tidak menonjol. */
-.evidence-page .card > h2.evidence-hero-title {
+.evidence-page .card .evidence-hero-title {
   font-size: var(--fs-7);
   font-weight: 600;
   line-height: 1.2;
@@ -126,7 +126,7 @@
   text-wrap: balance;
 }
 @media (max-width: 900px) {
-  .evidence-page .card > h2.evidence-hero-title { font-size: var(--fs-6); }
+  .evidence-page .card .evidence-hero-title { font-size: var(--fs-6); }
 }
 
 /* ---------- 4. Deret angka kunci: isi halaman, bukan keterangan ------ */
@@ -170,7 +170,7 @@
   gap: 4px;
   padding: 10px 12px;
   border-left-width: 3px;
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
 }
 .evidence-next-label { letter-spacing: 0.06em; }
 
@@ -184,7 +184,12 @@
 .evidence-route-step {
   position: relative;
   display: block;
-  padding: 0 22px 0 0;
+  /* Rata tengah (permintaan pemilik, 20 Okt 2026): tiap langkah duduk di
+     tengah kolomnya, bukan menempel tepi kiri. Padding SIMETRIS supaya pusat
+     penanda benar-benar 50% kolom — kalau hanya kanan yang ber-padding,
+     penanda ikut bergeser ke kiri dari pusat. */
+  padding: 0 var(--space-3);
+  text-align: center;
   border: 0;
   border-radius: 0;
   background: none;
@@ -196,10 +201,11 @@
   content: "";
   position: absolute;
   top: 11px;
-  left: 26px;
-  /* -22px = padding kanan langkah: garis berhenti tepat di tepi kiri
-     penanda langkah berikutnya, bukan 22 px sebelumya (celah). */
-  right: -22px;
+  /* 16 px = radius penanda (12) + celah (4). `right: calc(-50% + 16px)`
+     menaruh ujung garis 16 px sebelum PUSAT kolom tetangga, jadi garis
+     berhenti tepat di tepi kiri bulatan berikutnya tanpa celah menganga. */
+  left: calc(50% + 16px);
+  right: calc(-50% + 16px);
   height: 2px;
   background: var(--line);
 }
@@ -213,7 +219,7 @@
   place-items: center;
   width: 24px;
   height: 24px;
-  margin-bottom: 8px;
+  margin: 0 auto 8px;
   border: 2px solid var(--line-strong);
   border-radius: 50%;
   background: var(--surface);
@@ -253,7 +259,7 @@
 
 @media (max-width: 680px) {
   .evidence-route-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
-  .evidence-route-step { padding-right: 12px; }
+  .evidence-route-step { padding: 0 var(--space-2); }
   .evidence-route-step::before { content: none; }
 }
 
@@ -295,65 +301,36 @@
 
 .evidence-page .evidence-bottom { gap: 14px; }
 
-/* ---------- 10. Navigasi bagian: menempel + menandai posisi ---------- */
-
-.evidence-jump {
-  position: sticky;
-  top: 72px;                       /* tinggi top bar (64) + 8 */
-  z-index: 20;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  padding: 6px 8px;
-  background: rgba(255, 255, 255, 0.94);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  scrollbar-width: none;
-}
-.evidence-jump::-webkit-scrollbar { display: none; }
-.evidence-jump-list { flex-wrap: nowrap; }
-.evidence-jump-link {
-  min-height: 30px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  white-space: nowrap;
-}
-.evidence-jump-link[aria-current="true"] {
-  border-color: var(--accent-strong);
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 600;
-}
-@media (pointer: coarse), (max-width: 720px) {
-  .evidence-jump-link { min-height: 44px; }
-}
-
-/* Tautan jangkar tidak boleh mendarat di balik top bar + nav menempel. */
-#ringkasan,
-#rute,
-#zona-keputusan,
-#bukti,
-#jejak { scroll-margin-top: 132px; }
+/* ---------- 10. Navigasi bagian: kini komponen bersama ---------------- */
+/* Nav menempel + penanda posisi pindah ke `components/SectionJump.tsx` dan
+   diatur `app/globals.css` (`.section-jump`, `.jump-target`) supaya halaman
+   Keamanan Pangan & Overview memakai komponen yang SAMA, bukan salinan.
+   Yang tetap milik halaman ini hanya gerak penanda jalur persetujuan. */
 
 @media (prefers-reduced-motion: no-preference) {
-  .evidence-jump-link,
   .evidence-route-mark { transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease; }
 }
-@media (prefers-reduced-transparency: reduce) {
-  .evidence-jump { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
-}
 @media (forced-colors: active) {
-  .evidence-jump-link[aria-current="true"] { border-color: Highlight; color: Highlight; }
   .evidence-route-mark { forced-color-adjust: none; }
 }
 
 /* ---------- 11. Integritas: sub-judul, bukan judul kedua -------------- */
 /* Induk panel sudah berjudul "Jejak & riwayat" (label kapital). H3 di sini
-   satu tingkat di bawahnya, jadi hurufnya tetap besar tetapi garis bawahnya
-   dibuang: blok sudah dipisah garis dari kartu di atasnya. */
+   satu tingkat di bawahnya, jadi ia memakai BAHASA LABEL yang sama (20 Okt
+   2026): sebelumnya --fs-4/16 px KALIMAT — lebih besar daripada label
+   panelnya sendiri — plus titik aksen biru yang tidak dipakai judul lain. */
 .evidence-block .integrity-panel h3 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin: 0 0 6px;
   padding-bottom: 0;
   border-bottom: 0;
+  font-size: var(--fs-2);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
 }
 
 /* ---------- 12. Daftar Purchase order = tabel, bukan 7 kartu ---------- */
@@ -435,3 +412,65 @@
   justify-self: start;
 }
 .evidence-page section[aria-label="Supplier exclusion"] textarea { min-height: 64px; }
+
+/* ---------- 14. Kerapian 20 Okt 2026: satu bahasa untuk label, lipatan,
+   dan jarak label→judul ------------------------------------------------ */
+/* Permintaan pemilik: "gunakan skill untuk merapikan desain page tersebut".
+   Bukan palet atau struktur baru — hanya sisa ketidakseragaman yang membuat
+   halaman terbaca "kurang rapi". Angka sebelum–sesudahnya ada di
+   `_qa/decision-evidence-rapi/`. */
+
+/* (a) "Integritas Bukti" sudah dipindah ke bahasa label panel di §11;
+   di sini hanya konsekuensi bentuknya: titik aksen dibuang, garis rambut
+   dipasang seperti label lain supaya sejajar dengan "Jejak & riwayat". */
+.evidence-block .integrity-panel h3::before { content: none; }
+.evidence-block .integrity-panel h3::after {
+  content: "";
+  flex: 1 1 auto;
+  min-width: 20px;
+  height: 1px;
+  background: var(--line);
+}
+
+/* (b) Penanda lipatan: tiga lipatan di halaman ini dulu dua bahasa —
+   "Akibat tiap pilihan" punya ▸/▾, sedangkan "3 rincian lainnya" dan
+   "Rincian pengukuran & ekspor bukti" hanya teks biru tanpa penanda bentuk.
+   Sekarang ketiganya memakai chevron yang sama (bentuk, bukan hanya warna). */
+.evidence-page .fact-more > summary,
+.evidence-page .integrity-more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.evidence-page .fact-more > summary::before {
+  content: "▸";
+  font-size: 12px;
+  color: var(--ink-subtle);
+}
+.evidence-page .integrity-more > summary::before {
+  content: "▸";
+  font-size: 12px;
+  color: var(--ink-subtle);
+}
+.evidence-page .fact-more[open] > summary::before { content: "▾"; }
+.evidence-page .integrity-more[open] > summary::before { content: "▾"; }
+
+/* (d) Panah di tautan jangkar menempel kata ("Ke zona keputusan↓"): spasi di
+   awal <span> dipangkas saat kotak inline dimulai, jadi jaraknya harus datang
+   dari gap flex, bukan dari karakter spasi. */
+.evidence-page .evidence-hero-jump {
+  gap: var(--space-1);
+}
+
+/* (c) Bilah pintasan di ponsel: keadaan dipotong elipsis menjadi
+   "menunggu perset…" — teks yang hilang bukan keadaan yang dipadatkan.
+   Keadaan boleh dua baris; CTA tetap satu baris di kanan. */
+@media (max-width: 560px) {
+  .evidence-page .evidence-actionbar-text strong,
+  .evidence-page .evidence-actionbar-text span {
+    white-space: normal;
+    text-overflow: clip;
+    overflow: visible;
+  }
+}
+

@@ -8,8 +8,10 @@
 import PageHeader from "./PageHeader";
 import FactList from "./FactList";
 import {
+  alasanTanpaRencana,
   allocationPlan,
   angkaLimbahAda,
+  planFromServer,
   surplusSummary,
   wasteFacts,
 } from "../lib/surplus";
@@ -27,6 +29,9 @@ export default function SurplusBoard({
   onRetry,
   onOpenLocation,
   waste,
+  plan,
+  planLoading = false,
+  planError = null,
 }: {
   locations: unknown[] | null;
   commodity?: string | null;
@@ -38,9 +43,21 @@ export default function SurplusBoard({
   onOpenLocation?: (location: string) => void;
   /** Respons GET /waste/summary — sumber tiga baris limbah (bukan angka klien). */
   waste?: unknown;
+  /**
+   * Respons GET /surplus/allocations — rencana lintas lokasi dari server.
+   * Tanpa prop ini komponen menghitung sendiri dari `locations` (perilaku lama,
+   * dipakai tes render): untuk peran SPPG hasilnya kosong karena peta dibatasi
+   * cakupan, karena itu halaman asli WAJIB mengirim prop ini.
+   */
+  plan?: unknown;
+  planLoading?: boolean;
+  planError?: string | null;
 }) {
   const summary = surplusSummary(locations);
-  const plan = allocationPlan(locations, 6);
+  // Server lebih dulu; hitungan klien hanya cadangan saat prop tidak dikirim.
+  const dariServer = plan === undefined ? null : planFromServer(plan, 6);
+  const rows = dariServer ? dariServer.rows : allocationPlan(locations, 6);
+  const planKosong = rows.length === 0;
 
   return (
     <section className="board-page" aria-busy={loading || undefined}>
@@ -50,7 +67,14 @@ export default function SurplusBoard({
         meta={
           <span className="page-header-pills">
             <span className="commodity-pill">Komoditas {commodity ? commodity : "—"}</span>
-            <span className="commodity-pill">{summary.surplusCount} lokasi surplus</span>
+            {/* Lencana surplus: angka JARINGAN dari server bila ada. Peta akun
+                SPPG hanya memuat satu lokasi, jadi memakai hitungan peta akan
+                menulis "0 lokasi surplus" di atas rencana yang punya sumber. */}
+            <span className="commodity-pill">
+              {dariServer?.surplusLocations !== null && dariServer?.surplusLocations !== undefined
+                ? `${dariServer.surplusLocations} lokasi surplus jaringan`
+                : `${summary.surplusCount} lokasi surplus`}
+            </span>
             {summary.unmeasuredCount > 0 && (
               // Lokasi yang salah satu sisinya belum tercatat TIDAK hilang diam-
               // diam dari hitungan: jumlahnya dikatakan (PLAN-023).
@@ -155,8 +179,9 @@ export default function SurplusBoard({
             ]}
           />
           <p className="evidence-note">
-            Surplus = stok − kebutuhan pada satu komoditas. Angka kekurangan di sini juga muncul di
-            kartu “lokasi shortage” halaman Hari Ini.
+            Surplus = stok − kebutuhan pada satu komoditas. Kartu ini mengikuti cakupan peta akun Anda
+            (peran SPPG hanya melihat lokasinya sendiri); rencana di bawah dihitung lintas lokasi oleh
+            server. Angka kekurangan di sini juga muncul di kartu “lokasi shortage” halaman Hari Ini.
           </p>
         </article>
 
@@ -177,9 +202,21 @@ export default function SurplusBoard({
 
       <article className="card">
         <h2>Rencana alokasi surplus</h2>
-        {plan.length === 0 ? (
+        <p className="evidence-note">
+          Hanya surplus {dariServer?.minSurplusKg ?? 150} kg ke atas per lokasi yang
+          direncanakan, dan tiap pengiriman minimal {dariServer?.minSurplusKg ?? 150} kg —
+          di bawah itu biaya tetap pengiriman tidak sebanding.
+        </p>
+        {planError ? (
+          <p className="evidence-note">Rencana tidak bisa dimuat: {planError}</p>
+        ) : null}
+        {planKosong ? (
           <p className="evidence-note">
-            {loading ? <LoadingState label="Memuat neraca…" /> : "Tidak ada pasangan surplus→kekurangan yang bisa dialokasikan saat ini."}
+            {planLoading ? (
+              <LoadingState label="Memuat rencana alokasi…" />
+            ) : planError ? null : (
+              alasanTanpaRencana(dariServer?.reason)
+            )}
           </p>
         ) : (
           <>
@@ -196,17 +233,25 @@ export default function SurplusBoard({
                   <th scope="col" className="num">
                     Jarak
                   </th>
+                  <th scope="col" className="num">
+                    Biaya tetap
+                  </th>
                   <th scope="col">Wilayah tujuan</th>
                   <th scope="col">Tindakan</th>
                 </tr>
               </thead>
               <tbody>
-                {plan.map((row) => (
+                {rows.map((row) => (
                   <tr key={`${row.from}-${row.to}-${row.kg}`}>
                     <td>{row.from}</td>
                     <td>{row.to}</td>
                     <td className="num">{formatKg(row.kg)}</td>
                     <td className="num">{row.distanceKm === null ? "—" : `${row.distanceKm} km`}</td>
+                    <td className="num">
+                      {row.costSharePct === null || row.costSharePct === undefined
+                        ? "—"
+                        : `${row.costSharePct.toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`}
+                    </td>
                     <td>{row.region ?? "—"}</td>
                     <td>
                       {onOpenLocation ? (
@@ -230,7 +275,11 @@ export default function SurplusBoard({
               </>
             <p className="evidence-note">
               Urutan: kebutuhan terbesar diisi surplus terbesar lebih dulu, sampai salah satu sisi
-              habis. Jarak memakai koordinat lokasi (jarak lurus, bukan rute jalan).
+              habis. Jarak memakai koordinat lokasi (jarak lurus, bukan rute jalan). Rencana dihitung
+              lintas lokasi oleh server, karena itu barisnya bisa memuat kota di luar cakupan peta
+              akun ini — sementara peta tetap hanya menampilkan lokasi yang boleh Anda lihat.
+              Kolom “Biaya tetap” = (penanganan Rp150.000 + angkut) ÷ nilai barang pada harga acuan
+              terakhir: pengiriman kecil selalu mahal, dan angka itu yang membuatnya terbaca.
             </p>
           </>
         )}

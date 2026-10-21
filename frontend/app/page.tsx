@@ -12,11 +12,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MANAGE_ROLES } from "../lib/settings";
 
 import {
+  approveReceipt,
   evaluateFreshness,
   evaluateSafety,
+  fetchPendingReceipts,
   fetchReceipts,
   login,
   recordReceipt,
+  rejectReceipt,
   ubahKarantina,
   reproposeAction,
   triggerSafetyDisruption,
@@ -27,7 +30,7 @@ import { readDecisionLink, withDecisionLink } from "../lib/decision-link";
 import { useExclusions } from "../lib/hooks/useExclusions";
 import { useKpi } from "../lib/hooks/useKpi";
 import { useWasteSummary } from "../lib/hooks/useWasteSummary";
-import { useIntegrationStatus } from "../lib/hooks/useIntegrationStatus";
+import { useSurplusPlan } from "../lib/hooks/useSurplusPlan";
 import { usePurchaseOrders } from "../lib/hooks/usePurchaseOrders";
 import { agendaErrorText, useAgenda } from "../lib/hooks/useAgenda";
 import {
@@ -72,7 +75,6 @@ import { formatDateTime } from "../lib/datetime";
 import SettingsPanel from "../components/SettingsPanel";
 import Pager from "../components/Pager";
 import { paginate } from "../lib/pagination";
-import IntegrationStatusPanel from "../components/IntegrationStatusPanel";
 import PurchaseOrderList from "../components/PurchaseOrderList";
 import TopBar from "../components/TopBar";
 import {
@@ -99,11 +101,14 @@ import AgentSwarmPanel from "../components/AgentSwarmPanel";
 import DecisionPicker from "../components/DecisionPicker";
 import { defaultAgentLogId } from "../lib/agent-swarm";
 import DemoControlPanel from "../components/DemoControlPanel";
+import DemoSessionBanner from "../components/DemoSessionBanner";
 import { mapHeaderSubtitle } from "../lib/overview-copy";
 import DecisionChain from "../components/DecisionChain";
 import ProviderPanel from "../components/ProviderPanel";
 import RoleHero from "../components/RoleHero";
 import PageHeader from "../components/PageHeader";
+import SectionJump from "../components/SectionJump";
+import { overviewSections } from "../lib/section-jump";
 import KpiQualityBoard from "../components/KpiQualityBoard";
 import SupplyMap from "../components/SupplyMap";
 import NodeTelemetry from "../components/NodeTelemetry";
@@ -277,24 +282,23 @@ export default function Home() {
   // ringkasan jaringan), bukan hanya halaman Overview. Stempel "terakhir
   // diperbarui" datang dari React Query, bukan state kedua yang bisa menyimpang.
   const mapQuery = useBalanceMap(token, identityScope, mapCommodity);
-  // Grafik kecukupan: SPPG/gizi selalu melihat empat komoditas untuk lokasi
-  // sendiri; BGN baru memakainya saat memilih satu lokasi (saat nasional,
-  // grafiknya lintas lokasi lewat SupplyBalanceChart).
-  const peranSPPG = APPROVER_ROLES.has(role ?? "");
+  // Grafik kecukupan membandingkan EMPAT komoditas sekaligus untuk SATU
+  // lokasi. SPPG/gizi selalu memakainya; BGN Monitor memakainya begitu ia
+  // memilih lokasi tertentu (bukan "__all__"). Saat BGN masih nasional,
+  // grafiknya tetap lintas lokasi (SupplyBalanceChart), jadi empat query
+  // tambahan ini tidak dijalankan tanpa guna.
+  const peranSpPG = APPROVER_ROLES.has(role ?? "");
   const bgnLokasiSpesifik =
     role === "bgn_monitor" &&
     Boolean(activeLocation) &&
     activeLocation !== ALL_LOCATIONS;
-  const pakaiGrafikKecukupan = peranSPPG || bgnLokasiSpesifik;
+  const pakaiGrafikKecukupan = peranSpPG || bgnLokasiSpesifik;
   const commodityBalance = useCommodityBalance(
     token,
     identityScope,
     COMMODITIES,
     pakaiGrafikKecukupan
   );
-  // Papan status integrasi (W-3): dipakai panel di tab Agent Log; isinya env +
-  // artefak, jadi tidak di-poll.
-  const integrationStatus = useIntegrationStatus(token);
   // Purchase order mock SAP (W-5): sisi baca yang selama ini tidak ada. Kunci
   // query memakai `identityScope` karena isinya berbeda per peran.
   const purchaseOrders = usePurchaseOrders(token, identityScope);
@@ -374,8 +378,9 @@ export default function Home() {
   // Jam klien: null sampai komponen ter-mount supaya HTML server dan render
   // klien tidak berbeda (label waktu ditulis "—" sebelum jam siap).
   const [now, setNow] = useState<Date | null>(null);
-  // Baris kecukupan dihitung dari empat peta komoditas + batch; sebelum jam
-  // siap grafik menampilkan skeleton, bukan 0% yang menakutkan.
+  // Baris kecukupan dihitung murni dari empat peta komoditas + batch. `now`
+  // menentukan batch mana yang ≤48 jam/kedaluwarsa; sebelum jam siap, grafik
+  // menampilkan skeleton (bukan 0% yang menakutkan).
   const adequacyRows = useMemo(() => {
     const lokasi =
       activeLocation && activeLocation !== ALL_LOCATIONS
@@ -479,6 +484,27 @@ export default function Home() {
     return { safety, freshness };
   };
 
+  // Persetujuan penerimaan (migrasi 026): server menulis stok, lalu Overview,
+  // Hari Ini, dan feed keputusan diambil ulang — layar tidak menambah angka
+  // sendiri. `stock_kg` dikembalikan agar kartu bisa menyebut kg yang masuk.
+  const receiptApprove = async (receiptId: string) => {
+    if (!token) throw new Error("sesi tidak ada");
+    const hasil = await approveReceipt(receiptId, token);
+    await Promise.all([
+      todayQuery.refetch(),
+      mapQuery.refetch(),
+      decisionsQuery.refetch(),
+    ]);
+    return { stock_kg: hasil?.stock_kg ?? null };
+  };
+
+  const receiptReject = async (receiptId: string, note: string) => {
+    if (!token) throw new Error("sesi tidak ada");
+    const hasil = await rejectReceipt(receiptId, note, token);
+    await Promise.all([todayQuery.refetch(), mapQuery.refetch()]);
+    return hasil;
+  };
+
   const safetyRepropose = async (decisionId: string) => {
     if (!token) throw new Error("sesi tidak ada");
     const hasil = await reproposeAction(decisionId, token);
@@ -537,6 +563,10 @@ export default function Home() {
   // Limbah + mitra pengolahan (18 Okt 2026): panel Surplus & Limbah dulu menulis
   // "—" karena tidak ada sumbernya. Sekarang dari server, dimuat hanya di tab itu.
   const wasteQuery = useWasteSummary(token, identityScope, tab);
+  // Rencana alokasi surplus (20 Okt 2026): dihitung SERVER, lintas lokasi.
+  // Panel lama merakit pasangannya dari /balance/map yang dibatasi cakupan peran,
+  // sehingga selalu kosong untuk satu-satunya peran yang boleh membuka tab ini.
+  const planQuery = useSurplusPlan(token, mapCommodity, tab);
 
   // Kalender agenda harian (langkah 2, 2026-10-16). Bulan & hari terpilih
   // dimiliki HALAMAN — bukan komponen — supaya rentang yang diminta ke
@@ -1030,6 +1060,12 @@ export default function Home() {
           onLogout={onLogout}
         />
         <div className="app-body">
+        {/* Petunjuk global bahwa data memang sengaja kosong (sesi demo). */}
+        <DemoSessionBanner
+          token={token}
+          bolehBuka={isApprover}
+          onOpenDemoControl={() => setTab("demo-control")}
+        />
         {tab === "today" && (
           /* Langkah 3 (permintaan Roy 2026-10-11): rekap operasional hari
              berjalan. Semua angka dari API — keputusan menunggu tindakan,
@@ -1093,7 +1129,8 @@ export default function Home() {
                 peta (2/3) + grafik stok (1/3) → kartu Status Lokasi.
                 Angka dihitung dari data peta real (mapData), tanpa karangan. */}
             <section
-              className="overview-header"
+              className="overview-header jump-target"
+              id="ov-ringkas"
               aria-label="Ringkasan peta pasokan"
             >
               <div className="overview-header-main">
@@ -1122,6 +1159,15 @@ export default function Home() {
                 )}
               </div>
             </section>
+
+            {/* Navigasi bagian (komponen bersama): Overview delapan blok dalam
+                satu gulungan — peta, kiriman, kecukupan, telemetri. Daftarnya
+                dari lib/section-jump (bukan tautan yang ditulis ulang di sini),
+                dan tujuan kiriman hanya muncul kalau kartunya memang dirender. */}
+            <SectionJump
+              items={overviewSections({ isApprover, hasShipments: focusTotal > 0 })}
+              ariaLabel="Bagian halaman Overview"
+            />
 
             <RoleHero role={role ?? "sppg_head"} />
 
@@ -1274,7 +1320,8 @@ export default function Home() {
                 Layout: peta (kiri) + tabel Pasokan per Lokasi (kanan);
                 Telemetri Node di bawah peta. */}
             <section
-              className="overview-split"
+              className="overview-split jump-target"
+              id="overview-map"
               aria-label="Peta dan pasokan per lokasi"
             >
               <SupplyMap
@@ -1373,19 +1420,14 @@ export default function Home() {
               </div>
             </section>
 
-            {/* Informasi pengiriman (Arah A riset 16 Okt 2026): satu blok per
-                kiriman — pil status, stepper tahap, angka kunci, kalimat
-                keputusan. Datanya kiriman yang sama dengan garis di peta
-                (disaring komoditas tampilan), jadi angka di kartu dan garis di
-                peta tidak bisa berbeda cerita. */}
-            <ShipmentCard
-              routes={mapSupplierRoutesQuery.data}
-              hanya={focusRow ? (row) => row.id === focusRow.id : undefined}
-              note={`${focusNote(focusRow, focusTotal)} Mengikuti komoditas yang sedang ditampilkan di peta.`}
-            />
-
-            {/* Grafik kecukupan: empat komoditas untuk lokasi sendiri; BGN
-                memakai lintas lokasi saat cakupan nasional. */}
+            {/* Grafik kecukupan: peran SPPG/gizi melihat EMPAT komoditas
+                sekaligus untuk lokasi sendiri (bukan satu komoditas yang
+                kebetulan sedang dipilih di peta). Diletakkan TEPAT di bawah
+                peta + antrean: ini lapisan "scan" sebelum detail kiriman.
+                BGN Monitor memakai SupplyBalanceChart saat cakupan nasional,
+                lalu beralih ke grafik empat komoditas yang sama begitu ia
+                memilih satu lokasi. */}
+            <div className="jump-target" id="ov-kecukupan">
             {pakaiGrafikKecukupan ? (
               <SupplyAdequacyChart
                 rows={adequacyRows}
@@ -1405,6 +1447,9 @@ export default function Home() {
                 }}
                 onSelect={(commodity) => {
                   setMapCommodity(commodity);
+                  // "auto", bukan "smooth": gulir halus membuat kontainer peta
+                  // berubah ukuran terus-menerus dan MapLibre melempar error
+                  // (terbukti 20 Okt 2026). Lompat sekali = peta tetap hidup.
                   document
                     .getElementById("overview-map")
                     ?.scrollIntoView({ behavior: "auto", block: "center" });
@@ -1421,6 +1466,20 @@ export default function Home() {
                 onRetry={() => void mapQuery.refetch()}
               />
             )}
+            </div>
+
+            {/* Informasi pengiriman (Arah A riset 16 Okt 2026): satu blok per
+                kiriman — pil status, stepper tahap, angka kunci, kalimat
+                keputusan. Datanya kiriman yang sama dengan garis di peta
+                (disaring komoditas tampilan), jadi angka di kartu dan garis di
+                peta tidak bisa berbeda cerita. */}
+            <div className="jump-target" id="ov-kiriman">
+            <ShipmentCard
+              routes={mapSupplierRoutesQuery.data}
+              hanya={focusRow ? (row) => row.id === focusRow.id : undefined}
+              note={`${focusNote(focusRow, focusTotal)} Mengikuti komoditas yang sedang ditampilkan di peta.`}
+            />
+            </div>
 
             {/* Dua kartu ringkas BERDAMPINGAN (revisi 16 Okt: "shape terlalu
                 besar/kosong"). Sebelumnya Telemetri Node (237 px) dan daftar
@@ -1428,7 +1487,7 @@ export default function Home() {
                 isinya hanya beberapa baris teks — total 440 px tinggi demi
                 ~10 baris. Di >=1100px keduanya berbagi satu baris; di bawah itu
                 tetap bertumpuk (lihat `.overview-pair`). */}
-            <div className="overview-pair">
+            <div className="overview-pair jump-target" id="ov-telemetri">
               {/* Telemetri Node di bawah baris peta */}
               <section aria-label="Telemetri node">
                 <NodeTelemetry
@@ -1731,6 +1790,10 @@ export default function Home() {
               recordReceipt(batchId, checked, catatan, token ?? "")
             }
             loadReceipts={(batchId) => fetchReceipts(batchId, token ?? "")}
+            loadPendingReceipts={() => fetchPendingReceipts(token ?? "")}
+            onApproveReceipt={receiptApprove}
+            onRejectReceipt={receiptReject}
+            canApprove={role === "sppg_head"}
             onKarantina={safetyKarantina}
             onOpenDecisions={() => setTab("evidence")}
           />
@@ -1750,6 +1813,9 @@ export default function Home() {
               setTab("overview");
             }}
             waste={wasteQuery.data}
+            plan={planQuery.data}
+            planLoading={planQuery.loading}
+            planError={planQuery.error}
           />
         )}
 
@@ -1834,13 +1900,8 @@ export default function Home() {
               decisionId={selected?.decision_id ?? null}
               now={now}
             />
-            {/* W-3 (2026-10-17): bukti integrasi per komponen — panel, bukan tab baru. */}
-            <IntegrationStatusPanel
-              data={integrationStatus.data}
-              loading={integrationStatus.isFetching && !integrationStatus.data}
-              error={integrationStatus.error}
-              onRetry={() => void integrationStatus.refetch()}
-            />
+            {/* W-3 (2026-10-17): panel bukti integrasi dicabut dari tab ini 21 Okt
+                atas permintaan pemilik; komponennya masih ada untuk dipasang lain kali. */}
           </section>
         )}
         </div>

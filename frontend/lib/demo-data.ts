@@ -118,6 +118,21 @@ export function buildLine(result: any): string {
   );
 }
 
+/**
+ * true bila status benar-benar memuat baris (demo atau kanonik).
+ *
+ * Badge kartu sempat menulis "data siap" hanya karena `status` tidak null —
+ * setelah sesi demo berakhir (semua tabel 0) badge itu berbohong tepat di
+ * kartu yang menyuruh menyiapkan data.
+ */
+export function adaBaris(status: any): boolean {
+  const t = status?.tables;
+  if (!t) return false;
+  return [t.supply_records, t.price_signals, t.menu_plans].some(
+    (x) => (x?.seed ?? 0) + (x?.demo ?? 0) > 0
+  );
+}
+
 /** Baris status dari `GET /demo/data-status` — keadaan DB, bukan ingatan klien. */
 export function statusLine(status: any): string {
   const tabel = status?.tables;
@@ -213,4 +228,48 @@ export function honestNote(): string {
 /** Apakah tombol aksi boleh ditekan (rentang sah + tidak sedang sibuk). */
 export function canSubmit(start: string, end: string, busy: boolean): boolean {
   return !busy && rangeError(start, end) === null;
+}
+
+/** Bentuk ringkasan yang dikembalikan `POST /demo/template/rebuild`. */
+export type RebuildSummary = {
+  ok?: boolean;
+  durasi_detik?: number;
+  hitung?: {
+    batches?: number;
+    decisions?: number;
+    receipts?: number;
+    eksklusi?: number;
+    ledger?: number;
+    traces?: number;
+    po?: number;
+    users?: number;
+  };
+};
+
+/**
+ * Satu kalimat hasil bangun ulang — angka diambil dari `hitung` (dibaca ulang
+ * server dari database sesudah commit), bukan dari parameter permintaan.
+ */
+export function rebuildLine(hasil: RebuildSummary | null | undefined): string {
+  if (!hasil) return "Bangun ulang belum dijalankan.";
+  const h = hasil.hitung ?? {};
+  const bagian = [
+    typeof h.batches === "number" ? `${formatCount(h.batches)} batch` : null,
+    typeof h.decisions === "number" ? `${formatCount(h.decisions)} keputusan` : null,
+    typeof h.po === "number" ? `${formatCount(h.po)} pesanan SAP` : null,
+    typeof h.ledger === "number" ? `${formatCount(h.ledger)} blok ledger` : null,
+  ].filter(Boolean);
+  const durasi =
+    typeof hasil.durasi_detik === "number" ? ` dalam ${hasil.durasi_detik.toFixed(1)} detik` : "";
+  const isi = bagian.length ? `: ${bagian.join(", ")}` : "";
+  return `Data demo dibangun ulang${durasi}${isi}.`;
+}
+
+/** Peringatan yang menyertai tombol — menyebut yang hilang DAN yang tidak. */
+export function rebuildWarning(): string {
+  return (
+    "Baris operasional (batch, keputusan, pesanan, bukti, ledger) diganti dari template, " +
+    "jadi angka kembali ke keadaan awal. Jendela sesi, akun demo, lokasi, dan pemasok tidak " +
+    "disentuh. Proses ini butuh ±70 detik karena mengambil ulang rute jalan."
+  );
 }

@@ -203,6 +203,10 @@ const fake = vi.hoisted(() => {
       this.node = node;
       return this;
     }
+    on() {
+      // jagaPopup memasang listener "open"/"close" pada popup sungguhan.
+      return this;
+    }
     addTo() {
       popupLog.push(this);
       return this;
@@ -299,12 +303,6 @@ function mountWithRoutes() {
   act(() => {
     root.render(<SupplyMap locations={LOCATIONS} supplierRoutes={ROUTES} />);
   });
-}
-
-function routeToggle() {
-  const button = host.querySelector<HTMLButtonElement>(".map-route-toggle");
-  if (!button) throw new Error("tombol layer jalur kiriman tidak ada");
-  return button;
 }
 
 /** Sakelar "Rincian lapisan peta" (bilah di bawah kanvas). */
@@ -413,15 +411,6 @@ const locationMarkers = () =>
       !marker.removed
   );
 
-function toggle() {
-  const button = host.querySelector<HTMLButtonElement>(".map-layer-toggle");
-  if (!button) throw new Error("tombol layer pemasok tidak ada");
-  act(() => {
-    button.click();
-  });
-  return button;
-}
-
 function zoomTo(zoom: number) {
   act(() => {
     map().setZoom(zoom);
@@ -448,24 +437,22 @@ afterEach(() => {
 });
 
 describe("SupplyMap — perilaku layer pemasok", () => {
-  it("lapisan mati: hanya pin SPPG yang digambar", () => {
+  it("zoom jauh: pin SPPG dan titik pemasok tetap digambar", () => {
     mount();
     expect(mapLog).toHaveLength(1);
     expect(locationMarkers()).toHaveLength(1);
-    expect(supplierMarkers()).toHaveLength(0);
+    // Sejak 20 Okt 2026 titik pemasok TIDAK digerbang zoom: lapisan yang selalu
+    // hidup tidak boleh kehilangan penandanya saat peta diperkecil.
+    expect(supplierMarkers()).toHaveLength(2);
+    supplierMarkers().forEach((marker) => {
+      expect(marker.element.className).toContain("map-pin-supplier-compact");
+    });
   });
 
-  it("dinyalakan pada zoom jauh: pin belum digambar, pengguna diberi tahu", () => {
+  it("zoom jauh: titik pemasok tampil tanpa nama, pengguna diberi tahu alasannya", () => {
     mount();
-    const button = toggle();
-    expect(button.getAttribute("aria-pressed")).toBe("true");
-    // Sejak 19 Okt 2026 tombolnya ikon saja: jumlah pindah ke nama aksesibel,
-    // kalimat "tampilkan/sembunyikan" tetap di tooltip.
-    expect(button.getAttribute("aria-label")).toBe("Pemasok (2)");
-    expect(button.textContent?.trim()).toBe("");
-    expect(button.title).toBe("Sembunyikan pemasok (2)");
-    expect(supplierMarkers()).toHaveLength(0);
-    expect(host.querySelector(".map-layer-hint")?.textContent).toContain("Perbesar peta");
+    expect(supplierMarkers()).toHaveLength(2);
+    expect(host.querySelector(".map-layer-hint")?.textContent).toContain("muncul pada zoom 8 ke atas");
   });
 
   it("keterangan aksesibilitas bertahan setelah MapLibre menimpanya", () => {
@@ -475,7 +462,6 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     expect(locationMarkers()[0]?.element.getAttribute("aria-label")).toContain(
       "permintaan 1.080 kg"
     );
-    toggle();
     zoomTo(10);
     supplierMarkers().forEach((marker) => {
       expect(marker.element.getAttribute("aria-label")).not.toBe("Map marker");
@@ -484,18 +470,20 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     });
   });
 
-  it("zoom menengah (6–8): pin tampil sebagai titik tanpa nama", () => {
+  it("zoom menengah (6–8): titik tanpa nama, keterangan nama tetap tampil", () => {
     mount();
-    toggle();
     zoomTo(6.5);
     expect(supplierMarkers()).toHaveLength(2);
-    expect(host.querySelector(".map-layer-hint")).toBeNull();
+    // Nama belum ditulis, jadi keterangannya MASIH tampil — kalimatnya kini
+    // soal nama, bukan soal pin (pin tidak lagi digerbang zoom).
+    expect(host.querySelector(".map-layer-hint")?.textContent).toContain("nama pemasok muncul");
     supplierMarkers().forEach((marker) => {
       expect(marker.element.className).toContain("map-pin-supplier-compact");
       expect(marker.element.getAttribute("aria-label")).toContain("keandalan");
     });
     // Nama tetap tersedia lewat tooltip/aria, jadi bukan informasi yang hilang.
     zoomTo(9);
+    expect(host.querySelector(".map-layer-hint")).toBeNull();
     supplierMarkers().forEach((marker) => {
       expect(marker.element.className).not.toContain("map-pin-supplier-compact");
     });
@@ -503,7 +491,6 @@ describe("SupplyMap — perilaku layer pemasok", () => {
 
   it("zoom masuk (>= 8): pin muncul, hint hilang", () => {
     mount();
-    toggle();
     zoomTo(9);
     expect(supplierMarkers()).toHaveLength(2);
     expect(host.querySelector(".map-layer-hint")).toBeNull();
@@ -514,13 +501,15 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     expect(telur?.lngLat).toEqual([107.1636, -6.811]);
   });
 
-  it("zoom dijauhkan lagi: pin dibuang (tidak menyisakan penanda menggantung)", () => {
+  it("zoom dijauhkan lagi: nama hilang, titik tetap (tidak ada penanda menggantung)", () => {
     mount();
-    toggle();
     zoomTo(9);
     expect(supplierMarkers()).toHaveLength(2);
     zoomTo(5);
-    expect(supplierMarkers()).toHaveLength(0);
+    expect(supplierMarkers()).toHaveLength(2);
+    supplierMarkers().forEach((marker) => {
+      expect(marker.element.className).toContain("map-pin-supplier-compact");
+    });
     // Pin SPPG tidak ikut terpengaruh.
     expect(locationMarkers()).toHaveLength(1);
   });
@@ -531,7 +520,6 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     // pertama. Pin lalu ikut alur tata letak penanda lain dan bergeser sampai
     // ±192 px dari koordinat aslinya saat zoom in/out.
     mount();
-    toggle();
     zoomTo(6.5);
     supplierMarkers().forEach((marker) => {
       expect(marker.element.className).toContain("maplibregl-marker");
@@ -566,29 +554,15 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     expect(sesudah?.className).toContain("maplibregl-marker-anchor-bottom");
   });
 
-  it("zoom dekat lebih dulu, lalu dinyalakan: pin langsung muncul", () => {
+  it("zoom dekat: pin pemasok langsung muncul tanpa perlu dinyalakan", () => {
     mount();
     zoomTo(10);
-    expect(supplierMarkers()).toHaveLength(0); // lapisan masih mati
-    toggle();
     expect(supplierMarkers()).toHaveLength(2);
-  });
-
-  it("mematikan lapisan membuang semua pin pemasok", () => {
-    mount();
-    zoomTo(10);
-    toggle();
-    expect(supplierMarkers()).toHaveLength(2);
-    toggle();
-    expect(supplierMarkers()).toHaveLength(0);
-    expect(host.querySelector(".map-layer-hint")).toBeNull();
-    expect(locationMarkers()).toHaveLength(1);
   });
 
   it("kelas & popup pin memakai makna dari data (bukan enum internal)", () => {
     mount();
     zoomTo(10);
-    toggle();
     const telur = supplierMarkers().find((marker) =>
       marker.element.getAttribute("aria-label")?.includes("Telur Berkah Cianjur")
     )!;
@@ -597,9 +571,11 @@ describe("SupplyMap — perilaku layer pemasok", () => {
       "Telur Berkah Cianjur — pemasok telur, keandalan 38%, hub Cianjur (dikecualikan di Cianjur, Jakarta)"
     );
     const popupText = telur.popup?.node?.textContent ?? "";
-    expect(popupText).toContain("Komoditas: telur");
-    expect(popupText).toContain("Keandalan: 38%");
-    expect(popupText).toContain("Sertifikasi: Tidak bersertifikat");
+    // Popup 21 Okt 2026 memakai kartu berstruktur (kicker/judul/metrik),
+    // jadi teksnya dibaca per makna — bukan lagi satu kalimat "Label: nilai".
+    expect(popupText).toContain("telur");
+    expect(popupText).toContain("38%");
+    expect(popupText).toContain("Tidak bersertifikat");
     expect(popupText).toContain("Dikecualikan di: Cianjur, Jakarta");
     expect(popupText).not.toContain("none");
 
@@ -607,7 +583,7 @@ describe("SupplyMap — perilaku layer pemasok", () => {
       marker.element.getAttribute("aria-label")?.includes("Wortel Lestari Cianjur")
     )!;
     expect(wortel.element.className).toContain("map-pin-supplier-ok");
-    expect(wortel.popup?.node?.textContent).toContain("Sertifikasi: HACCP");
+    expect(wortel.popup?.node?.textContent).toContain("HACCP");
   });
 
   it("memasang source & layer garis untuk jalur kiriman (Fase 10)", () => {
@@ -622,11 +598,24 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     expect(done).toBeDefined();
     expect(todo).toBeDefined();
     expect(done.type).toBe("line");
-    expect(done.filter).toEqual(["==", ["get", "kind"], "done"]);
-    expect(todo.filter).toEqual(["==", ["get", "kind"], "todo"]);
+    expect(done.filter).toEqual(["all", ["==", ["get", "kind"], "done"], ["!=", ["get", "quiet"], true]]);
+    expect(todo.filter).toEqual(["all", ["==", ["get", "kind"], "todo"], ["!=", ["get", "quiet"], true]]);
     const cat = (layer: { paint?: unknown }) => (layer.paint ?? {}) as Record<string, unknown>;
     expect(cat(done)["line-dasharray"]).toBeUndefined();
     expect(cat(todo)["line-dasharray"]).toEqual([4, 3]);
+    // Audit 21 Okt 2026: jalur "sudah tiba" nyaris tak terlihat (abu 2,5px
+    // @0,32). Sekarang ia memakai nada status + alas putih, dan tebalnya
+    // minimal 3px dengan opasitas >= 0,4 supaya terbaca di basemap terang.
+    const tiba = peta.layers["supplier-route-line-tiba"];
+    const tibaAlas = peta.layers["supplier-route-line-tiba-casing"];
+    expect(tiba).toBeDefined();
+    expect(tibaAlas).toBeDefined();
+    expect(tiba.filter).toEqual(["==", ["get", "quiet"], true]);
+    expect(cat(tiba)["line-width"] as number).toBeGreaterThanOrEqual(3.6);
+    expect(cat(tiba)["line-opacity"] as number).toBeGreaterThanOrEqual(0.7);
+    expect(cat(tiba)[`line-color`]).toBe("#475569");
+    expect(cat(tibaAlas)[`line-color`]).toBe("#FFFFFF");
+
     // Geometrinya dari server (cache OSRM) — bukan garis lurus buatan UI.
     const data = peta.sources["supplier-routes"].data as {
       features: { properties: { kind: string }; geometry: { coordinates: number[][] } }[];
@@ -645,10 +634,12 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     const done = warna("supplier-route-line-done");
     const todo = warna("supplier-route-line-todo");
     expect(done[3]).toBe("#C62828");
-    expect(done[4]).toBe("#2E7D32");
+    // Sejak audit 21 Okt 2026 kiriman berjalan memakai violet --status-live,
+    // dan sisa perjalanan memakai violet lebih terang (--route-live-soft):
+    // satu kiriman tetap satu keluarga warna, tetapi dua bagian tetap beda nada.
+    expect(done[4]).toBe("#7C3AED");
     expect(todo[3]).toBe("#C62828");
-    // Sisa perjalanan = perkiraan, bukan fakta terkirim → nada berbeda (biru aksi UI).
-    expect(todo[4]).toBe("#2563EB");
+    expect(todo[4]).toBe("#8B5CF6");
     expect(todo[4]).not.toBe(done[4]);
   });
 
@@ -660,7 +651,6 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     expect(lokasi.element.querySelector(".map-pin-tip")).not.toBeNull();
     // Lapisan pemasok mati secara bawaan (keputusan Fase 3) dan pin baru muncul
     // setelah peta diperbesar — hidupkan keduanya dulu.
-    toggle();
     zoomTo(9);
     const pemasok = supplierMarkers()[0];
     expect(pemasok.element.querySelector("svg.map-pin-icon-supplier")).not.toBeNull();
@@ -668,6 +658,33 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     pemasok.element
       .querySelectorAll("svg.map-pin-icon")
       .forEach((ikon) => expect(ikon.getAttribute("aria-hidden")).toBe("true"));
+  });
+
+  it("kiriman yang sudah tiba tidak digambar dan tidak punya ikon mobil", () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    mounted = true;
+    act(() => {
+      root.render(
+        <SupplyMap
+          locations={LOCATIONS}
+          supplierRoutes={{
+            routes: [
+              {
+                ...ROUTES.routes[0],
+                journey: { ...ROUTES.routes[0].journey, state: "tiba", state_label: "Tiba" },
+              },
+            ],
+          }}
+        />
+      );
+    });
+    // Sejak 20 Okt 2026 lapisan dasar hanya menggambar kiriman yang BERJALAN.
+    expect(map().sources["supplier-routes"]).toBeUndefined();
+    expect(map().layers["supplier-route-line-done"]).toBeUndefined();
+    expect(markerLog.filter((m) => m.element.classList.contains("map-truck"))).toHaveLength(0);
   });
 
   it("memberi alas putih (casing) di bawah garis jalur supaya terbaca di basemap terang", () => {
@@ -680,7 +697,7 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     // Alas memakai source + filter yang sama; kalau tidak, bentuknya bisa beda
     // dengan garis yang dialasinnya.
     expect(casingDone.source).toBe("supplier-routes");
-    expect(casingTodo.filter).toEqual(["==", ["get", "kind"], "todo"]);
+    expect(casingTodo.filter).toEqual(["all", ["==", ["get", "kind"], "todo"], ["!=", ["get", "quiet"], true]]);
     const paint = (layer: { paint?: unknown }) => (layer.paint ?? {}) as Record<string, unknown>;
     expect(paint(casingDone)["line-color"]).toBe("#FFFFFF");
     // Bagian putus-putus: alas ikut putus, supaya tidak terbaca sebagai jalan solid.
@@ -705,18 +722,77 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     expect(host.querySelector(".map-route-toggle")).toBeNull();
   });
 
-  it("sakelar jalur dimatikan membuang layer dan source", () => {
+  it("kiriman yang sedang berjalan diberi halo tenang, bukan neon berdenyut", async () => {
     mountWithRoutes();
-    expect(map().layers["supplier-route-line-done"]).toBeDefined();
-    expect(map().layers["supplier-route-line-todo"]).toBeDefined();
-    act(() => {
-      routeToggle().click();
-    });
-    expect(map().layers["supplier-route-line-done"]).toBeUndefined();
-    expect(map().layers["supplier-route-line-todo"]).toBeUndefined();
-    expect(map().sources["supplier-routes"]).toBeUndefined();
-    expect(routeToggle().getAttribute("aria-label")).toBe("Jalur kiriman (1)");
-    expect(routeToggle().title).toContain("Tampilkan jalur kiriman (1)");
+    // Redesign 20 Okt 2026: penekanan garis tidak lagi neon + denyut + titik
+    // mengalir. Satu elemen bergerak (ikon mobil, karena posisinya data), dan
+    // garis hanya diberi halo sewarna yang tenang.
+    const haloDone = map().layers["supplier-route-halo-done"] as Record<string, unknown>;
+    const haloTodo = map().layers["supplier-route-halo-todo"] as Record<string, unknown>;
+    expect(haloDone).toBeDefined();
+    expect(haloTodo).toBeDefined();
+    for (const [halo, kind] of [
+      [haloDone, "done"],
+      [haloTodo, "todo"],
+    ] as const) {
+      expect(JSON.stringify(halo.filter)).toContain('"state"');
+      expect(JSON.stringify(halo.filter)).toContain("di_jalan");
+      expect(JSON.stringify(halo.filter)).toContain(kind);
+      const paint = halo.paint as Record<string, unknown>;
+      expect(Number(paint["line-blur"])).toBeGreaterThan(0);
+      // Tenang: opasitas rendah (<= 0,30), dan warnanya nada garis (bukan
+      // warna kelima). Batas ini menjaga "halo", bukan "neon" — 20 Okt 2026
+      // dinaikkan dari 0,22 ke 0,26 supaya peta lebih hidup, masih jauh dari
+      // efek menyala.
+      expect(Number(paint["line-opacity"])).toBeLessThanOrEqual(0.3);
+      expect(Array.isArray(paint["line-color"])).toBe(true);
+    }
+    // Halo di bawah alas putih supaya tidak menutupi pin maupun garis.
+    const ids = Object.keys(map().layers);
+    expect(ids.indexOf("supplier-route-halo-done")).toBeLessThan(
+      ids.indexOf("supplier-route-casing-done")
+    );
+    // Tidak ada denyut: opasitas halo tidak berubah selama seperempat detik.
+    const log = (map() as unknown as { paintLog: Array<[string, string, unknown]> }).paintLog;
+    const jumlahAwal = log.length;
+    await new Promise((r) => setTimeout(r, 250));
+    const perubahan = log
+      .slice(jumlahAwal)
+      .filter(([id, prop]) => id.startsWith("supplier-route-halo") && prop === "line-opacity");
+    expect(perubahan).toHaveLength(0);
+  });
+
+  it("ikon mobil menandai posisi kiriman berjalan dan menghadap arah perjalanan", () => {
+    mountWithRoutes();
+    const truk = markerLog.filter((m) => m.element.classList.contains("map-truck"));
+    expect(truk.length).toBe(1);
+    const el = truk[0].element;
+    // Nama aksesibel menyebut kiriman + persentase perjalanan (bukan "Map marker").
+    expect(el.getAttribute("aria-label")).toContain("Mobil kiriman");
+    expect(el.getAttribute("aria-label")).toMatch(/\d+% perjalanan/);
+    // Menghadap arah: sudut disimpan sebagai variabel CSS untuk rotasi glyph.
+    expect(el.style.getPropertyValue("--truk-arah")).toMatch(/^-?\d+deg$/);
+    // Popup truk 21 Okt 2026: kartu yang sama dengan SPPG/pemasok, dengan
+    // progres perjalanan sebagai angka utama.
+    const popupText = truk[0].popup?.node?.textContent ?? "";
+    expect(popupText).toContain("Perjalanan");
+    expect(popupText).toContain("Muatan");
+    expect(popupText).toContain("Sisa");
+    // Posisinya mengikuti `journey.progress` pada geometri jalan, bukan di ujung
+    // pemasok: 71,2% dari Cianjur ke Jakarta.
+    const koordinat = ROUTES.routes[0].road.geometry.coordinates as [number, number][];
+    const awalJalur = koordinat[0];
+    const akhirJalur = koordinat[koordinat.length - 1];
+    // `markerLog` diketik sebagai tiruan minimal; posisi dibaca dari `lngLat`.
+    const posisiTruk = (truk[0] as unknown as { lngLat: [number, number] | null }).lngLat;
+    expect(posisiTruk).not.toBeNull();
+    const [lng, lat] = posisiTruk as [number, number];
+    const harapan = [
+      awalJalur[0] + (akhirJalur[0] - awalJalur[0]) * 0.712,
+      awalJalur[1] + (akhirJalur[1] - awalJalur[1]) * 0.712,
+    ] as const;
+    expect(lng).toBeCloseTo(harapan[0], 3);
+    expect(lat).toBeCloseTo(harapan[1], 3);
   });
 
   it("legenda jalur menyebut asal OSRM dan jumlahnya", () => {
@@ -732,7 +808,6 @@ describe("SupplyMap — perilaku layer pemasok", () => {
   it("membongkar peta: peta dilepas tanpa error (penanda dibersihkan bersama peta)", () => {
     mount();
     zoomTo(10);
-    toggle();
     expect(supplierMarkers()).toHaveLength(2);
     expect(() => unmount()).not.toThrow();
     expect(map().removed).toBe(true);
@@ -780,12 +855,13 @@ describe("SupplyMap — rincian lapisan peta (bisa dibuka & ditutup)", () => {
     mountEl(<SupplyMap locations={LOCATIONS} suppliers={SUPPLIERS} supplierRoutes={ROUTES} />);
     expect(infoPanel().textContent).toContain("pemasok ditampilkan (nasional");
     expect(infoPanel().textContent).toContain("OSRM");
-    expect(host.querySelector(".map-layer-tags")?.textContent).toContain("jalur kiriman");
-    // Sakelar lapisan tetap satu-satunya elemen yang mengapung di kanvas; bilah
-    // rincian ada DI BAWAH peta (bukan overlay yang menutupi pin).
-    expect(
-      host.querySelector(".map-overlay-toggles")?.querySelectorAll(".map-layer-toggle")
-    ).toHaveLength(2);
+    // Sejak 20 Okt 2026 tag menghitung KIRIMAN YANG BERJALAN (peta hanya
+    // menggambar jalur `di_jalan`), bukan semua baris yang dilaporkan server.
+    expect(host.querySelector(".map-layer-tags")?.textContent).toContain("kiriman berjalan");
+    // Tombol lapisan sudah dihapus (20 Okt 2026): tidak ada elemen yang
+    // mengapung di kanvas, dan bilah rincian tetap DI BAWAH peta.
+    expect(host.querySelector(".map-overlay-toggles")).toBeNull();
+    expect(host.querySelector(".map-layer-toggle")).toBeNull();
   });
 
   it("tanpa kedua lapisan: bilah rincian tidak dirender sama sekali", () => {
@@ -822,12 +898,6 @@ describe("SupplyMap — rincian lapisan & perjalanan kiriman", () => {
     return panel;
   }
 
-  function supplierToggle() {
-    const button = host.querySelector<HTMLButtonElement>(".map-supplier-toggle");
-    if (!button) throw new Error("tombol lapisan pemasok tidak ada");
-    return button;
-  }
-
   it("tidak ada lagi tombol 'Info map'; legenda terbaca tanpa klik", () => {
     mountWithRoutes();
     expect(host.textContent).not.toContain("Info map");
@@ -851,24 +921,10 @@ describe("SupplyMap — rincian lapisan & perjalanan kiriman", () => {
     expect(host.querySelector(".map-layer-tags")?.textContent).toContain("tiba terdekat ± 22.54");
   });
 
-  it("mematikan lapisan jalur ikut menghapus perjalanan & keterangan garis", () => {
-    mountWithRoutes();
-    act(() => routeToggle().click());
-    expect(infoPanel().querySelector('[aria-label="Perjalanan kiriman"]')).toBeNull();
-    const legenda = host.querySelector(".map-legend-compact")?.textContent ?? "";
-    expect(legenda).not.toContain("Sisa perjalanan (perkiraan)");
-    // Status lokasi TIDAK ikut hilang: pin SPPG tidak punya sakelar.
-    expect(legenda).toContain("Shortage");
-  });
-
-  it("keterangan pemasok hanya muncul saat lapisannya hidup", () => {
+  it("keterangan pemasok selalu ada selama data pemasok dikirim", () => {
     mountEl(<SupplyMap locations={LOCATIONS} suppliers={SUPPLIERS} supplierRoutes={ROUTES} />);
     const legenda = () => host.querySelector(".map-legend-compact")?.textContent ?? "";
-    // Bawaan: lapisan pemasok mati → tidak ada warna pemasok yang diterangkan.
-    // (Catatan panjang di panel tetap ada: ia menjelaskan MENGAPA pin belum
-    // dipasang, dan itu justru informasi yang dibutuhkan saat lapisan mati.)
-    expect(legenda()).not.toContain("Keandalan rendah");
-    act(() => supplierToggle().click());
+    // Tidak ada sakelar lagi: kalau datanya ada, warnanya diterangkan.
     expect(legenda()).toContain("Keandalan rendah");
   });
 
@@ -905,8 +961,9 @@ describe("SupplyMap — rincian lapisan & perjalanan kiriman", () => {
     const perjalanan = infoPanel().querySelector('[aria-label="Perjalanan kiriman"]');
     expect(perjalanan?.textContent).toContain("belum berangkat · estimasi tiba belum ada");
     expect(perjalanan?.textContent).not.toContain("tiba ±");
-    // Tag lapisan pun tidak mengarang jam; ia jatuh ke keterangan asal geometri.
-    expect(host.querySelector(".map-layer-tags")?.textContent).toContain("jalur jalan OSRM");
+    // Tag lapisan pun tidak mengarang jam: tidak ada kiriman berjalan, jadi
+    // tag menyatakan itu apa adanya (bukan "1 jalur kiriman" yang tidak tergambar).
+    expect(host.querySelector(".map-layer-tags")?.textContent).toContain("tidak ada kiriman berjalan");
   });
 
   /**
@@ -1032,7 +1089,7 @@ describe("SupplyMap — sorotan kiriman di peta (Arah C)", () => {
   it("pemilih memanggil pemanggil dengan id kiriman, dan FOCUS_ALL untuk 'Semua'", () => {
     const dipanggil: string[] = [];
     mountFocus(null, (id) => dipanggil.push(id));
-    const pil = host.querySelectorAll<HTMLButtonElement>(".route-focus-pill");
+    const pil = host.querySelectorAll<HTMLButtonElement>("button.route-focus-pill");
     expect(pil).toHaveLength(2);
     expect(pil[0].textContent).toContain("Semua (1)");
     act(() => pil[1].click());
@@ -1086,14 +1143,6 @@ describe("SupplyMap — kontrol peta (langkah 7b-1: skala + tombol Tampilkan sem
     expect(map().fitBoundsLog.at(-1)?.[0]).toEqual(awal);
   });
 
-  it("judul berhenti menyebut jalur begitu lapisan jalur dimatikan (janji ikut berubah)", () => {
-    mountWithRoutes();
-    expect(tombolReset().title).toContain("jalur kiriman");
-    act(() => routeToggle().click());
-    expect(tombolReset().title).not.toContain("jalur");
-    expect(tombolReset().title).toContain("1 lokasi");
-  });
-
   it('tanpa jalur kiriman: tombol tetap ada, judulnya tidak menyebut jalur', () => {
     mount();
     const button = tombolReset();
@@ -1129,21 +1178,16 @@ describe("SupplyMap — baris legenda ringkas selalu terlihat (C2, langkah 7b-2)
     expect(baris().querySelector("button")).toBeNull();
   });
 
-  it("butir jalur mengikuti sakelar lapisannya (tidak ada keterangan tanpa lapisan)", () => {
+  it("butir jalur selalu diterangkan selama data jalur ada", () => {
     mountWithRoutes();
     // Labelnya dari `routeLegendEntries` — legenda menyebut makna yang BENAR
     // dipakai garis di peta, bukan karangan teks di tes.
     expect(baris().textContent).toContain("Sudah ditempuh");
     expect(baris().textContent).toContain("Sisa perjalanan (perkiraan)");
-    act(() => routeToggle().click());
-    expect(baris().textContent).not.toContain("Sudah ditempuh");
-    expect(baris().textContent).not.toContain("Sisa perjalanan (perkiraan)");
     expect(baris().textContent).toContain("Surplus");
   });
 
-  it("butir pemasok baru muncul setelah lapisan pemasok dinyalakan", () => {
-    // Butuh data pemasok: tanpa prop `suppliers` tidak ada sakelar pemasok sama
-    // sekali (kendali nganggur tidak dirender).
+  it("butir pemasok muncul begitu data pemasok ada", () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     host = document.createElement("div");
     document.body.append(host);
@@ -1154,8 +1198,6 @@ describe("SupplyMap — baris legenda ringkas selalu terlihat (C2, langkah 7b-2)
         <SupplyMap locations={LOCATIONS} suppliers={SUPPLIERS} supplierRoutes={ROUTES} />
       );
     });
-    expect(baris().textContent).not.toContain("Keandalan rendah");
-    toggle(); // sakelar "Pemasok (n)"
     expect(baris().textContent).toContain("Keandalan rendah");
   });
 
@@ -1193,36 +1235,25 @@ describe("SupplyMap — satu zona kendali di kanvas (C5, langkah 7b-2)", () => {
     });
   }
 
-  it("pil hanya memuat sakelar lapisan — dua tombol ikon, tanpa chip legenda", () => {
+  it("pil lapisan tidak dirender lagi (tombol dihapus 20 Okt 2026)", () => {
     renderKeduaLapisan();
-    expect(pil().querySelectorAll(".map-layer-toggle")).toHaveLength(2);
-    expect(pil().querySelector(".map-legend-toggle")).toBeNull();
-    // Hanya dua tombol + dua pembungkus ikon: tidak ada elemen teks di dalam pil.
-    expect(pil().textContent?.trim()).toBe("");
+    expect(host.querySelector(".map-overlay-toggles")).toBeNull();
+    expect(host.querySelector(".map-layer-toggle")).toBeNull();
+    expect(host.querySelector(".map-legend-toggle")).toBeNull();
   });
 
-  it("legenda & rincian dirender DI LUAR pil dan DI LUAR kanvas", () => {
+  it("legenda & rincian dirender DI LUAR kanvas", () => {
     renderKeduaLapisan();
     const legenda = host.querySelector<HTMLElement>(".map-legend-compact");
     const rincian = host.querySelector<HTMLElement>(".map-layer-info");
     for (const el of [legenda, rincian]) {
       expect(el).not.toBeNull();
-      expect(pil().contains(el as Node)).toBe(false);
       expect(host.querySelector(".map-gl")?.contains(el as Node)).toBe(false);
       // Ikut alur di dalam `.map-body`, persis DI BAWAH kanvas — bukan overlay.
       expect(host.querySelector(".map-body")?.contains(el as Node)).toBe(true);
     }
   });
 
-  it("membuka rincian lapisan tidak menambah satu pun elemen di dalam pil", () => {
-    renderKeduaLapisan();
-    const sebelum = pil().querySelectorAll("*").length;
-    act(() => host.querySelector<HTMLButtonElement>(".map-layer-info-toggle")?.click());
-    expect(pil().querySelectorAll("*").length).toBe(sebelum);
-    expect(
-      host.querySelector("#map-layer-info-panel")?.getAttribute("data-open")
-    ).toBe("true");
-  });
 });
 
 describe("SupplyMap — gestur kooperatif (C9, langkah 7b-2)", () => {

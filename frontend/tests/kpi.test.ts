@@ -12,6 +12,7 @@ import {
   KPI_WINDOWS,
   kpiWindowRange,
   metricLabel,
+  periodeBulan,
   shouldLoadKpi,
 } from "../lib/kpi";
 
@@ -56,14 +57,16 @@ describe("shouldLoadKpi", () => {
 describe("jendela KPI (pemilih periode)", () => {
   it("tiga jendela dengan label Indonesia yang cocok dengan jamnya", () => {
     expect(KPI_WINDOWS.map((w) => w.key)).toEqual(["24h", "7d", "30d"]);
-    expect(KPI_WINDOWS.map((w) => w.label)).toEqual(["24 jam", "7 hari", "30 hari"]);
+    expect(KPI_WINDOWS.map((w) => w.label)).toEqual(["24 jam", "7 hari", "1 bulan"]);
     expect(KPI_WINDOWS.map((w) => w.hours)).toEqual([24, 168, 720]);
   });
 
   it("rentang dihitung dari jam jendela; ujungnya waktu sekarang", () => {
     const now = new Date("2026-10-16T16:00:00.000Z");
+    // "1 bulan" = bulan berjalan WIB: 16 Okt 16.00 UTC = 17 Okt 00.00 WIB,
+    // jadi awalnya 1 Okt 00.00 WIB = 30 Sep 17.00 UTC.
     expect(kpiWindowRange("30d", now)).toEqual({
-      start: "2026-09-16T16:00:00.000Z",
+      start: "2026-09-30T17:00:00.000Z",
       end: "2026-10-16T16:00:00.000Z",
     });
     expect(kpiWindowRange("24h", now).start).toBe("2026-10-15T16:00:00.000Z");
@@ -73,6 +76,38 @@ describe("jendela KPI (pemilih periode)", () => {
     const now = new Date("2026-10-16T16:00:00.000Z");
     expect(kpiWindowRange("ngawur", now).start).toBe("2026-10-15T16:00:00.000Z");
     expect(kpiWindowRange(undefined, now).start).toBe("2026-10-15T16:00:00.000Z");
+  });
+});
+
+describe("periodeBulan — label periode sebagai bulan", () => {
+  it("satu bulan ditulis sekali", () => {
+    expect(periodeBulan("2026-10-19T10:22:41Z", "2026-10-20T10:22:41Z")).toBe(
+      "Oktober 2026"
+    );
+  });
+
+  it("lintas bulan menyebut kedua bulan", () => {
+    expect(periodeBulan("2026-09-20T10:22:41Z", "2026-10-20T10:22:41Z")).toBe(
+      "September – Oktober 2026"
+    );
+  });
+
+  it("lintas tahun menyebut kedua tahun", () => {
+    expect(periodeBulan("2026-12-15T00:00:00Z", "2027-01-14T00:00:00Z")).toBe(
+      "Desember 2026 – Januari 2027"
+    );
+  });
+
+  it("batas bulan memakai WIB, bukan UTC", () => {
+    // 31 Okt 20.00 UTC = 1 Nov 03.00 WIB: kartu harus menulis November.
+    expect(periodeBulan("2026-10-01T00:00:00Z", "2026-10-31T20:00:00Z")).toBe(
+      "Oktober – November 2026"
+    );
+  });
+
+  it("nilai kosong tidak dikarang", () => {
+    expect(periodeBulan(null, null)).toBe("—");
+    expect(periodeBulan("bukan-tanggal", null)).toBe("—");
   });
 });
 

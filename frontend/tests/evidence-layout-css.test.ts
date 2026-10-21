@@ -29,8 +29,7 @@ describe("CSS Decision & Evidence — tanpa baris selebar kartu berisi pendek", 
   it("kepala keputusan memakai grid ber-area: judul bersanding langkah berikutnya", () => {
     const hero = blok(".evidence-hero");
     expect(hero).toContain("grid-template-areas");
-    expect(hero).toMatch(/"eyebrow\s+next"/);
-    expect(hero).toMatch(/"title\s+next"/);
+    expect(hero).toMatch(/"head\s+next"/);
     // Metrik & temuan tetap selebar kartu supaya 4 tile tidak pecah 3+1.
     expect(hero).toMatch(/"metrics\s+metrics"/);
     expect(hero).toMatch(/"flags\s+flags"/);

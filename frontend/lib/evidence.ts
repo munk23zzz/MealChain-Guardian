@@ -289,6 +289,62 @@ export function nextStep(input: {
   return { text: "Tidak ada tindakan mendesak untuk keputusan ini.", tone: "plain" };
 }
 
+/** Posisi bagian #zona-keputusan terhadap layar, dipakai pintasan bawah. */
+export type ZonaPosisi = "bawah" | "terlihat" | "lewat";
+
+/**
+ * Apakah pintasan "Ke zona keputusan" pantas muncul? (permintaan pemilik
+ * 20 Okt 2026: "pop up itu hanya ada ketika perlu persetujuan saja")
+ *
+ * Sebelumnya bar muncul setiap kali zona tergulir keluar layar — termasuk pada
+ * keputusan yang sudah selesai dan pada peran pengawasan yang memang tidak
+ * boleh menyetujui. Pintasan yang selalu ada berhenti jadi isyarat; ia hanya
+ * berguna kalau ada yang benar-benar menunggu tindakan pengguna ini.
+ *
+ * Syaratnya semuanya dari payload, bukan karangan:
+ *   • peran termasuk penyetuju (cermin `visibleActions()`);
+ *   • status masih menunggu keputusan (`pending_approval` / `verifier_flagged`);
+ *   • gerbang aksi terbuka (`can_reject` — jendela berlaku & verifikasi lolos);
+ *   • kuorum persetujuan belum penuh.
+ */
+export function butuhTindakan(input: {
+  role: string;
+  status: string;
+  summary: unknown;
+}): boolean {
+  const role = String(input?.role ?? "");
+  const status = String(input?.status ?? "");
+  const payload = (input?.summary ?? null) as Record<string, unknown> | null;
+  if (!payload) return false;
+  if (!APPROVER_ROLES.has(role)) return false;
+  if (status !== "pending_approval" && status !== "verifier_flagged") return false;
+  if (payload.can_reject !== true) return false;
+  const jumlah = Array.isArray(payload.approvals) ? payload.approvals.length : null;
+  const ambang = Number((payload.approval_requirement as Record<string, unknown> | undefined)?.min_approvals);
+  if (jumlah !== null && Number.isFinite(ambang) && ambang > 0 && jumlah >= ambang) return false;
+  return true;
+}
+
+/**
+ * Teks, panah, dan label aksesibel pintasan mengikuti posisi zona.
+ *
+ * Panah ↓ hanya jujur kalau zona masih DI BAWAH layar. Begitu pengguna
+ * melewatinya, "Ke zona keputusan ↓" menunjuk ke arah yang salah — jadi
+ * panahnya dibalik dan kata kerjanya ikut berubah ("Kembali"). Label aksesibel
+ * ikut dibedakan supaya pembaca layar tidak mendengar ajakan yang sama untuk
+ * dua arah berbeda.
+ */
+export function zonaShortcut(posisi: Exclude<ZonaPosisi, "terlihat">): {
+  text: string;
+  arrow: string;
+  label: string;
+} {
+  if (posisi === "lewat") {
+    return { text: "Kembali ke zona keputusan", arrow: "↑", label: "Pintasan kembali ke zona keputusan" };
+  }
+  return { text: "Ke zona keputusan", arrow: "↓", label: "Pintasan ke zona keputusan" };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DESAIN BARU HALAMAN BUKTI (17 Okt 2026) — struktur "catatan keputusan".
 //

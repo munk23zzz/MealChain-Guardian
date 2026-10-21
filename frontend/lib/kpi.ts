@@ -28,7 +28,7 @@ export type KpiWindowKey = "24h" | "7d" | "30d";
 export const KPI_WINDOWS: readonly { key: KpiWindowKey; label: string; hours: number }[] = [
   { key: "24h", label: "24 jam", hours: 24 },
   { key: "7d", label: "7 hari", hours: 24 * 7 },
-  { key: "30d", label: "30 hari", hours: 24 * 30 },
+  { key: "30d", label: "1 bulan", hours: 24 * 30 },
 ];
 
 /** Rentang ISO untuk satu jendela. Kunci tak dikenal → 24 jam (perilaku lama). */
@@ -37,6 +37,15 @@ export function kpiWindowRange(
   now: Date = new Date()
 ): { start: string; end: string } {
   const found = KPI_WINDOWS.find((w) => w.key === key) ?? KPI_WINDOWS[0];
+  if (found.key === "30d") {
+    // "1 bulan" = bulan berjalan menurut WIB, bukan 30 hari bergulir.
+    // Alasannya tampilan: label periode menulis bulan ("Oktober 2026"), jadi
+    // jendelanya harus satu bulan — bukan 20 Sep–20 Okt yang terbaca dua bulan.
+    const WIB = 7 * 60 * 60 * 1000;
+    const wib = new Date(now.getTime() + WIB);
+    const awal = Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), 1) - WIB;
+    return { start: new Date(awal).toISOString(), end: now.toISOString() };
+  }
   return {
     start: new Date(now.getTime() - found.hours * 60 * 60 * 1000).toISOString(),
     end: now.toISOString(),
@@ -161,4 +170,49 @@ export function bulletOf(metric: any): KpiBullet | null {
     overMax: num > max,
     direction,
   };
+}
+
+/**
+ * Label periode sebagai BULAN saja: "September – Oktober 2026".
+ *
+ * Pemilik meminta tanggal persis ("20 Sep 2026 – 20 Okt 2026") diganti nama
+ * bulan: pada kartu KPI rentang tanggal penuh terbaca sebagai detail teknis,
+ * sementara pertanyaannya "periode mana", bukan "tanggal berapa".
+ *
+ * Tahun ditulis sekali bila sama ("September – Oktober 2026") dan dua kali bila
+ * berbeda ("Desember 2026 – Januari 2027"). Waktu diformat di zona Asia/Jakarta:
+ * batas periode datang sebagai ISO UTC, dan 31 Okt 20.00 UTC adalah 1 Nov WIB —
+ * memakai UTC akan memberi nama bulan yang berbeda dari yang dibaca operator.
+ */
+export function periodeBulan(
+  mulaiIso?: string | null,
+  selesaiIso?: string | null
+): string {
+  const bagian = (
+    iso?: string | null
+  ): { bulan: string; tahun: string } | null => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    const f = new Intl.DateTimeFormat("id-ID", {
+      month: "long",
+      year: "numeric",
+      timeZone: "Asia/Jakarta",
+    });
+    const potongan = f.formatToParts(d);
+    const ambil = (jenis: string) =>
+      potongan.find((p) => p.type === jenis)?.value ?? "";
+    return { bulan: ambil("month"), tahun: ambil("year") };
+  };
+
+  const awal = bagian(mulaiIso);
+  const akhir = bagian(selesaiIso) ?? awal;
+  if (!awal || !akhir) return "—";
+  if (awal.bulan === akhir.bulan && awal.tahun === akhir.tahun) {
+    return `${akhir.bulan} ${akhir.tahun}`;
+  }
+  if (awal.tahun === akhir.tahun) {
+    return `${awal.bulan} – ${akhir.bulan} ${akhir.tahun}`;
+  }
+  return `${awal.bulan} ${awal.tahun} – ${akhir.bulan} ${akhir.tahun}`;
 }

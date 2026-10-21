@@ -1,0 +1,42 @@
+{
+  "langkah": "geometri-label-ringkas",
+  "sebelum": {
+    "waktu": "2026-10-20 14.38 WIB",
+    "kelasLencanaTampil": 50,
+    "tandaTanganVisualUnik": 30,
+    "tinggiPerKeluarga": {
+      "board-badge": "24 px (51 elemen)",
+      "kpi-state": "24 px",
+      "integration-badge": "24 px",
+      "safety-state": "22 px (padding 1px 8px)",
+      "shipping-tag": "22 px",
+      "shipment-pill": "22 px / 20 px (2 varian)",
+      "route-tag": "20 px (padding 1px 6px)",
+      "shipment-event-tag": "16 px (inline di baris teks)",
+      "commodity-pill": "22 / 24 / 28 px (kendali)"
+    },
+    "penyebab": "padding vertikal 1 vs 2 px, padding horizontal 6 vs 8 px, dan line-height tidak diset sehingga leading body masuk"
+  },
+  "sesudah": {
+    "waktu": "2026-10-20 14.41 WIB",
+    "keluaran": "satu blok di AKHIR globals.css: 10 selektor, padding 2px 8px, line-height 16px, min-height 22px, box-sizing border-box, nowrap",
+    "tinggiPerKeluarga": {
+      "board-badge": "22 px (51)",
+      "safety-state": "22 px (13)",
+      "shipping-tag": "22 px (6)",
+      "integration-badge": "22 px (7)",
+      "shipment-pill": "22 px (16)",
+      "shipment-chip": "22 px (1)",
+      "route-tag": "22 px (10)",
+      "kpi-state": "22 px (7)"
+    },
+    "dikecualikanSengaja": {
+      "shipment-event-tag": "16 px — tag inline di dalam baris teks; menaikkan ke 22 menambah tinggi baris tabel",
+      "commodity-pill / board-sort-pill / route-focus-pill": "kendali (tombol) dengan target sentuh sendiri"
+    },
+    "teksTerpotong": "0 di semua keluarga (nowrap tidak menghasilkan elipsis)"
+  },
+  "tes": { "berkas": "tests/label-ringkas-geometri.test.ts", "isi": 3, "hasil": "3 passed" },
+  "gerbang": { "suite": "142 berkas / 1587 tes lulus", "tsc": "0 galat", "lint": "bersih" },
+  "catatanJujur": "Tes dibuat setelah blok CSS ditulis (bukan merah-dulu); nilainya sebagai penjaga regresi. Angka SEBELUM diambil dari pengukuran DOM sebelum suntingan pada turn yang sama."
+}

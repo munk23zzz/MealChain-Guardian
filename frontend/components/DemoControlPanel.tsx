@@ -21,12 +21,25 @@ import { useCallback, useEffect, useState } from "react";
 import { LoadingState } from "./LoadingState";
 import {
   ApiError,
+  endDemoSession,
+  extendDemoSession,
   fetchDemoAgentCommodities,
   fetchDemoAgentLastRun,
   fetchDemoDataStatus,
+  fetchDemoSession,
+  rebuildDemoTemplate,
   refreshDemoToToday,
   runDemoAgent,
+  startDemoSession,
 } from "../lib/api";
+import {
+  formatSisa,
+  keadaanSesi,
+  pesanSesi,
+  peringatanWaktu,
+  sisaDetik,
+  type StatusSesiDemo,
+} from "../lib/demo-session";
 import {
   agentReviewLine,
   demoAgentCards,
@@ -34,11 +47,19 @@ import {
   elapsedLine,
   proofFacts,
   runButtonLabel,
-  stepChips,
+  stepNames,
   supervisorLine,
   type AgentRun,
 } from "../lib/demo-agent";
-import { refreshLine, refreshWarning, statusLine } from "../lib/demo-data";
+import {
+  adaBaris,
+  rebuildLine,
+  rebuildWarning,
+  refreshLine,
+  refreshWarning,
+  statusLine,
+  type RebuildSummary,
+} from "../lib/demo-data";
 import { formatDateTime } from "../lib/datetime";
 
 const ROLE_JALAN = "sppg_head";
@@ -63,7 +84,7 @@ export function DemoProof({
   onOpenAgentLog?: () => void;
   onRefresh?: () => void;
 }) {
-  const langkah = stepChips(run);
+  const langkah = stepNames(run);
   const fakta = proofFacts(run);
   const narasi = run.supervisor?.summary ?? null;
   const kartu = demoAgentCards(run, running);
@@ -138,10 +159,9 @@ export function DemoProof({
           Langkah pipeline <span className="dc-fold-count">{langkah.length}</span>
         </summary>
         <ol className="dc-steps" aria-label="Langkah pipeline yang tercatat">
-          {langkah.map((l) => (
-            <li className="dc-step" key={`${l.nama}-${l.alat}`}>
-              <span className="dc-step-name">{l.nama}</span>
-              <span className="dc-step-tool">{l.alat}</span>
+          {langkah.map((nama, i) => (
+            <li className="dc-step" key={`${nama}-${i}`}>
+              <span className="dc-step-name">{nama}</span>
             </li>
           ))}
         </ol>
@@ -154,7 +174,7 @@ export function DemoProof({
 
       {narasi && (
         <details className="dc-narration">
-          <summary>Narasi supervisor (apa adanya dari model)</summary>
+          <summary>Hasil supervisor</summary>
           <p>{narasi}</p>
         </details>
       )}
@@ -189,6 +209,71 @@ export function DemoProof({
   );
 }
 
+
+/**
+ * Blok "bangun ulang data" — hanya muncul saat sesi berjalan.
+ *
+ * Kenapa dipisah: kontrak tampilannya harus bisa diuji tanpa jaringan/efek
+ * (pola yang sama dengan `DemoProof`). Konfirmasi dua langkah dipilih supaya
+ * aksi destruktif tidak berjalan karena salah klik, tanpa memakai `confirm()`
+ * bawaan browser yang tidak bisa digayakan dan memblokir panggung.
+ */
+export function DemoRebuild({
+  aktif,
+  sibuk = false,
+  detik = 0,
+  onRebuild,
+}: {
+  aktif: boolean;
+  sibuk?: boolean;
+  detik?: number;
+  onRebuild?: () => void;
+}) {
+  const [konfirmasi, setKonfirmasi] = useState(false);
+  if (!aktif) return null;
+  return (
+    <div className="dc-rebuild" data-keadaan={sibuk ? "jalan" : konfirmasi ? "konfirmasi" : "diam"}>
+      <p className="dc-rebuild-sub">
+        Mengembalikan angka ke keadaan awal tanpa menutup sesi: batch, keputusan, pesanan,
+        bukti, dan ledger dibangun ulang dari template. Butuh ±70 detik.
+      </p>
+      {sibuk ? (
+        <p className="dc-rebuild-line" role="status" aria-live="polite">
+          Membangun ulang… {detik} detik
+        </p>
+      ) : konfirmasi ? (
+        <div className="dc-rebuild-actions">
+          <button
+            type="button"
+            className="button button-danger"
+            onClick={() => {
+              setKonfirmasi(false);
+              onRebuild?.();
+            }}
+            title="Menghapus baris operasional lalu menyemai template lagi"
+          >
+            Ya, bangun ulang
+          </button>
+          <button type="button" className="button button-quiet" onClick={() => setKonfirmasi(false)}>
+            Batal
+          </button>
+        </div>
+      ) : (
+        <div className="dc-rebuild-actions">
+          <button
+            type="button"
+            className="button button-quiet"
+            onClick={() => setKonfirmasi(true)}
+            title="Angka kembali ke keadaan awal; sesi tetap berjalan"
+          >
+            Bangun ulang data
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DemoControlPanel({
   token,
   role,
@@ -206,11 +291,16 @@ export default function DemoControlPanel({
   const [statusError, setStatusError] = useState<string | null>(null);
   const [bukti, setBukti] = useState<AgentRun | null>(null);
   const [buktiError, setBuktiError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"data" | "agent" | null>(null);
+  const [busy, setBusy] = useState<"data" | "agent" | "bangun" | null>(null);
   const [detik, setDetik] = useState(0);
   const [hasilData, setHasilData] = useState<string | null>(null);
   const [peringatanData, setPeringatanData] = useState<string | null>(null);
   const [pesan, setPesan] = useState<string | null>(null);
+  // Sesi demo (024/025): status dari SERVER + hitungan mundur lokal yang
+  // diselaraskan ulang tiap 20 detik. Tidak ada timer yang "menebak" waktu.
+  const [sesi, setSesi] = useState<StatusSesiDemo | null>(null);
+  const [tickSesi, setTickSesi] = useState(0);
+  const [busySesi, setBusySesi] = useState<"mulai" | "tambah" | "tutup" | null>(null);
   // Pilihan komoditas datang dari DB (GET /demo/agent/commodities). Selama
   // daftarnya belum termuat, dropdown kosong — bukan ditebak "beras".
   const [daftarKomoditas, setDaftarKomoditas] = useState<string[]>([]);
@@ -227,6 +317,19 @@ export default function DemoControlPanel({
     } catch (e: any) {
       setStatus(null);
       setStatusError(String(e?.message ?? e));
+    }
+  }, [token]);
+
+  const muatSesi = useCallback(async () => {
+    if (!token) return;
+    try {
+      const r = (await fetchDemoSession(token)) as StatusSesiDemo;
+      setSesi(r);
+      setTickSesi(0);
+    } catch {
+      // Status sesi gagal dibaca bukan alasan menghentikan panel: kartu sesi
+      // tetap tersembunyi (null) dan blok lain bekerja seperti biasa.
+      setSesi((lama) => lama);
     }
   }, [token]);
 
@@ -261,11 +364,35 @@ export default function DemoControlPanel({
     void muatStatus();
     void muatBukti();
     void muatKomoditas();
-  }, [muatStatus, muatBukti, muatKomoditas]);
+    void muatSesi();
+  }, [muatStatus, muatBukti, muatKomoditas, muatSesi]);
+
+  // Hitungan mundur sesi: tick lokal 1 detik, diselaraskan ulang tiap 20 detik
+  // dengan `remaining_seconds` server (jam browser tidak dipercaya).
+  useEffect(() => {
+    if (!token) return;
+    const selaras = window.setInterval(() => void muatSesi(), 20000);
+    return () => window.clearInterval(selaras);
+  }, [token, muatSesi]);
+
+  const sesiAktif = Boolean(sesi?.active);
+  useEffect(() => {
+    if (!sesiAktif) return;
+    const tick = window.setInterval(() => setTickSesi((n) => n + 1), 1000);
+    return () => window.clearInterval(tick);
+  }, [sesiAktif, sesi?.session_id]);
+
+  // Sesi baru saja habis di layar: minta status sekali lagi supaya backend ikut
+  // menutup dan membersihkan; jangan mengandalkan jam klien untuk mengubah data.
+  const sisaSekarang = sisaDetik(sesi, tickSesi);
+  const habisDiLayar = sesiAktif && sisaSekarang <= 0;
+  useEffect(() => {
+    if (habisDiLayar) void muatSesi();
+  }, [habisDiLayar, muatSesi]);
 
   // Waktu berjalan hanya hidup selama tombol sibuk; tidak ada timer menganggur.
   useEffect(() => {
-    if (busy !== "agent") {
+    if (busy !== "agent" && busy !== "bangun") {
       setDetik(0);
       return;
     }
@@ -281,6 +408,24 @@ export default function DemoControlPanel({
     setBusy("data");
     setPesan(null);
     try {
+      // Mode sesi (024/025): tombol ini MEMULAI sesi — membuatnya, menyemai
+      // data, dan menyalakan jendela waktu. Tanpa mode sesi, perilakunya tetap
+      // seperti dulu (POST /demo/refresh) supaya pengembangan tidak berubah.
+      if (sesi?.enforced) {
+        const r = await startDemoSession(token);
+        setSesi(r as StatusSesiDemo);
+        setTickSesi(0);
+        if (r?.created) {
+          // Data baru tumbuh di bawah sesi ini: muat ulang halaman agar SEMUA
+          // tab membaca data sesi, bukan sisa render lama.
+          window.location.reload();
+          return;
+        }
+        setHasilData("Sesi demo sudah berjalan — data tidak di-reset.");
+        await muatStatus();
+        await muatBukti();
+        return;
+      }
       const r = await refreshDemoToToday(token);
       setHasilData(refreshLine(r));
       // Peringatan backend ditampilkan APA ADANYA — bukan diringkas klien.
@@ -292,6 +437,54 @@ export default function DemoControlPanel({
     } catch (e: any) {
       setPesan(String(e?.message ?? e));
     } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onPerpanjang() {
+    if (!token || busySesi !== null) return;
+    setBusySesi("tambah");
+    setPesan(null);
+    try {
+      const r = await extendDemoSession(token, 30);
+      setSesi(r as StatusSesiDemo);
+      setTickSesi(0);
+      setHasilData(`Sesi diperpanjang 30 menit — sisa ${formatSisa(r?.remaining_seconds ?? 0)}.`);
+    } catch (e: any) {
+      setPesan(String(e?.message ?? e));
+    } finally {
+      setBusySesi(null);
+    }
+  }
+
+  async function onAkhiri() {
+    if (!token || busySesi !== null) return;
+    setBusySesi("tutup");
+    setPesan(null);
+    try {
+      await endDemoSession(token);
+      // Data sesi dibersihkan server; muat ulang supaya semua tab jujur kosong.
+      window.location.reload();
+    } catch (e: any) {
+      setPesan(String(e?.message ?? e));
+      setBusySesi(null);
+    }
+  }
+
+  async function onBangunUlang() {
+    if (!token || busy !== null) return;
+    setBusy("bangun");
+    setPesan(null);
+    try {
+      const r = (await rebuildDemoTemplate(token)) as RebuildSummary;
+      setHasilData(rebuildLine(r));
+      setPeringatanData(rebuildWarning());
+      // Data diganti seluruhnya: muat ulang supaya SEMUA tab membaca baris baru,
+      // bukan sisa render lama (sama seperti tombol "Siapkan data demo").
+      window.location.reload();
+    } catch (e: any) {
+      const detail = e instanceof ApiError && e.detail ? e.detail : null;
+      setPesan(detail ?? String(e?.message ?? e));
       setBusy(null);
     }
   }
@@ -324,35 +517,87 @@ export default function DemoControlPanel({
             1
           </span>
           <h2 className="dc-title">Siapkan data demo</h2>
-          <span className={`badge ${status ? "status-safe" : "status-neutral"}`}>
-            {status ? "data siap" : "belum dimuat"}
+          <span className={`badge ${adaBaris(status) ? "status-safe" : "status-neutral"}`}>
+            {adaBaris(status) ? "data siap" : "belum ada data"}
           </span>
         </div>
         <p className="dc-sub">
-          Menyegarkan snapshot kanonik ke tanggal hari ini dan memuat ulang empat
-          kasus skrip. Aman dijalankan berulang sebelum demo.
+          Mengisi data demo untuk satu jendela waktu: hari ini, empat skenario uji,
+          dan hitungan mundur sesi. Menekan lagi saat sesi berjalan tidak memuat
+          ulang data — sesi yang sama diteruskan.
         </p>
+        {sesi?.enforced && (
+          <div className="dc-session" data-keadaan={keadaanSesi(sesi)}>
+            <p className="dc-session-line" role="status" aria-live="polite">
+              {pesanSesi(sesi, tickSesi)}
+            </p>
+            {sesi.active && (
+              <p className="dc-session-count" role="timer" aria-live="off">
+                {formatSisa(sisaSekarang)}
+              </p>
+            )}
+            {sesi.active && peringatanWaktu(sisaSekarang) && (
+              <p className="dc-session-warn">{peringatanWaktu(sisaSekarang)}</p>
+            )}
+            {sesi.active && (
+              <div className="dc-session-actions">
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={onPerpanjang}
+                  disabled={!token || busySesi !== null || !bolehJalankan}
+                  title="Menambah 30 menit tanpa mengubah data yang sedang berjalan"
+                >
+                  {busySesi === "tambah" ? "Menambah…" : "Perpanjang 30 menit"}
+                </button>
+                <button
+                  type="button"
+                  className="button button-quiet"
+                  onClick={onAkhiri}
+                  disabled={!token || busySesi !== null || !bolehJalankan}
+                  title="Menutup sesi sekarang; data sesi dibersihkan"
+                >
+                  {busySesi === "tutup" ? "Menutup…" : "Akhiri sesi"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        <DemoRebuild
+          // Aksi destruktif = hanya kepala SPPG (sama seperti tombol lain di blok ini);
+          // ahli gizi melihat catatan mode baca, bukan tombol yang pasti 403.
+          aktif={Boolean(sesi?.active) && bolehJalankan}
+          sibuk={busy === "bangun"}
+          detik={detik}
+          onRebuild={onBangunUlang}
+        />
         <div className="dc-actions">
           <button
             type="button"
             className="button button-secondary dc-prepare"
             onClick={onSiapkan}
             disabled={!token || !bolehJalankan || busy !== null}
-            title="Seeder relatif hari ini + muat ulang 4 kasus skrip"
+            title="Mengisi data demo hari ini dan memuat empat skenario uji"
           >
             {busy === "data" ? "Menyiapkan…" : "Siapkan data demo"}
           </button>
-          <p className="dc-status" role="status" aria-live="polite">
-            {status ? (
-              statusLine(status)
-            ) : statusError ? (
+          {(!sesi?.enforced || sesi.active) && (
+            <p className="dc-status" role="status" aria-live="polite">
+              {status ? (
+                sesi?.enforced ? (
+                  "Data demo siap dipakai selama sesi ini."
+                ) : (
+                  statusLine(status)
+                )
+              ) : statusError ? (
               <span className="status-danger">
                 Status data gagal dibaca: {statusError}
               </span>
             ) : (
-              <LoadingState label="Memuat status data demo" />
-            )}
-          </p>
+                <LoadingState label="Memuat status data demo" />
+              )}
+            </p>
+          )}
         </div>
         {hasilData && <p className="dc-result">{hasilData}</p>}
         {peringatanData && (
@@ -448,7 +693,7 @@ export default function DemoControlPanel({
           </span>
           <h2 className="dc-title">Bukti agent</h2>
           <span className={`badge ${adaBukti ? "status-safe" : "status-neutral"}`}>
-            {adaBukti ? `${stepChips(bukti).length} langkah tercatat` : "belum ada jejak"}
+            {adaBukti ? `${stepNames(bukti).length} langkah tercatat` : "belum ada jejak"}
           </span>
         </div>
 

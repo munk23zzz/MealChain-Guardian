@@ -44,12 +44,13 @@ export function supplierReachKmForRole(role: string | null | undefined): number 
   return SPPG_ROLES.includes(value) ? SUPPLIER_REACH_KM : null;
 }
 
-/**
- * Pin pemasok (berbentuk titik) muncul mulai zoom ini. Pada zoom peta
- * Indonesia penuh (±4,5) pin kota akan menumpuk dan menutupi pin SPPG.
+/*
+ * Pin pemasok TIDAK digerbang zoom (20 Okt 2026). Dulu pin baru muncul di zoom
+ * 6 ke atas karena pada tampilan Indonesia penuh pin kota menumpuk — tetapi
+ * setelah tombol lapisan dihapus, lapisan "selalu hidup" yang pin-nya menghilang
+ * saat di-zoom out terbaca sebagai kerusakan, bukan penghematan ruang. Sekarang
+ * titiknya selalu digambar; yang tetap digerbang hanya NAMA (lihat di bawah).
  */
-export const SUPPLIER_PIN_MIN_ZOOM = 6;
-
 /**
  * Label NAMA pemasok baru muncul mulai zoom ini. Di antara dua ambang ini pin
  * tampil sebagai titik saja: pada tampilan jaringan (zoom ±6,5) sepuluh label
@@ -348,11 +349,23 @@ export function supplierPinTone(
 export function supplierPinClass(
   row: SupplierPinRow,
   showLabels = true,
-  reachKm?: number | null
+  reachKm?: number | null,
+  /**
+   * Apakah pemasok ini punya kiriman yang SEDANG DI JALAN (`journey.state ===
+   * "di_jalan"`), dihitung pemanggil dari data jalur.
+   *
+   * Kenapa bukan `row.shipping`: blok `shipping` dari `GET /suppliers` menghitung
+   * SEMUA kiriman (termasuk yang sudah tiba), jadi memakainya akan menyalakan
+   * penanda untuk 6 pemasok saat hanya 2 yang benar-benar di jalan. Bila
+   * pemanggil belum punya data jalur (`undefined`), nilai lamanya dipakai
+   * sebagai perkiraan cair.
+   */
+  sedangJalan?: boolean
 ): string {
-  // Kelas "shipping" DITAMBAHKAN, bukan menggantikan kelas nada: warna tetap
-  // berarti keandalan/jangkauan, sedangkan cincin berarti kiriman berjalan.
-  const shipping = row.shipping ? " map-pin-supplier-shipping" : "";
+  // Kelas "shipping" DITAMBAHKAN, bukan menggantikan kelas nada: warnanya tetap
+  // berarti keandalan/jangkauan, sedangkan isian + denyut berarti kiriman aktif.
+  const aktif = sedangJalan ?? Boolean(row.shipping);
+  const shipping = aktif ? " map-pin-supplier-shipping" : "";
   return `map-pin map-pin-supplier map-pin-supplier-${supplierPinTone(row, reachKm)}${shipping}${
     showLabels ? "" : " map-pin-supplier-compact"
   }`;
@@ -497,22 +510,6 @@ export function supplierReachNote(
 }
 
 /**
- * Teks sakelar yang TERLIHAT — ringkas, hanya jumlahnya (arah pemilik
- * 2026-10-16: "2 tombol di atas dibuat kecil saja"). Kata "Tampilkan/
- * Sembunyikan" tidak diperlukan di teks yang terlihat karena keadaan hidup/mati
- * sudah dibawa `aria-pressed` + warna tombol (pola yang sama dengan pil komoditas
- * di halaman ini); kalimat lengkapnya tetap ada sebagai tooltip (`title`).
- */
-export function supplierToggleLabel(rows: readonly SupplierPinRow[]): string {
-  return `Pemasok (${rows.length})`;
-}
-
-/** Kalimat lengkap sakelar pemasok — dipakai sebagai tooltip/title. */
-export function supplierToggleAction(rows: readonly SupplierPinRow[], show: boolean): string {
-  return `${show ? "Sembunyikan" : "Tampilkan"} pemasok (${rows.length})`;
-}
-
-/**
  * Tag SANGAT pendek untuk bilah rincian lapisan (satu baris, selalu terlihat).
  *
  * Angkanya SAMA dengan `supplierReachNote` — termasuk pemasok yang dibuang
@@ -534,9 +531,6 @@ export function supplierReachTag(
   return `${within}/${total} pemasok dalam ${reachKm} km`;
 }
 
-export function supplierPinsVisible(zoom: number): boolean {
-  return Number.isFinite(zoom) && zoom >= SUPPLIER_PIN_MIN_ZOOM;
-}
 
 /** Nama pemasok hanya pada zoom dekat; di antaranya pin tampil sebagai titik. */
 export function supplierLabelsVisible(zoom: number): boolean {

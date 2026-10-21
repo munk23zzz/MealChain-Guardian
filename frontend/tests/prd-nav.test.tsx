@@ -42,6 +42,16 @@ describe("navigasi PRD 2.4 (7 screen → konsol tab)", () => {
     expect(pageSrc).toMatch(/<ProviderPanel/);
   });
 
+  // Permintaan pemilik 21 Okt: panel "Bukti integrasi per komponen" dihapus dari
+  // tab Agent Log — ia memakan ruang di bawah jejak langkah dan bukan bagian dari
+  // alur demo. Komponennya TIDAK dihapus (masih ada tes kontraknya), hanya tidak
+  // lagi dipasang; kalau nanti dipasang di tempat lain, tes ini harus ikut diubah.
+  it("agent-log: panel \"Bukti integrasi per komponen\" tidak lagi dipasang", () => {
+    expect(pageSrc).not.toContain("IntegrationStatusPanel");
+    expect(pageSrc).not.toContain("useIntegrationStatus");
+    expect(pageSrc).not.toContain("Bukti integrasi per komponen");
+  });
+
   it("demo-control memakai DemoControlPanel (jalankan agent lewat API resmi, bukan mock)", () => {
     // 2026-10-19: skenario Event 1/2/3 dilepas dari tab; tombol pintas rail
     // "Muat kasus demo" ikut dihapus supaya hanya ada SATU jalan menyiapkan data

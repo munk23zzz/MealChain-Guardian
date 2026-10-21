@@ -1,0 +1,35 @@
+{
+  "langkah": "bayangan-peran",
+  "sebelum": {
+    "literalMentah": 17,
+    "nilaiAlphaBerbeda": [0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2, 0.25, 0.35, 0.4, 0.42],
+    "contohDuplikasi": "pin peta punya 4 bayangan berbeda (0,2 / 0,35 / 0,4 / 0,42) yang tidak bisa dibedakan mata; popup 0,16 vs 0,18 vs 0,1",
+    "catatanAuditDiperbaiki": "batang inset 3 px ternyata SUDAH bertoken (--sev-critical-solid / --sev-medium-solid) — temuan audit sebelumnya keliru, tidak ada yang diubah di situ"
+  },
+  "sesudah": {
+    "literalMentah": 0,
+    "tokenBaru": ["--shadow-pin", "--shadow-pin-hover", "--shadow-pin-soft", "--shadow-pin-core", "--shadow-pin-active", "--shadow-cluster", "--shadow-pop", "--shadow-float", "--shadow-control", "--shadow-dock", "--ring-hairline"],
+    "deklarasiDitokenkan": 17,
+    "terukurHidup": {
+      ".map-pin-dot": "rgb(255,255,255) 0 0 0 2px + rgba(15,23,42,0.35) 0 1px 5px = --shadow-pin",
+      ".map-cluster": "rgba(15,23,42,0.4) 0 2px 8px = --shadow-cluster (identik)",
+      ".map-pin-label": "rgba(15,23,42,0.14) 0 1px 3px = --shadow-control",
+      ".map-reset-view": "rgba(15,23,42,0.14) 0 1px 3px = --shadow-control (identik)",
+      ".map-card .map-body": "rgba(15,23,42,0.08) 0 8px 24px + rgba(15,23,42,0.04) 0 2px 6px = --shadow-float (identik)"
+    },
+    "tidakTerukur": {
+      ".map-pin-supplier-dot": "tidak ada pin pemasok pada data saat ukur",
+      ".map-pin-active .map-pin-dot": "tidak ada lokasi aktif pada dropdown cakupan saat ukur",
+      ".top-bar-notif-panel": "panel notifikasi perlu dibuka; hanya ganti literal -> token bernilai SAMA (0.18)",
+      ".maplibregl-ctrl-group": "aturan proyek kalah oleh stylesheet MapLibre sendiri (terukur rgba(0,0,0,0.1) 0 0 0 2px) — kondisi ini sudah ada SEBELUM perubahan, bukan regresi"
+    }
+  },
+  "perubahanNilaiTerlihat": {
+    "map-pin-dot": "0 2px 6px 0.35 -> 0 1px 5px 0.35 (disamakan dengan pin pemasok)",
+    "map-pin-label": "0 1px 3px 0.12 -> 0 1px 3px 0.14",
+    "top-bar-notif-panel": "identik",
+    "dpick-panel / maplibregl-popup-content": "0.16 -> 0.18 dan 10px/24px -> 16px/40px (menyatu ke --shadow-pop)"
+  },
+  "tes": { "berkas": "tests/token-bayangan.test.ts", "isi": 4, "sebelum": "4 failed", "sesudah": "4 passed" },
+  "gerbang": { "suite": "141 berkas / 1584 tes lulus", "tsc": "0 galat", "lint": "bersih" }
+}

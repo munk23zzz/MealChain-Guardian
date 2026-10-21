@@ -15,6 +15,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import { kodeWilayah } from "../lib/wilayah";
+import { posisiDanArah, siapkanJalur, wakeLine } from "../lib/route-flow";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
   dataSourceNote,
@@ -61,7 +62,6 @@ import { gabungKelasPin } from "../lib/map-pin-class";
 // Ikon sakelar lapisan (19 Okt 2026): pil kendali kini ikon saja — teks
 // "Pemasok (6)"/"Jalur kiriman (12)" memakan lebar tepat di atas Jawa Barat,
 // padahal artinya sudah dibawa legenda di bawah kanvas dan jumlahnya di tag.
-import { IkonLapisanJalur, IkonLapisanPemasok } from "./map-toggle-icons";
 import {
   daftarkanSorot,
   langgananSorot,
@@ -72,9 +72,15 @@ import {
 // truk untuk pemasok — dua lapisan penanda jadi bisa dibedakan dari bentuknya.
 import { buildPinGlyph } from "../lib/map-pin-glyphs";
 import {
+  routePopupView,
+  sppgPopupView,
+  supplierPopupView,
+  truckPopupView,
+  type MapPopupView,
+} from "../lib/map-popup";
+import {
   SUPPLIER_LABEL_MIN_ZOOM,
   SUPPLIER_PIN_LEGEND,
-  SUPPLIER_PIN_MIN_ZOOM,
   supplierAccessibleLabel,
   supplierDistanceReference,
   supplierReachMeta,
@@ -83,12 +89,8 @@ import {
   supplierPinClass,
   supplierPinRows,
   supplierPinsForMap,
-  supplierPinsVisible,
-  supplierPopupLines,
   supplierReachNote,
   supplierReachTag,
-  supplierToggleAction,
-  supplierToggleLabel,
   suppliersForCommodity,
   type SupplierPinRow,
 } from "../lib/supplier-pins";
@@ -102,9 +104,6 @@ import {
   routeLayerTag,
   routeLegendEntries,
   routeLineClass,
-  routePopupLines,
-  routeToggleAction,
-  routeToggleLabel,
   supplierRoutes as supplierRouteRows,
   type SupplierRoute,
 } from "../lib/supplier-routes";
@@ -125,9 +124,28 @@ const ROUTE_SOURCE_ID = "supplier-routes";
 // MapLibre, jadi bentuk garis dipisah lewat filter `kind` per fitur.
 const ROUTE_DONE_LAYER_ID = "supplier-route-line-done";
 const ROUTE_TODO_LAYER_ID = "supplier-route-line-todo";
+// Kiriman yang SUDAH TIBA (21 Okt 2026): redup, tanpa animasi, tanpa ikon.
+// Dibedakan dari garis terang supaya "terang = ada yang bergerak" tetap benar.
+const ROUTE_QUIET_LAYER_ID = "supplier-route-line-tiba";
 // Alas putih (casing) di bawah garis jalur. Basemap OSM terang + banyak hijau
 // membuat garis hijau 2-4 px sulit ditemukan mata; alas ini hanya alat
 // keterbacaan, bukan informasi baru — karena itu tidak masuk legenda.
+/**
+ * Lapisan "menyala" untuk kiriman yang SEDANG berjalan (permintaan pemilik
+ * 20 Okt 2026: ikon & jalur pemasok yang sedang mengirim menyala).
+ *
+ * Ini lapisan tambahan DI BAWAH garis biasa: lebar + blur, tanpa mengganti warna
+ * atau kepadatan garis. Jadi "menyala" menambah penekanan, tidak menghapus arti
+ * garis yang sudah ada (padat = ditempuh, putus-putus = sisa).
+ */
+const ROUTE_HALO_DONE_LAYER_ID = "supplier-route-halo-done";
+const ROUTE_HALO_TODO_LAYER_ID = "supplier-route-halo-todo";
+/** Kilau tipis di atas bagian yang sudah ditempuh (bukan data baru: hanya
+ *  pantulan putih supaya garis terbaca sebagai pita yang menyala). */
+const ROUTE_GLINT_LAYER_ID = "supplier-route-glint";
+/** Ekor cahaya di belakang kendaraan yang sedang berjalan. */
+const WAKE_SOURCE_ID = "supplier-truck-wake";
+const WAKE_LAYER_ID = "supplier-truck-wake-line";
 const ROUTE_CASING_DONE_LAYER_ID = "supplier-route-casing-done";
 const ROUTE_CASING_TODO_LAYER_ID = "supplier-route-casing-todo";
 // Garis SOROTAN (Arah C): satu source berisi sampai dua potong — padat = sudah
@@ -153,14 +171,17 @@ const LAYER_INFO_PANEL_ID = "map-layer-info-panel";
 // panel itu sudah dilebur ke sini (19 Okt 2026) supaya legenda hanya dibaca di
 // SATU tempat: baris legenda di bawah kanvas, dengan rincian di panel ini.
 
+// Lebar dinaikkan 20 Okt 2026: peta sekarang hanya menggambar kiriman yang
+// sedang berjalan (1–3 jalur, bukan 20), jadi garis boleh lebih tegas tanpa
+// membuat peta padat.
 const ROUTE_LINE_WIDTH: maplibregl.ExpressionSpecification = [
   "interpolate",
   ["linear"],
   ["zoom"],
   5,
-  2.6,
+  6,
   10,
-  4.4,
+  7.8,
 ];
 
 /** Alas: +2,2 px dari garis di setiap tingkat zoom (cukup untuk halo tipis). */
@@ -169,9 +190,9 @@ const ROUTE_CASING_WIDTH: maplibregl.ExpressionSpecification = [
   ["linear"],
   ["zoom"],
   5,
-  4.8,
+  8.4,
   10,
-  6.6,
+  10.6,
 ];
 
 /** Sisa perjalanan digambar LEBIH TIPIS: itu estimasi, bukan fakta terkirim. */
@@ -180,9 +201,20 @@ const ROUTE_TODO_WIDTH: maplibregl.ExpressionSpecification = [
   ["linear"],
   ["zoom"],
   5,
-  2.2,
+  5.4,
   10,
-  3.6,
+  6.8,
+];
+
+/** Kilau: putih tipis, ikut zoom, selalu di dalam garis (tidak menambah lebar). */
+const ROUTE_GLINT_WIDTH: maplibregl.ExpressionSpecification = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  5,
+  1.1,
+  10,
+  1.9,
 ];
 
 /** Alas potongan "belum ditempuh" — selalu +2 px dari garisnya. */
@@ -191,9 +223,9 @@ const ROUTE_TODO_CASING_WIDTH: maplibregl.ExpressionSpecification = [
   ["linear"],
   ["zoom"],
   5,
-  4.2,
+  5.4,
   10,
-  5.6,
+  7,
 ];
 
 // Garis sorotan (Arah C) lebih tebal 2 px pada tiap tingkat zoom. Ditulis sebagai
@@ -232,28 +264,191 @@ function fitBoundsFor(
   return [[Math.min(...lons) - pad, Math.min(...lats) - pad], [Math.max(...lons) + pad, Math.max(...lats) + pad]];
 }
 
-/** Konten popup dibangun sebagai NODE (bukan HTML string): nama lokasi datang
- *  dari database, jadi jangan ditempel ke innerHTML. */
-function popupNode(location: BalanceMapLocation): HTMLElement {
+/**
+ * Satu popup pada satu waktu + jaminan popup tidak terpotong tepi peta.
+ *
+ * Latar (21 Okt 2026): tiap marker memasang popup sendiri, jadi mengklik
+ * pemasok kedua meninggalkan popup pertama terbuka — peta penuh gelembung.
+ * MapLibre juga menjalankan autoPan SETELAH popup terbuka; kalau kita
+ * menggeser peta terlalu awal, autoPan menimpa koreksi itu. Karena itu
+ * koreksi dijalankan pada setiap `moveend` selama popup terbuka, dengan
+ * batas aman agar peta tidak melompat jauh.
+ */
+let popupTerbuka: maplibregl.Popup | null = null;
+/** Waktu klik truk terakhir; dipakai handler garis jalur untuk tidak menimpa
+ *  popup truk saat klik yang sama juga terdeteksi sebagai klik layer garis. */
+let trukKlikTerakhir = 0;
+
+function jagaPopup(popup: maplibregl.Popup, map: maplibregl.Map): maplibregl.Popup {
+  let sedangMenyesuaikan = false;
+
+  const rapikan = () => {
+    if (!popup.isOpen() || sedangMenyesuaikan) return;
+    const el = popup.getElement();
+    if (!el) return;
+    const kotak = el.getBoundingClientRect();
+    const peta = map.getContainer().getBoundingClientRect();
+    // Popup yang seluruhnya di luar peta berarti penandanya di luar viewport
+    // (mis. dibuka lewat keyboard/otomasi): jangan pan — dulu pernah
+    // menggeser peta ribuan piksel sampai terlihat seperti laut.
+    if (kotak.bottom < peta.top || kotak.top > peta.bottom) return;
+    // Popup yang lebih tinggi dari peta tidak akan muat; jangan pan berulang.
+    if (kotak.height > peta.height - 24) return;
+    // Sisakan ruang di atas untuk bar tab lengket di ponsel dan kontrol peta.
+    const sempit = window.matchMedia("(max-width: 480px)").matches;
+    const insetAtas = sempit ? 82 : 24;
+    const insetSamping = sempit ? 6 : 12;
+    const bawah = kotak.bottom - peta.bottom + 12;
+    const atas = peta.top + insetAtas - kotak.top;
+    // Arah panBy: offset POSITIF menggeser pusat peta ke selatan, sehingga
+    // isi peta (termasuk popup) bergerak KE ATAS. Jadi popup yang terlalu
+    // rendah perlu offset positif, dan popup yang terlalu tinggi negatif.
+    const perluY = bawah > 0 ? bawah : atas > 0 ? -atas : 0;
+    // Peta ponsel sempit: penanda di tepi membuat popup terpotong KIRI/KANAN
+    // kalau hanya sumbu Y yang dikoreksi.
+    const kanan = kotak.right - peta.right + insetSamping;
+    const kiri = peta.left + insetSamping - kotak.left;
+    const perluX = kanan > 0 ? kanan : kiri > 0 ? -kiri : 0;
+    if (Math.abs(perluX) < 4 && Math.abs(perluY) < 4) return;
+    const batasY = Math.max(160, peta.height);
+    const batasX = Math.max(160, peta.width);
+    const geserX = Math.max(-batasX, Math.min(batasX, perluX));
+    const geserY = Math.max(-batasY, Math.min(batasY, perluY));
+    sedangMenyesuaikan = true;
+    map.panBy([geserX, geserY], { duration: 240 });
+    window.setTimeout(() => {
+      sedangMenyesuaikan = false;
+    }, 300);
+  };
+
+  popup.on("open", () => {
+    if (popupTerbuka && popupTerbuka !== popup) popupTerbuka.remove();
+    popupTerbuka = popup;
+    // MapLibre menulis tombol tutup berbahasa Inggris ("Close popup");
+    // antarmuka ini berbahasa Indonesia. Ganti tanpa mengubah glyph ×.
+    const tutup = popup.getElement()?.querySelector<HTMLButtonElement>(".maplibregl-popup-close-button");
+    if (tutup) {
+      tutup.setAttribute("aria-label", "Tutup informasi");
+      tutup.title = "Tutup informasi";
+    }
+    map.on("moveend", rapikan);
+    // Koreksi pertama setelah layout/font siap; moveend menangani sisa autoPan.
+    window.setTimeout(rapikan, 350);
+  });
+  popup.on("close", () => {
+    if (popupTerbuka === popup) popupTerbuka = null;
+    map.off("moveend", rapikan);
+  });
+  return popup;
+}
+
+/**
+ * Popup peta yang SERAGAM untuk empat jenis penanda (SPPG, pemasok, truk,
+ * garis jalur): satu kartu, satu hierarki (kicker → judul → angka utama →
+ * metrik → fakta). Warna aksen mengikuti jenis/nada, tetapi chip selalu
+ * menuliskan artinya dengan kata — warna bukan satu-satunya penanda.
+ *
+ * Dibangun sebagai NODE, bukan HTML string: nama lokasi/pemasok datang dari DB.
+ */
+function renderPopup(view: MapPopupView): HTMLElement {
   const box = document.createElement("div");
-  box.className = "map-popup";
+  box.className = `map-popup map-popup-${view.kind}`;
+  box.dataset.kind = view.kind;
+  box.dataset.tone = view.tone;
+  box.setAttribute("role", "group");
+  box.setAttribute("aria-label", view.aria);
+
+  const head = document.createElement("div");
+  head.className = "map-popup-head";
+  const icon = document.createElement("span");
+  icon.className = "map-popup-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.append(view.kind === "supplier" ? buildPinGlyph("supplier") : view.kind === "sppg" ? buildPinGlyph("sppg") : buildTruckGlyph());
+  const heading = document.createElement("span");
+  heading.className = "map-popup-heading";
+  const kicker = document.createElement("span");
+  kicker.className = "map-popup-kicker";
+  kicker.textContent = view.kicker;
   const title = document.createElement("strong");
-  title.textContent = location.location;
-  const numbers = document.createElement("p");
-  numbers.textContent = `pasokan ${formatKg(location.supply_kg)} · permintaan ${formatKg(location.demand_kg)}`;
-  const gap = document.createElement("em");
-  gap.textContent = formatBalanceGap(location);
-  box.append(title, numbers, gap);
-  // Asal nilai (PLAN-023) hanya muncul di RINCIAN: lokasi tanpa baris
-  // permintaan/pasokan tidak lagi tampak seperti angka terukur.
-  const note = dataSourceNote(location);
-  if (note) {
-    const catatan = document.createElement("span");
-    catatan.className = "map-popup-note";
-    catatan.textContent = note;
-    box.append(catatan);
+  title.className = "map-popup-title";
+  title.textContent = view.title;
+  const chip = document.createElement("span");
+  chip.className = "map-popup-chip";
+  chip.textContent = view.chip;
+  heading.append(kicker, title, chip);
+  head.append(icon, heading);
+
+  const hero = document.createElement("div");
+  hero.className = "map-popup-hero";
+  const heroLabel = document.createElement("span");
+  heroLabel.className = "map-popup-hero-label";
+  heroLabel.textContent = view.hero.label;
+  const heroValue = document.createElement("strong");
+  heroValue.className = "map-popup-hero-value";
+  heroValue.textContent = view.hero.value;
+  hero.append(heroLabel, heroValue);
+
+  box.append(head, hero);
+
+  if (view.meter) {
+    const meter = document.createElement("div");
+    meter.className = "map-popup-meter";
+    const track = document.createElement("span");
+    track.className = "map-popup-meter-track";
+    const fill = document.createElement("i");
+    fill.className = "map-popup-meter-fill";
+    fill.style.width = `${view.meter.pct}%`;
+    track.append(fill);
+    const text = document.createElement("span");
+    text.className = "map-popup-meter-text";
+    text.textContent = view.meter.text;
+    meter.append(track, text);
+    box.append(meter);
+  }
+
+  if (view.metrics.length) {
+    const metrics = document.createElement("dl");
+    metrics.className = "map-popup-metrics";
+    view.metrics.forEach((metric) => {
+      const item = document.createElement("div");
+      item.className = "map-popup-metric";
+      const label = document.createElement("dt");
+      label.textContent = metric.label;
+      const value = document.createElement("dd");
+      value.textContent = metric.value;
+      item.append(label, value);
+      metrics.append(item);
+    });
+    box.append(metrics);
+  }
+
+  if (view.callout) {
+    const callout = document.createElement("p");
+    callout.className = "map-popup-callout";
+    callout.dataset.tone = view.callout.tone;
+    callout.textContent = view.callout.text;
+    box.append(callout);
+  }
+
+  view.facts.forEach((fact) => {
+    const line = document.createElement("p");
+    line.className = "map-popup-line";
+    line.textContent = fact;
+    box.append(line);
+  });
+
+  if (view.note) {
+    const note = document.createElement("span");
+    note.className = "map-popup-note";
+    note.textContent = view.note;
+    box.append(note);
   }
   return box;
+}
+
+/** Konten popup SPPG (dibangun dari view murni di `lib/map-popup.ts`). */
+function popupNode(location: BalanceMapLocation): HTMLElement {
+  return renderPopup(sppgPopupView(location));
 }
 
 /** Membuat penanda satu lokasi (titik + label + popup). Node DOM — nama lokasi
@@ -279,7 +474,7 @@ function createPin(map: maplibregl.Map, location: BalanceMapLocation, active: bo
   el.append(dot, tip, label);
   const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
     .setLngLat([Number(location.longitude), Number(location.latitude)])
-    .setPopup(new maplibregl.Popup({ offset: 32 }).setDOMContent(popupNode(location)))
+    .setPopup(jagaPopup(new maplibregl.Popup({ offset: 32, maxWidth: "320px" }).setDOMContent(popupNode(location)), map))
     .addTo(map);
   // Keterangan aksesibilitas dipasang SETELAH marker dibuat: MapLibre 4.7
   // menulis aria-label="Map marker" pada elemen saat konstruksi, menimpa teks
@@ -357,7 +552,11 @@ function sembunyikanPin(marker: maplibregl.Marker): void {
 
 /** Segarkan isi penanda yang sudah ada (posisi, label, keterangan, popup) —
  *  tanpa menyentuh kamera peta. Dipakai saat sinkronisasi data. */
-function refreshPin(marker: maplibregl.Marker, location: BalanceMapLocation): void {
+function refreshPin(
+  marker: maplibregl.Marker,
+  location: BalanceMapLocation,
+  map: maplibregl.Map
+): void {
   const el = marker.getElement();
   const wasActive = el.classList.contains("map-pin-active");
   // Kelas digabung, BUKAN ditimpa: `className = ...` ikut menghapus
@@ -373,7 +572,7 @@ function refreshPin(marker: maplibregl.Marker, location: BalanceMapLocation): vo
   const label = el.querySelector(".map-pin-label");
   if (label) label.textContent = pinLabel(location);
   marker.setLngLat([Number(location.longitude), Number(location.latitude)]);
-  marker.setPopup(new maplibregl.Popup({ offset: 14 }).setDOMContent(popupNode(location)));
+  marker.setPopup(jagaPopup(new maplibregl.Popup({ offset: 14, maxWidth: "320px" }).setDOMContent(popupNode(location)), map));
 }
 
 /** Keterangan penanda untuk pembaca layar (MapLibre menandai tiap penanda
@@ -387,20 +586,93 @@ function pinAccessibleLabel(location: BalanceMapLocation): string {
   return note ? `${awal}: ${dasar}, ${note}` : `${awal}: ${dasar}`;
 }
 
-/** Isi popup pemasok — NODE DOM, bukan innerHTML (nama pemasok dari DB). */
+/** Isi popup pemasok — NODE DOM, bukan innerHTML. */
 function supplierPopupNode(row: SupplierPinRow, reachKm: number | null): HTMLElement {
-  const { title, lines } = supplierPopupLines(row, reachKm);
-  const box = document.createElement("div");
-  box.className = "map-popup map-popup-supplier";
-  const head = document.createElement("strong");
-  head.textContent = title;
-  box.append(head);
-  lines.forEach((line) => {
-    const p = document.createElement("p");
-    p.textContent = line;
-    box.append(p);
+  return renderPopup(supplierPopupView(row, reachKm));
+}
+
+/**
+ * Ikon mobil kiriman (permintaan pemilik 20 Okt 2026): posisi kendaraan saat ini
+ * di sepanjang jalur, menghadap arah perjalanan.
+ *
+ * Kenapa SVG dan bukan emoji: emoji digambar font sistem (beda bentuk per OS,
+ * tidak bisa diwarnai token) dan dilarang pedoman ikon aplikasi ini. Ikon ini
+ * tampak DARI ATAS supaya rotasi arah masuk akal — bukan siluet depan.
+ */
+const SVG_TRUK_NS = "http://www.w3.org/2000/svg";
+
+/**
+ * Ikon MOBIL TRUK (permintaan pemilik 20 Okt 2026) — bak + kabin, digambar DARI
+ * ATAS supaya rotasi arah perjalanan masuk akal.
+ *
+ * Kaca depan dan garis pemisah kabin/bak dibentuk sebagai LUBANG (`fill-rule:
+ * evenodd`) sehingga warna puck terlihat menembus; tanpa lubang, truk dari atas
+ * hanya terbaca sebagai kotak putih.
+ *
+ * Tetap SVG, bukan emoji: emoji digambar font sistem (beda bentuk per OS, tidak
+ * bisa diwarnai token) dan dilarang pedoman ikon aplikasi ini.
+ */
+function buildTruckGlyph(): SVGSVGElement {
+  const svg = document.createElementNS(SVG_TRUK_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  const badan = document.createElementNS(SVG_TRUK_NS, "path");
+  badan.setAttribute(
+    "d",
+    [
+      // kabin: sempit dan membulat, di depan (arah maju)
+      "M8.6 3.4h6.8a2.2 2.2 0 0 1 2.2 2.2v2.6H6.4V5.6a2.2 2.2 0 0 1 2.2-2.2Z",
+      // kaca depan (lubang)
+      "M9.6 4.9h4.8v1.7H9.6Z",
+      // bak: lebih lebar daripada kabin, dengan celah 0,9 px → siluet "mobil box"
+      "M6.9 9.9h10.2a1.5 1.5 0 0 1 1.5 1.5v7.1a2.3 2.3 0 0 1-2.3 2.3H7.7a2.3 2.3 0 0 1-2.3-2.3v-7.1a1.5 1.5 0 0 1 1.5-1.5Z",
+    ].join(" ")
+  );
+  badan.setAttribute("fill", "currentColor");
+  badan.setAttribute("fill-rule", "evenodd");
+  svg.append(badan);
+  return svg;
+}
+
+function createTruckMarker(
+  map: maplibregl.Map,
+  row: SupplierRoute,
+  posisi: [number, number],
+  arah: number
+): maplibregl.Marker {
+  const el = document.createElement("div");
+  el.className = "map-truck";
+  el.style.setProperty("--truk-arah", `${Math.round(arah)}deg`);
+  el.append(buildTruckGlyph());
+  const view = truckPopupView(row);
+  const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+    .setLngLat(posisi)
+    .setPopup(jagaPopup(new maplibregl.Popup({ offset: 18, maxWidth: "320px" }).setDOMContent(renderPopup(view)), map))
+    .addTo(map);
+  // Keterangan dipasang SESUDAH marker dibuat: MapLibre menulis
+  // aria-label="Map marker" pada konstruktor dan menimpa teks sebelumnya
+  // (jebakan yang sama dengan pin SPPG dan pin pemasok). Sekarang truk juga
+  // bisa dibuka dengan keyboard seperti penanda lain.
+  pasangAksesPin(el, marker, view.aria);
+  // Klik truk TIDAK boleh tembus ke garis jalur di bawahnya: tanpa ini,
+  // handler klik layer jalur ikut membuka popup jalur dan menimpa popup truk
+  // (pengguna mengklik mobil, yang muncul malah "Jalur kiriman").
+  el.addEventListener("click", (event) => {
+    trukKlikTerakhir = Date.now();
+    event.stopPropagation();
+    // Jaring pengaman: MapLibre kadang tidak membuka popup saat klik jatuh
+    // pada <path> di dalam SVG ikon. Kalau klik belum membuka apa pun,
+    // buka sendiri; kalau MapLibre sudah menutup popup yang tadi terbuka,
+    // jangan membukanya lagi.
+    const popup = marker.getPopup();
+    if (!popup) return;
+    const sebelumnyaTerbuka = popup.isOpen();
+    window.requestAnimationFrame(() => {
+      if (!sebelumnyaTerbuka && !popup.isOpen()) marker.togglePopup();
+    });
   });
-  return box;
+  return marker;
 }
 
 /** Penanda pemasok: BENTUK berbeda dari pin SPPG (kotak miring, bukan titik
@@ -409,10 +681,11 @@ function createSupplierPin(
   map: maplibregl.Map,
   row: SupplierPinRow,
   showLabels: boolean,
-  reachKm: number | null
+  reachKm: number | null,
+  sedangJalan: boolean
 ): maplibregl.Marker {
   const el = document.createElement("div");
-  el.className = supplierPinClass(row, showLabels, reachKm);
+  el.className = supplierPinClass(row, showLabels, reachKm, sedangJalan);
   const accessible = supplierAccessibleLabel(row, reachKm);
   const dot = document.createElement("span");
   dot.className = "map-pin-supplier-dot";
@@ -424,7 +697,7 @@ function createSupplierPin(
   el.append(dot, label);
   const marker = new maplibregl.Marker({ element: el })
     .setLngLat([row.longitude, row.latitude])
-    .setPopup(new maplibregl.Popup({ offset: 18 }).setDOMContent(supplierPopupNode(row, reachKm)))
+    .setPopup(jagaPopup(new maplibregl.Popup({ offset: 18, maxWidth: "320px" }).setDOMContent(supplierPopupNode(row, reachKm)), map))
     .addTo(map);
   // Sama seperti pin SPPG: MapLibre menimpa aria-label saat konstruksi.
   pasangAksesPin(el, marker, accessible);
@@ -436,20 +709,25 @@ function refreshSupplierPin(
   marker: maplibregl.Marker,
   row: SupplierPinRow,
   showLabels: boolean,
-  reachKm: number | null
+  reachKm: number | null,
+  sedangJalan: boolean,
+  map: maplibregl.Map
 ): void {
   const el = marker.getElement();
   // Sama seperti pin lokasi: jangan menimpa seluruh className — kelas
   // `maplibregl-marker` milik pustaka harus bertahan supaya penanda tetap
   // `position: absolute` dan menempel di koordinatnya saat zoom in/out.
-  el.className = gabungKelasPin(el.className, supplierPinClass(row, showLabels, reachKm));
+  el.className = gabungKelasPin(
+    el.className,
+    supplierPinClass(row, showLabels, reachKm, sedangJalan)
+  );
   const accessible = supplierAccessibleLabel(row, reachKm);
   pasangAksesPin(el, marker, accessible);
   const label = el.querySelector(".map-pin-label");
   if (label) label.textContent = row.name;
   marker.setLngLat([row.longitude, row.latitude]);
   marker.setPopup(
-    new maplibregl.Popup({ offset: 14 }).setDOMContent(supplierPopupNode(row, reachKm))
+    jagaPopup(new maplibregl.Popup({ offset: 14, maxWidth: "320px" }).setDOMContent(supplierPopupNode(row, reachKm)), map)
   );
 }
 
@@ -534,26 +812,9 @@ export function StatusLocationList({
   );
 }
 
-/** Popup jalur kiriman: identitas jalur, jarak & durasi JALAN (OSRM), perjalanan
- *  (jam berangkat + estimasi tiba dari server), masa layak, dan mutu kiriman.
- *  Jarak lurus/rasio sengaja TIDAK lagi ditulis (arah pemilik 2026-10-16). */
+/** Popup jalur kiriman — fakta yang sama, dibingkai seperti kartu truk. */
 function routePopupNode(row: SupplierRoute): HTMLElement {
-  const box = document.createElement("div");
-  box.className = "map-popup";
-  const title = document.createElement("strong");
-  title.textContent = `${row.supplierName} → ${row.destinationName}`;
-  box.appendChild(title);
-  const swatch = document.createElement("i");
-  swatch.className = routeLineClass(row);
-  swatch.setAttribute("aria-hidden", "true");
-  box.appendChild(swatch);
-  for (const baris of routePopupLines(row)) {
-    const p = document.createElement("p");
-    p.className = "map-popup-line";
-    p.textContent = baris;
-    box.appendChild(p);
-  }
-  return box;
+  return renderPopup(routePopupView(row));
 }
 
 export default function SupplyMap({
@@ -638,8 +899,11 @@ export default function SupplyMap({
   const pinSnapshot = useMemo(() => pinSignatures(locations ?? []), [locations]);
 
   // --- Layer pemasok (Fase 3) ---------------------------------------------
-  // Lapisan mati secara bawaan; pengguna menyalakannya sendiri.
-  const [showSuppliers, setShowSuppliers] = useState(false);
+  // SELALU hidup (permintaan 20 Okt 2026: tombol lapisan dihapus dari peta).
+  // Tidak ada state/penyetel lagi — peta tidak boleh punya keadaan "lapisan
+  // mati" yang tidak bisa dinyalakan kembali, dan legenda tidak perlu
+  // menerangkan lapisan yang bisa disembunyikan.
+  const showSuppliers = true;
   // null = belum tahu (SSR / peta belum siap) — pesan "perbesar peta" hanya
   // muncul setelah zoom benar-benar diketahui, bukan dari tebakan.
   const [zoomEnough, setZoomEnough] = useState<boolean | null>(null);
@@ -668,21 +932,32 @@ export default function SupplyMap({
     [supplierRows, reachKm]
   );
   const supplierMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  /** Ikon mobil per id kiriman — hanya untuk kiriman yang SEDANG berjalan. */
+  const trukMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  /** Bingkai animasi geser per kiriman (dibatalkan saat posisi baru datang). */
+  const trukFrameRef = useRef<Map<string, number>>(new Map());
   const supplierRowsRef = useRef<readonly SupplierPinRow[]>(supplierMapRows);
   const supplierReachRef = useRef<number | null>(reachKm ?? null);
-  const showSuppliersRef = useRef(false);
+  // Selalu hidup — ref ikut nilai tetapnya, bukan keadaan yang bisa berubah.
+  const showSuppliersRef = useRef(true);
 
   // --- Layer jalur kiriman (Fase 10) ---------------------------------------
-  // Nyalakan secara bawaan: garis inilah yang diminta pemilik proyek untuk
-  // diperlihatkan di peta (keputusan 2026-10-16). Geometri datang dari server
-  // (cache OSRM saat sinkronisasi) — peta tidak pernah memanggil OSRM sendiri.
-  const [showRoutes, setShowRoutes] = useState(true);
+  // SELALU hidup (keputusan 2026-10-16, tombolnya dihapus 20 Okt 2026):
+  // garis inilah yang diminta pemilik proyek untuk diperlihatkan di peta.
+  // Geometri datang dari server (cache OSRM saat sinkronisasi) — peta tidak
+  // pernah memanggil OSRM sendiri.
+  const showRoutes = true;
   // Rincian lapisan dilipat secara bawaan (revisi 2026-10-16): angkanya sudah
   // terbaca sebagai tag ringkas di bilah, jadi kalimat penjelas panjang tidak
   // perlu menahan ruang. Isinya tetap ada di DOM (tidak dihapus).
   const [showLayerInfo, setShowLayerInfo] = useState(false);
 
   const routePinRows = useMemo(() => supplierRouteRows(supplierRoutes), [supplierRoutes]);
+  /** Kiriman yang sedang berjalan — satu-satunya yang punya garis + ikon mobil. */
+  const jumlahJalan = useMemo(
+    () => routePinRows.filter((row) => row.journey?.state === "di_jalan").length,
+    [routePinRows]
+  );
   const routeFeatures = useMemo(() => routeGeoJson(supplierRoutes), [supplierRoutes]);
   const routeSummary = useMemo(() => routeLayerSummary(supplierRoutes), [supplierRoutes]);
   // Baris perjalanan di kotak "Info map": hanya saat lapisan jalur hidup (kalau
@@ -765,7 +1040,7 @@ export default function SupplyMap({
         return;
       }
       // Hanya penanda yang isinya benar-benar berubah yang disentuh.
-      if (diff.changed.includes(row.location)) refreshPin(existing, row);
+      if (diff.changed.includes(row.location)) refreshPin(existing, row, map);
     });
     pinSignaturesRef.current = next;
   }, []);
@@ -884,6 +1159,134 @@ export default function SupplyMap({
    *  Bedanya dengan penanda: garis digambar sebagai source/layer MapLibre (GeoJSON),
    *  jadi butuh gaya peta siap (`load`) sebelum source bisa ditambahkan. Saat
    *  data tiba sebelum gaya siap, handler `load` yang memanggil ulang fungsi ini. */
+  /**
+   * Geser ikon mobil ke posisi baru dengan halus.
+   *
+   * Data kiriman diperbarui tiap 5 detik (Live Sync); tanpa animasi, ikon
+   * MELOMPAT di sepanjang garis dan terbaca seperti kesalahan render. Satu
+   * transisi 700 ms dengan easing keluar membuat geraknya terbaca sebagai
+   * kendaraan yang maju — satu-satunya gerak di peta, dan ia membawa arti
+   * (posisi kendaraan), bukan hiasan.
+   */
+  const geserTruk = useCallback(
+    (id: string, marker: maplibregl.Marker, ke: [number, number], arahKe: number) => {
+      const bingkaiLama = trukFrameRef.current.get(id);
+      if (bingkaiLama !== undefined && typeof cancelAnimationFrame === "function") {
+        cancelAnimationFrame(bingkaiLama);
+      }
+      const el = marker.getElement();
+      const dari = marker.getLngLat();
+      const arahDari = Number(el.style.getPropertyValue("--truk-arah").replace("deg", "")) || 0;
+      const setArah = (derajat: number) =>
+        el.style.setProperty("--truk-arah", `${Math.round(derajat)}deg`);
+      const tanpaGerak =
+        typeof requestAnimationFrame !== "function" ||
+        typeof performance === "undefined" ||
+        mediaQueryCocok("(prefers-reduced-motion: reduce)");
+      if (tanpaGerak) {
+        marker.setLngLat(ke);
+        setArah(arahKe);
+        return;
+      }
+      // Arah terpendek: 350° → 10° harus lewat 360°, bukan berputar balik.
+      const selisih = ((arahKe - arahDari + 540) % 360) - 180;
+      const diam =
+        Math.abs(ke[0] - dari.lng) < 1e-9 &&
+        Math.abs(ke[1] - dari.lat) < 1e-9 &&
+        Math.abs(selisih) < 0.5;
+      if (diam) return;
+      const mulai = performance.now();
+      const LAMA_MS = 700;
+      const langkah = (kini: number) => {
+        const t = Math.min(1, (kini - mulai) / LAMA_MS);
+        const e = 1 - Math.pow(1 - t, 3); // ease-out cubic
+        marker.setLngLat([
+          dari.lng + (ke[0] - dari.lng) * e,
+          dari.lat + (ke[1] - dari.lat) * e,
+        ]);
+        setArah(arahDari + selisih * e);
+        if (t < 1) trukFrameRef.current.set(id, requestAnimationFrame(langkah));
+        else trukFrameRef.current.delete(id);
+      };
+      trukFrameRef.current.set(id, requestAnimationFrame(langkah));
+    },
+    []
+  );
+
+  /**
+   * Pasang/pindahkan ikon mobil ke posisi kendaraan SEKARANG.
+   *
+   * Hanya kiriman `di_jalan` yang punya ikon: yang sudah tiba atau belum
+   * berangkat tidak sedang mengirim, jadi tidak perlu indikator di peta.
+   * Posisi dihitung dari `journey.progress` pada geometri jalan, arah dari
+   * segmen di titik itu (lihat lib/route-flow.ts).
+   */
+  const syncTruk = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const hidup = new Set<string>();
+    const wakes: GeoJSON.Feature[] = [];
+    for (const row of routeRowsRef.current) {
+      if (row.journey?.state !== "di_jalan") continue;
+      const koordinat = row.road?.coordinates;
+      if (!koordinat || koordinat.length < 2) continue;
+      const jalur = siapkanJalur(koordinat as [number, number][]);
+      if (!jalur) continue;
+      const frac = Math.min(1, Math.max(0, row.journey.progress ?? 0));
+      const { posisi, arah } = posisiDanArah(jalur, frac);
+      hidup.add(row.id);
+      // Ekor: jejak beberapa kilometer terakhir. Ini yang membuat kendaraan
+      // terbaca "sedang bergerak ke arah sana", bukan titik yang melompat.
+      const ekor = wakeLine(jalur, frac);
+      if (ekor.length > 1) {
+        wakes.push({
+          type: "Feature",
+          properties: { id: row.id },
+          geometry: { type: "LineString", coordinates: ekor },
+        });
+      }
+      const derajat = Math.round(arah);
+      const ada = trukMarkersRef.current.get(row.id);
+      if (ada) {
+        geserTruk(row.id, ada, posisi, derajat);
+        continue;
+      }
+      trukMarkersRef.current.set(row.id, createTruckMarker(map, row, posisi, derajat));
+    }
+    // Kiriman yang selesai/berhenti: ikonnya dicabut, bukan dibiarkan menua.
+    for (const [id, marker] of Array.from(trukMarkersRef.current.entries())) {
+      if (hidup.has(id)) continue;
+      marker.remove();
+      trukMarkersRef.current.delete(id);
+    }
+    // Ekor digambar sebagai SATU layer (bukan satu per kiriman): menggambar 1–3
+    // garis lewat satu source jauh lebih murah daripada menambah layer dinamis.
+    const data: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: wakes };
+    const sumber = map.getSource(WAKE_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    if (wakes.length === 0) {
+      if (map.getLayer(WAKE_LAYER_ID)) map.removeLayer(WAKE_LAYER_ID);
+      if (sumber) map.removeSource(WAKE_SOURCE_ID);
+      return;
+    }
+    if (sumber) {
+      sumber.setData(data);
+      return;
+    }
+    map.addSource(WAKE_SOURCE_ID, { type: "geojson", data });
+    map.addLayer({
+      id: WAKE_LAYER_ID,
+      type: "line",
+      source: WAKE_SOURCE_ID,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#8B5CF6",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 5, 8, 10, 13],
+        "line-blur": 5,
+        "line-opacity": 0.55,
+      },
+    });
+  }, [geserTruk]);
+
   const syncRouteLayer = useCallback(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -892,10 +1295,13 @@ export default function SupplyMap({
     if (!aktif) {
       // Dimatikan / tidak ada data: bersihkan sepenuhnya, jangan tinggalkan
       // setengah lapisan yang tampak "masih ada jalur".
+      if (map.getLayer(ROUTE_HALO_DONE_LAYER_ID)) map.removeLayer(ROUTE_HALO_DONE_LAYER_ID);
+      if (map.getLayer(ROUTE_HALO_TODO_LAYER_ID)) map.removeLayer(ROUTE_HALO_TODO_LAYER_ID);
       if (map.getLayer(ROUTE_DONE_LAYER_ID)) map.removeLayer(ROUTE_DONE_LAYER_ID);
       if (map.getLayer(ROUTE_TODO_LAYER_ID)) map.removeLayer(ROUTE_TODO_LAYER_ID);
       if (map.getLayer(ROUTE_CASING_DONE_LAYER_ID)) map.removeLayer(ROUTE_CASING_DONE_LAYER_ID);
       if (map.getLayer(ROUTE_CASING_TODO_LAYER_ID)) map.removeLayer(ROUTE_CASING_TODO_LAYER_ID);
+      if (map.getLayer(ROUTE_GLINT_LAYER_ID)) map.removeLayer(ROUTE_GLINT_LAYER_ID);
       if (source) map.removeSource(ROUTE_SOURCE_ID);
       return;
     }
@@ -912,12 +1318,60 @@ export default function SupplyMap({
       ROUTE_LINE_COLORS.fail,
       ROUTE_LINE_COLORS.ok,
     ] as maplibregl.ExpressionSpecification;
-    // Alas dulu (render paling bawah), baru garis di atasnya.
+    const warnaSisa = [
+      "match",
+      ["get", "tone"],
+      "fail",
+      ROUTE_TODO_COLORS.fail,
+      ROUTE_TODO_COLORS.ok,
+    ] as maplibregl.ExpressionSpecification;
+    // HANYA lapisan dasar + SATU halo tenang (redesign 20 Okt 2026).
+    //
+    // Versi sebelumnya menumpuk tiga efek sekaligus — halo lebar, inti neon
+    // violet, denyut 1,2 dtk, plus tiga titik mengalir — pada warna di luar
+    // palet status. Hasilnya ramai: mata mengejar gerak yang tidak membawa
+    // informasi tambahan. Aturan yang dipakai sekarang: SATU elemen bergerak
+    // (ikon mobil, karena posisinya memang data), garis hanya memberi penekanan.
+    //
+    // Garis tetap membawa arti lamanya (peta-patterns: putus = belum ditempuh):
+    // padat hijau = sudah ditempuh, putus biru = sisa perjalanan.
+    const sedangJalan: maplibregl.FilterSpecification = ["==", ["get", "state"], "di_jalan"];
+    // Halo sewarna nadanya, bukan warna baru: menaikkan bobot visual tanpa
+    // menambah arti kedua yang harus dipelajari pembaca.
+    map.addLayer({
+      id: ROUTE_HALO_DONE_LAYER_ID,
+      type: "line",
+      source: ROUTE_SOURCE_ID,
+      filter: ["all", ["==", ["get", "kind"], "done"], sedangJalan],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": warnaGaris,
+        "line-width": 20,
+        "line-blur": 12,
+        "line-opacity": 0.26,
+      },
+    });
+    map.addLayer({
+      id: ROUTE_HALO_TODO_LAYER_ID,
+      type: "line",
+      source: ROUTE_SOURCE_ID,
+      filter: ["all", ["==", ["get", "kind"], "todo"], sedangJalan],
+      layout: { "line-cap": "butt", "line-join": "round" },
+      paint: {
+        "line-color": warnaSisa,
+        "line-width": 18,
+        "line-blur": 12,
+        "line-opacity": 0.22,
+      },
+    });
+
+    // Alas putih lalu garis di atasnya. Urutan ini yang membuat garis terbaca di
+    // basemap terang; halo tadi paling bawah supaya tidak menutupi pin.
     map.addLayer({
       id: ROUTE_CASING_DONE_LAYER_ID,
       type: "line",
       source: ROUTE_SOURCE_ID,
-      filter: ["==", ["get", "kind"], "done"],
+      filter: ["all", ["==", ["get", "kind"], "done"], ["!=", ["get", "quiet"], true]],
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-color": "#FFFFFF",
@@ -929,7 +1383,7 @@ export default function SupplyMap({
       id: ROUTE_CASING_TODO_LAYER_ID,
       type: "line",
       source: ROUTE_SOURCE_ID,
-      filter: ["==", ["get", "kind"], "todo"],
+      filter: ["all", ["==", ["get", "kind"], "todo"], ["!=", ["get", "quiet"], true]],
       layout: { "line-cap": "butt", "line-join": "round" },
       paint: {
         "line-color": "#FFFFFF",
@@ -944,7 +1398,7 @@ export default function SupplyMap({
       id: ROUTE_DONE_LAYER_ID,
       type: "line",
       source: ROUTE_SOURCE_ID,
-      filter: ["==", ["get", "kind"], "done"],
+      filter: ["all", ["==", ["get", "kind"], "done"], ["!=", ["get", "quiet"], true]],
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-color": warnaGaris,
@@ -956,26 +1410,68 @@ export default function SupplyMap({
       id: ROUTE_TODO_LAYER_ID,
       type: "line",
       source: ROUTE_SOURCE_ID,
-      filter: ["==", ["get", "kind"], "todo"],
+      filter: ["all", ["==", ["get", "kind"], "todo"], ["!=", ["get", "quiet"], true]],
       layout: { "line-cap": "butt", "line-join": "round" },
       paint: {
-        // Sisa perjalanan = perkiraan, jadi warnanya BUKAN hijau yang sudah
-        // ditempuh. Dua warna berbeda membuat "sudah dikirim" dan "masih jalan"
-        // terbaca tanpa membuka legenda.
-        "line-color": [
-          "match",
-          ["get", "tone"],
-          "fail",
-          ROUTE_TODO_COLORS.fail,
-          ROUTE_TODO_COLORS.ok,
-        ] as maplibregl.ExpressionSpecification,
+        "line-color": warnaSisa,
         "line-width": ROUTE_TODO_WIDTH,
         // Celah lebih lebar dari garis (4 vs 3): pola putus harus terbaca
-        // sebagai "belum", bukan sebagai garis padat yang terputus-putus.
+        // sebagai "belum", bukan garis padat yang terputus-putus.
         "line-dasharray": [4, 3],
         "line-opacity": routeFokusRef.current ? 0.26 : 0.62,
       },
     });
+
+    // Kiriman yang sudah tiba: satu garis utuh, abu-abu, putus-putus, tipis.
+    // Tidak diberi halo/glint/ikon — peta tetap tenang, tetapi jalur yang sudah
+    // ditempuh masih terbaca sebagai konteks.
+    // Jalur yang sudah tiba: alas putih + garis nada (hijau/merah) yang diredupkan.
+    // Versi pertama memakai abu-abu 2,5px @0,32 — terukur saat audit 21 Okt 2026:
+    // nyaris tak terlihat di basemap terang. Sekarang warnanya tetap dari palet
+    // status (bukan warna baru, supaya legenda tidak berbohong), tetapi lebih
+    // tebal dan diberi alas supaya terbaca.
+    map.addLayer({
+      id: `${ROUTE_QUIET_LAYER_ID}-casing`,
+      type: "line",
+      source: ROUTE_SOURCE_ID,
+      filter: ["==", ["get", "quiet"], true],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#FFFFFF",
+        "line-width": 7.6,
+        "line-opacity": 0.75,
+      },
+    });
+    map.addLayer({
+      id: ROUTE_QUIET_LAYER_ID,
+      type: "line",
+      source: ROUTE_SOURCE_ID,
+      filter: ["==", ["get", "quiet"], true],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#475569",
+        "line-width": 4.4,
+        "line-dasharray": [7, 5],
+        "line-opacity": 0.75,
+      },
+    });
+
+    // Kilau di atas bagian yang SUDAH ditempuh. Putih, sangat tipis, dan hanya
+    // di potongan padat — jadi ia mempertegas "yang benar-benar sudah jalan",
+    // bukan menambah kode warna baru yang harus dipelajari pembaca.
+    map.addLayer({
+      id: ROUTE_GLINT_LAYER_ID,
+      type: "line",
+      source: ROUTE_SOURCE_ID,
+      filter: ["all", ["==", ["get", "kind"], "done"], sedangJalan],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#FFFFFF",
+        "line-width": ROUTE_GLINT_WIDTH,
+        "line-opacity": routeFokusRef.current ? 0.15 : 0.62,
+      },
+    });
+
     // Klik berlaku di KEDUA lapisan: kalau hanya lapisan putus-putus yang bisa
     // diklik, kiriman yang sudah tiba (garisnya padat semua) kehilangan popup.
     const bukaPopupJalur = (event: maplibregl.MapLayerMouseEvent) => {
@@ -985,12 +1481,18 @@ export default function SupplyMap({
       // Klik garis = sorot kiriman ini (Arah C). Popup tetap muncul: ia yang
       // dibaca di tempat klik, sedangkan kartu kiriman di bawah peta memuat
       // stepper, rincian, dan riwayatnya.
+      // Klik pada ikon truk juga sampai ke layer garis di bawahnya; jangan
+      // ganti popup truk dengan popup jalur untuk klik yang sama.
+      if (Date.now() - trukKlikTerakhir < 600) return;
       onFocusRouteRef.current?.(row.id);
-      new maplibregl.Popup({ offset: 10 })
-        .setLngLat(event.lngLat)
-        .setDOMContent(routePopupNode(row))
-        .addTo(map);
+      jagaPopup(
+        new maplibregl.Popup({ offset: 10, maxWidth: "320px" })
+          .setLngLat(event.lngLat)
+          .setDOMContent(routePopupNode(row)),
+        map
+      ).addTo(map);
     };
+    map.on("click", ROUTE_GLINT_LAYER_ID, bukaPopupJalur);
     map.on("click", ROUTE_DONE_LAYER_ID, bukaPopupJalur);
     map.on("click", ROUTE_TODO_LAYER_ID, bukaPopupJalur);
   }, []);
@@ -1012,6 +1514,7 @@ export default function SupplyMap({
     atur(ROUTE_TODO_LAYER_ID, redup ? 0.26 : 0.62);
     atur(ROUTE_CASING_DONE_LAYER_ID, redup ? 0.15 : 0.85);
     atur(ROUTE_CASING_TODO_LAYER_ID, redup ? 0.12 : 0.5);
+    atur(ROUTE_GLINT_LAYER_ID, redup ? 0.15 : 0.5);
   }, []);
 
   /** Sinkronkan garis SOROTAN (Arah C).
@@ -1020,6 +1523,13 @@ export default function SupplyMap({
    *  dan saat tidak ada yang disorot seluruh layer + source DIBUANG — tidak boleh
    *  tertinggal garis sorotan untuk kiriman yang sudah dilepas. */
   const syncFocusLayer = useCallback(() => {
+    const warnaSisa = [
+      "match",
+      ["get", "tone"],
+      "fail",
+      ROUTE_TODO_COLORS.fail,
+      ROUTE_TODO_COLORS.ok,
+    ] as maplibregl.ExpressionSpecification;
     const map = mapRef.current;
     if (!map) return;
     const data = focusLinesRef.current;
@@ -1059,19 +1569,19 @@ export default function SupplyMap({
       filter: ["==", ["get", "kind"], "todo"],
       layout: { "line-cap": "butt", "line-join": "round" },
       paint: {
-        "line-color": [
-          "match",
-          ["get", "tone"],
-          "fail",
-          ROUTE_TODO_COLORS.fail,
-          ROUTE_TODO_COLORS.ok,
-        ] as maplibregl.ExpressionSpecification,
+        "line-color": warnaSisa,
         "line-width": ROUTE_FOCUS_WIDTH,
         "line-dasharray": [4, 3],
         "line-opacity": 0.95,
       },
     });
   }, [dimBaseRoutes]);
+
+  /** Pemasok yang punya kiriman `di_jalan` saat ini. Pin-nya diberi isian warna
+   *  aktif + denyut; sisanya tetap lingkaran bergaris. Diisi dari data jalur,
+   *  bukan dari blok `shipping` pemasok (blok itu menghitung kiriman yang sudah
+   *  tiba juga). */
+  const jalanRef = useRef<Set<string>>(new Set());
 
   /** Sinkronkan penanda PEMASOK: hanya saat lapisan dinyalakan DAN zoom cukup
    *  dekat. Semua penanda dibuang saat lapisan dimatikan atau zoom dijauhkan —
@@ -1080,7 +1590,9 @@ export default function SupplyMap({
     const map = mapRef.current;
     if (!map) return;
     const markers = supplierMarkersRef.current;
-    const visible = showSuppliersRef.current && supplierPinsVisible(map.getZoom());
+    // Lapisan pemasok selalu hidup dan TIDAK digerbang zoom: titiknya digambar
+    // di semua tingkat perbesaran (lihat catatan di lib/supplier-pins.ts).
+    const visible = showSuppliersRef.current;
     const rows = visible ? supplierRowsRef.current : [];
     const showLabels = visible && supplierLabelsVisible(map.getZoom());
     const keep = new Set(rows.map((row) => row.id));
@@ -1093,12 +1605,33 @@ export default function SupplyMap({
     rows.forEach((row) => {
       const existing = markers.get(row.id);
       if (existing) {
-        refreshSupplierPin(existing, row, showLabels, supplierReachRef.current);
+        refreshSupplierPin(
+          existing,
+          row,
+          showLabels,
+          supplierReachRef.current,
+          jalanRef.current.has(row.id),
+          map
+        );
         return;
       }
-      markers.set(row.id, createSupplierPin(map, row, showLabels, supplierReachRef.current));
+      markers.set(
+        row.id,
+        createSupplierPin(map, row, showLabels, supplierReachRef.current, jalanRef.current.has(row.id))
+      );
     });
   }, []);
+
+  // Data jalur datang setelah peta hidup: perbarui himpunan pemasok aktif lalu
+  // segarkan penanda, supaya warna pin tidak bergantung pada urutan permintaan.
+  useEffect(() => {
+    jalanRef.current = new Set(
+      routePinRows
+        .filter((row) => row.journey?.state === "di_jalan")
+        .map((row) => row.supplierId)
+    );
+    syncSupplierMarkers();
+  }, [routePinRows, syncSupplierMarkers]);
 
   useEffect(() => {
     if (!mapContainer.current || mapRef.current || !locationsRef.current?.length) return;
@@ -1106,6 +1639,7 @@ export default function SupplyMap({
     // dijalankan (aturan react-hooks/exhaustive-deps).
     const markers = markersRef.current;
     const supplierMarkers = supplierMarkersRef.current;
+    const trukMarkers = trukMarkersRef.current;
     const sebar = sebarRef.current;
     const map = new maplibregl.Map({
       container: mapContainer.current,
@@ -1183,12 +1717,11 @@ export default function SupplyMap({
     });
     syncMarkers();
     syncClusters();
-    // Zoom menentukan apakah pin pemasok boleh tampil (mereka baru muncul di
-    // zoom 8+). Keadaan zoom juga dipakai untuk memberi tahu pengguna kenapa
-    // lapisan yang dinyalakan masih kosong.
-    setZoomEnough(supplierPinsVisible(map.getZoom()));
+    // Zoom hanya menentukan apakah NAMA pemasok ikut ditulis di samping titik.
+    // Keadaan ini juga dipakai memberi tahu pengguna kenapa pin tampil tanpa nama.
+    setZoomEnough(supplierLabelsVisible(map.getZoom()));
     const onZoom = () => {
-      setZoomEnough(supplierPinsVisible(map.getZoom()));
+      setZoomEnough(supplierLabelsVisible(map.getZoom()));
       syncSupplierMarkers();
       syncClusters();
     };
@@ -1239,6 +1772,8 @@ export default function SupplyMap({
       mapRef.current = null;
       markers.clear();
       supplierMarkers.clear();
+      trukMarkers.forEach((marker) => marker.remove());
+      trukMarkers.clear();
       clusterMarkersRef.current = [];
       sebar.clear();
       pinSignaturesRef.current = {};
@@ -1266,7 +1801,19 @@ export default function SupplyMap({
     routeRowsRef.current = routePinRows;
     routeFeaturesRef.current = routeFeatures;
     syncRouteLayer();
-  }, [showRoutes, routePinRows, routeFeatures, syncRouteLayer]);
+    // Hanya berdenyut kalau memang ada kiriman yang sedang berjalan: lapisan
+    // glow tanpa isi tidak perlu animasi.
+    const adaJalan = routeFeatures.features.some(
+      (f) => (f.properties as { state?: string | null }).state === "di_jalan"
+    );
+    syncTruk();
+  }, [
+    showRoutes,
+    routePinRows,
+    routeFeatures,
+    syncRouteLayer,
+    syncTruk,
+  ]);
 
   // Sorotan kiriman (Arah C): pilihan + geometrinya. Tidak menyentuh kamera peta.
   useEffect(() => {
@@ -1414,43 +1961,10 @@ export default function SupplyMap({
               keputusan pemilik 2026-10-16): sebelumnya panel kendali menutupi 39%
               luas kanvas (terukur 650x262 px dari 947x460 px), tepat di atas Jawa
               Barat tempat pin SPPG dan jalur kiriman berada. */}
-          {(Boolean(suppliers) || Boolean(supplierRoutes)) && (
-            <div className="map-overlay-toggles" role="group" aria-label="Lapisan peta">
-              {/* Ikon saja (19 Okt 2026). Nama aksesibel tetap membawa jumlah
-                  ("Pemasok (6)") dan tooltip-nya membawa aksi ("Tampilkan …"),
-                  karena teksnya hilang dari layar. Keadaan nyala/mati TIDAK
-                  hanya dibedakan warna: `aria-pressed` + garis miring di ikon
-                  saat mati (ui-ux-pro-max prioritas 1: jangan andalkan warna). */}
-              {Boolean(suppliers) && (
-                <button
-                  type="button"
-                  className="map-layer-toggle map-supplier-toggle"
-                  aria-pressed={showSuppliers}
-                  aria-label={supplierToggleLabel(supplierMapRows)}
-                  title={supplierToggleAction(supplierMapRows, showSuppliers)}
-                  onClick={() => setShowSuppliers((value) => !value)}
-                >
-                  <span className="map-layer-toggle-icon">
-                    <IkonLapisanPemasok />
-                  </span>
-                </button>
-              )}
-              {Boolean(supplierRoutes) && (
-                <button
-                  type="button"
-                  className="map-layer-toggle map-route-toggle"
-                  aria-pressed={showRoutes}
-                  aria-label={routeToggleLabel(routePinRows)}
-                  title={routeToggleAction(routePinRows, showRoutes)}
-                  onClick={() => setShowRoutes((value) => !value)}
-                >
-                  <span className="map-layer-toggle-icon">
-                    <IkonLapisanJalur />
-                  </span>
-                </button>
-              )}
-            </div>
-          )}
+          {/* Tombol lapisan peta DIHAPUS (permintaan 20 Okt 2026): pin pemasok
+              dan jalur kiriman selalu tampil, jadi sakelar "tampilkan/sembunyikan"
+              tidak punya keadaan yang bisa dipilih lagi. Legenda di bawah kanvas
+              tetap menerangkan warna garis dan bentuk penanda. */}
           {/* Sematan "Info map" dilebur ke panel "Rincian lapisan peta" di
               bawah (19 Okt 2026). Alasannya bukan ruang: isi panel itu memang
               legenda yang SAMA dengan baris legenda di bawah kanvas (status,
@@ -1604,11 +2118,18 @@ export default function SupplyMap({
         {/* Peringatan zoom sengaja DI LUAR panel yang bisa dilipat: saat sakelar
             pemasok dinyalakan pada zoom jauh, alasannya harus muncul seketika —
             bukan menunggu pengguna membuka rincian. */}
+        {/* Pin pemasok tidak lagi digerbang zoom (20 Okt 2026): yang perlu
+            diterangkan tinggal NAMA-nya. Kalimatnya di luar panel lipat supaya
+            langsung terbaca. */}
         {Boolean(suppliers) && showSuppliers && zoomEnough === false && (
           <p className="map-layer-hint" role="status">
-            Perbesar peta untuk melihat {supplierSummary.total} pemasok — pin pemasok
-            muncul pada zoom {SUPPLIER_PIN_MIN_ZOOM} ke atas, nama pemasok pada zoom{" "}
-            {SUPPLIER_LABEL_MIN_ZOOM} ke atas.
+            {supplierSummary.total} pemasok tampil sebagai titik; nama pemasok muncul
+            pada zoom {SUPPLIER_LABEL_MIN_ZOOM} ke atas.
+          </p>
+        )}
+        {Boolean(supplierRoutes) && jumlahJalan > 0 && (
+          <p className="map-layer-hint" role="status">
+            Ikon mobil menandai posisi kiriman yang sedang berjalan sekarang.
           </p>
         )}
         {showStatusList && (

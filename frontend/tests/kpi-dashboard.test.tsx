@@ -185,7 +185,7 @@ describe("pemilih periode KPI", () => {
     const html = renderToStaticMarkup(<KPIDashboard kpi={ENVELOPE_AVAILABLE} />);
     expect(html).toContain("kpi-period");
     expect(html).toContain('role="group"');
-    for (const label of ["24 jam", "7 hari", "30 hari"]) {
+    for (const label of ["24 jam", "7 hari", "1 bulan"]) {
       expect(html).toContain(label);
     }
   });

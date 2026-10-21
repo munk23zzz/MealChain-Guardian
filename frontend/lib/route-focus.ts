@@ -50,20 +50,31 @@ export function focusRows(routes: unknown): SupplierRoute[] {
   });
 }
 
-/** Opsi pemilih: satu baris per kiriman (tanpa opsi "semua" — itu tombol tersendiri). */
+/**
+ * Opsi pemilih: satu baris per kiriman **yang sedang berjalan** (tanpa opsi
+ * "semua" — itu tombol tersendiri).
+ *
+ * Sejak 20 Okt 2026 peta hanya menggambar jalur `di_jalan`, jadi daftar pilihan
+ * disaring dengan aturan yang SAMA: kiriman yang sudah tiba atau belum berangkat
+ * tidak ditawarkan, karena memilihnya tidak akan menampilkan apa pun di kanvas.
+ * Data jalur sendiri tetap utuh — ini soal apa yang ditawarkan, bukan apa yang
+ * disimpan.
+ */
 export function focusOptions(routes: unknown): FocusOption[] {
-  return focusRows(routes).map((row) => {
-    const headline = shipmentHeadline(row);
-    return {
-      id: row.id,
-      // Dua batch bisa berbagi id (pasangan pemasok-tujuan sama); batchId
-      // membuat kunci daftar tetap unik tanpa mengubah id pemilihan.
-      batchId: row.batchId,
-      label: focusLabel(row),
-      state: headline.label,
-      tone: headline.tone,
-    };
-  });
+  return focusRows(routes)
+    .filter((row) => row.journey?.state === "di_jalan")
+    .map((row) => {
+      const headline = shipmentHeadline(row);
+      return {
+        id: row.id,
+        // Dua batch bisa berbagi id (pasangan pemasok-tujuan sama); batchId
+        // membuat kunci daftar tetap unik tanpa mengubah id pemilihan.
+        batchId: row.batchId,
+        label: focusLabel(row),
+        state: headline.label,
+        tone: headline.tone,
+      };
+    });
 }
 
 /**

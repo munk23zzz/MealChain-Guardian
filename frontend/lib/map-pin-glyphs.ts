@@ -7,10 +7,14 @@
  * membaca legenda lebih dulu. Ikonnya sengaja siluet sederhana (garis 1,8 px,
  * tanpa detail kecil) supaya tetap terbaca pada ukuran 13 px di kanvas.
  *
- * Aturan:
- * - `sppg` = bangunan/gudang dapur (fasilitas penerima).
- * - `supplier` = truk (pemasok yang mengirim).
- * - Ikon selalu `aria-hidden`: maknanya sudah dibawa aria-label penanda.
+ * Pembagian makna (redesign 20 Okt 2026):
+ * - `sppg`  = bangunan dapur/gudang — fasilitas PENERIMA. Bentuk pin: air mata.
+ * - `supplier` = kardus/paket — sumber barang. Bentuk pin: lingkaran bergaris.
+ *   Dulu ikonnya truk; sekarang kardus, supaya metafora "kendaraan" hanya
+ *   dipakai satu penanda: ikon mobil yang benar-benar bergerak di peta.
+ *
+ * Ikonnya sengaja siluet sederhana (garis 1,9 px, tanpa detail kecil) supaya
+ * tetap terbaca pada ukuran 14 px di kanvas.
  */
 
 export type PinGlyphKind = "sppg" | "supplier";
@@ -27,12 +31,14 @@ export const PIN_GLYPHS: Record<PinGlyphKind, Glyph> = {
   sppg: {
     paths: ["M4 20h16", "M6.5 20V10.6L12 7l5.5 3.6V20", "M10.2 20v-4.4h3.6V20"],
   },
-  // Truk: bak, kabin, dan dua roda.
+  // Kardus: badan, tutup atas (dua sisi), dan garis pita di tengah.
+  // Dulu ikon pemasok adalah truk; sekarang kardus supaya metafora "kendaraan"
+  // hanya dipakai satu penanda: ikon mobil yang benar-benar bergerak di peta.
   supplier: {
-    paths: ["M3 16.5V7.5h9.5v9", "M12.5 10.5h3.2L19 13.6v2.9h-6.5", "M3 16.5h16"],
-    circles: [
-      { cx: 6.6, cy: 17.6, r: 1.7 },
-      { cx: 15.6, cy: 17.6, r: 1.7 },
+    paths: [
+      "M4.5 8.4 12 4.6l7.5 3.8v7.8L12 20l-7.5-3.8z",
+      "M4.5 8.4 12 12.2l7.5-3.8",
+      "M12 12.2V20",
     ],
   },
 };

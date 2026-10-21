@@ -40,7 +40,14 @@ const PAYLOAD = {
       destination_id: "L2",
       destination_name: "Bandung",
       destination: { latitude: -6.9, longitude: 107.6 },
-      journey: { state: "sudah_tiba", state_label: "Sudah tiba", eta_at: "2026-10-16T13:00:00+00:00" },
+      journey: {
+        dispatched_at: "2026-10-16T12:10:00+00:00",
+        eta_at: "2026-10-16T13:00:00+00:00",
+        state: "di_jalan",
+        state_label: "Di jalan",
+        remaining_min: 35,
+        progress: 0.4,
+      },
     },
   ],
 };
@@ -84,6 +91,23 @@ describe("RouteFocusPicker", () => {
     expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
     const aktif = html.slice(html.indexOf("aria-pressed=\"true\""));
     expect(aktif).toContain("Supplier A → JKT");
+  });
+
+  it("kiriman yang sudah tiba tidak ditawarkan", () => {
+    // Aturan yang sama dengan peta: hanya `di_jalan` yang punya jalur di kanvas.
+    const selesai = {
+      routes: [
+        {
+          ...PAYLOAD.routes[0],
+          journey: {
+            ...(PAYLOAD.routes[0].journey as Record<string, unknown>),
+            state: "sudah_tiba",
+            state_label: "Sudah tiba",
+          },
+        },
+      ],
+    };
+    expect(focusOptions(selesai)).toHaveLength(0);
   });
 
   it("tidak ada kiriman → tidak ada bentuk kosong yang dirender", () => {

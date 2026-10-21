@@ -1,0 +1,25 @@
+{
+  "langkah": "alias-token-primary-danger",
+  "sebelum": {
+    "waktu": "2026-10-20 10.58 WIB",
+    "tabDiperiksa": 9,
+    "sisaWarnaWarisan": 6,
+    "elemen": [
+      { "tab": "Pemasok", "cls": "board-sort-pill is-active", "color": "rgb(0, 92, 85)", "borderColor": "rgb(0, 92, 85)", "teks": "Paling mendesak" },
+      { "tab": "KPI & Kualitas Agen", "cls": "commodity-pill kpi-period-pill is-active", "color": "rgb(0, 92, 85)", "borderColor": "rgb(0, 92, 85)", "teks": "24 jam" }
+    ],
+    "catatan": "teal #005C55 berasal dari cadangan hex `var(--primary, #005c55)` padahal --primary tidak pernah dideklarasikan"
+  },
+  "sesudah": {
+    "waktu": "2026-10-20 11.00 WIB",
+    "tabDiperiksa": 9,
+    "sisaWarnaWarisan": 0,
+    "elemen": [
+      { "tab": "Pemasok", "cls": "board-sort-pill is-active", "color": "rgb(37, 99, 235)", "borderColor": "rgb(37, 99, 235)", "ariaPressed": "true" },
+      { "tab": "KPI & Kualitas Agen", "cls": "commodity-pill kpi-period-pill is-active", "color": "rgb(37, 99, 235)", "borderColor": "rgb(37, 99, 235)", "ariaPressed": "true" },
+      { "tab": "Overview", "cls": "commodity-pill route-focus-pill is-active", "color": "rgb(29, 78, 216)", "borderColor": "rgb(37, 99, 235)", "ariaPressed": "true" }
+    ]
+  },
+  "kontras": { "teal #005C55 vs putih": 7.89, "biru #2563EB vs putih": 5.17, "ambang": 4.5 },
+  "tes": { "berkas": "tests/token-alias-css.test.ts", "sebelum": "6 failed", "sesudah": "6 passed" }
+}

@@ -70,6 +70,26 @@
   --grey-500: #475569;          /* teks sekunder, caption (slate-600) */
   /* Warna STATUS sengaja TETAP gelap supaya kontras teks >= 4,5:1 (AA). */
   --status-safe: #2E7D32;       /* PASS / normal */
+  /* "Aktif" — dipakai HANYA untuk penanda yang sedang bergerak/mengirim (pin
+     pemasok pengirim + puck mobil). Bukan warna status: violet tidak dipakai
+     makna lain di peta, jadi ia menandai "hidup" tanpa menyamar sebagai
+     aman/bahaya. Kontras ke tile OSM terang ~4,3:1. */
+  --status-live: #8B5CF6;
+  /* Sisa perjalanan: keluarga warna yang SAMA dengan --status-live, hanya lebih
+     terang. Dulu sisa memakai biru --accent-strong sementara bagian yang sudah
+     ditempuh hijau; hasilnya dua warna berbeda untuk satu kiriman dan garis
+     tenggelam di basemap terang (audit 21 Okt 2026). */
+  --route-live-soft: #8B5CF6;
+  /* Bagian yang SUDAH ditempuh: violet lebih tua (kontras 4,97:1 di tile OSM
+     terang) supaya terbaca; sisa perjalanan memakai --route-live-soft (3,69:1,
+     masih lolos ambang grafik 3:1) dan dibedakan lewat pola putus. */
+  --route-live-strong: #7C3AED;
+  /* Jalur yang sudah tiba: abu netral, sengaja di luar palet status. */
+  --route-arrived: #475569;
+  /* "Menyala" — khusus penanda bergerak (kiriman sedang berjalan). Bukan warna
+     status: nilainya terang supaya terbaca sebagai cahaya di atas garis gelap.
+     HARUS sama dengan ROUTE_LIVE_COLORS.ok di lib/supplier-routes.ts (MapLibre
+     tidak membaca var()); dikunci oleh tests/map-live-color.test.ts. */
   /* Teks hijau DI ATAS tint hijau butuh nada lebih tua: #2E7D32 di atas
      rgba(46,125,50,.1) hanya 4,49:1 — gagal AA dengan selisih 0,01 (temuan
      audit Fase 7, terukur di axe). Dipakai HANYA sebagai warna teks di dalam
@@ -88,6 +108,13 @@
   --ink-muted: #475569;         /* teks sekunder (slate-600) */
   --accent: #1D4ED8;            /* hover aksi primer (blue-700) */
   --accent-strong: #2563EB;     /* aksi primer (blue-600) */
+  /* Alias tema lama. Blok agenda, pil periode KPI, dan pil urutan papan masih
+     merujuk `--primary` / `--danger`; tanpa deklarasi ini rujukannya jatuh ke
+     cadangan hex teal #005C55 (terukur: pil "24 jam" & "Paling mendesak"
+     berwarna rgb(0, 92, 85)) padahal docs/design.md §376 menetapkan keadaan
+     terpilih = --accent-strong. Alias, bukan hex baru. */
+  --primary: var(--accent-strong);
+  --danger: var(--status-danger);
   --accent-soft: #EFF6FF;       /* tint aksen: item rail aktif, chip peran (blue-50) */
   /* Kotak bukti (Fase 3 §5.6; tema terang 19 Okt 2026): dulu SATU-SATUNYA
      permukaan gelap (#0F172A) di tema terang. Kini ikut tema terang dengan
@@ -106,11 +133,39 @@
   --terminal-ink: #0F172A;
   --terminal-accent: #2563EB;
   --radius: 12px;               /* kartu bento; 16 → 12 (17 Okt: "UI kebesaran") */
+  /* Skala radius kanonik. Sebelum 20 Okt 2026 ada 12 nilai mentah (2–14 px) dan
+     dua token hantu (`--r-1`, `--r-2`) yang tidak pernah dideklarasikan sehingga
+     `.dc-agent` & `.dc-steps-fold` tampil bersudut tajam. Tujuh nilai di bawah
+     adalah satu-satunya yang sah; docs/design.md menyebut 12 (kartu), 10
+     (kontrol, §521/§725), 8 (CTA, §2014), 14 (dock keputusan, §2007). */
+  --radius-dock: 14px;          /* dock/panel kerja yang melayang */
+  --radius-control: 10px;       /* kontrol besar: input, select, modal */
+  --radius-control-sm: 8px;     /* kontrol kecil, tombol, item rail */
+  --radius-chip: 4px;           /* chip, lencana, penanda peta */
   /* Elevasi ultra-halus ala Bento Modern: L1 rambut, L2 hover, L3 modal */
   --shadow-1: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.03);
   --shadow-2: 0 4px 12px rgba(15, 23, 42, 0.07), 0 2px 4px rgba(15, 23, 42, 0.04);
   --shadow-3: 0 16px 40px rgba(15, 23, 42, 0.22), 0 4px 10px rgba(15, 23, 42, 0.06);
+  /* Bayangan peran (20 Okt 2026). Sebelumnya 17 literal `rgba(15, 23, 42, …)`
+     dengan 10 nilai alpha untuk tiga peran yang sama: penanda peta, panel
+     melayang, dan kontrol kecil. Nilai di sini = varian yang paling sering
+     dipakai, sehingga elemen menyebut PERAN, bukan angka. -shadow-1/2/3 tetap
+     elevasi umum; -shadow-dock adalah komposit yang disebut docs/design.md §2007
+     ("--shadow-2 + satu lapis bayangan 40 px"). */
+  --shadow-pin: 0 0 0 2px var(--surface), 0 1px 5px rgba(15, 23, 42, 0.35);
+  --shadow-pin-hover: 0 0 0 2px var(--surface), 0 3px 9px rgba(15, 23, 42, 0.42);
+  --shadow-pin-soft: 0 1px 4px rgba(15, 23, 42, 0.2);
+  --shadow-pin-core: 0 1px 5px rgba(15, 23, 42, 0.35);
+  --shadow-pin-active: 0 0 0 4px rgba(37, 99, 235, 0.45), 0 0 0 2px var(--surface),
+    0 2px 6px rgba(15, 23, 42, 0.35);
+  --shadow-cluster: 0 2px 8px rgba(15, 23, 42, 0.4);
+  --shadow-pop: 0 16px 40px rgba(15, 23, 42, 0.18), 0 4px 10px rgba(15, 23, 42, 0.06);
+  --shadow-float: 0 8px 24px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04);
+  --shadow-control: 0 1px 3px rgba(15, 23, 42, 0.14);
+  --shadow-dock: var(--shadow-2), 0 16px 40px rgba(15, 23, 42, 0.1);
+  --ring-hairline: 0 0 0 1px rgba(15, 23, 42, 0.25);
   --font-data: "Fira Code", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-ui: "Fira Sans", Inter, system-ui, sans-serif;
   /* Alias token yang dipakai blok bawah */
   --border: var(--line);
   --card: var(--surface);
@@ -167,12 +222,24 @@
 
 body {
   margin: 0;
-  font-family: "Fira Sans", Inter, system-ui, sans-serif;
+  font-family: var(--font-ui);
   font-size: var(--fs-3);
   line-height: var(--lh-body);
   color: var(--ink);
   background: var(--bg-page);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Angka & potongan kode memakai huruf data. Sebelum ini `code` tidak punya
+   font-family sama sekali, jadi jatuh ke `monospace` bawaan peramban (terukur
+   pada `GET /agenda` di tab Hari Ini) — berbeda dari angka Fira Code di
+   tempat lain. */
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Semua angka data pakai tabel-tabular biar kolom sejajar */
@@ -418,7 +485,7 @@ dl dd,
   background: var(--terminal);
   color: var(--terminal-ink);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   padding: 8px 10px;
   font-family: var(--font-data);
   font-size: var(--fs-1);
@@ -441,7 +508,7 @@ dl dd,
 
 .approval-modal {
   border: 2px solid var(--navy-700);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   padding: 16px;
   max-width: 420px;
 }
@@ -450,7 +517,7 @@ dl dd,
   background: var(--accent-strong);
   color: var(--ink-inverse);
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   padding: 8px 16px;
   font-size: var(--fs-3);
   font-weight: 500;
@@ -490,7 +557,7 @@ a:focus-visible {
   margin: 16px 0;
   padding: 12px 16px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
 }
 /* Judul panel ini belum punya aturan sendiri — h2 tanpa aturan jatuh ke
    bawaan peramban (21px) sehingga tampak lebih besar dari judul kartu lain. */
@@ -711,7 +778,7 @@ a:focus-visible {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 28px 26px;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--shadow-float);
 }
 
 .login-form h2 {
@@ -746,7 +813,7 @@ a:focus-visible {
 
 .field input {
   border: 1px solid var(--line-input);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   padding: 10px 12px;
   font-size: var(--fs-3);
   font-weight: 400;
@@ -763,7 +830,7 @@ a:focus-visible {
 .login-error {
   margin: 0;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   font-size: var(--fs-2);
   font-style: normal;
 }
@@ -814,7 +881,7 @@ a:focus-visible {
   font-weight: 600;
   color: var(--accent-strong);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   transition: color 0.18s ease;
 }
 
@@ -852,7 +919,7 @@ a:focus-visible {
   padding: 6px 10px;
   background: rgba(198, 40, 40, 0.1);
   border-left: 3px solid var(--status-danger);
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   font-size: var(--fs-2);
   color: var(--status-danger);
 }
@@ -861,7 +928,7 @@ a:focus-visible {
   margin: 14px 0;
   padding: 12px 16px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--surface);
 }
 
@@ -886,7 +953,7 @@ a:focus-visible {
   position: relative;
   padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface-sunken);
 }
 
@@ -928,13 +995,13 @@ a:focus-visible {
   width: 100%;
   padding: 12px;
   border: 1px dashed var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface-sunken);
 }
 
 .reject-reason-box textarea {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   padding: 8px 10px;
   font: inherit;
   font-size: var(--fs-3);
@@ -954,7 +1021,7 @@ a:focus-visible {
 .role-hero {
   display: block;
   padding: 12px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--ink);
@@ -1041,7 +1108,7 @@ a:focus-visible {
   min-width: 150px;
   padding: 8px 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   font: inherit;
   background: var(--surface);
 }
@@ -1226,7 +1293,7 @@ a:focus-visible {
   padding: 8px 10px;
   background: var(--neutral-bg);
   border: 1px solid var(--neutral-border);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   font-size: var(--fs-2);
   line-height: var(--lh-body);
   color: var(--ink);
@@ -1247,7 +1314,7 @@ a:focus-visible {
   justify-content: space-between;
   margin: 0 0 6px;
   padding: 12px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--ink);
@@ -1347,7 +1414,7 @@ a:focus-visible {
   width: 32px;
   height: 32px;
   flex: none;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: linear-gradient(135deg, var(--accent-strong) 0%, var(--accent) 100%);
   color: #FFFFFF;
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
@@ -1374,7 +1441,7 @@ a:focus-visible {
   height: 32px;
   flex: none;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface);
   color: var(--ink-muted);
   cursor: pointer;
@@ -1420,7 +1487,7 @@ a:focus-visible {
   min-height: 38px;
   text-align: left;
   padding: 0 10px;
-  border-radius: 9px;
+  border-radius: var(--radius-control-sm);
   border: 1px solid transparent;
   background: transparent;
   color: var(--ink-muted); /* 7,5:1 di permukaan kaca putih */
@@ -1487,7 +1554,7 @@ a:focus-visible {
   transform: translateY(-50%);
   height: 20px;
   width: 3px;
-  border-radius: 0 3px 3px 0;
+  border-radius: 0 var(--radius-chip) var(--radius-chip) 0;
   background: var(--accent-strong);
 }
 
@@ -1554,7 +1621,7 @@ a:focus-visible {
   height: 32px;
   flex: none;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface);
   color: var(--ink-muted);
   cursor: pointer;
@@ -1594,7 +1661,7 @@ a:focus-visible {
   border: 1px solid var(--line-input);
   color: var(--navy-700);
   font-size: var(--fs-2);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   padding: 8px 12px;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
@@ -1732,7 +1799,7 @@ a:focus-visible {
   padding: 0 10px;
   flex: 0 1 auto;
   border: 1px solid var(--line-input);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface);
   color: var(--ink);
   font-size: var(--fs-2);
@@ -1816,7 +1883,7 @@ a:focus-visible {
   width: 32px;
   height: 32px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   background: transparent;
   color: var(--ink-muted);
   cursor: pointer;
@@ -1868,7 +1935,7 @@ a:focus-visible {
   color: var(--ink);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+  box-shadow: var(--shadow-pop);
   text-align: left;
 }
 
@@ -1906,7 +1973,7 @@ a:focus-visible {
   height: 32px;
   flex: none;
   border: 1px solid var(--line-input);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface);
   color: var(--ink-muted);
   cursor: pointer;
@@ -1977,7 +2044,7 @@ a:focus-visible {
   min-height: 40px;
   padding: 0 12px;
   border: 1px solid var(--line-input);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface);
   color: var(--accent-strong);
   font-size: var(--fs-2);
@@ -2023,7 +2090,7 @@ a:focus-visible {
   width: 32px;
   height: 32px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   background: transparent;
   color: var(--ink-muted);
   cursor: pointer;
@@ -2084,10 +2151,14 @@ a:focus-visible {
    penggelapan kanvas. */
 .map-gl {
   width: 100%;
+  /* Vignette lembut: tepi peta sedikit gelap supaya mata jatuh ke TENGAH
+     (tempat jalur & penanda). Memakai token warna, bukan bayangan literal,
+     dan tidak menutupi apa pun — bayangan inset digambar di dalam elemen. */
+  box-shadow: inset 0 0 44px -16px var(--navy-900);
   /* 460 → 400 (17 Okt): kanvas peta adalah blok terbesar di Overview; tinggi
      ini memangkas 60 px tanpa mengurangi informasi (legenda & daftar tetap). */
   height: 400px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   overflow: hidden;
   border: 1px solid var(--border);
 }
@@ -2116,7 +2187,11 @@ a:focus-visible {
   color: var(--surface);
   /* Cincin putih lewat box-shadow (bukan border) supaya ekor di bawahnya bisa
      menempel persis tanpa celah garis. */
-  box-shadow: 0 0 0 2px var(--surface), 0 2px 6px rgba(15, 23, 42, 0.35);
+  box-shadow: var(--shadow-pin);
+  /* Sedikit cahaya sewarna nada pin: pusat jaringan terlihat "hidup" tanpa
+     animasi, dan pin tetap terbaca di atas tile yang ramai. */
+  filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.3))
+    drop-shadow(0 0 6px color-mix(in srgb, var(--pin-ink) 42%, transparent));
   transition: box-shadow var(--dur-2) var(--ease-standard),
     background var(--dur-2) var(--ease-standard),
     transform var(--dur-1) var(--ease-standard);
@@ -2140,7 +2215,7 @@ a:focus-visible {
 .map-pin { cursor: pointer; }
 .map-pin:hover .map-pin-dot {
   transform: scale(1.06);
-  box-shadow: 0 0 0 2px var(--surface), 0 3px 9px rgba(15, 23, 42, 0.42);
+  box-shadow: var(--shadow-pin-hover);
 }
 /* Gelembung pengganti penanda yang BERTUMPUK (WCAG 2.5.8: target minimal
    24x24 px dan jarak antar-target). 30 px + cincin 2 px supaya tetap nyaman
@@ -2161,7 +2236,7 @@ a:focus-visible {
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.4);
+  box-shadow: var(--shadow-cluster);
 }
 .map-cluster:hover { background: var(--ink-muted); }
 .map-cluster:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
@@ -2174,7 +2249,7 @@ a:focus-visible {
   transform: translateY(-50%);
   margin-left: 7px;
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.94);
   color: var(--ink);
@@ -2183,13 +2258,12 @@ a:focus-visible {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   pointer-events: none;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+  box-shadow: var(--shadow-control);
 }
 /* Lokasi aktif dari dropdown cakupan top bar: cincin brand, ukuran sama
    supaya tidak ada pin yang "melompat" saat disorot. */
 .map-pin-active .map-pin-dot {
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.45), 0 0 0 2px var(--surface),
-    0 2px 6px rgba(15, 23, 42, 0.35);
+  box-shadow: var(--shadow-pin-active);
 }
 
 /* Kotak legenda peta (kiri-bawah) — SATU kotak berisi tiga baris: status lokasi,
@@ -2277,171 +2351,6 @@ a:focus-visible {
    `--warn-ink` (keandalan rendah — dipakai, bukan --status-warning, karena
    kuning terang hanya 1,9:1 di atas peta terang), `--status-danger`
    (dikecualikan), `--ink-muted` (keandalan belum diketahui). */
-/* Sakelar lapisan: SATU-SATUNYA elemen yang mengapung di kanvas peta (keputusan
-   pemilik 2026-10-16). Dua tombol dikelompokkan dalam satu pil putih supaya
-   terbaca sebagai satu kendali, bukan dua kotak terpisah — dan sejak revisi
-   16 Okt (arah pemilik: "2 tombol di atas dibuat kecil saja") pil ini diperkecil
-   lagi supaya tidak menutupi Jawa Barat tempat pin SPPG & jalur kiriman berada.
-   Sejak 19 Okt 2026 pil ini memuat DUA tombol IKON saja (pemasok, jalur):
-   label teks "Pemasok (6)"/"Jalur kiriman (12)" memakan lebar tepat di atas
-   Jawa Barat, sementara artinya sudah dibawa baris legenda di bawah kanvas dan
-   jumlahnya di tag "Rincian lapisan peta". Tombol "Info map" dihapus karena
-   isinya duplikat legenda; daftar perjalanan kiriman pindah ke panel rincian.
-   Kanvas tetap hanya punya SATU elemen mengapung (celah C5), dan semua
-   keterangan panjang tidak menutupi pin. */
-.map-overlay-toggles {
-  /* 19 Okt 2026 (permintaan pemilik): pil pindah ke KIRI-BAWAH dan piring
-     putihnya dihapus. Kiri-bawah dulu dipakai bilah skala — bilah itu kini
-     dihapus, jadi tidak ada yang bertabrakan; sudut ini juga laut/open water
-     di tampilan Indonesia, sehingga ikon tidak menutupi pin SPPG.
-     Tanpa latar: ikon duduk langsung di atas peta. Keterbacaan dijaga halo
-     putih tipis pada ikon + plat putih MUNCUL saat hover/fokus, jadi area klik
-     tetap terlihat saat dibutuhkan tanpa menutupi peta sepanjang waktu. */
-  position: absolute;
-  bottom: 8px;
-  left: 8px;
-  top: auto;
-  z-index: 4;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  max-width: calc(100% - 16px);
-}
-.map-layer-toggle {
-  /* Ikon saja (19 Okt 2026): 32 px persegi di desktop — cukup besar untuk
-     sasaran tunjuk mouse, tetap kecil di atas kanvas. Target 44x44 px untuk
-     layar sentuh ditulis EKSPLISIT di blok "Kontrol peta" media yang sama
-     (WCAG 2.5.8: minimum 24 px; panduan sentuh 44 px), karena `width`/`height`
-     di kelas ini MENANG atas aturan global `button` (min-height 44px). */
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  position: relative;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  /* Transparan di atas peta (permintaan pemilik). Ikon tetap terbaca karena
-     warnanya `--ink` di atas ubin terang; halo putih tipis menjaga kontras
-     saat ikon jatuh di atas garis jalan atau pin berwarna. */
-  background: transparent;
-  color: var(--ink);
-  filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.95));
-  cursor: pointer;
-  /* Umpan balik halus: warna + dorongan tekan. Aturan global `button:active`
-     yang mempersingkat durasi ke --dur-1 saat tombol ditekan. */
-  transition: background var(--dur-2) var(--ease-standard),
-    color var(--dur-2) var(--ease-standard),
-    border-color var(--dur-2) var(--ease-standard),
-    transform var(--dur-2) var(--ease-standard);
-}
-.map-layer-toggle:hover {
-  background: rgba(255, 255, 255, 0.92);
-  border-color: var(--line-input);
-}
-/* Keadaan tertekan juga butuh latar putih yang sama supaya garis miring pada
-   ikon tidak tenggelam di peta; ini bukan piring tetap, hanya saat hover. */
-.map-layer-toggle:active { background: rgba(255, 255, 255, 0.92); }
-.map-layer-toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-.map-layer-toggle[aria-pressed="true"] {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
-  color: var(--surface);
-  filter: none;
-}
-
-/* Pil sakelar TETAP transparan walau tema konsol peta (map-console.css) mengecat
-   tombol dengan kaca gelap. Spesifisitas sengaja dinaikkan (`.map-card` + pil +
-   tombol) supaya aturan ini menang tanpa `!important`.
-   Warna ikon = tinta gelap, bukan `--map-text` (putih): ubin peta tetap TERANG
-   walau kerangka konsol gelap, jadi ikon putih akan hilang di atas peta. Halo
-   putih tipis menjaga kontras saat ikon jatuh di atas jalan/pin berwarna. */
-.map-card .map-overlay-toggles .map-layer-toggle {
-  background: transparent;
-  border-color: transparent;
-  color: var(--ink);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  box-shadow: none;
-  filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.95));
-}
-/* Plat hover/fokus: KACA GELAP, bukan putih. Awalnya di sini putih 92%, tetapi
-   tema konsol peta memakai kaca gelap (`--map-glass-deep`) dan dua aturan putih
-   vs gelap pada spesifisitas sama membuat hasilnya bergantung urutan berkas.
-   Nilainya kini SAMA dengan tema (dengan fallback), jadi hasilnya tidak berubah
-   walau urutan CSS berubah: piringan gelap + ikon terang = 15:1. */
-/* `button` disisipkan di selektor: tema memakai selektor 0,4,0 untuk hover dan
-   berkasnya dimuat SESUDAH globals.css, jadi tanpa kenaikan ini `border-color`
-   milik tema (abu 50%) selalu menang dan tepi piringan tetap terlihat kotor. */
-.map-card .map-overlay-toggles button.map-layer-toggle:hover,
-.map-card .map-overlay-toggles button.map-layer-toggle:focus-visible {
-  /* Tema terang (19 Okt): piringan putih .97. Batasnya `--map-hair-strong`
-     (45% tinta = 3,2:1) karena piringan putih di atas peta terang butuh tepi
-     yang benar-benar terlihat — beda dengan tema gelap, di mana garis setengah
-     transparan justru terbaca kotor. */
-  background: var(--map-glass-deep, rgba(255, 255, 255, 0.97));
-  border-color: var(--map-hair-strong, rgba(15, 23, 42, 0.45));
-  color: var(--map-text, #0f172a);
-}
-/* Cincin fokus: tema konsol memakai `--map-focus` #7dd3fc — tepat di atas kaca
-   GELAP, tapi pil ini transparan di atas ubin peta TERANG, sehingga cincin biru
-   muda hanya ~1,4:1 dan praktis tak terlihat (gagal WCAG 1.4.11 / 2.4.7).
-   Spesifisitas 0,4,0 menang atas aturan tema (0,3,0) tanpa `!important`. */
-.map-card .map-overlay-toggles .map-layer-toggle:focus-visible {
-  /* Cincin fokus harus kontras ke DUA arah: ke dalam (piringan gelap saat
-     fokus) dan ke luar (ubin peta terang). Satu warna tidak bisa keduanya —
-     tinta gelap hilang di piringan gelap, `--map-focus` #7dd3fc hilang di peta
-     terang (1,43:1). Jadi dua lapis: cincin putih di dalam (18:1 ke piringan)
-     dan halo tinta gelap 5 px di luar (≈8:1 ke peta). */
-  /* Tema terang: satu cincin `--map-focus` #1E40AF (8,7:1 di piringan putih,
-     4,9:1 di atas ubin taman) — cukup kontras ke dua latar tanpa lapisan kedua.
-     `--map-accent` #2563EB tidak dipakai: hanya 2,93:1 di atas taman. */
-  outline: 2px solid var(--map-focus, #1e40af);
-  outline-offset: 2px;
-  box-shadow: none;
-}
-
-.map-card .map-overlay-toggles .map-layer-toggle[aria-pressed="true"] {
-  /* Nyala: TETAP transparan — bukan piring. Keadaan dibaca dari DUA hal, bukan
-     warna saja: garis miring HILANG (bentuk) dan warna berubah (warna).
-     Warna = `--map-accent-ink`; di tema konsol nilainya #1E40AF karena sudah
-     diukur terhadap empat ekstrem basemap (4,94-8,72:1). Hijau #15803D GAGAL
-     3:1 di atas ubin hijau (2,84:1), jadi hijau tidak dipakai. */
-  background: transparent;
-  border-color: transparent;
-  color: var(--map-accent-ink, #1e40af);
-  filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.95));
-  box-shadow: none;
-}
-.map-layer-toggle-icon {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-}
-/* Keadaan MATI diberi garis miring: bentuk, bukan hanya warna. Pengguna
-   buta warna tetap melihat "dicoret", dan `aria-pressed` membawa keadaan yang
-   sama untuk pembaca layar (ui-ux-pro-max prioritas 1: jangan andalkan warna). */
-.map-layer-toggle[aria-pressed="false"] .map-layer-toggle-icon::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 20px;
-  height: 2px;
-  margin: -1px 0 0 -10px;
-  background: currentColor;
-  transform: rotate(-45deg);
-  opacity: 0.55;
-  pointer-events: none;
-}
 /* --- Chip saringan aktif di atas kanvas (celah C8, langkah 7b-2) -----------
    Saat satu kiriman disorot, peta menyembunyikan kiriman lain. Riset menuntut
    penanda keadaannya ("a small chip above the map") supaya pengguna tidak
@@ -2701,6 +2610,7 @@ a:focus-visible {
 /* Nada "sisa": estimasi yang belum ditempuh. Biru aksi aplikasi (--accent-strong),
    BUKAN hijau — sama dengan warna layer `todo` di kanvas (ROUTE_TODO_COLORS.ok). */
 .map-legend-line-sisa { border-top-color: var(--accent-strong); }
+
 .map-popup-line {
   margin: 4px 0 0;
   font-size: var(--fs-2);
@@ -2804,7 +2714,7 @@ a:focus-visible {
   gap: 4px 10px;
   padding: 8px 10px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--surface-sunken);
 }
 .supplier-summary .fact-row dd {
@@ -2862,33 +2772,150 @@ a:focus-visible {
   min-width: 0;
 }
 
+/* Tanda legenda "bentuk" mengikuti BENTUK pin di peta: lingkaran bergaris,
+   bukan belah ketupat — legenda yang bentuknya beda dari petanya membuat
+   pembaca mencari simbol yang tidak ada. Ukuran 9 px supaya garis tepinya
+   masih terbaca. */
 .map-legend-box-shape {
   display: inline-block;
-  width: 7px;
-  height: 7px;
+  width: 9px;
+  height: 9px;
   flex: none;
-  transform: rotate(45deg);
-  border: 1px solid rgba(15, 23, 42, 0.25);
+  border-radius: 50%;
+  border: 2px solid var(--accent-strong);
+  background: var(--surface);
 }
-.map-legend-box-shape-ok { background: var(--accent-strong); }
-.map-legend-box-shape-low { background: var(--warn-ink); }
-.map-legend-box-shape-excluded { background: var(--status-danger); }
+.map-legend-box-shape-ok { border-color: var(--accent-strong); }
+.map-legend-box-shape-low { border-color: var(--warn-ink); }
+.map-legend-box-shape-excluded { border-color: var(--status-danger); }
 /* Di luar jangkauan: bentuk KOSONG dengan garis putus-putus, supaya beda dari
    pemasok terdekat (penuh) dan dari "dikecualikan" (merah penuh). Warna tetap token. */
-.map-legend-box-shape-far { background: var(--surface); border: 1px dashed var(--ink-subtle); }
+.map-legend-box-shape-far { border-style: dashed; border-color: var(--ink-subtle); }
 /* Sedang mengirim (keputusan pemilik 2026-10-16): CINCIN hijau-aman. Bentuk ini
    sengaja bukan nada kelima yang saling menutup - cincin dipakai bersama warna
    nada mana pun, jadi pemasok pengirim aktif tetap memperlihatkan keandalan dan
    jangkauannya. Warna memakai token, tanpa hex mentah (design.md §4). */
-.map-legend-box-shape-shipping { background: var(--surface); border: 2px solid var(--status-safe); }
+.map-legend-box-shape-shipping { background: var(--status-live); border-color: var(--status-live); }
 .map-pin-supplier-shipping .map-pin-supplier-dot {
-  box-shadow: 0 0 0 2px var(--status-safe), 0 1px 5px rgba(15, 23, 42, 0.35);
+  box-shadow: 0 0 0 2px var(--status-safe), var(--shadow-pin-core);
 }
-/* Pemasok: kotak membulat + ikon truk. Bentuk sengaja BUKAN bulat — pin SPPG
-   bulat, jadi dua lapisan penanda tidak bisa tertukar meski bertumpuk. */
+/* Pemasok yang SEDANG MENGIRIM (permintaan pemilik 20 Okt 2026): warnanya beda
+   dari pemasok biasa + diberi denyut.
+
+   - Warna: pin biasa = lingkaran PUTIH bergaris nada; yang mengirim = lingkaran
+     PENUH violet `--status-live`. Jadi bedanya terbaca dari jarak pandang biasa,
+     bukan dari warna garis tepi yang tipis.
+   - Denyut: satu halo yang melebar lalu hilang (2,2 dtk, easing keluar) — pelan
+     dan berulang, bukan kedip. Gerak ini membawa arti ("masih di jalan"), jadi
+     ia bukan hiasan; `prefers-reduced-motion` mematikannya dan menyisakan halo
+     diam supaya status tetap terbaca. */
+.map-pin-supplier-shipping .map-pin-supplier-dot {
+  background: var(--status-live);
+  border-color: var(--status-live);
+  color: var(--surface);
+  box-shadow: var(--shadow-pin-core);
+}
+.map-pin-supplier-shipping .map-pin-supplier-dot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid var(--status-live);
+  opacity: 0;
+  pointer-events: none;
+  animation: pin-kirim-halo 2.2s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+}
+@keyframes pin-kirim-halo {
+  0% { transform: scale(0.9); opacity: 0.55; }
+  70% { transform: scale(1.7); opacity: 0; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-pin-supplier-shipping .map-pin-supplier-dot::after {
+    animation: none;
+    opacity: 0.45;
+    transform: scale(1.25);
+  }
+}
+
+/* ---------------------------------------------------------------- mobil kiriman
+   Penanda kendaraan yang sedang berjalan (permintaan pemilik 20 Okt 2026).
+
+   Kosakata bentuknya dibedakan supaya tiga lapisan tidak bisa tertukar:
+   - pin SPPG   : air mata (fasilitas penerima)
+   - pemasok    : lingkaran BERGARIS, isi putih, glyph kardus (sumber barang)
+   - mobil      : puck PEJAL biru merek, cincin putih, glyph truk dari atas,
+                  plus penunjuk arah di sisi depan
+   Hanya puck ini yang berputar mengikuti arah perjalanan; pin lain diam.
+   `pointer-events: none` disengaja: ini penanda informatif, bukan tombol — jadi
+   tidak menciptakan sasaran sentuh kecil di tengah peta. */
+.map-truck {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: var(--surface);
+  background: var(--status-live);
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  box-shadow: var(--shadow-control), var(--shadow-pin-soft);
+  /* Seluruh puck berputar (glyph-nya digambar dari atas, jadi rotasi = arah). */
+  transform: rotate(var(--truk-arah, 0deg));
+  transition: transform var(--dur-2) var(--ease-standard);
+  /* Truk kini punya popup: ikon harus menerima klik. Sebelumnya
+     pointer-events:none membuat mobil mustahil diklik. */
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 2;
+}
+/* Cahaya di bawah puck: memberi kesan kendaraan "menyala" di jalan, dan
+   mempertegas posisinya saat bertumpuk dengan pin pemasok. */
+.map-truck:hover,
+.map-truck:focus-visible {
+  outline: 2px solid var(--surface);
+  outline-offset: 3px;
+  box-shadow: var(--shadow-control), var(--shadow-pin-soft), 0 0 0 5px rgba(29, 78, 216, 0.22);
+}
+
+.map-truck::before {
+  content: "";
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--status-live) 42%, transparent) 0%,
+    transparent 68%
+  );
+  pointer-events: none;
+}
+/* Penunjuk arah: segitiga putih di sisi DEPAN puck, ikut berputar bersamanya. */
+.map-truck::after {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 0;
+  height: 0;
+  margin-left: -4px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 5px solid var(--surface);
+}
+.map-truck svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Pemasok (redesign 20 Okt 2026): LINGKARAN bergaris, isi putih, glyph berwarna.
+   Sebelumnya kotak biru pejal 24 px dengan glyph truk putih — berat di atas tile
+   terang, dan ikon truknya bersaing dengan penanda mobil yang bergerak.
+   Sekarang: isi putih (ringan), garis tepi 2 px membawa warna nada (keandalan /
+   jangkauan tetap terbaca), dan glyph KARDUS menandakan "sumber barang". */
 .map-pin-supplier {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   --pin-ink: var(--accent-strong);
 }
 .map-pin-supplier-dot {
@@ -2896,10 +2923,11 @@ a:focus-visible {
   inset: 0;
   display: grid;
   place-items: center;
-  border-radius: 7px;
-  background: var(--pin-ink);
-  color: var(--surface);
-  box-shadow: 0 0 0 2px var(--surface), 0 1px 5px rgba(15, 23, 42, 0.35);
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--pin-ink);
+  color: var(--pin-ink);
+  box-shadow: var(--shadow-pin), 0 0 0 2px var(--surface);
   transition: box-shadow var(--dur-2) var(--ease-standard),
     background var(--dur-2) var(--ease-standard),
     transform var(--dur-1) var(--ease-standard);
@@ -2915,7 +2943,9 @@ a:focus-visible {
 .map-pin-supplier-far .map-pin-supplier-dot {
   background: var(--surface);
   color: var(--pin-ink);
-  box-shadow: 0 0 0 2px var(--surface), 0 1px 4px rgba(15, 23, 42, 0.2);
+  box-shadow: var(--shadow-pin-soft);
+  /* Putus-putus: satu-satunya bentuk yang menyatakan "tidak dijangkau",
+     bukan warna saja (dan tetap terbaca pada nada apa pun). */
   border: 2px dashed var(--pin-ink);
 }
 /* Titik tanpa nama: pada tampilan jaringan sepuluh label kota akan saling
@@ -2930,6 +2960,29 @@ a:focus-visible {
    sendiri. Elemennya <button> ASLI — bukan DIV bergaya tombol — supaya bisa
    difokus keyboard dan dibacakan pembaca layar (aturan yang sama dengan pemilih
    kiriman Arah C). Gayanya mengikuti kontrol bawaan MapLibre di sebelahnya. */
+/* Posisi tombol "Tampilkan semua" (perbaikan 21 Okt 2026).
+   Sebelumnya tombol ini anak LANGSUNG wadah kontrol MapLibre, sedangkan grup
+   zoom adalah `.maplibregl-ctrl-group` yang mengapung (float:right) dengan
+   margin 10 px. Akibatnya tombol reset tidak ikut aturan itu: ia menempel di
+   pojok kanvas — terukur 11 px lebih tinggi dan ~30 px lebih kiri daripada
+   tombol zoom, sehingga terlihat "melayang sendiri" di tepi peta.
+   Sekarang posisinya ditulis eksplisit: sejajar atas grup zoom, 8 px di
+   kirinya (10 px margin + 31 px lebar grup + 8 px jarak), dan tetap 44 px di
+   layar sentuh lewat media query di bawah. */
+.maplibregl-ctrl-top-right > .map-reset-view {
+  position: absolute;
+  top: 10px;
+  right: 50px;
+  margin: 0;
+}
+@media (pointer: coarse), (max-width: 720px) {
+  .maplibregl-ctrl-top-right > .map-reset-view {
+    top: 10px;
+    /* 10 margin + 44 lebar grup zoom + 8 jarak */
+    right: 62px;
+  }
+}
+
 .map-reset-view {
   display: flex;
   align-items: center;
@@ -2938,11 +2991,11 @@ a:focus-visible {
   height: 29px;
   padding: 0;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   background: rgba(255, 255, 255, 0.96);
   color: var(--ink);
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14);
+  box-shadow: var(--shadow-control);
   /* WAJIB: sudut kontrol MapLibre (.maplibregl-ctrl-top-right) punya
      `pointer-events: none`, dan kelas itu diwariskan ke anaknya. Kontrol bawaan
      diselamatkan oleh kelas `.maplibregl-ctrl { pointer-events: auto }` yang
@@ -2996,9 +3049,15 @@ a:focus-visible {
   .map-layer-info-panel .map-layer-info-inner,
   .map-layer-info-chevron,
   .map-layer-info-toggle,
-  .map-layer-toggle,
   .map-pin-dot,
   .map-pin-supplier-dot { transition: none; }
+  /* Gerak dimatikan, penanda tetap terbaca: cincin statis tanpa denyut. */
+  .map-pin-supplier-shipping .map-pin-supplier-dot::after,
+  .map-pin-supplier-shipping .map-pin-supplier-dot::before {
+    animation: none;
+    opacity: 0.5;
+    transform: none;
+  }
   .map-pin:hover .map-pin-dot { transform: none; }
   .map-pin-supplier:hover .map-pin-supplier-dot { transform: none; }
 }
@@ -3043,7 +3102,7 @@ a:focus-visible {
   }
 }
 .map-card .map-row-name { font-size: var(--fs-4); font-weight: 600; overflow-wrap: anywhere; }
-.map-card .map-row-status { font-size: var(--fs-1); padding: 3px 8px; border-radius: 4px; background: var(--bg-page); }
+.map-card .map-row-status { font-size: var(--fs-1); padding: 3px 8px; border-radius: var(--radius-chip); background: var(--bg-page); }
 .map-card .map-row-shortage .map-row-status { color: var(--status-danger); background: rgba(198, 40, 40, 0.1); }
 .map-card .map-row-surplus .map-row-status { color: var(--safe-ink-tint); background: rgba(46, 125, 50, 0.1); }
 .map-card .map-row-supply, .map-card .map-row-demand, .map-card .map-row-gap { grid-column: 2 / -1; font-variant-numeric: tabular-nums; font-size: var(--fs-2); overflow-wrap: anywhere; }
@@ -3151,7 +3210,7 @@ a:focus-visible {
   display: inline-block;
   width: 10px;
   height: 10px;
-  border-radius: 3px;
+  border-radius: var(--radius-chip);
   margin-right: 6px;
   vertical-align: -1px;
 }
@@ -3169,7 +3228,7 @@ a:focus-visible {
 }
 
 .stock-chart-placeholder {
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   background: repeating-linear-gradient(
     45deg,
     var(--surface-sunken),
@@ -3177,6 +3236,651 @@ a:focus-visible {
     var(--line) 12px,
     var(--line) 24px
   );
+}
+
+/* ============================================================
+   Kecukupan pasokan per komoditas (SPPG Head & Ahli Gizi)
+   Satu batang per komoditas: stok layak pakai (segar / ≤48 jam /
+   tidak layak / belum terverifikasi) + garis kebutuhan.
+   ============================================================ */
+.supply-adequacy {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px 18px 14px;
+  box-shadow: var(--shadow-1);
+}
+
+.sa-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.sa-title h3 {
+  margin: 0;
+  font-size: var(--fs-5);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.sa-sub {
+  margin: 3px 0 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.sa-summary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+}
+
+.sa-summary-count {
+  font-size: var(--fs-8);
+  font-weight: 700;
+  line-height: 0.9;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+
+.sa-summary-count em {
+  font-size: var(--fs-4);
+  font-style: normal;
+  font-weight: 600;
+  color: var(--ink-muted);
+  letter-spacing: 0;
+}
+
+.sa-summary-label {
+  max-width: 150px;
+  font-size: var(--fs-1);
+  line-height: 1.25;
+  color: var(--ink-muted);
+}
+
+.sa-worst {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--sa-tone-soft, var(--surface-sunken));
+  color: var(--sa-tone, var(--ink));
+  font-size: var(--fs-1);
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.sa-tone-danger {
+  --sa-tone: var(--danger-ink);
+  --sa-bar: var(--status-danger);
+  --sa-tone-soft: var(--danger-bg);
+}
+
+.sa-tone-warning {
+  --sa-tone: var(--warn-ink);
+  --sa-bar: var(--status-warning);
+  --sa-tone-soft: var(--warn-bg);
+}
+
+.sa-tone-safe {
+  --sa-tone: var(--status-safe);
+  --sa-bar: var(--status-safe);
+  --sa-tone-soft: rgba(46, 125, 50, 0.08);
+}
+
+.sa-tone-muted {
+  --sa-tone: var(--neutral-ink);
+  --sa-bar: var(--line-strong);
+  --sa-tone-soft: var(--surface-sunken);
+}
+
+.sa-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin: 14px 0 6px;
+}
+
+.sa-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+}
+
+.sa-toggle button {
+  padding: 5px 12px;
+  min-height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.sa-toggle button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: var(--shadow-1);
+}
+
+.sa-toggle button:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.sa-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.sa-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sa-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-chip);
+}
+
+.sa-dot-fresh {
+  background: var(--status-safe);
+}
+
+.sa-dot-near {
+  background: var(--status-warning);
+}
+
+.sa-dot-unsafe {
+  border: 1px solid var(--status-danger);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--status-danger) 0 2px,
+    transparent 2px 5px
+  );
+}
+
+.sa-dot-unverified {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--line-strong) 0 2px,
+    var(--surface-sunken) 2px 5px
+  );
+}
+
+.sa-legend-demand i {
+  display: inline-block;
+  width: 2px;
+  height: 12px;
+  border-radius: 1px;
+  background: var(--ink);
+}
+
+.sa-rows {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.sa-row {
+  --sa-tone: var(--neutral-ink);
+  --sa-tone-soft: var(--surface-sunken);
+  border-bottom: 1px solid var(--line);
+}
+
+.sa-row:last-child {
+  border-bottom: 0;
+}
+
+.sa-row-btn {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(150px, 1.15fr) 64px minmax(180px, 3fr) minmax(128px, 0.9fr);
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 12px 8px 12px 14px;
+  border: 0;
+  border-radius: var(--radius-control-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.18s ease;
+}
+
+.sa-row-btn::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--sa-tone);
+  opacity: 0.9;
+  transition: width 0.18s ease;
+}
+
+.sa-row-btn:hover {
+  background: var(--sa-tone-soft);
+}
+
+.sa-row-btn:hover::before {
+  width: 4px;
+}
+
+.sa-row-btn:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.sa-row-static {
+  cursor: default;
+}
+
+.sa-row-static:hover {
+  background: transparent;
+}
+
+.sa-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sa-commodity {
+  font-size: var(--fs-3);
+  font-weight: 600;
+  color: var(--ink);
+  text-transform: capitalize;
+}
+
+.sa-stock {
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.sa-near-note {
+  width: fit-content;
+  margin-top: 1px;
+  padding: 1px 6px;
+  border-radius: var(--radius-chip);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sa-nobatch {
+  width: fit-content;
+  margin-top: 1px;
+  padding: 1px 6px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-chip);
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sa-dot-pasokan {
+  background: linear-gradient(
+    90deg,
+    var(--status-danger) 0 33%,
+    var(--status-warning) 33% 66%,
+    var(--status-safe) 66% 100%
+  );
+}
+
+.sa-legend-note {
+  color: var(--ink-muted);
+  font-size: 11px;
+}
+
+.sa-seg-pasokan {
+  background-color: var(--sa-bar, var(--sa-tone));
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.24),
+    rgba(255, 255, 255, 0) 60%
+  );
+}
+
+.supply-balance .sa-commodity {
+  text-transform: none;
+}
+
+.supply-balance .sa-stock {
+  color: var(--sa-tone);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.supply-balance .sa-row-btn {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.sa-empty {
+  margin: 16px 0 2px;
+  color: var(--ink-muted);
+  font-size: var(--fs-2);
+}
+
+.sa-coverage {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1;
+}
+
+.sa-coverage strong {
+  color: var(--sa-tone);
+  font-size: var(--fs-7);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.sa-coverage span {
+  margin-top: 3px;
+  color: var(--ink-muted);
+  font-size: 11px;
+}
+
+.sa-track {
+  position: relative;
+  height: 24px;
+  border-radius: var(--radius-control-sm);
+  background: var(--surface-sunken);
+  box-shadow: inset 0 1px 2px var(--line);
+}
+
+.sa-track-neutral {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--surface-sunken) 0 7px,
+    var(--line) 7px 8px
+  );
+}
+
+.sa-track-fill {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow: hidden;
+  border-radius: inherit;
+  transform-origin: left center;
+}
+
+.supply-adequacy.is-mounted .sa-track-fill {
+  animation: sa-grow 0.7s cubic-bezier(0.22, 0.8, 0.24, 1) both;
+  animation-delay: calc(var(--i, 0) * 55ms);
+}
+
+.sa-seg {
+  flex: 0 0 auto;
+  height: 100%;
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.28),
+    rgba(255, 255, 255, 0) 58%
+  );
+}
+
+.sa-seg-fresh {
+  background-color: var(--status-safe);
+}
+
+.sa-seg-near {
+  background-color: var(--status-warning);
+}
+
+.sa-seg-unsafe {
+  background-color: var(--danger-bg);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--status-danger) 0 2px,
+    transparent 2px 6px
+  );
+}
+
+.sa-seg-unverified {
+  background-color: var(--surface-sunken);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--line-strong) 0 2px,
+    transparent 2px 6px
+  );
+}
+
+.sa-demand {
+  position: absolute;
+  top: -5px;
+  bottom: -5px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--surface);
+  transform: translateX(-1px);
+  z-index: 2;
+}
+
+.sa-demand::before {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: -4px;
+  width: 10px;
+  height: 4px;
+  border-radius: var(--radius-chip) var(--radius-chip) 0 0;
+  background: var(--ink);
+}
+
+.sa-gap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sa-gap strong {
+  color: var(--sa-tone);
+  font-size: var(--fs-3);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sa-gap-ok strong {
+  color: var(--status-safe);
+}
+
+.sa-gap small {
+  color: var(--ink-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.sa-foot {
+  margin: 12px 0 0;
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  line-height: 1.5;
+}
+
+.sa-foot strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.sa-error {
+  margin: 12px 0 0;
+}
+
+.sa-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.sa-skeleton-row {
+  display: grid;
+  grid-template-columns: 150px 1fr 120px;
+  align-items: center;
+  gap: 16px;
+}
+
+.sa-skeleton-name,
+.sa-skeleton-gap {
+  height: 12px;
+  border-radius: var(--radius-chip);
+  background: var(--surface-sunken);
+}
+
+.sa-skeleton-track {
+  height: 24px;
+  border-radius: var(--radius-control-sm);
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 0%,
+    var(--line) 50%,
+    var(--surface-sunken) 100%
+  );
+  background-size: 200% 100%;
+  animation: sa-shimmer 1.3s ease-in-out infinite;
+}
+
+@keyframes sa-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes sa-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (max-width: 980px) {
+  .sa-head {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .sa-summary {
+    justify-content: flex-start;
+  }
+
+  .sa-row-btn {
+    grid-template-columns: minmax(130px, 1fr) 60px 120px;
+    grid-template-areas:
+      "name coverage gap"
+      "track track track";
+    row-gap: 10px;
+  }
+
+  .sa-name {
+    grid-area: name;
+  }
+
+  .sa-coverage {
+    grid-area: coverage;
+  }
+
+  .sa-track {
+    grid-area: track;
+  }
+
+  .sa-gap {
+    grid-area: gap;
+  }
+}
+
+@media (max-width: 640px) {
+  .supply-adequacy {
+    padding: 14px 12px 12px;
+  }
+
+  .sa-tools {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .sa-row-btn {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "name coverage"
+      "track track"
+      "gap gap";
+    padding-left: 12px;
+  }
+
+  .sa-gap {
+    align-items: flex-start;
+    flex-direction: row;
+    gap: 8px;
+    text-align: left;
+  }
+
+  .sa-skeleton-row {
+    grid-template-columns: 120px 1fr;
+  }
+
+  .sa-skeleton-gap {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .supply-adequacy.is-mounted .sa-track-fill,
+  .sa-skeleton-track {
+    animation: none;
+  }
+
+  .sa-row-btn,
+  .sa-row-btn::before {
+    transition: none;
+  }
 }
 
 @media (max-width: 860px) {
@@ -3282,7 +3986,7 @@ a:focus-visible {
 .integrity-panel {
   margin-top: 16px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   padding: 14px 16px;
   background: var(--card);
 }
@@ -3295,7 +3999,7 @@ a:focus-visible {
   color: var(--warning-ink, #92400e);
   background: var(--warning-bg, #fffbeb);
   border: 1px solid var(--warning-line, #fcd34d);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   padding: 4px 8px;
 }
 .integrity-ledger strong, .integrity-dossier strong { font-size: var(--fs-1); display: block; margin-bottom: 4px; }
@@ -3309,7 +4013,7 @@ a:focus-visible {
   color: var(--terminal-accent);
   background: var(--terminal);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   padding: 4px 8px;
   display: inline-block;
 }
@@ -3321,7 +4025,7 @@ a:focus-visible {
 .chaos-result, .event2-result {
   margin-top: 12px;
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   border: 1px solid var(--line);
   background: var(--surface-sunken);
   font-size: var(--fs-2);
@@ -3332,7 +4036,7 @@ a:focus-visible {
   color: var(--terminal-accent);
   background: var(--terminal);
   border: 1px solid var(--terminal-border);
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   padding: 1px 6px;
 }
 .event2-result { border-left: 3px solid var(--accent-strong); }
@@ -3342,7 +4046,7 @@ a:focus-visible {
   margin: 12px 0 8px;
   padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   background: var(--bg-page);
   font-size: var(--fs-2);
   font-weight: 600;
@@ -3361,7 +4065,7 @@ a:focus-visible {
   gap: 10px;
   padding: 8px 12px;
   border: 1px solid var(--line-input);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface);
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -3436,7 +4140,7 @@ a:focus-visible {
   margin: 14px 0 18px;
   padding: 14px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface);
   min-width: 0;
 }
@@ -3493,7 +4197,7 @@ a:focus-visible {
   min-width: 0;
   padding: 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface);
   overflow-wrap: anywhere;
 }
@@ -3624,7 +4328,7 @@ a:focus-visible {
 .agent-console {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   overflow: hidden;
   color: var(--ink);
 }
@@ -3667,7 +4371,7 @@ a:focus-visible {
   background: var(--surface-sunken);
   color: var(--ink);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   padding: 8px 10px;
   font-family: var(--font-data);
   font-size: var(--fs-1);
@@ -3688,7 +4392,7 @@ a:focus-visible {
   background: transparent;
   color: var(--accent-strong);
   border: 1px solid var(--line-input);
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   padding: 6px 12px;
   font-size: var(--fs-2);
   font-weight: 600;
@@ -3699,7 +4403,7 @@ a:focus-visible {
 
 /* Wadah dan blocks demo-control ala panel Stitch */
 .chaos-panel .field, .event2-panel .field select {
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
 }
 .event2-panel .ops-controls .field select { min-height: 34px; }
 .chaos-readonly, .event2-readonly {
@@ -3719,7 +4423,7 @@ a:focus-visible {
 .approval-modal {
   border: 1px solid var(--accent-strong);
   border-left: 4px solid var(--accent-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface);
   box-shadow: var(--shadow-3);
 }
@@ -3736,7 +4440,7 @@ a:focus-visible {
   background: var(--status-danger, rgba(198, 40, 40, 0.1));
   background: rgba(198, 40, 40, 0.1);
   border: 1px solid rgba(198, 40, 40, 0.4);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   color: var(--status-danger);
   font-size: var(--fs-2);
 }
@@ -3749,7 +4453,7 @@ a:focus-visible {
 }
 
 /* Tombol ala DESIGN.md Buttons: radius 4px, hover primary #115E59 */
-.button { border-radius: 4px; }
+.button { border-radius: var(--radius-chip); }
 .button-secondary {
   background: var(--surface);
   color: var(--navy-700);
@@ -3770,7 +4474,7 @@ a:focus-visible {
   padding: 6px 10px;
   background: rgba(198, 40, 40, 0.1);
   border-left: 3px solid var(--status-danger);
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   font-size: var(--fs-2);
   color: var(--status-danger);
 }
@@ -3849,7 +4553,7 @@ a:focus-visible {
   justify-content: center;
   width: 38px;
   height: 38px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--accent-soft);
   color: var(--accent-strong);
   flex: none;
@@ -3883,13 +4587,15 @@ a:focus-visible {
   align-items: center;
   gap: 6px;
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   background: rgba(46, 125, 50, 0.1);
   color: var(--safe-ink-tint);
   font-family: var(--font-data);
   font-size: var(--fs-1);
   font-weight: 600;
 }
+
+/* Penanda provenance: data ini contoh/demo, bukan angka operasional. */
 
 .overview-live-dot {
   width: 6px;
@@ -4162,11 +4868,17 @@ a:focus-visible {
   align-items: flex-start;
   gap: 10px;
   padding: 12px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   border: 1px solid rgba(198, 40, 40, 0.4);
   background: rgba(198, 40, 40, 0.1);
   color: var(--navy-900);
   font-size: var(--fs-3);
+}
+
+.overview-alert p {
+  margin: 0;
+  flex: 1 1 320px;
+  min-width: 0;
 }
 
 .overview-alert svg {
@@ -4222,6 +4934,14 @@ a:focus-visible {
 /* Status aktif harus MENANG atas aturan dasar di dalam kartu filter: dulu
    `.filter-card .commodity-pill` (2 kelas) mengalahkan `.commodity-pill-active`
    (1 kelas) sehingga latar tetap putih — teks putih jadi tak terlihat. */
+/* Aktif harus terbaca di mana pun pil itu dipakai (papan cakupan, saringan
+   batch, dll.), bukan hanya di dalam `.filter-card`. */
+.commodity-pill-active {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--ink-inverse);
+}
+
 .filter-card .commodity-pill-active,
 .filter-card .commodity-pill-active:hover,
 .commodity-pill-active:hover {
@@ -4256,7 +4976,7 @@ a:focus-visible {
    lewat teks .sr-only + aria-busy pada wadahnya. */
 .skeleton {
   display: block;
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   background: linear-gradient(
     90deg,
     var(--surface-sunken) 25%,
@@ -4275,7 +4995,7 @@ a:focus-visible {
 .skeleton-line { height: 12px; }
 .skeleton-pill { width: 56px; height: 20px; border-radius: 999px; }
 .skeleton-map { height: 300px; border-radius: var(--radius); }
-.skeleton-value { width: 72px; height: 18px; border-radius: 4px; }
+.skeleton-value { width: 72px; height: 18px; border-radius: var(--radius-chip); }
 .skeleton-card { height: 96px; }
 .skeleton-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 @media (max-width: 1100px) { .skeleton-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -4332,8 +5052,11 @@ a:focus-visible {
    Filter dipasang pada KANVAS-nya saja — pin adalah penanda DOM di atas
    kanvas, jadi pin hijau/merah tetap menyala penuh dan kontrasnya justru naik.
    Tidak ada gaya/tile baru: nol jaringan tambahan, nol dependensi. */
+/* Kanvas peta: tile sedikit diredam supaya LAPISAN DATA yang menonjol.
+   Sebelumnya contrast 0,94 membuat semuanya sama pudar; sekarang tile tetap
+   tenang tetapi garis jalur & penanda punya nada lebih tinggi daripada peta. */
 .map-gl canvas {
-  filter: saturate(0.62) brightness(1.05) contrast(0.94);
+  filter: saturate(0.66) brightness(1.04) contrast(1.04);
 }
 
 /* Split 2:1 seperti dashboard acuan: peta lebar, tabel Pasokan per Lokasi kanan.
@@ -4463,7 +5186,7 @@ a:focus-visible {
 .queue-open {
   width: 100%;
   padding: 8px 12px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--line-input);
   background: var(--surface);
   color: var(--navy-700);
@@ -4540,7 +5263,7 @@ a:focus-visible {
 .location-status {
   display: inline-block;
   padding: 1px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   font-size: var(--fs-1);
   font-weight: 600;
   text-transform: uppercase;
@@ -4704,9 +5427,9 @@ a:focus-visible {
   gap: 8px;
   padding: 8px 10px;
   margin-bottom: 10px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--danger, #b42318) 8%, transparent);
-  color: var(--danger, #b42318);
+  border-radius: var(--radius-control-sm);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
   font-size: var(--fs-2);
 }
 
@@ -4731,7 +5454,7 @@ a:focus-visible {
   gap: 2px;
   padding: 6px 2px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface);
   color: inherit;
   font-variant-numeric: tabular-nums;
@@ -4747,8 +5470,8 @@ a:focus-visible {
 }
 
 .agenda-cell-active {
-  border-color: var(--primary, #005c55);
-  background: color-mix(in srgb, var(--primary, #005c55) 7%, transparent);
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
   font-weight: 600;
 }
 
@@ -4762,7 +5485,7 @@ a:focus-visible {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: var(--primary, #005c55);
+  background: var(--primary);
 }
 
 .agenda-panel {
@@ -4852,8 +5575,8 @@ a:focus-visible {
 
 .agenda-month-btn:hover,
 .agenda-month-btn[aria-expanded="true"] {
-  border-color: var(--primary, #005c55);
-  color: var(--primary, #005c55);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .agenda-month-btn .agenda-month {
@@ -4884,7 +5607,7 @@ a:focus-visible {
   border: 1px solid var(--line, #e2e8f0);
   background: var(--surface);
   color: inherit;
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   padding: 4px 8px;
   font: inherit;
   font-variant-numeric: tabular-nums;
@@ -4940,8 +5663,8 @@ a:focus-visible {
 }
 
 .kpi-period-pill.is-active {
-  border-color: var(--primary, #005c55);
-  color: var(--primary, #005c55);
+  border-color: var(--primary);
+  color: var(--primary);
   font-weight: 600;
 }
 
@@ -5094,7 +5817,7 @@ a:focus-visible {
   min-height: 44px;
   padding: 6px 10px;
   border: 1px solid var(--line-input);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--ink);
   font: inherit;
@@ -5191,9 +5914,9 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--surface);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
+  box-shadow: var(--shadow-pop);
   overflow: hidden;
 }
 /* `[hidden]` hanya menang atas aturan BAWAAN peramban (display: none). Karena
@@ -5218,7 +5941,7 @@ a:focus-visible {
   min-height: 36px;
   padding: 6px 30px 6px 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface-sunken);
   color: var(--ink);
   font: inherit;
@@ -5277,7 +6000,7 @@ a:focus-visible {
   min-height: 44px;
   padding: 6px 10px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -5367,7 +6090,7 @@ a:focus-visible {
   margin: 0 0 12px;
   padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--surface-sunken);
 }
 .evidence-next-label {
@@ -5428,8 +6151,7 @@ a:focus-visible {
   grid-template-columns: minmax(0, 1.7fr) minmax(250px, 1fr);
   grid-template-areas:
     "bar         bar"
-    "eyebrow     next"
-    "title       next"
+    "head        next"
     "metrics     metrics"
     "flags       flags"
     "consequence consequence"
@@ -5438,8 +6160,7 @@ a:focus-visible {
   align-items: start;
 }
 .evidence-hero-bar { grid-area: bar; }
-.evidence-hero-eyebrow { grid-area: eyebrow; }
-.evidence-hero-title { grid-area: title; }
+.evidence-hero-head { grid-area: head; display: grid; gap: var(--space-1); align-content: start; min-width: 0; }
 .evidence-metrics { grid-area: metrics; }
 .evidence-flags { grid-area: flags; }
 .evidence-next { grid-area: next; margin: 0; }
@@ -5451,8 +6172,7 @@ a:focus-visible {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       "bar"
-      "eyebrow"
-      "title"
+      "head"
       "metrics"
       "flags"
       "next"
@@ -5501,7 +6221,7 @@ a:focus-visible {
 .evidence-hero-jump:focus-visible {
   outline: 2px solid var(--accent-strong);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
 }
 .evidence-hero-eyebrow {
   margin: 0;
@@ -5514,7 +6234,7 @@ a:focus-visible {
 /* Judul keputusan = aksi (aturan 3 detik). Ia harus MENGALAHKAN `.card h2`
    (--fs-3) dan `.evidence-page .card > h2` (--fs-4, 600): tanpa specificity
    ini judulnya jatuh ke 16px dan kalah tegas dari label di atasnya. */
-.evidence-page .card > h2.evidence-hero-title {
+.evidence-page .card .evidence-hero-title {
   margin: 0;
   /* Judul ini satu kalimat panjang ("Alihkan 712 kg telur: Cianjur → Jakarta"),
      bukan angka metrik. --fs-7 (24px) membuatnya menimpa kartu di sekitarnya;
@@ -5533,7 +6253,7 @@ a:focus-visible {
   margin: 0;
   background: var(--line);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 .evidence-metric {
@@ -5585,7 +6305,7 @@ a:focus-visible {
   padding: 7px 10px;
   border: 1px solid var(--line);
   border-left-width: 3px;
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface-sunken);
 }
 .evidence-flag-label {
@@ -5627,7 +6347,7 @@ a:focus-visible {
   margin: 0;
   padding: 10px 12px;
   border: 1px dashed var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
 }
 .evidence-consequence-row {
   display: grid;
@@ -5661,7 +6381,7 @@ a:focus-visible {
   align-items: start;
   padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--surface);
 }
 .evidence-route-mark {
@@ -5856,7 +6576,7 @@ a:focus-visible {
 }
 .gov-blocker {
   border: 1px solid var(--warn-border);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   background: var(--warn-bg);
   color: var(--warn-ink);
   padding: 8px 10px;
@@ -5977,7 +6697,7 @@ a:focus-visible {
 }
 
 @media (max-width: 760px) {
-  .evidence-page .card > h2.evidence-hero-title {
+  .evidence-page .card .evidence-hero-title {
     font-size: var(--fs-4);
   }
   .evidence-consequence-row {
@@ -6113,7 +6833,7 @@ a:focus-visible {
 .kpi-state {
   align-self: flex-start;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   font-family: var(--font-data);
   font-size: var(--fs-1);
   font-weight: 600;
@@ -6159,7 +6879,7 @@ a:focus-visible {
   align-self: flex-start;
   margin: 0;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   font-family: var(--font-data);
   font-size: var(--fs-1);
   font-weight: 600;
@@ -6240,7 +6960,7 @@ a:focus-visible {
   cursor: pointer;
   border: 1px solid var(--line);
   border-left-width: 3px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--ink);
   box-shadow: var(--shadow-1);
@@ -6748,7 +7468,7 @@ a:focus-visible {
   cursor: pointer;
   font-size: var(--fs-2);
   color: var(--accent-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
 }
 .fact-more > summary:hover {
   text-decoration: underline;
@@ -6874,7 +7594,7 @@ a:focus-visible {
 .feed-field select {
   width: 100%;
   border: 1px solid var(--line-input);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface);
   color: var(--ink);
   font-size: var(--fs-2);
@@ -6908,7 +7628,7 @@ a:focus-visible {
   border: 1px solid var(--line-input);
   background: var(--surface);
   color: var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   padding: 6px 12px;
   font-size: var(--fs-2);
   font-weight: 600;
@@ -6993,7 +7713,7 @@ a:focus-visible {
 .board-alert {
   margin: 0.75rem 0 0;
   padding: 0.7rem 0.85rem;
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--danger-bg);
   border: 1px solid var(--danger-border);
   /* Fase 5: "batch gagal diblokir" adalah aksi berbingkai bahaya — tepi kiri
@@ -7019,7 +7739,7 @@ a:focus-visible {
   gap: 0.75rem;
   padding: 0.45rem 0.55rem 0.45rem 1.55rem;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
 }
 
 /* Fase 5: titik amber — daftar ini isinya batch yang mendesak (≤ 48 jam),
@@ -7118,14 +7838,71 @@ a:focus-visible {
   max-width: 100%;
   padding: 4px 8px;
   border: 1px solid var(--line-input);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--ink);
   font: inherit;
 }
 
+/* Dua langkah penerimaan (20 Okt 2026): komoditas dulu, baru batch. Di layar
+   lebar keduanya sejajar supaya terlihat sebagai satu urutan; di ponsel
+   menumpuk karena nama komoditas + berat + lokasi butuh lebar penuh. */
+.safety-pick-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  gap: 0 16px;
+  align-items: start;
+}
+
+@media (max-width: 640px) {
+  .safety-pick-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .safety-checks {
   margin-bottom: var(--space-2, 10px);
+}
+
+/* Redesign 20 Okt 2026: lima titik periksa dua kolom di layar lebar — kartu
+   penerimaan tidak menjulang dan kelima titik terlihat tanpa menggulir. */
+@media (min-width: 900px) {
+  .safety-checks {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 28px;
+  }
+}
+
+/* Keadaan batch terpilih: menempel di bawah <select>, sedikit lebih rapat
+   daripada jarak antar-blok supaya jelas milik pilihan di atasnya. */
+.safety-pick-state {
+  margin: -6px 0 var(--space-2, 10px);
+  font-size: var(--fs-2);
+}
+
+/* Tanggal tidak boleh pecah di tengah ("19 Mar" / "2027"): di 375 px baris
+   keadaan batch membungkus, dan tahun yang terpisah dari tanggalnya justru
+   mengembalikan ambiguitas yang mau dihilangkan. */
+.safety-nobr {
+  white-space: nowrap;
+}
+
+/* Pembungkus semantik titik periksa (audit 20 Okt 2026): lima kotak centang
+   tanpa nama kelompok membuat pembaca layar tidak tahu ini satu set. Bingkai
+   bawaan <fieldset> dimatikan supaya tampilannya sama seperti daftar biasa. */
+.safety-checks-set {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.safety-checks-set > legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
 }
 
 .safety-checks li {
@@ -7177,11 +7954,36 @@ a:focus-visible {
   width: 100%;
   padding: 8px 10px;
   border: 1px solid var(--line-input);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--ink);
   font: inherit;
   resize: vertical;
+}
+
+/* Persetujuan penerimaan (026): panel keputusan kepala SPPG. Memakai
+   permukaan & garis yang sama dengan kotak lain di papan ini — satu bahasa
+   visual, bukan kartu baru. */
+.safety-approve {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: var(--space-2, 10px) 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+}
+
+.safety-approve-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.safety-notes .board-badge {
+  margin-left: 8px;
+  vertical-align: middle;
 }
 
 /* Riwayat catatan: titik amber bawaan `.board-list` juga tidak berlaku di sini
@@ -7195,10 +7997,158 @@ a:focus-visible {
   gap: 6px 8px;
 }
 
+/* Baris keputusan (026) di bawah catatan: satu baris penuh, rata kiri —
+   supaya "Disetujui … · +213 kg stok" tidak berdesakan di kanan. */
+.safety-notes li .board-list-meta + .board-list-meta {
+  flex-basis: 100%;
+  text-align: left;
+}
+
+/* —— Redesign 20 Okt 2026: saringan & pencarian daftar batch ——
+   Tujuan: halaman dibuka → pengguna melihat PRIORITAS (perlu tindakan),
+   bukan 30 baris setara. Chip membawa jumlah supaya isi saringan diketahui
+   sebelum diklik; kotak cari menyaring lokasi/komoditas. */
+.safety-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 4px 0 14px;
+  padding: 10px 12px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.safety-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.safety-filter .commodity-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.safety-filter-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  line-height: 16px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-muted);
+}
+
+.commodity-pill-active .safety-filter-count {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: transparent;
+  color: inherit;
+}
+
+.safety-search {
+  flex: 1 1 240px;
+  max-width: 340px;
+}
+
+.safety-search input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.safety-search input:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.safety-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+
+.safety-cta .evidence-note {
+  margin: 0;
+}
+
+/* Di layar sempit tabel 8 kolom tidak bisa dibaca: tiap baris menjadi kartu
+   berlabel (data-label), tombol tindakan turun ke bawah kartu. Ambang 860px
+   (bukan 720) karena pada 768px tanggal "Layak sampai" pecah tiga baris. */
+@media (max-width: 860px) {
+  .safety-table thead {
+    display: none;
+  }
+
+  .safety-table,
+  .safety-table tbody,
+  .safety-table tr,
+  .safety-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .safety-table tr {
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+
+  .safety-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+    border: 0;
+    text-align: right;
+  }
+
+  .safety-table td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    color: var(--ink-muted);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .safety-table td:first-child {
+    font-weight: 600;
+  }
+
+  .safety-table td[data-label="Tindakan"] {
+    display: block;
+    text-align: left;
+  }
+
+  .safety-table td[data-label="Tindakan"]::before {
+    display: none;
+  }
+
+  .safety-row-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
 .board-badge {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   font-size: var(--fs-1);
   border: 1px solid transparent;
   white-space: nowrap;
@@ -7395,20 +8345,6 @@ button:active:not(:disabled),
     height: 20px;
   }
 
-  .map-layer-toggle {
-    /* Ikon persegi: `min-height` saja akan membuatnya 44x32 (lonjong), jadi
-       lebar ikut ditulis. 44x44 = panduan sentuh iOS/Android (skill prioritas 2). */
-    width: 44px;
-    height: 44px;
-    min-height: 44px;
-  }
-
-  .map-layer-toggle-icon,
-  .map-layer-toggle-icon svg {
-    width: 20px;
-    height: 20px;
-  }
-
   .map-layer-info-toggle,
   .map-filter-clear {
     min-height: 44px;
@@ -7483,14 +8419,14 @@ button:active:not(:disabled),
 .settings-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .settings-title { margin: 0; font-size: var(--fs-6); color: var(--ink); }
 .settings-sub { margin: 4px 0 0; color: var(--ink-muted); font-size: var(--fs-2); max-width: 70ch; }
-.settings-refresh, .settings-save { min-height: 44px; padding: 0 14px; border-radius: var(--radius, 10px); border: 1px solid var(--line-input); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; transition: background var(--dur-1, .12s) var(--ease-standard, ease); }
+.settings-refresh, .settings-save { min-height: 44px; padding: 0 14px; border-radius: var(--radius); border: 1px solid var(--line-input); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; transition: background var(--dur-1, .12s) var(--ease-standard, ease); }
 .settings-save { min-width: 88px; }
 .settings-save:disabled { opacity: .55; cursor: not-allowed; }
 .settings-refresh:focus-visible, .settings-save:focus-visible,
 .settings-select:focus-visible, .settings-input:focus-visible { outline: 2px solid var(--focus-ring, var(--accent, #2563eb)); outline-offset: 2px; }
-.settings-notice { margin: 0; padding: 10px 12px; border-radius: var(--radius, 10px); background: var(--ok-bg); color: var(--ok-ink); font-size: var(--fs-2); }
-.settings-error { margin: 0; padding: 10px 12px; border-radius: var(--radius, 10px); background: var(--danger-bg); color: var(--danger-ink); font-size: var(--fs-2); }
-.settings-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius, 10px); padding: 14px; }
+.settings-notice { margin: 0; padding: 10px 12px; border-radius: var(--radius); background: var(--ok-bg); color: var(--ok-ink); font-size: var(--fs-2); }
+.settings-error { margin: 0; padding: 10px 12px; border-radius: var(--radius); background: var(--danger-bg); color: var(--danger-ink); font-size: var(--fs-2); }
+.settings-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
 .settings-card-title { margin: 0 0 6px; font-size: var(--fs-4); color: var(--ink); }
 .settings-table-wrap {
   overflow-x: auto;
@@ -7507,7 +8443,7 @@ button:active:not(:disabled),
 .settings-table th { color: var(--ink-muted); font-weight: 600; }
 .settings-name { display: block; color: var(--ink); }
 .settings-email { display: block; color: var(--ink-muted); font-size: var(--fs-1); }
-.settings-select, .settings-input { min-height: 44px; width: 100%; min-width: 150px; padding: 0 10px; border: 1px solid var(--line-input); border-radius: var(--radius, 10px); background: var(--surface); color: var(--ink); font: inherit; }
+.settings-select, .settings-input { min-height: 44px; width: 100%; min-width: 150px; padding: 0 10px; border: 1px solid var(--line-input); border-radius: var(--radius); background: var(--surface); color: var(--ink); font: inherit; }
 .settings-coord { font-family: var(--font-data, monospace); color: var(--ink-muted); white-space: nowrap; }
 .settings-muted { color: var(--ink-muted); }
 .settings-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -7676,7 +8612,7 @@ button:active:not(:disabled),
 .quality-legend-dot {
   width: 10px;
   height: 10px;
-  border-radius: 3px;
+  border-radius: var(--radius-chip);
   flex: none;
   border: 1px solid var(--line-strong);
   background: var(--neutral-border);
@@ -7714,7 +8650,7 @@ button:active:not(:disabled),
   display: inline-block;
   padding: 2px 7px;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   background: var(--surface-sunken);
   color: var(--ink-muted);
   font-family: var(--font-data);
@@ -7836,7 +8772,7 @@ button:active:not(:disabled),
   width: 32px;
   height: 32px;
   border: 1px solid var(--line-input);
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   background: var(--surface);
   color: var(--navy-700);
   cursor: pointer;
@@ -7914,7 +8850,7 @@ button:active:not(:disabled),
   gap: var(--space-3);
   padding: var(--space-3);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface-sunken);
   transition: border-color var(--dur-1) var(--ease-standard);
 }
@@ -7928,7 +8864,7 @@ button:active:not(:disabled),
   font-size: var(--fs-1);
   background: var(--neutral-bg);
   border: 1px solid var(--neutral-border);
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   padding: 0 4px;
   color: var(--neutral-ink);
 }
@@ -7941,7 +8877,7 @@ button:active:not(:disabled),
   background: var(--danger-bg);
   border: 1px solid var(--danger-border);
   border-left: 3px solid var(--status-danger);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   color: var(--danger-ink);
   font-size: var(--fs-2);
   line-height: var(--lh-body);
@@ -8023,7 +8959,7 @@ button:active:not(:disabled),
   padding: 10px 12px;
   border: 1px solid var(--ok-border);
   border-left: 3px solid var(--ok-ink);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   background: var(--ok-bg);
   color: var(--ok-ink);
   font-size: var(--fs-2);
@@ -8033,7 +8969,7 @@ button:active:not(:disabled),
   padding: 10px 12px;
   border: 1px solid var(--warn-border);
   border-left: 3px solid var(--status-warning);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   background: var(--warn-bg);
   color: var(--warn-ink);
   font-size: var(--fs-2);
@@ -8063,7 +8999,7 @@ button:active:not(:disabled),
   padding: 10px 12px;
   border: 1px solid var(--danger-border);
   border-left: 3px solid var(--status-danger);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   background: var(--danger-bg);
   color: var(--danger-ink);
   font-size: var(--fs-2);
@@ -8071,7 +9007,7 @@ button:active:not(:disabled),
 .demo-data-status {
   padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface-sunken);
   font-size: var(--fs-2);
   color: var(--ink);
@@ -8155,7 +9091,7 @@ button:active:not(:disabled),
   padding: 10px 12px;
   border: 1px solid var(--tone-line);
   border-left: 3px solid var(--tone-ink);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: linear-gradient(180deg, var(--tone-bg), var(--surface) 84%);
 }
 .integrity-proof[data-tone="ok"] {
@@ -8258,7 +9194,7 @@ button:active:not(:disabled),
   color: var(--trust-accent);
   background: var(--trust-surface);
   border: 1px solid var(--trust-line);
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   padding: 2px 8px;
   overflow-wrap: anywhere;
 }
@@ -8272,7 +9208,7 @@ button:active:not(:disabled),
   min-height: 32px;
   padding: 4px 12px;
   border: 1px solid var(--line-input);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface);
   color: var(--accent-strong);
   font-size: var(--fs-2);
@@ -8344,7 +9280,7 @@ button:active:not(:disabled),
   letter-spacing: -0.2px;
 }
 .approval-modal ul { font-size: var(--fs-3); line-height: 1.7; }
-.approval-modal-blockers { border-radius: 10px; }
+.approval-modal-blockers { border-radius: var(--radius-control); }
 .approval-modal-actions { gap: 10px; }
 /* Ring fokus eksplisit: approve adalah aksi berdampak, fokus keyboardnya tidak
    boleh bergantung pada gaya bawaan browser. */
@@ -8354,7 +9290,7 @@ button:active:not(:disabled),
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
-.action-menu-item { border-radius: 10px; }
+.action-menu-item { border-radius: var(--radius-control); }
 .action-menu-item:hover { border-color: var(--line-strong); background: var(--accent-soft); }
 
 /* ===========================================================================
@@ -8526,7 +9462,7 @@ button:active:not(:disabled),
   gap: 2px;
   padding: 12px 14px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--surface-sunken);
 }
 
@@ -8593,7 +9529,7 @@ button:active:not(:disabled),
   padding: 12px 14px;
   margin: 0 0 12px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--surface-sunken);
 }
 
@@ -8760,7 +9696,7 @@ button:active:not(:disabled),
 .settings-input,
 .settings-refresh,
 .settings-save {
-  border-radius: 10px;
+  border-radius: var(--radius-control);
 }
 
 .settings-save-cell {
@@ -8813,7 +9749,7 @@ button:active:not(:disabled),
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-left: 4px solid var(--line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--surface);
   transition: border-color var(--dur-2) ease;
 }
@@ -9057,6 +9993,73 @@ button:active:not(:disabled),
   color: var(--ink-muted);
 }
 
+/* Daftar pil bisa DILIPAT (permintaan pemilik 20 Okt 2026): kalau pil lebih dari
+   satu baris, hanya segitiga yang tampak sampai dibuka. Saat terlipat, pil
+   benar-benar dilepas dari tata letak (`display: none`) supaya tidak ada tombol
+   tak terlihat yang masih bisa difokus keyboard. */
+.route-focus-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.route-focus-list.is-collapsed {
+  display: none;
+}
+
+.route-focus-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-chip);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-1);
+}
+
+.route-focus-toggle:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.route-focus-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.route-focus-caret {
+  width: 12px;
+  height: 12px;
+  transition: transform 150ms var(--ease-standard);
+  transform: rotate(-90deg);
+}
+
+.route-focus-caret.is-open {
+  transform: rotate(0deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-focus-caret {
+    transition: none;
+  }
+}
+
+.route-focus-probe {
+  position: absolute;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .route-focus-pill {
   display: inline-flex;
   align-items: center;
@@ -9070,9 +10073,9 @@ button:active:not(:disabled),
 }
 
 .route-focus-pill.is-active {
-  border-color: var(--primary, #005c55);
+  border-color: var(--primary);
   background: var(--surface);
-  color: var(--primary, #005c55);
+  color: var(--primary);
 }
 
 .route-focus-name {
@@ -9085,7 +10088,7 @@ button:active:not(:disabled),
 }
 
 .route-focus-pill.is-active .route-focus-state {
-  color: var(--primary, #005c55);
+  color: var(--primary);
 }
 
 /* ── Papan kiriman (Arah B, 16 Okt 2026) ──────────────────────────────────────
@@ -9118,8 +10121,8 @@ button:active:not(:disabled),
 }
 
 .board-sort-pill.is-active {
-  border-color: var(--primary, #005c55);
-  color: var(--primary, #005c55);
+  border-color: var(--primary);
+  color: var(--primary);
   font-weight: 600;
 }
 
@@ -9190,7 +10193,7 @@ button:active:not(:disabled),
 .shipment-details > summary:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
 }
 
 .shipment-detail-list {
@@ -9380,7 +10383,7 @@ p, li, dd { text-wrap: pretty; }
 .reach-tag {
   display: inline-block;
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   font-size: var(--fs-1);
 }
 .route-tag { background: var(--cat-blue-bg); color: var(--cat-blue-ink); }
@@ -9393,7 +10396,7 @@ p, li, dd { text-wrap: pretty; }
   display: inline-block;
   width: 6px;
   height: 6px;
-  border-radius: 2px;
+  border-radius: var(--radius-chip);
   margin-right: 8px;
   vertical-align: 2px;
   background: var(--accent-strong);
@@ -9428,7 +10431,7 @@ p, li, dd { text-wrap: pretty; }
   display: inline-block;
   width: 6px;
   height: 6px;
-  border-radius: 2px;
+  border-radius: var(--radius-chip);
   margin-right: 8px;
   vertical-align: 2px;
   background: var(--accent-strong);
@@ -9604,7 +10607,7 @@ p, li, dd { text-wrap: pretty; }
   padding: 5px 10px;
   min-height: 30px;
   border: 1px solid color-mix(in srgb, var(--accent-strong) 32%, var(--line));
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface);
   color: var(--accent);
   font: inherit;
@@ -9668,55 +10671,124 @@ p, li, dd { text-wrap: pretty; }
    Rujukan: _qa/rencana-decision-evidence-v3.md. Tidak ada token/palet baru —
    semua nilai memakai --space-*, --fs-*, --line*, --surface, --accent. */
 
-/* Tautan bagian: target tidak tertutup kepala halaman yang menempel
-   (WCAG 2.2 SC 2.4.11 Focus Not Obscured). */
-.evidence-page [id] {
-  scroll-margin-top: 120px;
+/* ── Navigasi "lompat ke bagian halaman" (komponen bersama, 20 Okt 2026) ─────
+   Dipindahkan dari halaman Decision & Evidence supaya halaman lain memakai
+   komponen yang SAMA (components/SectionJump.tsx), bukan salinan. Aturan
+   pemakaian ada di docs/design.md §24: hanya untuk halaman panjang (≥ ±2,5
+   layar) dengan ≥ 3 bagian tetap, maksimum lima tujuan.
+
+   Satu-satunya penanda posisi: `aria-current="true"` (bukan kelas terpisah),
+   supaya pembaca layar dan gaya visual tidak bisa berselisih. Semua nilai dari
+   token — tidak ada palet baru. */
+
+/* Target jangkar tidak boleh mendarat di balik top bar (64) + nav menempel
+   (± 44) — WCAG 2.2 SC 2.4.11 Focus Not Obscured. Dipasang sebagai kelas
+   pada elemen tujuan, bukan daftar id, supaya halaman baru tidak perlu
+   menambah selektor. */
+.jump-target {
+  scroll-margin-top: 132px;
 }
 
-.evidence-jump {
+.section-jump {
+  position: sticky;
+  top: 72px;                        /* tinggi top bar 64 + 8 */
+  z-index: 20;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--space-2);
+  overflow-x: auto;                 /* satu baris; digulir mendatar di layar sempit */
   padding: 6px 8px;
   margin: 0;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.94);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  scrollbar-width: none;
 }
-.evidence-jump-label {
+.section-jump::-webkit-scrollbar {
+  display: none;
+}
+
+.section-jump-label {
+  flex: none;                       /* label tidak ikut menyusut saat daftar digulir */
   font-size: var(--fs-1);
   letter-spacing: var(--track-caps);
   text-transform: uppercase;
   color: var(--ink-subtle);
 }
-.evidence-jump-list {
+
+.section-jump-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   list-style: none;
   margin: 0;
   padding: 0;
 }
-.evidence-jump-link {
+
+.section-jump-link {
   display: inline-flex;
   align-items: center;
-  min-height: 32px;
+  min-height: 30px;
   padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: var(--fs-1);           /* lantai teks 12 px */
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
   text-decoration: none;
   color: var(--ink-muted);
   background: var(--surface);
 }
-.evidence-jump-link:hover {
+.section-jump-link:hover {
   color: var(--ink);
-}
-.evidence-jump-link:hover {
   border-color: var(--line-strong);
 }
-.evidence-jump-link:focus-visible {
+.section-jump-link:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+.section-jump-link[aria-current="true"] {
+  border-color: var(--accent-strong);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Target sentuh 44 px di layar sentuh atau sempit (aturan yang sama dengan pil
+   komoditas & chip filter). */
+@media (pointer: coarse), (max-width: 720px) {
+  .section-jump-link {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .section-jump-link {
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .section-jump {
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media (forced-colors: active) {
+  .section-jump-link[aria-current="true"] {
+    border-color: Highlight;
+    color: Highlight;
+  }
+}
+@media print {
+  /* Kertas tidak punya gulir: nav menempel hanya memakan ruang. */
+  .section-jump {
+    display: none;
+  }
 }
 
 /* Akibat keputusan kini <details>, bukan <dl> yang selalu terbuka. */
@@ -9749,7 +10821,7 @@ p, li, dd { text-wrap: pretty; }
 .evidence-consequence-summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
 }
 .evidence-consequence-hint {
   font-size: var(--fs-1);
@@ -9799,9 +10871,9 @@ p, li, dd { text-wrap: pretty; }
   width: min(560px, calc(100vw - 24px));
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius-dock);
   background: var(--surface);
-  box-shadow: var(--shadow-2), 0 16px 40px rgba(15, 23, 42, 0.1);
+  box-shadow: var(--shadow-dock);
   animation: actionbar-in var(--dur-3) var(--ease-standard) both;
 }
 @keyframes actionbar-in {
@@ -9864,7 +10936,7 @@ p, li, dd { text-wrap: pretty; }
   gap: 6px;
   min-height: 40px;
   padding-inline: var(--space-4);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   /* Tautan bergaya tombol: garis bawah bawaan <a> membuat label putih di atas
      biru terbaca seperti tautan teks, bukan tombol. */
   text-decoration: none;
@@ -9929,7 +11001,7 @@ p, li, dd { text-wrap: pretty; }
   font-size: var(--fs-2);
   color: var(--accent-strong);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-control-sm);
 }
 .integrity-more > summary:hover {
   text-decoration: underline;
@@ -9991,7 +11063,7 @@ p, li, dd { text-wrap: pretty; }
   flex-wrap: wrap;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--surface-sunken);
 }
 .popup-governance .gov-progress {
@@ -10093,7 +11165,7 @@ p, li, dd { text-wrap: pretty; }
 .popup-governance .approval-fact code {
   padding: 0 4px;
   border: 1px solid var(--neutral-border);
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   background: var(--neutral-bg);
   color: var(--neutral-ink);
   font-family: var(--font-data);
@@ -10109,7 +11181,7 @@ p, li, dd { text-wrap: pretty; }
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--danger-border);
   border-left: 3px solid var(--status-danger);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--danger-bg);
   color: var(--danger-ink);
 }
@@ -10335,7 +11407,7 @@ p, li, dd { text-wrap: pretty; }
   min-height: 32px;
   padding: 0 8px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface);
   color: var(--ink-muted);
   font-family: inherit;
@@ -10443,6 +11515,124 @@ p, li, dd { text-wrap: pretty; }
   gap: 10px;
   flex-wrap: wrap;
 }
+
+/* ── Bangun ulang data (21 Okt 2026) ─────────────────────────────────────────
+   Blok konfirmasi dua langkah di dalam "Siapkan data demo". Sengaja dibatasi
+   garis kiri amber, bukan kartu penuh: ia aksi sekunder yang hanya muncul saat
+   sesi berjalan, dan tidak boleh menyaingi tombol utama. */
+.dc-rebuild {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--status-warn, #b45309);
+  border-radius: var(--radius-control);
+  background: var(--surface-2, var(--surface));
+}
+.dc-rebuild-sub {
+  margin: 0;
+  max-width: 74ch;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+}
+.dc-rebuild-line {
+  margin: 0;
+  font-family: var(--font-mono, ui-monospace, "SFMono-Regular", Menlo, monospace);
+  font-size: var(--fs-2);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.dc-rebuild-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Tombol destruktif: satu-satunya tempat merah dipakai untuk aksi (bukan status). */
+.button-danger {
+  border-color: var(--status-danger);
+  background: var(--status-danger);
+  color: #fff;
+}
+.button-danger:hover:not(:disabled) {
+  filter: brightness(0.94);
+}
+.button-danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Sesi demo (024/025) ─────────────────────────────────────────────────────
+   Kartu sesi di dalam blok "Siapkan data demo": satu baris status + hitungan
+   mundur (monospace supaya angka tidak "menari" tiap detik) + aksi. Warna
+   mengikuti keadaan: hijau = berjalan, netral = kosong, kuning = tinggal <5 m. */
+.dc-session {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-2, var(--surface));
+}
+.dc-session[data-keadaan="berjalan"] {
+  border-color: color-mix(in srgb, var(--safe, #1e8e3e) 40%, var(--line));
+}
+.dc-session-line {
+  margin: 0;
+  flex: 1 1 320px;
+  min-width: 0;
+  font-size: var(--fs-2);
+  color: var(--ink);
+}
+.dc-session-count {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-4);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+.dc-session-warn {
+  margin: 0;
+  flex-basis: 100%;
+  font-size: var(--fs-2);
+  color: var(--warn, #8a5a00);
+}
+.dc-session-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+/* Banner global saat data memang sengaja kosong. */
+.demo-kosong {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--warn, #8a5a00);
+  border-radius: var(--radius-control);
+  background: var(--surface-2, var(--surface));
+}
+.demo-kosong-teks {
+  margin: 0;
+  max-width: 78ch;
+  font-size: var(--fs-2);
+  color: var(--ink);
+}
+.demo-kosong-muted { color: var(--ink-muted); }
+@media (max-width: 640px) {
+  .dc-session-actions { margin-left: 0; width: 100%; }
+  .dc-session-actions .button { flex: 1 1 auto; }
+}
 .dc-actions .button {
   margin: 0;
 }
@@ -10519,7 +11709,7 @@ p, li, dd { text-wrap: pretty; }
   max-height: 240px;
   overflow: auto;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface-sunken);
   color: var(--ink);
   font-family: var(--font-data);
@@ -10566,7 +11756,7 @@ p, li, dd { text-wrap: pretty; }
   min-width: 0;
   padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: var(--r-2);
+  border-radius: var(--radius-control-sm);
   background: var(--surface);
 }
 .dc-agent-head {
@@ -10602,7 +11792,11 @@ p, li, dd { text-wrap: pretty; }
 }
 .dc-agent-meta {
   display: flex;
-  gap: 14px;
+  /* Tujuh kartu berdampingan: dua kolom membuat nilai pendek pun pecah
+     ("268 md" -> "268" / "md", "1 peringatan" -> "1" / "peringatan").
+     Satu kolom per kartu: label di atas nilainya, nilai utuh satu baris. */
+  flex-direction: column;
+  gap: 6px;
   margin: 0;
 }
 .dc-agent-meta dt {
@@ -10614,6 +11808,7 @@ p, li, dd { text-wrap: pretty; }
   font-size: var(--fs-2);
   font-variant-numeric: tabular-nums;
   color: var(--ink);
+  white-space: nowrap;
 }
 .dc-agent[data-state="ok"] {
   background: var(--ok-bg);
@@ -10681,7 +11876,7 @@ p, li, dd { text-wrap: pretty; }
 .dc-steps-fold > summary:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
-  border-radius: var(--r-1);
+  border-radius: var(--radius-control-sm);
 }
 .dc-fold-count {
   display: inline-flex;
@@ -10713,7 +11908,7 @@ p, li, dd { text-wrap: pretty; }
   gap: 1px;
   padding: 5px 8px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-control-sm);
   background: var(--surface);
 }
 .dc-step-name {
@@ -10722,11 +11917,8 @@ p, li, dd { text-wrap: pretty; }
   letter-spacing: 0.02em;
   color: var(--ink);
 }
-.dc-step-tool {
-  font-family: var(--font-data);
-  font-size: var(--fs-1);
-  color: var(--ink-muted);
-}
+/* .dc-step-tool dicabut 21 Okt: daftar langkah hanya menampilkan nama
+   langkah/agent, bukan slug alat (evaluate_safety, supervisor.narration). */
 .dc-line--muted {
   color: var(--ink-subtle);
 }
@@ -10917,4 +12109,34 @@ p, li, dd { text-wrap: pretty; }
     height: 44px;
     right: 1px;
   }
+}
+
+/* Geometri standar label ringkas (20 Okt 2026) — lencana status.
+   Delapan keluarga lencana mengukur dirinya sendiri: terukur tinggi 20/22/24 px
+   karena padding vertikal 1 vs 2 px, padding horizontal 6 vs 8 px, dan
+   `line-height` tidak diset sehingga leading body ikut masuk. Satu geometri di
+   sini (blok terakhir stylesheet, jadi menang urutan): 2px 8px + line-height
+   16px menghasilkan 22 px termasuk border 1 px, dan min-height menjaga yang
+   tanpa border. Kendali pil (commodity-pill, board-sort-pill, route-focus-pill)
+   TIDAK ikut — itu tombol dengan target sentuh sendiri. `.shipment-event-tag`
+   juga tidak ikut: ia tag inline di dalam baris teks (16 px) dan menaikkannya
+   menambah tinggi baris tabel. */
+.board-badge,
+.kpi-state,
+.safety-state,
+.shipping-tag,
+.shipping-tag-fail,
+.integration-badge,
+.shipment-pill,
+.shipment-chip,
+.route-tag,
+.reach-tag {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 2px 8px;
+  line-height: 16px;
+  min-height: 22px;
+  font-size: var(--fs-1);
+  white-space: nowrap;
 }

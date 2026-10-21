@@ -19,13 +19,33 @@ import { formatKg } from "../lib/overview-format";
 // Label masa berlaku. Angka hanya dicetak kalau memang berupa angka yang sah:
 // `seconds_remaining ?? 0` dulu menampilkan "berlaku 0 dtk" saat backend tidak
 // mengirim sisa waktu — angka karangan, bertentangan dengan aturan anti-fabricate.
+// Satuan detik tidak dipakai di kartu: "600 dtk" sulit dibaca. Nilai tetap
+// dihitung dari detik, lalu dibulatkan ke bawah ke menit/jam/hari supaya
+// pengguna tidak dibuat merasa punya waktu lebih panjang dari yang sebenarnya.
+function validityDuration(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  if (total < 60) return "kurang dari 1 menit";
+  const minutes = Math.floor(total / 60);
+  if (minutes < 60) return `${minutes} menit`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    const restMinutes = minutes % 60;
+    return restMinutes ? `${hours} jam ${restMinutes} menit` : `${hours} jam`;
+  }
+  const days = Math.floor(hours / 24);
+  const restHours = hours % 24;
+  return restHours ? `${days} hari ${restHours} jam` : `${days} hari`;
+}
+
 function validityBadge(decision: { valid?: boolean; seconds_remaining?: unknown }): string {
   // "Lewat tenggat" — bukan "kedaluwarsa": yang dibaca pengguna adalah bahwa
   // TINDAKAN tidak mungkin lagi, dan kalimatnya sama dengan lonceng top bar
   // ("menunggu tindakan"/"lewat tenggat") supaya satu kosakata di seluruh app.
   if (!decision.valid) return "Lewat tenggat";
   const sisa = decision.seconds_remaining;
-  return typeof sisa === "number" && Number.isFinite(sisa) ? `berlaku ${sisa} dtk` : "berlaku";
+  return typeof sisa === "number" && Number.isFinite(sisa)
+    ? `berlaku ${validityDuration(sisa)}`
+    : "berlaku";
 }
 
 const CASE_LABELS: Record<string, string> = {

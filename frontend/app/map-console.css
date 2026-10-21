@@ -61,12 +61,12 @@
 /* Piringan terang yang menampung kanvas + chrome-nya. */
 .map-card .map-body {
   padding: 10px;
-  border-radius: 14px;
+  border-radius: var(--radius-dock);
   background: var(--map-glass);
   border: 1px solid var(--map-hair);
   -webkit-backdrop-filter: blur(10px) saturate(1.02);
   backdrop-filter: blur(10px) saturate(1.02);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-float);
   color: var(--map-text);
 }
 
@@ -74,7 +74,7 @@
    putih tanpa mengandalkan bayangan. */
 .map-card .map-gl {
   border-color: var(--map-hair-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
 }
 
 /* Label pin: chip putih, bukan kaca gelap. */
@@ -82,7 +82,7 @@
   background: rgba(255, 255, 255, 0.97);
   border-color: var(--map-hair-strong);
   color: var(--map-text);
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+  box-shadow: var(--shadow-control);
   font-weight: 600;
 }
 
@@ -95,19 +95,6 @@
   color: var(--map-text);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
-}
-
-/* Hover/fokus pil: piringan PUTIH (tema terang). */
-.map-card .map-overlay-toggles .map-layer-toggle:hover,
-.map-card .map-overlay-toggles .map-layer-toggle:focus-visible {
-  background: var(--map-glass-deep);
-  border-color: var(--map-hair-strong);
-  color: var(--map-text);
-}
-.map-card .map-overlay-toggles .map-layer-toggle[aria-pressed="true"] {
-  background: transparent;
-  border-color: transparent;
-  color: var(--map-accent-ink);
 }
 
 /* Chip saringan aktif + tombol rincian lapisan. */
@@ -183,7 +170,7 @@
 }
 .map-card .map-legend-box-shape,
 .map-card .map-legend-compact-item > i:not([class*="map-legend-line"]) {
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.25);
+  box-shadow: var(--ring-hairline);
 }
 
 /* Pemilih kiriman (Arah C). */
@@ -215,9 +202,9 @@
 .map-card .maplibregl-popup-content {
   background: var(--map-glass-deep);
   border: 1px solid var(--map-hair-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   color: var(--map-text);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+  box-shadow: var(--shadow-pop);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
@@ -267,10 +254,15 @@
   color: var(--map-text);
 }
 
-.map-card .maplibregl-ctrl-group {
+/* Leluhur `.map-gl` dinaikkan (0,3,0) karena MapLibre sendiri menulis
+   `.maplibregl-ctrl-group:not(:empty)` (0,2,0): tanpa ini aturan proyek kalah
+   urutan dan bayangan terukur tetap milik MapLibre. Bukan `!important` supaya
+   tema masih bisa menimpanya kelak. */
+.map-card .map-gl .maplibregl-ctrl-group {
   background: var(--map-glass-solid);
   border: 1px solid var(--map-hair-strong);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+  border-radius: var(--radius-chip);
+  box-shadow: var(--shadow-control);
 }
 .map-card .maplibregl-ctrl-group button + button {
   border-top-color: var(--map-hair);
@@ -295,7 +287,7 @@
 .map-card .maplibregl-ctrl.maplibregl-ctrl-attrib {
   background: var(--map-glass-solid);
   color: var(--map-text-muted);
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
 }
 .map-card .maplibregl-ctrl.maplibregl-ctrl-attrib a {
   color: var(--map-accent-text);
@@ -305,7 +297,6 @@
    piringan putih (8,7:1) dan ubin peta termasuk taman (4,9:1).
    `--map-accent` #2563EB gagal di taman (2,93:1), jadi cincin memakai
    `--map-focus` #1E40AF. */
-.map-card .map-layer-toggle:focus-visible,
 .map-card .map-legend-toggle:focus-visible,
 .map-card .map-filter-clear:focus-visible,
 .map-card .map-layer-info-toggle:focus-visible,
@@ -316,10 +307,8 @@
   outline-offset: 2px;
 }
 
-/* Tanpa animasi saat reduced motion. */
 @media (prefers-reduced-motion: reduce) {
   .map-card .map-body,
-  .map-card .map-layer-toggle,
   .map-card .map-legend-toggle,
   .map-card .route-focus-pill,
   .map-card .maplibregl-popup-content {
@@ -332,7 +321,6 @@
 @media (prefers-reduced-transparency: reduce) {
   .map-card .map-body,
   .map-card .maplibregl-popup-content,
-  .map-card .map-layer-toggle,
   .map-card .map-legend-toggle,
   .map-card .map-reset-view,
   .map-card .maplibregl-ctrl-group,
@@ -347,7 +335,6 @@
 @media (forced-colors: active) {
   .map-card .map-body,
   .map-card .map-pin-label,
-  .map-card .map-layer-toggle,
   .map-card .maplibregl-popup-content {
     background: Canvas;
     color: CanvasText;
@@ -360,6 +347,430 @@
 .map-card .map-body .map-side {
   color: var(--ink);
   background: var(--surface);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   padding: 8px;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Kartu popup peta (21 Okt 2026)
+   ──────────────────────────────────────────────────────────────────────────
+   Permintaan pemilik: "kalau diklik icon mobil, supplier, dan SPPG muncul
+   informasi — desain UI/UX-nya sebaik mungkin, eye catching."
+   Sebelumnya popup = gelembung putih berisi 2–5 baris teks tanpa hierarki.
+   Sekarang SATU kartu untuk empat jenis penanda, dengan bahasa desain yang
+   sama seperti kartu aplikasi: judul tebal, chip bernada, angka utama
+   (Fira Code), metrik pendek, dan fakta pendukung. Warna aksen berbeda per
+   jenis, tetapi arti selalu ditulis dengan kata di chip/callout.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.map-card .maplibregl-popup-content {
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--map-hair-strong);
+  border-radius: var(--radius-dock);
+  background: var(--map-glass-solid);
+  box-shadow: var(--shadow-3);
+}
+
+.map-card .map-popup {
+  /* flow-root menahan margin anak (mis. callout) di dalam kartu; tanpa ini
+     margin bawah callout kolaps keluar dan dipotong overflow popup. */
+  display: flow-root;
+  --pop-accent: #1d4ed8;
+  --pop-accent-2: #60a5fa;
+  --pop-accent-soft: #eff6ff;
+  --pop-accent-ink: #1e40af;
+  --pop-ink: #0f172a;
+  --pop-muted: #475569;
+  --pop-hair: rgba(15, 23, 42, 0.1);
+  min-width: 248px;
+  max-width: min(320px, calc(100vw - 80px));
+  color: var(--pop-ink);
+  background: #fff;
+}
+
+.map-card .maplibregl-popup {
+  z-index: 6;
+}
+
+.map-card .map-popup::before {
+  content: "";
+  display: block;
+  height: 3px;
+  background: linear-gradient(90deg, var(--pop-accent), var(--pop-accent-2));
+}
+
+.map-card .map-popup[data-kind="supplier"] {
+  --pop-accent: #0f766e;
+  --pop-accent-2: #2dd4bf;
+  --pop-accent-soft: #f0fdfa;
+  --pop-accent-ink: #115e59;
+}
+
+.map-card .map-popup[data-kind="truck"],
+.map-card .map-popup[data-kind="route"] {
+  --pop-accent: #1d4ed8;
+  --pop-accent-2: #60a5fa;
+  --pop-accent-soft: #eff6ff;
+  --pop-accent-ink: #1e40af;
+}
+
+/* Nada KEADAAN menang atas warna jenis: merah/hijau/amber membawa arti. */
+.map-card .map-popup[data-tone="danger"] {
+  --pop-accent: #b91c1c;
+  --pop-accent-2: #f87171;
+  --pop-accent-soft: #fef2f2;
+  --pop-accent-ink: #991b1b;
+}
+.map-card .map-popup[data-tone="safe"] {
+  --pop-accent: #15803d;
+  --pop-accent-2: #4ade80;
+  --pop-accent-soft: #ecfdf5;
+  --pop-accent-ink: #065f46;
+}
+.map-card .map-popup[data-tone="warning"] {
+  --pop-accent: #b45309;
+  --pop-accent-2: #fbbf24;
+  --pop-accent-soft: #fffbeb;
+  --pop-accent-ink: #8a5a00;
+}
+.map-card .map-popup[data-tone="neutral"] {
+  --pop-accent: #475569;
+  --pop-accent-2: #94a3b8;
+  --pop-accent-soft: #f1f5f9;
+  --pop-accent-ink: #334155;
+}
+
+/* Kepala: ikon (SVG, bukan emoji) + kicker + judul + chip. */
+.map-card .map-popup-head {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 12px 14px 8px;
+}
+.map-card .map-popup-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius);
+  color: var(--pop-accent-ink);
+  background: var(--pop-accent-soft);
+  border: 1px solid var(--pop-hair);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+.map-card .map-popup-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.map-card .map-popup-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding-right: 22px;
+}
+.map-card .map-popup-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pop-muted);
+}
+.map-card .map-popup-title {
+  margin-top: 2px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--pop-ink);
+  overflow-wrap: anywhere;
+}
+.map-card .map-popup-chip {
+  align-self: flex-start;
+  max-width: 100%;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--pop-hair);
+  border-radius: 999px;
+  background: var(--pop-accent-soft);
+  color: var(--pop-accent-ink);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Angka utama: satu hal yang paling ingin diketahui dari penanda ini. */
+.map-card .map-popup-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 10px;
+  padding: 0 14px 9px;
+}
+.map-card .map-popup-hero-label {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--pop-muted);
+}
+.map-card .map-popup-hero-value {
+  flex: none;
+  max-width: 100%;
+  font-family: var(--font-data);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--pop-accent-ink);
+  text-align: right;
+}
+
+/* Metrik pendek: maksimal tiga, satu baris bila ruang cukup. */
+.map-card .map-popup-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+  gap: 1px;
+  margin: 0 14px 10px;
+  padding: 0;
+  border: 1px solid var(--pop-hair);
+  border-radius: var(--radius-control);
+  background: var(--pop-hair);
+  overflow: hidden;
+}
+.map-card .map-popup-metric {
+  min-width: 0;
+  padding: 7px 9px;
+  background: #f8fafc;
+}
+.map-card .map-popup-metric dt {
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pop-muted);
+}
+.map-card .map-popup-metric dd {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  color: var(--pop-ink);
+  overflow-wrap: anywhere;
+}
+
+/* Bar progres/keandalan. */
+.map-card .map-popup-meter {
+  display: grid;
+  gap: 4px;
+  padding: 0 14px 10px;
+}
+.map-card .map-popup-meter-track {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+.map-card .map-popup-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--pop-accent), var(--pop-accent-2));
+  transition: width var(--dur-3) var(--ease-standard);
+}
+.map-card .map-popup-meter-text {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--pop-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Kotak sorot: kiriman aktif / exclusion / peringatan mutu. */
+.map-card .maplibregl-popup-content .map-popup-callout {
+  margin: 0 14px 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--pop-hair);
+  border-left: 3px solid var(--pop-accent);
+  border-radius: var(--radius-control-sm);
+  background: var(--pop-accent-soft);
+  color: var(--pop-accent-ink);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.map-card .maplibregl-popup-content .map-popup-callout[data-tone="danger"] {
+  border-left-color: #b91c1c;
+  background: #fef2f2;
+  color: #991b1b;
+}
+.map-card .maplibregl-popup-content .map-popup-callout[data-tone="warning"] {
+  border-left-color: #b45309;
+  background: #fffbeb;
+  color: #8a5a00;
+}
+
+/* Fakta pendukung (jalur, perjalanan, masa layak). */
+.map-card .map-popup-line {
+  display: flex;
+  gap: 7px;
+  margin: 0;
+  padding: 0 14px 4px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--pop-muted);
+}
+.map-card .map-popup-line::before {
+  content: "";
+  flex: none;
+  width: 4px;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--pop-accent);
+}
+.map-card .map-popup-line:last-child {
+  padding-bottom: 12px;
+}
+
+.map-card .map-popup-note {
+  display: block;
+  margin: 0;
+  padding: 8px 14px 11px;
+  border-top: 1px dashed var(--pop-hair);
+  background: #fbfcfe;
+  color: var(--pop-muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+/* Tombol tutup MapLibre: bulat, tidak menabrak chip. */
+.map-card .maplibregl-popup-close-button {
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--pop-hair);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--pop-muted);
+  font-size: 16px;
+  line-height: 1;
+}
+.map-card .maplibregl-popup-close-button:hover {
+  background: #f1f5f9;
+  color: var(--pop-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-card .map-popup-meter-fill {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .map-card .map-popup,
+  .map-card .map-popup-icon,
+  .map-card .map-popup-chip,
+  .map-card .map-popup-metrics,
+  .map-card .map-popup-metric,
+  .map-card .map-popup-callout {
+    background: Canvas;
+    color: CanvasText;
+    border-color: CanvasText;
+  }
+}
+
+/* Layar sempit: angka utama sedikit lebih kecil supaya "kurang 780 kg"
+   tidak terpotong di kartu 274 px. Ditaruh SETELAH aturan dasar, bukan
+   sebelum — kalau tidak, font-size 20px di atasnya menang. */
+@media (max-width: 480px) {
+  .map-card .map-popup-hero-value {
+    font-size: 18px;
+  }
+  .map-card .map-popup-hero-label {
+    font-size: 10.5px;
+  }
+
+  /* Kartu truk lebih tinggi dari kartu SPPG (judul 2 baris + metrik 3 +
+     fakta). Di peta ponsel hanya ~320 px, jadi pada 375 px dipadatkan:
+     fakta "Sisa …" yang mengulang meter disembunyikan, teks meter juga
+     (angka besar sudah menyatakan progres), dan padding dirapatkan.
+     Fakta "Layak dipakai s/d …" tetap tampil — itu satu-satunya tempat
+     batas keamanan terlihat di popup. */
+  .map-card .map-popup[data-kind="truck"] .map-popup-line:not(:last-child) {
+    display: none;
+  }
+  .map-card .map-popup[data-kind="truck"] .map-popup-meter-text,
+  .map-card .map-popup[data-kind="supplier"] .map-popup-meter-text {
+    display: none;
+  }
+  .map-card .map-popup-head {
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px 12px 6px;
+  }
+  .map-card .map-popup-icon {
+    width: 34px;
+    height: 34px;
+  }
+  .map-card .map-popup-kicker {
+    font-size: 9px;
+  }
+  .map-card .map-popup-title {
+    font-size: 14.5px;
+    line-height: 1.2;
+  }
+  .map-card .map-popup-chip {
+    margin-top: 4px;
+    padding: 1px 7px;
+    font-size: 10px;
+  }
+  .map-card .map-popup-hero,
+  .map-card .map-popup-meter {
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-bottom: 6px;
+  }
+  .map-card .map-popup-metrics {
+    margin-left: 12px;
+    margin-right: 12px;
+    margin-bottom: 7px;
+  }
+  .map-card .map-popup-callout {
+    margin: 0 12px 8px;
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+  .map-card .map-popup-metric {
+    padding: 6px 7px;
+  }
+  .map-card .map-popup-metric dt {
+    font-size: 8.5px;
+  }
+  .map-card .map-popup-metric dd {
+    font-size: 11px;
+  }
+  .map-card .map-popup-line {
+    padding: 0 12px 3px;
+    font-size: 10.5px;
+  }
+  .map-card .map-popup-line:last-child {
+    padding-bottom: 10px;
+  }
 }

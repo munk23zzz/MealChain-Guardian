@@ -6,6 +6,8 @@ import {
   checkedForReceipt,
   coverageSentence,
   expiryState,
+  filterSafetyRows,
+  safetyFilterCounts,
   hoursLabel,
   hoursLeft,
   incomingBatchId,
@@ -14,6 +16,12 @@ import {
   receiptRows,
   RECEIVING_CHECKS,
   RECEIVING_OTHER,
+  receivingBatchOptions,
+  receivingCommodityGroups,
+  receivingChecks,
+  receiptSavedSentence,
+  receiptNeedLabel,
+  receiptStatusLabel,
   receivingSentence,
   receivingState,
   safetyDecisions,
@@ -22,6 +30,7 @@ import {
   safetySummary,
   safetyTone,
   sortByDeadline,
+  usableLabel,
   WATCH_HOURS,
   URGENT_HOURS,
 } from "../lib/food-safety";
@@ -353,10 +362,18 @@ describe("daftar periksa penerimaan barang (workflow petugas, bukan data server)
     expect(RECEIVING_CHECKS.map((c) => c.id)).toEqual([
       "kemasan",
       "suhu",
-      "warna",
+      "bau_warna",
       "timbang",
       "lot",
     ]);
+  });
+  it("label suhu menyebut batas yang benar-benar dipakai mesin", () => {
+    // Sumber angka: `_SAFE_TEMP_BY_COMMODITY` di backend/app/api/freshness.py
+    // (telur/ayam/wortel 0–8 °C, beras 15–30 °C). Label tanpa angka membuat
+    // petugas menebak arti "sesuai" — itu yang diperbaiki 20 Okt 2026.
+    const suhu = RECEIVING_CHECKS.find((c) => c.id === "suhu");
+    expect(suhu?.label).toContain("0–8 °C");
+    expect(suhu?.label).toContain("15–30 °C");
   });
   it("menghitung yang sudah ditandai, dan tahu kalau lengkap", () => {
     const dua = receivingState({ kemasan: true, suhu: true });
@@ -365,7 +382,7 @@ describe("daftar periksa penerimaan barang (workflow petugas, bukan data server)
     expect(dua.allDone).toBe(false);
     expect(receivingSentence(dua)).toContain("2 dari 5");
 
-    const semua = receivingState({ kemasan: true, suhu: true, warna: true, timbang: true, lot: true });
+    const semua = receivingState({ kemasan: true, suhu: true, bau_warna: true, timbang: true, lot: true });
     expect(semua.allDone).toBe(true);
     expect(receivingSentence(semua)).toContain("5 dari 5");
   });
@@ -376,6 +393,40 @@ describe("daftar periksa penerimaan barang (workflow petugas, bukan data server)
   });
   it("centang bernilai non-boolean tidak dihitung", () => {
     expect(receivingState({ kemasan: "ya", suhu: 1 }).done).toBe(0);
+  });
+});
+
+// Audit 20 Okt 2026: kalimat lama menjanjikan gerbang yang tidak ada ("tandai
+// sisanya sebelum barang dipakai") padahal tombolnya aktif di 0/5 dan server
+// menerima snapshot kosong; pesan sesudah simpan pun menyuruh menandai ulang.
+describe("kalimat penerimaan — tanpa gerbang palsu, bentuk lampau sesudah simpan", () => {
+  it("sebelum simpan: menyebut sisa titik dan izin mencatat sebagian", () => {
+    const s = receivingSentence(receivingState({ kemasan: true }));
+    expect(s).toContain("1 dari 5");
+    expect(s).toContain("4 belum");
+    expect(s).toContain("Boleh disimpan sebagian");
+    expect(s).not.toContain("tandai sisanya");
+  });
+
+  it("sesudah simpan: bentuk lampau, tanpa perintah", () => {
+    const s = receiptSavedSentence(receivingState({ kemasan: true, suhu: true }));
+    expect(s).toContain("Catatan tersimpan");
+    expect(s).toContain("2 dari 5 titik tercatat");
+    expect(s).toContain("3 belum diperiksa");
+    expect(s).not.toContain("tandai");
+  });
+
+  it("lengkap: tidak ada lagi kata 'belum'", () => {
+    const penuh = receivingState({
+      kemasan: true,
+      suhu: true,
+      bau_warna: true,
+      timbang: true,
+      lot: true,
+    });
+    expect(receivingSentence(penuh)).toContain("semuanya sesuai");
+    expect(receiptSavedSentence(penuh)).toContain("semuanya sesuai");
+    expect(receiptSavedSentence(penuh)).not.toContain("belum");
   });
 });
 
@@ -421,6 +472,54 @@ describe("catatan penerimaan barang — opsi Lainnya (tersimpan di /receipts)", 
     expect(rows[1].byName).toBe(null);
   });
 
+  it("status penerimaan dipetakan ke label + nada; baris lama dianggap menunggu", () => {
+    expect(receiptStatusLabel("disetujui")).toEqual({ label: "Disetujui", nada: "ok" });
+    expect(receiptStatusLabel("ditolak")).toEqual({ label: "Ditolak", nada: "danger" });
+    expect(receiptStatusLabel(undefined)).toEqual({
+      label: "Menunggu persetujuan",
+      nada: "warn",
+    });
+    // Baris sebelum migrasi 026 tidak punya `status` — jangan jadi "undefined".
+    const lama = receiptRows({
+      items: [{ id: "r0", checked_count: 2, recorded_at: "2026-10-16T07:56:22+00:00" }],
+    });
+    expect(lama[0].status).toBe("menunggu");
+    expect(lama[0].statusLabel).toBe("Menunggu persetujuan");
+  });
+
+  it("receiptRows membawa pemutus, waktu keputusan, kg stok, dan alasan tolak", () => {
+    const rows = receiptRows({
+      items: [
+        {
+          id: "r1",
+          checked_count: 5,
+          recorded_at: "2026-10-20T10:00:00+00:00",
+          status: "disetujui",
+          reviewed_by_name: "SPPG Head Demo",
+          reviewed_at: "2026-10-20T10:05:00+00:00",
+          stock_kg: 128,
+          review_note: null,
+        },
+        {
+          id: "r2",
+          checked_count: 1,
+          recorded_at: "2026-10-20T10:10:00+00:00",
+          status: "ditolak",
+          reviewed_by_name: "SPPG Head Demo",
+          reviewed_at: "2026-10-20T10:12:00+00:00",
+          stock_kg: null,
+          review_note: "kemasan penyok",
+        },
+      ],
+    });
+    expect(rows[0].statusNada).toBe("ok");
+    expect(rows[0].reviewedByName).toBe("SPPG Head Demo");
+    expect(rows[0].stockKg).toBe(128);
+    expect(rows[1].statusNada).toBe("danger");
+    expect(rows[1].stockKg).toBe(null);
+    expect(rows[1].reviewNote).toBe("kemasan penyok");
+  });
+
   it("balasan kosong/rusak → daftar kosong, tidak melempar", () => {
     expect(receiptRows(null)).toEqual([]);
     expect(receiptRows({})).toEqual([]);
@@ -433,11 +532,232 @@ describe("catatan penerimaan barang — opsi Lainnya (tersimpan di /receipts)", 
     expect(kirim).toEqual({
       kemasan: true,
       suhu: false,
-      warna: false,
+      bau_warna: false,
       timbang: false,
       lot: false,
     });
+    // Kunci lama "warna" tidak dikirim lagi; baris lama di database tetap
+    // menyimpan kuncinya sendiri (snapshot disimpan apa adanya).
+    expect(Object.keys(kirim)).not.toContain("warna");
     // Opsi "Lainnya" BUKAN titik periksa — catatannya dikirim lewat other_note.
     expect(Object.keys(kirim)).not.toContain("lainnya");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Opsi "Batch yang diterima" (audit 20 Okt 2026). Server menolak 403 kalau batch
+// bukan milik dapur pemakai ("lokasi batch di cakupan lokasi di luar SPPG Anda"):
+// barang diterima di dapur sendiri, ruling 2026-10-14. Karena itu daftar opsi
+// TIDAK BOLEH ikut cakupan tabel — saat cakupan "Semua lokasi (pengawasan)"
+// dropdown sempat menawarkan 50+ batch kota lain, pilihan yang dijamin gagal.
+describe("opsi 'Batch yang diterima' selalu milik dapur sendiri", () => {
+  const now = new Date("2026-10-20T10:00:00+07:00");
+  const batch = (id: string, location: string, commodity: string, kg: number) => ({
+    id,
+    location,
+    commodity,
+    quantity_kg: kg,
+    usable_until: "2026-10-22T10:00:00+07:00",
+    safety_status: "pending",
+    freshness_score: 0.9,
+    quarantine_status: null,
+  });
+  const rows = safetyRows(
+    [
+      batch("b-jkt", "Jakarta", "ayam", 80),
+      batch("b-smg", "Semarang", "ayam", 120),
+      batch("b-yog", "Yogyakarta", "wortel", 100),
+    ],
+    now
+  );
+
+  it("membuang batch lokasi lain meski sumbernya seluruh jaringan", () => {
+    const opsi = receivingBatchOptions(rows, "Jakarta");
+    expect(opsi.map((row) => row.id)).toEqual(["b-jkt"]);
+  });
+
+  it("nama lokasi dibandingkan tanpa peduli huruf besar/kecil dan spasi", () => {
+    const opsi = receivingBatchOptions(rows, "  jakarta ");
+    expect(opsi.map((row) => row.id)).toEqual(["b-jkt"]);
+  });
+
+  it("tanpa lokasi sendiri (peran pengawasan) semua baris tetap sah — kartunya tidak dirender", () => {
+    expect(receivingBatchOptions(rows, null)).toHaveLength(3);
+  });
+
+  it("baris tanpa id tidak pernah jadi opsi", () => {
+    const tanpaId = safetyRows([{ ...batch("x", "Jakarta", "beras", 10), id: null }], now);
+    expect(receivingBatchOptions(tanpaId, "Jakarta")).toHaveLength(0);
+  });
+
+  it("label tanggal layak pakai selalu menyebut tahun (lintas tahun tidak ambigu)", () => {
+    // Batch beras demo layak sampai Maret TAHUN BERIKUTNYA; tanpa tahun labelnya
+    // terbaca "19 Mar" — seolah bulan depan. Di kartu penerimaan label ini
+    // dipakai memilih batch, jadi ambiguitasnya bukan kosmetik.
+    expect(usableLabel("2027-03-19T01:00:00+07:00")).toContain("2027");
+    expect(usableLabel("2026-10-22T10:00:00+07:00")).toContain("2026");
+    expect(usableLabel("2027-03-19T01:00:00+07:00")).toContain("19");
+    expect(usableLabel(null)).toBe("—");
+  });
+
+  it("batch yang masih layak didahulukan; yang kedaluwarsa tetap ada di bawah", () => {
+    const campur = safetyRows(
+      [
+        { ...batch("b-lewat", "Jakarta", "ayam", 80), usable_until: "2026-10-11T10:00:00+07:00" },
+        { ...batch("b-layak", "Jakarta", "wortel", 90), usable_until: "2026-10-24T10:00:00+07:00" },
+        { ...batch("b-gesit", "Jakarta", "telur", 40), usable_until: "2026-10-20T20:00:00+07:00" },
+      ],
+      now
+    );
+    const opsi = receivingBatchOptions(campur, "Jakarta");
+    // Default = yang paling cepat kedaluwarsa TAPI masih layak, bukan yang sudah lewat.
+    expect(opsi.map((row) => row.id)).toEqual(["b-gesit", "b-layak", "b-lewat"]);
+  });
+});
+
+describe("saringan daftar batch (redesign 20 Okt 2026)", () => {
+  const rows = safetyRows(BATCHES, new Date("2026-10-10T00:00:00Z"));
+
+  it("menghitung isi tiap saringan dari keadaan baris", () => {
+    const n = safetyFilterCounts(rows);
+    expect(n.semua).toBe(3);
+    expect(n.aman).toBe(1);
+    expect(n.gagal).toBe(1);
+    expect(n.verifikasi).toBe(1);
+    // "perlu tindakan" = gagal + perlu verifikasi + ditahan; aman tidak ikut.
+    expect(n.tindakan).toBe(2);
+  });
+
+  it("saringan tindakan mengeluarkan baris aman, saringan gagal hanya yang merah", () => {
+    const tindakan = filterSafetyRows(rows, "tindakan", "");
+    expect(tindakan.map((r) => r.id)).toEqual(["b2", "b3"]);
+    expect(filterSafetyRows(rows, "gagal", "").map((r) => r.id)).toEqual(["b2"]);
+    expect(filterSafetyRows(rows, "aman", "").map((r) => r.id)).toEqual(["b1"]);
+  });
+
+  it("pencarian mencocokkan lokasi & komoditas tanpa peduli huruf besar/kecil", () => {
+    expect(filterSafetyRows(rows, "semua", "SURABAYA").map((r) => r.id)).toEqual(["b2"]);
+    expect(filterSafetyRows(rows, "semua", "telur").map((r) => r.id)).toEqual(["b1", "b3"]);
+    expect(filterSafetyRows(rows, "semua", "  ")).toHaveLength(3);
+    expect(filterSafetyRows(rows, "semua", "tidak-ada")).toHaveLength(0);
+  });
+
+  it("saringan dan pencarian digabung, bukan saling menimpa", () => {
+    expect(filterSafetyRows(rows, "tindakan", "bogor").map((r) => r.id)).toEqual(["b3"]);
+  });
+});
+
+describe("pilihan penerimaan dua langkah: komoditas lalu batch", () => {
+  // Penerimaan hanya untuk barang BELUM diuji; batch fixture kanonik sudah
+  // punya hasil, jadi statusnya dijadikan `pending` untuk menguji pengelompokan.
+  const rows = safetyRows(
+    BATCHES.map((batch) => ({ ...batch, safety_status: "pending" })),
+    new Date("2026-10-10T00:00:00Z")
+  );
+
+  it("mengelompokkan batch per komoditas, mempertahankan urutan tenggat", () => {
+    const grup = receivingCommodityGroups(rows, null);
+    expect(grup.map((g) => g.commodity)).toEqual(["telur", "ayam"]);
+    expect(grup[0].rows.map((r) => r.id)).toEqual(["b1", "b3"]);
+    expect(grup[1].rows.map((r) => r.id)).toEqual(["b2"]);
+  });
+
+  it("menjumlahkan berat per komoditas, dan null bila tak ada kg", () => {
+    const grup = receivingCommodityGroups(rows, null);
+    expect(grup[0].totalKg).toBe(450); // 400 + 50
+    expect(grup[1].totalKg).toBe(120);
+    const tanpaKg = safetyRows(
+      [{ id: "x", location: "Bogor", commodity: "sayur", safety_status: "pending" }],
+      new Date()
+    );
+    expect(receivingCommodityGroups(tanpaKg, null)[0].totalKg).toBeNull();
+  });
+
+  it("cakupan lokasi tetap dihormati seperti daftar batch", () => {
+    const grup = receivingCommodityGroups(rows, "Bogor");
+    expect(grup).toHaveLength(1);
+    expect(grup[0].rows.map((r) => r.id)).toEqual(["b3"]);
+  });
+
+  it("komoditas kosong tetap punya kelompok, tidak hilang dari pilihan", () => {
+    const tanpaNama = safetyRows(
+      [{ id: "y", location: "Bogor", quantity_kg: 10, safety_status: "pending" }],
+      new Date()
+    );
+    expect(receivingCommodityGroups(tanpaNama, null)[0].commodity).toBe("—");
+  });
+});
+
+describe("titik periksa menyesuaikan komoditas", () => {
+  const ids = ["kemasan", "suhu", "bau_warna", "timbang", "lot"];
+
+  it("id titik tetap lima yang sama, hanya kalimatnya yang berubah", () => {
+    for (const komoditas of ["ayam", "telur", "beras", "wortel", "tidak-dikenal"]) {
+      expect(receivingChecks(komoditas).map((c) => c.id)).toEqual(ids);
+      expect(receivingChecks(komoditas)).toHaveLength(5);
+    }
+  });
+
+  it("beras memakai karung + rentang 15–30 °C dan ciri apek", () => {
+    const cek = receivingChecks("beras");
+    expect(cek[0].label).toContain("Karung");
+    expect(cek[1].label).toContain("15–30 °C");
+    expect(cek[2].label).toContain("apek");
+  });
+
+  it("ayam, telur, wortel membawa ciri masing-masing", () => {
+    expect(receivingChecks("ayam")[2].label).toContain("amis");
+    expect(receivingChecks("ayam")[1].label).toContain("0–8 °C");
+    expect(receivingChecks("telur")[2].label).toContain("retak");
+    expect(receivingChecks("wortel")[2].label).toContain("layu");
+  });
+
+  it("komoditas tak dikenal / kosong memakai kalimat umum, bukan kosong", () => {
+    const umum = receivingChecks("jagung");
+    expect(umum[0].label).toBe("Kemasan utuh, tidak sobek atau bocor");
+    expect(umum[1].label).toContain("0–8 °C");
+    expect(umum[2].label).toBe("Bau & warna normal");
+    expect(receivingChecks(null)[1].label).toContain("0–8 °C");
+  });
+
+  it("huruf besar/kecil tidak mengubah profil", () => {
+    expect(receivingChecks("BERAS")[1].label).toContain("15–30 °C");
+  });
+});
+
+describe("batch yang ditawarkan = yang masih perlu diperiksa/dicatat", () => {
+  const now = new Date("2026-10-10T00:00:00Z");
+  const rows = safetyRows(
+    [
+      { id: "n1", location: "Bogor", commodity: "beras", quantity_kg: 10, safety_status: "pending" },
+      { id: "n2", location: "Bogor", commodity: "beras", quantity_kg: 20, safety_status: "pending", receipt_status: "ditolak" },
+      { id: "n3", location: "Bogor", commodity: "beras", quantity_kg: 30, safety_status: "pending", receipt_status: "menunggu" },
+      { id: "n4", location: "Bogor", commodity: "beras", quantity_kg: 40, safety_status: "pending", receipt_status: "disetujui" },
+    ],
+    now
+  );
+
+  it("hanya batch yang BELUM dinilai yang ditawarkan", () => {
+    const id = receivingBatchOptions(rows, "Bogor").map((r) => r.id);
+    // menunggu, ditolak, dan disetujui sama-sama sudah dinilai → keluar.
+    expect(id).toEqual(["n1"]);
+  });
+
+  it("batch menunggu tidak kembali ke form; ia pindah ke antrean persetujuan", () => {
+    expect(receivingBatchOptions(rows, "Bogor").map((r) => r.id)).not.toContain("n3");
+  });
+
+  it("kelompok komoditas ikut aturan yang sama", () => {
+    const grup = receivingCommodityGroups(rows, "Bogor");
+    expect(grup).toHaveLength(1);
+    expect(grup[0].rows.map((r) => r.id)).toEqual(["n1"]);
+    expect(grup[0].totalKg).toBe(10);
+  });
+
+  it("label kebutuhan mencatat jujur per status", () => {
+    expect(receiptNeedLabel(null)).toBe("belum dinilai");
+    expect(receiptNeedLabel("ditolak")).toContain("dinilai ulang");
+    expect(receiptNeedLabel("menunggu")).toContain("menunggu persetujuan");
+    expect(receiptNeedLabel("disetujui")).toContain("sudah disetujui");
   });
 });

@@ -1,0 +1,29 @@
+{
+  "langkah": "hex-mentah-komponen",
+  "berkas": ["components/StockChart.tsx", "components/ComplianceEvidencePanel.module.css"],
+  "sebelum": {
+    "hexDiStockChart": ["#C62828 (SHORTAGE)", "#2E7D32 (SURPLUS)", "#E2E8F0 (grid)", "#64748B (tick X)", "#64748B (tick Y)"],
+    "hexDiComplianceEvidencePanel": ["#DCE6E9 (x2, cadangan --line)", "#FFFFFF (cadangan --surface)", "#555555 (cadangan --muted-foreground)", "#2E7D32 (.pass)", "#C62828 (.fail)", "#1F3B4D (.needs_verification)"],
+    "terukurHidup": {
+      "batang": "fill #C62828 / #2E7D32 (sama dengan token tapi hardcoded)",
+      "tick": "fill #64748B -> bukan token mana pun (--ink-muted = #475569)",
+      "grid": "stroke #E2E8F0 (sama dengan --line)"
+    }
+  },
+  "sesudah": {
+    "terukurHidup": {
+      "batang": "7 batang rgb(198, 40, 40) = --status-danger, 3 batang rgb(46, 125, 50) = --status-safe; atribut kini var(--status-danger)",
+      "tick": "rgb(71, 85, 105) = --ink-muted (#475569), 12 px",
+      "grid": "rgb(226, 232, 240) = --line",
+      "legenda": "ikon mengikuti token (merah 198,40,40 / hijau 46,125,50)",
+      "modulTerkompilasi": ".ComplianceEvidencePanel_pass { color: var(--status-safe) } / _fail { --status-danger } / _needs_verification { --navy-700 }"
+    },
+    "kontrasVsPutih": { "tickLama #64748B": 4.76, "tickBaru #475569": 7.58, "fail #C62828": 5.62, "pass #2E7D32": 5.13, "verifikasiLama #1F3B4D": 11.73, "verifikasiBaru #334155": 10.35, "ambangAA": 4.5 }
+  },
+  "keputusanTeknis": {
+    "varDalamAtributSVG": "diuji hidup: fill=\"var(--status-danger)\" resolve jadi rgb(198, 40, 40) di Chrome; font-size=\"var(--fs-1)\" juga resolve 12 px",
+    "radiusBatang": "radius={[0,4,4,0]} = --radius-chip; Recharts menghitung path dari ANGKA sehingga tidak bisa var(), jadi disamakan manual dan dikomentari di kode",
+    "needs_verification": "#1F3B4D tidak punya token setara; --status-warning hanya untuk tint, jadi teks memakai --navy-700 (#334155)"
+  },
+  "tes": { "berkas": "tests/token-warna-komponen.test.ts", "isi": 4, "sebelum": "4 failed", "sesudah": "4 passed", "gerbang": "140 berkas / 1580 tes lulus, tsc 0 galat, lint bersih" }
+}

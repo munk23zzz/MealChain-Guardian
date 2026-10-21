@@ -16,6 +16,8 @@ import {
   windowUsage,
   approvalRoute,
   attentionFlags,
+  butuhTindakan,
+  zonaShortcut,
   consequences,
   decisionHeadline,
   decisionMetrics,
@@ -818,5 +820,80 @@ describe("decisionFacts — pengadaan pemasok", () => {
     );
     expect(supplierNameOf({ supplier: "UD Beras Rancaekek" })).toBe("UD Beras Rancaekek");
     expect(supplierNameOf({})).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pintasan "Ke zona keputusan" (permintaan pemilik, 20 Okt 2026):
+//   1) hanya muncul kalau memang ADA yang harus disetujui — bukan setiap kali
+//      zona tergulir, dan bukan untuk peran pengawas;
+//   2) arah panahnya jujur: zona masih di bawah → turun (↓); zona sudah
+//      dilewati → panah dibalik, ajakan kembali (↑).
+// Keduanya logika murni supaya bisa diuji tanpa DOM.
+describe("pintasan 'Ke zona keputusan' — hanya saat persetujuan memang tertunda", () => {
+  const ringkas = (ubah: Record<string, unknown> = {}) => ({
+    status: "pending_approval",
+    can_approve: true,
+    can_reject: true,
+    approvals: [{ approver_role: "sppg_head" }],
+    approval_requirement: { min_approvals: 2, roles: ["sppg_head", "sppg_nutritionist"] },
+    ...ubah,
+  });
+
+  it("muncul untuk Kepala SPPG & Ahli Gizi saat kuorum belum penuh", () => {
+    expect(
+      butuhTindakan({ role: "sppg_head", status: "pending_approval", summary: ringkas() })
+    ).toBe(true);
+    expect(
+      butuhTindakan({ role: "sppg_nutritionist", status: "verifier_flagged", summary: ringkas() })
+    ).toBe(true);
+  });
+
+  it("tidak muncul untuk peran pengawasan", () => {
+    expect(
+      butuhTindakan({ role: "bgn_monitor", status: "pending_approval", summary: ringkas() })
+    ).toBe(false);
+    expect(butuhTindakan({ role: "", status: "pending_approval", summary: ringkas() })).toBe(false);
+  });
+
+  it("tidak muncul saat kuorum sudah penuh atau keputusan sudah selesai", () => {
+    const penuh = ringkas({ approvals: [{}, {}] });
+    expect(butuhTindakan({ role: "sppg_head", status: "pending_approval", summary: penuh })).toBe(
+      false
+    );
+    for (const status of ["approved", "executed", "rejected", "review_only", "expired"]) {
+      expect(butuhTindakan({ role: "sppg_head", status, summary: ringkas() })).toBe(false);
+    }
+  });
+
+  it("tidak muncul sebelum ringkasan tiba atau saat gerbang aksi tertutup", () => {
+    expect(butuhTindakan({ role: "sppg_head", status: "pending_approval", summary: null })).toBe(
+      false
+    );
+    expect(
+      butuhTindakan({
+        role: "sppg_head",
+        status: "pending_approval",
+        summary: ringkas({ can_reject: false }),
+      })
+    ).toBe(false);
+  });
+});
+
+describe("pintasan 'Ke zona keputusan' — panah mengikuti posisi zona", () => {
+  it("zona masih di bawah lipatan: ajak turun", () => {
+    expect(zonaShortcut("bawah")).toEqual({
+      text: "Ke zona keputusan",
+      arrow: "↓",
+      label: "Pintasan ke zona keputusan",
+    });
+  });
+
+  it("zona sudah dilewati: panah dibalik, ajak kembali", () => {
+    expect(zonaShortcut("lewat")).toEqual({
+      text: "Kembali ke zona keputusan",
+      arrow: "↑",
+      label: "Pintasan kembali ke zona keputusan",
+    });
   });
 });

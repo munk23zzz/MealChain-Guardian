@@ -13,8 +13,11 @@ import {
 } from "recharts";
 import type { BalanceMapLocation } from "../lib/overview-format";
 
-const SHORTAGE = "#C62828";
-const SURPLUS = "#2E7D32";
+// Warna batang datang dari token status, bukan hex: diuji hidup 20 Okt 2026,
+// `fill="var(--status-danger)"` resolve jadi rgb(198, 40, 40) di Chrome, jadi
+// perubahan token ikut terbawa ke grafik.
+const SHORTAGE = "var(--status-danger)";
+const SURPLUS = "var(--status-safe)";
 
 type ChartPoint = { lokasi: string; Shortage: number | null; Surplus: number | null };
 
@@ -103,10 +106,10 @@ export default function StockChart({
             layout="vertical"
             margin={{ top: 4, right: 16, left: 4, bottom: 4 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" horizontal={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" horizontal={false} />
             <XAxis
               type="number"
-              tick={{ fontSize: "var(--fs-1)", fill: "#64748B" }}
+              tick={{ fontSize: "var(--fs-1)", fill: "var(--ink-muted)" }}
               tickFormatter={(value: number) => value.toLocaleString("id-ID")}
             />
             <YAxis
@@ -114,15 +117,18 @@ export default function StockChart({
               dataKey="lokasi"
               width={76}
               interval={0}
-              tick={{ fontSize: "var(--fs-1)", fill: "#64748B" }}
+              tick={{ fontSize: "var(--fs-1)", fill: "var(--ink-muted)" }}
             />
             <Tooltip formatter={(value) => {
               const numeric = Number(value);
               return Number.isFinite(numeric) ? `${numeric.toLocaleString("id-ID")} kg` : "—";
             }} />
             <Legend />
-            <Bar dataKey="Shortage" fill={SHORTAGE} radius={[0, 3, 3, 0]} maxBarSize={26} />
-            <Bar dataKey="Surplus" fill={SURPLUS} radius={[0, 3, 3, 0]} maxBarSize={26} />
+            {/* Sudut batang = --radius-chip (4). Recharts menghitung path dari
+                angka, jadi nilainya tidak bisa berupa var(); angkanya disamakan
+                manual dengan token. */}
+            <Bar dataKey="Shortage" fill={SHORTAGE} radius={[0, 4, 4, 0]} maxBarSize={26} />
+            <Bar dataKey="Surplus" fill={SURPLUS} radius={[0, 4, 4, 0]} maxBarSize={26} />
           </BarChart>
         </ResponsiveContainer>
       </div>

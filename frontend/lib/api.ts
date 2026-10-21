@@ -85,7 +85,7 @@ export async function login(email: string, password: string) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
-  });
+ });
 }
 
 // GET /auth/me — identitas kanonik pemakai (role + lokasi). Dipakai top bar:
@@ -94,7 +94,7 @@ export async function login(email: string, password: string) {
 export async function fetchMe(token: string) {
   return request("/auth/me", {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 // GET /integrations/status — papan status integrasi per komponen (read-only).
@@ -104,7 +104,7 @@ export async function fetchMe(token: string) {
 export function fetchIntegrationStatus(token: string): Promise<any> {
   return request("/integrations/status", {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 // /sap/purchase-orders — sisi BACA purchase order SAP simulasi (W-5, 2026-10-17).
@@ -124,13 +124,13 @@ export function fetchPurchaseOrders(
   const akhiran = qs.toString() ? `?${qs.toString()}` : "";
   return request(`/sap/purchase-orders${akhiran}`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 export function fetchPurchaseOrderSummary(token: string): Promise<any> {
   return request("/sap/purchase-orders/summary", {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 /**
@@ -142,7 +142,7 @@ export async function fetchPurchaseOrderPdf(poNumber: string, token: string): Pr
   const path = `/sap/purchase-orders/${encodeURIComponent(poNumber)}/pdf`;
   const resp = await fetch(`${API_URL}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
   if (!resp.ok) {
     let detail: string | null = null;
     try {
@@ -158,25 +158,25 @@ export async function fetchPurchaseOrderPdf(poNumber: string, token: string): Pr
 export function fetchComplianceDossier(decisionId: string, token: string): Promise<any> {
   return request(`/decisions/${encodeURIComponent(decisionId)}/compliance`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 export async function fetchDecisions(token: string) {
   return request("/decisions", {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 export async function fetchDecision(decisionId: string, token: string) {
   return request(`/decisions/${decisionId}`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 export async function fetchDecisionTraces(decisionId: string, token: string) {
   return request(`/decisions/${decisionId}/traces`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 export async function approveAction(
@@ -192,7 +192,7 @@ export async function approveAction(
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ decision_id: decisionId, approved, comment }),
-  });
+ });
 }
 
 export async function executeAction(decisionId: string, token: string) {
@@ -203,7 +203,7 @@ export async function executeAction(decisionId: string, token: string) {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ decision_id: decisionId }),
-  });
+ });
 }
 
 export async function verifyAction(decisionId: string, token: string) {
@@ -216,7 +216,7 @@ export async function verifyAction(decisionId: string, token: string) {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ decision_id: decisionId }),
-  });
+ });
 }
 
 export async function reproposeAction(decisionId: string, token: string) {
@@ -227,7 +227,7 @@ export async function reproposeAction(decisionId: string, token: string) {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ decision_id: decisionId }),
-  });
+ });
 }
 
 // POST /safety/evaluate + /freshness/evaluate (Fase 11 — halaman Keamanan
@@ -250,7 +250,7 @@ export async function evaluateSafety(batchId: string, token: string): Promise<Sa
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ batch_id: batchId }),
-  });
+ });
 }
 
 export type KarantinaAksi = "tahan" | "lepas" | "gagal";
@@ -283,7 +283,7 @@ export async function ubahKarantina(
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ aksi, alasan }),
-  });
+ });
 }
 
 export type FreshnessCheck = {
@@ -300,7 +300,7 @@ export async function evaluateFreshness(batchId: string, token: string): Promise
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ batch_id: batchId }),
-  });
+ });
 }
 
 // /events/safety-disruption — jalankan Event 3 untuk SATU batch dari halaman
@@ -344,7 +344,7 @@ export async function triggerSafetyDisruption(
       target_location_id: targetLocationId,
       operation_key: operationKey,
     }),
-  });
+ });
 }
 
 // /receipts — catatan penerimaan barang (migrasi 016). Inilah rumah jujur untuk
@@ -360,6 +360,14 @@ export type ReceiptRow = {
   recorded_by: string;
   recorded_by_name: string | null;
   recorded_at: string;
+  // ---- keputusan (migrasi 026) ----
+  status: "menunggu" | "disetujui" | "ditolak";
+  reviewed_by: string | null;
+  reviewed_by_name: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  supply_record_id: string | null;
+  stock_kg: number | null;
 };
 
 export async function recordReceipt(
@@ -375,7 +383,7 @@ export async function recordReceipt(
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ batch_id: batchId, checked, other_note: otherNote }),
-  });
+ });
 }
 
 export async function fetchReceipts(
@@ -385,6 +393,54 @@ export async function fetchReceipts(
 ): Promise<{ items: ReceiptRow[] }> {
   return request(`/receipts?batch_id=${encodeURIComponent(batchId)}&limit=${limit}`, {
     headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export type PendingReceiptRow = {
+  id: string;
+  batch_id: string;
+  commodity: string;
+  quantity_kg: number;
+  location: string;
+  safety_status: string | null;
+  checked_count: number;
+  recorded_by_name: string | null;
+  recorded_at: string;
+};
+
+/** Catatan penerimaan yang sudah dibuat tetapi belum diputuskan (antrean approval). */
+export async function fetchPendingReceipts(
+  token: string
+): Promise<{ items: PendingReceiptRow[]; total: number }> {
+  return request("/receipts/menunggu", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+/** Kepala SPPG menyetujui penerimaan → barang masuk stok (idempoten di server). */
+export async function approveReceipt(
+  receiptId: string,
+  token: string
+): Promise<ReceiptRow & { sudah?: boolean }> {
+  return request(`/receipts/${encodeURIComponent(receiptId)}/approve`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+/** Kepala SPPG menolak penerimaan; alasan wajib (server menolak yang kosong). */
+export async function rejectReceipt(
+  receiptId: string,
+  note: string,
+  token: string
+): Promise<ReceiptRow & { sudah?: boolean }> {
+  return request(`/receipts/${encodeURIComponent(receiptId)}/reject`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ note }),
   });
 }
 
@@ -406,7 +462,7 @@ export async function proposeAction(
       decision_id: decisionId,
       ...(materialNumber ? { material_number: materialNumber } : {}),
     }),
-  });
+ });
 }
 
 export async function fetchDecisionChain(
@@ -415,7 +471,7 @@ export async function fetchDecisionChain(
 ) {
   return request(`/decisions/${decisionId}/chain`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 // S4-04: read model kanonik approval — modal TIDAK menghitung requirement;
@@ -426,7 +482,7 @@ export async function fetchApprovalSummary(
 ) {
   return request(`/decisions/${decisionId}/approval-summary`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 export async function seedDemo(token: string, force = false) {
@@ -437,7 +493,7 @@ export async function seedDemo(token: string, force = false) {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ force }),
-  });
+ });
 }
 
 // --- Data & rentang waktu (Fase 5) — panel Demo Control ---
@@ -464,7 +520,7 @@ export async function fetchDemoPreview(
     start: startIso,
     end: endIso,
     interval_hours: String(intervalHours),
-  });
+ });
   return request(`/demo/preview?${qs.toString()}`, { headers: authHeaders(token) });
 }
 
@@ -484,7 +540,7 @@ export async function runDemoTimeseries(
       interval_hours: intervalHours,
       force,
     }),
-  });
+ });
 }
 
 /** `POST /demo/timeseries/purge` — hapus HANYA baris demo; kanonik tidak disentuh. */
@@ -499,6 +555,51 @@ export async function purgeDemoTimeseries(token: string) {
 export async function refreshDemoToToday(token: string) {
   return request("/demo/refresh", { method: "POST", headers: authHeaders(token) });
 }
+
+// --- Sesi demo (migrasi 024/025) -------------------------------------------
+// Kontrak: `remaining_seconds` dihitung SERVER; UI hanya menguranginya dengan
+// waktu yang berjalan di layar, lalu menyelaraskan lagi tiap 20 detik.
+
+/** `GET /demo/session` — status + hitungan mundur (aman dipanggil berulang). */
+export async function fetchDemoSession(token: string) {
+  return request("/demo/session", { headers: authHeaders(token) });
+}
+
+/** `POST /demo/session/start` — buat sesi, semai data, aktifkan jendela waktu. */
+export async function startDemoSession(token: string, menit?: number) {
+  return request("/demo/session/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(menit ? { menit } : {}),
+  });
+}
+
+/** `POST /demo/session/extend` — tambah waktu; sesi & data tidak diganti. */
+export async function extendDemoSession(token: string, menit = 30) {
+  return request("/demo/session/extend", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify({ menit }),
+  });
+}
+
+/** `POST /demo/session/end` — tutup sesi sekarang; data sesi dibersihkan. */
+export async function endDemoSession(token: string) {
+  return request("/demo/session/end", { method: "POST", headers: authHeaders(token) });
+}
+
+/**
+ * `POST /demo/template/rebuild` — bangun ulang SELURUH data demo (±70 detik).
+ *
+ * Beda dari `startDemoSession`: jendela waktu sesi tidak disentuh, dan panggilan
+ * ini memang menghapus baris operasional lalu menyemai ulang template. Dipakai
+ * saat geladi berulang supaya angka kembali ke keadaan awal tanpa menutup sesi.
+ * Permintaan kedua saat proses masih berjalan dijawab 409 oleh server.
+ */
+export async function rebuildDemoTemplate(token: string) {
+  return request("/demo/template/rebuild", { method: "POST", headers: authHeaders(token) });
+}
+
 
 /**
  * `POST /demo/event1` — jalankan Event 1 PENUH di backend
@@ -527,7 +628,7 @@ export async function runEvent1(
       target_location: targetLocation,
       ttl_minutes: ttlMinutes,
     }),
-  });
+ });
 }
 
 // --- Ops Console (interaksi sebelum hasil — arah Roy 2026-10-07) ---
@@ -541,7 +642,7 @@ export async function fetchBalance(
 ) {
   return request(balancePath(location, commodity, asOf), {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 export async function runAnalysis(token: string, commodity?: string) {
@@ -554,7 +655,7 @@ export async function runAnalysis(token: string, commodity?: string) {
     // Ruling S4-05 p10: kirim komoditas panel agar pipeline difilter
     // (proposal mengikuti komoditas yang dianalisis, bukan rank-1 global).
     body: JSON.stringify({ commodity: commodity ?? null }),
-  });
+ });
 }
 
 // POST /decisions — snapshot rekomendasi dipersist (status "proposed").
@@ -575,7 +676,7 @@ export async function createDecision(
       ttl_minutes: ttlMinutes,
       decision_type: "regional_balance",
     }),
-  });
+ });
 }
 
 // --- Event 2 (Sprint 4) — price anomaly review-only ---
@@ -589,7 +690,7 @@ export async function fetchPriceQuotes(
 ) {
   return request(`/price/quotes/${location}/${commodity}`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 // POST /events/price-anomaly — 201 decision price_anomaly / 200 no-anomaly
@@ -613,6 +714,21 @@ export async function triggerPriceAnomaly(
       target_location_id: targetLocationId,
       operation_key: operationKey,
     }),
+ });
+}
+
+// Rencana alokasi surplus lintas lokasi (GET /surplus/allocations, 20 Okt 2026).
+// Dihitung SERVER karena /balance/map dibatasi cakupan peran: peran SPPG hanya
+// menerima lokasinya sendiri, sehingga panel "Rencana alokasi surplus" selalu
+// kosong kalau pasangannya dirakit di klien.
+export async function fetchSurplusAllocations(
+  token: string,
+  commodity: string,
+  limit = 6
+) {
+  const params = new URLSearchParams({ commodity, limit: String(limit) });
+  return request(`/surplus/allocations?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
 }
 
@@ -624,7 +740,7 @@ export async function fetchWasteSummary(token: string, days = 30) {
   const params = new URLSearchParams({ days: String(days) });
   return request(`/waste/summary?${params.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 export async function fetchKpis(
@@ -637,7 +753,7 @@ export async function fetchKpis(
   if (locationId) params.set("location_id", locationId);
   return request(`/kpi?${params.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 // GET /batches — inventaris batch (lokasi, komoditas, kg, kesegaran, batas
@@ -645,9 +761,12 @@ export async function fetchKpis(
 // Backend membalas {batches: [...]} — envelope itu dibuka di sini supaya
 // pemanggil tidak perlu tahu bentuk amplopnya.
 export async function fetchBatches(token: string) {
-  const data = await request("/batches", {
+  // Plafon server 500. Tanpa `limit`, server memakai 50 baris terbaru dan
+  // barang baru datang (mis. ayam 90 kg) bisa tidak ikut terkirim sama sekali —
+  // kartu Penerimaan lalu tampak tidak punya batch padahal DB punya.
+  const data = await request("/batches?limit=500", {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
   return Array.isArray(data) ? data : (data?.batches ?? []);
 }
 
@@ -656,7 +775,7 @@ export async function fetchBatches(token: string) {
 export async function fetchAgenda(token: string, start: string, end: string) {
   const data = await request(`/agenda?start=${start}&end=${end}`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
   return data ?? null;
 }
 
@@ -666,7 +785,7 @@ export async function fetchAgenda(token: string, start: string, end: string) {
 export async function fetchBalanceMap(commodity: string, token: string) {
   return request(`/balance/map?commodity=${encodeURIComponent(commodity)}`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 // GET /suppliers — daftar pemasok + profil peta (Fase 2, 2026-10-14). Dipakai
@@ -692,7 +811,7 @@ export async function fetchSuppliers(
   const komoditas = commodity ? `&commodity=${encodeURIComponent(commodity)}` : "";
   return request(`/suppliers?limit=200${komoditas}${jarak}`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 // GET /supplier-routes — garis JALUR KIRIMAN pemasok → tujuan (Fase 10).
@@ -707,7 +826,7 @@ export async function fetchSupplierRoutes(
   const lokasi = location ? `&location=${encodeURIComponent(location)}` : "";
   return request(`/supplier-routes?limit=200${komoditas}${lokasi}`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 // --- P1 Merkle ledger (paket 1-6, keputusan Roy 2026-10-09) ---
@@ -717,7 +836,7 @@ export async function fetchSupplierRoutes(
 export async function verifyLedger(token: string) {
   return request("/ledger/verify", {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 // --- P2/P3 dossier konten-addressed + ECDSA ---
@@ -726,7 +845,7 @@ export async function verifyLedger(token: string) {
 export async function fetchDossier(decisionId: string, token: string) {
   return request(`/decisions/${decisionId}/dossier`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
 }
 
 // --- Admin / Pengaturan (S4-11) -------------------------------------------
@@ -756,14 +875,14 @@ function mapAdminLocation(raw: any) {
 export async function fetchAdminUsers(token: string) {
   const body = await request("/admin/users", {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
   return (body.users ?? []).map(mapAdminUser);
 }
 
 export async function fetchAdminLocations(token: string) {
   const body = await request("/admin/locations", {
     headers: { Authorization: `Bearer ${token}` },
-  });
+ });
   return (body.locations ?? []).map(mapAdminLocation);
 }
 
@@ -779,7 +898,7 @@ export async function updateAdminUser(
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
-  });
+ });
   return mapAdminUser(body.user);
 }
 
@@ -795,7 +914,7 @@ export async function updateAdminLocation(
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
-  });
+ });
   return mapAdminLocation(body.location);
 }
 
@@ -820,7 +939,7 @@ export async function runDemoAgent(
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders(token) },
     body: JSON.stringify(payload),
-  });
+ });
 }
 
 /** `GET /demo/agent/commodities` — pilihan dropdown: nama yang ADA di database. */

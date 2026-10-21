@@ -50,14 +50,30 @@ describe("RecommendationCard — narasi", () => {
       <RecommendationCard decision={{ ...BASE, valid: true, seconds_remaining: null } as any} />
     );
     expect(html).not.toContain("0 dtk");
+    expect(html).not.toContain("dtk");
     expect(html).toContain("berlaku");
   });
 
-  it("valid dengan sisa waktu: angka aslinya dicetak", () => {
+  it("valid dengan sisa waktu: dicetak dalam menit, bukan detik", () => {
     const html = renderToStaticMarkup(
       <RecommendationCard decision={{ ...BASE, valid: true, seconds_remaining: 600 } as any} />
     );
-    expect(html).toContain("berlaku 600 dtk");
+    expect(html).toContain("berlaku 10 menit");
+    expect(html).not.toContain("dtk");
+  });
+
+  it.each([
+    [59, "kurang dari 1 menit"],
+    [90, "1 menit"],
+    [3600, "1 jam"],
+    [5400, "1 jam 30 menit"],
+    [90000, "1 hari 1 jam"],
+  ])("sisa %i detik ditulis '%s'", (seconds, expected) => {
+    const html = renderToStaticMarkup(
+      <RecommendationCard decision={{ ...BASE, valid: true, seconds_remaining: seconds } as any} />
+    );
+    expect(html).toContain(`berlaku ${expected}`);
+    expect(html).not.toContain("dtk");
   });
 });
 

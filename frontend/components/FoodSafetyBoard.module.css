@@ -1,0 +1,138 @@
+/* Pemilih penerimaan dua langkah — modul terpisah supaya tidak bertabrakan
+   dengan suntingan `app/globals.css` yang dipakai bersama.
+
+   Riset 20 Okt 2026:
+   - NN/g, "Dropdowns: Design Guidelines": hindari menu yang opsinya berubah
+     karena pilihan di widget lain — "users get very confused when options come
+     and go". Karena itu dua <select> bertingkat diganti pil komoditas +
+     daftar radio batch yang terlihat semua.
+   - DWP Design System, "Filters": "use radios, not dropdowns" untuk pilihan
+     tunggal dari daftar pendek.
+   - GOV.UK Design System, "Radios": radio di kiri label, target sentuh 44 px,
+     jangan bergantung pada warna saja untuk keadaan terpilih.
+*/
+
+.pickStep {
+  min-width: 0;
+  margin: 0 0 4px;
+  padding: 0;
+  border: 0;
+}
+
+.pickStep > legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.commodityChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.stepHint {
+  margin: 0 0 8px;
+}
+
+.batchList {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.batchItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.batchItem:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-sunken);
+}
+
+/* Keadaan terpilih dibawa radio native + bingkai, bukan warna saja. */
+.batchItem:has(input:checked) {
+  border-color: var(--accent-strong);
+  box-shadow: inset 0 0 0 1px var(--accent-strong);
+}
+
+.batchItem input {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-strong);
+}
+
+.batchItem:has(input:focus-visible) {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.batchBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.batchTitle {
+  font-size: var(--fs-3);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.batchMeta {
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+@media (max-width: 640px) {
+  .batchItem {
+    align-items: flex-start;
+    min-height: 56px;
+  }
+}
+
+
+/* Antrean persetujuan: catatan yang sudah dinilai petugas, menunggu kepala
+   SPPG. Dipisah dari form penerimaan supaya daftar barang yang belum dinilai
+   tidak tercampur barang yang sudah dinilai. */
+.approvalList {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.approvalItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.approvalHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}

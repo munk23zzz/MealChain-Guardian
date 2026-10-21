@@ -22,6 +22,8 @@ export type SafetyBatch = {
   usable_until?: string | null;
   /** Kolom baru (migrasi 019); data lama tidak punya → dianggap "none". */
   quarantine_status?: string | null;
+  /** Status catatan penerimaan terakhir (`GET /batches`, 20 Okt 2026). */
+  receipt_status?: string | null;
 };
 
 export type SafetyTone = "ok" | "warn" | "danger" | "muted";
@@ -121,6 +123,10 @@ export type SafetyRow = {
   /** Karantina: batch ditahan tidak boleh dipakai menyusun alokasi. */
   quarantine: QuarantineStatus;
   quarantineLabel: string;
+  /** Catatan penerimaan terakhir; null = belum pernah dicatat. */
+  receiptStatus: string | null;
+  /** Status keamanan mentah (`pending` = belum diuji). */
+  safetyStatus: string | null;
 };
 
 /** Skor kesegaran 0..1 → persen (dipakai bersama halaman lain). */
@@ -131,13 +137,22 @@ export function freshnessPercent(score: unknown): string {
   return `${Math.round(numeric * 100)}%`;
 }
 
-/** Tanggal layak pakai ringkas (YYYY-MM-DD HH:MM WIB). */
+/**
+ * Tanggal layak pakai ringkas, mis. "19 Mar 2027, 01.00" (WIB).
+ *
+ * Tahun SELALU ditulis (audit 20 Okt 2026): tanpa tahun, batch beras yang layak
+ * sampai Maret tahun berikutnya tampil "19 Mar" — terbaca seolah bulan depan,
+ * dan di kartu penerimaan itu dipakai untuk memilih batch yang mana. Menulis
+ * tahun juga membuat fungsi ini deterministik: hasilnya tidak bergantung pada
+ * tahun berjalan saat halaman dibuka.
+ */
 export function usableLabel(usableUntil: unknown): string {
   const parsed = Date.parse(String(usableUntil ?? ""));
   if (!Number.isFinite(parsed)) return DASH;
   return new Date(parsed).toLocaleString("id-ID", {
     day: "numeric",
     month: "short",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "Asia/Jakarta",
@@ -163,6 +178,8 @@ export function safetyRows(batches: unknown, now: Date): SafetyRow[] {
       hoursLabel: hoursLabel(hours),
       quarantine: karantina,
       quarantineLabel: quarantineLabel(karantina),
+      receiptStatus: text(batch?.receipt_status),
+      safetyStatus: text(batch?.safety_status)?.toLowerCase() ?? null,
     };
   });
 }
@@ -559,17 +576,87 @@ export function safetyDecisions(items: unknown): SafetyDecisionSummary {
 }
 
 // ── Penerimaan barang (kartu "Penerimaan barang") ───────────────────────────
-// Titik periksa ini WORKFLOW PETUGAS — bukan data dari server, dan sengaja
-// tidak dipersistensikan: backend tidak punya kolom untuk hasil pemeriksaan
-// manual, jadi mengarang penyimpanan hanya akan berbohong. Yang TERSIMPAN di
-// database adalah hasil hitung ulang keamanan/kesegaran yang dipicu tombolnya.
+// Titik periksa ini WORKFLOW PETUGAS: isinya pendapat orang di dapur, bukan
+// pengukuran mesin. Sejak migrasi `016_batch_receipts` snapshot-nya DISIMPAN
+// (`batch_receipts.checked`, JSONB) apa adanya, bersama isian "Lainnya" dan
+// pencatatnya — server tidak menafsirkan dan tidak mengubah status keamanan dari
+// sini (itu tugas `/safety/evaluate` + `/freshness/evaluate`). Karena itu daftar
+// di bawah boleh berubah tanpa menulis ulang baris lama: tiap baris menyimpan
+// keadaan saat dicatat.
+//
+// Batas suhu di label suhu BUKAN karangan: `_SAFE_TEMP_BY_COMMODITY` di
+// `backend/app/api/freshness.py` memakai 0–8 °C untuk telur/ayam/wortel dan
+// 15–30 °C untuk beras (bawaan `safe_temp_min_c`/`safe_temp_max_c` = 0/8).
 export const RECEIVING_CHECKS: { id: string; label: string }[] = [
   { id: "kemasan", label: "Kemasan utuh, tidak sobek atau bocor" },
-  { id: "suhu", label: "Suhu wadah sesuai (tidak hangat, tidak beku)" },
-  { id: "warna", label: "Bau & warna normal" },
+  { id: "suhu", label: "Suhu wadah dalam rentang aman — 0–8 °C (beras 15–30 °C)" },
+  { id: "bau_warna", label: "Bau & warna normal" },
   { id: "timbang", label: "Timbangan ulang cocok dengan surat jalan" },
   { id: "lot", label: "Nomor lot & tanggal dicatat" },
 ];
+
+/**
+ * Titik periksa yang DISESUAIKAN dengan komoditas (permintaan pemilik
+ * 20 Okt 2026: "titik periksa mungkin bisa disesuaikan ceklisnya dengan
+ * komoditasnya"). Id titik TETAP lima yang sama — `kemasan`, `suhu`,
+ * `bau_warna`, `timbang`, `lot` — supaya catatan lama tetap terbaca dan
+ * `receivingState`/`checkedForReceipt` tidak perlu tabel baru; yang berubah
+ * hanya kalimatnya: wadah apa yang diperiksa, rentang suhu, dan ciri khas
+ * komoditas (telur retak, beras apek, sayur layu).
+ *
+ * Rentang suhu mengikuti `_SAFE_TEMP_BY_COMMODITY` di
+ * `backend/app/api/freshness.py` (ayam/telur/wortel 0–8 °C, beras 15–30 °C),
+ * bukan angka karangan layar.
+ */
+const PROFIL_PERIKSA: Record<
+  string,
+  { kemasan: string; suhu: [number, number]; kualitas: string }
+> = {
+  ayam: {
+    kemasan: "Kemasan/segel utuh, tidak sobek atau bocor",
+    suhu: [0, 8],
+    kualitas: "Tidak berbau asam/amis menyimpang; warna tidak pucat",
+  },
+  telur: {
+    kemasan: "Rak/tray utuh, telur tidak pecah",
+    suhu: [0, 8],
+    kualitas: "Telur tidak retak atau pecah; permukaan bersih",
+  },
+  beras: {
+    kemasan: "Karung utuh, tidak sobek atau bocor",
+    suhu: [15, 30],
+    kualitas: "Tidak berjamur, tidak berbau apek; butir tidak berkutu",
+  },
+  wortel: {
+    kemasan: "Krat/kemasan utuh, tidak sobek atau bocor",
+    suhu: [0, 8],
+    kualitas: "Tidak layu, tidak berlendir; warna cerah",
+  },
+};
+
+const PROFIL_BAWAAN = {
+  kemasan: "Kemasan utuh, tidak sobek atau bocor",
+  suhu: [0, 8] as [number, number],
+  kualitas: "Bau & warna normal",
+};
+
+export function receivingChecks(commodity: string | null | undefined): {
+  id: string;
+  label: string;
+}[] {
+  const kunci = (commodity ?? "").trim().toLowerCase();
+  const profil = PROFIL_PERIKSA[kunci] ?? PROFIL_BAWAAN;
+  return [
+    { id: "kemasan", label: profil.kemasan },
+    {
+      id: "suhu",
+      label: `Suhu wadah dalam rentang aman — ${profil.suhu[0]}–${profil.suhu[1]} °C`,
+    },
+    { id: "bau_warna", label: profil.kualitas },
+    { id: "timbang", label: "Timbangan ulang cocok dengan surat jalan" },
+    { id: "lot", label: "Nomor lot & tanggal dicatat" },
+  ];
+}
 
 export type ReceivingState = { done: number; total: number; allDone: boolean };
 
@@ -580,12 +667,35 @@ export function receivingState(checked: unknown): ReceivingState {
   return { done, total: RECEIVING_CHECKS.length, allDone: done === RECEIVING_CHECKS.length };
 }
 
-/** Satu kalimat jujur: berapa titik diperiksa, dan apakah semuanya sesuai. */
+/**
+ * Satu kalimat jujur: berapa titik yang benar-benar ditandai, dan apa artinya.
+ *
+ * Kalimat lama berakhiran "tandai sisanya sebelum barang dipakai" — perintah
+ * yang tidak pernah ditegakkan layar ini (tombolnya aktif di 0/5, server menerima
+ * snapshot kosong). Kalimat yang menjanjikan gerbang palsu lebih buruk daripada
+ * tidak ada kalimat, jadi yang ditulis sekarang hanya keadaan + izin mencatat
+ * sebagian, dan sisa titik disebut apa adanya.
+ */
 export function receivingSentence(state: ReceivingState): string {
-  const awal = `${state.done} dari ${state.total} titik periksa sudah ditandai`;
-  return state.allDone
-    ? `${awal} — semuanya sesuai.`
-    : `${awal} — tandai sisanya sebelum barang dipakai.`;
+  if (state.allDone) {
+    return `${state.done} dari ${state.total} titik periksa sudah ditandai — semuanya sesuai.`;
+  }
+  const sisa = state.total - state.done;
+  return `${state.done} dari ${state.total} titik periksa sudah ditandai — ${sisa} belum diperiksa. Boleh disimpan sebagian.`;
+}
+
+/**
+ * Kalimat SESUDAH menyimpan. Dipisah dari `receivingSentence` karena memakai
+ * "sudah ditandai" di pesan sukses membuat layar menyuruh menandai ulang tepat
+ * setelah catatannya tersimpan (terukur: "Catatan penerimaan tersimpan. 0 dari 5
+ * titik periksa sudah ditandai — tandai sisanya…").
+ */
+export function receiptSavedSentence(state: ReceivingState): string {
+  if (state.allDone) {
+    return `Catatan tersimpan: ${state.done} dari ${state.total} titik tercatat, semuanya sesuai.`;
+  }
+  const sisa = state.total - state.done;
+  return `Catatan tersimpan: ${state.done} dari ${state.total} titik tercatat, ${sisa} belum diperiksa.`;
 }
 
 /**
@@ -600,13 +710,155 @@ export const RECEIVING_OTHER = {
   hint: "karung lapis kedua basah, timbangan tidak tersedia, kendaraan tanpa pendingin",
 };
 
+/**
+ * Opsi "Batch yang diterima" — SELALU milik dapur sendiri.
+ *
+ * Audit 20 Okt 2026: daftar ini dulu memakai baris yang sudah disaring cakupan
+ * tabel, jadi saat cakupan diubah ke "Semua lokasi (pengawasan)" dropdown
+ * menawarkan 50+ batch kota lain. Memilih salah satunya berakhir 403 — "lokasi
+ * batch di cakupan lokasi di luar SPPG Anda" — karena barang diterima di dapur
+ * sendiri (ruling 2026-10-14, `assert_in_scope` di `POST /receipts`). Pilihan
+ * yang dijamin gagal bukan pilihan.
+ *
+ * Penyaring lokasi di sini SENGAJA tidak membaca `scope`: cakupan tabel adalah
+ * alat pengawasan, sedangkan penerimaan barang adalah tindakan fisik di satu
+ * dapur. Baris tanpa id juga dibuang karena tidak bisa dikirim ke server.
+ */
+export function receivingBatchOptions(
+  rows: SafetyRow[],
+  ownLocation: string | null | undefined
+): SafetyRow[] {
+  const milik = ownLocation ? ownLocationRows(rows, ownLocation) : rows;
+  const berkas = milik.filter((row) => Boolean(row.id));
+  // HANYA barang yang BELUM dinilai (permintaan pemilik 20 Okt 2026, pilihan
+  // eksplisit: batch berstatus "Belum diuji"/`pending`). Batch yang sudah punya
+  // hasil — Aman, Gagal uji, Perlu verifikasi — tidak muncul: penilaiannya
+  // sudah ada, jadi bukan pekerjaan penerimaan lagi. Catatan `menunggu` juga
+  // tidak muncul; ia diputuskan dari kartu "Menunggu persetujuan".
+  const perluDicatat = berkas.filter(
+    (row) => row.safetyStatus === "pending" && row.receiptStatus === null
+  );
+  // Batch yang MASIH layak didahulukan: urutan tenggat menaruh nilai negatif
+  // (sudah kedaluwarsa) paling atas, sehingga pilihan default bisa jatuh ke
+  // batch kedaluwarsa — bukan sasaran yang masuk akal untuk "barang datang
+  // hari ini". Batch kedaluwarsa tetap bisa dipilih (kiriman bisa terlambat),
+  // hanya diletakkan di bawah.
+  const layak = perluDicatat.filter((row) => row.hoursLeft === null || row.hoursLeft >= 0);
+  const lewat = perluDicatat.filter(
+    (row) => row.hoursLeft !== null && row.hoursLeft < 0
+  );
+  return [...sortByDeadline(layak), ...sortByDeadline(lewat)];
+}
+
+export type CommodityBatchGroup = {
+  commodity: string;
+  /** Batch komoditas ini, urut tenggat (yang paling mendesak lebih dulu). */
+  rows: SafetyRow[];
+  /** Total berat yang bisa diterima; null bila tak satu pun punya kg. */
+  totalKg: number | null;
+};
+
+/**
+ * Kelompokkan pilihan penerimaan per KOMODITAS (permintaan pemilik 20 Okt 2026:
+ * "pilih komoditasnya baru memilih batch-nya"). Urutan kelompok mengikuti
+ * kemunculan pertama di daftar batch — jadi komoditas yang paling mendesak
+ * tetap di atas, bukan diacak abjad.
+ */
+export function receivingCommodityGroups(
+  rows: SafetyRow[],
+  ownLocation: string | null | undefined
+): CommodityBatchGroup[] {
+  const opsi = receivingBatchOptions(rows, ownLocation);
+  const peta = new Map<string, SafetyRow[]>();
+  for (const row of opsi) {
+    const kunci = (row.commodity ?? "").trim() || "—";
+    const isi = peta.get(kunci);
+    if (isi) isi.push(row);
+    else peta.set(kunci, [row]);
+  }
+  return Array.from(peta.entries()).map(([commodity, isi]) => ({
+    commodity,
+    rows: isi,
+    totalKg: isi.some((row) => row.kg !== null)
+      ? isi.reduce((jumlah, row) => jumlah + (row.kg ?? 0), 0)
+      : null,
+  }));
+}
+
+export type ReceiptStatus = "menunggu" | "disetujui" | "ditolak";
+
+/** Kalimat singkat: apakah batch ini masih perlu dicatat? (20 Okt 2026) */
+export function receiptNeedLabel(status: string | null | undefined): string {
+  if (status === "ditolak") return "ditolak — dinilai ulang";
+  if (status === "menunggu") return "sudah dicatat, menunggu persetujuan";
+  if (status === "disetujui") return "sudah disetujui";
+  return "belum dinilai";
+}
+
 export type ReceiptCardRow = {
   id: string;
   note: string | null;
   checkedCount: number | null;
   byName: string | null;
   waktuLabel: string;
+  // ---- keputusan (migrasi 026) ----
+  status: ReceiptStatus;
+  statusLabel: string;
+  statusNada: "warn" | "ok" | "danger";
+  reviewedByName: string | null;
+  reviewedLabel: string | null;
+  reviewNote: string | null;
+  stockKg: number | null;
 };
+
+/** Label + nada badge untuk satu status penerimaan. */
+/** Saringan daftar batch (redesign 20 Okt 2026): pengguna memilih PRIORITAS,
+ *  bukan menggulir 30 baris. "tindakan" = apa pun yang belum beres (gagal,
+ *  perlu verifikasi, atau ditahan) — sasaran pertama kepala SPPG. */
+export type SafetyFilter = "semua" | "tindakan" | "gagal" | "verifikasi" | "aman";
+
+export function matchesSafetyFilter(row: SafetyRow, filter: SafetyFilter): boolean {
+  if (filter === "semua") return true;
+  if (filter === "gagal") return row.tone === "danger";
+  if (filter === "verifikasi") return row.tone === "warn";
+  if (filter === "aman") return row.tone === "ok";
+  return row.tone === "danger" || row.tone === "warn" || row.quarantine !== "none";
+}
+
+/** Saring berdasarkan keadaan + pencarian lokasi/komoditas (tanpa peduli huruf). */
+export function filterSafetyRows(
+  rows: readonly SafetyRow[],
+  filter: SafetyFilter,
+  query: string
+): SafetyRow[] {
+  const cari = query.trim().toLowerCase();
+  return rows.filter((row) => {
+    if (!matchesSafetyFilter(row, filter)) return false;
+    if (!cari) return true;
+    return `${row.location} ${row.commodity}`.toLowerCase().includes(cari);
+  });
+}
+
+/** Jumlah per saringan — ditampilkan di chip supaya pengguna tahu isinya dulu. */
+export function safetyFilterCounts(rows: readonly SafetyRow[]): Record<SafetyFilter, number> {
+  return {
+    semua: rows.length,
+    tindakan: rows.filter((r) => matchesSafetyFilter(r, "tindakan")).length,
+    gagal: rows.filter((r) => matchesSafetyFilter(r, "gagal")).length,
+    verifikasi: rows.filter((r) => matchesSafetyFilter(r, "verifikasi")).length,
+    aman: rows.filter((r) => matchesSafetyFilter(r, "aman")).length,
+  };
+}
+
+export function receiptStatusLabel(status: unknown): {
+  label: string;
+  nada: "warn" | "ok" | "danger";
+} {
+  const nilai = text(status)?.toLowerCase();
+  if (nilai === "disetujui") return { label: "Disetujui", nada: "ok" };
+  if (nilai === "ditolak") return { label: "Ditolak", nada: "danger" };
+  return { label: "Menunggu persetujuan", nada: "warn" };
+}
 
 /**
  * Snapshot titik periksa yang boleh dikirim ke server: HANYA id titik periksa
@@ -633,12 +885,29 @@ export function receiptRows(payload: unknown): ReceiptCardRow[] {
   return items.map((mentah) => {
     const row = (mentah ?? null) as Record<string, unknown> | null;
     const jumlah = Number(row?.["checked_count"]);
+    // `Number(null)` = 0 — untuk stok, null berarti "belum masuk stok",
+    // bukan "0 kg". Paksa NaN agar tampil kosong, bukan nol palsu.
+    const stokMentah = row?.["stock_kg"];
+    const stok = stokMentah === null || stokMentah === undefined ? NaN : Number(stokMentah);
+    const status = receiptStatusLabel(row?.["status"]);
+    const diputuskan = text(row?.["reviewed_at"])
+      ? formatDateTime(String(row?.["reviewed_at"]))
+      : null;
     return {
       id: text(row?.["id"]) ?? DASH,
       note: text(row?.["other_note"]) ?? null,
       checkedCount: Number.isFinite(jumlah) ? jumlah : null,
       byName: text(row?.["recorded_by_name"]) ?? null,
       waktuLabel: formatDateTime(String(row?.["recorded_at"] ?? "")),
+      // Baris lama (sebelum migrasi 026) tidak punya status → dianggap
+      // "menunggu", sama dengan default kolom di DB.
+      status: (text(row?.["status"])?.toLowerCase() ?? "menunggu") as ReceiptStatus,
+      statusLabel: status.label,
+      statusNada: status.nada,
+      reviewedByName: text(row?.["reviewed_by_name"]) ?? null,
+      reviewedLabel: diputuskan,
+      reviewNote: text(row?.["review_note"]) ?? null,
+      stockKg: Number.isFinite(stok) ? stok : null,
     };
   });
 }

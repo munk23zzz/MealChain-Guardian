@@ -12,7 +12,14 @@
 // Kontrak markup untuk test TIDAK berubah (class kpi-* dipin).
 
 import PageHeader from "./PageHeader";
-import { bulletOf, directionLabel, KPI_WINDOWS, type KpiWindowKey } from "../lib/kpi";
+import {
+  bulletOf,
+  directionLabel,
+  KPI_WINDOWS,
+  metricLabel,
+  periodeBulan,
+  type KpiWindowKey,
+} from "../lib/kpi";
 import { roleLabel } from "../lib/settings";
 
 const UNIT_FMT: Record<string, (v: string) => string> = {
@@ -48,19 +55,6 @@ export function unitLabel(unit: unknown): string {
   const key = String(unit ?? "").trim();
   if (!key) return "";
   return key in UNIT_LABELS ? UNIT_LABELS[key] : key;
-}
-
-/** Tanggal periode dalam bahasa manusia (acuan: "24 Sep 2026 22:08 WIB").
- *  Envelope membawa ISO lengkap — menampilkannya mentah itu tidak terbaca. */
-function fmtPeriodDate(iso?: string | null): string {
-  if (!iso) return "-";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 /** Keadaan metrik dari backend (kata apa adanya, tidak dikarang). Diekspor
@@ -193,7 +187,7 @@ export default function KPIDashboard({
         meta={
           <span className="page-header-pills" data-testid="kpi-scope">
             <span className="commodity-pill">
-              Periode {fmtPeriodDate(kpi.period?.start)} – {fmtPeriodDate(kpi.period?.end)}
+              Periode {periodeBulan(kpi.period?.start, kpi.period?.end)}
             </span>
             <span className="commodity-pill" title={kpi.scope?.location_id ?? undefined}>
               Cakupan: {kpi.scope?.role ? roleLabel(kpi.scope.role) : "—"}
@@ -237,7 +231,9 @@ export default function KPIDashboard({
           return (
             <article key={m.name} className={`kpi-card card kpi-${m.state}`}>
               <div className="kpi-card-top">
-                <p className="kpi-card-name">{m.name}</p>
+                <p className="kpi-card-name" title={m.name}>
+                  {metricLabel(m.name)}
+                </p>
                 <MetricIcon name={m.name} />
               </div>
               {shown !== null ? (

@@ -17,7 +17,7 @@ import {
   rupiahLabel,
   routeLabel,
   runButtonLabel,
-  stepChips,
+  stepNames,
   supervisorLine,
   type AgentRun,
 } from "../lib/demo-agent";
@@ -109,15 +109,13 @@ describe("proofFacts", () => {
   });
 });
 
-describe("stepChips", () => {
+describe("stepNames", () => {
   it("hanya langkah yang benar-benar tercatat, urut dari server", () => {
-    expect(stepChips(RUN).map((s) => s.nama)).toEqual(["DETECT", "SUPERVISE"]);
+    expect(stepNames(RUN)).toEqual(["DETECT", "SUPERVISE"]);
   });
 
-  it("tool kosong tidak dikarang menjadi nama palsu", () => {
-    expect(stepChips({ ...RUN, steps: [{ step_name: "TRACE", tool_called: null }] })[0].alat).toBe(
-      "—"
-    );
+  it("langkah tanpa nama tidak dikarang; ditulis —", () => {
+    expect(stepNames({ ...RUN, steps: [{ step_name: "" }] })).toEqual(["—"]);
   });
 });
 

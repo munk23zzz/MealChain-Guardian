@@ -98,8 +98,15 @@ describe("fokus kiriman (Arah C)", () => {
       state: "Di jalan · 20 menit lagi",
       tone: "moving",
     });
-    expect(options[2].label).toBe("Supplier B → BDG");
-    expect(options[1].state).toBe("Belum berangkat");
+  });
+
+  it("hanya kiriman yang SEDANG berjalan yang ditawarkan", () => {
+    // Peta menggambar jalur `di_jalan` saja, jadi pemilih tidak boleh
+    // menawarkan kiriman yang tidak akan muncul di kanvas.
+    const options = focusOptions({ routes: LANGSUNG });
+    expect(options.map((option) => option.id)).toEqual(["S1->L1"]);
+    expect(options.some((option) => option.state === "Belum berangkat")).toBe(false);
+    expect(options.some((option) => option.state === "Sudah tiba")).toBe(false);
   });
 
   it("id tak dikenal / kosong = tampilan SEMUA (gagal-tertutup, bukan tebakan)", () => {

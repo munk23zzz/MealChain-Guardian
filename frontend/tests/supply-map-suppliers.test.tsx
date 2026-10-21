@@ -89,42 +89,22 @@ describe("SupplyMap — layer pemasok", () => {
     expect(html).toContain("Shortage");
   });
 
-  it("dengan data pemasok: tombol layer mati secara bawaan", () => {
+  it("dengan data pemasok: tidak ada tombol lapisan, pin & legenda langsung aktif", () => {
     const html = render({ suppliers: SUPPLIERS });
-    expect(html).toContain("map-layer-toggle");
-    expect(html).toContain('aria-pressed="false"');
-    expect(html).toContain('type="button"');
-    // 3 baris, satu di antaranya tanpa koordinat → hanya 2 yang bisa dipin.
-    // Sejak 19 Okt 2026 tombolnya IKON SAJA: jumlah pindah ke nama aksesibel
-    // (`aria-label`), aksinya ke tooltip. Teks yang terlihat sudah tidak ada.
-    expect(html).toContain('aria-label="Pemasok (2)"');
-    expect(html).toContain('title="Tampilkan pemasok (2)"');
-    expect(html).toContain('class="map-layer-toggle-icon"');
-    expect(html).not.toContain(">Pemasok (2)</button>");
+    // Tombol lapisan dihapus 20 Okt 2026: tidak ada lagi sakelar untuk
+    // menyembunyikan pin pemasok — datanya ada, legendanya ikut tampil.
+    expect(html).not.toContain("map-layer-toggle");
+    expect(html).not.toContain("map-overlay-toggles");
+    expect(html).toContain("map-legend-box-shape-excluded");
+    expect(html).toContain("Keandalan rendah");
   });
 
-  it("label tombol mengikuti filter komoditas peta", () => {
-    expect(render({ suppliers: SUPPLIERS, commodity: "telur" })).toContain(
-      'aria-label="Pemasok (1)"'
-    );
-    expect(render({ suppliers: SUPPLIERS, commodity: "wortel" })).toContain(
-      'aria-label="Pemasok (1)"'
-    );
-    expect(render({ suppliers: SUPPLIERS, commodity: "ayam" })).toContain(
-      'aria-label="Pemasok (0)"'
-    );
-  });
-
-  it("keterangan pemasok hanya dirender saat lapisannya hidup", () => {
-    // Arah pemilik 2026-10-16: kotak "Info map" tidak menerangkan warna yang
-    // tidak ada di peta. Lapisan pemasok MATI secara bawaan, jadi keterangannya
-    // belum dirender di SSR; labelnya sendiri (makna nada pin) tetap diuji di
-    // sini lewat sumber datanya, dan perilakunya setelah tombol dinyalakan ada di
-    // tests/supply-map-layer.test.tsx.
+  it("keterangan pemasok dirender karena lapisannya selalu hidup", () => {
+    // Arah pemilik 2026-10-16: kotak keterangan tidak menerangkan warna yang
+    // tidak ada di peta. Sejak tombolnya dihapus (20 Okt 2026) lapisan pemasok
+    // selalu hidup, jadi keterangannya selalu ada begitu datanya dikirim.
     const html = render({ suppliers: SUPPLIERS });
-    expect(html).toContain('aria-label="Pemasok (2)"');
-    expect(html).not.toContain('aria-label="Keterangan pemasok"');
-    expect(html).not.toContain("map-legend-box-shape-excluded");
+    expect(html).toContain("map-legend-box-shape-excluded");
     const label = SUPPLIER_PIN_LEGEND.map((entry) => entry.label).join(" | ");
     expect(label).toContain("Keandalan rendah");
     expect(label).toContain("Dikecualikan");
@@ -134,12 +114,14 @@ describe("SupplyMap — layer pemasok", () => {
     expect(html).not.toContain("hygiene");
   });
 
-  it("tanpa pemasok berkoordinat: kendali tetap ada dengan angka jujur (0)", () => {
+  it("tanpa pemasok berkoordinat: tidak ada tombol lapisan yang menganggur", () => {
     const html = render({
       suppliers: { items: [SUPPLIERS.items[2]] },
     });
-    expect(html).toContain('aria-label="Pemasok (0)"');
-    expect(html).toContain('title="Tampilkan pemasok (0)"');
+    // Dulu ada tombol "Pemasok (0)" — kendali tanpa isi. Sekarang tidak ada
+    // kendali sama sekali; yang jujur adalah ketiadaan tombolnya.
+    expect(html).not.toContain("map-layer-toggle");
+    expect(html).not.toContain('aria-label="Pemasok (0)"');
   });
 
   it("lapisan pemasok tidak menambah/mengubah pin SPPG atau angka peta", () => {

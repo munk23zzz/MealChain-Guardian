@@ -38,6 +38,10 @@ const API_ROOTS = [
   // Surplus & Limbah. Tanpa akar ini panel menerima 404 HTML dari Next sendiri
   // dan tiga baris limbah kembali menjadi "—".
   "waste",
+  // Rencana alokasi surplus lintas lokasi (20 Okt 2026): /surplus/allocations
+  // untuk panel "Rencana alokasi surplus". Tanpa akar ini Next menjawab 404 HTML
+  // sendiri dan panel kembali menulis "tidak ada pasangan".
+  "surplus",
   // Fase 11: dua hitung-ulang dari halaman Keamanan Pangan. Tanpa dua akar ini
   // tombol "Periksa kiriman"/"Uji ulang" membalas 404 HTML dari Next sendiri
   // (terukur: "Tidak bisa memeriksa: HTTP 404: /freshness/evaluate").

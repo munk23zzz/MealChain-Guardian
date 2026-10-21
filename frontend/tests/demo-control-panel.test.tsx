@@ -136,10 +136,15 @@ describe("DemoProof — bukti dari payload, bukan karangan", () => {
     expect(html).not.toContain("Selesai");
   });
 
-  it("menyebut langkah yang tercatat beserta alatnya", () => {
+  // Arah pemilik 21 Okt: daftar langkah cukup nama langkah/agent. Slug alat
+  // (mis. `evaluate_safety`, `supervisor.narration`) tidak lagi dicetak — dulu
+  // ia tampil di sebelah nama dan terbaca sebagai istilah internal.
+  it("hanya nama langkah yang tercatat, tanpa slug alat", () => {
     const html = renderToStaticMarkup(<DemoProof run={RUN} />);
     expect(html).toContain("DETECT");
-    expect(html).toContain("supervisor.narration");
+    expect(html).not.toContain("supervisor.narration");
+    expect(html).not.toContain("supply.get+demand.get");
+    expect(html).not.toContain("dc-step-tool");
     // Enam langkah pada fixture, bukan tujuh yang "seharusnya" ada.
     expect((html.match(/class="dc-step"/g) ?? []).length).toBe(6);
   });
@@ -176,6 +181,14 @@ describe("DemoProof — bukti dari payload, bukan karangan", () => {
     const html = renderToStaticMarkup(<DemoProof run={RUN} />);
     expect(html).toContain('<details class="dc-narration">');
     expect(html).not.toContain('<details class="dc-narration" open');
+  });
+
+  // Arah pemilik 21 Okt: judul lipatan cukup "Hasil supervisor". Keterangan
+  // "apa adanya dari model" adalah catatan internal, bukan bahasa layar.
+  it("lipatan narasi berlabel \"Hasil supervisor\", tanpa catatan internal", () => {
+    const html = renderToStaticMarkup(<DemoProof run={RUN} />);
+    expect(html).toContain("Hasil supervisor");
+    expect(html).not.toContain("apa adanya dari model");
   });
 
   it("tanpa narasi, lipatan tidak dirender sama sekali", () => {
