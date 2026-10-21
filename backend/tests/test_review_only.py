@@ -10,9 +10,6 @@ tidak bisa dieksekusi, tetapi tetap terbaca sebagai bukti. Semua endpoint tulis
 menolaknya dengan alasan yang menyebut statusnya.
 """
 
-import json
-import urllib.error
-import urllib.request
 import uuid
 
 import pytest
@@ -20,11 +17,17 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
 from app.main import app
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 
+# Catatan harness (21 Okt 2026): berkas ini dulu menembak server live
+# http://localhost:8000 lewat urllib. Akibatnya (a) hasilnya bergantung pada
+# proses uvicorn di luar tes — 404 bila proses itu menunjuk DB lain, dan
+# (b) menjalankan suite di DB terpisah tetap mengubah data DB demo. Sekarang
+# semua panggilan memakai TestClient(app) sehingga DB yang dipakai persis
+# DATABASE_URL milik tes.
 DB_URL = (
-    "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+    DSN_ASYNC
 ).replace("+asyncpg", "+psycopg")
-BASE = "http://localhost:8000"
 
 
 def _db():
@@ -44,19 +47,14 @@ def _exec(sql: str, params: dict | None = None):
         engine.dispose()
 
 
-def _login_demo(email: str = "sppg.head@demo.local") -> dict:
-    """Login akun demo lewat HTTP; sandi dibaca dari seed (tidak dicetak)."""
+def _login_demo(client: TestClient, email: str = "sppg.head@demo.local") -> dict:
+    """Login akun demo lewat TestClient; sandi dibaca dari seed (tidak dicetak)."""
     from app.seed.seed_data import DEMO_USERS
 
     sandi = next(u["password"] for u in DEMO_USERS if u["email"] == email)
-    req = urllib.request.Request(
-        BASE + "/auth/login",
-        data=json.dumps({"email": email, "password": sandi}).encode(),
-        method="POST",
-    )
-    req.add_header("Content-Type", "application/json")
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return {"Authorization": f"Bearer {json.loads(r.read())['access_token']}"}
+    r = client.post("/auth/login", json={"email": email, "password": sandi})
+    assert r.status_code == 200, (r.status_code, r.text)
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 
 def _buat_quote_sintetis() -> tuple[str, str]:
@@ -81,23 +79,20 @@ def _buat_quote_sintetis() -> tuple[str, str]:
     return str(quote_id), str(jakarta)
 
 
-def _event2(headers: dict) -> dict:
+def _event2(client: TestClient, headers: dict) -> dict:
     quote_id, target = _buat_quote_sintetis()
-    req = urllib.request.Request(
-        BASE + "/events/price-anomaly",
-        data=json.dumps(
-            {
-                "quote_id": quote_id,
-                "target_location_id": target,
-                "operation_key": str(uuid.uuid4()),
-            }
-        ).encode(),
-        method="POST",
+    r = client.post(
+        "/events/price-anomaly",
+        json={
+            "quote_id": quote_id,
+            "target_location_id": target,
+            "operation_key": str(uuid.uuid4()),
+        },
+        headers=headers,
     )
-    req.add_header("Content-Type", "application/json")
-    req.add_header("Authorization", headers["Authorization"])
-    with urllib.request.urlopen(req, timeout=120) as r:
-        body = json.loads(r.read())
+    # /events/price-anomaly menjawab 201 Created (temuan baru), bukan 200.
+    assert r.status_code in (200, 201), (r.status_code, r.text)
+    body = r.json()
     body["_quote_id"] = quote_id
     return body
 
@@ -116,33 +111,32 @@ def client():
 
 
 def test_event2_menghasilkan_review_only():
-    headers = _login_demo()
-    body = _event2(headers)
-    did = body.get("decision_id")
-    try:
-        assert body["status"] != "no_anomaly", body
-        assert did, body
-        baris = _exec("SELECT status FROM decisions WHERE id = :d", {"d": did})
-        assert baris[0][0] == "review_only", baris
-        with TestClient(app) as c:
+    with TestClient(app) as c:
+        headers = _login_demo(c)
+        body = _event2(c, headers)
+        did = body.get("decision_id")
+        try:
+            assert body["status"] != "no_anomaly", body
+            assert did, body
+            baris = _exec("SELECT status FROM decisions WHERE id = :d", {"d": did})
+            assert baris[0][0] == "review_only", baris
             summary = c.get(f"/decisions/{did}/approval-summary", headers=headers).json()
-        assert summary["status"] == "review_only"
-        assert summary["can_execute"] is False
-        assert summary["can_approve"] is False
-        assert any("review-only" in r or "tinjauan" in r for r in summary["blocking_reasons"]), (
-            summary["blocking_reasons"]
-        )
-    finally:
-        _bersihkan(did, body.get("_quote_id"))
+            assert summary["status"] == "review_only"
+            assert summary["can_execute"] is False
+            assert summary["can_approve"] is False
+            alasan = summary["blocking_reasons"]
+            assert any("review-only" in r or "tinjauan" in r for r in alasan), alasan
+        finally:
+            _bersihkan(did, body.get("_quote_id"))
 
 
 def test_review_only_menolak_semua_jalur_tulis():
-    headers = _login_demo()
-    body = _event2(headers)
-    did = body.get("decision_id")
-    try:
-        assert did, body
-        with TestClient(app) as c:
+    with TestClient(app) as c:
+        headers = _login_demo(c)
+        body = _event2(c, headers)
+        did = body.get("decision_id")
+        try:
+            assert did, body
             for path, payload in (
                 ("/actions/propose", {"decision_id": did}),
                 ("/actions/verify", {"decision_id": did}),
@@ -157,5 +151,5 @@ def test_review_only_menolak_semua_jalur_tulis():
                 # hanya benar untuk /actions/repropose.
                 if path == "/actions/propose":
                     assert "ulang" not in detail, (path, detail)
-    finally:
-        _bersihkan(did, body.get("_quote_id"))
+        finally:
+            _bersihkan(did, body.get("_quote_id"))
