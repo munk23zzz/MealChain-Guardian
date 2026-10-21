@@ -11,6 +11,9 @@ import "./evidence-dossier.css";
 // Overview P0 (21 Okt 2026): chip provenance, aksi alert, dan baris antrean
 // yang bisa diklik. Berkas terpisah agar tidak menambah hunk di globals.css.
 import "./overview-p0.css";
+// Grafik kecukupan: aturan .supply-adequacy/.sa-* dipisah dari globals.css
+// supaya lapisan grafik dapat di-commit tanpa hunk stylesheet bersama.
+import "./supply-adequacy.css";
 
 import Providers from "./providers";
 

@@ -108,7 +108,10 @@ import KpiQualityBoard from "../components/KpiQualityBoard";
 import SupplyMap from "../components/SupplyMap";
 import NodeTelemetry from "../components/NodeTelemetry";
 import TodayDashboard from "../components/TodayDashboard";
-import StockChart from "../components/StockChart";
+import SupplyAdequacyChart from "../components/SupplyAdequacyChart";
+import SupplyBalanceChart from "../components/SupplyBalanceChart";
+import { useCommodityBalance } from "../lib/hooks/useCommodityBalance";
+import { buildAdequacyRows } from "../lib/supply-adequacy";
 import ShipmentCard from "../components/ShipmentCard";
 import { focusNote, focusPick, focusRows } from "../lib/route-focus";
 import { formatKg, snapshotNote, syncLabel } from "../lib/overview-format";
@@ -274,6 +277,21 @@ export default function Home() {
   // ringkasan jaringan), bukan hanya halaman Overview. Stempel "terakhir
   // diperbarui" datang dari React Query, bukan state kedua yang bisa menyimpang.
   const mapQuery = useBalanceMap(token, identityScope, mapCommodity);
+  // Grafik kecukupan: SPPG/gizi selalu melihat empat komoditas untuk lokasi
+  // sendiri; BGN baru memakainya saat memilih satu lokasi (saat nasional,
+  // grafiknya lintas lokasi lewat SupplyBalanceChart).
+  const peranSPPG = APPROVER_ROLES.has(role ?? "");
+  const bgnLokasiSpesifik =
+    role === "bgn_monitor" &&
+    Boolean(activeLocation) &&
+    activeLocation !== ALL_LOCATIONS;
+  const pakaiGrafikKecukupan = peranSPPG || bgnLokasiSpesifik;
+  const commodityBalance = useCommodityBalance(
+    token,
+    identityScope,
+    COMMODITIES,
+    pakaiGrafikKecukupan
+  );
   // Papan status integrasi (W-3): dipakai panel di tab Agent Log; isinya env +
   // artefak, jadi tidak di-poll.
   const integrationStatus = useIntegrationStatus(token);
@@ -350,11 +368,35 @@ export default function Home() {
   const ledger = todayQuery.data?.ledger ?? null;
   const batchesLoading = todayQuery.isFetching;
   const batchesError = errorMessage(todayQuery.error);
+  const grafikKecukupanError = commodityBalance.error ?? batchesError;
   const decisionsError = errorMessage(decisionsQuery.error);
   const error = decisionsError ?? traceError;
   // Jam klien: null sampai komponen ter-mount supaya HTML server dan render
   // klien tidak berbeda (label waktu ditulis "—" sebelum jam siap).
   const [now, setNow] = useState<Date | null>(null);
+  // Baris kecukupan dihitung dari empat peta komoditas + batch; sebelum jam
+  // siap grafik menampilkan skeleton, bukan 0% yang menakutkan.
+  const adequacyRows = useMemo(() => {
+    const lokasi =
+      activeLocation && activeLocation !== ALL_LOCATIONS
+        ? activeLocation
+        : me?.location_name?.trim() || "";
+    if (!now || !pakaiGrafikKecukupan || !lokasi) return [];
+    return buildAdequacyRows({
+      commodities: COMMODITIES,
+      byCommodity: commodityBalance.byCommodity,
+      batches,
+      location: lokasi,
+      now,
+    });
+  }, [
+    now,
+    activeLocation,
+    me?.location_name,
+    pakaiGrafikKecukupan,
+    commodityBalance.byCommodity,
+    batches,
+  ]);
   // 19 Okt 2026: daftar keputusan sering tiba SETELAH tab dibuka (muat awal),
   // sehingga handler SideNav di atas tidak menemukan apa pun dan tab terbuka
   // dengan "Pilih keputusan" padahal daftarnya sudah berisi. Efek ini menjadi
@@ -1342,14 +1384,43 @@ export default function Home() {
               note={`${focusNote(focusRow, focusTotal)} Mengikuti komoditas yang sedang ditampilkan di peta.`}
             />
 
-            {/* Grafik pasokan per lokasi (Fase 2): sebelumnya di kolom samping
-                peta — kolom itu hanya ~310px lebar sehingga grafiknya terjepit
-                ~70px dan label 10 lokasi saling bertumpuk. Kini selebar halaman
-                dengan tinggi tetap 380px, jadi batangnya benar-benar terbaca. */}
-            <section className="map-panel" aria-label="Pasokan per lokasi">
-              <h3>Pasokan per Lokasi</h3>
-              <StockChart locations={mapData?.locations ?? []} />
-            </section>
+            {/* Grafik kecukupan: empat komoditas untuk lokasi sendiri; BGN
+                memakai lintas lokasi saat cakupan nasional. */}
+            {pakaiGrafikKecukupan ? (
+              <SupplyAdequacyChart
+                rows={adequacyRows}
+                role={role}
+                locationName={activeLocation ?? me?.location_name ?? "SPPG"}
+                updatedAt={commodityBalance.updatedAt}
+                sourceNote={snapshotNote(mapData?.locations ?? [])}
+                now={now}
+                loading={
+                  !grafikKecukupanError &&
+                  (commodityBalance.isLoading || batches === null)
+                }
+                error={grafikKecukupanError}
+                onRetry={() => {
+                  void commodityBalance.refetch();
+                  void todayQuery.refetch();
+                }}
+                onSelect={(commodity) => {
+                  setMapCommodity(commodity);
+                  document
+                    .getElementById("overview-map")
+                    ?.scrollIntoView({ behavior: "auto", block: "center" });
+                }}
+              />
+            ) : (
+              <SupplyBalanceChart
+                locations={mapData?.locations ?? []}
+                commodity={mapData?.commodity ?? mapCommodity}
+                updatedAt={mapUpdatedAt}
+                now={now}
+                loading={!mapData && !mapError}
+                error={mapError}
+                onRetry={() => void mapQuery.refetch()}
+              />
+            )}
 
             {/* Dua kartu ringkas BERDAMPINGAN (revisi 16 Okt: "shape terlalu
                 besar/kosong"). Sebelumnya Telemetri Node (237 px) dan daftar
