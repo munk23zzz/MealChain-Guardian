@@ -84,6 +84,27 @@ const DIRECTION_LABEL: Record<"higher" | "lower", string> = {
   lower: "makin rendah makin baik",
 };
 
+/**
+ * Nama metrik untuk LAYAR. Kunci tetap nama kanonik dari server; yang
+ * diterjemahkan hanya tampilannya. Nama tak dikenal dikembalikan apa adanya —
+ * jangan mengarang label untuk metrik yang belum pernah dilihat.
+ */
+export const KPI_LABELS: Record<string, string> = {
+  "Meal Continuity Rate": "Keberlanjutan menu",
+  "Avoidable Food Loss": "Susut pangan",
+  "Regional Imbalance Resolution Rate": "Penyelesaian ketimpangan",
+  "Safe Delivered Cost": "Biaya kirim aman",
+  "Procurement Price Deviation": "Simpangan harga",
+  "Decision Time": "Waktu keputusan",
+  "Evidence Completeness": "Kelengkapan bukti",
+};
+
+export function metricLabel(name: unknown): string {
+  const key = String(name ?? "").trim();
+  if (!key) return "—";
+  return KPI_LABELS[key] ?? key;
+}
+
 export function directionLabel(direction: KpiDirection): string | null {
   return direction === "none" ? null : DIRECTION_LABEL[direction];
 }

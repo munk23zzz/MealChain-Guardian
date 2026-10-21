@@ -25,7 +25,7 @@ const TILES: SummaryTile[] = [
   { key: "action", label: "Menunggu tindakan", value: "13", note: "1 sudah lewat tenggat", tone: "danger", target: "today-action" },
   { key: "batches", label: "Batch <48 jam", value: "2", note: "kedaluwarsa 1 batch (450 kg)", tone: "danger", target: "today-batches" },
   { key: "shortage", label: "Lokasi shortage", value: "1", note: "Total kekurangan 780 kg", tone: "warn", target: "today-shortage" },
-  { key: "kpi", label: "KPI terisi", value: "5/7", note: "2 metrik belum ada data", tone: "warn", target: "today-kpi" },
+  { key: "kpi", label: "KPI tersedia", value: "5/7", note: "2 metrik belum ada data", tone: "warn", target: "today-kpi" },
   { key: "ledger", label: "Rantai audit", value: "Rantai utuh", note: "3.301 blok", tone: "ok", target: "today-ledger" },
 ];
 

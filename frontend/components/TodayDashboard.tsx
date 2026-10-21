@@ -19,6 +19,7 @@ import { type AgendaPickerProps } from "./AgendaDatePicker";
 import { clampDayStep, type AgendaPayload } from "../lib/agenda";
 import { RANGE_MAX, RANGE_MIN } from "../lib/demo-data";
 import { fmtValue, unitLabel, STATE_LABEL } from "./KPIDashboard";
+import { metricLabel } from "../lib/kpi";
 import { DECISION_TYPE_LABELS } from "./RecommendationCard";
 import { formatKg } from "../lib/overview-format";
 import { kodeWilayah } from "../lib/wilayah";
@@ -75,6 +76,16 @@ function statusLabel(status: unknown): string {
 function typeLabel(decisionType: unknown): string {
   const key = String(decisionType ?? "");
   return DECISION_TYPE_LABELS[key] ?? (key ? key.replace(/_/g, " ") : "Rekomendasi");
+}
+
+/**
+ * Jumlah dalam kg untuk layar. `formatKg` menulis "—" untuk nilai yang tidak
+ * terbaca; di daftar keputusan tanda itu terlalu mudah disalahartikan sebagai
+ * nol. Tulis alasannya dalam bahasa pengguna, tanpa mengarang angka.
+ */
+function quantityLabel(value: unknown): string {
+  const label = formatKg(value as number);
+  return label === "—" ? "Jumlah tidak tercatat" : label;
 }
 
 /** Tanggal hari ini dalam bahasa manusia; "—" kalau jam klien belum siap. */
@@ -141,6 +152,7 @@ export default function TodayDashboard({
   onAgendaRetry,
   onOpenDecision,
   onOpenAllDecisions,
+  onOpenBatches,
   onOpenLocation,
 }: {
   decisions: TodayDecision[];
@@ -173,6 +185,8 @@ export default function TodayDashboard({
   onAgendaRetry?: () => void;
   onOpenDecision?: (decisionId: string) => void;
   onOpenAllDecisions?: () => void;
+  /** Membuka daftar batch lengkap saat kartu hanya menampilkan enam baris. */
+  onOpenBatches?: () => void;
   onOpenLocation?: (location: string) => void;
 }) {
   // Semua turunan dihitung dari `now` yang sama; kalau jam belum siap, label
@@ -180,9 +194,16 @@ export default function TodayDashboard({
   const clock = now ?? new Date(0);
   const pending = pendingDecisions(decisions, clock);
   const batchState = batchExpiry(batches ?? [], clock);
+  // Daftar batch bisa jauh lebih panjang dari kartu. Simpan urutan lengkap di
+  // satu tempat supaya hitungan "N lain" dan baris yang dirender tidak bisa
+  // menyimpang (dulu slice(0,6) diam-diam menyembunyikan sisanya).
+  const batchRows = [...batchState.expired, ...batchState.dueSoon];
   const shortage = shortageSummary(locations);
   const ledgerState = ledgerSummary(ledger);
   const metrics = Array.isArray(kpi?.metrics) ? kpi!.metrics! : [];
+  const metricsTersedia = metrics.filter(
+    (m) => m.value !== null && m.value !== undefined
+  ).length;
 
   // Desain ulang 2026-10-17: status dulu (strip ringkasan) → pengecualian →
   // rincian. Tiles dihitung di `lib/today.ts` (diuji tanpa DOM) supaya aturan
@@ -210,7 +231,7 @@ export default function TodayDashboard({
       <PageHeader
         title="Hari Ini"
         eyebrow={greeting(now, greetingName)}
-        description="Status hari berjalan lebih dulu, lalu yang perlu tindakan, lalu rinciannya — semua dari API."
+        description="Apa yang perlu ditindak hari ini, agenda terdekat, dan kondisi pasokan — dalam satu tampilan."
         meta={
           <span className="page-header-pills">
             <span className="commodity-pill">{todayLabel(now)}</span>
@@ -261,7 +282,7 @@ export default function TodayDashboard({
                     <div className="today-row-main">
                       <span className="today-row-title">{typeLabel(decision.decision_type)}</span>
                       <span className="today-row-meta">
-                        {formatKg(decision.quantity_kg as number)} · {statusLabel(decision.status)}
+                        {quantityLabel(decision.quantity_kg)} · {statusLabel(decision.status)}
                       </span>
                     </div>
                     <span className={dueClass(dueTone(decision.expires_at, now, expired))}>
@@ -272,8 +293,9 @@ export default function TodayDashboard({
                         type="button"
                         className="button today-row-action"
                         onClick={() => onOpenDecision(String(decision.decision_id))}
+                        aria-label={`Tinjau ${typeLabel(decision.decision_type)}`}
                       >
-                        Buka
+                        Tinjau
                       </button>
                     )}
                   </li>
@@ -362,7 +384,7 @@ export default function TodayDashboard({
                       .join(" · ")}
               </p>
               <ul className="today-list">
-                {[...batchState.expired, ...batchState.dueSoon].slice(0, 6).map((batch, index) => {
+                {batchRows.slice(0, 6).map((batch, index) => {
                   const isExpired = index < batchState.expired.length;
                   return (
                     <li
@@ -394,6 +416,22 @@ export default function TodayDashboard({
                     </li>
                   );
                 })}
+                {batchRows.length > 6 && (
+                  <li className="today-more">
+                    <span>
+                      +{batchRows.length - 6} batch lain mendekati kedaluwarsa
+                    </span>
+                    {onOpenBatches && (
+                      <button
+                        type="button"
+                        className="button today-row-action"
+                        onClick={onOpenBatches}
+                      >
+                        Lihat semua
+                      </button>
+                    )}
+                  </li>
+                )}
               </ul>
             </>
           )}
@@ -404,15 +442,16 @@ export default function TodayDashboard({
           <div className="today-card-head">
             <h2>KPI 24 jam</h2>
             <span className="today-count">
-              {metrics.filter((m) => m.value !== null && m.value !== undefined).length}/
-              {metrics.length || "—"}
+              {metricsTersedia}/{metrics.length || "—"}
             </span>
           </div>
           <p className="today-card-note">
             {periodeKpi ? `${periodeKpi}. ` : ""}
             {metrics.length === 0
-              ? "Belum ada jawaban /kpi untuk periode ini."
-              : "Metrik yang belum punya data ditulis “—” (tidak diganti 0)."}
+              ? "Belum ada data KPI untuk periode ini."
+              : metricsTersedia === metrics.length
+                ? "Semua metrik tersedia untuk periode ini."
+                : "Sebagian metrik belum tersedia untuk periode ini; angka kosong ditulis “—”."}
           </p>
           {metrics.length > 0 && (
             <ul className="today-list">
@@ -421,11 +460,15 @@ export default function TodayDashboard({
                 return (
                   <li key={String(metric.name ?? index)} className="today-row">
                     <div className="today-row-main">
-                      <span className="today-row-title">{metric.name ?? "—"}</span>
-                      <span className="today-row-meta">
-                        {STATE_LABEL[String(metric.state ?? "")] ??
-                          (metric.state ?? "keadaan tidak diketahui")}
+                      <span className="today-row-title" title={String(metric.name ?? "")}>
+                        {metricLabel(metric.name)}
                       </span>
+                      {metric.state !== "available" && (
+                        <span className="today-row-meta">
+                          {STATE_LABEL[String(metric.state ?? "")] ??
+                            (metric.state ?? "keadaan tidak diketahui")}
+                        </span>
+                      )}
                     </div>
                     <span className={`today-value${shown === null ? " today-value-none" : ""}`}>
                       {shown === null ? "—" : `${shown} ${unitLabel(metric.unit)}`}
@@ -497,9 +540,14 @@ export default function TodayDashboard({
             </li>
             <li className="today-row">
               <div className="today-row-main">
-                <span className="today-row-title">Head hash</span>
+                <span className="today-row-title">Kode verifikasi</span>
               </div>
-              <span className="today-value today-value-mono">{ledgerState.headShort}</span>
+              <span
+                className="today-value today-value-mono"
+                title={ledgerState.headFull ?? undefined}
+              >
+                {ledgerState.headShort}
+              </span>
             </li>
           </ul>
         </article>

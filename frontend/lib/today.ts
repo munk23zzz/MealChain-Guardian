@@ -57,22 +57,22 @@ function timeOf(value: unknown): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
-/** Durasi dalam bahasa manusia: "5 mnt", "2 jam 6 mnt", "2 hari 2 jam". */
+/** Durasi dalam bahasa manusia: "5 menit", "2 jam 6 menit", "2 hari 2 jam". */
 function humanDuration(ms: number): string {
-  if (ms < 60 * 1000) return "kurang dari 1 mnt";
+  if (ms < 60 * 1000) return "kurang dari 1 menit";
   const minutes = Math.floor(ms / (60 * 1000));
-  if (minutes < 60) return `${minutes} mnt`;
+  if (minutes < 60) return `${minutes} menit`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) {
     const restMinutes = minutes % 60;
-    return restMinutes ? `${hours} jam ${restMinutes} mnt` : `${hours} jam`;
+    return restMinutes ? `${hours} jam ${restMinutes} menit` : `${hours} jam`;
   }
   const days = Math.floor(hours / 24);
   const restHours = hours % 24;
   return restHours ? `${days} hari ${restHours} jam` : `${days} hari`;
 }
 
-/** Sisa waktu ("3 jam lagi") atau keterlambatan ("Lewat 2 jam 5 mnt"). */
+/** Sisa waktu ("3 jam lagi") atau keterlambatan ("Lewat 2 jam 5 menit"). */
 export function dueLabel(value: unknown, now: Date): string {
   const ms = timeOf(value);
   if (ms === null) return "—";
@@ -201,7 +201,7 @@ export function ledgerSummary(ledger: unknown) {
     broken_at?: unknown;
   } | null;
   if (!payload || typeof payload !== "object") {
-    return { ok: null, statusLabel: "—", blocksLabel: "—", headShort: "—" };
+    return { ok: null, statusLabel: "—", blocksLabel: "—", headShort: "—", headFull: null };
   }
   const ok = typeof payload.valid === "boolean" ? payload.valid : null;
   const brokenAt = Number(payload.broken_at);
@@ -219,6 +219,7 @@ export function ledgerSummary(ledger: unknown) {
     statusLabel,
     blocksLabel: Number.isFinite(blocks) ? `${blocks.toLocaleString("id-ID")} blok` : "—",
     headShort: typeof payload.head === "string" && payload.head ? payload.head.slice(0, 10) : "—",
+    headFull: typeof payload.head === "string" && payload.head ? payload.head : null,
   };
 }
 
@@ -340,7 +341,7 @@ export function summaryTiles(input: SummaryInput): SummaryTile[] {
   const kpi: SummaryTile = daftar && daftar.length
     ? {
         key: "kpi",
-        label: "KPI terisi",
+        label: "KPI tersedia",
         target: "today-kpi",
         value: `${terisi}/${daftar.length}`,
         tone: terisi === daftar.length ? "ok" : "warn",
@@ -351,11 +352,11 @@ export function summaryTiles(input: SummaryInput): SummaryTile[] {
       }
     : {
         key: "kpi",
-        label: "KPI terisi",
+        label: "KPI tersedia",
         target: "today-kpi",
         value: "—",
         tone: "none",
-        note: "belum ada jawaban /kpi untuk periode ini",
+        note: "belum ada data KPI untuk periode ini",
       };
 
   const ledgerTile: SummaryTile = {

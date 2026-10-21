@@ -90,8 +90,7 @@ export default function TodayAgendaCalendar({
         <div className="agenda-head-text">
           <h2>Agenda harian</h2>
           <p className="agenda-sub">
-            Rencana menu, pasokan, limbah, dan keputusan pada hari terpilih. Sumber{" "}
-            <code>GET /agenda</code>.
+            Rencana menu, pasokan, limbah, dan keputusan pada hari terpilih.
           </p>
         </div>
         <div className="agenda-nav">

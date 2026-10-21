@@ -39,21 +39,21 @@ function decision(over: Record<string, unknown> = {}) {
 describe("dueLabel — sisa/lewat waktu dalam bahasa manusia", () => {
   it("masa depan: jam, hari, dan menit", () => {
     expect(dueLabel(iso(3 * H), NOW)).toBe("3 jam lagi");
-    expect(dueLabel(iso(2 * H + 6 * M), NOW)).toBe("2 jam 6 mnt lagi");
-    expect(dueLabel(iso(40 * M), NOW)).toBe("40 mnt lagi");
+    expect(dueLabel(iso(2 * H + 6 * M), NOW)).toBe("2 jam 6 menit lagi");
+    expect(dueLabel(iso(40 * M), NOW)).toBe("40 menit lagi");
     expect(dueLabel(iso(50 * H), NOW)).toBe("2 hari 2 jam lagi");
     expect(dueLabel(iso(48 * H), NOW)).toBe("2 hari lagi");
   });
 
   it("masa lalu memakai kata 'Lewat'", () => {
-    expect(dueLabel(iso(-(2 * H + 5 * M)), NOW)).toBe("Lewat 2 jam 5 mnt");
+    expect(dueLabel(iso(-(2 * H + 5 * M)), NOW)).toBe("Lewat 2 jam 5 menit");
     expect(dueLabel(iso(-5 * H), NOW)).toBe("Lewat 5 jam");
     expect(dueLabel(iso(-26 * H), NOW)).toBe("Lewat 1 hari 2 jam");
   });
 
   it("kurang dari satu menit tetap terbaca manusia", () => {
-    expect(dueLabel(iso(30 * 1000), NOW)).toBe("kurang dari 1 mnt lagi");
-    expect(dueLabel(iso(-30 * 1000), NOW)).toBe("Lewat kurang dari 1 mnt");
+    expect(dueLabel(iso(30 * 1000), NOW)).toBe("kurang dari 1 menit lagi");
+    expect(dueLabel(iso(-30 * 1000), NOW)).toBe("Lewat kurang dari 1 menit");
   });
 
   it("tanggal tak terbaca tidak diklaim — ditulis '—'", () => {
@@ -110,7 +110,7 @@ describe("pendingDecisions — yang menunggu tindakan manusia", () => {
       NOW
     );
     expect(out.nextDue).toBe(iso(45 * M));
-    expect(out.nextDueLabel).toBe("45 mnt lagi");
+    expect(out.nextDueLabel).toBe("45 menit lagi");
   });
 
   it("tanpa agenda berikutnya, label ditulis '—' (tidak dikarang)", () => {
@@ -249,6 +249,7 @@ describe("ledgerSummary — status rantai Merkle", () => {
     expect(out.statusLabel).toBe("Rantai utuh");
     expect(out.blocksLabel).toBe("758 blok");
     expect(out.headShort).toBe("0fb6bff271");
+    expect(out.headFull).toBe("0fb6bff271d50349f1d56722b4f9f078a48a776da143c7c23c6cf85e14abef12");
   });
 
   it("rantai terputus menyebut blok yang gagal", () => {

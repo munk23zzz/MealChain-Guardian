@@ -1028,6 +1028,7 @@ export default function Home() {
               setTab("recommendations");
             }}
             onOpenAllDecisions={() => setTab("recommendations")}
+            onOpenBatches={() => setTab("safety")}
             onOpenLocation={(location) => {
               setActiveLocation(location);
               setTab("overview");

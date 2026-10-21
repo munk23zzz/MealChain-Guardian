@@ -99,6 +99,98 @@ describe("halaman Hari Ini — struktur", () => {
   });
 });
 
+describe("kebersihan copy halaman Hari Ini", () => {
+  it("deskripsi berbicara manfaat, bukan sumber API", () => {
+    const html = render();
+    expect(html).toContain("Apa yang perlu ditindak hari ini");
+    expect(html).not.toContain("semua dari API");
+  });
+
+  it("tidak menampilkan path endpoint agenda", () => {
+    const html = render({
+      agenda: { days: [] },
+      agendaDate: "2026-10-20",
+      agendaMonth: { year: 2026, month: 10 },
+      agendaPicker: {
+        open: false,
+        month: { year: 2026, month: 10 },
+        years: [2026],
+        agenda: null,
+        loading: false,
+        error: null,
+        today: "2026-10-20",
+        selected: "2026-10-20",
+        onOpen: () => {},
+        onClose: () => {},
+        onShiftMonth: () => {},
+        onSetMonth: () => {},
+        onSelect: () => {},
+        onToday: () => {},
+        onRetry: () => {},
+      },
+    });
+    expect(html).toContain("Rencana menu, pasokan, limbah, dan keputusan pada hari terpilih.");
+    expect(html).not.toContain("GET /agenda");
+  });
+
+  it("rantai audit memakai istilah pengguna dan hash penuh hanya di tooltip", () => {
+    const html = render();
+    expect(html).toContain("Kode verifikasi");
+    expect(html).not.toContain("Head hash");
+    expect(html).toContain('title="0fb6bff271d50349f1d56722b4f9f078a48a776da143c7c23c6cf85e14abef12"');
+  });
+
+  it("jenis keputusan restoration diterjemahkan, bukan slug mentah", () => {
+    const html = render({
+      decisions: [
+        {
+          decision_id: "d-restorasi",
+          decision_type: "supplier_exclusion_restoration",
+          status: "pending_approval",
+          quantity_kg: 120,
+          expires_at: iso(2 * H),
+        },
+      ],
+    });
+    expect(html).toContain("Pemulihan status pemasok");
+    expect(html).not.toContain("supplier exclusion restoration");
+  });
+
+  it("jumlah yang tidak tercatat diberi alasan, bukan '—' tanpa konteks", () => {
+    const html = render({
+      decisions: [
+        {
+          decision_id: "d-tanpa-jumlah",
+          decision_type: "regional_balance",
+          status: "pending_approval",
+          quantity_kg: null,
+          expires_at: iso(2 * H),
+        },
+      ],
+    });
+    expect(html).toContain("Jumlah tidak tercatat");
+  });
+
+  it("label KPI memakai bahasa Indonesia; nama asli tetap tersedia di tooltip", () => {
+    const html = render();
+    expect(html).toContain("Keberlanjutan menu");
+    expect(html).toContain('title="Meal Continuity Rate"');
+    expect(html).not.toContain(">Meal Continuity Rate<");
+  });
+
+  it("status 'tersedia' tidak diulang di setiap baris KPI", () => {
+    const html = render();
+    expect(html).not.toContain(">tersedia<");
+    expect(html).toContain("belum ada data");
+  });
+
+  it("tombol membuka keputusan diberi kata kerja yang jelas", () => {
+    const html = render({ onOpenDecision: () => {} });
+    expect(html).toContain(">Tinjau</button>");
+    expect(html).not.toContain(">Buka</button>");
+  });
+});
+
 describe("kartu keputusan menunggu tindakan", () => {
   it("hanya menghitung yang actionable (rejected tidak ikut)", () => {
     const html = render();
@@ -109,7 +201,7 @@ describe("kartu keputusan menunggu tindakan", () => {
   it("menampilkan sisa waktu dari `now` yang diberikan", () => {
     const html = render();
     expect(html).toContain("Lewat 2 jam");
-    expect(html).toContain("45 mnt lagi");
+    expect(html).toContain("45 menit lagi");
   });
 
   it("baris batch menampilkan status keamanan yang dikirim server", () => {
@@ -122,7 +214,7 @@ describe("kartu keputusan menunggu tindakan", () => {
 
   it("menyebut agenda terdekat dan jumlah yang lewat tenggat", () => {
     const html = render();
-    expect(html).toContain("Agenda terdekat 45 mnt lagi · 1 sudah lewat tenggat");
+    expect(html).toContain("Agenda terdekat 45 menit lagi · 1 sudah lewat tenggat");
   });
 
   it("tanpa agenda baru, dikatakan apa adanya (bukan '—')", () => {
@@ -184,6 +276,22 @@ describe("kartu batch", () => {
     expect(html).not.toContain("· —");
   });
 
+  it("lebih dari enam batch: sisanya DINYATAKAN, bukan hilang diam-diam", () => {
+    const banyak = Array.from({ length: 9 }, (_, i) => ({
+      id: `b${i}`,
+      location: "Bandung",
+      commodity: "telur",
+      quantity_kg: 100,
+      freshness_score: 0.9,
+      safety_status: "pass",
+      usable_until: iso(-(i + 1) * H),
+    }));
+    const html = render({ batches: banyak, onOpenBatches: () => {} });
+    expect(html).toContain("<span class=\"today-count\">9</span>");
+    expect(html).toContain("+3 batch lain mendekati kedaluwarsa");
+    expect(html).toContain(">Lihat semua</button>");
+  });
+
   it("data batch belum ada: '—' dan tidak diklaim kosong", () => {
     const html = render({ batches: null, batchesLoading: true });
     expect(html).toContain("Memuat data batch…");
@@ -235,9 +343,23 @@ describe("kartu KPI", () => {
     expect(html).toContain("today-value-none");
   });
 
-  it("belum ada jawaban /kpi: diakui, bukan dianggap nol", () => {
+  it("semua metrik terisi: dikatakan utuh, bukan peringatan generik", () => {
+    const html = render({
+      kpi: {
+        metrics: [
+          { name: "Meal Continuity Rate", unit: "percent", value: "100", state: "available" },
+          { name: "Safe Delivered Cost", unit: "IDR", value: "16206000", state: "available" },
+        ],
+      },
+    });
+    expect(html).toContain("Semua metrik tersedia untuk periode ini.");
+    expect(html).not.toContain("Sebagian metrik belum tersedia");
+  });
+
+  it("belum ada jawaban KPI: diakui, bukan dianggap nol", () => {
     const html = render({ kpi: null });
-    expect(html).toContain("Belum ada jawaban /kpi untuk periode ini.");
+    expect(html).toContain("Belum ada data KPI untuk periode ini.");
+    expect(html).not.toContain("/kpi");
   });
 });
 
@@ -274,7 +396,7 @@ describe("sapaan header + nada sisa waktu (Fase 6)", () => {
 
   it("chip sisa waktu: lewat = merah, ≤48 jam = amber, jauh = netral", () => {
     const html = render();
-    // d-lewat (2 jam lewat) dan batch kedaluwarsa → over; d-dekat (45 mnt) dan
+    // d-lewat (2 jam lewat) dan batch kedaluwarsa → over; d-dekat (45 menit) dan
     // batch 10 jam lagi → soon (ambang 48 jam yang sudah dipakai halaman ini).
     expect(html).toContain("today-due-over");
     expect(html).toContain("today-due-soon");

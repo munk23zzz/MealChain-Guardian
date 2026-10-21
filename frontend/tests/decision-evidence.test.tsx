@@ -131,7 +131,7 @@ describe("Decision & Evidence — dengan keputusan", () => {
   });
 
   it("tenggat memakai jam yang diberikan pemanggil", () => {
-    expect(render()).toContain("Lewat 13 mnt");
+    expect(render()).toContain("Lewat 13 menit");
   });
 
   it("riwayat iterasi memuat alasan penolakan (bahan belajar agen)", () => {
@@ -236,7 +236,7 @@ describe("Decision & Evidence — dengan keputusan", () => {
   it("jam klien belum siap: label tenggat '—' (bukan jam server)", () => {
     const html = render({ now: null });
     expect(html).toContain("Tenggat");
-    expect(html).not.toContain("Lewat 13 mnt");
+    expect(html).not.toContain("Lewat 13 menit");
   });
 
   it("summary belum dimuat: fakta kosong ditulis '—', riwayat iterasi tetap tampil", () => {
@@ -245,7 +245,7 @@ describe("Decision & Evidence — dengan keputusan", () => {
     expect(html).not.toContain("Rp0");
     // Yang masih diketahui dari payload keputusan tetap terisi:
     expect(html).toContain("600 kg");
-    expect(html).toContain("Lewat 13 mnt");
+    expect(html).toContain("Lewat 13 menit");
     // Riwayat iterasi tidak ikut hilang.
     expect(html).toContain("v1");
     expect(html).toContain("alasan: Kuota penuh");
@@ -293,7 +293,7 @@ describe("Decision & Evidence — pemilih keputusan", () => {
   });
 
   it("yang menunggu tindakan membawa sisa waktu supaya bisa diprioritaskan", () => {
-    expect(render()).toContain("Lewat 13 mnt · d1");
+    expect(render()).toContain("Lewat 13 menit · d1");
   });
 
   it("tanpa jam klien, sisa waktu tidak dikarang jadi '—' di dalam opsi", () => {

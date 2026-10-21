@@ -6255,6 +6255,24 @@ a:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
+
+/* Satu gerak masuk untuk lima tile: pengguna melihat "status hari ini" datang
+   sebagai satu kelompok, bukan lima animasi terpisah. Hanya opacity+transform
+   (GPU), jeda 30ms, dan dimatikan bila pengguna meminta gerak minimum. */
+@keyframes today-tile-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+.today-summary-list > li {
+  animation: today-tile-in var(--dur-3) var(--ease-standard) both;
+}
+.today-summary-list > li:nth-child(2) { animation-delay: 30ms; }
+.today-summary-list > li:nth-child(3) { animation-delay: 60ms; }
+.today-summary-list > li:nth-child(4) { animation-delay: 90ms; }
+.today-summary-list > li:nth-child(5) { animation-delay: 120ms; }
+@media (prefers-reduced-motion: reduce) {
+  .today-summary-list > li { animation: none; }
+}
 .today-tile-label {
   /* Label selebar bentuk (tidak berbagi baris dengan nilai): di bentuk 183 px,
      "MENUNGGU TINDAKAN" butuh 143 px sedangkan sisa kolom hanya 126 px sehingga

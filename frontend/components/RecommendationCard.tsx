@@ -44,6 +44,10 @@ export const DECISION_TYPE_LABELS: Record<string, string> = {
   price_anomaly: "Penyesuaian harga direkomendasikan",
   surplus_redistribution: "Redistribusi surplus direkomendasikan",
   supplier_exclusion: "Usulan pengecualian pemasok",
+  // Restorasi pengecualian adalah keputusan administratif terpisah; tanpa label
+  // ini halaman Hari Ini jatuh ke fallback dan menampilkan slug mentah
+  // "supplier exclusion restoration" ke layar pengguna.
+  supplier_exclusion_restoration: "Pemulihan status pemasok",
   // Demo Control 2026-10-19: pengadaan dari pemasok yang memasok SPPG itu —
   // jangan diberi label "Alokasi regional" yang artinya pemindahan antar SPPG.
   supplier_procurement: "Pengadaan dari pemasok",

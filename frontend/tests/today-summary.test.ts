@@ -108,7 +108,7 @@ describe("strip ringkasan — lima tile dengan urutan tetap", () => {
       "Menunggu tindakan",
       "Batch <48 jam",
       "Lokasi shortage",
-      "KPI terisi",
+      "KPI tersedia",
       "Rantai audit",
     ]);
   });

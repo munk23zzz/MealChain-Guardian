@@ -16,8 +16,8 @@ import { decisionGroups } from "../lib/decision-picker";
 
 const NOW = new Date("2026-10-11T02:30:00Z");
 
-const ID_A = "ef347f91-6ebf-481c-a790-128ad3eba6ec"; // lewat 13 mnt
-const ID_B = "cdde80a9-7858-4274-ac2a-d3dceeac4635"; // 6 jam 30 mnt lagi
+const ID_A = "ef347f91-6ebf-481c-a790-128ad3eba6ec"; // lewat 13 menit
+const ID_B = "cdde80a9-7858-4274-ac2a-d3dceeac4635"; // 6 jam 30 menit lagi
 const ID_C = "5e0f758c-363f-4ab1-80f6-8c0d4afe23cf"; // tenggat tidak terbaca
 const ID_D = "b24f509d-decc-40c0-bec7-4d083da70906"; // proposed
 const ID_E = "fb6a5651-d20e-4437-b6d2-1aaaf312e112"; // rejected
@@ -100,9 +100,9 @@ describe("decisionGroups — label memakai bahasa manusia", () => {
   it("yang menunggu tindakan memuat sisa waktu dan id pendek 8 karakter", () => {
     const [action] = decisionGroups(DECISIONS, NOW);
     expect(action.options[0].label).toBe(
-      "Alokasi regional direkomendasikan · Lewat 13 mnt · ef347f91"
+      "Alokasi regional direkomendasikan · Lewat 13 menit · ef347f91"
     );
-    expect(action.options[1].label).toContain("6 jam 30 mnt lagi");
+    expect(action.options[1].label).toContain("6 jam 30 menit lagi");
   });
 
   it("tenggat yang tidak terbaca: bagian waktunya dihilangkan, bukan ditulis '—'", () => {
@@ -138,7 +138,7 @@ describe("decisionGroups — label memakai bahasa manusia", () => {
 describe("decisionGroups — sembunyikan yang lewat tenggat", () => {
   it("default tetap memuat yang lewat (kompatibel dengan pemanggil lama)", () => {
     const ids = optionsOf(decisionGroups(DECISIONS, NOW));
-    expect(ids).toContain(ID_A); // lewat 13 mnt
+    expect(ids).toContain(ID_A); // lewat 13 menit
   });
 
   it("includeExpired=false membuang yang lewat, menyisakan yang masih berlaku", () => {

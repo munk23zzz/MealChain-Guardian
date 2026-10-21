@@ -7,7 +7,13 @@
 // ketahuan saat demo.
 import { describe, expect, it } from "vitest";
 
-import { KPI_TABS, KPI_WINDOWS, kpiWindowRange, shouldLoadKpi } from "../lib/kpi";
+import {
+  KPI_TABS,
+  KPI_WINDOWS,
+  kpiWindowRange,
+  metricLabel,
+  shouldLoadKpi,
+} from "../lib/kpi";
 
 describe("shouldLoadKpi", () => {
   it("memuat di tab yang benar-benar menampilkan KPI", () => {
@@ -67,5 +73,18 @@ describe("jendela KPI (pemilih periode)", () => {
     const now = new Date("2026-10-16T16:00:00.000Z");
     expect(kpiWindowRange("ngawur", now).start).toBe("2026-10-15T16:00:00.000Z");
     expect(kpiWindowRange(undefined, now).start).toBe("2026-10-15T16:00:00.000Z");
+  });
+});
+
+describe("metricLabel — nama metrik untuk layar", () => {
+  it("menerjemahkan nama kanonik yang dipakai halaman", () => {
+    expect(metricLabel("Meal Continuity Rate")).toBe("Keberlanjutan menu");
+    expect(metricLabel("Avoidable Food Loss")).toBe("Susut pangan");
+    expect(metricLabel("Evidence Completeness")).toBe("Kelengkapan bukti");
+  });
+
+  it("nama yang belum dikenal dikembalikan apa adanya, bukan dikarang", () => {
+    expect(metricLabel("New Metric From Server")).toBe("New Metric From Server");
+    expect(metricLabel(null)).toBe("—");
   });
 });

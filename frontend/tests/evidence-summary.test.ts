@@ -142,7 +142,7 @@ describe("decisionFacts — identitas keputusan", () => {
 
   it("tenggat tetap terbaca — sebagai metrik dari expiry bersarang", () => {
     const rows = decisionMetrics({}, SUMMARY, new Date("2026-10-11T02:30:00Z"));
-    expect(find(rows, "Tenggat").value).toBe("Lewat 13 mnt");
+    expect(find(rows, "Tenggat").value).toBe("Lewat 13 menit");
   });
 
   it("tenggat di root payload keputusan juga terbaca sebagai metrik", () => {
