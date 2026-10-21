@@ -113,3 +113,108 @@ def test_purchase_orders_terbaca_dari_backend_hidup(klien):
     )
     # Asal baris disebut eksplisit — PO impor SAP tidak boleh tampil seolah dari eksekusi.
     assert {row.get("origin") for row in rows} <= {"execution", "demo"}
+
+
+# --- read model baru: bukti bahwa jembatan benar-benar bisa membaca SEMUA domain ----------
+
+
+def _pasangan(klien) -> tuple[str, str, str, str]:
+    """Satu (location_id, location, commodity) nyata dari inventaris — bukan hardcode."""
+    baris = klien.batches()
+    contoh = next(
+        b for b in baris if b.get("location_id") and b.get("commodity")
+    )
+    return (
+        str(contoh["location_id"]),
+        str(contoh["location"]),
+        str(contoh["commodity"]),
+        str(contoh.get("id") or ""),
+    )
+
+
+def test_batches_memuat_seluruh_inventaris(klien):
+    """Batas 50 di backend dulu memotong inventaris; sekarang plafon 500 = semua baris."""
+    baris = klien.batches()
+    assert len(baris) > 50, (
+        "kurang dari 51 batch terbaca — batas 50 di /batches mungkin kembali tertanam di kode"
+    )
+
+
+def test_harga_dan_kuotasi_per_pasangan(klien):
+    lokasi_id, lokasi, komoditas, _ = _pasangan(klien)
+    harga = klien.price(lokasi_id, komoditas)
+    assert harga.get("price_per_kg") is not None, f"harga {lokasi}/{komoditas} kosong: {harga}"
+    assert harga.get("location") == lokasi
+    kuotasi = klien.price_quotes(lokasi_id, komoditas)
+    assert kuotasi.get("quotes"), f"kuotasi {lokasi}/{komoditas} kosong"
+    assert "supplier_name" in kuotasi["quotes"][0]
+
+
+def test_kebutuhan_dan_prakiraan_per_pasangan(klien):
+    lokasi_id, _, komoditas, _ = _pasangan(klien)
+    kebutuhan = klien.demand(lokasi_id, komoditas)
+    assert kebutuhan.get("quantity_kg") is not None
+    prakiraan = klien.demand_forecast(lokasi_id, komoditas)
+    assert prakiraan.get("forecast_qty_kg") is not None
+    assert prakiraan.get("method"), "metode prakiraan harus disebut backend"
+
+
+def test_pasokan_baris_terakhir_per_pasangan(klien):
+    lokasi_id, _, komoditas, _ = _pasangan(klien)
+    titik = klien.supply_point(lokasi_id, komoditas)
+    assert titik.get("quantity_kg") is not None
+    assert titik.get("source"), "sumber baris pasokan harus disebut (mock vs nyata)"
+
+
+def test_limbah_menyebut_tiga_angka_terpisah(klien):
+    ringkas = klien.waste_summary()
+    for kunci in ("recorded", "diverted", "unassigned"):
+        assert kunci in ringkas, f"/waste/summary tidak memuat {kunci}: {sorted(ringkas)}"
+
+
+def test_eksklusi_dan_rute_pemasok_terbaca(klien):
+    eksklusi = klien.supplier_exclusions()
+    assert isinstance(eksklusi, list)
+    rute = klien.supplier_routes(limit=50)
+    assert rute["routes"], "tidak ada kiriman aktif — seed belum dijalankan?"
+    contoh = rute["routes"][0]
+    assert contoh.get("supplierName") and contoh.get("destinationName")
+    assert "geometry" not in str(rute), "polylines tidak boleh ikut ke teks chat"
+
+
+def test_bukti_dan_jejak_keputusan_terbaca(klien):
+    baris = klien.decisions()
+    if not baris:
+        pytest.skip("belum ada keputusan di DB demo")
+    decision_id = str(baris[0]["decision_id"])
+    compliance = klien.decision_compliance(decision_id)
+    assert compliance.get("signature"), f"keputusan {decision_id} tanpa tanda tangan"
+    assert (compliance.get("signature") or {}).get("state")
+    assert "verify" in compliance
+    rantai = klien.decision_chain(decision_id)
+    assert rantai.get("chain"), "rantai iterasi kosong"
+    jejak = klien.decision_traces(decision_id)
+    assert "steps" in jejak
+
+
+def test_integrasi_ledger_dan_ringkasan_po_terbaca(klien):
+    integrasi = klien.integrations_status()
+    assert integrasi.get("components"), "/integrations/status tanpa komponen"
+    ledger = klien.ledger_verify()
+    assert ledger.get("valid") is not None and ledger.get("blocks") is not None
+    ringkas = klien.po_summary()
+    assert ringkas.get("count") is not None
+    assert ringkas.get("total_value") is not None
+
+
+def test_receipts_terbaca_untuk_satu_batch(klien):
+    """`/receipts` mewajibkan batch_id; jembatan hanya bisa mencari per batch."""
+    baris = klien.batches()
+    for batch in baris[:20]:
+        try:
+            catatan = klien.receipts(str(batch["id"]))
+        except Exception:  # batch tanpa penerimaan dijawab 404 oleh backend
+            continue
+        assert isinstance(catatan, list)
+        return
+    pytest.skip("tidak ada batch dengan penerimaan barang di DB demo")

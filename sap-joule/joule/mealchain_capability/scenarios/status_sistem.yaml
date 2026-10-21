@@ -1,0 +1,10 @@
+description: >-
+  This skill reports the readiness of the MealChain Guardian system as the backend states it:
+  the status of each integration component (SAP AI Core, mock SAP, AgentCore, observability),
+  the block-chain ledger verification result, the purchase-order summary, and the registered
+  SPPG network. Use it for questions about integrasi, integration, ledger, status sistem,
+  status koneksi, or kesiapan sistem. Read-only: components that have not started are reported
+  as not started, never upgraded to green.
+target:
+  name: mealchain_query_function
+  type: function

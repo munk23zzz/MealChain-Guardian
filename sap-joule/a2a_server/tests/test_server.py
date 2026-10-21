@@ -56,6 +56,7 @@ class FakeClient:
             {
                 "id": "b-1",
                 "location": "SPPG Jakarta",
+                "location_id": "loc-1",
                 "commodity": "telur",
                 "quantity_kg": 120.0,
                 "safety_status": "pass",
@@ -69,6 +70,7 @@ class FakeClient:
         self._cek()
         return [
             {
+                "id": "sup-1",
                 "name": "CV Cipinang Boga Utama",
                 "location": "Jakarta",
                 "commodity": "beras",
@@ -83,6 +85,7 @@ class FakeClient:
                 "shippingUntil": "2026-10-22T00:00:00+00:00",
             },
             {
+                "id": "sup-2",
                 "name": "UD Cipanas Telur Sejahtera",
                 "location": "Cianjur",
                 "commodity": "telur",
@@ -166,6 +169,243 @@ class FakeClient:
             }
         ]
 
+    # --- read model baru (dipakai skill harga/kebutuhan/limbah/risiko/bukti/sistem) ---------
+
+    def locations(self) -> list[dict]:
+        self.dipanggil.append("locations")
+        self._cek()
+        return [
+            {"id": "loc-1", "name": "Jakarta", "region": "DKI Jakarta"},
+            {"id": "loc-2", "name": "Cianjur", "region": "Jawa Barat"},
+        ]
+
+    def supply_point(self, location_id: str, commodity: str) -> dict:
+        self.dipanggil.append(f"supply_point:{location_id}/{commodity}")
+        self._cek()
+        return {
+            "quantity_kg": 1207.32,
+            "recorded_at": "2026-11-04T12:00:00+00:00",
+            "source": "mock_sap",
+        }
+
+    def price(self, location_id: str, commodity: str) -> dict:
+        self.dipanggil.append(f"price:{location_id}/{commodity}")
+        self._cek()
+        return {
+            "location": "Jakarta",
+            "commodity": commodity,
+            "price_per_kg": 12225.53,
+            "recorded_at": "2026-11-04T12:00:00+00:00",
+            "source": "pihps_reference",
+        }
+
+    def price_quotes(self, location_id: str, commodity: str) -> dict:
+        self.dipanggil.append(f"price_quotes:{location_id}/{commodity}")
+        self._cek()
+        return {
+            "location": "Jakarta",
+            "commodity": commodity,
+            "quotes": [
+                {
+                    "supplier_name": "UD Rancaekek Beras Sejahtera",
+                    "price_per_kg": 12039.42,
+                    "recorded_at": "2026-11-03T00:00:00+00:00",
+                }
+            ],
+        }
+
+    def demand(self, location_id: str, commodity: str) -> dict:
+        self.dipanggil.append(f"demand:{location_id}/{commodity}")
+        self._cek()
+        return {"quantity_kg": 957.04, "needed_by": "2026-11-07T00:00:00+00:00"}
+
+    def demand_forecast(self, location_id: str, commodity: str) -> dict:
+        self.dipanggil.append(f"demand_forecast:{location_id}/{commodity}")
+        self._cek()
+        return {"forecast_qty_kg": 6697.558, "method": "statistical_fallback", "confidence": 1.0}
+
+    def waste_summary(self) -> dict:
+        self.dipanggil.append("waste_summary")
+        self._cek()
+        return {
+            "period": {
+                "start": "2026-09-20T00:00:00+00:00",
+                "end": "2026-10-20T00:00:00+00:00",
+                "days": 30,
+            },
+            "scope": {"role": "bgn_monitor", "locations": ["Jakarta", "Cianjur"]},
+            "computed_at": "2026-10-20T00:43:56+00:00",
+            "recorded": {"available": True, "kg": 631.46, "events": 86},
+            "diverted": {"available": True, "kg": 332.5, "events": 41},
+            "unassigned": {"available": True, "kg": 298.96, "events": 45},
+            "partners": [{"name": "PT Biogas Nusantara", "kg": 122.8, "events": 14}],
+        }
+
+    def supplier_exclusions(self) -> list[dict]:
+        self.dipanggil.append("supplier_exclusions")
+        self._cek()
+        return [
+            {
+                "id": "exc-1",
+                "supplier_id": "sup-1",
+                "scope_location_id": "loc-1",
+                "status": "active",
+                "reason": "batch ayam gagal uji antibiotik",
+                "activated_at": "2026-10-16T22:36:54+00:00",
+                "revoked_at": None,
+            }
+        ]
+
+    def supplier_routes(self) -> dict:
+        self.dipanggil.append("supplier_routes")
+        self._cek()
+        return {
+            "routes": [
+                {
+                    "supplierName": "CV Cipinang Boga Utama",
+                    "destinationName": "Jakarta",
+                    "commodity": "beras",
+                    "quantityKg": 800.0,
+                    "roadKm": 9.8,
+                    "roadMinutes": 12.2,
+                    "journeyState": "dalam perjalanan",
+                    "etaAt": "2026-10-20T09:00:00+00:00",
+                }
+            ],
+            "summary": {
+                "routes": 1,
+                "with_road": 1,
+                "without_road": 0,
+                "scope": "nasional",
+                "journey_states": {"dalam_perjalanan": 1},
+            },
+        }
+
+    def decisions(self) -> list[dict]:
+        self.dipanggil.append("decisions")
+        self._cek()
+        return [
+            {
+                "decision_id": "cec7e30d-3eb5-4c29-82ee-c5fee581add1",
+                "status": "proposed",
+                "decision_type": "regional_balance",
+                "quantity_kg": 600.0,
+            }
+        ]
+
+    def decision_compliance(self, decision_id: str) -> dict:
+        self.dipanggil.append(f"decision_compliance:{decision_id}")
+        self._cek()
+        return {
+            "decision": {
+                "id": decision_id,
+                "decision_type": "regional_balance",
+                "status": "proposed",
+                "proposed_by": "supervisor_agent",
+            },
+            "evidence": [],
+            "approvals": [],
+            "traces": [{"step_name": "LEARN", "tool_called": "rejection_loop.repropose"}],
+            "content_address": "mc1-13i7rjc532qre22o835j3ffb5sxqn2rzsi7pd2hda82zdg442w",
+            "signature": {
+                "state": "signed",
+                "algorithm": "ECDSA-secp256k1-sha256 (deterministic RFC6979)",
+                "signature": "95b57211c6ef5b6139a32703e21327d662c9eee2bd26d418f2bb73631bd7166e" * 2,
+            },
+            "verify": True,
+        }
+
+    def decision_chain(self, decision_id: str) -> dict:
+        self.dipanggil.append(f"decision_chain:{decision_id}")
+        self._cek()
+        return {
+            "anchor_id": decision_id,
+            "chain": [
+                {
+                    "decision_id": decision_id,
+                    "iteration": 2,
+                    "status": "proposed",
+                    "rejection_reason": None,
+                    "quantity_kg": 600.0,
+                    "created_at": "2026-10-19T20:33:04+00:00",
+                }
+            ],
+        }
+
+    def decision_traces(self, decision_id: str) -> dict:
+        self.dipanggil.append(f"decision_traces:{decision_id}")
+        self._cek()
+        return {
+            "decision_id": decision_id,
+            "steps": [
+                {
+                    "step_name": "LEARN",
+                    "tool_called": "rejection_loop.repropose",
+                    "output_summary": {"learning_note": "harga terlalu tinggi — cari sumber lebih dekat"},
+                    "step_at": "2026-10-19T20:33:04+00:00",
+                }
+            ],
+        }
+
+    def integrations_status(self) -> dict:
+        self.dipanggil.append("integrations_status")
+        self._cek()
+        return {
+            "checked_at": "2026-10-20T00:43:56+00:00",
+            "components": [
+                {
+                    "id": "mock_sap",
+                    "name": "Mock SAP (sap_integration)",
+                    "category": "contract_tested",
+                    "category_label": "kontrak diuji",
+                    "evidence": "layanan mock-sap + tes kontrak PO",
+                },
+                {
+                    "id": "agentcore_gateway",
+                    "name": "AgentCore Gateway",
+                    "category": "not_started",
+                    "category_label": "belum dimulai",
+                    "evidence": "env AGENTCORE_GATEWAY_URL kosong",
+                },
+            ],
+        }
+
+    def ledger_verify(self) -> dict:
+        self.dipanggil.append("ledger_verify")
+        self._cek()
+        return {
+            "valid": True,
+            "blocks": 115,
+            "head": "bdeeefb7f7b13441cd7432d8af5010b4946c3a8f5a23ea503343a1e652789a48",
+            "linked_blocks": 115,
+            "orphan_blocks": 0,
+            "linked_ratio": 1.0,
+            "coverage_warning": None,
+        }
+
+    def po_summary(self) -> dict:
+        self.dipanggil.append("po_summary")
+        self._cek()
+        return {
+            "by_status": {"draft": 0, "submitted": 9, "confirmed": 14},
+            "count": 23,
+            "total_value": 227295034.0,
+            "scope": "nasional",
+            "source": "mock_sap_table",
+        }
+
+    def receipts(self, batch_id: str) -> list[dict]:
+        self.dipanggil.append(f"receipts:{batch_id}")
+        self._cek()
+        return [
+            {
+                "recorded_at": "2026-10-20T03:00:00+00:00",
+                "recorded_by_name": "Petugas Gudang Jakarta",
+                "checked": {"suhu": True, "catatan": True, "kemasan": False, "berat_kg": True},
+                "other_note": "selisih 20 kg dilaporkan",
+            }
+        ]
+
 
 def _app(fake: FakeClient):
     return server.build_app(client_factory=lambda: fake, app_url="http://bridge.test")
@@ -229,7 +469,7 @@ def test_routing_direktori_pemasok_tetapi_antrean_tetap_menang():
 # --- kartu agen & /health -----------------------------------------------------------------
 
 
-def test_agent_card_di_well_known_berisi_lima_skill():
+def test_agent_card_di_well_known_berisi_tiga_belas_skill():
     with TestClient(_app(FakeClient())) as client:
         card = client.get("/.well-known/agent-card.json").json()
 
@@ -238,8 +478,16 @@ def test_agent_card_di_well_known_berisi_lima_skill():
         "supply_situation",
         "kpi_snapshot",
         "approval_queue",
+        "receipts_queue",
+        "quarantine_status",
         "purchase_order",
         "supplier_directory",
+        "price_intelligence",
+        "demand_forecast",
+        "food_loss",
+        "supplier_risk",
+        "decision_evidence",
+        "system_status",
     ]
     assert card["url"] == "http://bridge.test"
     assert card["capabilities"]["streaming"] is False
@@ -470,3 +718,151 @@ def test_skill_po_mengirim_rincian_po_dan_tidak_menyentuh_pasokan():
     assert "Rp10.800.000" in teks
     assert "purchase_orders" in fake.dipanggil
     assert "batches" not in fake.dipanggil, "skill PO tidak boleh membaca read model pasokan"
+
+
+# --- skill baru: harga, kebutuhan, limbah, risiko, bukti, sistem --------------------------
+
+
+def test_routing_skill_baru_dikenali_dari_kata_kunci():
+    assert server.resolve_skill("berapa harga beras di Jakarta?")[0] == "price_intelligence"
+    assert server.resolve_skill("tampilkan kuotasi pemasok beras")[0] == "price_intelligence"
+    assert server.resolve_skill("berapa kebutuhan telur minggu ini?")[0] == "demand_forecast"
+    assert server.resolve_skill("prakiraan kebutuhan beras")[0] == "demand_forecast"
+    assert server.resolve_skill("berapa limbah pangan bulan ini?")[0] == "food_loss"
+    assert server.resolve_skill("kehilangan pangan sebulan terakhir")[0] == "food_loss"
+    assert server.resolve_skill("pemasok mana yang dikecualikan?")[0] == "supplier_risk"
+    assert server.resolve_skill("rute kiriman ke Jakarta")[0] == "supplier_risk"
+    assert server.resolve_skill("tunjukkan bukti keputusan terakhir")[0] == "decision_evidence"
+    assert server.resolve_skill("status integrasi SAP")[0] == "system_status"
+    assert server.resolve_skill("apakah ledger masih sah?")[0] == "system_status"
+
+
+def test_routing_skill_baru_tidak_merebut_skill_lama():
+    """Kata kunci baru bertumpang-tindih dengan yang lama; urutan prioritas harus menang."""
+    # "usulan" milik antrean, walau kalimatnya menyebut eksklusi pemasok.
+    assert server.resolve_skill("usulan eksklusi pemasok")[0] == "approval_queue"
+    assert server.resolve_skill("keputusan yang menunggu persetujuan")[0] == "approval_queue"
+    # "pemasok" tanpa kata eksklusi/rute/harga tetap direktori.
+    assert server.resolve_skill("direktori pemasok")[0] == "supplier_directory"
+    # KPI menang atas "kehilangan" (nama metrik KPI juga memuat kata itu).
+    assert server.resolve_skill("KPI kehilangan pangan")[0] == "kpi_snapshot"
+    assert server.resolve_skill("Tampilkan KPI minggu ini")[0] == "kpi_snapshot"
+    assert server.resolve_skill("PO mana yang sudah disetujui?")[0] == "purchase_order"
+    # Nama komoditas yang mengandung kata lain tidak boleh memicu filter salah.
+    assert server.resolve_skill("bagaimana pasokan bayam?")[0] == "supply_situation"
+
+
+def test_routing_bukti_membawa_id_keputusan():
+    skill, payload = server.resolve_skill(
+        "jelaskan bukti keputusan cec7e30d-3eb5-4c29-82ee-c5fee581add1"
+    )
+
+    assert skill == "decision_evidence"
+    assert payload["decision_id"] == "cec7e30d-3eb5-4c29-82ee-c5fee581add1"
+
+
+def test_routing_penerimaan_barang_membawa_id_batch():
+    skill, payload = server.resolve_skill(
+        "penerimaan barang batch 11111111-2222-3333-4444-555555555555"
+    )
+
+    assert skill == "supply_situation"
+    assert payload["batch_id"] == "11111111-2222-3333-4444-555555555555"
+
+
+def test_skill_harga_menampilkan_acuan_dan_kuotasi():
+    fake = FakeClient()
+    events = _jalan(server.MealchainExecutor(lambda: fake), "berapa harga beras di Jakarta?")
+    teks = _teks_artefak(events[1])
+
+    assert "Rp12.226" in teks, "harga acuan per kg dari backend harus tampil"
+    assert "acuan PIHPS" in teks
+    assert "UD Rancaekek Beras Sejahtera" in teks and "Rp12.039" in teks
+    assert "price:loc-1/telur" in fake.dipanggil
+    assert not any(p.startswith("balance_map") for p in fake.dipanggil), (
+        "skill harga tidak boleh menyentuh read model pasokan"
+    )
+
+
+def test_skill_kebutuhan_menampilkan_prakiraan_dan_metodenya():
+    events = _jalan(
+        server.MealchainExecutor(lambda: FakeClient()), '{"skill": "demand_forecast"}'
+    )
+    teks = _teks_artefak(events[1])
+
+    assert "957 kg" in teks
+    assert "6.697,6 kg" in teks
+    assert "fallback statistik" in teks, "metode prakiraan harus terbaca, bukan disembunyikan"
+    assert "Keyakinan (0–1)" in teks
+
+
+def test_skill_kehilangan_pangan_memisahkan_tiga_angka():
+    events = _jalan(server.MealchainExecutor(lambda: FakeClient()), "berapa limbah pangan?")
+    teks = _teks_artefak(events[1])
+
+    assert "631,5 kg · 86 kejadian" in teks
+    assert "332,5 kg · 41 kejadian" in teks, "yang dialihkan ke mitra harus terpisah"
+    assert "299 kg · 45 kejadian" in teks, "yang belum punya mitra harus terpisah"
+    assert "PT Biogas Nusantara" in teks
+
+
+def test_skill_risiko_pemasok_menerjemahkan_id_menjadi_nama():
+    events = _jalan(
+        server.MealchainExecutor(lambda: FakeClient()), "pemasok mana yang dikecualikan?"
+    )
+    teks = _teks_artefak(events[1])
+
+    assert "CV Cipinang Boga Utama" in teks, "supplier_id harus diterjemahkan ke nama"
+    assert "Jakarta" in teks
+    assert "AKTIF" in teks and "batch ayam gagal uji antibiotik" in teks
+    assert "9,8 km" in teks and "dalam perjalanan" in teks
+
+
+def test_skill_bukti_menampilkan_tanda_tangan_rantai_dan_jejak():
+    events = _jalan(
+        server.MealchainExecutor(lambda: FakeClient()),
+        '{"skill": "decision_evidence", "decision_id": "cec7e30d-3eb5-4c29-82ee-c5fee581add1"}',
+    )
+    teks = _teks_artefak(events[1])
+
+    assert "bertanda tangan" in teks
+    assert "verifikasi materi: cocok" in teks
+    assert "mc1-13i7rjc" in teks
+    assert "LEARN" in teks and "rejection_loop.repropose" in teks
+    assert "harga terlalu tinggi" in teks
+
+
+def test_skill_sistem_menampilkan_integrasi_ledger_dan_po():
+    events = _jalan(
+        server.MealchainExecutor(lambda: FakeClient()), "status integrasi dan ledger"
+    )
+    teks = _teks_artefak(events[1])
+
+    assert "Mock SAP (sap_integration)" in teks
+    assert "belum dimulai" in teks, "komponen yang belum jalan tidak boleh tampil hijau"
+    assert "SAH" in teks
+    assert "Rp227.295.034" in teks
+    assert "Jaringan SPPG (2 lokasi)" in teks
+
+
+def test_pasokan_menyebut_satu_pasangan_membaca_baris_pasokan_terakhir():
+    fake = FakeClient()
+    events = _jalan(server.MealchainExecutor(lambda: fake), "pasokan telur di SPPG Jakarta")
+    teks = _teks_artefak(events[1])
+
+    assert "supply_point:loc-1/telur" in fake.dipanggil
+    assert "Baris pasokan terakhir" in teks
+    assert "1.207,3 kg" in teks and "mock_sap" in teks
+
+
+def test_penerimaan_barang_dibaca_per_batch_yang_disebut():
+    fake = FakeClient()
+    events = _jalan(
+        server.MealchainExecutor(lambda: fake),
+        "penerimaan barang batch 11111111-2222-3333-4444-555555555555",
+    )
+    teks = _teks_artefak(events[1])
+
+    assert "receipts:11111111-2222-3333-4444-555555555555" in fake.dipanggil
+    assert "Penerimaan barang untuk batch" in teks
+    assert "kemasan: belum" in teks and "selisih 20 kg dilaporkan" in teks

@@ -106,12 +106,18 @@ def test_jalur_artefak_tidak_berubah(fungsi):
     assert pesan["content"] == SPEL_ARTEFAK
 
 
-def test_empat_scenario_menargetkan_fungsi_yang_sama(scenario):
+def test_semua_scenario_menargetkan_fungsi_yang_sama(scenario):
     assert set(scenario) == {
         "situasi_pasokan",
         "indikator_kinerja",
         "antrean_usulan",
         "detail_purchase_order",
+        "harga_pemasok",
+        "kebutuhan_prakiraan",
+        "kehilangan_pangan",
+        "risiko_pemasok",
+        "bukti_keputusan",
+        "status_sistem",
     }
     for nama, isi in scenario.items():
         assert isi["target"] == {"name": "mealchain_query_function", "type": "function"}, nama
@@ -139,6 +145,12 @@ def test_kata_kunci_scenario_cocok_dengan_skill_jembatan(scenario):
     peta = {
         "kpi_snapshot": "indikator_kinerja",
         "approval_queue": "antrean_usulan",
+        "price_intelligence": "harga_pemasok",
+        "demand_forecast": "kebutuhan_prakiraan",
+        "food_loss": "kehilangan_pangan",
+        "supplier_risk": "risiko_pemasok",
+        "decision_evidence": "bukti_keputusan",
+        "system_status": "status_sistem",
     }
     for skill, nama_scenario in peta.items():
         deskripsi = scenario[nama_scenario]["description"].lower()

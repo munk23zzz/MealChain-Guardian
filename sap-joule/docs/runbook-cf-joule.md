@@ -86,7 +86,7 @@ Jembatan ini memanggil backend MealChain lewat HTTP, dan Cloud Foundry **tidak b
 
 | Opsi | Cara | Catatan |
 |---|---|---|
-| a. Tunnel publik | `cloudflared tunnel --url http://localhost:8000` → dapat URL `https://...trycloudflare.com` | Paling cepat; URL berubah tiap dijalankan ulang |
+| a. Tunnel publik | `bash sap-joule/scripts/tunnel-untuk-cf.sh` (menjalankan tunnel, menguji dari internet, `cf set-env`, restage, lalu memeriksa `reachable:true`) | Paling cepat; URL berubah tiap dijalankan ulang — **jalankan lagi setelah mesin tidur** |
 | b. VPS (sudah ada) | deploy backend + Postgres + frontend di VPS, pakai URL publik VPS | Paling dekat dengan "arsitektur nyata"; ada di rencana infra proyek |
 | c. Tidak dipakai | — | Jembatan tetap hidup, tetapi setiap permintaan menjawab "backend tidak bisa dihubungi" (jujur, bukan angka palsu) |
 

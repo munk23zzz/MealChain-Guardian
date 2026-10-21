@@ -1,0 +1,9 @@
+description: >-
+  This skill opens the evidence file behind a decision in MealChain Guardian: the cryptographic
+  signature and whether the material still verifies, the content address, the iteration chain
+  including rejected iterations, and the agent trace with the tools that were called. Use it
+  for questions about bukti, evidence, jejak, audit, dossier, tanda tangan, or kepatuhan of a
+  decision. Read-only: it never approves, re-signs, or alters the material.
+target:
+  name: mealchain_query_function
+  type: function

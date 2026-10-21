@@ -358,3 +358,259 @@ def test_wib_tidak_mengarang_zona_bila_offset_hilang():
     # Tanpa offset: dikembalikan apa adanya, TIDAK diasumsikan UTC.
     assert report.wib("2026-10-20T02:20:00") == "2026-10-20T02:20:00"
     assert report.wib(None) == report.MISSING
+
+
+# --- perender skill baru -------------------------------------------------------------------
+
+
+def test_harga_menampilkan_acuan_dan_kuotasi_tanpa_menghitung_termurah():
+    teks = report.price_report(
+        [
+            {
+                "location": "Bandung",
+                "commodity": "beras",
+                "price_per_kg": 12225.53,
+                "recorded_at": "2026-11-04T12:00:00+00:00",
+                "source": "pihps_reference",
+            }
+        ],
+        [
+            {
+                "location": "Bandung",
+                "commodity": "beras",
+                "quotes": [
+                    {
+                        "supplier_name": "UD Rancaekek Beras Sejahtera",
+                        "price_per_kg": 12039.42,
+                        "recorded_at": "2026-11-03T00:00:00+00:00",
+                    },
+                    {
+                        "supplier_name": "CV Cipinang Boga Utama",
+                        "price_per_kg": 12500.0,
+                        "recorded_at": "2026-11-02T00:00:00+00:00",
+                    },
+                ],
+            }
+        ],
+    )
+
+    assert "Rp12.226" in teks and "acuan PIHPS" in teks
+    assert "UD Rancaekek Beras Sejahtera" in teks and "Rp12.039" in teks
+    assert "CV Cipinang Boga Utama" in teks and "Rp12.500" in teks
+    assert "termurah" in teks  # dinyatakan TIDAK dihitung, bukan disembunyikan
+
+
+def test_harga_kosong_disebut_kosong_bukan_nol():
+    teks = report.price_report([])
+
+    assert "Belum ada data harga" in teks
+    assert "Rp0" not in teks
+
+
+def test_kebutuhan_menampilkan_metode_prakiraan_apa_adanya():
+    teks = report.demand_report(
+        [
+            {
+                "location": "Bandung",
+                "commodity": "beras",
+                "quantityKg": 957.04,
+                "neededBy": "2026-11-07T00:00:00+00:00",
+                "forecastKg": 6697.558,
+                "forecastMethod": "statistical_fallback",
+                "confidence": 1.0,
+            }
+        ]
+    )
+
+    assert "957 kg" in teks and "6.697,6 kg" in teks
+    assert "fallback statistik" in teks
+    assert "Keyakinan (0–1)" in teks and "| 1,00 |" in teks
+
+
+def test_kehilangan_pangan_memisahkan_tiga_angka():
+    teks = report.food_loss_report(
+        {
+            "period": {
+                "start": "2026-09-20T00:00:00+00:00",
+                "end": "2026-10-20T00:00:00+00:00",
+                "days": 30,
+            },
+            "scope": {"role": "bgn_monitor", "locations": ["Bandung", "Bogor"]},
+            "computed_at": "2026-10-20T00:43:56+00:00",
+            "recorded": {"available": True, "kg": 631.46, "events": 86},
+            "diverted": {"available": True, "kg": 332.5, "events": 41},
+            "unassigned": {"available": True, "kg": 298.96, "events": 45},
+            "partners": [{"name": "PT Biogas Nusantara", "kg": 122.8, "events": 14}],
+        }
+    )
+
+    assert "631,5 kg · 86 kejadian" in teks
+    assert "332,5 kg · 41 kejadian" in teks
+    assert "299 kg · 45 kejadian" in teks
+    assert "PT Biogas Nusantara" in teks
+    assert "bgn_monitor · 2 SPPG" in teks
+
+
+def test_kehilangan_pangan_yang_tidak_tersedia_menyebut_alasannya():
+    teks = report.food_loss_report(
+        {"recorded": {"available": False, "reason": "tidak ada baris limbah"}}
+    )
+
+    assert "tidak ada baris limbah" in teks
+    assert "0 kg" not in teks
+
+
+def test_risiko_pemasok_menampilkan_eksklusi_dan_rute():
+    teks = report.supplier_risk_report(
+        [
+            {
+                "supplierName": "UD Ayam Sehat",
+                "scopeLocationName": "Jakarta",
+                "status": "active",
+                "reason": "batch ayam gagal uji antibiotik",
+                "activated_at": "2026-10-16T22:36:54+00:00",
+                "revoked_at": None,
+            }
+        ],
+        {
+            "routes": [
+                {
+                    "supplierName": "CV Cipinang Boga Utama",
+                    "destinationName": "Jakarta",
+                    "commodity": "beras",
+                    "quantityKg": 800.0,
+                    "roadKm": 9.8,
+                    "roadMinutes": 12.2,
+                    "journeyState": "dalam perjalanan",
+                }
+            ],
+            "summary": {
+                "with_road": 1,
+                "without_road": 0,
+                "scope": "nasional",
+                "journey_states": {"dalam_perjalanan": 1},
+            },
+        },
+    )
+
+    assert "AKTIF" in teks and "batch ayam gagal uji antibiotik" in teks
+    assert "9,8 km" in teks and "12,2 menit" in teks
+    assert "dalam perjalanan" in teks
+    assert "tanpa geometri: 0" in teks
+
+
+def test_bukti_keputusan_menampilkan_tanda_tangan_dan_jejak():
+    teks = report.decision_evidence_report(
+        [
+            {
+                "id": "cec7e30d-3eb5-4c29-82ee-c5fee581add1",
+                "compliance": {
+                    "decision": {
+                        "decision_type": "regional_balance",
+                        "status": "proposed",
+                        "proposed_by": "supervisor_agent",
+                    },
+                    "evidence": [],
+                    "approvals": [],
+                    "content_address": "mc1-13i7rjc532qre22o835j3ffb5sxqn2rzsi7pd2hda82zdg442w",
+                    "signature": {
+                        "state": "signed",
+                        "algorithm": "ECDSA-secp256k1-sha256 (deterministic RFC6979)",
+                        "signature": "95b57211c6ef5b6139a32703e21327d6",
+                    },
+                    "verify": True,
+                },
+                "chain": {
+                    "chain": [
+                        {
+                            "iteration": 2,
+                            "status": "proposed",
+                            "quantity_kg": 600.0,
+                            "rejection_reason": None,
+                            "created_at": "2026-10-19T20:33:04+00:00",
+                        }
+                    ]
+                },
+                "traces": {
+                    "steps": [
+                        {
+                            "step_name": "LEARN",
+                            "tool_called": "rejection_loop.repropose",
+                            "output_summary": {"learning_note": "harga terlalu tinggi — cari sumber lebih dekat"},
+                            "step_at": "2026-10-19T20:33:04+00:00",
+                        }
+                    ]
+                },
+            }
+        ]
+    )
+
+    assert "bertanda tangan" in teks and "verifikasi materi: cocok" in teks
+    assert "mc1-13i7rjc532qre22o835j3ffb5sxqn2rzsi7pd2hda82zdg442w" in teks
+    assert "LEARN" in teks and "rejection_loop.repropose" in teks
+    assert "harga terlalu tinggi" in teks
+    assert "95b57211c6ef5b6139a32703…" in teks  # dipotong, bukan hilang
+
+
+def test_status_sistem_tidak_menaikkan_status_komponen():
+    teks = report.system_status_report(
+        {
+            "checked_at": "2026-10-20T00:43:56+00:00",
+            "components": [
+                {
+                    "name": "AgentCore Gateway",
+                    "category": "not_started",
+                    "category_label": "belum dimulai",
+                    "evidence": "env AGENTCORE_GATEWAY_URL kosong",
+                }
+            ],
+        },
+        {
+            "valid": True,
+            "blocks": 115,
+            "linked_blocks": 115,
+            "orphan_blocks": 0,
+            "linked_ratio": 1.0,
+            "head": "bdeeefb7",
+            "coverage_warning": None,
+        },
+        {
+            "by_status": {"submitted": 9, "confirmed": 14},
+            "count": 23,
+            "total_value": 227295034.0,
+            "scope": "nasional",
+            "source": "mock_sap_table",
+        },
+        [{"name": "Bandung", "region": "Jawa Barat"}],
+    )
+
+    assert "belum dimulai" in teks
+    assert "SAH" in teks and "Rasio blok terhubung (0–1):** 1" in teks
+    assert "Rp227.295.034" in teks
+    assert "Jaringan SPPG (1 lokasi)" in teks and "Bandung (Jawa Barat)" in teks
+    assert "/admin/users" in teks  # alasan tidak dibuka, dinyatakan
+
+
+def test_penerimaan_barang_satu_batch():
+    teks = report.receipt_report(
+        [
+            {
+                "recorded_at": "2026-10-20T03:00:00+00:00",
+                "recorded_by_name": "SPPG Head Demo",
+                "checked": {"suhu": True, "catatan": False, "kemasan": True, "berat_kg": True},
+                "other_note": "selisih 20 kg dilaporkan",
+            }
+        ],
+        batch_id="b-1",
+    )
+
+    assert "batch b-1 (1 catatan)" in teks
+    assert "SPPG Head Demo" in teks and "suhu: ya" in teks and "catatan: belum" in teks
+    assert "selisih 20 kg dilaporkan" in teks
+
+
+def test_penerimaan_barang_kosong_disebut_kosong():
+    teks = report.receipt_report([], batch_id="b-1")
+
+    assert "Belum ada penerimaan barang" in teks
+    assert "0 kg" not in teks

@@ -1,0 +1,9 @@
+description: >-
+  This skill reports requirement quantities in kilograms for each school-meal kitchen (SPPG)
+  and commodity, the deadline by which the requirement must be met, and the requirement
+  forecast produced by the backend model together with its method and confidence level. Use
+  it for questions about kebutuhan, demand, prakiraan, forecast, or proyeksi per SPPG. A
+  statistical fallback method is shown as such, never disguised as a certain figure.
+target:
+  name: mealchain_query_function
+  type: function

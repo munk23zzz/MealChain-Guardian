@@ -393,3 +393,209 @@ def test_suppliers_meminta_limit_masuk_akal():
         client.suppliers(limit=0)
 
     assert batas == ["200", "1"]
+
+
+# --- read model baru: batas, path, dan pemetaan kolom -------------------------------------
+
+
+def test_batches_meminta_plafon_supaya_inventaris_lengkap():
+    """Batas 50 di backend dulu membuat 158 batch tampak seperti 50 tanpa galat."""
+    diminta: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/login":
+            return httpx.Response(200, json={"access_token": "t1"})
+        assert request.url.path == "/batches"
+        diminta.append(request.url.params["limit"])
+        return httpx.Response(200, json={"batches": [{"id": "b1"}], "total": 158})
+
+    with _client(handler) as client:
+        assert client.batches() == [{"id": "b1"}]
+        client.batches(limit=99999)  # dijepit ke plafon, bukan ditolak
+
+    assert diminta == [str(500), str(500)]
+
+
+def test_price_quotes_memakai_path_per_pasangan_dan_memetakan_kuotasi():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/login":
+            return httpx.Response(200, json={"access_token": "t1"})
+        assert request.url.raw_path.decode() == "/price/quotes/l-1/beras%20merah"
+        return httpx.Response(
+            200,
+            json={
+                "location": "Bandung",
+                "commodity": "beras merah",
+                "quotes": [
+                    {
+                        "supplier_name": "UD Rancaekek Beras Sejahtera",
+                        "price_per_kg": 12039.42,
+                        "recorded_at": "2026-11-03T00:00:00+00:00",
+                    },
+                    "bukan objek",
+                ],
+            },
+        )
+
+    with _client(handler) as client:
+        hasil = client.price_quotes("l-1", "beras merah")
+
+    assert hasil["location"] == "Bandung"
+    assert [q["supplier_name"] for q in hasil["quotes"]] == ["UD Rancaekek Beras Sejahtera"]
+
+
+def test_demand_forecast_meneruskan_metode_dan_keyakinan():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/login":
+            return httpx.Response(200, json={"access_token": "t1"})
+        assert request.url.path == "/demand/forecast/l-1/beras"
+        return httpx.Response(
+            200,
+            json={"forecast_qty_kg": 6697.558, "method": "statistical_fallback", "confidence": 1.0},
+        )
+
+    with _client(handler) as client:
+        hasil = client.demand_forecast("l-1", "beras")
+
+    assert hasil["forecast_qty_kg"] == 6697.558
+    assert hasil["method"] == "statistical_fallback"
+
+
+def test_waste_summary_mengirim_jendela_hari_yang_masuk_akal():
+    diminta: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/login":
+            return httpx.Response(200, json={"access_token": "t1"})
+        assert request.url.path == "/waste/summary"
+        diminta.append(request.url.params["days"])
+        return httpx.Response(200, json={"recorded": {"available": True, "kg": 631.46}})
+
+    with _client(handler) as client:
+        client.waste_summary(days=30)
+        client.waste_summary(days=9999)  # dijepit ke 365
+        client.waste_summary(days=0)  # minimal 1
+
+    assert diminta == ["30", "365", "1"]
+
+
+def test_supplier_routes_membuang_geometri_tapi_mempertahankan_angka_rute():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/login":
+            return httpx.Response(200, json={"access_token": "t1"})
+        assert request.url.path == "/supplier-routes"
+        return httpx.Response(
+            200,
+            json={
+                "routes": [
+                    {
+                        "supplier_name": "CV Cipinang Boga Utama",
+                        "origin": {"name": "CV Cipinang Boga Utama", "latitude": -6.2},
+                        "destination_name": "Jakarta",
+                        "commodity": "beras",
+                        "quantity_kg": 800.0,
+                        "safety_status": "pass",
+                        "usable_until": "2027-04-17T15:36:52+00:00",
+                        "straight_km": 4.92,
+                        "road": {
+                            "distance_km": 9.8,
+                            "duration_min": 12.2,
+                            "ratio_vs_straight": 1.99,
+                            "geometry": {
+                                "type": "LineString",
+                                "coordinates": [[106.88, -6.22], [106.87, -6.21]],
+                            },
+                        },
+                        "journey": {
+                            "state": "dalam_perjalanan",
+                            "state_label": "dalam perjalanan",
+                            "eta_at": "2026-10-20T09:00:00+00:00",
+                            "remaining_min": 7.5,
+                            "arrives_before_usable_until": True,
+                        },
+                    }
+                ],
+                "summary": {"routes": 1, "with_road": 1, "without_road": 0, "scope": "nasional"},
+            },
+        )
+
+    with _client(handler) as client:
+        hasil = client.supplier_routes()
+
+    assert hasil["routes"][0]["roadKm"] == 9.8
+    assert hasil["routes"][0]["roadMinutes"] == 12.2
+    assert hasil["routes"][0]["journeyState"] == "dalam perjalanan"
+    assert "geometry" not in str(hasil), "polylines tidak boleh ikut ke teks chat"
+    assert hasil["summary"]["with_road"] == 1
+
+
+def test_bukti_keputusan_memakai_path_yang_benar():
+    dipanggil: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/login":
+            return httpx.Response(200, json={"access_token": "t1"})
+        dipanggil.append(request.url.path)
+        return httpx.Response(200, json={"decision_id": "d1", "chain": [], "steps": []})
+
+    with _client(handler) as client:
+        client.decision_compliance("d1")
+        client.decision_chain("d1")
+        client.decision_traces("d1")
+
+    assert dipanggil == [
+        "/decisions/d1/compliance",
+        "/decisions/d1/chain",
+        "/decisions/d1/traces",
+    ]
+
+
+def test_status_sistem_membaca_integrasi_ledger_dan_ringkasan_po():
+    dipanggil: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/login":
+            return httpx.Response(200, json={"access_token": "t1"})
+        dipanggil.append(request.url.path)
+        if request.url.path == "/ledger/verify":
+            return httpx.Response(200, json={"valid": True, "blocks": 115, "linked_ratio": 1.0})
+        if request.url.path == "/sap/purchase-orders/summary":
+            return httpx.Response(200, json={"count": 23, "total_value": 227295034.0})
+        return httpx.Response(200, json={"components": [{"id": "mock_sap"}]})
+
+    with _client(handler) as client:
+        assert client.ledger_verify()["valid"] is True
+        assert client.po_summary()["count"] == 23
+        assert client.integrations_status()["components"][0]["id"] == "mock_sap"
+
+    assert dipanggil == ["/ledger/verify", "/sap/purchase-orders/summary", "/integrations/status"]
+
+
+def test_receipts_mewajibkan_id_batch_dan_membaca_envelope():
+    diminta: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/login":
+            return httpx.Response(200, json={"access_token": "t1"})
+        assert request.url.path == "/receipts"
+        diminta.update(dict(request.url.params))
+        return httpx.Response(200, json={"items": [{"checked": {"suhu": True}}]})
+
+    with _client(handler) as client:
+        rows = client.receipts("b-1")
+
+    assert rows == [{"checked": {"suhu": True}}]
+    assert diminta["batch_id"] == "b-1"
+
+
+def test_supply_point_memakai_path_per_pasangan():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/login":
+            return httpx.Response(200, json={"access_token": "t1"})
+        assert request.url.path == "/supply/l-1/telur"
+        return httpx.Response(
+            200, json={"quantity_kg": 1207.32, "recorded_at": "2026-11-04T12:00:00+00:00"}
+        )
+
+    with _client(handler) as client:
+        assert client.supply_point("l-1", "telur")["quantity_kg"] == 1207.32
