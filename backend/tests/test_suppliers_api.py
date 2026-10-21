@@ -23,8 +23,9 @@ from sqlalchemy import create_engine, text
 from app.main import app
 from app.seed.seed_data import DEMO_USERS, build_seed_rows
 from app.seed.suppliers_demo import load_demo_rows
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 
-DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+DB_URL = DSN_SYNC
 
 # Dihitung dari data, bukan dipaku: dataset demo 19 Okt 2026 berisi 59 pemasok
 # lokal (berkas kanonik dan berkas profil memakai nama yang SAMA, jadi berkas

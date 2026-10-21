@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Batch, Commodity, Location, Supplier
 from app.services import recommendation_service as rs
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 
 AS_OF = datetime(2026, 10, 8, 12, tzinfo=timezone.utc)
 
@@ -18,7 +19,7 @@ AS_OF = datetime(2026, 10, 8, 12, tzinfo=timezone.utc)
 @pytest.mark.parametrize("explicit_as_of", [False, True], ids=["live-race", "historical"])
 def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, explicit_as_of):
     engine = create_engine(
-        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+        DSN_SYNC
     )
 
     class FrozenClock(datetime):

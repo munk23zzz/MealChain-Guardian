@@ -16,6 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 
 NOW = datetime(2026, 10, 8, 12, 0, 0, tzinfo=timezone.utc)
 START = NOW - timedelta(days=1)
@@ -59,7 +60,7 @@ def _mk_user(role: str, location_id=None) -> str:
     from sqlalchemy import create_engine, text
 
     eng = create_engine(
-        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+        DSN_SYNC
     )
     uid = uuid.uuid4()
     pw_hash = bcrypt.hashpw(b"kpi-test-pw", bcrypt.gensalt()).decode()
@@ -86,7 +87,7 @@ def _cleanup_user(uid: str) -> None:
     from sqlalchemy import create_engine, text
 
     eng = create_engine(
-        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+        DSN_SYNC
     )
     with eng.begin() as conn:
         conn.execute(text("DELETE FROM users WHERE id=:u"), {"u": uid})
@@ -99,7 +100,7 @@ def scope_ctx(suffix):
     from sqlalchemy import create_engine, text
 
     eng = create_engine(
-        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+        DSN_SYNC
     )
     with eng.begin() as conn:
         row = conn.execute(
@@ -177,7 +178,7 @@ def test_kpi_sppg_foreign_location_403(scope_ctx, suffix, client):
     from sqlalchemy import create_engine, text
 
     eng = create_engine(
-        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+        DSN_SYNC
     )
     with eng.begin() as conn:
         row = conn.execute(

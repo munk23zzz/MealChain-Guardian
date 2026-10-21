@@ -27,8 +27,9 @@ from app.core.road_route import (
 )
 from app.db import create_engine, create_session_maker
 from app.seed.road_routes import batch_route_rows, sync_requests, sync_road_routes
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 
-DB_URL = "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+DB_URL = DSN_ASYNC
 FIXTURE = Path(__file__).parent / "fixtures" / "osrm_cianjur_jakarta.json"
 
 # Koordinat karangan jauh dari data demo (Indonesia) supaya tidak bertabrakan.

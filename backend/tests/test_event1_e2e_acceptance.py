@@ -15,12 +15,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
 from app.main import app
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 from tests.test_action_boundary_e2e import _force_server_verdict
 from tests.test_actions import _cleanup, _login, _mk_user
 from tests.test_event1_supervisor_flow import _trace_rows
 
 DB_URL = (
-    "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+    DSN_ASYNC
 ).replace("+asyncpg", "+psycopg")
 
 

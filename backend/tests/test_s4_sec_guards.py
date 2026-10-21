@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
 from app.main import app
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 from tests.test_actions import (
     RECOMMENDATION,
     _cleanup,
@@ -29,7 +30,7 @@ from tests.test_actions import (
     _mk_user,
 )
 
-DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+DB_URL = DSN_SYNC
 
 
 def _rec(target: str) -> dict:

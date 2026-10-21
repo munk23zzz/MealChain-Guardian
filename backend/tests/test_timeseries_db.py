@@ -25,8 +25,9 @@ from app.seed.timeseries import (
     preview_timeseries,
     purge_demo_rows,
 )
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 
-DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+DB_URL = DSN_SYNC
 
 WINDOW_START = CANONICAL_REF - timedelta(days=1)  # 7 Okt 12:00 UTC
 

@@ -13,10 +13,11 @@ import pytest
 from sqlalchemy import create_engine, text
 
 from app.seed.seed_data import build_seed_rows, canonical_hash, load_seed
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 
 DB_URL = (
     os.environ.get("DATABASE_URL")
-    or "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+    or DSN_ASYNC
 ).replace("+asyncpg", "+psycopg")
 
 # Ruling REF seed canonical (Roy 2026-10-09): dataset demo ter-anchor ke

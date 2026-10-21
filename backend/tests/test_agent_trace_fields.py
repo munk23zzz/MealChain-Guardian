@@ -3,9 +3,10 @@
 from sqlalchemy import create_engine, text
 
 from app.models.decisions import AgentTrace
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 
 DB_URL = (
-    "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+    DSN_ASYNC
 ).replace("+asyncpg", "+psycopg")
 
 WORKER_FIELDS = {

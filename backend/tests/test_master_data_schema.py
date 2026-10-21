@@ -14,9 +14,11 @@ import os
 import pytest
 from sqlalchemy import create_engine, text
 
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
+
 DB_URL = (
     os.environ.get("DATABASE_URL")
-    or "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+    or DSN_ASYNC
 ).replace("+asyncpg", "+psycopg")
 
 EXPECTED_TABLES = {"locations", "commodities", "suppliers", "users"}

@@ -12,8 +12,9 @@ import asyncio
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.services import recommendation_service as rs
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 
-_AURL = "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+_AURL = DSN_ASYNC
 
 
 def test_live_evidence_batch_ids_nonempty():

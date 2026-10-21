@@ -23,6 +23,7 @@ from sqlalchemy import create_engine, text
 from app.core.gaps import calculate_supply_gap
 from app.core.price import price_deviation
 from app.services import recommendation_service as rs
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 
 UTC = timezone.utc
 AS_OF = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
@@ -136,7 +137,7 @@ def test_scenario_4_supplier_identity_in_supplier_id():
         "normal", "normal", "anomalous", "normal"]
     # Sumber data (seed) memisahkan identitas dari source generik:
     engine = create_engine(
-        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+        DSN_SYNC
     )
     with engine.connect() as conn:
         row = conn.execute(

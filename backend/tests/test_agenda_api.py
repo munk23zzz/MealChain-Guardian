@@ -26,8 +26,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 
-ENGINE_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+ENGINE_URL = DSN_SYNC
 HARI_SEED = "2026-10-02"      # ada rencana + kiriman + pasokan
 HARI_RENCANA_SAJA = "2026-10-20"  # rencana ada; tanpa kiriman/limbah
 HARI_TANPA_RENCANA = "2026-11-06"  # setelah rencana menu berakhir (5 Nov)

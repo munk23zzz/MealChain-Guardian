@@ -18,8 +18,10 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import create_engine, text
 
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
+
 DB_URL = (
-    "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+    DSN_SYNC
 )
 
 NOW = datetime.now(timezone.utc)

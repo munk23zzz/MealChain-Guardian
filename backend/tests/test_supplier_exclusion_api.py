@@ -12,11 +12,13 @@ from app.api.actions import get_verifier_chain
 from app.api.auth import get_current_user
 from app.main import app
 from app.models import User
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 
 
 @pytest.fixture(autouse=True)
 def _verdict_konsisten():
     """Kunci verdict provider agar alur administratif deterministik.
+
 
     Sejak audit M1 (18 Okt 2026) approve mensyaratkan verdict hasil audit, dan
     provider nyata bisa menjawab UNAVAILABLE. Tes ini mengukur pagar siklus
@@ -39,7 +41,7 @@ def _verdict_konsisten():
 
 @pytest.fixture
 def scenario():
-    engine = create_engine("postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain")
+    engine = create_engine(DSN_SYNC)
     ids = {k: uuid.uuid4() for k in ("supplier", "batch", "head", "nutritionist", "monitor")}
     with engine.begin() as conn:
         ids["scope"] = conn.execute(

@@ -18,7 +18,9 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import create_engine, text
 
-DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
+
+DB_URL = DSN_SYNC
 
 
 def _has_006(engine) -> bool:

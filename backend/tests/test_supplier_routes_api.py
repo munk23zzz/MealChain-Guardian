@@ -30,6 +30,7 @@ from sqlalchemy import text
 
 from app.db import create_engine, create_session_maker
 from app.main import app
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 
 KUNCI_WAJIB = {
     "batch_id",
@@ -53,7 +54,7 @@ KUNCI_WAJIB = {
 
 #: Basis data demo (container backend ↔ container postgres), pola sama seperti
 #: test_road_route_sync.py — dipakai untuk MEMBUKTIKAN angka peta = angka DB.
-DB_URL = "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+DB_URL = DSN_ASYNC
 
 
 @pytest.fixture()

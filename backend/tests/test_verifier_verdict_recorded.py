@@ -30,9 +30,10 @@ from app.db import create_engine as create_async_engine
 from app.db import create_session_maker
 from app.main import app
 from app.models import Commodity, Decision
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 
 DB_URL = (
-    "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+    DSN_ASYNC
 ).replace("+asyncpg", "+psycopg")
 PW = "TestPass#2026"
 

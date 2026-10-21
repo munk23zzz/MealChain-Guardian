@@ -23,8 +23,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
 from app.main import app
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 
-DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+DB_URL = DSN_SYNC
 KOMODITAS_DEMO = ("telur", "ayam", "wortel", "beras")
 # Cakupan minimum deret demo per komoditas (terukur 2026-10-17: supply 10/10,
 # demand 8/10 lokasi — beras ikut: supply 10/10, demand 8/10). Nilai 8 memberi

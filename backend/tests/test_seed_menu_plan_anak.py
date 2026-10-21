@@ -16,8 +16,11 @@ from datetime import UTC, datetime
 import asyncpg
 
 from app.seed.seed_data import build_seed_rows, load_seed, stable_uuid
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 
-DSN = "postgresql://mealchain:mealchain_local@postgres:5432/mealchain"
+# DSN asyncpg mengikuti DATABASE_URL: sebelumnya dipaku ke DB demo, sehingga
+# menjalankan suite di DB lain tetap menulis/menghapus data di DB demo.
+DSN = DSN_ASYNC.replace("+asyncpg", "")
 REF = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
 
 

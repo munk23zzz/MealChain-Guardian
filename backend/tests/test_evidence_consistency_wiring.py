@@ -24,9 +24,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
 from app.main import app
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 from tests.test_event2_service import mk_pair
 
-DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+DB_URL = DSN_SYNC
 
 
 def _db_all(query: str, params: dict | None = None):

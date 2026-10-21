@@ -22,8 +22,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.services import recommendation_service as rs
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 
-DB_URL = "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+DB_URL = DSN_ASYNC
 
 
 def _facts(as_of):

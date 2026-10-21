@@ -38,8 +38,9 @@ from app.seed.timeseries import (
     plan_all,
     plan_demand_rows,
 )
+from tests.dsn import DSN_ASYNC, DSN_SYNC  # DSN mengikuti DATABASE_URL
 
-DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+DB_URL = DSN_SYNC
 
 
 def _pairs(n: int = 2, baseline: str = "1080") -> list[tuple[str, uuid.UUID, uuid.UUID, Decimal]]:
@@ -134,7 +135,7 @@ def test_upsert_tidak_menimpa_baris_kanonik_dan_idempoten():
 
     async def _jalankan() -> None:
         engine = create_async_engine(
-            "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+            DSN_ASYNC
         )
         maker = async_sessionmaker(engine, expire_on_commit=False)
         try:

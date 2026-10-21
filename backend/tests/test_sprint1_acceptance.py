@@ -14,8 +14,9 @@ from app.core.constraints import check_capacity, check_delivery_window
 from app.core.forecasting_fallback import statistical_forecast
 from app.core.freshness import classify_freshness
 from app.main import app
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 
-DB_URL = "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain".replace(
+DB_URL = DSN_ASYNC.replace(
     "+asyncpg", "+psycopg"
 )
 

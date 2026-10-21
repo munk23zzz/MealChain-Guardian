@@ -7,10 +7,11 @@ from __future__ import annotations
 
 import pytest
 
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 from tests.gate_lock import KUNCI_GERBANG, ambil_kunci, dsn_psycopg, lepas_kunci
 
 DSN = dsn_psycopg(
-    "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+    DSN_ASYNC
 )
 
 

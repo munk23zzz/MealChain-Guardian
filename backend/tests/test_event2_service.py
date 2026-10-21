@@ -6,9 +6,10 @@ import pytest
 from sqlalchemy import create_engine, text
 
 from app.core.price import price_deviation
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 
 DB_URL = (
-    "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+    DSN_SYNC
 ).replace("+asyncpg", "+psycopg")
 
 
@@ -25,6 +26,7 @@ def _db_one(query: str, params: dict | None = None):
 
 def _seed_pair(deviation_factor: str) -> tuple[str, str, str, dict]:
     """Buat pasangan quote+reference (lokasi test terisolasi) → (quote_id,
+
     reference_id, target_location_id, handles utk cleanup).
 
     REVISI S4-05 (2026-10-08): versi lama TIDAK membersihkan residu

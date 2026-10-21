@@ -16,8 +16,9 @@ from pathlib import Path
 from sqlalchemy import create_engine, text
 
 from app.seed.suppliers_demo import load_demo_rows
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 
-DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+DB_URL = DSN_SYNC
 SEED_JSON = Path("/data/seed/sprint1_seed.json")
 
 

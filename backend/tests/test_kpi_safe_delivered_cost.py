@@ -21,9 +21,10 @@ from sqlalchemy import create_engine, text
 
 from app.api.actions import get_verifier_chain
 from app.main import app
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 from tests.test_actions import _cleanup, _login, _mk_user
 
-DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+DB_URL = DSN_SYNC
 
 
 @pytest.fixture()

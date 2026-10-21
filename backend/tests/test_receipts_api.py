@@ -8,6 +8,8 @@ import uuid
 
 from fastapi.testclient import TestClient
 
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
+
 
 def _client():
     from app.main import app
@@ -19,7 +21,7 @@ def _batch_jakarta_id() -> str:
     from sqlalchemy import create_engine, text
 
     engine = create_engine(
-        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+        DSN_SYNC
     )
     try:
         with engine.begin() as conn:
@@ -39,7 +41,7 @@ def _batch_luar_jakarta_id() -> str:
     from sqlalchemy import create_engine, text
 
     engine = create_engine(
-        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+        DSN_SYNC
     )
     try:
         with engine.begin() as conn:
@@ -71,7 +73,7 @@ def _bersihkan(*ids: str) -> None:
     from sqlalchemy import bindparam, create_engine, text
 
     engine = create_engine(
-        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+        DSN_SYNC
     )
     try:
         with engine.begin() as conn:

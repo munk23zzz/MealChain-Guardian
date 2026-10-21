@@ -13,10 +13,11 @@ from sqlalchemy import create_engine, text
 
 from app.api.actions import get_verifier_chain
 from app.main import app
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 from tests.test_actions import _cleanup, _login, _mk_user
 
 DB_URL = (
-    "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+    DSN_ASYNC
 ).replace("+asyncpg", "+psycopg")
 
 

@@ -16,7 +16,9 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import create_engine, text
 
-DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+from tests.dsn import DSN_ASYNC, DSN_SYNC  # DSN mengikuti DATABASE_URL
+
+DB_URL = DSN_SYNC
 
 from app.core.kpi import (  # noqa: E402
     quantize2,
@@ -48,7 +50,7 @@ async def _with_session(fn):
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
     eng = create_async_engine(
-        "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+        DSN_ASYNC
     )
     maker = async_sessionmaker(eng, class_=AsyncSession, expire_on_commit=False)
     try:

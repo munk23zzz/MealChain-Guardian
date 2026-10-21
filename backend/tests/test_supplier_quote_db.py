@@ -10,8 +10,9 @@ import pytest
 from sqlalchemy import create_engine, text
 
 from app.seed.seed_data import build_seed_rows
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 
-DB_URL = "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain".replace(
+DB_URL = DSN_ASYNC.replace(
     "+asyncpg", "+psycopg"
 )
 

@@ -27,8 +27,9 @@ from sqlalchemy import create_engine, text
 
 from app.api.actions import get_verifier_chain
 from app.main import app
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 
-DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+DB_URL = DSN_SYNC
 
 NOW = datetime.now(timezone.utc)
 

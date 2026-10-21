@@ -14,6 +14,8 @@ import uuid
 
 import pytest
 
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
+
 
 def test_content_address_deterministic_and_distinct():
     from app.services.dossier_service import content_address
@@ -58,7 +60,7 @@ def test_dossier_endpoint(auth_headers):
     from app.main import app
 
     eng = create_engine(
-        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+        DSN_SYNC
     )
     try:
         with TestClient(app) as c:

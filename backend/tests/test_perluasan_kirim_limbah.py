@@ -32,8 +32,9 @@ from app.seed.timeseries import (
     generate_timeseries,
     purge_demo_rows,
 )
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 
-DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+DB_URL = DSN_SYNC
 
 #: hari rencana pertama yang BELUM punya kiriman/limbah kanonik (kanonik 1–7 Okt)
 HARI_PERTAMA_DEMO = date(2026, 10, 8)

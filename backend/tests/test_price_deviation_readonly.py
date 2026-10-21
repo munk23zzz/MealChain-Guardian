@@ -20,8 +20,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
 from app.main import app
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 
-DSN = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+DSN = DSN_SYNC
 PW = "TestPass#2026"
 
 

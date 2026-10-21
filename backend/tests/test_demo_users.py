@@ -9,9 +9,10 @@ mustahil di-approve karena scope backend menolak (403).
 from sqlalchemy import create_engine, text
 
 from app.seed.seed_data import DEMO_USERS, ensure_demo_users
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 
 DB_URL = (
-    "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+    DSN_ASYNC
 ).replace("+asyncpg", "+psycopg")
 
 KOTA_APPROVER = ("Jakarta", "Bandung", "Surabaya")
