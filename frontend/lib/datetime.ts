@@ -66,6 +66,35 @@ export function formatClockWib(iso: string | null | undefined): string {
     .replace(":", ".");
 }
 
+/** Kunci hari WIB (YYYY-MM-DD) untuk membandingkan "hari ini" tanpa jam. */
+function kunciHari(d: Date): string {
+  return d.toLocaleDateString("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: TZ,
+  });
+}
+
+/**
+ * ISO → "14.20" bila masih hari ini, atau "8 Okt 2026 16.01" bila bukan.
+ *
+ * Dipakai pil/verdict kiriman: jam saja membuat perjalanan 13 hari lalu
+ * terbaca sebagai perjalanan hari ini. Perbandingan memakai tanggal WIB,
+ * bukan UTC, supaya pergantian hari di Jakarta tidak salah.
+ */
+export function formatMomentWib(
+  iso: string | null | undefined,
+  sekarang: Date = new Date()
+): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(sekarang.getTime())) return formatClockWib(iso);
+  if (kunciHari(d) === kunciHari(sekarang)) return formatClockWib(iso);
+  return `${formatDate(iso)} ${formatClockWib(iso)}`;
+}
+
 /** ISO → "10 Okt 2026" (tanpa jam). Nilai kosong/tidak sah → "—". */
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return "—";

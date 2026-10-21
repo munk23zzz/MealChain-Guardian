@@ -12,11 +12,11 @@ export const roleProfile: Record<string, Profile> = {
   sppg_head: {
     title: "Konsol Kepala SPPG",
     mission:
-      "Pantau pasangan pasokan–permintaan, jalankan analisis agent, lalu setujui atau tolak rekomendasi dengan alasan yang jelas.",
+      "Pantau pasangan pasokan–permintaan, jalankan analisis agen, lalu setujui atau tolak rekomendasi dengan alasan yang jelas.",
     steps: [
       "Pilih lokasi & komoditas → muat kondisi terkini",
-      "Jalankan analisis agent → tinjau kandidat + harga janggal",
-      "Ajukan usulan → approve/reject di feed dengan alasan",
+      "Jalankan analisis agen → tinjau kandidat + harga janggal",
+      "Ajukan usulan → setujui/tolak di feed dengan alasan",
     ],
   },
   sppg_nutritionist: {
@@ -25,18 +25,18 @@ export const roleProfile: Record<string, Profile> = {
       "Tinjau aspek kesegaran dan kecocokan gizi pada setiap rekomendasi distribusi sebelum persetujuan diberikan.",
     steps: [
       "Muat kondisi lokasi & komoditas",
-      "Periksa freshness score pada kandidat analisis",
-      "Approve/reject rekomendasi dengan catatan gizi",
+      "Periksa skor kesegaran pada kandidat analisis",
+      "Setujui/tolak rekomendasi dengan catatan gizi",
     ],
   },
   bgn_monitor: {
     title: "Papan Pengawasan BGN",
     mission:
-      "Akun read-only: memantau seluruh keputusan, alasan penolakan, dan jejak audit agent tanpa dapat mengubah apa pun.",
+      "Akun hanya-baca: memantau seluruh keputusan, alasan penolakan, dan jejak audit agen tanpa dapat mengubah apa pun.",
     steps: [
       "Amati feed keputusan lintas SPPG",
       "Buka detail untuk jejak audit & iterasi",
-      "Semua aksi mutasi dinonaktifkan by design",
+      "Semua aksi perubahan memang dinonaktifkan untuk peran ini",
     ],
   },
 };

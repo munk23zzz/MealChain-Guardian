@@ -271,7 +271,7 @@ export default function TopBar({
                   onOpenNotifications();
                 }}
               >
-                Buka tab Recommendations
+                Lihat semua rekomendasi
               </button>
             </div>
           )}

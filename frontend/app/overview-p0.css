@@ -1,0 +1,89 @@
+/*
+ * Overview P0 (21 Okt 2026): chip provenance, aksi alert, dan baris antrean
+ * yang bisa diklik. Diimpor setelah globals.css supaya menang urutan tanpa
+ * menyunting stylesheet bersama yang masih dipakai pekerjaan lain.
+ */
+
+.overview-demo-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius-control-sm);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font-size: var(--fs-1);
+  font-weight: 600;
+}
+
+.overview-alert {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.overview-alert p {
+  margin: 0;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.overview-alert-action {
+  flex: none;
+  padding: 6px 12px;
+  border: 1px solid rgba(198, 40, 40, 0.45);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--status-danger);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.overview-alert-action:hover {
+  background: var(--danger-bg);
+}
+
+.overview-alert-action:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.queue-item {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.queue-item-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.queue-item-action:hover {
+  background: var(--surface-sunken);
+}
+
+.queue-item-action:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.queue-item-main {
+  flex: 1;
+  min-width: 0;
+}

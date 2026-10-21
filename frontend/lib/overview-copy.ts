@@ -11,7 +11,7 @@
 export function mapHeaderSubtitle(locationCount: number): string {
   if (locationCount <= 0) return "Tidak ada lokasi pada cakupan ini.";
   if (locationCount === 1) {
-    return "Peta SPPG Anda — hijau surplus, merah shortage, abu seimbang.";
+    return "Peta SPPG Anda — warna menandai pasokan berlebih, kekurangan, atau seimbang.";
   }
-  return `Peta ${locationCount} lokasi SPPG — hijau surplus, merah shortage, abu seimbang.`;
+  return `Peta ${locationCount} lokasi SPPG — warna menandai pasokan berlebih, kekurangan, atau seimbang.`;
 }

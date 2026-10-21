@@ -20,7 +20,7 @@
  *    diterjemahkan ulang di klien.
  */
 import { kodeWilayah } from "./wilayah";
-import { formatClockWib, formatDate, formatDateTime } from "./datetime";
+import { formatClockWib, formatDate, formatDateTime, formatMomentWib } from "./datetime";
 import { formatKg } from "./overview-format";
 import {
   durationLabel,
@@ -71,7 +71,10 @@ function alasanJalur(row: SupplierRoute): string {
  * "Belum berangkat" sengaja TIDAK diberi jam tiba — jam itu tidak ada di basis
  * data, dan menuliskannya akan terbaca seolah barangnya sudah di jalan.
  */
-export function shipmentHeadline(row: SupplierRoute): ShipmentHeadline {
+export function shipmentHeadline(
+  row: SupplierRoute,
+  now: Date = new Date()
+): ShipmentHeadline {
   const journey = row.journey;
   if (!journey) {
     return { tone: "unknown", label: "Perjalanan belum dilaporkan server" };
@@ -83,7 +86,12 @@ export function shipmentHeadline(row: SupplierRoute): ShipmentHeadline {
       return { tone, label: `Di jalan${sisa}` };
     }
     case "sudah_tiba":
-      return { tone, label: journey.etaAt ? `Sudah tiba ${formatClockWib(journey.etaAt)}` : "Sudah tiba" };
+      return {
+        tone,
+        label: journey.etaAt
+          ? `Sudah tiba ${formatMomentWib(journey.etaAt, now)}`
+          : "Sudah tiba",
+      };
     case "belum_berangkat":
       return { tone, label: "Belum berangkat" };
     default:
@@ -160,7 +168,10 @@ export function shipmentKeyFacts(row: SupplierRoute): string[] {
 }
 
 /** Kalimat keputusan di bawah angka kunci (satu kalimat, bukan tiga baris). */
-export function shipmentVerdict(row: SupplierRoute): string {
+export function shipmentVerdict(
+  row: SupplierRoute,
+  now: Date = new Date()
+): string {
   const journey = row.journey;
   if (!journey) {
     return "Perjalanan belum dilaporkan server — waktu berangkat dan estimasi tiba belum bisa dipastikan.";
@@ -170,7 +181,7 @@ export function shipmentVerdict(row: SupplierRoute): string {
   }
   if (journey.state === "sudah_tiba") {
     return journey.etaAt
-      ? `Tiba ${formatClockWib(journey.etaAt)} — perjalanan selesai.`
+      ? `Tiba ${formatMomentWib(journey.etaAt, now)} — perjalanan selesai.`
       : "Perjalanan selesai.";
   }
   if (journey.state === "di_jalan" && journey.etaAt) {

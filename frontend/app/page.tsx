@@ -112,6 +112,7 @@ import StockChart from "../components/StockChart";
 import ShipmentCard from "../components/ShipmentCard";
 import { focusNote, focusPick, focusRows } from "../lib/route-focus";
 import { formatKg, snapshotNote, syncLabel } from "../lib/overview-format";
+import { pendingKpiCopy, queueQuantityLabel } from "../lib/overview-kpi";
 // Fase 2 bento Overview: selisih hero & pangsa terhadap kebutuhan — logika
 // murni di lib/overview-bento.ts (diuji di tests/overview-bento.test.ts).
 import {
@@ -799,6 +800,13 @@ export default function Home() {
   // tanpa peran angka di sini 16 sementara lonceng menulis 24 — dua angka
   // untuk hal yang sama (temuan audit 19 Okt 2026).
   const notif = notifList(decisions, 4, role);
+  const kpiAntrean = pendingKpiCopy({
+    total: notif.total,
+    monitored: decisions.length,
+    limit: 4,
+    loading: decisionsQuery.isLoading,
+    expired: notif.expired,
+  });
   const roleLabel = ROLE_LABEL[role ?? ""] ?? (role ?? "user");
 
   // Feed traceable (arah Roy 2026-10-09): EXPIRED TIDAK disembunyikan — semua
@@ -1055,9 +1063,15 @@ export default function Home() {
                 </p>
               </div>
               <div className="overview-header-status">
-                <span className="overview-live-pill">
+                <span
+                  className="overview-demo-chip"
+                  title="Data contoh untuk demo, bukan data operasional produksi"
+                >
+                  Data simulasi
+                </span>
+                <span className="overview-live-pill" title="Diperbarui setiap 5 detik">
                   <span className="overview-live-dot" aria-hidden="true" />
-                  Live Sync (5s)
+                  Sinkron otomatis
                 </span>
                 {mapUpdatedAt !== null && (
                   <span className="overview-updated" aria-live="polite">
@@ -1140,23 +1154,9 @@ export default function Home() {
                 <span className="kpi-card-label">Rekomendasi menunggu</span>
                 {/* Selama daftar keputusan belum tiba, "0" adalah klaim palsu:
                     pembaca mengira tidak ada pekerjaan. Tampilkan "—". */}
-                <span className="kpi-card-value">
-                  {decisionsQuery.isLoading ? "—" : notif.total}
-                </span>
-                <span className="kpi-card-foot">
-                  {decisionsQuery.isLoading
-                    ? "memuat daftar keputusan"
-                    : notif.expired > 0
-                      ? `${notif.expired} lewat tenggat — tetap terlihat, tidak disembunyikan`
-                      : `${decisions.length} keputusan dipantau`}
-                </span>
-                <span className="kpi-card-mini">
-                  {decisionsQuery.isLoading
-                    ? "menunggu data"
-                    : notif.rest > 0
-                      ? `+${notif.rest} lain menunggu tindakan`
-                      : "semua sudah ditindaklanjuti"}
-                </span>
+                <span className="kpi-card-value">{kpiAntrean.value}</span>
+                <span className="kpi-card-foot">{kpiAntrean.foot}</span>
+                <span className="kpi-card-mini">{kpiAntrean.mini}</span>
               </div>
             </section>
 
@@ -1179,10 +1179,18 @@ export default function Home() {
                   <path d="M12 9v4M12 17h.01" />
                 </svg>
                 <p>
-                  <strong>{mapShortage.length} lokasi shortage</strong>{" "}
-                  — {mapShortage.map((l: any) => l.location).join(", ")}. Cek
-                  rekomendasi agent untuk alokasi ulang.
+                  <strong>{mapShortage.length} lokasi shortage</strong> pada{" "}
+                  {mapData?.commodity ?? mapCommodity} —{" "}
+                  {mapShortage.map((l: any) => l.location).join(", ")}. Tinjau
+                  rekomendasi agen untuk alokasi ulang.
                 </p>
+                <button
+                  type="button"
+                  className="overview-alert-action"
+                  onClick={() => setTab("recommendations")}
+                >
+                  Tinjau rekomendasi
+                </button>
               </div>
             )}
 
@@ -1250,12 +1258,13 @@ export default function Home() {
                 >
                   <div className="queue-head">
                     <h3>Perlu keputusan</h3>
-                    <span className="queue-head-count">{notif.total}</span>
+                    <span className="queue-head-count">{kpiAntrean.value}</span>
                   </div>
                   {notif.shown.length === 0 ? (
                     <p className="queue-empty">
-                      Semua keputusan sudah ditindaklanjuti. Permintaan baru
-                      muncul di sini.
+                      {kpiAntrean.value === "—"
+                        ? "Belum ada data keputusan untuk ditampilkan."
+                        : "Tidak ada keputusan yang menunggu tindakan."}
                     </p>
                   ) : (
                     <ul className="queue-list">
@@ -1267,17 +1276,34 @@ export default function Home() {
                           }
                           className="queue-item"
                         >
-                          <span className="queue-item-main">
-                            <span className="queue-item-label">
-                              {DECISION_TYPE_LABELS[item.decision_type ?? ""] ??
-                                "Rekomendasi baru"}
+                          <button
+                            type="button"
+                            className="queue-item-action"
+                            onClick={() => {
+                              if (item.decision_id) {
+                                setSelectedId(item.decision_id);
+                                setTab("evidence");
+                                requestAnimationFrame(() =>
+                                  window.scrollTo({ top: 0, left: 0 })
+                                );
+                              } else {
+                                setTab("recommendations");
+                              }
+                            }}
+                            aria-label={`Tinjau ${DECISION_TYPE_LABELS[item.decision_type ?? ""] ?? "rekomendasi baru"}`}
+                          >
+                            <span className="queue-item-main">
+                              <span className="queue-item-label">
+                                {DECISION_TYPE_LABELS[item.decision_type ?? ""] ??
+                                  "Rekomendasi baru"}
+                              </span>
+                              <span className="queue-item-meta">
+                                {queueQuantityLabel(item.quantity_kg)} ·{" "}
+                                {formatDateTime(item.created_at)}
+                              </span>
                             </span>
-                            <span className="queue-item-meta">
-                              {formatKg(item.quantity_kg)} ·{" "}
-                              {formatDateTime(item.created_at)}
-                            </span>
-                          </span>
-                          {item.status && <StatusBadge status={item.status} />}
+                            {item.status && <StatusBadge status={item.status} />}
+                          </button>
                         </li>
                       ))}
                     </ul>
@@ -1298,7 +1324,7 @@ export default function Home() {
                       className="queue-open"
                       onClick={() => setTab("recommendations")}
                     >
-                      Buka tab Recommendations
+                      Lihat semua rekomendasi
                     </button>
                   </div>
                 </section>

@@ -8,6 +8,9 @@ import "./map-console.css";
 // Diimpor PALING AKHIR dengan alasan yang sama: menang urutan tanpa !important
 // dan tanpa menyunting globals.css yang dipakai sesi lain.
 import "./evidence-dossier.css";
+// Overview P0 (21 Okt 2026): chip provenance, aksi alert, dan baris antrean
+// yang bisa diklik. Berkas terpisah agar tidak menambah hunk di globals.css.
+import "./overview-p0.css";
 
 import Providers from "./providers";
 

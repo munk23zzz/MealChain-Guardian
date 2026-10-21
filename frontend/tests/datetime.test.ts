@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatClockUtc, formatClockWib, formatDate, formatDateTime } from "../lib/datetime";
+import { formatClockUtc, formatClockWib, formatDate, formatDateTime, formatMomentWib } from "../lib/datetime";
 
 describe("formatDateTime (WIB, id-ID)", () => {
   it("format acuan: tanggal + jam titik + WIB", () => {
@@ -53,6 +53,30 @@ describe("formatClockWib (estimasi tiba perjalanan)", () => {
     expect(formatClockWib(null)).toBe("—");
     expect(formatClockWib(undefined)).toBe("—");
     expect(formatClockWib("bukan-tanggal")).toBe("—");
+  });
+});
+
+describe("formatMomentWib (jam, dengan tanggal bila bukan hari ini)", () => {
+  const NOW = new Date("2026-10-21T07:30:00Z"); // 21 Okt 2026 14.30 WIB
+
+  it("hari yang sama: cukup jam, seperti format jam ringkas", () => {
+    expect(formatMomentWib("2026-10-21T07:01:19Z", NOW)).toBe("14.01");
+  });
+
+  it("hari lain: tanggal + tahun + jam, supaya kiriman lama tidak terbaca hari ini", () => {
+    expect(formatMomentWib("2026-10-08T09:01:19Z", NOW)).toBe(
+      "8 Okt 2026 16.01",
+    );
+  });
+
+  it("membandingkan tanggal di zona Jakarta, bukan UTC", () => {
+    // 21 Okt 01.00 WIB masih "hari ini" walau UTC-nya 20 Okt.
+    expect(formatMomentWib("2026-10-20T18:00:00Z", NOW)).toBe("01.00");
+  });
+
+  it("kosong atau tidak sah → —", () => {
+    expect(formatMomentWib(null, NOW)).toBe("—");
+    expect(formatMomentWib("bukan-tanggal", NOW)).toBe("—");
   });
 });
 

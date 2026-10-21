@@ -124,7 +124,24 @@ describe("shipmentHeadline — pil status ramping", () => {
   });
 
   it("sudah tiba: menyebut jam tibanya", () => {
-    expect(shipmentHeadline(SUDAH_TIBA)).toEqual({ tone: "done", label: "Sudah tiba 14.20" });
+    expect(shipmentHeadline(SUDAH_TIBA, NOW)).toEqual({ tone: "done", label: "Sudah tiba 14.20" });
+  });
+
+  it("siap 13 hari lalu: tanggal ikut ditulis, bukan jam yang terbaca hari ini", () => {
+    const lama = route({
+      journey: {
+        ...route().journey!,
+        state: "sudah_tiba",
+        etaAt: "2026-10-08T09:01:19Z",
+      },
+    });
+    const sekarang = new Date("2026-10-21T07:30:00Z");
+    expect(shipmentHeadline(lama, sekarang).label).toBe(
+      "Sudah tiba 8 Okt 2026 16.01",
+    );
+    expect(shipmentVerdict(lama, sekarang)).toContain(
+      "Tiba 8 Okt 2026 16.01",
+    );
   });
 
   it("jalur belum tersinkron: nada tidak diketahui, bukan merah/terlambat", () => {
