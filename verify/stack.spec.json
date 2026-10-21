@@ -22,12 +22,6 @@
       "logs_command": "docker logs mealchain-backend --tail 400"
     },
     {
-      "name": "mock-sap",
-      "external": true,
-      "port": 8001,
-      "health": "http://127.0.0.1:8001/health"
-    },
-    {
       "name": "frontend",
       "external": true,
       "port": 3010,
@@ -158,7 +152,7 @@
       {
         "name": "migrasi alembic head",
         "sql": "SELECT version_num FROM alembic_version",
-        "expect": "022_disposal_partner"
+        "expect": "026_receipt_approval"
       },
       {
         "name": "suppliers rows",
@@ -231,9 +225,7 @@
     }
   ],
   "containers": [
-    "mealchain-frontend",
     "mealchain-backend",
-    "mealchain-mock-sap",
     "mealchain-postgres"
   ]
 }

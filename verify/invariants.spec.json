@@ -1,0 +1,292 @@
+{
+  "name": "mealchain-invariants",
+  "artifact_dir": "verify-out-invariants",
+  "_comment": "Invarian yang HARUS selalu benar, bukan sekadar 'endpoint membalas 200'. Semua cek baca-saja: tidak menulis, tidak memanggil endpoint destruktif. Angka harapan sengaja 0 (pelanggaran), jadi setiap kegagalan berarti ada baris yang melanggar aturan domain. Cek 'keputusan tanpa jejak' dan 'executed tanpa persetujuan' adalah dua temuan yang sudah terukur pada 21 Okt 2026 (2 keputusan tanpa trace; 1 keputusan executed tanpa baris approvals yang approved).",
+  "services": [
+    {
+      "name": "postgres",
+      "external": true,
+      "port": 15432,
+      "timeout": 20
+    },
+    {
+      "name": "backend",
+      "external": true,
+      "port": 8000,
+      "health": "http://127.0.0.1:8000/health",
+      "logs_command": "docker logs mealchain-backend --tail 50"
+    }
+  ],
+  "login": {
+    "as": "sppg_head (Jakarta)",
+    "url": "http://127.0.0.1:8000/auth/login",
+    "json": {
+      "email": "sppg.head@demo.local",
+      "password": "Demo#SPPG2026"
+    },
+    "token_path": "access_token"
+  },
+  "http": [
+    {
+      "name": "tanpa token GET /decisions -> 401",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions",
+      "no_auth": true,
+      "expect_status": [
+        401
+      ]
+    },
+    {
+      "name": "tanpa token GET /batches -> 401",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/batches",
+      "no_auth": true,
+      "expect_status": [
+        401
+      ]
+    },
+    {
+      "name": "tanpa token GET /ledger/verify -> 401",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/ledger/verify",
+      "no_auth": true,
+      "expect_status": [
+        401
+      ]
+    },
+    {
+      "name": "kepala SPPG GET /admin/users -> 403 (bukan admin)",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/admin/users",
+      "expect_status": [
+        403
+      ]
+    },
+    {
+      "name": "GET /batches total",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/batches?limit=1",
+      "expect_status": 200,
+      "expect_keys": [
+        "count",
+        "total",
+        "batches"
+      ],
+      "extract": "total",
+      "store": "api_batches",
+      "max_ms": 4000
+    },
+    {
+      "name": "GET /decisions jumlah item",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions",
+      "expect_status": 200,
+      "expect_keys": [
+        "items"
+      ],
+      "extract_len": "items",
+      "store": "api_decisions",
+      "max_ms": 4000
+    },
+    {
+      "name": "GET /demo/session bentuk jawaban",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/demo/session",
+      "expect_status": 200,
+      "expect_keys": [
+        "active",
+        "enforced",
+        "session_id",
+        "status",
+        "expires_at",
+        "anchor_now",
+        "server_now"
+      ],
+      "max_ms": 3000
+    },
+    {
+      "name": "GET /ledger/verify rantai valid",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/ledger/verify",
+      "expect_status": 200,
+      "expect_json": {
+        "valid": true
+      },
+      "max_ms": 6000
+    },
+    {
+      "name": "chain untuk id yang tidak ada -> 404",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/00000000-0000-4000-8000-000000000000/chain",
+      "expect_status": 404
+    },
+    {
+      "name": "chain dengan id bukan UUID -> 422",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/bukan-uuid/chain",
+      "expect_status": 422
+    },
+    {
+      "name": "batch yang tidak ada -> 404",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/batches/00000000-0000-4000-8000-000000000000",
+      "expect_status": 404
+    },
+    {
+      "name": "health backend",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/health",
+      "expect_status": 200,
+      "expect_json": {
+        "status": "healthy"
+      }
+    },
+    {
+      "name": "batches: limit dipotong, ada total",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/batches?limit=1",
+      "expect_status": 200,
+      "expect_keys": [
+        "count",
+        "total",
+        "batches"
+      ],
+      "expect_json": {
+        "count": 1
+      }
+    },
+    {
+      "name": "batches limit=0 ditolak 422",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/batches?limit=0",
+      "expect_status": 422
+    },
+    {
+      "name": "batches limit=1000 ditolak 422",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/batches?limit=1000",
+      "expect_status": 422
+    }
+  ],
+  "db": {
+    "kind": "command",
+    "target": "postgres:15432/mealchain",
+    "run": "docker exec mealchain-postgres psql -U mealchain -d mealchain -At -F \"|\" -c \"{sql}\"",
+    "checks": [
+      {
+        "name": "migrasi alembic head",
+        "sql": "SELECT version_num FROM alembic_version",
+        "expect": "026_receipt_approval"
+      },
+      {
+        "name": "jumlah batch di DB",
+        "sql": "SELECT count(*) FROM batches",
+        "expect_min": 0,
+        "store": "db_batches"
+      },
+      {
+        "name": "jumlah keputusan untuk Jakarta di DB (scope peran kepala SPPG)",
+        "sql": "SELECT count(*) FROM decisions d JOIN locations l ON l.id = d.target_location_id WHERE l.name = 'Jakarta'",
+        "expect_min": 0,
+        "store": "db_decisions"
+      },
+      {
+        "name": "batch dengan kuantitas negatif",
+        "sql": "SELECT count(*) FROM batches WHERE quantity_kg < 0",
+        "expect": 0
+      },
+      {
+        "name": "batch diberangkatkan sebelum dipanen",
+        "sql": "SELECT count(*) FROM batches WHERE dispatched_at IS NOT NULL AND harvested_at IS NOT NULL AND dispatched_at < harvested_at",
+        "expect": 0
+      },
+      {
+        "name": "baris kanonik batch ikut berstempel sesi (regresi 21 Okt)",
+        "sql": "SELECT count(*) FROM batches WHERE origin = 'seed' AND demo_session_id IS NOT NULL",
+        "expect": 0
+      },
+      {
+        "name": "baris kanonik keputusan ikut berstempel sesi",
+        "sql": "SELECT count(*) FROM decisions WHERE origin = 'seed' AND demo_session_id IS NOT NULL",
+        "expect": 0
+      },
+      {
+        "name": "baris kanonik pasokan ikut berstempel sesi",
+        "sql": "SELECT count(*) FROM supply_records WHERE origin = 'seed' AND demo_session_id IS NOT NULL",
+        "expect": 0
+      },
+      {
+        "name": "langkah LEARN pada status di luar rejected/proposed",
+        "sql": "SELECT count(*) FROM agent_traces t JOIN decisions d ON d.id = t.decision_id WHERE t.step_name = 'LEARN' AND d.status NOT IN ('rejected','proposed')",
+        "expect": 0,
+        "_note": "LEARN ditulis saat keputusan diajukan ulang (rejection_loop.repropose): pada baris rejected dan pada draf barunya (proposed). Terukur 21 Okt: 2 LEARN di draf proposed."
+      },
+      {
+        "name": "langkah ACT pada keputusan yang tidak executed",
+        "sql": "SELECT count(*) FROM agent_traces t JOIN decisions d ON d.id = t.decision_id WHERE t.step_name = 'ACT' AND d.status <> 'executed'",
+        "expect": 0
+      },
+      {
+        "name": "jejak agent yatim (decision tidak ada)",
+        "sql": "SELECT count(*) FROM agent_traces t LEFT JOIN decisions d ON d.id = t.decision_id WHERE d.id IS NULL",
+        "expect": 0
+      },
+      {
+        "name": "keputusan tanpa satu pun jejak langkah (temuan 21 Okt: 2 baris)",
+        "sql": "SELECT count(*) FROM decisions d WHERE NOT EXISTS (SELECT 1 FROM agent_traces t WHERE t.decision_id = d.id)",
+        "expect": 0
+      },
+      {
+        "name": "lebih dari satu PO untuk satu keputusan",
+        "sql": "SELECT count(*) FROM (SELECT decision_id FROM sap_mock_purchase_orders WHERE decision_id IS NOT NULL GROUP BY decision_id HAVING count(*) > 1) x",
+        "expect": 0
+      },
+      {
+        "name": "jejak dengan step_at kosong",
+        "sql": "SELECT count(*) FROM agent_traces WHERE step_at IS NULL",
+        "expect": 0
+      },
+      {
+        "name": "persetujuan yatim (keputusan tidak ada)",
+        "sql": "SELECT count(*) FROM approvals a LEFT JOIN decisions d ON d.id = a.decision_id WHERE d.id IS NULL",
+        "expect": 0
+      },
+      {
+        "name": "keputusan executed tanpa persetujuan (temuan 21 Okt: 1 baris)",
+        "sql": "SELECT count(*) FROM decisions d WHERE d.status = 'executed' AND NOT EXISTS (SELECT 1 FROM approvals a WHERE a.decision_id = d.id AND a.approved)",
+        "expect": 0
+      },
+      {
+        "name": "fakta pasokan melewati horizon 31 hari",
+        "sql": "SELECT count(*) FROM supply_records WHERE recorded_at > now() + interval '31 days'",
+        "expect": 0
+      },
+      {
+        "name": "fakta permintaan melewati horizon 31 hari",
+        "sql": "SELECT count(*) FROM demand_records WHERE recorded_at > now() + interval '31 days'",
+        "expect": 0
+      },
+      {
+        "name": "horizon pasokan tercatat (max recorded_at <= 31 hari)",
+        "sql": "SELECT count(*) FROM supply_records WHERE recorded_at = (SELECT max(recorded_at) FROM supply_records) AND recorded_at > now() + interval '31 days'",
+        "expect": 0
+      }
+    ]
+  },
+  "compare": [
+    {
+      "name": "jumlah batch: API /batches.total == DB",
+      "left": "api_batches",
+      "right": "db_batches"
+    },
+    {
+      "name": "jumlah keputusan: API /decisions == DB",
+      "left": "api_decisions",
+      "right": "db_decisions"
+    }
+  ],
+  "containers": [
+    "mealchain-backend",
+    "mealchain-postgres"
+  ]
+}

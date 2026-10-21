@@ -290,3 +290,66 @@
 - [2026-10-20] Joule mendapat skill kelima `supplier_directory` (baca `GET /suppliers`): direktori pemasok per SPPG + kiriman aktif; rute deterministik `pemasok`/`supplier`/`direktori` diperiksa SETELAH antrean agar "usulan eksklusi pemasok" tetap masuk antrean. — klaim "Joule bisa memanggil data pemasok" harus terbukti lewat skill, bukan hanya lewat batch/PO.
 - [2026-10-20] `jakarta_lengkap` menulis `verifier_note="consistent"` (bukan "konsisten") karena `approval_summary` memetakan teks lain ke verdict `unavailable`; tes keputusan KPI dibatasi ke ID `demo_decision_id` agar tidak mencampur 30 baris riwayat `jakarta_lengkap`. — verdict layar dan gate harus membaca kontrak yang sama.
 - [2026-10-20] `seed_demo_activity` hanya menghapus batch milik namespace `demo_batch_id`-nya sendiri (bukan semua `origin='demo'`), supaya 40 batch kaya `jakarta_lengkap` tidak ikut terhapus saat suite menjalankan penyemai ini; `test_demo_activity._bersihkan` memakai himpunan ID yang sama. — seeder demo harus komposabel; filter `origin` terlalu luas dan merusak data seeder lain.
+- [2026-10-20] Kartu "Penerimaan barang" (Keamanan Pangan) diaudit: daftar batch penerimaan kini SELALU dapur sendiri (`receivingBatchOptions`, bukan baris yang sudah disaring cakupan tabel) karena batch kota lain dijawab 403 `assert_in_scope` — opsi yang dijamin gagal bukan opsi; batch yang masih layak didahulukan supaya default tidak jatuh ke batch kedaluwarsa; kalimat "tandai sisanya sebelum barang dipakai" dihapus karena gerbangnya tidak pernah ditegakkan (tombol aktif di 0/5) dan diganti "Boleh disimpan sebagian"; pesan sesudah simpan memakai bentuk lampau (`receiptSavedSentence`); kendaraan berpendingin TIDAK jadi titik periksa ke-6 (rantai dingin dihitung deterministik oleh `/safety/evaluate`, dan batas 15–30 °C beras membuat titik periksa generik salah). — bukti 403, daftar 50+ opsi, dan simpan nyata 201 (`checked` berisi `bau_warna`) ada di `_qa/penerimaan-barang/`.
+
+[2026-10-20] **Sesi demo (langkah 1).** Pemilik meminta default kosong + tombol "Siapkan data demo" yang
+mengaktifkan data selama satu jendela waktu (bawaan 2 jam, maksimum 4 jam), hitungan mundur, perpanjangan tanpa
+mengubah data berjalan, dan data kembali kosong saat sesi habis. Implementasi: migrasi `024_demo_sessions`,
+`app/services/demo_session.py` (kedaluwarsa malas, pembersihan HANYA baris ber-stempel, penjaga ORM
+`before_flush` + `do_orm_execute` yang mati bila `DEMO_SESSION_ENFORCE=false`), router `/demo/session`, dan 7 tes.
+Keputusan penting: jam tidak dibekukan (`anchor_now` hanya dicatat); pembersihan tidak menghapus data tanpa
+stempel; flag belum dinyalakan karena UI belum ada. Sisa pekerjaan: stempel tabel lain + UI Demo Control.
+
+[2026-10-20] **Sesi demo (lanjutan) — filter ORM dibuang.** `with_loader_criteria` tidak bisa diandalkan: banyak endpoint memilih kolom (`select(Batch.id, ...)`) atau memakai Core/bulk sehingga penyaringan hanya sebagian (`/batches` 0 padahal 118 baris; `count` 118). Penggantinya: kosong-secara-default dijaga SIKLUS DATA — mulai sesi mengosongkan semua baris operasional lalu menyemai + stempel massal (`tandai_sesi`) untuk menutup celah bulk insert; sesi berakhir mengosongkan; boot tanpa sesi mengosongkan. Mutasi dijaga dependency `butuh_sesi_aktif` (409). Konsekuensi diterima pemilik: bukti sesi lama tidak diarsipkan di DB. Temuan lain: cache `model_bersesi()` yang dihitung saat impor melewatkan tabel yang diimpor belakangan → ForeignKeyViolationError; sekarang cache dihitung ulang bila jumlah mapper berubah.
+
+
+## 2026-10-20 — Sesi demo: kosong-secara-default lewat siklus data, bukan filter kueri
+
+**Keputusan.** `with_loader_criteria` dibuang. Kosong-secara-default dijamin siklus:
+`start` mengosongkan seluruh baris operasional lalu menyemai + menstempel; `end`/kedaluwarsa
+mengosongkan; boot tanpa sesi mengosongkan (restart saat sesi aktif tidak menyentuh data).
+`kosongkan_kecuali(db, None)` = purge semua baris bertanda sesi ditambah baris tanpa stempel;
+`kosongkan_kecuali(db, sid)` = sisakan milik sesi itu.
+
+**Alasan.** Banyak endpoint memilih kolom (`select(Batch.id, …)`) atau memakai Core/bulk yang
+tidak tersaring `with_loader_criteria`, sehingga `/batches` menjawab 0 padahal 118 baris ada —
+filter itu tampak benar di tes unit dan salah di aplikasi.
+
+**Konsekuensi.** Riwayat sesi lama tidak diarsipkan di DB (audit trail tetap ada di
+`agent_traces`/`decision_evidence` selama sesi berjalan). `asyncio.Lock` menyerialkan
+`start`/`end` supaya penyemaian yang masih berjalan tidak menyisakan baris tanpa stempel
+setelah "Akhiri sesi".
+
+**Prasyarat gerbang lokal.** Suite backend memakai DB demo bersama; jalankan dengan
+`-e DEMO_SESSION_ENFORCE=false` dan data kanonik dari `seed_data --reference-time
+2026-10-08T12:00:00+00:00` + `generate_timeseries()`. Seed dengan referensi "hari ini"
+menggeser jangkar dan membuat `test_agenda_api` merah.
+
+## 2026-10-20 — Nav "lompat ke bagian" jadi komponen bersama, dipasang hanya di halaman yang butuh
+
+**Keputusan.** Nav menempel "Bagian" yang dulu hidup di dalam `components/DecisionEvidence.tsx`
+dipindah ke tiga berkas bersama: `components/SectionJump.tsx` (markup + `aria-current`),
+`lib/hooks/useActiveSection.ts` (pengukur posisi), `lib/section-jump.ts` (daftar tujuan per
+halaman). Gayanya pindah dari `evidence-dossier.css` ke `globals.css` (`.section-jump`,
+`.jump-target`). Dipasang di **dua** halaman baru — Keamanan Pangan dan Overview — dan **tidak**
+di halaman lain.
+
+**Alasan.** (1) Menyalin pola ini ke halaman kedua berarti menyalin pengukur gulir + aturan
+aksesibilitas, dan dua salinan pasti menyimpang. (2) Tidak semua halaman berhak mendapatkannya:
+hari Ini sudah punya lima tile tombol yang menggulir **dan** memindahkan fokus (lebih baik
+daripada anchor), Recommendations sudah dipendekkan pencarian/filter/urut/paginasi, dan Pemasok,
+KPI & Kualitas, Agent Log, Demo Control punya ≤ tiga bagian. Aturan pemakaian + tabel alasan
+tertulis di `docs/design.md` §24 supaya keputusan ini tidak dibuka ulang tanpa argumen baru.
+(3) Daftar tujuan dibangun dari **kondisi render yang sama** dengan bagiannya — "Penerimaan
+barang" hanya untuk peran ber-SPPG, "Keputusan keamanan lokasi ini" hanya bila daftar keputusan
+ada, "Kiriman" hanya bila kartu kiriman benar-benar dirender (kartu itu `return null` saat daftar
+kosong). Tautan mati lebih buruk daripada tidak ada nav.
+
+**Konsekuensi.** (a) Ambang posisi = 140 px dari atas viewport, diukur dengan listener gulir
+rAF-throttled, bukan `IntersectionObserver` (bagian lebih tinggi dari viewport tidak pernah
+"menang" pada rasio irisan). (b) Di **dasar halaman** bagian terakhir dipaksa aktif: cacat ini
+hanya terlihat saat verifikasi di aplikasi hidup (Overview, bagian Telemetri selalu kalah dari
+Kecukupan), sudah diperbaiki + dites. (c) `scroll-margin-top` kini satu kelas `.jump-target`
+(132 px), bukan daftar lima id — halaman baru tidak perlu menambah selektor. (d) Nav hanya
+muncul setelah datanya ada; di Overview, tujuan "Kiriman" bisa menyusul beberapa ratus milidetik
+setelah muat pertama.

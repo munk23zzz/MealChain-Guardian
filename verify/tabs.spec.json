@@ -20,8 +20,8 @@
           "LOGIN_STEPS": "text=SPPG Head,button:has-text('Masuk')",
           "TABS": "Hari Ini,Overview,Recommendations,Decision & Evidence,Keamanan Pangan,Surplus & Limbah,Pemasok,Agent Log,KPI & Kualitas Agen,Demo Control",
           "FORBID_TABS": "Pengaturan",
-          "TAB_EXPECT": "{\"Hari Ini\": \"Jakarta\", \"Overview\": \"Konsol Kepala SPPG\", \"Recommendations\": \"Recommendation Feed\", \"Decision & Evidence\": \"Keputusan yang diperiksa\", \"Keamanan Pangan\": \"Ringkasan pengawasan\", \"Surplus & Limbah\": \"Neraca hari ini\", \"Pemasok\": \"Papan kiriman\", \"Agent Log\": \"Agent Activity Log\", \"KPI & Kualitas Agen\": \"Kualitas Agen\", \"Demo Control\": \"Demo Control Panel\"}",
-          "TAB_FORBID": "{\"Overview\": \"Papan Pengawasan BGN\", \"Hari Ini\": \"Semua lokasi SPPG\"}"
+          "TAB_EXPECT": "{\"Hari Ini\": \"Jakarta\", \"Overview\": \"Konsol Kepala SPPG\", \"Recommendations\": \"Recommendation Feed\", \"Decision & Evidence\": \"Keputusan yang diperiksa\", \"Keamanan Pangan\": \"Ringkasan pengawasan\", \"Surplus & Limbah\": \"Neraca hari ini\", \"Pemasok\": \"Papan kiriman\", \"Agent Log\": \"Agent Activity Log\", \"KPI & Kualitas Agen\": \"Kualitas Agen\", \"Demo Control\": \"Siapkan data demo\"}",
+          "TAB_FORBID": "{\"Overview\": \"Papan Pengawasan BGN\", \"Hari Ini\": \"Semua lokasi SPPG\", \"Agent Log\": \"Bukti integrasi per komponen\"}"
         }
       },
       {
@@ -32,7 +32,7 @@
           "TABS": "Hari Ini,Overview,Recommendations,Decision & Evidence,Keamanan Pangan,Pemasok,Agent Log,KPI & Kualitas Agen,Pengaturan",
           "FORBID_TABS": "Surplus & Limbah,Demo Control",
           "TAB_EXPECT": "{\"Hari Ini\": \"Semua lokasi SPPG\", \"Overview\": \"Papan Pengawasan BGN\", \"Recommendations\": \"Recommendation Feed\", \"Decision & Evidence\": \"Keputusan yang diperiksa\", \"Keamanan Pangan\": \"Ringkasan pengawasan\", \"Pemasok\": \"Papan kiriman\", \"Agent Log\": \"Agent Activity Log\", \"KPI & Kualitas Agen\": \"Kualitas Agen\", \"Pengaturan\": \"Pengguna\"}",
-          "TAB_FORBID": "{\"Overview\": \"Konsol Kepala SPPG\", \"Hari Ini\": \"Cakupan lokasi yang ditampilkan | Jakarta\"}"
+          "TAB_FORBID": "{\"Overview\": \"Konsol Kepala SPPG\", \"Hari Ini\": \"Cakupan lokasi yang ditampilkan | Jakarta\", \"Agent Log\": \"Bukti integrasi per komponen\"}"
         }
       },
       {
@@ -42,8 +42,8 @@
           "LOGIN_STEPS": "text=Kepala Bandung,button:has-text('Masuk')",
           "TABS": "Hari Ini,Overview,Recommendations,Decision & Evidence,Keamanan Pangan,Surplus & Limbah,Pemasok,Agent Log,KPI & Kualitas Agen,Demo Control",
           "FORBID_TABS": "Pengaturan",
-          "TAB_EXPECT": "{\"Hari Ini\": \"Bandung\", \"Overview\": \"Konsol Kepala SPPG\", \"Recommendations\": \"Recommendation Feed\", \"Decision & Evidence\": \"Keputusan yang diperiksa\", \"Keamanan Pangan\": \"Ringkasan pengawasan\", \"Surplus & Limbah\": \"Neraca hari ini\", \"Pemasok\": \"Papan kiriman\", \"Agent Log\": \"Agent Activity Log\", \"KPI & Kualitas Agen\": \"Kualitas Agen\", \"Demo Control\": \"Demo Control Panel\"}",
-          "TAB_FORBID": "{\"Overview\": \"Papan Pengawasan BGN\", \"Hari Ini\": \"Semua lokasi SPPG\"}"
+          "TAB_EXPECT": "{\"Hari Ini\": \"Bandung\", \"Overview\": \"Konsol Kepala SPPG\", \"Recommendations\": \"Recommendation Feed\", \"Decision & Evidence\": \"Keputusan yang diperiksa\", \"Keamanan Pangan\": \"Ringkasan pengawasan\", \"Surplus & Limbah\": \"Neraca hari ini\", \"Pemasok\": \"Papan kiriman\", \"Agent Log\": \"Agent Activity Log\", \"KPI & Kualitas Agen\": \"Kualitas Agen\", \"Demo Control\": \"Siapkan data demo\"}",
+          "TAB_FORBID": "{\"Overview\": \"Papan Pengawasan BGN\", \"Hari Ini\": \"Semua lokasi SPPG\", \"Agent Log\": \"Bukti integrasi per komponen\"}"
         }
       }
     ]
