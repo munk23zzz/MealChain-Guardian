@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import MUTATING_ROLES, require_roles
 from app.api.dependencies import get_db
+from app.core.commodity_limits import safe_temp_for
 from app.core.config import settings
 from app.core.freshness import classify_freshness, compute_freshness_score, compute_usable_until
 from app.models import Batch, Commodity, User
@@ -22,16 +23,10 @@ _SHELF_LIFE_BY_COMMODITY = {
     "beras": settings.shelf_life_days_beras,
 }
 
-# Rentang suhu aman PER KOMODITAS. Beras adalah barang kering pada suhu ruang
-# (26-28 C di Indonesia): memakai rentang dingin 0-8 C akan menuduhnya
-# "temperature excursion" padahal penyimpanannya justru benar.
-_SAFE_TEMP_BY_COMMODITY = {
-    "telur": (0.0, 8.0),
-    "ayam": (0.0, 8.0),
-    "wortel": (0.0, 8.0),
-    "beras": (15.0, 30.0),
-}
-_DEFAULT_SAFE_TEMP = (0.0, 8.0)
+# Rentang suhu aman PER KOMODITAS dipusatkan di `app/core/commodity_limits.py`
+# supaya safety & freshness tidak memakai batas berbeda untuk batch yang sama.
+# Beras adalah barang kering pada suhu ruang (26-28 C di Indonesia): rentang
+# dingin 0-8 C akan menuduhnya "temperature excursion" padahal penyimpanannya benar.
 
 
 class FreshnessRequest(BaseModel):
@@ -72,9 +67,7 @@ async def evaluate_freshness(
             detail=f"komoditas '{commodity_name}' belum punya masa layak",
         )
     shelf_life_days = _SHELF_LIFE_BY_COMMODITY[commodity_name]
-    safe_min_c, safe_max_c = _SAFE_TEMP_BY_COMMODITY.get(
-        commodity_name, _DEFAULT_SAFE_TEMP
-    )
+    safe_min_c, safe_max_c = safe_temp_for(commodity_name)
     score = compute_freshness_score(
         harvested_at=batch.harvested_at,
         as_of=as_of,

@@ -164,6 +164,52 @@ def test_bukti_menggabungkan_trace_dan_tanda_tangan(monkeypatch):
     assert hasil["alamat_konten"] == "mc1-abc"
 
 
+def test_semua_batch_membaca_semua_halaman(monkeypatch):
+    """`/batches` berplafon 500 (bawaan 50): batch di halaman berikutnya harus ikut.
+
+    Tanpa paginasi, agen kesegaran/keamanan melaporkan "0 batch" untuk lokasi yang
+    batch-nya kebetulan tidak masuk halaman pertama — terukur di demo: Jakarta/telur
+    punya 3 batch tetapi agen melaporkan 0.
+    """
+    halaman = {
+        "offset=0": (
+            {
+                "batches": [
+                    {"id": "lain", "location": "Medan", "commodity": "ayam",
+                     "quantity_kg": 10.0, "safety_status": "pass",
+                     "freshness_score": 0.9, "usable_until": _iso(48)}
+                ],
+                "total": 2,
+            }
+        ),
+        "offset=1": (
+            {
+                "batches": [
+                    {"id": "jkt", "location": "Jakarta", "commodity": "telur",
+                     "quantity_kg": 30.0, "safety_status": "pass",
+                     "freshness_score": 0.8, "usable_until": _iso(48)}
+                ],
+                "total": 2,
+            }
+        ),
+    }
+    dilihat: list[str] = []
+
+    def fake_request(path, method="GET", body=None):
+        dilihat.append(path)
+        for kunci, nilai in halaman.items():
+            if kunci in path:
+                return nilai
+        raise AssertionError(f"path tak terduga: {path}")
+
+    monkeypatch.setattr(tools, "_request", fake_request)
+    hasil = tools.get_safety_freshness("Jakarta", "telur")
+    assert hasil["jumlah_batch"] == 1, "batch Jakarta di halaman 2 harus terbaca"
+    assert hasil["total_kg"] == 30.0
+    assert len(dilihat) == 2, "tool harus memanggil halaman kedua"
+    assert all("/batches?limit=500" in p for p in dilihat)
+
+
 def test_error_api_tidak_dikarang(monkeypatch):
     def fake_request(path, method="GET", body=None):
         raise tools.ToolError("HTTP 503 pada /balance/Jakarta/telur")

@@ -216,9 +216,15 @@ async def build_approval_summary(
             .all()
         )
         role_by_id = {u.id: u.role for u in users}
+        name_by_id = {u.id: u.name for u in users}
+    else:
+        name_by_id = {}
     approvals_payload = [
         {
             "role": role_by_id.get(a.approved_by),
+            # Nama penyetuju (aditif, 21 Okt 2026): pertanyaan "siapa yang menyetujui"
+            # tidak bisa dijawab dari role saja — Joule hanya bisa menyebut peran.
+            "approved_by_name": name_by_id.get(a.approved_by),
             "approved": a.approved,
             "comment": a.comment,
             "approved_at": a.approved_at.isoformat(),

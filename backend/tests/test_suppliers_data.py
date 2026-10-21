@@ -19,22 +19,20 @@ dipakai seeder) supaya validasi tidak terduplikasi.
 
 import json
 import os
-import uuid
 from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, text
 
-from app.seed.seed_data import stable_uuid
 from app.seed.suppliers_demo import (
     OFFSETS,
     REACH_KM_MAX,
-    demo_supplier_id,
     haversine_km,
     load_demo_rows,
 )
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 
-DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+DB_URL = DSN_SYNC
 
 # Indonesia (batas longgar) — cukup untuk menangkap koordinat yang tertukar
 # lat/long atau salah benua.

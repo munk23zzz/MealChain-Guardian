@@ -13,6 +13,13 @@ from app.db import Base
 
 class SupplierExclusion(Base):
     __tablename__ = "supplier_exclusions"
+    # Sesi demo (025): NULL = data kerja biasa; terisi = milik sesi berjalan.
+    demo_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("demo_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     __table_args__ = (
         CheckConstraint(
             "status IN ('proposed','active','rejected','revoked')",

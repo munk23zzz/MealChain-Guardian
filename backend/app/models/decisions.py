@@ -27,6 +27,13 @@ class Decision(Base):
     """Keputusan deterministik + expires_at (kontrak Roy 2026-10-05)."""
 
     __tablename__ = "decisions"
+    # Sesi demo (025): NULL = data kerja biasa; terisi = milik sesi berjalan.
+    demo_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("demo_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     __table_args__ = (
         CheckConstraint(
             "decision_type IN ('regional_balance','price_anomaly',"

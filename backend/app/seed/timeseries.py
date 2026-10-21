@@ -346,11 +346,20 @@ def plan_quote_price_rows(
 
 
 def plan_menu_plan_rows(
-    bases: list[tuple[Any, int]], start: datetime, end: datetime
+    bases: list[tuple[Any, int]],
+    start: datetime,
+    end: datetime,
+    menu_start: datetime | None = None,
 ) -> list[dict]:
-    """Rencana menu harian (tabel PERENCANAAN: tanggal masa depan sah)."""
+    """Rencana menu harian (tabel PERENCANAAN: tanggal masa depan sah).
+
+    `menu_start` memisahkan awal rencana dari awal deret fakta. Dipakai sesi
+    demo: pasokan/harga disemai 30 hari agar pemilih periode KPI punya pembeda,
+    sementara rencana menu + kiriman + limbah tetap mulai `EVENT_DEMO_START`
+    supaya continuity tidak jatuh hanya karena hari lama belum punya kiriman.
+    """
     rows: list[dict] = []
-    day = start.date()
+    day = (menu_start or start).date()
     last = end.date()
     while day <= last:
         for location_id, base in bases:
@@ -479,12 +488,13 @@ def plan_all(
     end: datetime,
     interval_hours: int = DEFAULT_INTERVAL_HOURS,
     ref: datetime = ACTUAL_REF,
+    menu_start: datetime | None = None,
 ) -> dict:
     """Seluruh rencana baris demo (murni) — dipakai API untuk pratinjau & tulis."""
     validate_range(start, end)
     stamps = actual_timestamps(start, end, interval_hours, ref)
     actual_end = min(end, actual_cutoff(ref))
-    menu_rows = plan_menu_plan_rows(menu_bases, start, end)
+    menu_rows = plan_menu_plan_rows(menu_bases, start, end, menu_start)
     demand_rows = plan_demand_rows(demand_pairs or [], stamps)
     #: Berapa baris kiriman/limbah yang SEHARUSNYA ada: satu kiriman per rencana
     #: sejak 8 Okt, dua catatan limbah per hari rencana. Angka inilah yang dipakai
@@ -876,6 +886,7 @@ async def generate_timeseries(
     interval_hours: int = DEFAULT_INTERVAL_HOURS,
     ref: datetime = ACTUAL_REF,
     database_url: str | None = None,
+    menu_start: datetime | None = None,
 ) -> dict:
     """Tulis baris demo untuk rentang `[start, end]`. Idempoten.
 
@@ -888,7 +899,8 @@ async def generate_timeseries(
         async with maker() as session:
             baselines = await _collect_baselines(session)
             plan = plan_all(
-                start=start, end=end, interval_hours=interval_hours, ref=ref, **baselines
+                start=start, end=end, interval_hours=interval_hours, ref=ref,
+                menu_start=menu_start, **baselines
             )
             before = {
                 "supply": await _count_origin(session, SupplyRecord, "demo"),
@@ -961,6 +973,7 @@ async def preview_timeseries(
     interval_hours: int = DEFAULT_INTERVAL_HOURS,
     ref: datetime = ACTUAL_REF,
     database_url: str | None = None,
+    menu_start: datetime | None = None,
 ) -> dict:
     """Sama seperti `generate_timeseries`, TANPA menulis apa pun."""
     engine = create_engine(database_url or _database_url())
@@ -969,7 +982,8 @@ async def preview_timeseries(
         async with maker() as session:
             baselines = await _collect_baselines(session)
             plan = plan_all(
-                start=start, end=end, interval_hours=interval_hours, ref=ref, **baselines
+                start=start, end=end, interval_hours=interval_hours, ref=ref,
+                menu_start=menu_start, **baselines
             )
             existing_menu = int(
                 (

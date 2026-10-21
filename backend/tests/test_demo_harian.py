@@ -27,12 +27,10 @@ from app.db import create_engine, create_session_maker
 from app.models import (
     AgentTrace,
     Approval,
-    Batch,
     Commodity,
     Decision,
     DecisionEvidence,
     DisposalEvent,
-    Location,
     PriceSignal,
     SapMockPurchaseOrder,
 )

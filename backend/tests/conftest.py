@@ -12,6 +12,7 @@ import bcrypt
 import pytest
 from sqlalchemy import create_engine, text
 
+from tests.dsn import DSN_ASYNC, DSN_SYNC  # DSN mengikuti DATABASE_URL
 from tests.gate_lock import ambil_kunci, dsn_psycopg, lepas_kunci
 
 # Test yang butuh modul host-only (agent/, infra/) atau file root repo
@@ -139,7 +140,7 @@ def _hapus_user(conn, email: str) -> None:
 @pytest.fixture()
 def auth_headers():
     engine = create_engine(
-        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+        DSN_SYNC
     )
     pw = "TestPass#2026"
     digest = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
@@ -191,7 +192,7 @@ _MONITOR_EMAIL = "pytest-monitor-national@test.local"
 @pytest.fixture()
 def monitor_headers():
     engine = create_engine(
-        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+        DSN_SYNC
     )
     pw = "TestPass#2026"
     digest = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
@@ -236,7 +237,7 @@ def far_nutritionist_headers():
     lokasi akun demo — ia menyiapkan sendiri peran "SPPG lain".
     """
     engine = create_engine(
-        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+        DSN_SYNC
     )
     pw = "TestPass#2026"
     digest = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
@@ -314,7 +315,7 @@ def _sapu_sisa_test() -> int:
     """
     try:
         engine = create_engine(
-            "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+            DSN_SYNC
         )
         try:
             with engine.begin() as conn:
@@ -406,7 +407,7 @@ def kunci_gerbang():
     dsn = dsn_psycopg(
         os.environ.get(
             "DATABASE_URL",
-            "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain",
+            DSN_ASYNC,
         )
     )
     try:
@@ -431,10 +432,90 @@ def kunci_gerbang():
         lepas_kunci(pegangan)
 
 
+def _semai_demo_ringkas() -> None:
+    """Aktivitas + keputusan demo + harga hari ini, TANPA batch `jakarta_lengkap`.
+
+    Dipakai di awal sesi. `jakarta_lengkap.seed_batches` sengaja tidak ikut: ia
+    menambah pemasok di luar data kanonik, dan invariant "seed demo tidak boleh
+    menambah pemasok" (`test_demo_batch_pemasok_tunggal`) langsung merah. Modul
+    pengadaan yang butuh batch kaya tetap memakai `_semai_kiriman_demo()` lewat
+    `_MODUL_BUTUH_KANDIDAT`.
+    """
+    import asyncio
+    from datetime import UTC, datetime
+
+    async def _jalankan() -> None:
+        from app.core.config import settings as _settings
+        from app.db import create_engine as _engine
+        from app.db import create_session_maker
+        from app.seed.demo_activity import (
+            seed_demo_activity,
+            seed_demo_completed_decisions,
+            seed_demo_daily_prices,
+        )
+
+        eng = _engine(_settings.database_url)
+        try:
+            async with create_session_maker(eng)() as sesi:
+                sekarang = datetime.now(UTC)
+                await seed_demo_activity(sesi, sekarang)
+                await seed_demo_completed_decisions(sesi, sekarang)
+                await seed_demo_daily_prices(sesi, sekarang)
+                await sesi.commit()
+        finally:
+            await eng.dispose()
+
+    asyncio.run(_jalankan())
+
+
+def _ada_kiriman_demo_hari_ini() -> bool:
+    """True bila ada batch `origin='demo'` bertanggal hari ini (WIB).
+
+    Batch demo yang tertinggal di hari kemarin membuat keputusan demo, PO, dan
+    metrik KPI "hari ini" kosong — persis kegagalan yang terukur pada gerbang
+    21 Okt 2026. DB yang tak terjangkau dianggap "ada" agar tes tidak dihalangi.
+    """
+    import os
+
+    try:
+        dsn = dsn_psycopg(
+            os.environ.get(
+                "DATABASE_URL",
+                DSN_ASYNC,
+            )
+        )
+        engine = create_engine(dsn, pool_pre_ping=True)
+        try:
+            with engine.begin() as conn:
+                n = conn.execute(
+                    text(
+                        "SELECT count(*) FROM batches "
+                        "WHERE origin = 'demo' AND "
+                        "(created_at AT TIME ZONE 'Asia/Jakarta')::date = "
+                        "(now() AT TIME ZONE 'Asia/Jakarta')::date"
+                    )
+                ).scalar_one()
+            return int(n) > 0
+        finally:
+            engine.dispose()
+    except Exception as exc:  # host tanpa Postgres
+        print(f"[conftest] cek kiriman demo hari ini dilewati: {exc}")
+        return True
+
+
 @pytest.fixture(scope="session", autouse=True)
 def jaring_deret_demo(kunci_gerbang):
-    """Pulihkan deret demo kanonik bila sesi ini menghabiskannya."""
+    """Pulihkan deret demo kanonik bila sesi ini menghabiskannya.
+
+    Menyegarkan di AWAL sesi (bukan hanya per modul di `_MODUL_BUTUH_KANDIDAT`):
+    modul di luar daftar itu dulu memakai baris yang sudah dibuang tes lain,
+    sehingga `Event 1` kehabisan kandidat dan PO demo "belum ada".
+    """
     awal = _jumlah_deret_demo()
+    if not _ada_kiriman_demo_hari_ini():
+        print("[conftest] menyegarkan aktivitas demo di awal sesi")
+        _semai_demo_ringkas()
+        awal = _jumlah_deret_demo()
     yield
     akhir = _jumlah_deret_demo()
     if not awal or not akhir:
@@ -487,6 +568,7 @@ _MODUL_BUTUH_KANDIDAT = frozenset(
         "test_supervisor_narration.py",
         "test_supplier_procurement_eval.py",
         "test_demo_batch_pemasok_tunggal.py",
+        "test_demo_harian.py",
         "test_api_domain_tools.py",
     }
 )
@@ -500,7 +582,7 @@ def _ada_kiriman_demo() -> bool:
         dsn = dsn_psycopg(
             os.environ.get(
                 "DATABASE_URL",
-                "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain",
+                DSN_ASYNC,
             )
         )
         engine = create_engine(dsn, pool_pre_ping=True)
@@ -529,6 +611,7 @@ def _semai_kiriman_demo() -> None:
         from app.seed.demo_activity import (
             seed_demo_activity,
             seed_demo_completed_decisions,
+            seed_demo_daily_prices,
         )
         from app.seed.jakarta_lengkap import seed_batches as _seed_batches
         from app.seed.jakarta_lengkap import seed_prices as _seed_prices
@@ -539,6 +622,7 @@ def _semai_kiriman_demo() -> None:
                 sekarang = datetime.now(UTC)
                 await seed_demo_activity(sesi, sekarang)
                 await seed_demo_completed_decisions(sesi, sekarang)
+                await seed_demo_daily_prices(sesi, sekarang)
                 # Batch kaya `jakarta_lengkap` (mis. telur Jakarta dari pemasok
                 # yang TIDAK dikecualikan) ikut dipulihkan; tanpa ini modul
                 # pengadaan hanya melihat batch kanonik 8 Okt yang sudah basi.
@@ -553,6 +637,29 @@ def _semai_kiriman_demo() -> None:
         print("[conftest] kiriman demo disemai ulang (batch segar untuk Event 1)")
     except Exception as exc:  # biarkan tes melaporkan sendiri kegagalannya
         print(f"[conftest] semai kiriman demo dilewati: {exc}")
+
+
+@pytest.fixture(scope="module", autouse=True)
+def jaga_deret_demo_utuh():
+    """Bangun ulang deret demo bila modul sebelumnya sudah menghabiskannya.
+
+    Tes yang mem-purge baris `origin='demo'` (dan rollback yang tidak sempat
+    jalan) membuat modul berikutnya melihat DB kosong: agenda 2 Okt kehilangan
+    `supply_records`, Event 1 kehabisan kandidat, PO demo "belum ada". Pemeriksaannya
+    satu query ringan; generator hanya dijalankan bila deret memang habis.
+    """
+    try:
+        jumlah = _jumlah_deret_demo()
+    except Exception as exc:  # DB tak terjangkau: jangan halangi tes
+        print(f"[conftest] cek deret demo dilewati: {exc}")
+        return
+    if jumlah and int(jumlah.get("supply_records", 0)) == 0:
+        import asyncio
+
+        from app.seed.timeseries import pastikan_deret_demo
+
+        print("[conftest] deret demo habis — dibangun ulang sebelum modul ini")
+        asyncio.run(pastikan_deret_demo())
 
 
 @pytest.fixture(scope="module", autouse=True)

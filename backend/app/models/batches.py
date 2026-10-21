@@ -56,6 +56,14 @@ class Batch(Base):
         UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=False
     )
     quantity_kg: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    # Sesi demo (024): baris hanya terlihat selama sesinya. NULL = data kerja
+    # biasa (tidak tersaring) — dipakai saat demo_session_enforce mati.
+    demo_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("demo_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     harvested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )

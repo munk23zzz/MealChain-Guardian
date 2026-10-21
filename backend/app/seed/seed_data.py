@@ -38,11 +38,24 @@ SEED_PATH = Path(os.environ.get("SEED_PATH", "/data/seed/sprint1_seed.json"))
 
 
 def _seed_database_url() -> str:
-    """URL DB untuk seed (sinkron psycopg), default ke contract compose."""
-    return os.environ.get(
-        "SEED_DATABASE_URL",
-        "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain",
-    )
+    """URL DB untuk seed (sinkron psycopg) — target penulisan = target baca.
+
+    Audit 21 Okt 2026 (keselamatan data): fungsi ini dulu hanya membaca
+    `SEED_DATABASE_URL` lalu jatuh ke DSN compose, MENGABAIKAN `DATABASE_URL`.
+    Skrip/uji yang menunjuk salinan (`DATABASE_URL=…/mealchain_audit`) tetap
+    menulis akun & data demo ke DB demo utama — terbukti saat verifikasi template
+    di DB salinan: `users` salinan tetap kosong, DB utama menerima merge-nya.
+
+    Urutan: `SEED_DATABASE_URL` (eksplisit) → `DATABASE_URL` (asyncpg→psycopg)
+    → DSN compose.
+    """
+    eksplisit = os.environ.get("SEED_DATABASE_URL")
+    if eksplisit:
+        return eksplisit
+    utama = os.environ.get("DATABASE_URL")
+    if utama:
+        return utama.replace("+asyncpg", "+psycopg")
+    return "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
 
 # Namespace tetap proyek — jangan pernah diubah (mengubah semua id seed)
 SEED_NAMESPACE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")

@@ -10,9 +10,9 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import get_current_user
@@ -162,6 +162,8 @@ async def create_decision(
 
 @router.get("/decisions")
 async def list_decisions(
+    limit: int | None = Query(default=None, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -169,20 +171,27 @@ async def list_decisions(
 
     Ruling 2026-10-14: peran SPPG hanya melihat keputusan yang menyasar
     lokasinya; `bgn_monitor` melihat semuanya (read-only nasional).
+
+    Paginasi (audit 21 Okt 2026, P6): `limit`/`offset` dulu diterima lalu
+    diabaikan tanpa galat, dan tidak ada `total` — pemanggil tidak bisa tahu
+    berapa baris yang belum tampil. Sekarang bentuknya sama dengan `/batches`:
+    `count` (panjang halaman), `total` (seluruh baris pada cakupan pengguna),
+    `offset`. Tanpa `limit`, perilaku lama dipertahankan (seluruh baris).
     """
-    rows = (
-        (
-            await db.execute(
-                apply_location_scope(
-                    select(Decision).order_by(Decision.created_at.desc(), Decision.id.desc()),
-                    Decision.target_location_id,
-                    user,
-                )
-            )
-        )
-        .scalars()
-        .all()
+    dasar = apply_location_scope(
+        select(Decision).order_by(Decision.created_at.desc(), Decision.id.desc()),
+        Decision.target_location_id,
+        user,
     )
+    total = int(
+        (
+            await db.execute(select(func.count()).select_from(dasar.order_by(None).subquery()))
+        ).scalar_one()
+    )
+    kueri = dasar.offset(offset)
+    if limit is not None:
+        kueri = kueri.limit(limit)
+    rows = (await db.execute(kueri)).scalars().all()
     # P4: tandai keputusan yang benar-benar punya jejak 7 worker (agent_name terisi).
     # Dihitung sekali untuk semua baris (bukan satu query per keputusan) supaya
     # halaman Agent Log bisa memilih default tanpa N permintaan.
@@ -233,7 +242,13 @@ async def list_decisions(
                 "has_agent_review": row.id in dengan_review,
             }
         )
-    return {"items": items}
+    return {
+        "items": items,
+        "count": len(items),
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+    }
 
 
 @router.get("/decisions/{decision_id}/chain")

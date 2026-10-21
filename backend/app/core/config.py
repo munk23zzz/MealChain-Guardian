@@ -21,6 +21,19 @@ class Settings(BaseSettings):
     demo_mode: bool = False
     app_name: str = "MealChain Guardian"
 
+    # Sesi demo (permintaan 20 Okt 2026): default KOSONG, data hidup hanya
+    # selama sesi. `demo_session_enforce` MATI secara bawaan supaya suite tes
+    # (1.200+ kasus) tetap bisa menyemai data tanpa sesi; di lingkungan demo
+    # nyalakan lewat env DEMO_SESSION_ENFORCE=true.
+    demo_session_enforce: bool = False
+    demo_session_minutes: int = 120
+    demo_session_max_minutes: int = 240
+    #: Riwayat data yang disemai saat sesi dimulai. Tanpa ini, semua fakta jatuh
+    #: di hari yang sama dan pemilih periode KPI (24 jam / 7 hari / 30 hari)
+    #: menampilkan angka identik — bukan karena jendelanya salah, tetapi karena
+    #: tidak ada baris lebih tua untuk dibedakan.
+    demo_session_history_days: int = 30
+
     # Review 7 worker agent (P4: orkestrasi siap, flag default MATI sampai panel P5).
     # `advisory` = agen hanya meninjau keputusan deterministik; bukan pre-decision.
     multi_agent_review: bool = False

@@ -26,9 +26,10 @@ from sqlalchemy import create_engine, text
 
 from app.main import app
 from app.seed.seed_data import DEMO_USERS, ensure_demo_users
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 
 DB_URL = (
-    "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+    DSN_ASYNC
 ).replace("+asyncpg", "+psycopg")
 
 KOTA = ("Bandung", "Surabaya")
@@ -107,7 +108,12 @@ def test_approval_riwayat_demo_sesuai_lokasi_target(seed_akun):
         "JOIN users u ON u.id = a.approved_by "
         "LEFT JOIN locations ul ON ul.id = u.location_id "
         "LEFT JOIN locations dl ON dl.id = d.target_location_id "
-        "WHERE d.status = 'executed' AND d.origin = 'demo'"
+        # Filter lama `d.origin = 'demo'` mengikat tes ke satu cara penyemaian.
+        # Template demo membekukan origin menjadi 'seed' supaya barisnya selamat
+        # dari penyapu sesi (lihat `_bekukan` di app/seed/demo_template.py), jadi
+        # invarian ini diuji pada SELURUH keputusan executed — cakupan lebih luas,
+        # bukan lebih longgar.
+        "WHERE d.status = 'executed'"
     )
     assert rows, "riwayat demo executed tidak ada — seed belum dijalankan?"
     beda = [r for r in rows if r["approver_loc"] != r["target"]]

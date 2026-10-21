@@ -211,6 +211,29 @@ def test_plan_all_meringkas_batas_aktual_dan_rencana():
     assert len(plan["prices"]) == len(plan["supply"])
 
 
+def test_menu_start_memindahkan_rencana_tanpa_menggeser_fakta():
+    """Sesi demo menyemai pasokan/harga 30 hari, tetapi rencana menu mulai 8 Okt.
+
+    Tanpa pemisahan ini, hari lama punya rencana tanpa kiriman sehingga Meal
+    Continuity jatuh (39,57% terukur) hanya karena bentuk data — bukan operasi.
+    """
+    batas_rencana = datetime(2026, 10, 8, tzinfo=UTC)
+    plan = plan_all(
+        supply_pairs=_pairs(2),
+        reference_pairs=_pairs(2),
+        quotes=[],
+        menu_bases=[("lok-1", 1200)],
+        start=datetime(2026, 9, 20, tzinfo=UTC),
+        end=datetime(2026, 10, 8, tzinfo=UTC),
+        interval_hours=24,
+        menu_start=batas_rencana,
+    )
+    tanggal_rencana = {r["plan_date"] for r in plan["menu_plans"]}
+    assert min(tanggal_rencana) == batas_rencana.date()
+    # Fakta pasokan tetap mulai dari `start`, bukan dari `menu_start`.
+    assert min(r["recorded_at"] for r in plan["supply"]).date() < batas_rencana.date()
+
+
 def test_perkalian_data_tetap_terjangkau():
     """Skala nyata: 10 lokasi × 3 komoditas (30 pasangan) × 130 cap waktu."""
     stamps = actual_timestamps(DEFAULT_START, DEFAULT_END, 12)

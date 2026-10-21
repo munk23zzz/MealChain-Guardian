@@ -299,14 +299,14 @@ async def seed_batches(session: AsyncSession, now: datetime) -> dict:
         mundur = indeks % 18
         tanggal = hari - timedelta(days=mundur)
         panen = _jam(now, tanggal, 4 + (indeks % 4), 30)
-        # Sebaran keadaan: 1 dari 7 gagal, 1 dari 6 needs_verification,
-        # 1 dari 11 pending, sisanya pass — cukup untuk semua nada UI.
+        # Sebaran keadaan: 1 dari 7 gagal, 1 dari 6 needs_verification, sisanya
+        # pass. `pending` ("Belum diuji") TIDAK dibuat di sini: barang pending
+        # khusus berasal dari blok "baru datang" di bawah, supaya kartu
+        # Penerimaan hanya berisi kedatangan yang memang belum dinilai.
         if indeks % 7 == 3:
             safety = "fail"
         elif indeks % 6 == 4:
             safety = "needs_verification"
-        elif indeks % 11 == 7:
-            safety = "pending"
         else:
             safety = "pass"
         segar = Decimal("0.62") + Decimal(indeks % 35) / 100
@@ -349,6 +349,11 @@ async def seed_batches(session: AsyncSession, now: datetime) -> dict:
             for k, v in nilai.items():
                 setattr(ada, k, v)
         jumlah += 1
+
+    # Barang baru datang TIDAK dibuat di sini: jalur yang dipakai "Siapkan
+    # data demo" adalah `seed/demo_activity.py` (punya namespace id sendiri).
+    # Blok serupa di sini dulu membuat enam batch pending (dua namespace) dan
+    # memicu duplikat saat sesi disiapkan.
     await session.flush()
     return {"batch": jumlah}
 

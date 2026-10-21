@@ -35,6 +35,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import require_roles
+from app.api.demo_session import butuh_sesi_aktif
 from app.api.dependencies import get_db
 from app.core.config import settings
 from app.core.scope import assert_in_scope
@@ -158,6 +159,9 @@ async def _ikat_sumber(db: AsyncSession, decision: Decision, sekarang: datetime)
                 Batch.commodity_id == decision.commodity_id,
                 Batch.usable_until.is_not(None),
                 Batch.usable_until >= sekarang,
+                # Sama dengan `demo_cost._batch_terikat`: batch gagal uji tidak
+                # boleh menjadi sumber alokasi (hard exclusion).
+                Batch.safety_status != "fail",
             )
             .order_by(Batch.quantity_kg.desc(), Batch.id.asc())
             .limit(1)
@@ -489,6 +493,7 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
 @router.post("/demo/seed", status_code=200)
 async def seed_demo(
     payload: SeedRequest,
+    _sesi: object = Depends(butuh_sesi_aktif),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
 ) -> dict:
@@ -534,6 +539,7 @@ async def preview_timeseries_data(
 @router.post("/demo/timeseries", status_code=200)
 async def generate_timeseries_data(
     payload: TimeseriesRequest,
+    _sesi: object = Depends(butuh_sesi_aktif),
     _user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
 ) -> dict:
     """Buat/perbarui baris demo `origin='demo'`. Idempoten.
@@ -555,6 +561,7 @@ async def generate_timeseries_data(
 
 @router.post("/demo/timeseries/purge", status_code=200)
 async def purge_timeseries_data(
+    _sesi: object = Depends(butuh_sesi_aktif),
     _user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
 ) -> dict:
     """Hapus HANYA baris deret waktu `origin='demo'`; snapshot kanonik tidak disentuh."""
@@ -605,6 +612,7 @@ async def _sync_routes_aman(now: datetime) -> tuple[dict, str | None]:
 
 @router.post("/demo/refresh", status_code=200)
 async def refresh_to_today(
+    _sesi: object = Depends(butuh_sesi_aktif),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
 ) -> dict:
@@ -671,6 +679,7 @@ async def refresh_to_today(
 @router.post("/demo/event1", status_code=201)
 async def run_demo_event1(
     payload: Event1Request,
+    _sesi: object = Depends(butuh_sesi_aktif),
     db: AsyncSession = Depends(get_db),
     # Event 1 penuh membuat keputusan operasional → usul, jadi Head saja
     # (PLAN.md §13.3, keputusan owner 2026-10-17).
@@ -828,11 +837,12 @@ async def _catat_review_gagal(
 #                             dan lokasi SPPG milik akun sendiri (bukan lokasi
 #                             yang diketik klien — cakupan peran jadi mustahil
 #                             dilanggar dari UI).
-#   GET  /demo/agent/last-run bukti yang dibaca dari DB: keputusan terakhir yang
-#                             punya langkah DETECT (hanya pipeline agent yang
-#                             menulisnya — kasus seed tidak), seluruh langkahnya,
-#                             provider yang benar-benar menjawab, dan status
-#                             review 7-worker kalau ada.
+#   GET  /demo/agent/last-run bukti yang dibaca dari DB: keputusan terakhir dari
+#                             putaran pipeline agent (punya langkah PREDICT /
+#                             OPTIMIZE / SUPERVISE tanpa agent_name — bukan
+#                             baris template yang hanya menulis DETECT/DECIDE),
+#                             seluruh langkahnya, provider yang benar-benar
+#                             menjawab, dan status review 7-worker kalau ada.
 #
 # Tidak ada angka karangan: setiap field berasal dari baris DB. Bila belum ada
 # jejak agent sama sekali, jawabannya `found: false` — bukan potret kosong yang
@@ -967,26 +977,58 @@ async def get_last_agent_run(
         "supply_gap": None,
     }
 
-    # Putaran agent yang sesungguhnya = keputusan yang punya langkah SUPERVISE.
-    # Baris DETECT saja bisa berasal dari data seed, jadi jangan dipakai
-    # sebagai penanda "putaran terakhir" bila ada SUPERVISE.
-    terakhir = (
-        await db.execute(
-            select(AgentTrace.decision_id)
-            .where(AgentTrace.step_name == "SUPERVISE")
-            .order_by(AgentTrace.step_at.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-    if terakhir is None:
-        terakhir = (
+    # Putaran agent yang sesungguhnya = keputusan dengan JEJAK PIPELINE LENGKAP:
+    # minimal DETECT + DECIDE dan satu langkah prediksi/optimasi/supervisi, semuanya
+    # tanpa `agent_name` (baris review 7 worker memakai nama agen).
+    #
+    # Tiga koreksi dari gerbang 21 Okt 2026 — sebelumnya endpoint hanya mencari
+    # `DETECT` terakhir dan melaporkan baris hasil semai sebagai "bukti putaran
+    # agent" (statusnya bukan `proposed`, `supply_gap.gap_kg` kosong):
+    #   (a) `DETECT` saja bukan penanda putaran: template menulis DETECT/DECIDE/ACT
+    #       untuk keputusan contohnya, dan jalur Event 3 menulis DETECT+OPTIMIZE;
+    #   (b) salinan 4 kasus skrip (`demo_case` terisi) juga memuat DETECT/PREDICT/
+    #       DECIDE, jadi kasus skrip dikecualikan lewat `demo_case IS NULL`;
+    #   (c) urutan wajib deterministik: keputusan terbaru menang, bukan "baris
+    #       mana pun yang step_at-nya sama" (satu putaran menulis semua langkahnya
+    #       dalam satu transaksi sehingga `step_at` baris-barisnya identik).
+    kandidat = (
+        (
             await db.execute(
                 select(AgentTrace.decision_id)
-                .where(AgentTrace.step_name == "DETECT")
-                .order_by(AgentTrace.step_at.desc())
-                .limit(1)
+                .join(Decision, Decision.id == AgentTrace.decision_id)
+                .where(
+                    AgentTrace.step_name == "DETECT",
+                    AgentTrace.agent_name.is_(None),
+                    Decision.demo_case.is_(None),
+                )
+                .order_by(Decision.created_at.desc(), AgentTrace.step_at.desc())
+                .limit(25)
             )
-        ).scalar_one_or_none()
+        )
+        .scalars()
+        .all()
+    )
+    terakhir = None
+    for calon in dict.fromkeys(kandidat):
+        nama_langkah = set(
+            (
+                await db.execute(
+                    select(AgentTrace.step_name).where(
+                        AgentTrace.decision_id == calon,
+                        AgentTrace.agent_name.is_(None),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if {"DETECT", "DECIDE"} <= nama_langkah and nama_langkah & {
+            "PREDICT",
+            "OPTIMIZE",
+            "SUPERVISE",
+        }:
+            terakhir = calon
+            break
     if terakhir is None:
         return kosong
 

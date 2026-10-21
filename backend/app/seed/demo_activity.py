@@ -223,7 +223,82 @@ async def seed_demo_activity(session: AsyncSession, now: datetime) -> dict:
     hasil_usang = await session.execute(usang)
     dihapus = hasil_usang.rowcount or 0
     await session.flush()
-    return {"batch_demo": dibuat, "diperbarui": len(id_dipakai) - dibuat, "dibuang": dihapus}
+    # Barang baru datang untuk kartu Penerimaan: status `pending` (Belum diuji).
+    # Tanpa ini form penerimaan kosong karena semua batch demo sudah dinilai.
+    datang = await _seed_barang_datang(session, now, lokasi, komoditas)
+    return {
+        "batch_demo": dibuat,
+        "diperbarui": len(id_dipakai) - dibuat,
+        "dibuang": dihapus,
+        "barang_datang": datang,
+    }
+
+
+async def _seed_barang_datang(
+    session: AsyncSession,
+    now: datetime,
+    lokasi: list[Location],
+    komoditas: dict[str, uuid.UUID],
+) -> int:
+    """Tiga kiriman baru tiba di Jakarta dengan status `pending` (Belum diuji).
+
+    Id deterministik di namespace sendiri (`...:datang:<komoditas>`), jadi
+    menyegarkan demo tidak menggandakan barang. Pemasok diambil dari batch
+    Jakarta yang sudah ada untuk komoditas itu — bukan pemasok karangan — agar
+    `resolve_binding` tetap menemukan pemasok kanonik.
+    """
+    jakarta = next((loc for loc in lokasi if loc.name == "Jakarta"), None)
+    if jakarta is None:
+        return 0
+    rencana = (("ayam", Decimal("90"), 4.1), ("beras", Decimal("300"), 27.0), ("wortel", Decimal("120"), 4.2))
+    jumlah = 0
+    for nama, kg, suhu in rencana:
+        com_id = komoditas.get(nama)
+        if com_id is None:
+            continue
+        contoh = (
+            await session.execute(
+                select(Batch)
+                .where(Batch.location_id == jakarta.id, Batch.commodity_id == com_id)
+                .order_by(Batch.id)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if contoh is None or contoh.supplier_id is None:
+            continue
+        panen = now - timedelta(hours=6)
+        log = [
+            {
+                "timestamp": (panen + timedelta(minutes=30 * i)).isoformat(),
+                "temperature_c": suhu + (0.1 if i == 1 else 0.0),
+            }
+            for i in range(3)
+        ]
+        kunci = uuid.uuid5(uuid.NAMESPACE_URL, f"mcg:{DEMO_TAG}:datang:{nama}")
+        nilai = dict(
+            commodity_id=com_id,
+            location_id=jakarta.id,
+            supplier_id=contoh.supplier_id,
+            quantity_kg=kg,
+            harvested_at=panen,
+            temperature_log=log,
+            certification_status="haccp",
+            freshness_score=Decimal("0.95"),
+            safety_status="pending",
+            usable_until=now + timedelta(days=SHELF_LIFE_HARI.get(nama, 14)),
+            origin="demo",
+            generated_at=now,
+            dispatched_at=now - timedelta(hours=5),
+        )
+        ada = await session.get(Batch, kunci)
+        if ada is None:
+            session.add(Batch(id=kunci, **nilai))
+        else:
+            for k, v in nilai.items():
+                setattr(ada, k, v)
+        jumlah += 1
+    await session.flush()
+    return jumlah
 
 # --------------------------------------------------------------------------
 # Keputusan demo yang SUDAH SELESAI + limbah hari ini

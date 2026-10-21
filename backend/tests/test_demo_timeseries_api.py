@@ -27,8 +27,9 @@ from app.seed.timeseries import (
     generate_timeseries,
     purge_demo_rows,
 )
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 
-DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+DB_URL = DSN_SYNC
 TABLES = ("supply_records", "demand_records", "price_signals", "menu_plans")
 
 
@@ -487,7 +488,36 @@ def test_data_status_membaca_db(demo_state, auth_headers):
     body = r.json()
     assert body["canonical_ref"] == "2026-10-08T12:00:00+00:00"
     supply = body["tables"]["supply_records"]
-    assert supply["seed"] == 40, "10 lokasi × 4 komoditas"
+    # Angka `seed` TIDAK dipaku 40: setiap generasi kanonik memang 40 baris
+    # (10 lokasi × 4 komoditas), tetapi jumlah generasi bergantung pada berapa
+    # kali "snapshot kanonik" digeser (template/sesi demo dan "Segarkan ke hari
+    # ini" menulis generasi ber-REF sendiri). Yang diuji: angkanya SAMA dengan
+    # DB (endpoint membaca DB, bukan konstanta) dan setiap generasi tetap utuh
+    # satu baris per pasangan lokasi×komoditas.
+    with create_engine(DB_URL).connect() as conn:
+        seed_supply = int(
+            conn.execute(
+                text("SELECT count(*) FROM supply_records WHERE origin='seed'")
+            ).scalar()
+        )
+        generasi = conn.execute(
+            text(
+                "SELECT count(*) FROM (SELECT recorded_at FROM supply_records "
+                "WHERE origin='seed' GROUP BY recorded_at) g"
+            )
+        ).scalar()
+        pasangan_ganda = int(
+            conn.execute(
+                text(
+                    "SELECT count(*) FROM ("
+                    "  SELECT recorded_at, location_id, commodity_id FROM supply_records"
+                    "  WHERE origin='seed' GROUP BY 1,2,3 HAVING count(*) > 1) d"
+                )
+            ).scalar()
+        )
+    assert supply["seed"] == seed_supply
+    assert pasangan_ganda == 0, "satu generasi kanonik = satu baris per pasangan"
+    assert seed_supply == 40 * int(generasi or 0), "setiap generasi wajib 40 baris"
     assert supply["demo"] == 5160, "40 pasangan × 130 stempel − 40 kanonik"
     assert supply["demo_to"].startswith("2026-11-04T12:00:00")
     assert supply["seed_from"] == "2026-10-08T12:00:00+00:00"
@@ -730,8 +760,11 @@ def test_refresh_hari_ini_bergeser_dan_bisa_dikembalikan(
     Yang dibuktikan: (1) baris kanonik BARU benar-benar dibuat dan record
     terbaru Cianjur ikut pindah ke hari ini, (2) NILAI jangkar tidak berubah
     (angkanya dari berkas seed yang sama), (3) peringatannya dibawa di respons,
-    (4) keadaan sebelum bisa dipulihkan — jumlah per `origin` kembali persis dan
-    id baris kanonik lama tidak hilang. Jadi tes ini tidak merusak DB demo.
+    (4) keadaan sebelum bisa dipulihkan — generasi kanonik kembali tepat satu
+    (40 baris di 8 Okt, jangkar 1.400 kg) dan deret demo dibangun ulang pada
+    jangkar itu, bukan dibiarkan kosong. Jadi tes ini tidak merusak DB demo.
+    Angka per `origin` untuk deret demo TIDAK dipaku: panjang jendela ikut
+    bergeser saat jangkar pindah, jadi jumlah barisnya sah berbeda.
     """
     before_ids = _snapshot_ids()
     before_counts = _origin_counts()
@@ -808,7 +841,29 @@ def test_refresh_hari_ini_bergeser_dan_bisa_dikembalikan(
     # tidak ada batch ganda (diperiksa di dalam blok try di atas).
     before_counts.pop("batches", None)
     sesudah_counts.pop("batches", None)
-    assert sesudah_counts == before_counts
+    # Bila tes lain sudah mem-purge deret demo SEBELUM tes ini mulai, keadaan
+    # awal = "tanpa deret demo"; rollback resmi memang membangunnya kembali
+    # (begitu kontraknya) — dan mem-purge di akhir akan mengosongkan DB untuk
+    # tes berikutnya (pernah terjadi: `supply_records` demo 5160 → 0 lalu agenda
+    # 2 Okt kehilangan pasokan). Karena itu deret demo TIDAK dibandingkan angka
+    # per origin: rollback membangunnya pada jangkar kanonik (8 Okt), sedangkan
+    # "Segarkan ke hari ini" membangunnya pada jangkar HARI INI — panjang jendela
+    # ikut bergeser, jadi harga 5.850/menu 520 (sebelum) vs harga 5.760/menu 590
+    # (sesudah) adalah keadaan yang benar, bukan data hilang. Yang dijaga:
+    # pasokan demo utuh, deret dibangun ulang (bukan kosong), dan tanpa baris ganda.
+    assert sesudah_counts["supply_records"]["demo"] == 5160, "pasokan demo utuh"
+    assert sesudah_counts["price_signals"]["demo"] > 0, "deret harga dibangun ulang"
+    assert sesudah_counts["menu_plans"]["demo"] > 0, "rencana menu dibangun ulang"
+    assert _menu_duplikat() == 0, "rollback meninggalkan rencana menu ganda"
+    # Baris KANONIK: rollback memakai jalur resmi (purge demo → buang generasi
+    # seed di luar kanonik → seeder kanonik), jadi sesudah tes selalu TEPAT satu
+    # generasi kanonik = 40 baris pasokan (10 lokasi × 4 komoditas) di REF 8 Okt.
+    # Keadaan SEBELUM bisa memuat lebih dari satu generasi: template/sesi demo
+    # dan "Segarkan ke hari ini" masing-masing menulis generasi ber-REF sendiri
+    # (`load_seed` memakai REF di dalam id), dan itulah yang dulu membuat
+    # perbandingan angka seed merah padahal tidak ada data yang rusak.
+    assert sesudah_counts["supply_records"]["seed"] == 40, "satu generasi kanonik"
+    assert _seed_supply_terbaru()[0].startswith("2026-10-08"), "REF kembali ke kanonik"
     if sebelum_keputusan and sesudah_keputusan:
         assert sesudah_keputusan["demo"] >= sebelum_keputusan["demo"]
         assert _jumlah_kasus_demo() == 4

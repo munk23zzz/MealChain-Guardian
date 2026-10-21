@@ -3,6 +3,7 @@
 from app.models.batches import Batch
 from app.models.commodities import Commodity
 from app.models.decisions import AgentTrace, Approval, Decision, DecisionEvidence
+from app.models.demo_sessions import DemoSession
 from app.models.demand_records import DemandRecord
 from app.models.kpi_facts import DeliveryEvent, DisposalEvent, MenuPlan
 from app.models.locations import Location
@@ -16,6 +17,7 @@ from app.models.supply_records import SupplyRecord
 from app.models.users import User
 
 __all__ = [
+    "DemoSession",
     "Location",
     "Commodity",
     "User",

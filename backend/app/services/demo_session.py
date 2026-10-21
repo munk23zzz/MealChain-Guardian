@@ -1,0 +1,507 @@
+"""Sesi demo — data operasional hanya hidup selama sesi (20 Okt 2026).
+
+Permintaan pemilik: tampilan default KOSONG; tombol "Siapkan data demo" memanggil
+data dan mengaktifkannya selama satu jam (bisa diperpanjang), ada hitungan
+mundur, dan sesudah sesi habis data kembali kosong (perubahan selama sesi ikut
+hilang). Aturan yang dipegang modul ini:
+
+- Sesi TIDAK menghapus bukti secara membabi buta: yang dihapus hanya baris yang
+  ber-stempel `demo_session_id` sesi itu. Baris lain (data kerja orang lain,
+  referensi users/locations/commodities) tidak disentuh.
+- Jam tidak digeser: `anchor_now` mencatat waktu server saat sesi dibuat, lalu
+  berjalan normal. Tidak ada pembekuan waktu yang membuat log suhu mustahil.
+- Kedaluwarsa dinilai malas (saat ada yang bertanya), bukan oleh cron: satu
+  sumber kebenaran, tidak ada proses latar yang bisa mati diam-diam.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import time
+import uuid
+from contextlib import asynccontextmanager
+from contextvars import ContextVar
+from datetime import datetime, timedelta, timezone
+from typing import Any
+
+from sqlalchemy import delete, event, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.db import Base
+from app.models.demo_sessions import DemoSession
+
+#: Sesi yang sedang dipakai request ini. Diisi `get_db` (lihat dependencies.py).
+_current: ContextVar[uuid.UUID | None] = ContextVar("mealchain_demo_session", default=None)
+
+#: Model yang ikut aturan sesi. Ditambah bertahap; setiap model WAJIB punya
+#: kolom `demo_session_id` dan dipasang di migrasi yang sama.
+MODEL_BERSESI: tuple[type[Base], ...] = ()
+
+
+_model_cache: tuple[type[Base], ...] | None = None
+_model_ukuran = -1
+
+
+def model_bersesi() -> tuple[type[Base], ...]:
+    """Model yang punya kolom `demo_session_id` — dicari, bukan didaftar manual.
+
+    Cache dihitung ulang bila jumlah mapper berubah. Ini bukan optimasi gaya:
+    `pasang_penjaga()` berjalan saat modul diimpor, ketika `app.models` mungkin
+    BELUM lengkap. Cache yang "sekali jadi" membuat supplier_exclusions (dan
+    tabel lain yang diimpor belakangan) tidak pernah ikut disaring/dihapus —
+    terukur 20 Okt 2026 sebagai ForeignKeyViolationError saat menghapus decisions.
+    """
+    global _model_cache, _model_ukuran
+    ukuran = len(Base.registry.mappers)
+    if _model_cache is None or ukuran != _model_ukuran:
+        _model_cache = tuple(
+            mapper.class_
+            for mapper in Base.registry.mappers
+            if "demo_session_id" in mapper.columns
+        )
+        _model_ukuran = ukuran
+    return _model_cache
+
+
+def sekarang() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def set_sesi(sesi_id: uuid.UUID | None) -> None:
+    _current.set(sesi_id)
+
+
+def sesi_sekarang() -> uuid.UUID | None:
+    return _current.get()
+
+
+#: Serialisasi operasi sesi (mulai/akhiri). Tanpa ini, penyemaian yang masih
+#: berjalan bisa menulis baris SETELAH pembersihan, sehingga "Akhiri sesi"
+#: meninggalkan data (terukur 20 Okt 2026: 30 keputusan + 82 batch sisa).
+#: Satu worker uvicorn — bila kelak multi-worker, ganti dengan advisory lock DB.
+_kunci = asyncio.Lock()
+
+
+@asynccontextmanager
+async def kunci_sesi():
+    async with _kunci:
+        yield
+
+
+def _menit_valid(menit: int | None, bawaan: int) -> int:
+    """Batasi durasi ke rentang wajar: minimal 1 menit, maksimal `settings`."""
+    maks = max(1, int(settings.demo_session_max_minutes))
+    if menit is None:
+        return max(1, min(int(bawaan), maks))
+    try:
+        nilai = int(menit)
+    except (TypeError, ValueError):
+        return max(1, min(int(bawaan), maks))
+    return max(1, min(nilai, maks))
+
+
+def status_payload(sesi: DemoSession | None, saat: datetime | None = None) -> dict[str, Any]:
+    """Bentuk balasan stabil untuk UI (hitungan mundur dihitung SERVER)."""
+    saat = saat or sekarang()
+    if sesi is None:
+        return {
+            "active": False,
+            "enforced": bool(settings.demo_session_enforce),
+            "session_id": None,
+            "status": "kosong",
+            "expires_at": None,
+            "anchor_now": None,
+            "server_now": saat.isoformat(),
+            "remaining_seconds": 0,
+        }
+    sisa = int((sesi.expires_at - saat).total_seconds())
+    return {
+        "active": sesi.status == "active" and sisa > 0,
+        "enforced": bool(settings.demo_session_enforce),
+        "session_id": str(sesi.id),
+        "status": sesi.status,
+        "expires_at": sesi.expires_at.isoformat(),
+        "anchor_now": sesi.anchor_now.isoformat(),
+        "server_now": saat.isoformat(),
+        "remaining_seconds": max(0, sisa),
+    }
+
+
+async def _sesi_aktif_terakhir(db: AsyncSession) -> DemoSession | None:
+    hasil = await db.execute(
+        select(DemoSession)
+        .where(DemoSession.status == "active")
+        .order_by(DemoSession.started_at.desc())
+        .limit(1)
+    )
+    return hasil.scalar_one_or_none()
+
+
+#: Kapan terakhir kali sisa demo tanpa sesi disapu (monotonic detik). Sapu ini
+#: dipanggil dari jalur baca (`aktif()`), jadi ia dibatasi supaya tidak menjadi
+#: DELETE di setiap request.
+_sapu_terakhir = 0.0
+SAPU_JEDA_DETIK = 10.0
+
+
+async def sapu_tanpa_sesi(db: AsyncSession, *, jeda: float | None = None) -> int:
+    """Hapus baris `origin='demo'` TANPA stempel saat tidak ada sesi aktif.
+
+    Kenapa perlu: `kosongkan_bertanda()` hanya berjalan kalau ADA sesi yang
+    ditutup. Baris demo yang lahir di luar sesi (jalur lama `/demo/seed`,
+    `/demo/refresh`, seeder skrip) tidak punya stempel dan tidak ada sesi untuk
+    ditutup — jadi ia hidup selamanya. Terukur 21 Okt 2026: 25 keputusan demo
+    tanpa stempel masih tampil padahal semua sesi sudah `expired`, sehingga
+    "tampilan default kosong" tidak terpenuhi.
+
+    Batas aman: hanya `origin='demo'`. Baris kanonik (`origin='seed'`) tidak
+    pernah disentuh — itu data kerja yang dipakai peta, KPI, dan suite backend.
+
+    `jeda` (detik) menahan pemanggilan berulang dari jalur baca; `0` memaksa.
+    Mengembalikan jumlah baris yang dihapus.
+    """
+    global _sapu_terakhir
+    if not settings.demo_session_enforce:
+        return 0
+    sekarang_mono = time.monotonic()
+    ambang = SAPU_JEDA_DETIK if jeda is None else jeda
+    if ambang > 0 and sekarang_mono - _sapu_terakhir < ambang:
+        return 0
+    if await _sesi_aktif_terakhir(db) is not None:
+        return 0
+    _sapu_terakhir = sekarang_mono
+    dihapus = 0
+    for model in sorted(model_bersesi(), key=_urutan_hapus):
+        if "origin" not in model.__table__.columns:
+            continue
+        hasil = await db.execute(
+            delete(model).where(
+                model.demo_session_id.is_(None),
+                model.__table__.c.origin == "demo",
+            )
+        )
+        dihapus += int(hasil.rowcount or 0)
+    if dihapus:
+        await db.commit()
+    return dihapus
+
+
+async def aktif(db: AsyncSession) -> DemoSession | None:
+    """Sesi aktif, atau None. Sesi yang lewat waktu diakhiri di sini juga.
+
+    Saat tidak ada sesi aktif, sisa baris demo tanpa stempel ikut disapu
+    (`sapu_tanpa_sesi`, dijeda 10 detik) — ini yang membuat tampilan kembali
+    kosong tanpa harus ada sesi yang ditutup lebih dulu.
+    """
+    sesi = await _sesi_aktif_terakhir(db)
+    if sesi is None:
+        await sapu_tanpa_sesi(db)
+        return None
+    if sesi.expires_at <= sekarang():
+        await akhiri(db, sesi)
+        return None
+    set_sesi(sesi.id)
+    return sesi
+
+
+async def mulai(
+    db: AsyncSession,
+    *,
+    menit: int | None = None,
+    created_by: uuid.UUID | None = None,
+    template_version: str | None = None,
+    kosongkan: bool = True,
+) -> DemoSession:
+    """Mulai sesi baru. Sesi lama (kalau ada) diakhiri lebih dulu — satu sesi aktif.
+
+    `kosongkan=False` dipakai oleh `mulai_dengan_template`: template dibangun lebih
+    dulu, jadi pengosongan di sini akan menghapus hasil build itu sendiri.
+    """
+    lama = await _sesi_aktif_terakhir(db)
+    if lama is not None:
+        await akhiri(db, lama)
+    if settings.demo_session_enforce and kosongkan:
+        # Sesi baru = data mulai dari nol. Ini juga mencegah tabrakan id
+        # deterministik seed dengan sisa sesi lama (duplicate key batches_pkey).
+        await kosongkan_kecuali(db, None)
+    saat = sekarang()
+    durasi = _menit_valid(menit, settings.demo_session_minutes)
+    sesi = DemoSession(
+        status="active",
+        started_at=saat,
+        expires_at=saat + timedelta(minutes=durasi),
+        anchor_now=saat,
+        template_version=template_version,
+        created_by=created_by,
+    )
+    db.add(sesi)
+    await db.commit()
+    await db.refresh(sesi)
+    set_sesi(sesi.id)
+    return sesi
+
+
+async def mulai_dengan_template(
+    db: AsyncSession,
+    *,
+    menit: int | None = None,
+    created_by: uuid.UUID | None = None,
+) -> tuple[DemoSession, dict[str, Any]]:
+    """Bangun template demo DULU, buka sesi BELAKANGAN.
+
+    Alasan (audit 21 Okt 2026, dua kali terukur): urutan lama — buat sesi, kosongkan
+    semua tabel operasional, lalu bangun template — membuat kegagalan build
+    meninggalkan sesi `active` dengan 15 tabel kosong. Klik berikutnya dibalas
+    `created=false` (idempoten), jadi template tidak pernah dibangun ulang dan
+    sistem tidak bisa pulih tanpa "Akhiri sesi".
+
+    Dengan urutan ini: build gagal → tidak ada sesi baru, baris lama utuh, dan
+    pemanggil menerima galat (router membalas 503 dengan pesan jujur). Klik ulang
+    akan mencoba membangun lagi.
+    """
+    lama = await _sesi_aktif_terakhir(db)
+    if lama is not None:
+        await akhiri(db, lama)
+
+    # Impor di dalam fungsi: hindari siklus services <-> seed saat modul dimuat.
+    from app.seed.demo_template import build_into
+
+    laporan = await build_into(db, purge=True, freeze=True, bersihkan_sisa=False)
+    sesi = await mulai(db, menit=menit, created_by=created_by, kosongkan=False)
+    return sesi, laporan
+
+
+async def perpanjang(db: AsyncSession, *, menit: int = 30) -> DemoSession | None:
+    """Tambah waktu sesi berjalan. ID sesi TIDAK berubah, data tidak disentuh."""
+    sesi = await _sesi_aktif_terakhir(db)
+    if sesi is None:
+        return None
+    if sesi.expires_at <= sekarang():
+        await akhiri(db, sesi)
+        return None
+    batas = sesi.started_at + timedelta(minutes=int(settings.demo_session_max_minutes))
+    baru = min(sesi.expires_at + timedelta(minutes=_menit_valid(menit, 30)), batas)
+    sesi.expires_at = baru
+    await db.commit()
+    await db.refresh(sesi)
+    set_sesi(sesi.id)
+    return sesi
+
+
+async def akhiri(db: AsyncSession, sesi: DemoSession | None = None) -> DemoSession | None:
+    """Tutup sesi + hapus baris ber-stempel sesi itu (perubahan hilang, sesuai permintaan)."""
+    sesi = sesi or await _sesi_aktif_terakhir(db)
+    if sesi is None:
+        set_sesi(None)
+        return None
+    await kosongkan_bertanda(db)
+    sesi.status = "expired"
+    sesi.ended_at = sekarang()
+    await db.commit()
+    # Sisa demo yang lahir di luar sesi (tanpa stempel) juga dibersihkan, supaya
+    # "Akhiri sesi" benar-benar kembali ke 0 baris demo. Dipanggil SESUDAH sesi
+    # ditandai expired: penyapu itu menolak bekerja selama masih ada sesi aktif.
+    await sapu_tanpa_sesi(db, jeda=0)
+    await db.refresh(sesi)
+    set_sesi(None)
+    return sesi
+
+
+async def tandai_sesi(db: AsyncSession, sesi_id: uuid.UUID) -> int:
+    """Stempel SEMUA baris operasional tanpa sesi ke sesi ini.
+
+    Diperlukan karena penyemai memakai `insert()` Core/bulk yang tidak melewati
+    event flush. Dipanggil sekali sesudah penyemaian selesai.
+    """
+    ditandai = 0
+    for model in model_bersesi():
+        kriteria = model.demo_session_id.is_(None)
+        # 21 Okt 2026: hanya baris DEMO yang boleh distempel. Sebelum ini
+        # stempel massal ikut mengenai baris kanonik (`origin='seed'`) yang
+        # lahir di tengah sesi, sehingga "Akhiri sesi" menghapus data kerja
+        # (terukur: 78 batch + 2 keputusan kanonik). Model tanpa kolom origin
+        # (tabel jembatan) tetap distempel karena barisnya memang lahir dari sesi.
+        if "origin" in model.__table__.columns:
+            kriteria = kriteria & (model.__table__.c.origin == "demo")
+        hasil = await db.execute(
+            update(model)
+            .where(kriteria)
+            .values(demo_session_id=sesi_id)
+            .execution_options(synchronize_session=False)
+        )
+        ditandai += int(hasil.rowcount or 0)
+    await db.commit()
+    return ditandai
+
+
+async def kosongkan_bertanda(db: AsyncSession) -> int:
+    """Hapus baris milik sesi + baris DEMO tanpa stempel (mode sesi menyala).
+
+    Dipakai saat sesi ditutup (tombol "Akhiri sesi") maupun saat sesi
+    kedaluwarsa. Dua golongan yang dihapus:
+
+    1. `demo_session_id IS NOT NULL` DAN `origin='demo'` — semua baris demo
+       ber-stempel, termasuk sisa sesi lain. Ini yang menutup bug "sisa sesi
+       lama" tanpa menyentuh template kanonik.
+    2. `origin='demo'` DAN `demo_session_id IS NULL` — hanya saat
+       `demo_session_enforce` menyala. Tanpa poin ini, data dari jalur lama
+       (`POST /demo/seed`, `POST /demo/refresh`) yang lahir di luar sesi tidak
+       pernah ikut terhapus: terukur 21 Okt 2026 — 25 keputusan demo tanpa
+       stempel masih tampil padahal tidak ada sesi aktif, sehingga "akhiri sesi"
+       tidak kembali ke 0 seperti aturan pemilik.
+
+    Kenapa TIDAK menghapus semua baris tanpa stempel: baris kanonik `seed`
+    (`origin='seed'`, bawaan kolom) adalah data kerja yang tidak pernah lahir
+    dari sesi; menghapusnya membuat peta, KPI, dan 58 tes backend kehilangan
+    data. Batas `origin='demo'` itulah yang membuat pembersihan ini aman.
+    """
+    dihapus = 0
+    for model in sorted(model_bersesi(), key=_urutan_hapus):
+        kriteria = model.demo_session_id.isnot(None)
+        # Baris kanonik yang (karena data lama) terlanjur berstempel tidak ikut
+        # dihapus: template `origin='seed'` harus selamat dari siklus demo.
+        if "origin" in model.__table__.columns:
+            kriteria = kriteria & (model.__table__.c.origin == "demo")
+        hasil = await db.execute(delete(model).where(kriteria))
+        dihapus += int(hasil.rowcount or 0)
+        # Model tanpa kolom `origin` (mis. tabel jembatan) hanya kena aturan (1).
+        if settings.demo_session_enforce and "origin" in model.__table__.columns:
+            sisa = await db.execute(
+                delete(model).where(
+                    model.demo_session_id.is_(None),
+                    model.__table__.c.origin == "demo",
+                )
+            )
+            dihapus += int(sisa.rowcount or 0)
+    await db.commit()
+    return dihapus
+
+
+async def kosongkan_kecuali(db: AsyncSession, simpan: uuid.UUID | None) -> int:
+    """Hapus SEMUA baris operasional kecuali milik sesi `simpan` (None = semua).
+
+    Kenapa "semua kecuali", bukan "yang tanpa stempel": sesi bisa saling
+    menimpa (dua tab, klik ganda, penyemaian yang masih berjalan saat sesi
+    diganti). Kalau pembersihan hanya menyasar stempel tertentu, sisa sesi lain
+    tertinggal dan tetap terlihat — terukur 20 Okt 2026: 40 batch + 4 keputusan
+    milik sesi yang sudah `expired` masih muncul setelah "Akhiri sesi".
+    """
+    dihapus = 0
+    for model in sorted(model_bersesi(), key=_urutan_hapus):
+        if simpan is None:
+            hasil = await db.execute(delete(model))
+        else:
+            hasil = await db.execute(
+                delete(model).where(
+                    model.demo_session_id.is_(None)
+                    | (model.demo_session_id != simpan)
+                )
+            )
+        dihapus += int(hasil.rowcount or 0)
+    await db.commit()
+    return dihapus
+
+
+async def bersihkan_warisan(db: AsyncSession) -> int:
+    """Alias lama: kosongkan semua baris operasional (default kosong)."""
+    return await kosongkan_kecuali(db, None)
+
+
+async def bersihkan(db: AsyncSession, sesi_id: uuid.UUID) -> int:
+    """Hapus baris milik sesi ini, urut aman terhadap foreign key.
+
+    Hanya baris ber-stempel yang dihapus — pemeriksaan "data lain aman" ada di
+    tes (`test_demo_session.py`), bukan sekadar niat di komentar.
+    """
+    dihapus = 0
+    for model in sorted(model_bersesi(), key=_urutan_hapus):
+        hasil = await db.execute(
+            delete(model).where(model.demo_session_id == sesi_id)
+        )
+        dihapus += int(hasil.rowcount or 0)
+    await db.commit()
+    return dihapus
+
+
+def _urutan_hapus(model: type[Base]) -> int:
+    """Anak dulu, induk kemudian (receipts → batches, evidence → decisions)."""
+    nama = model.__tablename__
+    # Anak dulu: penerimaan & pengecualian pemasok merujuk decisions/batches
+    # tanpa cascade (`supplier_exclusions.source_decision_id`), jadi harus
+    # dihapus sebelum induknya — terukur 20 Okt 2026 (ForeignKeyViolationError).
+    if nama in {
+        "decision_evidence",
+        "approvals",
+        "agent_traces",
+        "batch_receipts",
+        "supplier_exclusions",
+    }:
+        return 0
+    if nama in {"decisions", "batches"}:
+        return 1
+    return 2
+
+
+# ── Penjaga ORM: stempel saat insert + saring saat baca ─────────────────────
+# Dua-duanya HANYA aktif bila `settings.demo_session_enforce` menyala. Bawaan
+# mati supaya 1.200+ tes backend yang menyemai tanpa sesi tetap sah.
+
+_terpasang = False
+
+
+def pasang_penjaga() -> None:
+    """Pasang stempel `before_flush` sekali per proses (idempoten).
+
+    Catatan penting (20 Okt 2026): penyaringan baca lewat
+    `with_loader_criteria` DIHAPUS. Alasannya empiris: banyak endpoint memilih
+    kolom (`select(Batch.id, ...)`) atau memakai Core/bulk, sehingga kriteria
+    ORM tidak konsisten — `/batches` menjawab 0 baris padahal 118 batch ada.
+    Kosong-secara-default sekarang dijaga oleh SIKLUS DATA: baris tanpa stempel
+    dibersihkan saat sesi mulai (dan saat startup), baris ber-stempel dihapus
+    saat sesi berakhir. Itu juga yang diminta pemilik, dan tidak bergantung
+    pada bentuk kueri masing-masing endpoint.
+    """
+    global _terpasang
+    if _terpasang:
+        return
+
+    @event.listens_for(Session, "before_flush")
+    def _stempel(session, _flush_context, _instances):  # type: ignore[no-untyped-def]
+        # Dipasang di flush — bukan per model — supaya model yang ditambahkan
+        # pada iterasi berikutnya otomatis ikut tanpa didaftar ulang.
+        if not settings.demo_session_enforce:
+            return
+        sesi_id = sesi_sekarang()
+        if sesi_id is None:
+            return
+        for obj in session.new:
+            if hasattr(obj, "demo_session_id") and obj.demo_session_id is None:
+                obj.demo_session_id = sesi_id
+
+    _terpasang = True
+
+
+# Dipasang saat modul diimpor: event hanya bekerja bila flag menyala, jadi
+# biayanya nol untuk tes/produksi, tetapi tidak bisa "lupa dipasang" di tes.
+pasang_penjaga()
+
+
+__all__ = [
+    "akhiri",
+    "aktif",
+    "bersihkan",
+    "kosongkan_kecuali",
+    "kunci_sesi",
+    "bersihkan_warisan",
+    "model_bersesi",
+    "mulai",
+    "pasang_penjaga",
+    "perpanjang",
+    "sekarang",
+    "sesi_sekarang",
+    "set_sesi",
+    "status_payload",
+    "tandai_sesi",
+]

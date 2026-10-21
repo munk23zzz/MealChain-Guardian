@@ -16,8 +16,9 @@ from sqlalchemy import create_engine, text
 from app.api.auth import get_current_user
 from app.main import app
 from app.models import User
+from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 
-DB_URL = "postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain"
+DB_URL = DSN_SYNC
 
 
 def _user(role: str, location_id: uuid.UUID | None = None) -> User:
@@ -181,10 +182,20 @@ def test_daftar_lokasi_dan_ubah_nama(skenario):
             "role_hint",
         }
         target = body["locations"][0]
-        nama_baru = f"{target['name']} (uji)"
-        res = client.patch(f"/admin/locations/{target['id']}", json={"name": nama_baru})
-        assert res.status_code == 200, res.text
-        assert res.json()["location"]["name"] == nama_baru
+        nama_asli = target["name"]
+        nama_baru = f"{nama_asli} (uji)"
+        # WAJIB dipulihkan: lokasi ini baris KANONIK. Sebelum 21 Okt 2026 tes ini
+        # mengganti nama "Bandung" menjadi "Bandung (uji)" lalu selesai — id
+        # deterministiknya tetap milik Bandung, sehingga seed berikutnya gagal
+        # `duplicate key locations_pkey` dan template demo tidak bisa dibangun.
+        try:
+            res = client.patch(f"/admin/locations/{target['id']}", json={"name": nama_baru})
+            assert res.status_code == 200, res.text
+            assert res.json()["location"]["name"] == nama_baru
+        finally:
+            pulih = client.patch(f"/admin/locations/{target['id']}", json={"name": nama_asli})
+            assert pulih.status_code == 200, pulih.text
+            assert pulih.json()["location"]["name"] == nama_asli
 
 
 def test_ubah_lokasi_nilai_tidak_valid_422(skenario):

@@ -22,6 +22,13 @@ from app.db import Base
 
 class PriceSignal(Base):
     __tablename__ = "price_signals"
+    # Sesi demo (025): NULL = data kerja biasa; terisi = milik sesi berjalan.
+    demo_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("demo_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     __table_args__ = (
         CheckConstraint(
             "price_per_kg > 0", name="price_signals_price_positive_check"

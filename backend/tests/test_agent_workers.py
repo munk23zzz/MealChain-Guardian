@@ -30,6 +30,11 @@ class FakeApi:
         assert isinstance(response, dict)
         return response
 
+    def semua_batch(self, page_size: int = 500, max_rows: int = 5000) -> list[dict]:
+        """Tiruan paginasi `/batches`: satu halaman, seperti respons nyata tanpa `offset`."""
+        respons = self.get("/batches")
+        return list(respons.get("batches") or [])
+
 
 def _context(api: object, location: str = "Jakarta", commodity: str = "telur") -> WorkerContext:
     return WorkerContext(
@@ -297,6 +302,39 @@ def test_freshness_daftar_kosong_adalah_nol_nyata() -> None:
     assert finding.facts["worst_freshness_score"] is None
     assert finding.blocking is False
     assert _citations(finding) == {"batch_count": 0, "expired_count": 0}
+
+
+def test_klien_semua_batch_membaca_semua_halaman(monkeypatch) -> None:
+    """`/batches` berplafon 500 (bawaan 50): halaman kedua harus ikut terbaca.
+
+    Regresi nyata: worker kesegaran/keamanan memanggil `/batches` sekali lalu
+    menyaring di memori, sehingga batch Jakarta/telur (3 baris) tidak terlihat
+    dan laporan menjadi "0 batch" padahal datanya ada.
+    """
+    from agent.api_client import MealChainClient
+
+    klien = MealChainClient(base_url="http://backend:8000", token="token-uji")
+    diminta: list[dict] = []
+
+    def fake_get(path: str, params: dict | None = None) -> dict:
+        assert path == "/batches"
+        assert params is not None
+        diminta.append(params)
+        if params["offset"] == 0:
+            return {
+                "batches": [{"id": "lain", "location": "Medan"}],
+                "total": 2,
+            }
+        return {
+            "batches": [{"id": "jkt", "location": "Jakarta"}],
+            "total": 2,
+        }
+
+    monkeypatch.setattr(klien, "get", fake_get)
+    hasil = klien.semua_batch()
+    assert [b["id"] for b in hasil] == ["lain", "jkt"]
+    assert [p["offset"] for p in diminta] == [0, 1]
+    assert all(p["limit"] == 500 for p in diminta)
 
 
 def test_worker_tanpa_api_tidak_mengarang() -> None:

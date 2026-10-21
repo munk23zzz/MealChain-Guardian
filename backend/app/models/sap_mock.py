@@ -13,6 +13,13 @@ from app.db import Base
 
 class SapMockMaterialStock(Base):
     __tablename__ = "sap_mock_material_stock"
+    # Sesi demo (025): NULL = data kerja biasa; terisi = milik sesi berjalan.
+    demo_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("demo_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
@@ -30,6 +37,13 @@ class SapMockMaterialStock(Base):
 
 class SapMockPurchaseOrder(Base):
     __tablename__ = "sap_mock_purchase_orders"
+    # Sesi demo (025): NULL = data kerja biasa; terisi = milik sesi berjalan.
+    demo_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("demo_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     __table_args__ = (
         CheckConstraint(
             "status IN ('draft','submitted','confirmed')",
@@ -51,7 +65,9 @@ class SapMockPurchaseOrder(Base):
     ordered_quantity: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     decision_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True
+        UUID(as_uuid=True),
+        ForeignKey("decisions.id", ondelete="CASCADE"),
+        nullable=True,
     )
     status: Mapped[str] = mapped_column(String, nullable=False, server_default="draft")
     created_at: Mapped[datetime] = mapped_column(

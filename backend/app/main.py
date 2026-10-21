@@ -18,7 +18,12 @@ from app.api.decisions import router as decisions_router
 from app.api.demand import forecast_router
 from app.api.demand import router as demand_router
 from app.api.demo import router as demo_router
+from app.api.demo_session import router as demo_session_router
 from app.api.waste import router as waste_router
+# 2026-10-20: rencana alokasi surplus lintas lokasi. Panel "Rencana alokasi
+# surplus" (halaman Surplus & Limbah) sebelumnya dihitung klien dari
+# /balance/map yang dibatasi cakupan peran -> selalu kosong untuk peran SPPG.
+from app.api.surplus import router as surplus_router
 from app.api.dependencies import lifespan
 from app.api.dossier import router as dossier_router
 from app.api.events import router as events_router
@@ -87,6 +92,31 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
+# ── Konteks sesi demo (024) ────────────────────────────────────────────────
+# `do_orm_execute` menyaring kueri berdasarkan ContextVar; ContextVar itu diisi
+# di sini, satu kali per request, hanya bila DEMO_SESSION_ENFORCE menyala.
+# Tanpa flag, middleware hanya meneruskan request (biaya nol, tes tidak berubah).
+@app.middleware("http")
+async def _konteks_sesi_demo(request, call_next):
+    from app.core.config import settings as _settings
+    from app.services import demo_session as _sesi
+
+    _sesi.pasang_penjaga()
+    if not _settings.demo_session_enforce:
+        return await call_next(request)
+    if request.url.path in {"/health", "/auth/login", "/docs", "/openapi.json"}:
+        return await call_next(request)
+
+    maker = request.app.state.session_maker
+    try:
+        async with maker() as db:
+            # `aktif()` juga menutup sesi yang sudah lewat waktu (kedaluwarsa malas).
+            await _sesi.aktif(db)
+        return await call_next(request)
+    finally:
+        _sesi.set_sesi(None)
+
+
 # Forecast SEBELUM demand generik (path param `/demand/{location}` bisa menelan "forecast")
 app.include_router(forecast_router)
 app.include_router(demand_router)
@@ -111,8 +141,10 @@ app.include_router(actions_router)
 # sehingga PO yang terbit setelah eksekusi tidak bisa ditunjukkan di layar.
 app.include_router(sap_orders_router)
 app.include_router(demo_router)
+app.include_router(demo_session_router)
 app.include_router(kpi_router)
 app.include_router(waste_router)
+app.include_router(surplus_router)
 app.include_router(agenda_router)
 app.include_router(ledger_router)
 app.include_router(dossier_router)

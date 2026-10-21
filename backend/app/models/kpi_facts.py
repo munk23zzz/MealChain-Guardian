@@ -30,6 +30,13 @@ from app.db import Base
 
 class MenuPlan(Base):
     __tablename__ = "menu_plans"
+    # Sesi demo (025): NULL = data kerja biasa; terisi = milik sesi berjalan.
+    demo_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("demo_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     __table_args__ = (
         UniqueConstraint("location_id", "plan_date", name="uq_menu_plans_loc_date"),
         CheckConstraint("planned_portions >= 0", name="menu_plans_portions_check"),
@@ -60,6 +67,13 @@ class MenuPlan(Base):
 
 class DeliveryEvent(Base):
     __tablename__ = "delivery_events"
+    # Sesi demo (025): NULL = data kerja biasa; terisi = milik sesi berjalan.
+    demo_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("demo_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     __table_args__ = (
         CheckConstraint("delivered_portions >= 0", name="delivery_portions_check"),
         CheckConstraint(
@@ -91,6 +105,13 @@ class DeliveryEvent(Base):
 
 class DisposalEvent(Base):
     __tablename__ = "disposal_events"
+    # Sesi demo (025): NULL = data kerja biasa; terisi = milik sesi berjalan.
+    demo_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("demo_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     __table_args__ = (
         CheckConstraint("quantity_kg >= 0", name="disposal_qty_check"),
         CheckConstraint(

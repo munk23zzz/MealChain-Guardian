@@ -59,6 +59,12 @@ async def _batch_terikat(
                 Batch.commodity_id == decision.commodity_id,
                 Batch.usable_until.is_not(None),
                 Batch.usable_until >= sekarang,
+                # Safety FAIL = hard exclusion terkunci (`core/scoring.py`).
+                # Tanpa filter ini batch gagal uji bisa terpilih sebagai batch
+                # terikat, lalu `calculate_safe_delivered_cost` melempar
+                # ValueError dan seluruh perhitungan biaya (termasuk tombol
+                # "Hitung ulang biaya") mati karena data yang sah.
+                Batch.safety_status != "fail",
             )
             .order_by(Batch.quantity_kg.desc(), Batch.id.asc())
             .limit(1)

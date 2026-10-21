@@ -17,6 +17,7 @@ from datetime import datetime
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
+    ForeignKey,
     Integer,
     Numeric,
     String,
@@ -31,6 +32,13 @@ from app.db import Base
 
 class RoadRoute(Base):
     __tablename__ = "road_routes"
+    # Sesi demo (025): NULL = data kerja biasa; terisi = milik sesi berjalan.
+    demo_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("demo_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     __table_args__ = (
         CheckConstraint("distance_m >= 0", name="road_routes_distance_check"),
         CheckConstraint("duration_s >= 0", name="road_routes_duration_check"),

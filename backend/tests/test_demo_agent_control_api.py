@@ -17,9 +17,37 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
 
 from app.main import app
+from tests.dsn import DSN_SYNC
 from tests.test_actions import _drop_user, _login, _mk_user
+
+#: Status keputusan yang sah — cermin CHECK `decisions_status_check` di DB.
+STATUS_KEPUTUSAN = {
+    "proposed",
+    "verifier_flagged",
+    "pending_approval",
+    "approved",
+    "rejected",
+    "executed",
+    "review_only",
+}
+
+
+def _status_keputusan(decision_id: str) -> str:
+    """Status baris DB untuk satu keputusan (pembanding `last-run`, bukan angka karangan)."""
+    engine = create_engine(DSN_SYNC)
+    try:
+        with engine.connect() as conn:
+            return str(
+                conn.execute(
+                    text("SELECT status FROM decisions WHERE id = CAST(:id AS uuid)"),
+                    {"id": decision_id},
+                ).scalar_one()
+            )
+    finally:
+        engine.dispose()
 
 
 @pytest.fixture()
@@ -209,7 +237,12 @@ def test_last_run_memakai_keepala_sppg(client, pemakai):
         assert body["steps"], "bukti tanpa langkah bukan bukti"
         assert "DETECT" in [s["step_name"] for s in body["steps"]]
         assert body["supervisor"]["status"] in {"narrated", "unavailable", "error", "missing"}
-        assert body["status"] == "proposed"
+        # Status TIDAK dipaku `proposed`: putaran yang sama bisa sudah disetujui
+        # sesudah dibuat (suite ini memang menyetujui beberapa putaran), dan
+        # endpoint wajib melaporkan status TERKINI. Yang diuji: angkanya sama
+        # dengan baris DB-nya — bukan angka karangan.
+        assert body["status"] == _status_keputusan(body["decision_id"])
+        assert body["status"] in STATUS_KEPUTUSAN
         # Tujuh kartu agen di panel "Bukti agent": kunci tetap dan status
         # hanya dari baris review yang tersimpan.
         assert [a["key"] for a in body["agents"]] == [
@@ -253,4 +286,86 @@ def test_last_run_memuat_bukti_pemasok(client, pemakai):
         assert body["supplier"]["name"], "keputusan pengadaan wajib punya pemasok"
         assert body["supply_gap"]["gap_kg"] is not None
         assert body["source_location"] is None
+
+
+def test_last_run_hanya_putaran_pipeline(client, pemakai):
+    """Bukti "putaran agent" wajib berasal dari pipeline penuh, bukan baris seed.
+
+    Regresi (gerbang 21 Okt 2026): endpoint jatuh ke "keputusan dengan DETECT
+    terakhir", sehingga keputusan hasil template/seed — yang juga menulis
+    DETECT/DECIDE/ACT — dilaporkan sebagai putaran agent. Akibatnya `status`
+    bukan `proposed` dan `supply_gap.gap_kg` kosong padahal `mode` pengadaan.
+
+    Ciri putaran NYATA: ada langkah pipeline penuh (PREDICT/OPTIMIZE/SUPERVISE)
+    yang ditulis tanpa `agent_name` (baris review worker memakai nama agen).
+    """
+    kepala = pemakai("sppg_head", "Jakarta")
+    resp = client.get("/demo/agent/last-run", headers=_login(client, kepala))
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    if not body["found"]:
+        return
+    nama = {langkah["step_name"] for langkah in body["steps"]}
+    assert {"DETECT", "DECIDE"} <= nama, (
+        "bukti putaran agent tanpa DETECT+DECIDE: " + ", ".join(sorted(nama))
+    )
+    assert nama & {"PREDICT", "OPTIMIZE", "SUPERVISE"}, (
+        "bukti putaran agent tanpa satu pun langkah pipeline: "
+        + ", ".join(sorted(nama))
+    )
+    # Catatan: pengecualian salinan 4 kasus skrip (`decisions.demo_case` terisi)
+    # diuji lewat kode endpoint (filter `demo_case IS NULL`), bukan lewat payload —
+    # payload sengaja tidak membuka kolom penyemai ke UI.
+
+
+def test_last_run_memilih_putaran_pipeline_penuh(client, pemakai):
+    """Kasus POSITIF: putaran pipeline lengkap benar-benar terpilih.
+
+    Tanpa tes ini, filter "jejak pipeline lengkap" bisa lolos hanya karena
+    endpoint selalu menjawab `found: false` (baris semai tidak memenuhi syarat) —
+    panel Demo Control lalu diam-diam tidak pernah menampilkan bukti.
+    """
+    kunci = uuid.uuid5(uuid.NAMESPACE_URL, "mealchain:uji-last-run-pipeline")
+    langkah = ("DETECT", "VERIFY", "TRACE", "PREDICT", "OPTIMIZE", "DECIDE", "SUPERVISE")
+    engine = create_engine(DSN_SYNC)
+
+    def _bersihkan(conn) -> None:
+        # FK agent_traces → decisions ON DELETE CASCADE, jadi satu DELETE cukup.
+        conn.execute(
+            text("DELETE FROM decisions WHERE id = CAST(:id AS uuid)"), {"id": str(kunci)}
+        )
+
+    try:
+        with engine.begin() as conn:
+            _bersihkan(conn)
+            conn.execute(
+                text(
+                    "INSERT INTO decisions (id, decision_type, status, proposed_by, "
+                    "expires_at, created_at, origin) VALUES (CAST(:id AS uuid), "
+                    "'supplier_procurement', 'proposed', 'supervisor_agent', "
+                    "now() + interval '1 hour', now(), 'demo')"
+                ),
+                {"id": str(kunci)},
+            )
+            for nama in langkah:
+                conn.execute(
+                    text(
+                        "INSERT INTO agent_traces (decision_id, step_name, tool_called, step_at) "
+                        "VALUES (CAST(:id AS uuid), :step, :tool, now())"
+                    ),
+                    {"id": str(kunci), "step": nama, "tool": f"uji.{nama.lower()}"},
+                )
+
+        kepala = pemakai("sppg_head", "Jakarta")
+        resp = client.get("/demo/agent/last-run", headers=_login(client, kepala))
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["found"] is True, "putaran pipeline lengkap tidak terdeteksi"
+        assert body["decision_id"] == str(kunci), "putaran pipeline terbaru wajib menang"
+        assert body["mode"] == "supplier_procurement"
+        assert {s["step_name"] for s in body["steps"]} == set(langkah)
+    finally:
+        with engine.begin() as conn:
+            _bersihkan(conn)
+        engine.dispose()
 
