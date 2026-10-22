@@ -577,5 +577,87 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
         )
         jumlah["approvals"] += 1
 
+    # ------------------------------- kiriman yang SEDANG DI JALAN (lapisan peta)
+    # Jalur "Siapkan data demo" (demo_template) memberangkatkan sebagian batch
+    # memakai durasi rute dari cache OSRM, sehingga peta menampilkan truk yang
+    # bergerak. Jalur `init-demo` tidak melakukannya: terukur 124 kiriman aktif
+    # tetapi journey `di_jalan` = 0, jadi selama demo tidak ada satu pun truk
+    # bergerak walau 114 rute sudah punya geometri. Di sini aturan yang sama
+    # diterapkan memakai cache yang sudah ada (tanpa memanggil OSRM).
+    from app.core.road_route import route_key
+    from app.models.road_routes import RoadRoute
+
+    # Cache rute dibersihkan bersama tabel bisnis lain di awal init-demo, jadi
+    # tanpa langkah ini peta kehilangan SELURUH garis jalur (terukur: road 114
+    # -> 0 setelah init-demo, hanya tombol "Siapkan data demo" yang menyinkronkan
+    # ulang). Sinkronisasi memakai fungsi yang sama dengan tombol itu; kalau OSRM
+    # mati, init-demo tetap lanjut tanpa garis dan alasannya tercatat.
+    from app.api.demo import _sync_routes_aman
+
+    _, galat_rute = await _sync_routes_aman(now)
+    if galat_rute:
+        jumlah["rute_galat"] = 1
+
+    kandidat = (
+        await session.execute(
+            select(Batch)
+            .where(
+                Batch.usable_until >= now,
+                Batch.supplier_id.is_not(None),
+                Batch.location_id.is_not(None),
+                Batch.quarantine_reason.is_(None),
+                Batch.safety_status != "fail",
+            )
+            .order_by(Batch.quantity_kg.desc())
+        )
+    ).scalars().all()
+
+    kunci: dict[str, bool] = {}
+    for b in kandidat:
+        pemasok = await session.get(Supplier, b.supplier_id)
+        lokasi = await session.get(Location, b.location_id)
+        if pemasok is None or lokasi is None:
+            continue
+        if pemasok.latitude is None or lokasi.latitude is None:
+            continue
+        kunci[
+            route_key(
+                float(pemasok.latitude), float(pemasok.longitude),
+                float(lokasi.latitude), float(lokasi.longitude),
+            )
+        ] = True
+
+    durasi: dict[str, float] = {}
+    if kunci:
+        for r in (
+            await session.execute(select(RoadRoute).where(RoadRoute.route_key.in_(list(kunci))))
+        ).scalars():
+            durasi[r.route_key] = float(r.duration_s or 0)
+
+    diberangkatkan = 0
+    for b in kandidat:
+        if diberangkatkan >= 8:
+            break
+        pemasok = await session.get(Supplier, b.supplier_id)
+        lokasi = await session.get(Location, b.location_id)
+        if pemasok is None or lokasi is None:
+            continue
+        if pemasok.latitude is None or lokasi.latitude is None:
+            continue
+        d = durasi.get(
+            route_key(
+                float(pemasok.latitude), float(pemasok.longitude),
+                float(lokasi.latitude), float(lokasi.longitude),
+            ),
+            0.0,
+        )
+        if d <= 0:
+            continue
+        # 35% perjalanan sudah ditempuh: truk terlihat di tengah rute, bukan
+        # menempel di titik asal, dan masih "di jalan" saat layar dibuka.
+        b.dispatched_at = now - timedelta(seconds=d * 0.35)
+        diberangkatkan += 1
+    jumlah["batches_diberangkatkan"] = diberangkatkan
+
     await session.commit()
     return dict(jumlah)

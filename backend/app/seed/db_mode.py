@@ -270,6 +270,19 @@ async def cmd_init_demo(session, refresh: bool = False) -> dict:
 
     hasil: dict[str, object] = {"langkah": "init-demo", "refresh": refresh}
 
+    # 22 Okt 2026: init-demo HARUS deterministik dari keadaan apa pun. Setelah
+    # tombol "Siapkan data demo" (demo_template), baris kanonik punya kunci unik
+    # (lokasi, komoditas, waktu, sumber) yang sama dengan id berbeda, lalu
+    # `load_seed` menabrak `uq_supply_records_loc_com_time_source` dan seluruh
+    # init-demo berhenti (exit 1) di tengah jalan. Data demo dibersihkan lebih
+    # dulu — sama seperti `reset-demo`, dan tetap hanya di DB lokal.
+    dibersihkan: dict[str, int] = {}
+    for model in URUTAN_HAPUS:
+        r = await session.execute(delete(model))
+        dibersihkan[model.__tablename__] = int(r.rowcount or 0)
+    await session.commit()
+    hasil["dibersihkan"] = {k: v for k, v in dibersihkan.items() if v}
+
     hasil["referensi_dinormalisasi"] = await _normalisasi_referensi(session)
     hasil["referensi"] = await seed_reference(session)
     await session.commit()

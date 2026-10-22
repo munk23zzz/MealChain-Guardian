@@ -256,7 +256,13 @@ def build_route_payloads(
 
         road: Optional[dict] = None
         reason: Optional[str] = ALASAN_BELUM_DISINKRON
-        if row:
+        # Baris cache dengan durasi 0 detik bukan rute: pemasok dan tujuan
+        # berimpit (10 baris seperti ini ada di data DEMO). Dulu baris itu
+        # dilaporkan sebagai `road` dengan duration_min 0, tetapi `journey`
+        # sengaja tidak membuat ETA untuk durasi 0 — hasilnya kontrak yang
+        # bertentangan sendiri (`road` ada, `eta_at` null) dan tes rute gagal
+        # `None == 0.0`. Sekarang jujur: tanpa jalan, alasan disebutkan.
+        if row and float(row.get("duration_s") or 0) > 0:
             distance_km = round(row["distance_m"] / 1000, 1)
             road = {
                 "distance_km": distance_km,
