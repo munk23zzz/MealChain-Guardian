@@ -737,6 +737,7 @@ async def seed_decisions(session: AsyncSession, now: datetime) -> dict:
                 price=harga,
                 decision_id=kunci,
                 status="submitted",
+                origin="demo",
                 created_at=now - timedelta(hours=indeks % 6 + 1),
             )
             # Rapikan PO yang lahir sebelum perbaikan: kode bahan terpotong

@@ -641,6 +641,7 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
                     price=harga_po,
                     decision_id=did,
                     status="confirmed",
+                    origin="demo",
                     created_at=po_kapan,
                 )
             )

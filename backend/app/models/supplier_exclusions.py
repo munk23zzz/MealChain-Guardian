@@ -47,10 +47,14 @@ class SupplierExclusion(Base):
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     evidence_refs: Mapped[list] = mapped_column(JSONB, nullable=False)
     source_decision_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("decisions.id"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("decisions.id", ondelete="CASCADE"),
+        nullable=False,
     )
     restoration_decision_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("decisions.id"), nullable=True
+        UUID(as_uuid=True),
+        ForeignKey("decisions.id", ondelete="SET NULL"),
+        nullable=True,
     )
     proposed_by: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False

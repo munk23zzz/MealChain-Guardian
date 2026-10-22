@@ -1262,6 +1262,7 @@ async def _semai_bukti_dan_rantai(db: AsyncSession, now: datetime) -> dict:
                         price=harga,
                         decision_id=d.id,
                         status="confirmed",
+                        origin="demo",
                         created_at=kapan + timedelta(minutes=2),
                     )
                 )
