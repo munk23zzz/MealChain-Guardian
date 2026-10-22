@@ -35,6 +35,23 @@ docker compose exec backend alembic upgrade head
 docker compose exec backend alembic current   # harus = heads (012_supplier_profile)
 ```
 
+### Mode database: DEFAULT atau DEMO (cara yang dianjurkan sejak 22 Okt 2026)
+
+Daripada mengetik perintah seed satu per satu, pilih mode:
+
+```bash
+bash scripts/db-mode.sh status                 # mode menurut isi DB + jumlah baris
+DB_MODE=default bash scripts/db-mode.sh init-default   # referensi saja (dev bersih)
+DB_MODE=demo    bash scripts/db-mode.sh init-demo      # dataset demo penuh
+DB_MODE=default bash scripts/db-mode.sh reset-demo --yes  # kembali ke DEFAULT
+```
+
+Rincian, pengaman, dan rollback: `.claude/skills/db-mode/SKILL.md`. Cakupan data demo:
+`.claude/skills/demo-data-builder/SKILL.md` + `docs/db-coverage-matrix.md`.
+Laporan perbaikan database (22 Okt 2026): `docs/db-fix-report.md`.
+
+Cara manual (setara langkah `init-demo`, masih sah):
+
 Kalau TIDAK memakai dump (schema dari nol), jalankan seed kanonik + data demo:
 
 ```bash
