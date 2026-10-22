@@ -426,3 +426,29 @@ terpotong, 28 blok reduced-motion menutup semua keyframe.
 
 Kontrak baru: `frontend/tests/design-tokens-kontrak.test.ts` (8 tes). Gerbang: tsc 0,
 161 berkas / 1760 tes, lint 0.
+
+## 2026-10-22 — Audit 375 px + peran BGN Monitor & Nutritionist
+
+BGN Monitor (9 tab, ada Pengaturan, tanpa Surplus/Demo Control) dan Nutritionist (10 tab,
+ada Surplus + Demo Control, tanpa Pengaturan) konsisten di 1262 px: 2 keluarga huruf per tab
+(Overview 3 = kanvas MapLibre), skala 12-32 px, 0 teks < 12 px, tanpa luapan.
+
+Satu cacat nyata di 375 px, hanya di Pemasok: pager meluap 9 px. Sebab: nomor halaman satu
+baris flex yang tidak boleh menyusut, sementara pada `(pointer: coarse), (max-width: 720px)`
+tombolnya naik ke 44 px -> 6 nomor + rentang + 2 tombol langkah = 301 px di ruang 286 px.
+Membiarkan nomor membungkus DITOLAK (pager jadi 214 px / 6 baris). Perbaikan: nomor halaman
+disembunyikan di <=720 px (posisi tetap terbaca dari "1-10 dari 105" + Sebelumnya/Berikutnya)
+plus `min-width: 0` pada `.pager-controls`. Terukur sesudah: luapan 0 px di 9 tab, pager
+44 px satu baris (sw=cw=286), 0 target sentuh < 44 px, desktop tidak berubah (pager 32 px,
+nomor 1-5-11 tetap tampil).
+
+Elemen yang melewati tepi kanan di mobile tapi bukan cacat: `.section-jump-list`
+(rail chip, induk `overflow-x: auto`), `.board-table-wrap` (tabel lebar), `.side-nav`
+(drawer off-canvas) — luapan halaman tetap 0.
+
+Metode 375 px: iframe same-origin 375x812 di halaman hidup (media query ikut lebar iframe),
+reload di antara kelompok tab karena hot-reload dev mengganti pohon React dan membuat
+pengukuran kosong. Artefak: `_qa/design-consistency/00b-mobile-dan-peran-2026-10-22.md`.
+
+Kontrak: tes `pager menyempit di <=720 px` di design-tokens-kontrak.test.ts (9 tes).
+Gerbang: tsc 0, 161 berkas / 1761 tes, lint 0.

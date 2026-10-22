@@ -11392,6 +11392,7 @@ p, li, dd { text-wrap: pretty; }
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1);
+  min-width: 0;
 }
 .pager-list {
   display: flex;
@@ -11447,6 +11448,16 @@ p, li, dd { text-wrap: pretty; }
   padding: 0 2px;
   color: var(--ink-subtle);
   font-size: var(--fs-1);
+}
+@media (max-width: 720px) {
+  /* Nomor halaman disembunyikan di layar sempit: pada 44 px per tombol
+     (batas sentuh), enam tombol angka meluap 15 px dari kartu (terukur
+     375 px) atau membungkus jadi pager setinggi 214 px. Rentang
+     "1–10 dari 104" + Sebelumnya/Berikutnya memberi posisi yang sama
+     dalam satu baris tanpa gulir. */
+  .pager-list {
+    display: none;
+  }
 }
 @media (max-width: 640px) {
   .pager {

@@ -111,6 +111,15 @@ describe("kontrak token CSS", () => {
     expect(liar, "font-family literal di luar @font-face").toEqual([]);
   });
 
+  it("pager menyempit di ≤720 px: nomor halaman disembunyikan", () => {
+    // Pada 44 px per tombol (batas sentuh) enam nomor halaman meluap 15 px dari
+    // kartu di 375 px, atau membungkus jadi pager setinggi 214 px. Rentang
+    // "1–10 dari 105" + Sebelumnya/Berikutnya memberi posisi yang sama.
+    const css = isiBersih["globals.css"];
+    expect(css).toMatch(/@media \(max-width: 720px\) \{[\s\S]{0,600}?\.pager-list \{\s*display: none;/);
+    expect(css).toMatch(/\.pager-controls \{[\s\S]{0,200}?min-width: 0;/);
+  });
+
   it("tidak ada hex di luar palet token (komentar tidak dihitung)", () => {
     // Palet sah = nilai dari deklarasi token, bukan semua hex di berkas (kalau
     // palet diambil dari semua hex, tes ini selalu hijau dan tidak menjaga apa pun).
