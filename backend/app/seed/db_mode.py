@@ -206,6 +206,17 @@ async def _alembic_upgrade_head() -> None:
     await asyncio.to_thread(command.upgrade, cfg, "head")
 
 
+async def _tabel_bisnis() -> list[str]:
+    """Semua tabel bisnis menurut metadata (bukan daftar laporan yang mungkin bolong)."""
+    from app.db import Base
+
+    return sorted(
+        t
+        for t in Base.metadata.tables
+        if t not in TABEL_REFERENSI and t != "alembic_version"
+    )
+
+
 async def _normalisasi_referensi(session) -> bool:
     """Samakan id referensi ke `stable_uuid(nama)` bila database hanya referensi.
 
@@ -216,9 +227,16 @@ async def _normalisasi_referensi(session) -> bool:
     dan ditanam ulang dengan id kanonik. Bila ada baris bisnis, jangan menyentuh
     apa pun — laporkan agar operator membangun ulang database demo.
     """
-    jumlah = await _hitung(session)
-    if any(v for k, v in jumlah.items() if k not in TABEL_REFERENSI):
-        return False
+    # Deteksi "database hanya referensi" HARUS memakai seluruh tabel bisnis.
+    # Versi pertama memakai `_hitung` (subset tabel laporan); tabel yang tidak
+    # terdaftar lolos dari pemeriksaan, penghapusan referensi berjalan, dan FK
+    # CASCADE ikut menghapus data bisnis — persis kejadian 22 Okt 2026.
+    from sqlalchemy import text as _text
+
+    for tabel in await _tabel_bisnis():
+        ada = await session.scalar(_text(f'select count(*) from "{tabel}"'))
+        if int(ada or 0) > 0:
+            return False
     await session.execute(delete(User))
     await session.execute(delete(Location))
     await session.execute(delete(Commodity))
@@ -263,20 +281,42 @@ async def cmd_init_demo(session, refresh: bool = False) -> dict:
     # kanonik); `ensure_demo_users()` tidak dipakai karena memanggil asyncio.run
     # di dalam event loop yang sedang berjalan.
     hasil["kanonik"] = await load_seed(REFERENSI_KANONIK)
+    # 22 Okt 2026: init-demo sempat menghasilkan tabel kosong tanpa pesan apa pun
+    # (supply 5.200 -> 0 setelah run kedua). Tanpa jejak angka per langkah,
+    # penyebabnya hanya bisa ditebak. Simpan hitungan sesudah tiap langkah.
+    jejak: dict[str, dict[str, int]] = {}
+
+    async def _jejak(nama: str) -> None:
+        j = await _hitung(session)
+        jejak[nama] = {
+            k: j.get(k, 0)
+            for k in ("supply_records", "demand_records", "batches", "decisions")
+        }
+
+    await _jejak("sesudah_kanonik")
 
     # 2. Deret waktu relatif hari ini + aktivitas demo.
     hasil["deret"] = await generate_timeseries()
+    await _jejak("sesudah_deret")
     now = datetime.now(timezone.utc)
     hasil["aktivitas"] = await seed_demo_activity(session, now)
     hasil["keputusan_selesai"] = await seed_demo_completed_decisions(session, now)
     hasil["harga_harian"] = await seed_demo_daily_prices(session, now)
 
     # 3. Pelengkap cakupan matriks (semua enum, semua status, kasus ekstrem).
+    await _jejak("sesudah_aktivitas")
     hasil["pelengkap"] = await build_demo_extra(session, now)
+    await _jejak("sesudah_pelengkap")
 
-    # 4. Tandai seluruh baris bisnis sebagai demo supaya reset tepat sasaran.
-    ditandai = await _tandai_demo(session)
-    hasil["ditandai_demo"] = ditandai
+    # 4. TIDAK menandai ulang baris kanonik menjadi `origin='demo'`.
+    #    Alasan (22 Okt 2026): `_collect_baselines()` di generator membaca baris
+    #    `origin='seed'` sebagai jangkar. Menandai ulang semuanya membuat run
+    #    KEDUA melihat "tidak ada jangkar" -> planned=0, dan itu sudah terbukti
+    #    membuat deret waktu runtuh tanpa pesan galat. Reset tetap tepat sasaran
+    #    karena `reset-demo` hanya jalan di DB demo (dijaga) dan menghapus seluruh
+    #    tabel bisnis; sampah penanda tidak sepadan dengan risikonya.
+    hasil["ditandai_demo"] = {"dilewati": True, "alasan": "jangkar seed dipertahankan"}
+    hasil["jejak"] = jejak
     await session.commit()
     hasil["status"] = await cmd_status(session)
     return hasil

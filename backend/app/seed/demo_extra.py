@@ -233,6 +233,37 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
             )
             jumlah["agent_traces"] += 1
 
+    # Jejak BER-AGEN (agent_name terisi) — dipakai panel "bukti pipeline" di
+    # Demo Control, yang menyaring `agent_name is not null`. Jejak pipeline di
+    # atas sengaja tanpa agen (itu putaran orkestrasi), jadi tanpa blok ini
+    # panel itu selalu kosong walau datanya ada (matriks §5.1, 22 Okt 2026).
+    for urut in range(2):
+        _, _, did = id_keputusan[urut]
+        for langkah, agen in (
+            ("PREDICT", "agent:demand-forecaster"),
+            ("OPTIMIZE", "agent:allocation-optimizer"),
+            ("SUPERVISE", "agent:safety-supervisor"),
+        ):
+            await _ambil_atau_buat(
+                session,
+                AgentTrace,
+                f"trace-agen:{did}:{langkah}",
+                dict(
+                    decision_id=did,
+                    step_name=langkah,
+                    tool_called=f"tool_{langkah.lower()}",
+                    input_summary={"komoditas": komoditas[urut].name},
+                    output_summary={"hasil": "ok", "agen": agen},
+                    duration_ms=1200 + urut * 150,
+                    run_id=stable_uuid("extra", "run-agen", str(urut)),
+                    agent_name=agen,
+                    confidence=0.88,
+                    citations=[{"source": "extra", "ref": f"agen-{urut}"}],
+                    step_at=now - timedelta(minutes=5 * (3 - urut)),
+                ),
+            )
+            jumlah["agent_traces"] += 1
+
     # ------------------------------------------------------------------- PO
     # Satu PO untuk setiap keputusan berstatus executed: inilah bukti bahwa
     # "dua approval -> PO terbit" bisa ditunjukkan di UI dan dijawab Joule.

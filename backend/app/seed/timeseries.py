@@ -836,6 +836,26 @@ async def _insert_events(
         }
         for r in baris
     ]
+    # 22 Okt 2026: rencana dibaca dari DB, tetapi baris menu bisa GAGAL masuk
+    # karena `ON CONFLICT (location_id, plan_date) DO NOTHING` kalah oleh menu
+    # kanonik (kunci unik tidak memuat `origin`). Kalau id hasil rencana dipakai
+    # apa adanya, INSERT kiriman menabrak FK `delivery_events_menu_plan_id_fkey`
+    # dan seluruh init-demo berhenti. Saring dulu ke id yang benar-benar ada.
+    ada = set(
+        (
+            await session.execute(
+                select(MenuPlan.id).where(
+                    MenuPlan.id.in_([r["menu_plan_id"] for r in rencana])
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    rencana = [r for r in rencana if r["menu_plan_id"] in ada]
+    if not rencana:
+        return
+
     sudah_punya = set(
         (
             await session.execute(
