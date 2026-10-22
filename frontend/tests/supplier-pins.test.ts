@@ -141,6 +141,36 @@ describe("suppliersForCommodity", () => {
     // Pemasok tanpa fokus komoditas TIDAK dicocokkan (jangan menebak).
     expect(suppliersForCommodity(rows, "ayam")).toEqual([]);
   });
+
+  it("kiriman aktif komoditas lain ikut tampil walau fokus pemasok berbeda", () => {
+    // Kasus nyata DEMO: CV Ayam Kampung Cugenang berfokus ayam tetapi sedang
+    // mengirim ayam DAN telur. Tanpa aturan ini kiriman telurnya tidak pernah
+    // muncul saat peta difilter ke telur.
+    const campuran = supplierPinRows([
+      {
+        id: "s9",
+        name: "CV Ayam Kampung Cugenang",
+        location: "Cianjur",
+        commodity: "ayam",
+        certification_status: "haccp",
+        reliability_score: 0.9,
+        latitude: -6.8,
+        longitude: 107.1,
+        excluded_at_hub: false,
+        excluded_scope_locations: [],
+        shipping: {
+          count: 5,
+          total_kg: 1760,
+          until: "2026-11-02T00:00:00Z",
+          commodities: ["ayam", "telur"],
+          safety_fail_count: 0,
+        },
+      },
+    ]);
+    expect(suppliersForCommodity(campuran, "telur")).toHaveLength(1);
+    expect(suppliersForCommodity(campuran, "ayam")).toHaveLength(1);
+    expect(suppliersForCommodity(campuran, "beras")).toEqual([]);
+  });
 });
 
 describe("nada pin", () => {

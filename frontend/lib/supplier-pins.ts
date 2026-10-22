@@ -234,7 +234,18 @@ export function suppliersForCommodity(
 ): SupplierPinRow[] {
   const needle = text(commodity)?.toLowerCase() ?? null;
   if (!needle) return [...rows];
-  return rows.filter((row) => row.commodity?.toLowerCase() === needle);
+  // 22 Okt 2026: pin hanya cocok bila komoditas UTAMA pemasok sama dengan yang
+  // dipilih. Padahal satu pemasok bisa mengirim lebih dari satu komoditas
+  // (`shipping.commodities`); kiriman komoditas lain jadi tidak tergambar di
+  // peta walau sedang berjalan. Terukur pada data DEMO: 4 pemasok, 5 pasangan
+  // kiriman tidak pernah muncul. Kiriman aktif kini ikut dihitung sebagai bukti.
+  return rows.filter(
+    (row) =>
+      row.commodity?.toLowerCase() === needle ||
+      (row.shipping?.commodities ?? []).some(
+        (item) => item.toLowerCase() === needle
+      )
+  );
 }
 
 export type SupplierDistanceReference = {
