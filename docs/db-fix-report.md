@@ -276,7 +276,7 @@ Konfigurasi destination (`MEALCHAIN_AGENT_01`) tidak diubah.
 | Frontend mode DEFAULT | empty state benar ("Belum ada data …", 0 kg), tanpa error/NaN, tanpa spinner menggantung |
 | 14 pertanyaan Joule DEMO / DEFAULT | 14/14 dan 14/14 |
 | `ruff` berkas yang diubah | bersih (kecuali `N818` lama pada `Sibuk` di `demo_template_reset.py`, sudah ada sebelum pekerjaan ini) |
-| Gerbang backend terpisah (`scripts/gerbang-db-terpisah.sh`) | **1282 passed, 18 skipped, 0 failed** — 830,81 detik (13m50s), dijalankan ulang SESUDAH seluruh perbaikan §0; log `_qa/gerbang-db-terpisah-2026-10-22.txt` |
+| Gerbang backend terpisah (`scripts/gerbang-db-terpisah.sh`) | **1282 passed, 18 skipped, 0 failed** — 823,70 detik (13m43s), dijalankan ulang SESUDAH seluruh perbaikan §0 dan §0b; log `_qa/gerbang-db-terpisah-2026-10-22.txt` |
 | `init-demo` dua kali berturut-turut | identik: supply 5.200, decisions 14, agent_traces 40 (6 ber-agen), batch 125, PO 20, penerimaan 5 |
 | `init-default` dua kali | identik: 4 komoditas, 10 lokasi, 7 akun, semua tabel bisnis 0 |
 | Data bertahan setelah semeai | supply 5.200 tetap 5.200 setelah 20 detik (dulu runtuh karena `DEMO_SESSION_ENFORCE=true` + reload) |
