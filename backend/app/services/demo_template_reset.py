@@ -51,6 +51,32 @@ async def bangun_ulang(db: AsyncSession) -> dict:
         await pastikan_sesi(db)
         laporan = await build_into(db, purge=True, freeze=True, bersihkan_sisa=False)
         await db.commit()
+        # 22 Okt 2026: `build_into` mem-purge seluruh baris demo lalu membangun
+        # ulang template. Tanpa langkah ini, data pelengkap cakupan (semua
+        # decision_type/status, penerimaan menunggu, karantina, eksklusi, PO
+        # dari keputusan) HILANG setiap kali tombol "Siapkan data demo" ditekan —
+        # terukur: 20 PO demo -> 12, penerimaan 5 -> 0. Builder pelengkap
+        # idempoten, jadi aman dipanggil sesudah template.
+        # Deret waktu + aktivitas juga lahir dari jalur demo dan ikut ter-purge
+        # oleh `build_into`. Tanpa dua langkah ini, setelah menekan "Siapkan
+        # data demo" grafik dan KPI kosong (terukur: supply_records 5.200 -> 40).
+        from datetime import datetime, timezone
+
+        from app.seed.demo_activity import (
+            seed_demo_activity,
+            seed_demo_completed_decisions,
+            seed_demo_daily_prices,
+        )
+        from app.seed.demo_extra import build_demo_extra
+        from app.seed.timeseries import generate_timeseries
+
+        laporan["deret"] = await generate_timeseries()
+        sekarang = datetime.now(timezone.utc)
+        laporan["aktivitas"] = await seed_demo_activity(db, sekarang)
+        laporan["keputusan_selesai"] = await seed_demo_completed_decisions(db, sekarang)
+        laporan["harga_harian"] = await seed_demo_daily_prices(db, sekarang)
+        laporan["pelengkap"] = await build_demo_extra(db, sekarang)
+        await db.commit()
     except Exception:
         await db.rollback()
         raise

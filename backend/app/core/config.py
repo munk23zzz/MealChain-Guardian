@@ -18,6 +18,11 @@ class Settings(BaseSettings):
 
     # App
     debug: bool = False
+    #: Mode database yang DIHARAPKAN: "default" (referensi saja) atau "demo".
+    #: Sumber kebenaran isi tetap database itu sendiri (`app.seed.db_mode status`
+    #: membandingkan keduanya dan melaporkan bila tidak cocok). Lihat
+    #: .claude/skills/db-mode/SKILL.md.
+    db_mode: str = "default"
     demo_mode: bool = False
     app_name: str = "MealChain Guardian"
 
