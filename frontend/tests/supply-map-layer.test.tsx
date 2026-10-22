@@ -88,6 +88,15 @@ const fake = vi.hoisted(() => {
     removeLayer(id: string) {
       delete this.layers[id];
     }
+    /** MapLibre: pindahkan layer ke akhir urutan gambar. Tiruan cukup menghapus
+     *  lalu menambah ulang supaya `Object.keys(layers)` mencerminkan urutan
+     *  render sesungguhnya (dipakai untuk memeriksa ekor truk di atas jalur). */
+    moveLayer(id: string) {
+      const layer = this.layers[id];
+      if (!layer) return;
+      delete this.layers[id];
+      this.layers[id] = layer;
+    }
     removeSource(id: string) {
       delete this.sources[id];
     }
@@ -126,7 +135,15 @@ const fake = vi.hoisted(() => {
     on(event: string, ...args: unknown[]) {
       const handler = args[args.length - 1] as () => void;
       (this.handlers[event] ??= []).push(handler);
+      // Bentuk `on(tipe, layerId, handler)`: catat per layer supaya tes bisa
+      // memanggil handler lapisan tertentu (mis. garis kiriman "sudah tiba").
+      if (args.length >= 2) {
+        const layerId = String(args[0]);
+        (this.layerHandlers[layerId] ??= []).push(handler);
+      }
     }
+    /** Handler `click` yang didaftarkan per layer id. */
+    layerHandlers: Record<string, ((arg?: unknown) => void)[]> = {};
     off(event: string, ...args: unknown[]) {
       const handler = args[args.length - 1];
       this.handlers[event] = (this.handlers[event] ?? []).filter((item) => item !== handler);
@@ -964,6 +981,62 @@ describe("SupplyMap — rincian lapisan & perjalanan kiriman", () => {
     // Tag lapisan pun tidak mengarang jam: tidak ada kiriman berjalan, jadi
     // tag menyatakan itu apa adanya (bukan "1 jalur kiriman" yang tidak tergambar).
     expect(host.querySelector(".map-layer-tags")?.textContent).toContain("tidak ada kiriman berjalan");
+  });
+
+  it("butir 'Sedang mengirim' di legenda hanya bila ada pin yang memakainya", () => {
+    // Legenda tidak boleh menyebut warna yang tidak tergambar di kanvas.
+    const semuaTiba = {
+      routes: [
+        {
+          ...ROUTES.routes[0],
+          journey: {
+            ...ROUTES.routes[0].journey,
+            state: "sudah_tiba",
+            state_label: "Sudah tiba",
+            progress: 1,
+          },
+        },
+      ],
+    };
+    mountEl(<SupplyMap locations={LOCATIONS} supplierRoutes={semuaTiba} />);
+    expect(host.querySelector(".map-legend-compact")?.textContent).not.toContain("Sedang mengirim");
+
+    mountEl(<SupplyMap locations={LOCATIONS} supplierRoutes={ROUTES} />);
+    expect(host.querySelector(".map-legend-compact")?.textContent).toContain("Sedang mengirim");
+  });
+
+  it("garis kiriman yang SUDAH TIBA pun bisa diklik: popup + sorotan", () => {
+    // Kiriman yang sudah tiba punya layer sendiri (ROUTE_QUIET_LAYER_ID). Layer
+    // itu dulu tidak didaftarkan ke handler klik, jadi garis yang paling banyak
+    // terlihat sore hari justru satu-satunya yang mati saat diklik (audit 22 Okt).
+    const tiba = {
+      routes: [
+        {
+          ...ROUTES.routes[0],
+          journey: {
+            ...ROUTES.routes[0].journey,
+            state: "sudah_tiba",
+            state_label: "Sudah tiba",
+            progress: 1,
+          },
+        },
+      ],
+    };
+    const onFocus = vi.fn();
+    mountEl(<SupplyMap locations={LOCATIONS} supplierRoutes={tiba} onFocusRoute={onFocus} />);
+    const map = mapLog[mapLog.length - 1] as any;
+    const handler = map.layerHandlers["supplier-route-line-tiba"]?.[0];
+    expect(handler, "layer garis 'sudah tiba' harus punya handler klik").toBeTypeOf("function");
+    const fitur = (map.sources["supplier-routes"].data as any).features[0];
+    act(() => {
+      handler({
+        features: [{ properties: fitur.properties }],
+        lngLat: { lng: 106.9, lat: -6.2 },
+      });
+    });
+    const popup = popupLog[popupLog.length - 1];
+    expect(popup?.node?.textContent).toContain("Jalur jalan (OSRM)");
+    expect(onFocus).toHaveBeenCalled();
   });
 
   /**

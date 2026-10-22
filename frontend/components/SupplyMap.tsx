@@ -104,6 +104,7 @@ import {
   routeLayerTag,
   routeLegendEntries,
   routeLineClass,
+  shipmentKey,
   supplierRoutes as supplierRouteRows,
   type SupplierRoute,
 } from "../lib/supplier-routes";
@@ -975,9 +976,16 @@ export default function SupplyMap({
     () =>
       compactLegendItems({
         jalur: showRoutes ? routeLegendEntries(routePinRows) : [],
-        pemasok: showSuppliers ? SUPPLIER_PIN_LEGEND : [],
+        // Butir "Sedang mengirim" hanya disebut bila ADA pin yang memakai
+        // nadanya — lebih baik dari sekadar jumlah pin > 0: legenda yang
+        // menjanjikan warna yang tak terlihat membuat pembaca mencari-cari.
+        pemasok: showSuppliers
+          ? SUPPLIER_PIN_LEGEND.filter(
+              (butir) => butir.tone !== "shipping" || jumlahJalan > 0
+            )
+          : [],
       }),
-    [routePinRows, showRoutes, showSuppliers]
+    [routePinRows, showRoutes, showSuppliers, jumlahJalan]
   );
   // Pemenggalan baris ditentukan MAKNA, bukan lebar layar: kelompok pemasok
   // selalu mulai di baris 2 (permintaan pemilik 2026-10-19). Tanpa ini, di lebar
@@ -1476,7 +1484,7 @@ export default function SupplyMap({
     // diklik, kiriman yang sudah tiba (garisnya padat semua) kehilangan popup.
     const bukaPopupJalur = (event: maplibregl.MapLayerMouseEvent) => {
       const id = (event.features?.[0]?.properties as { id?: string } | undefined)?.id;
-      const row = routeRowsRef.current.find((item) => item.id === id);
+      const row = routeRowsRef.current.find((item) => shipmentKey(item) === id);
       if (!row) return;
       // Klik garis = sorot kiriman ini (Arah C). Popup tetap muncul: ia yang
       // dibaca di tempat klik, sedangkan kartu kiriman di bawah peta memuat
@@ -1495,6 +1503,15 @@ export default function SupplyMap({
     map.on("click", ROUTE_GLINT_LAYER_ID, bukaPopupJalur);
     map.on("click", ROUTE_DONE_LAYER_ID, bukaPopupJalur);
     map.on("click", ROUTE_TODO_LAYER_ID, bukaPopupJalur);
+    // Kiriman yang SUDAH TIBA punya layer sendiri (garis redup). Tanpa
+    // pendaftaran ini, garis yang paling banyak terlihat di sore hari justru
+    // satu-satunya yang tidak bisa diklik — ditemukan saat audit 22 Okt 2026.
+    map.on("click", ROUTE_QUIET_LAYER_ID, bukaPopupJalur);
+
+    // Urutan pasang layer mengikuti urutan data tiba, jadi ekor kendaraan bisa
+    // tertimbun alas putih/garis jalur. Naikkan eksplisit: jejak truk harus
+    // selalu terbaca di atas jalur.
+    if (map.getLayer(WAKE_LAYER_ID)) map.moveLayer(WAKE_LAYER_ID);
   }, []);
 
   /** Redupkan garis jalur dasar saat satu kiriman disorot.

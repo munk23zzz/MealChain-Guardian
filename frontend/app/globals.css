@@ -2591,7 +2591,10 @@ a:focus-visible {
   display: inline-block;
   width: 22px;
   height: 0;
-  border-top: 3px dashed var(--status-safe);
+  /* Violet = warna garis jalur di kanvas (ROUTE_DONE_COLORS.ok). Dulu hijau
+     `--status-safe`, sehingga contoh garis di legenda/popup berbeda warna dari
+     garis yang digambar peta (audit 22 Okt 2026). */
+  border-top: 3px dashed var(--route-live-strong);
   flex: none;
 }
 /* Contoh garis di dalam kotak legenda peta ikut diperkecil (keputusan pemilik
@@ -2607,9 +2610,13 @@ a:focus-visible {
    tetap putus-putus supaya legenda lama (jalur tanpa gaya) tidak berubah arti. */
 .map-legend-line-padat { border-top-style: solid; }
 .map-legend-line-putus { border-top-style: dashed; }
-/* Nada "sisa": estimasi yang belum ditempuh. Biru aksi aplikasi (--accent-strong),
-   BUKAN hijau — sama dengan warna layer `todo` di kanvas (ROUTE_TODO_COLORS.ok). */
-.map-legend-line-sisa { border-top-color: var(--accent-strong); }
+/* Nada legenda WAJIB sama dengan warna kanvas (ROUTE_DONE_COLORS.ok,
+   ROUTE_TODO_COLORS.ok, dan garis "sudah tiba" #475569 = --route-arrived).
+   Sebelum audit 22 Okt 2026 di sini tertulis biru --accent-strong untuk `sisa`
+   sementara layer `todo` menggambar violet terang: dua cerita warna di satu peta. */
+.map-legend-line-ok { border-top-color: var(--route-live-strong); }
+.map-legend-line-sisa { border-top-color: var(--route-live-soft); }
+.map-legend-line-tiba { border-top-color: var(--route-arrived); }
 
 .map-popup-line {
   margin: 4px 0 0;
@@ -2791,14 +2798,10 @@ a:focus-visible {
 /* Di luar jangkauan: bentuk KOSONG dengan garis putus-putus, supaya beda dari
    pemasok terdekat (penuh) dan dari "dikecualikan" (merah penuh). Warna tetap token. */
 .map-legend-box-shape-far { border-style: dashed; border-color: var(--ink-subtle); }
-/* Sedang mengirim (keputusan pemilik 2026-10-16): CINCIN hijau-aman. Bentuk ini
-   sengaja bukan nada kelima yang saling menutup - cincin dipakai bersama warna
-   nada mana pun, jadi pemasok pengirim aktif tetap memperlihatkan keandalan dan
-   jangkauannya. Warna memakai token, tanpa hex mentah (design.md §4). */
+/* Sedang mengirim: kotak di legenda memakai nada HIDUP yang sama dengan isian
+   pin pengirim (--status-live), jadi warna legenda = warna yang terlihat di
+   peta. Warna memakai token, tanpa hex mentah (design.md §4). */
 .map-legend-box-shape-shipping { background: var(--status-live); border-color: var(--status-live); }
-.map-pin-supplier-shipping .map-pin-supplier-dot {
-  box-shadow: 0 0 0 2px var(--status-safe), var(--shadow-pin-core);
-}
 /* Pemasok yang SEDANG MENGIRIM (permintaan pemilik 20 Okt 2026): warnanya beda
    dari pemasok biasa + diberi denyut.
 

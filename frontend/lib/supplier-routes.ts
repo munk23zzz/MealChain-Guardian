@@ -91,7 +91,7 @@ export const ROUTE_TODO_COLORS: Record<RouteLineTone, string> = {
  * memakai warna kelima — penekanannya halo sewarna, dan penanda bergeraknya
  * ikon mobil. Legenda yang menyebut warna yang tidak ada hanya menambah beban.
  */
-export type RouteLegendTone = RouteLineTone | "sisa";
+export type RouteLegendTone = RouteLineTone | "sisa" | "tiba";
 
 export type SupplierRouteRoad = {
   distanceKm: number;
@@ -130,6 +130,8 @@ export type RouteLineKind = "done" | "todo";
 
 export type RouteFeature = {
   type: "Feature";
+  /** Id unik per FITUR (`lajur#batch#kind`): satu kiriman = dua fitur. */
+  id: string;
   geometry: { type: "LineString"; coordinates: [number, number][] };
   properties: {
     id: string;
@@ -558,8 +560,12 @@ export function routeGeoJson(raw: unknown): RouteFeatureCollection {
       ? journeyLineParts(row.road.coordinates, row.journey)
       : { done: row.road.coordinates, todo: [] as [number, number][] };
     if (!bagian) continue;
+    const kunci = shipmentKey(row);
     const properti = {
-      id: row.id,
+      // Id per KIRIMAN (`lajur#batch`), bukan per lajur: dua batch di lajur yang
+      // sama (dua kiriman telur sehari) tadinya berbagi id sehingga klik/popup
+      // dan sorotan menunjuk kiriman yang salah (audit 22 Okt 2026).
+      id: kunci,
       tone: routeLineTone(row),
       label: routeLabel(row),
       supplierName: row.supplierName,
@@ -581,6 +587,9 @@ export function routeGeoJson(raw: unknown): RouteFeatureCollection {
       if (coords.length < 2) continue;
       features.push({
         type: "Feature",
+        // Id tingkat-FITUR harus unik: satu kiriman menghasilkan dua fitur
+        // (ditempuh + sisa) dan MapLibre memakai id ini untuk feature-state.
+        id: `${kunci}#${kind}`,
         geometry: { type: "LineString", coordinates: coords },
         properties: { ...properti, kind },
       });
@@ -674,7 +683,10 @@ export function routeLegendEntries(
   }
   const tibaEntries = rows.filter((row) => row.journey?.state === "sudah_tiba");
   if (tibaEntries.length > 0) {
-    entries.push({ tone: "ok", label: "Sudah tiba (redup)", gaya: "putus" });
+    // Nada "tiba": kanvas menggambar kiriman yang sudah tiba dengan SLATE
+    // #475569 (--route-arrived), bukan violet. Dulu entri ini memakai "ok"
+    // sehingga legenda menjanjikan violet untuk garis yang tampak abu-abu.
+    entries.push({ tone: "tiba", label: "Sudah tiba (redup)", gaya: "putus" });
   }
   if (bergerak.some((row) => routeLineTone(row) === "fail")) {
     entries.push({ tone: "fail", label: "Jalur kiriman gagal uji", gaya: "putus" });

@@ -212,7 +212,7 @@ export function truckPopupView(row: SupplierRoute): MapPopupView {
         : {
             pct,
             text:
-              sisaMenit !== null
+              sisaMenit !== null && sisaMenit > 0
                 ? `Sisa ± ${Math.round(sisaMenit)} menit`
                 : `${pct}% perjalanan ditempuh`,
           },

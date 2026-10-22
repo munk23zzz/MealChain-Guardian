@@ -140,6 +140,25 @@ describe("popup truk & garis jalur", () => {
     expect(view.callout?.text).toContain("GAGAL UJI");
   });
 
+  it("kiriman yang sudah tiba tidak mencetak sisa menit negatif", () => {
+    // Server mengirim `remaining_min` negatif untuk perjalanan yang selesai
+    // (terukur -200). Dulu popup menulis "Sisa ± -200 menit" di samping
+    // "Perjalanan 100%" (audit 22 Okt 2026).
+    const tiba = {
+      ...RUTE,
+      journey: {
+        ...RUTE.journey!,
+        state: "sudah_tiba" as const,
+        remainingMin: -200,
+        progress: 1,
+      },
+    };
+    const view = truckPopupView(tiba);
+    expect(view.hero.value).toBe("100%");
+    expect(view.meter?.text).not.toMatch(/-\d/);
+    expect(view.meter?.text).toContain("100% perjalanan ditempuh");
+  });
+
   it("popup garis memakai fakta jalur yang sama dengan sebelumnya", () => {
     const view = routePopupView(RUTE);
     expect(view.kind).toBe("route");

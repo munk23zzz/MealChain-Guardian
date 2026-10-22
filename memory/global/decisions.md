@@ -353,3 +353,38 @@ Kecukupan), sudah diperbaiki + dites. (c) `scroll-margin-top` kini satu kelas `.
 (132 px), bukan daftar lima id — halaman baru tidak perlu menambah selektor. (d) Nav hanya
 muncul setelah datanya ada; di Overview, tujuan "Kiriman" bisa menyusul beberapa ratus milidetik
 setelah muat pertama.
+
+## 2026-10-22 — Audit peta: legenda = kanvas, klaim kiriman per batch, klik garis tiba
+
+Temuan dan perbaikan (diverifikasi di aplikasi hidup, gate frontend hijau):
+
+(a) LEGENDA bercerita beda dengan kanvas: contoh garis "sisa" memakai biru aksi
+    (--accent-strong) sementara layer `todo` menggambar violet terang; entri
+    "Sudah tiba (redup)" memakai nada `ok` (violet) sementara garisnya SLATE #475569.
+    Kini ada nada baru `tiba` (--route-arrived); `.map-legend-line-ok/-sisa/-tiba`
+    memakai token yang SAMA dengan ROUTE_DONE_COLORS / ROUTE_TODO_COLORS, dijaga
+    tes drift (nilai token + kelas CSS).
+
+(b) Pin "sedang mengirim" tidak pernah berwarna: DUA blok CSS dengan selektor
+    identik (pin pengirim), yang pertama cincin hijau --status-safe menang cascade
+    sehingga aturan violet di bawahnya mati. Dua tes lama justru mengunci cincin itu.
+    Blok mati dihapus; tes diganti ke kontrak isian violet + halo (dengan cabang
+    prefers-reduced-motion). Catatan: label "sedang mengirim N kiriman" tetap dihitung
+    dari blok `shipping` (keputusan pemilik 16 Okt), jadi pin bisa menyebut mengirim
+    walau tidak ada perjalanan aktif — itu teks, bukan warna.
+
+(c) Id fitur GeoJSON dulu id LAJUR: dua batch di lajur sama berbagi id, dan dua fitur
+    satu kiriman (ditempuh + sisa) juga berbagi id. Kini `properties.id` = shipmentKey
+    (lajur#batch) dan id tingkat-fitur = lajur#batch#kind; lookup klik ikut shipmentKey.
+
+(d) Garis kiriman yang SUDAH TIBA (layer supplier-route-line-tiba) tidak pernah
+    didaftarkan ke handler klik — satu-satunya garis yang terlihat sore hari justru
+    mati saat diklik. Didaftarkan; popup + sorotan hidup lagi (diuji lewat handler
+    per layer di tiruan peta).
+
+(e) Ekor kendaraan dinaikkan eksplisit (moveLayer) setelah layer jalur dipasang,
+    supaya urutan pasang layer yang mengikuti urutan data tidak menenggelamkannya.
+
+(f) Popup mencetak "Sisa ± -200 menit" untuk kiriman yang sudah tiba (remaining_min
+    negatif dari server). Kini sisa hanya ditulis bila > 0; selain itu
+    "100% perjalanan ditempuh".

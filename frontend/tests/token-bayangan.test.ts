@@ -71,8 +71,12 @@ describe("bayangan memakai token peran", () => {
     expect(dock?.[1]).toContain("box-shadow: var(--shadow-dock)");
   });
 
-  it("ekor cincin status tetap di luar token supaya warnanya bisa beda", () => {
+  it("pin pengirim memakai token warna hidup, tanpa bayangan literal", () => {
+    // Audit 22 Okt 2026: cincin `0 0 0 2px var(--status-safe)` adalah blok MATI
+    // (selektor kembar, kalah cascade). Warna pin pengirim kini isian violet
+    // `--status-live` + bayangan inti dari token.
     const ship = /^\.map-pin-supplier-shipping \.map-pin-supplier-dot\s*\{([^}]*)\}/m.exec(css);
-    expect(ship?.[1]).toContain("0 0 0 2px var(--status-safe), var(--shadow-pin-core)");
+    expect(ship?.[1]).toContain("var(--shadow-pin-core)");
+    expect(ship?.[1]).not.toContain("var(--status-safe)");
   });
 });

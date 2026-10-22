@@ -72,14 +72,39 @@ describe("kontrak CSS kontrol peta (7b-1)", () => {
     expect(gabungan).toMatch(/\.maplibregl-ctrl-group button[^{}]*\{[^}]*min-width:\s*44px/);
   });
 
-  it("pin pemasok yang sedang mengirim ditandai cincin DIAM, bukan denyut", () => {
-    // Redesign 20 Okt 2026: satu-satunya gerak di peta milik ikon mobil kiriman.
-    // Pin tetap menandai "sedang mengirim" lewat cincin, tanpa animasi.
-    const blok = /\.map-pin-supplier-shipping \.map-pin-supplier-dot \{([^}]*)\}/.exec(css)?.[1] ?? "";
-    expect(blok).toMatch(/box-shadow:/);
-    expect(blok).toMatch(/var\(--status-safe\)/);
-    // Tidak ada keyframes denyut yang tertinggal.
-    expect(css).not.toContain("pin-kirim-denyut");
+  it("pin pemasok yang sedang mengirim: isian violet + halo, bukan cincin hijau", () => {
+    // Audit 22 Okt 2026: dulu ada DUA blok dengan selektor yang SAMA. Blok
+    // pertama (cincin hijau --status-safe) menang cascade, sehingga aturan
+    // violet di bawahnya tidak pernah berlaku — dan tes lama justru mengunci
+    // cincin itu, jadi terasa aman. Sekarang: tepat satu blok, dan isinya violet.
+    const semua = Array.from(
+      css.matchAll(/\.map-pin-supplier-shipping \.map-pin-supplier-dot \{([^}]*)\}/g)
+    );
+    expect(semua.length, "selektor dasar pin pengirim harus tunggal").toBe(1);
+    const aturan = semua[0][1];
+    expect(aturan).toMatch(/background:\s*var\(--status-live\)/);
+    expect(aturan).toMatch(/border-color:\s*var\(--status-live\)/);
+    expect(aturan).not.toMatch(/--status-safe/);
+    // Halo membawa arti "masih di jalan" (bukan hiasan) → dimatikan saat
+    // reduced-motion, bukan dihapus.
+    expect(css).toMatch(/@keyframes pin-kirim-halo\s*\{/);
+    const kurangiGerak =
+      /@media \(prefers-reduced-motion: reduce\) \{\s*\.map-pin-supplier-shipping \.map-pin-supplier-dot::after \{([^}]*)\}/
+        .exec(css)?.[1] ?? "";
+    expect(kurangiGerak).toMatch(/animation:\s*none/);
+  });
+
+  it("contoh garis legenda memakai warna kanvas yang sama (tanpa drift)", () => {
+    // Legend yang menjanjikan warna berbeda dari kanvas = dua cerita warna.
+    // Nilai token di sini WAJIB sama dengan ROUTE_DONE_COLORS / ROUTE_TODO_COLORS
+    // dan warna layer "sudah tiba" di SupplyMap.
+    expect(css).toMatch(/\.map-legend-line-ok\s*\{[^}]*border-top-color:\s*var\(--route-live-strong\)/);
+    expect(css).toMatch(/\.map-legend-line-sisa\s*\{[^}]*border-top-color:\s*var\(--route-live-soft\)/);
+    expect(css).toMatch(/\.map-legend-line-tiba\s*\{[^}]*border-top-color:\s*var\(--route-arrived\)/);
+    expect(css).not.toMatch(/\.map-legend-line-sisa\s*\{[^}]*--accent-strong/);
+    expect(css).toMatch(/--route-live-strong:\s*#7C3AED/);
+    expect(css).toMatch(/--route-live-soft:\s*#8B5CF6/);
+    expect(css).toMatch(/--route-arrived:\s*#475569/);
   });
 
   it("layar pesan gestur dipergelap: bawaan MapLibre terlalu tipis di atas peta terang", () => {

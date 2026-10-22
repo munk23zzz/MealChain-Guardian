@@ -208,6 +208,9 @@ describe("nada & kelas garis", () => {
       routes: [{ ...kiriman(), journey: { ...kiriman().journey, state: "sudah_tiba" } }],
     });
     expect(routeLegendEntries(tiba).map((e) => e.label)).toEqual(["Sudah tiba (redup)"]);
+    // Nada "tiba" (bukan "ok"): kanvas menggambar kiriman yang sudah tiba dengan
+    // slate --route-arrived, bukan violet (audit 22 Okt 2026).
+    expect(routeLegendEntries(tiba).map((e) => e.tone)).toEqual(["tiba"]);
 
     const denganGagal = routeLegendEntries(
       supplierRoutes({ routes: [kiriman(), kiriman({ safety_status: "fail", destination_name: "Bogor" })] })
@@ -221,6 +224,20 @@ describe("nada & kelas garis", () => {
 });
 
 describe("layer GeoJSON", () => {
+  it("dua kiriman di lajur yang sama tidak berbagi id fitur", () => {
+    // Regresi 22 Okt 2026: `properties.id` dulu id LAJUR, sehingga dua batch
+    // telur dari pemasok yang sama ke SPPG yang sama berbagi id — klik dan
+    // sorotan menunjuk kiriman yang salah. Kini id per KIRIMAN (`lajur#batch`),
+    // dan id tingkat-fitur diberi akhiran `#kind` karena satu kiriman = dua fitur.
+    const dua = { routes: [kiriman(), kiriman({ batch_id: "b-2" })] };
+    const fitur = routeGeoJson(dua).features;
+    const idFitur = fitur.map((f) => f.id);
+    expect(new Set(idFitur).size, "id tingkat-fitur harus unik").toBe(idFitur.length);
+    const idKiriman = fitur.map((f) => f.properties.id);
+    expect(new Set(idKiriman).size).toBe(2);
+    expect(idKiriman.every((id) => id.includes("#b-"))).toBe(true);
+  });
+
   it("hanya menggambar kiriman yang punya geometri jalan", () => {
     const tanpaRute = kiriman({
       road: null,
