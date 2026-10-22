@@ -39,6 +39,35 @@ Dampak ke matriks: **33 baris terbukti, 0 GAP, 3 dipensiunkan** (sebelumnya 32/1
 panel-panel yang sengaja tidak dipasang kini punya bukti tes dan tidak lagi dilaporkan sebagai
 cacat data.
 
+## 0b. Peta: kiriman selama sesi demo (22 Okt 2026, susulan kedua)
+
+Pertanyaan pemilik: "selama sesi demo, apakah semua pengiriman semua komoditas tampil di peta?".
+Diaudit dengan API + DOM, tiga cacat nyata ditemukan dan diperbaiki:
+
+1. **Init-demo menghapus cache rute.** Tabel `road_routes` ikut terbersihkan di awal
+   init-demo, sehingga peta kehilangan SELURUH garis jalur (terukur `with_road` 114 -> 0);
+   hanya tombol "Siapkan data demo" yang menyinkronkan ulang. Init-demo sekarang memanggil
+   sinkronisasi yang sama dengan tombol itu; hasil terukur `with_road` 88.
+2. **Tidak ada satu pun kiriman berstatus `di_jalan`.** Jalur demo_template memberangkatkan
+   batch memakai durasi cache OSRM (`dispatched_at = now - 0,35 x durasi`), jalur init-demo
+   tidak. Akibatnya ikon truk tidak pernah muncul walau rutenya ada (journey: di_jalan 0).
+   Init-demo kini memberangkatkan 8 kiriman; terukur `di_jalan` 8, `sudah_tiba` 50.
+3. **Pin pemasok disaring dari komoditas utama saja.** Satu pemasok bisa mengirim lebih dari
+   satu komoditas (`shipping.commodities`); kiriman komoditas lain tidak pernah tergambar.
+   Terukur 4 pemasok / 5 pasangan kiriman hilang. Penyaring kini juga menerima alasan
+   "punya kiriman aktif komoditas itu" (+ tes).
+
+Perbaikan sampingan dari temuan yang sama: baris cache dengan `duration_s = 0` (pemasok dan
+tujuan berimpit, 10 baris) dulu dilaporkan sebagai `road` berdurasi 0 menit padahal `journey`
+sengaja tidak membuat ETA untuk durasi 0 — kontrak yang bertentangan sendiri dan membuat
+`test_supplier_routes_api` gagal. Sekarang baris itu jujur berstatus "tanpa jalan".
+
+Angka peta saat ini (nasional, BGN Monitor): 105 kiriman aktif, 88 bergeometri jalan,
+8 di jalan, 50 sudah tiba, 17 belum berangkat, 30 tidak diketahui; per komoditas telur 27,
+ayam 25, beras 27, wortel 26 kiriman. Batas yang perlu diketahui juri: peta menampilkan SATU
+komoditas pada satu waktu (chip telur/ayam/beras/wortel) — tidak ada mode "semua komoditas
+sekaligus".
+
 ## 1. Ringkasan: masalah dan akar penyebab
 
 Keluhan awal "database tidak sesuai kebutuhan project" ternyata **bukan satu bug**, melainkan
