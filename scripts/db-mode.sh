@@ -22,7 +22,9 @@ perintah="${1:-status}"
 shift || true
 
 DB_NAME="${DB_NAME:-mealchain}"
-DB_MODE="${DB_MODE:-default}"
+# DB_MODE TIDAK diberi nilai bawaan: `status` harus bisa membedakan "operator
+# tidak menyetel mode" dari "operator mengharapkan default". Nilai bawaan di
+# sini dulu membuat database DEMO yang sehat terbaca "cocok: false".
 
 # Password Postgres dibaca dari .env tanpa mencetaknya ke layar/log.
 sandi="$(
@@ -33,9 +35,16 @@ sandi="${sandi:-mealchain_local}"
 
 DSN="postgresql+asyncpg://mealchain:${sandi}@postgres:5432/${DB_NAME}"
 
-echo "== db-mode: ${perintah} (database=${DB_NAME}, DB_MODE=${DB_MODE}) =="
+# Teruskan DB_MODE hanya bila disetel, supaya modul bisa melaporkan mode_env
+# sebagai null alih-alih membandingkan dengan nilai bawaan.
+tambahan=()
+if [[ -n "${DB_MODE:-}" ]]; then
+  tambahan+=(-e "DB_MODE=${DB_MODE}")
+fi
+
+echo "== db-mode: ${perintah} (database=${DB_NAME}, DB_MODE=${DB_MODE:-<tidak disetel>}) =="
 docker compose exec -T \
   -e DATABASE_URL="$DSN" \
-  -e DB_MODE="$DB_MODE" \
   -e PYTHONPATH=/app \
+  "${tambahan[@]}" \
   backend python -m app.seed.db_mode "$perintah" "$@"

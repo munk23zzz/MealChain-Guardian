@@ -177,14 +177,18 @@ async def cmd_status(session) -> dict:
     jumlah = await _hitung(session)
     demo = await _hitung_demo(session)
     isi = _mode_dari_isi(jumlah)
-    env = (os.environ.get("DB_MODE") or settings.db_mode or "default").lower()
+    # `mode_env` hanya dilaporkan bila operator MEMANG menyetel DB_MODE.
+    # Tanpa itu, membandingkan dengan nilai bawaan "default" membuat database
+    # DEMO yang sehat terbaca "cocok: false" hanya karena skrip dijalankan
+    # tanpa variabel — peringatan palsu yang melatih orang mengabaikan status.
+    env = (os.environ.get("DB_MODE") or "").strip().lower() or None
     from sqlalchemy import text
 
     alembic = await session.scalar(text("select version_num from alembic_version"))
     return {
         "mode_isi": isi,
         "mode_env": env,
-        "cocok": isi == env,
+        "cocok": (None if env is None else isi == env),
         "alembic": alembic,
         "host": _host_db(),
         "jumlah": jumlah,

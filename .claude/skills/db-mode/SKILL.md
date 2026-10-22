@@ -72,9 +72,12 @@ bash scripts/db-mode.sh status | head -8
 Yang harus dibaca:
 
 - `mode_isi` — mode menurut isi database (ini yang dipakai).
-- `mode_env` — nilai `DB_MODE` yang diharapkan aplikasi.
-- `cocok` — `false` berarti environment dan isi database berbeda; perbaiki
-  dengan perintah `init-*`/`reset-demo`, atau ubah `DB_MODE` di `.env`.
+- `mode_env` — nilai `DB_MODE` yang diharapkan aplikasi. **`null` berarti
+  operator tidak menyetelnya** (skrip tidak mengarang nilai bawaan), jadi tidak
+  ada yang perlu diperbandingkan.
+- `cocok` — `true`/`false` hanya muncul bila `mode_env` diisi. `false` berarti
+  environment dan isi database berbeda; perbaiki dengan perintah
+  `init-*`/`reset-demo`, atau ubah `DB_MODE` di `.env`.
 - `jumlah` — bila mode DEFAULT, semua tabel bisnis harus `0`.
 - `bertanda_demo` — jumlah baris `origin='demo'` per tabel (mode DEMO).
 
