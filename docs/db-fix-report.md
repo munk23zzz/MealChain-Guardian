@@ -44,10 +44,10 @@ cacat data.
 Pertanyaan pemilik: "selama sesi demo, apakah semua pengiriman semua komoditas tampil di peta?".
 Diaudit dengan API + DOM, tiga cacat nyata ditemukan dan diperbaiki:
 
-1. **Init-demo menghapus cache rute.** Tabel `road_routes` ikut terbersihkan di awal
-   init-demo, sehingga peta kehilangan SELURUH garis jalur (terukur `with_road` 114 -> 0);
-   hanya tombol "Siapkan data demo" yang menyinkronkan ulang. Init-demo sekarang memanggil
-   sinkronisasi yang sama dengan tombol itu; hasil terukur `with_road` 88.
+1. **Init-demo tidak pernah menyinkronkan cache rute.** Hanya tombol "Siapkan data demo" yang
+   melakukannya; pada keadaan di mana tabel bisnis dibersihkan lebih dulu, cache ikut hilang dan
+   peta kehilangan SELURUH garis jalur (terukur `with_road` 114 -> 0). Init-demo sekarang memanggil
+   sinkronisasi yang sama dengan tombol itu; terukur `with_road` 85 dari 105 kiriman aktif.
 2. **Tidak ada satu pun kiriman berstatus `di_jalan`.** Jalur demo_template memberangkatkan
    batch memakai durasi cache OSRM (`dispatched_at = now - 0,35 x durasi`), jalur init-demo
    tidak. Akibatnya ikon truk tidak pernah muncul walau rutenya ada (journey: di_jalan 0).
