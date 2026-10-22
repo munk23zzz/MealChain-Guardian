@@ -1,0 +1,200 @@
+{
+  "mode": "demo",
+  "url": "http://127.0.0.1:8099/",
+  "total": 14,
+  "lulus": 14,
+  "gagal": 0,
+  "hasil": [
+    {
+      "id": "supply-beras-jakarta",
+      "skill": "supply_situation",
+      "tanya": "Bagaimana situasi pasokan beras di SPPG Jakarta hari ini?",
+      "endpoint": "GET /balance/map?commodity=beras, /supply/{loc}/{com}",
+      "detik": 0.97,
+      "lulus": true,
+      "cocok": [
+        "beras",
+        "kg"
+      ],
+      "galat": null,
+      "jawaban": "Keseimbangan pasokan per lokasi (40 baris), yang kurang ditampilkan lebih dulu:\n\n| SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | Status |\n|---|---|---|---|---|---|\n| Bandung | ayam | 242,2 kg | 311,8 kg | kurang 69,6 kg | KURANG |\n| Bandung | telur | 413,3 kg | 545,3 kg | kurang 132,1 kg | KURANG |\n| Bandung | wortel | 344,6 kg | 390,4 kg | kurang 45,8 kg | KURANG |\n| Bogor | ayam | 305,5 kg | 307,7 kg | kurang 2,2 kg | KURANG |\n| Bogor | wortel | 190,7 kg | 399,9 kg | kurang 209,3 kg | KURANG |\n| Jakarta | ayam | 207,6 kg | 213 kg | kurang 5,4 kg | KURANG |\n| Jakarta | beras | 920,2 kg | 2.956,4 kg | kurang 2.036,2 kg | KURANG |\n| Jakarta | telur | 307,4 kg | 1.060,1 kg | kurang 752,7 kg | KURANG |\n| Makassar | ayam | 149,2 kg | 159 kg | kurang 9,8 kg | KURANG |\n| Makassar | beras | 624,5 kg | 853,4 kg | kurang 228,9 kg | KURANG |\n| Makassar | telur | 303,6 kg | 309,4 kg | kurang 5,8 kg | KURANG |\n| Medan | ayam | 100,8 kg | 106,7 kg | kurang 5,9 kg | KURANG |\n\nInventaris batch (125 batch):\n\n| SPPG | Komoditas | Jumlah | Keamanan | Skor kesegaran | Boleh dipakai sampai |\n|---|---|---|---|---|---|\n| Jakarta | ayam | 120 kg | GAGAL | 0,88 | 2026-10-12T03:36:00+00:00 |\n| Cianjur"
+    },
+    {
+      "id": "risiko-pemasok-bandung",
+      "skill": "supplier_risk",
+      "tanya": "Pemasok mana yang berisiko dikeluarkan di Bandung dan mengapa?",
+      "endpoint": "GET /supplier-exclusions, /supplier-routes",
+      "detik": 0.46,
+      "lulus": true,
+      "cocok": [
+        "pemasok"
+      ],
+      "galat": null,
+      "jawaban": "Direktori pemasok (61 pemasok, dikelompokkan per SPPG):\n\n| Pemasok | SPPG | Komoditas | Keandalan | Kapasitas/minggu | Kiriman aktif |\n|---|---|---|---|---|---|\n| Toko Sayur Bu Endang | Jakarta | — | 0,82 | — | 1 batch · 220 kg · dikecualikan di hub |\n| CV Lembang Sayur Makmur | Bandung | wortel | 0,88 | — | 1 batch · 210 kg |\n| CV Lembang Telur Segar | Bandung | telur | 0,85 | — | 2 batch · 400 kg |\n| PT Cileunyi Ayam Segar | Bandung | ayam | 0,89 | — | 1 batch · 600 kg |\n| UD Caringin Sayur Induk | Bandung | wortel | 0,84 | — | 2 batch · 640 kg |\n| UD Rancaekek Beras Sejahtera | Bandung | beras | 0,86 | — | 3 batch · 2.200 kg |\n| CV Beras Sari Bogor | Bogor | beras | 0,89 | — | 2 batch · 1.300 kg |\n| CV Puncak Sayur Sejahtera | Bogor | wortel | 0,86 | — | 3 batch · 1.000 kg |\n| PD Cibinong Beras Mandiri | Bogor | beras | 0,52 | — | 1 batch · 600 kg |\n| PT Bogor Prima Ayam | Bogor | ayam | 0,91 | — | 1 batch · 900 kg |\n| UD Cibinong Telur Berkah | Bogor | telur | 0,87 | — | 3 batch · 1.100 kg |\n| CV Ayam Kampung Cugenang | Cianjur | ayam | 0,81 | — | 1 batch · 1.000 kg |\n| CV Barokah Telur Cianjur | Cianjur | — | 0,85 | — | 1 batch · 800 kg |\n| CV Lestari Sayur Cugenang | Cianjur "
+    },
+    {
+      "id": "antrean-usulan",
+      "skill": "approval_queue",
+      "tanya": "Tampilkan antrean usulan keputusan yang menunggu persetujuan saya.",
+      "endpoint": "GET /decisions, /decisions/{id}/approval-summary",
+      "detik": 0.59,
+      "lulus": true,
+      "cocok": [
+        "usulan",
+        "keputusan"
+      ],
+      "galat": null,
+      "jawaban": "Antrean usulan keputusan MealChain Guardian (5 baris):\n\n| ID | Jenis | Asal → tujuan | Komoditas | Jumlah | Status |\n|---|---|---|---|---|---|\n| 102dd6ea-7959-5806-aceb-48866c019d10 | penyeimbangan wilayah | Bogor → Cianjur | ayam | 175,5 kg | verifier_flagged |\n| 36465d64-522a-57f5-8bdc-ba62e38739a0 | anomali harga | Cianjur → Bandung | wortel | 200,5 kg | pending_approval |\n| 3d9df3fd-309b-52ef-bbdd-7e07e802a984 | anomali harga | Bandung → Semarang | beras | 225,5 kg | approved |\n| 4a36cbd3-b714-56fa-a04a-d034de2c018f | supplier_procurement | Medan → Jakarta | ayam | 375,5 kg | pending_approval |\n| ed9689ef-9399-584a-b088-f788bb838f4b | penyeimbangan wilayah | Jakarta → Bogor | telur | 150,5 kg | proposed |\n\n_Persetujuan TIDAK bisa dilakukan dari Joule: approver menekan Setuju di UI MealChain dengan tokennya sendiri (Rules.md §1.2 — tidak ada auto-execute)._\n_Sumber: GET /decisions + GET /decisions/{id}/approval-summary._"
+    },
+    {
+      "id": "kpi-mingguan",
+      "skill": "kpi_snapshot",
+      "tanya": "Berapa indikator kinerja KPI program dalam 7 hari terakhir?",
+      "endpoint": "GET /kpi?start&end",
+      "detik": 0.58,
+      "lulus": true,
+      "cocok": [
+        "kpi",
+        "indikator"
+      ],
+      "galat": null,
+      "jawaban": "Indikator kinerja MealChain Guardian (7 metrik, angka dari backend):\n\n| Indikator | Nilai |\n|---|---|\n| Meal Continuity Rate | 98,55% |\n| Avoidable Food Loss | 0,07% |\n| Regional Imbalance Resolution Rate | 100% |\n| Safe Delivered Cost | Rp9.764.019 |\n| Procurement Price Deviation | 5,18% |\n| Decision Time | 20 menit |\n| Evidence Completeness | 50% |\n\n_0 indikator belum bisa dihitung dan ditandai alasannya, bukan diisi nol._\n_Sumber: GET /kpi (jendela waktu diminta oleh jembatan)._"
+    },
+    {
+      "id": "po-dari-keputusan",
+      "skill": "purchase_order",
+      "tanya": "Tunjukkan PO MC-EXTRA000 dan dari keputusan mana PO itu lahir.",
+      "endpoint": "GET /sap/purchase-orders?limit",
+      "detik": 0.53,
+      "lulus": true,
+      "cocok": [
+        "keputusan"
+      ],
+      "galat": null,
+      "jawaban": "Purchase order MealChain Guardian (20 PO terbaca):\n\n| Nomor PO | Status | Lokasi tujuan | Bahan | Jumlah | Total | Keputusan |\n|---|---|---|---|---|---|---|\n| MC-EXTREME01 | rancangan | — | — | 99.999,5 kg | Rp99.999.499.000 | impor SAP |\n| 4500000001 | dikonfirmasi | — | — | 500 kg | Rp13.100.000 | impor SAP |\n| 4500000002 | dikonfirmasi | — | — | 700 kg | Rp8.820.000 | impor SAP |\n| 4500000003 | dikonfirmasi | — | — | 400 kg | Rp9.040.000 | impor SAP |\n| 4500000004 | dikonfirmasi | — | — | 300 kg | Rp10.620.000 | impor SAP |\n| 4500000005 | dikonfirmasi | — | — | 600 kg | Rp7.680.000 | impor SAP |\n| 4500000006 | dikonfirmasi | — | — | 350 kg | Rp7.490.000 | impor SAP |\n| 4500000007 | dikonfirmasi | — | — | 800 kg | Rp22.560.000 | impor SAP |\n| 4500000008 | terkirim | — | — | 500 kg | Rp7.100.000 | impor SAP |\n| 4500000009 | dikonfirmasi | — | — | 300 kg | Rp7.560.000 | impor SAP |\n\n_Sumber: GET /sap/purchase-orders (tabel mock SAP di backend), urutan terbaru lebih dulu — angka apa adanya, tanpa hitung ulang di jembatan._\n_Sebut satu nomor PO (mis. `PO MC-661695B2C685`) untuk melihat rinciannya._\n_10 baris lain tidak ditampilkan._"
+    },
+    {
+      "id": "harga-wortel",
+      "skill": "price_intelligence",
+      "tanya": "Berapa harga acuan dan kuotasi pemasok untuk wortel di Jakarta?",
+      "endpoint": "GET /price/{loc}/{com}, /price/quotes/{loc}/{com}",
+      "detik": 0.51,
+      "lulus": true,
+      "cocok": [
+        "wortel",
+        "rp"
+      ],
+      "galat": null,
+      "jawaban": "Harga acuan per SPPG dan komoditas (1 pasangan terbaca):\n\n| SPPG | Komoditas | Harga per kg | Sumber | Dicatat |\n|---|---|---|---|---|\n| Jakarta | wortel | Rp23.068 | acuan PIHPS | 4 Nov 2026 19.00 WIB |\n\nKuotasi pemasok terbaru (3 kuotasi, yang terbaru lebih dulu):\n\n| Pemasok | SPPG | Komoditas | Harga per kg | Dicatat |\n|---|---|---|---|---|\n| UD Puncak Sayur Asri | Jakarta | wortel | Rp25.683 | 3 Nov 2026 07.00 WIB |\n| UD Tani Sayur Depok | Jakarta | wortel | Rp23.854 | 3 Nov 2026 07.00 WIB |\n| CV Hortikultura Subang Lestari | Jakarta | wortel | Rp24.950 | 3 Nov 2026 07.00 WIB |\n\n_Dari 40 pasangan (SPPG, komoditas) di inventaris, 1 diperiksa karena pertanyaan menyebut SPPG/komoditas tertentu._\n_Sumber: `GET /price/…` + `GET /price/quotes/…` — harga apa adanya dari backend; jembatan tidak menghitung termurah atau rata-rata._\n_Komoditas tanpa baris harga tidak diisi nol: kekosongan berarti backend belum punya sinyal harga untuk pasangan itu._"
+    },
+    {
+      "id": "prakiraan-kebutuhan",
+      "skill": "demand_forecast",
+      "tanya": "Bagaimana prakiraan kebutuhan telur untuk SPPG Jakarta?",
+      "endpoint": "GET /demand/forecast/{loc}/{com}",
+      "detik": 0.49,
+      "lulus": true,
+      "cocok": [
+        "telur",
+        "prakiraan"
+      ],
+      "galat": null,
+      "jawaban": "Kebutuhan dan prakiraan per SPPG (1 pasangan terbaca):\n\n| SPPG | Komoditas | Kebutuhan | Diperlukan sampai | Prakiraan | Metode prakiraan | Keyakinan (0–1) |\n|---|---|---|---|---|---|---|\n| Jakarta | telur | 1.074,1 kg | 7 Nov 2026 07.00 WIB | 7.509,8 kg | fallback statistik (model peramal tidak dipakai) | 1,00 |\n\n_Dari 40 pasangan (SPPG, komoditas) di inventaris, 1 diperiksa karena pertanyaan menyebut SPPG/komoditas tertentu._\n_Sumber: `GET /demand/…` + `GET /demand/forecast/…` (angka dari backend; jembatan tidak meramal dan tidak menghitung ulang)._\n_`fallback statistik` berarti model peramal SAP tidak dipakai untuk pasangan itu — prakiraannya tetap angka backend, bukan tebakan jembatan._"
+    },
+    {
+      "id": "kehilangan-pangan",
+      "skill": "food_loss",
+      "tanya": "Berapa kehilangan pangan 30 hari terakhir dan mana yang sudah dialihkan?",
+      "endpoint": "GET /waste/summary?days=30",
+      "detik": 0.53,
+      "lulus": true,
+      "cocok": [
+        "limbah",
+        "kg"
+      ],
+      "galat": null,
+      "jawaban": "Kehilangan pangan dan pengalihannya (MealChain Guardian)\n\n- **Limbah tercatat:** 410,7 kg · 53 kejadian\n- **Dialihkan ke mitra:** 58,5 kg · 3 kejadian\n- **Tercatat tanpa mitra:** 352,2 kg · 50 kejadian\n- **Periode:** 22 Sep 2026 14.27 WIB – 22 Okt 2026 14.27 WIB (30 hari)\n- **Cakupan:** bgn_monitor · 10 SPPG\n- **Dihitung pada:** 22 Okt 2026 14.27 WIB\n\nMitra pengalihan limbah:\n\n| Mitra | Jumlah | Kejadian |\n|---|---|---|\n| Kompos Bersama | 26,5 kg | 1 |\n| Bank Pangan Nusantara | 19,5 kg | 1 |\n| Bank Sampah Melati | 12,5 kg | 1 |\n\n_Sumber: `GET /waste/summary` (tabel `disposal_events`) — angka dihitung backend, jembatan hanya memformat._\n_Tanpa mitra artinya limbah tercatat tetapi belum dialihkan ke pengolahan — bukan berarti dibuang; backend tidak menyimpulkan hal itu._"
+    },
+    {
+      "id": "penerimaan-menunggu",
+      "skill": "receipts_queue",
+      "tanya": "Penerimaan barang mana yang masih menunggu pemeriksaan?",
+      "endpoint": "GET /receipts/menunggu, /receipts?batch_id",
+      "detik": 0.5,
+      "lulus": true,
+      "cocok": [
+        "menunggu"
+      ],
+      "galat": null,
+      "jawaban": "Ada 3 penerimaan barang yang menunggu keputusan:\n\n| Komoditas | Jumlah | Lokasi | Keamanan | Dicatat oleh | Diperiksa | Waktu |\n|---|---|---|---|---|---|---|\n| telur | 180 kg | Jakarta | needs_verification | SPPG Head Demo | 1/3 | 22 Okt 2026 13.25 WIB |\n| ayam | 220 kg | Bogor | pass | SPPG Head Demo | 0/3 | 22 Okt 2026 12.25 WIB |\n| wortel | 260 kg | Cianjur | fail | SPPG Head Demo | 1/3 | 22 Okt 2026 11.25 WIB |\n\n_Sumber: `GET /receipts/menunggu` (satu baris per batch, catatan terbaru), sudah di-scope ke lokasi pengguna._\n_Persetujuan ditulis lewat `POST /receipts/{id}/approve`; barulah stok bertambah._"
+    },
+    {
+      "id": "batch-karantina",
+      "skill": "quarantine_status",
+      "tanya": "Apakah ada batch yang sedang dikarantina atau gagal keamanan pangan?",
+      "endpoint": "GET /batches",
+      "detik": 0.45,
+      "lulus": true,
+      "cocok": [
+        "karantina",
+        "batch"
+      ],
+      "galat": null,
+      "jawaban": "Ada 1 batch berstatus karantina:\n\n| Batch | Komoditas | Jumlah | Lokasi | Keamanan |\n|---|---|---|---|---|\n| 8ee9f272 | telur | 180 kg | Jakarta | needs_verification |\n\n_Sumber: `GET /batches` (kolom `quarantine_status`), angka apa adanya dari backend._"
+    },
+    {
+      "id": "bukti-keputusan",
+      "skill": "decision_evidence",
+      "tanya": "Perlihatkan bukti keputusan terbaru: apakah tanda tangannya masih sah?",
+      "endpoint": "GET /decisions/{id}/compliance, /chain, /traces",
+      "detik": 0.57,
+      "lulus": true,
+      "cocok": [
+        "bukti",
+        "keputusan"
+      ],
+      "galat": null,
+      "jawaban": "Bukti & jejak keputusan MealChain Guardian (3 keputusan):\n\n**Keputusan e7150da4-cb4b-5b46-a380-6fccbeaa3dc9**\n\n- **Jenis:** penyeimbangan wilayah\n- **Status:** dieksekusi\n- **Diusulkan oleh:** supervisor_agent\n- **Tanda tangan:** bertanda tangan · ECDSA-secp256k1-sha256 (deterministic RFC6979) · verifikasi materi: cocok\n- **Sidik tanda tangan:** dd9e792a799e72ea6e571b03…\n- **Alamat isi (content address):** mc1-7xlhwpjqijk9cczgxi2k7wp8isivfyb8bfn20rhrvphnmwqv1\n- **Bukti / approval / jejak:** 3 / 2 / 4\n- **Penyetuju:** — (sppg_head), — (sppg_nutritionist)\n- **Iterasi dalam rantai:** 1\n\nRantai iterasi:\n\n| Iterasi | Status | Jumlah | Alasan penolakan | Dibuat |\n|---|---|---|---|---|\n| 1 | dieksekusi | 600 kg | — | 22 Okt 2026 13.41 WIB |\n\nJejak agen:\n\n| Langkah | Tool | Ringkasan keluaran | Waktu |\n|---|---|---|---|\n| DETECT | demo.detect | — | 22 Okt 2026 13.41 WIB |\n| VERIFY | demo.verify | — | 22 Okt 2026 13.45 WIB |\n| DECIDE | demo.decide | — | 22 Okt 2026 13.51 WIB |\n| ACT | demo.act | — | 22 Okt 2026 14.01 WIB |\n\n**Keputusan b54d0f11-0d61-57ad-88a0-c72b20b66280**\n\n- **Jenis:** penyeimbangan wilayah\n- **Status:** dieksekusi\n- **Diusulkan oleh:** supervisor_agent\n- **Tanda tangan:*"
+    },
+    {
+      "id": "status-sistem",
+      "skill": "system_status",
+      "tanya": "Bagaimana status integrasi sistem dan verifikasi ledger?",
+      "endpoint": "GET /integrations/status, /ledger/verify, /sap/purchase-orders/summary",
+      "detik": 0.58,
+      "lulus": true,
+      "cocok": [
+        "integrasi",
+        "ledger"
+      ],
+      "galat": null,
+      "jawaban": "Komponen integrasi (7 komponen, diperiksa 22 Okt 2026 14.27 WIB):\n\n| Komponen | Status | Bukti |\n|---|---|---|\n| AgentCore Runtime (Strands supervisor) | terkonfigurasi | env AGENTCORE_RUNTIME_ARN terisi |\n| SAP AI Core (SAP-RPT-1.6) | kontrak diuji | env SAP_AI_CORE_CLIENT_ID terisi |\n| Mock SAP (sap_integration) | kontrak diuji | layanan mock-sap + tes kontrak PO |\n| Observability | gagal-tertutup | kebijakan: tanpa kredensial → galat eksplisit, bukan laporan palsu |\n| AgentCore Gateway | belum dimulai | env AGENTCORE_GATEWAY_URL kosong |\n| AWS for SAP MCP | belum dimulai | belum ada implementasi/tenant |\n| AgentCore Memory | tersedia, belum dipakai aplikasi | env AGENTCORE_MEMORY_ID terisi |\n\nLedger bukti (rantai blok):\n\n- **Status verifikasi:** SAH\n- **Blok:** 72 (terhubung 12, yatim 60)\n- **Rasio blok terhubung (0–1):** 0,17\n- **Kepala rantai:** f267b4272bf4ea538ec2f8645778ab9d07ea1d83d92d110acae2848a3b29483e\n- **Peringatan cakupan:** rantai utuh, tetapi 60 blok menunjuk entitas yang sudah tidak ada\n\nPurchase order (mock SAP):\n\n- **Jumlah PO:** 20\n- **Total nilai:** Rp100.195.448.434\n- **Per status:** rancangan=2, terkirim=3, dikonfirmasi=15\n- **Cakupan:** nasional · sumber mo"
+    },
+    {
+      "id": "direktori-pemasok",
+      "skill": "supplier_directory",
+      "tanya": "Daftar pemasok yang terdaftar beserta komoditasnya.",
+      "endpoint": "GET /suppliers?limit",
+      "detik": 0.46,
+      "lulus": true,
+      "cocok": [
+        "pemasok"
+      ],
+      "galat": null,
+      "jawaban": "Direktori pemasok (61 pemasok, dikelompokkan per SPPG):\n\n| Pemasok | SPPG | Komoditas | Keandalan | Kapasitas/minggu | Kiriman aktif |\n|---|---|---|---|---|---|\n| Toko Sayur Bu Endang | Jakarta | — | 0,82 | — | 1 batch · 220 kg · dikecualikan di hub |\n| CV Lembang Sayur Makmur | Bandung | wortel | 0,88 | — | 1 batch · 210 kg |\n| CV Lembang Telur Segar | Bandung | telur | 0,85 | — | 2 batch · 400 kg |\n| PT Cileunyi Ayam Segar | Bandung | ayam | 0,89 | — | 1 batch · 600 kg |\n| UD Caringin Sayur Induk | Bandung | wortel | 0,84 | — | 2 batch · 640 kg |\n| UD Rancaekek Beras Sejahtera | Bandung | beras | 0,86 | — | 3 batch · 2.200 kg |\n| CV Beras Sari Bogor | Bogor | beras | 0,89 | — | 2 batch · 1.300 kg |\n| CV Puncak Sayur Sejahtera | Bogor | wortel | 0,86 | — | 3 batch · 1.000 kg |\n| PD Cibinong Beras Mandiri | Bogor | beras | 0,52 | — | 1 batch · 600 kg |\n| PT Bogor Prima Ayam | Bogor | ayam | 0,91 | — | 1 batch · 900 kg |\n| UD Cibinong Telur Berkah | Bogor | telur | 0,87 | — | 3 batch · 1.100 kg |\n| CV Ayam Kampung Cugenang | Cianjur | ayam | 0,81 | — | 1 batch · 1.000 kg |\n| CV Barokah Telur Cianjur | Cianjur | — | 0,85 | — | 1 batch · 800 kg |\n| CV Lestari Sayur Cugenang | Cianjur "
+    },
+    {
+      "id": "po-inggris",
+      "skill": "purchase_order",
+      "tanya": "Show me the latest purchase orders and their suppliers, please.",
+      "endpoint": "GET /sap/purchase-orders?limit",
+      "detik": 0.44,
+      "lulus": true,
+      "cocok": [
+        "po"
+      ],
+      "galat": null,
+      "jawaban": "Purchase order MealChain Guardian (20 PO terbaca):\n\n| Nomor PO | Status | Lokasi tujuan | Bahan | Jumlah | Total | Keputusan |\n|---|---|---|---|---|---|---|\n| MC-EXTREME01 | rancangan | — | — | 99.999,5 kg | Rp99.999.499.000 | impor SAP |\n| 4500000001 | dikonfirmasi | — | — | 500 kg | Rp13.100.000 | impor SAP |\n| 4500000002 | dikonfirmasi | — | — | 700 kg | Rp8.820.000 | impor SAP |\n| 4500000003 | dikonfirmasi | — | — | 400 kg | Rp9.040.000 | impor SAP |\n| 4500000004 | dikonfirmasi | — | — | 300 kg | Rp10.620.000 | impor SAP |\n| 4500000005 | dikonfirmasi | — | — | 600 kg | Rp7.680.000 | impor SAP |\n| 4500000006 | dikonfirmasi | — | — | 350 kg | Rp7.490.000 | impor SAP |\n| 4500000007 | dikonfirmasi | — | — | 800 kg | Rp22.560.000 | impor SAP |\n| 4500000008 | terkirim | — | — | 500 kg | Rp7.100.000 | impor SAP |\n| 4500000009 | dikonfirmasi | — | — | 300 kg | Rp7.560.000 | impor SAP |\n\n_Sumber: GET /sap/purchase-orders (tabel mock SAP di backend), urutan terbaru lebih dulu — angka apa adanya, tanpa hitung ulang di jembatan._\n_Sebut satu nomor PO (mis. `PO MC-661695B2C685`) untuk melihat rinciannya._\n_10 baris lain tidak ditampilkan._"
+    }
+  ]
+}

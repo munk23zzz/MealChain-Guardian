@@ -152,18 +152,18 @@ Cakupan enum (dihitung `group by` dari DB, bukan klaim):
 Matriks cakupan lengkap ada di `docs/db-coverage-matrix.md`, dihasilkan ulang oleh
 `scripts/audit/db_coverage.py` dari kondisi live (route, skema, respons HTTP, dan satu query SQL
 per baris). Angka ringkasnya (run terakhir, data DEMO final): 11 layar sidebar, 36 baris matriks,
-**33 baris terbukti penuh, 3 baris GAP**, 612 sel state tampilan (287 terbukti, 294 GAP, 31 N/A),
+**33 baris terbukti penuh, 0 baris GAP, 3 dipensiunkan sengaja**, 612 sel state tampilan (271 terbukti, 310 GAP, 31 N/A),
 **3 enum** yang masih tidak sinkron antara kode, CHECK constraint, dan nilai di DB.
 
 **GAP yang jujur harus disebut:**
 
-1. Tiga baris GAP = tiga komponen yang ada di repo tetapi **tidak dirender layar mana pun** —
-   "Konsol operasi — snapshot kondisi", "Konsol operasi — analisis agent & usulan",
-   "Supplier governance (eksklusi/pemulihan)". Ini cacat frontend, bukan data; tidak saya ubah
-   karena di luar lingkup database. (Sebelum data demo dibangun ulang sempat terbaca 4 GAP karena
-   satu penanda data belum ada; sekarang 3.)
+1. Tiga panel — "Konsol operasi — snapshot kondisi", "Konsol operasi — analisis agent & usulan",
+   dan "Status integrasi" — **tidak dirender layar mana pun**, tetapi itu **keputusan produk yang
+   punya bukti**: `frontend/tests/prd-nav.test.tsx:50-60` menuntut `page.tsx` TANPA
+   `IntegrationStatusPanel` dan TANPA `<OpsConsole`. Karena itu statusnya sekarang
+   `DIPENSIUNKAN`, bukan GAP; memasangnya kembali justru memerahkan tes PRD.
 
-2. 294 sel state tampilan (mis. `kosong`, `filter_tanpa_hasil`, `error`) tidak bisa dibuktikan
+2. 310 sel state tampilan (mis. `kosong`, `filter_tanpa_hasil`, `error`) tidak bisa dibuktikan
    lewat baris database — perlu interaksi UI atau tes komponen. Yang bisa dibuktikan lewat data
    (volume > 1 halaman, angka ekstrem, teks panjang/Unicode, tanggal lampau/hari ini/masa depan)
    sudah disediakan builder.
@@ -240,7 +240,10 @@ Konfigurasi destination (`MEALCHAIN_AGENT_01`) tidak diubah.
 | Frontend mode DEFAULT | empty state benar ("Belum ada data …", 0 kg), tanpa error/NaN, tanpa spinner menggantung |
 | 14 pertanyaan Joule DEMO / DEFAULT | 14/14 dan 14/14 |
 | `ruff` berkas yang diubah | bersih (kecuali `N818` lama pada `Sibuk` di `demo_template_reset.py`, sudah ada sebelum pekerjaan ini) |
-| Gerbang backend terpisah (`scripts/gerbang-db-terpisah.sh`) | **1282 passed, 18 skipped, 0 failed** (785,94 detik ≈ 13 menit), log `_qa/gerbang-db-terpisah-2026-10-22.txt` |
+| Gerbang backend terpisah (`scripts/gerbang-db-terpisah.sh`) | **1282 passed, 18 skipped, 0 failed** — 830,81 detik (13m50s), dijalankan ulang SESUDAH seluruh perbaikan §0; log `_qa/gerbang-db-terpisah-2026-10-22.txt` |
+| `init-demo` dua kali berturut-turut | identik: supply 5.200, decisions 14, agent_traces 40 (6 ber-agen), batch 125, PO 20, penerimaan 5 |
+| `init-default` dua kali | identik: 4 komoditas, 10 lokasi, 7 akun, semua tabel bisnis 0 |
+| Data bertahan setelah semeai | supply 5.200 tetap 5.200 setelah 20 detik (dulu runtuh karena `DEMO_SESSION_ENFORCE=true` + reload) |
 | Frontend/tes frontend | tidak diubah pada pekerjaan ini; suite terakhir 160 berkas / 1.746 tes lulus (sesi sebelumnya hari ini) |
 
 ## 8. Asumsi, risiko, dan sisa pekerjaan
@@ -289,6 +292,11 @@ Delapan commit, tiap satu tema:
 | `ea03e60` | `docs/db-coverage-matrix.md`, `docs/db-fix-report.md`, `scripts/audit/db_coverage.py` |
 | `42c475c` | `db-mode status` tidak lagi mengarang `DB_MODE` bawaan (menghindari peringatan palsu) |
 | `d593832` | Onboarding: penyiapan DB diarahkan ke `scripts/db-mode.sh` |
+| `f446cba` | Joule: tiga jawaban yang diam-diam kosong (batch id, `excluded_at_hub`, versi agent card) |
+| `4262774` | init-demo: hentikan penghapusan senyap pada run kedua (normalisasi, jangkar seed, FK menu) + jejak angka |
+| `a9783d7` | `DecisionCreate` menerima 6 `decision_type` yang sah |
+| `8643538` | Joule: pemasok bertanda eksklusi selalu masuk potongan direktori |
+| `416ea7e` | Matriks: pisahkan "dipensiunkan sengaja" dari GAP (33 terbukti / 0 GAP / 3 dipensiunkan) |
 
 Verifikasi ulang sesudah semua commit: gerbang backend **1282 passed / 18 skipped / 0 failed**,
 sap-joule **123 passed / 14 skipped**, Joule DEMO **14/14**, DEFAULT **14/14**.
