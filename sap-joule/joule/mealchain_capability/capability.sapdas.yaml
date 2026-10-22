@@ -8,14 +8,19 @@ schema_version: 3.28.0
 metadata:
   namespace: joule.ext
   name: mealchain_capability
-  version: 1.3.0
+  # 1.3.0 -> 1.4.0 (22 Okt 2026): tiga scenario baru (direktori_pemasok, antrean_penerimaan,
+  # status_karantina) menutup tiga skill jembatan yang sebelumnya tidak bisa dipicu dari chat
+  # Joule. MINOR, bukan PATCH: kemampuan yang ditawarkan bertambah (13 skill jembatan kini
+  # semuanya punya scenario; lihat docs/peta-skill-joule.md).
+  version: 1.4.0
   display_name: MealChain_Guardian
   description: >-
     Melihat SELURUH data MealChain Guardian yang boleh dibaca akun baca-saja: situasi pasokan
     SPPG, kebutuhan dan prakiraan, harga dan kuotasi pemasok, kehilangan pangan, direktori dan
-    risiko pemasok, antrean usulan keputusan, bukti serta jejak keputusan, purchase order (PO)
-    termasuk PO yang lahir dari keputusan yang sudah dieksekusi, dan status integrasi serta
-    ledger bukti. Baca-saja: persetujuan tetap dilakukan manusia di UI MealChain.
+    risiko pemasok, antrean usulan keputusan, antrean penerimaan barang, status karantina
+    batch, bukti serta jejak keputusan, purchase order (PO) termasuk PO yang lahir dari
+    keputusan yang sudah dieksekusi, dan status integrasi serta ledger bukti. Baca-saja:
+    persetujuan tetap dilakukan manusia di UI MealChain.
 
 system_aliases:
   # Kunci alias (MEALCHAIN_AGENT) dipakai di functions/*.yaml.

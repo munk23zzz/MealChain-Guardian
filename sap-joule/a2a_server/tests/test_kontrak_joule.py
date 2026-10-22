@@ -118,10 +118,59 @@ def test_semua_scenario_menargetkan_fungsi_yang_sama(scenario):
         "risiko_pemasok",
         "bukti_keputusan",
         "status_sistem",
+        # Ditambahkan 22 Okt 2026: tiga skill jembatan yang sebelumnya tidak punya
+        # scenario, sehingga tidak bisa dipicu dari chat Joule sama sekali.
+        "direktori_pemasok",
+        "antrean_penerimaan",
+        "status_karantina",
     }
     for nama, isi in scenario.items():
         assert isi["target"] == {"name": "mealchain_query_function", "type": "function"}, nama
         assert len(isi["description"]) > 80, f"deskripsi {nama} terlalu pendek untuk NLU"
+
+
+def test_setiap_skill_jembatan_punya_scenario(scenario):
+    """Setiap skill yang bisa dipilih `resolve_skill` harus punya scenario Joule.
+
+    `supply_situation` adalah DEFAULT (bisa dicapai tanpa scenario khusus) dan
+    `unsupported_domain` sengaja TIDAK ditawarkan sebagai skill (tidak ada di `SKILLS`,
+    tidak ada di agent card) karena jawabannya "belum tersedia", bukan data.
+
+    Tanpa tes ini, menambah skill baru di jembatan tanpa scenario akan lolos tanpa gejala:
+    pertanyaannya cuma jatuh ke default pasokan.
+    """
+    from server import _KEYWORDS, _PO_WORD, SKILLS, SKILL_GAP, SKILL_SUPPLY
+
+    peta = {
+        "kpi_snapshot": "indikator_kinerja",
+        "approval_queue": "antrean_usulan",
+        "purchase_order": "detail_purchase_order",
+        "supplier_directory": "direktori_pemasok",
+        "price_intelligence": "harga_pemasok",
+        "demand_forecast": "kebutuhan_prakiraan",
+        "food_loss": "kehilangan_pangan",
+        "supplier_risk": "risiko_pemasok",
+        "receipts_queue": "antrean_penerimaan",
+        "quarantine_status": "status_karantina",
+        "decision_evidence": "bukti_keputusan",
+        "system_status": "status_sistem",
+    }
+    assert set(SKILLS) - {SKILL_SUPPLY} == set(peta), (
+        "skill jembatan dan peta scenario tidak sinkron"
+    )
+    assert SKILL_GAP not in SKILLS
+    for skill, nama_scenario in peta.items():
+        assert nama_scenario in scenario, f"skill {skill} tidak punya scenario"
+        if skill == "purchase_order":
+            # PO tidak ada di `_KEYWORDS`: bentuknya regex sendiri (`_PO_WORD`), dan
+            # kesetiaan kata kuncinya sudah dikunci test_scenario_po_… di bawah.
+            assert _PO_WORD.search(scenario[nama_scenario]["description"])
+            continue
+        deskripsi = scenario[nama_scenario]["description"].lower()
+        kunci = {k for s, daftar in _KEYWORDS if s == skill for k in daftar}
+        assert any(k in deskripsi for k in kunci), (
+            f"scenario {nama_scenario} tidak memuat satu pun kata kunci {sorted(kunci)[:3]}"
+        )
 
 
 def test_scenario_antrean_menegaskan_persetujuan_manusia(scenario):

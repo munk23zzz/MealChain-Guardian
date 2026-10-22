@@ -42,11 +42,11 @@ tabel kosong atau angka 0 yang terbaca seolah tidak ada masalah.
 
 | Berkas | Isi |
 |---|---|
-| `a2a_server/server.py` | Aplikasi A2A (kartu agen, 11 skill, `/health`) + executor |
+| `a2a_server/server.py` | Aplikasi A2A (kartu agen, 13 skill, `/health`) + executor |
 | `a2a_server/mealchain_client.py` | Klien HTTP baca-saja ke API v0.2.0 (`/batches`, `/balance/map`, `/kpi`, `/decisions`, `/sap/purchase-orders`, `/price`, `/demand`, `/waste/summary`, `/supplier-exclusions`, `/supplier-routes`, `/integrations/status`, `/ledger/verify`, `/receipts`), kegagalan eksplisit |
 | `a2a_server/report.py` | Perender markdown murni (tabel, format angka Indonesia) |
 | `a2a_server/manifest.yml`, `runtime.txt`, `.cfignore` | Deklarasi deploy Cloud Foundry |
-| `joule/` | Capability Joule: `da.sapdas.yaml`, `capability.sapdas.yaml`, 10 scenario, 1 function |
+| `joule/` | Capability Joule: `da.sapdas.yaml`, `capability.sapdas.yaml`, 13 scenario, 1 function |
 | `scripts/probe_ai_core.py` | Probe kredensial + model AI Core (`gpt-5.4`, `sap-rpt-1.6`) — jalur terpisah |
 | `scripts/uji-semua-skill.py` | Bukti ujung-ke-ujung: 11 skill dijawab dari backend hidup + angka laporan disilang ke Postgres |
 | `docs/runbook-cf-joule.md` | **Langkah manual Roy**: CF CLI → keybroker → `cf push` → Destination → `joule deploy` |
@@ -73,7 +73,7 @@ MEALCHAIN_READ_PASSWORD='Demo#BGN2026' \
 python -m uvicorn server:app --host 127.0.0.1 --port 8098
 ```
 
-## Sebelas skill yang tersedia untuk Joule
+## Tiga belas skill yang tersedia untuk Joule
 
 | Skill | Endpoint backend | Isi |
 |---|---|---|
@@ -87,13 +87,16 @@ python -m uvicorn server:app --host 127.0.0.1 --port 8098
 | `food_loss` | `/waste/summary?days=30` | tiga angka terpisah: limbah tercatat, dialihkan ke mitra, tanpa mitra; plus piring mitra pengolahan; "tidak tersedia" + alasan bila tidak ada baris |
 | `supplier_risk` | `/supplier-exclusions` + `/supplier-routes` (maks 200, geometri dibuang) + nama pemasok/lokasi dari `/suppliers`, `/admin/locations` | eksklusi pemasok per hub (status, alasan, sejak/dicabut) dan kiriman aktif: jarak jalan, durasi, status perjalanan, ETA |
 | `decision_evidence` | `/decisions/{id}/compliance` + `/chain` + `/traces` (maks 3 keputusan terakhir, atau satu keputusan yang UUID-nya disebut) | tanda tangan (algoritma, potongan tanda tangan), hasil verifikasi materi, alamat isi, iterasi rantai + alasan penolakan, jejak langkah agen |
+| `receipts_queue` | `/receipts/menunggu` (satu baris per batch, catatan terbaru, di-scope per lokasi akun) | antrean penerimaan barang yang sudah dicatat tetapi belum diputuskan: komoditas, kg, SPPG, status keamanan, pencatat, jumlah titik periksa yang dicentang, waktu |
+| `quarantine_status` | `/batches` (disaring di jembatan pada kolom `quarantine_status`) | batch yang sedang dikarantina: komoditas, kg, SPPG, status keamanan; daftar kosong = tidak ada batch ditahan, bukan data hilang |
 | `system_status` | `/integrations/status` + `/ledger/verify` + `/sap/purchase-orders/summary` + `/admin/locations` | status 7 komponen integrasi beserta buktinya, keabsahan ledger (blok, rasio, peringatan cakupan), ringkasan PO, cakupan jaringan SPPG; `/admin/users` sengaja tidak dibuka (PII) |
 | `supply_situation` (lanjutan) | `/receipts?batch_id=…` bila pengguna menyebut satu batch | bagian "Penerimaan barang" satu batch: checklist (suhu/kemasan/berat/catatan), pencatat, waktu |
 
 Pemilihan skill **deterministik** (bukan LLM): pesan JSON dengan field `skill`, nomor PO di dalam
 teks (`MC-661695B2C685`), atau kata kunci pada kalimat pengguna, dengan urutan yang diuji:
 `kpi`/`indikator` → KPI; nomor/kata `po` → PO; `bukti`/`jejak`/`audit`/`dossier`/`tanda tangan` →
-bukti keputusan; `usulan`/`persetujuan`/`approval`/`keputusan` → antrean; `eksklusi`/`dikecualikan`/
+bukti keputusan; `penerimaan`/`receipt`/`barang datang` → antrean penerimaan; `karantina` →
+status karantina; `usulan`/`persetujuan`/`approval`/`keputusan` → antrean; `eksklusi`/`dikecualikan`/
 `rute`/`jarak` → risiko pemasok; `harga`/`kuotasi` → harga; `kebutuhan`/`prakiraan`/`forecast` →
 kebutuhan; `limbah`/`kehilangan`/`susut` → kehilangan pangan; `pemasok`/`supplier`/`direktori` →
 direktori; `integrasi`/`ledger`/`status sistem` → status sistem; sisanya → pasokan. PO sengaja
@@ -181,6 +184,18 @@ Semua kredensial diisi lewat `cf set-env` / environment lokal — **tidak pernah
   `bash sap-joule/scripts/tunnel-untuk-cf.sh` (tunnel baru → uji dari internet → `cf set-env` →
   restage → pastikan `reachable:true`). Untuk demo yang tidak boleh putus, pakai tunnel bernama atau
   backend di VPS — bukan quick tunnel.
+
+### Status verifikasi (22 Okt 2026) — 13 skill = 13 scenario
+
+- Tiga scenario baru menutup tiga skill yang sebelumnya **tidak bisa dipicu dari Joule**:
+  `direktori_pemasok`, `antrean_penerimaan`, `status_karantina`. Peta lengkap skill → endpoint →
+  tabel/kolom → contoh pertanyaan → bentuk jawaban ada di `docs/peta-skill-joule.md`.
+- `capability.sapdas.yaml` → `metadata.version: 1.4.0` (minor: kemampuan bertambah).
+- `pytest a2a_server/tests -q` → **123 passed, 14 skipped** (sebelum perubahan: 122 passed,
+  14 skipped; satu tes kontrak baru). Tes baru mengunci bijection `SKILLS` → scenario, jadi
+  penambahan skill di jembatan tanpa scenario akan gagal, bukan jatuh diam-diam ke pasokan.
+- 13 contoh pertanyaan di dokumen peta diuji lewat `resolve_skill` dan semuanya jatuh ke skill
+  yang dimaksud (skrip verifikasi sekali pakai; tidak disimpan di repo).
 
 ## Yang sengaja BELUM ada
 

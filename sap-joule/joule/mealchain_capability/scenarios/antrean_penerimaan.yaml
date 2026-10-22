@@ -1,0 +1,10 @@
+description: >-
+  This skill lists the goods receipts for Indonesian school-meal kitchens (SPPG) that were
+  already recorded but not yet decided: commodity, quantity in kg, SPPG, food-safety status,
+  who recorded it, how many checks were ticked, and when. Use it for questions about
+  penerimaan, receipt, receiving, barang datang, goods receipt, or pemeriksaan barang yang
+  belum diperiksa. Read-only: approving or rejecting a receipt stays a human action inside
+  the MealChain user interface, never through Joule.
+target:
+  name: mealchain_query_function
+  type: function

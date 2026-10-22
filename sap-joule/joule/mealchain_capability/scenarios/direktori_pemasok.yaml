@@ -1,0 +1,10 @@
+description: >-
+  This skill lists the supplier directory for each Indonesian school-meal kitchen (SPPG,
+  MBG programme): vendor name, the SPPG hub it serves, commodity, reliability score,
+  weekly capacity in kg, certification status, and the active shipments it currently
+  supplies. Use it for questions about pemasok, supplier, direktori, or vendor per SPPG.
+  Read-only: it never ranks, adds, or removes a vendor, and a supplier with no shipment is
+  reported as "belum mengirim", never as zero.
+target:
+  name: mealchain_query_function
+  type: function
