@@ -1276,6 +1276,14 @@ export default function SupplyMap({
       if (sumber) map.removeSource(WAKE_SOURCE_ID);
       return;
     }
+    if (!map.isStyleLoaded()) {
+      // Gaya peta bisa belum siap saat data tiba lebih dulu (race). Tanpa
+      // penjaga ini MapLibre melempar "Style is not done loading", error
+      // boundary menangkapnya, dan SELURUH layar jadi kosong — terukur pada
+      // peran BGN Monitor saat membuka Overview. Layer ekor truk kosmetik:
+      // lewati dulu, dipasang lagi pada pemanggilan berikutnya / event load.
+      return;
+    }
     if (sumber) {
       sumber.setData(data);
       return;
@@ -1525,7 +1533,12 @@ export default function SupplyMap({
     routeFokusRef.current = redup;
     if (!map) return;
     const atur = (id: string, nilai: number) => {
-      if (map.getLayer(id)) map.setPaintProperty(id, "line-opacity", nilai);
+      if (!map.getLayer(id)) return;
+      try {
+        map.setPaintProperty(id, "line-opacity", nilai);
+      } catch {
+        // Gaya peta sedang dimuat ulang: lewati, bukan melempar ke error boundary.
+      }
     };
     atur(ROUTE_DONE_LAYER_ID, redup ? 0.22 : 0.9);
     atur(ROUTE_TODO_LAYER_ID, redup ? 0.26 : 0.62);
@@ -1824,6 +1837,10 @@ export default function SupplyMap({
       (f) => (f.properties as { state?: string | null }).state === "di_jalan"
     );
     syncTruk();
+    // Kalau sinkronisasi di atas terlewat karena gaya peta belum siap, ulangi
+    // tepat saat gaya selesai dimuat.
+    const peta = mapRef.current;
+    if (peta) peta.on("load", syncTruk);
   }, [
     showRoutes,
     routePinRows,
