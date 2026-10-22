@@ -297,7 +297,7 @@
   border-radius: var(--radius-chip);
   background: var(--warn-bg);
   color: var(--warn-ink);
-  font-size: 11px;
+  font-size: var(--fs-1);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -309,7 +309,7 @@
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius-chip);
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--fs-1);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -325,7 +325,7 @@
 
 .sa-legend-note {
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--fs-1);
 }
 
 .sa-seg-pasokan {
@@ -376,7 +376,7 @@
 .sa-coverage span {
   margin-top: 3px;
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--fs-1);
 }
 
 .sa-track {
@@ -490,7 +490,7 @@
 
 .sa-gap small {
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--fs-1);
   white-space: nowrap;
 }
 

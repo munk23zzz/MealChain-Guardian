@@ -473,7 +473,7 @@
   padding-right: 22px;
 }
 .map-card .map-popup-kicker {
-  font-size: 10px;
+  font-size: var(--fs-1);
   font-weight: 700;
   line-height: 1.4;
   letter-spacing: 0.08em;
@@ -498,7 +498,7 @@
   border-radius: 999px;
   background: var(--pop-accent-soft);
   color: var(--pop-accent-ink);
-  font-size: 11px;
+  font-size: var(--fs-1);
   font-weight: 700;
   line-height: 1.45;
   white-space: nowrap;
@@ -517,7 +517,7 @@
 }
 .map-card .map-popup-hero-label {
   min-width: 0;
-  font-size: 11px;
+  font-size: var(--fs-1);
   font-weight: 600;
   line-height: 1.4;
   color: var(--pop-muted);
@@ -553,7 +553,7 @@
   background: #f8fafc;
 }
 .map-card .map-popup-metric dt {
-  font-size: 9.5px;
+  font-size: var(--fs-1);
   font-weight: 700;
   line-height: 1.4;
   letter-spacing: 0.06em;
@@ -592,7 +592,7 @@
   transition: width var(--dur-3) var(--ease-standard);
 }
 .map-card .map-popup-meter-text {
-  font-size: 11px;
+  font-size: var(--fs-1);
   line-height: 1.4;
   color: var(--pop-muted);
   font-variant-numeric: tabular-nums;
@@ -628,7 +628,7 @@
   gap: 7px;
   margin: 0;
   padding: 0 14px 4px;
-  font-size: 11.5px;
+  font-size: var(--fs-1);
   line-height: 1.45;
   color: var(--pop-muted);
 }
@@ -645,14 +645,24 @@
   padding-bottom: 12px;
 }
 
+/* Tinggi popup dibatasi supaya SELALU muat di kanvas 400 px, dan isinya bisa
+   digulir. Sejak lantai tipografi 12 px ditegakkan (audit 22 Okt 2026) popup
+   jalur setinggi 402 px: keluar dari peta dan `jagaPopup` menyerah karena
+   tingginya melebihi tinggi peta − 24 px, sehingga kartu menggantung di luar.
+   Batas 340 px menyisakan ruang untuk panah + inset atas 24 px. */
+.map-card .maplibregl-popup-content {
+  max-height: 340px;
+  overflow-y: auto;
+}
+
 .map-card .map-popup-note {
   display: block;
   margin: 0;
   padding: 8px 14px 11px;
   border-top: 1px dashed var(--pop-hair);
-  background: #fbfcfe;
+  background: var(--bg-page);
   color: var(--pop-muted);
-  font-size: 10.5px;
+  font-size: var(--fs-1);
   line-height: 1.45;
 }
 
@@ -704,7 +714,7 @@
     font-size: 18px;
   }
   .map-card .map-popup-hero-label {
-    font-size: 10.5px;
+    font-size: var(--fs-1);
   }
 
   /* Kartu truk lebih tinggi dari kartu SPPG (judul 2 baris + metrik 3 +
@@ -730,7 +740,7 @@
     height: 34px;
   }
   .map-card .map-popup-kicker {
-    font-size: 9px;
+    font-size: var(--fs-1);
   }
   .map-card .map-popup-title {
     font-size: 14.5px;
@@ -739,7 +749,7 @@
   .map-card .map-popup-chip {
     margin-top: 4px;
     padding: 1px 7px;
-    font-size: 10px;
+    font-size: var(--fs-1);
   }
   .map-card .map-popup-hero,
   .map-card .map-popup-meter {
@@ -755,20 +765,20 @@
   .map-card .map-popup-callout {
     margin: 0 12px 8px;
     padding: 6px 8px;
-    font-size: 11px;
+    font-size: var(--fs-1);
   }
   .map-card .map-popup-metric {
     padding: 6px 7px;
   }
   .map-card .map-popup-metric dt {
-    font-size: 8.5px;
+    font-size: var(--fs-1);
   }
   .map-card .map-popup-metric dd {
-    font-size: 11px;
+    font-size: var(--fs-1);
   }
   .map-card .map-popup-line {
     padding: 0 12px 3px;
-    font-size: 10.5px;
+    font-size: var(--fs-1);
   }
   .map-card .map-popup-line:last-child {
     padding-bottom: 10px;

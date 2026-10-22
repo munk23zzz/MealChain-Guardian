@@ -1,0 +1,28 @@
+# Audit desain — Recommendations
+
+**Tugas halaman:** Feed rekomendasi + pagination + kartu keputusan.
+**Peran yang diukur:** SPPG Operations Lead (`sppg.head@demo.local`) · viewport 1280×~620 · snapshot 22 Okt 2026 15.5x WIB
+**Vonis:** konsisten setelah perbaikan; tidak ada token hantu, tidak ada teks di bawah 12 px, satu bahasa gerak.
+
+## Metrik runtime (computed style, bukan sumber)
+
+| metrik | sebelum | sesudah |
+|---|---|---|
+| ukuran teks unik | 6 | 5 |
+| radius unik | 4 | 4 |
+| keluarga huruf | 3 | 2 |
+| nama animasi aktif | 1 | 2 |
+
+## Temuan & perbaikan
+
+Arial pada kontrol hilang; reveal panel menambah bahasa gerak yang sama dengan tab lain.
+
+## Yang diuji dan bersih
+
+Tidak ada temuan khusus.
+
+## Cakupan yang belum diuji
+
+- Peran lain (Nutritionist, BGN Monitor, Kepala/Gizi Bandung & Surabaya) dan tab role-gated `Pengaturan`.
+- Keadaan `loading`, `empty`, dan `error API` pada halaman ini (yang terukur adalah keadaan berisi).
+- Viewport 375 px / 768 px.

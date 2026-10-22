@@ -33,7 +33,7 @@
 /* Baris: zebra tipis + aksen tepi kiri sesuai status keamanan.
    Badge tetap membawa teksnya, jadi warna bukan satu-satunya penanda. */
 .board-page .location-table tbody tr:nth-child(even) {
-  background: #FAFBFC;
+  background: var(--surface-sunken);
 }
 .board-page .location-table tbody tr:hover {
   background: var(--cat-blue-bg);
@@ -141,4 +141,69 @@
 }
 .balance-side-shortage .balance-label {
   color: var(--cat-rose-ink);
+}
+
+/* ============================================================
+   Audit design system — 22 Okt 2026 (seluruh halaman)
+   Tiga cacat lintas halaman yang "diam": tidak ada error, hanya tampil beda.
+   Dimuat setelah globals.css, jadi menang urutan tanpa !important.
+   ============================================================ */
+
+/* 1) KONTROL FORM tidak mewarisi tipografi proyek: bawaan peramban membuat
+   `button` tampil Arial 13,3333 px (satu-satunya ukuran bukan skala dokumen di
+   setiap halaman) dan `select` berteks hitam murni — terukur di Demo Control.
+   `font: inherit` + `color: inherit` menutup keduanya; ukuran yang memang
+   ditulis komponen tetap menang karena selektornya lebih spesifik. */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+/* Daftar pilihan `select` dirender peramban di lapisan terpisah; tanpa ini
+   pilihannya tampil dengan huruf berbeda dari kontrolnya. */
+option {
+  font: inherit;
+}
+
+/* 2) ALIAS TOKEN LAMA → token kanonik. Semuanya dulu ditulis sebagai
+   `var(--x, #hex)` dengan `--x` yang tidak pernah dideklarasikan, jadi hex
+   fallback yang menang tanpa error: `.integrity-warning` memakai cokelat
+   #92400e sementara peringatan lain memakai amber --warn-ink #8A5A00;
+   `.dc-session` diberi tepi #b45309, bukan --status-warning; dan `--surface-2`
+   jatuh ke --surface sehingga panel bersarang kehilangan lapisannya. */
+:root {
+  --warning-ink: var(--warn-ink);
+  --warning-bg: var(--warn-bg);
+  --warning-line: var(--warn-border);
+  --status-warn: var(--status-warning);
+  --safe: var(--status-safe);
+  --warn: var(--warn-ink);
+  --surface-2: var(--surface-sunken);
+  /* Bayangan merek untuk logo rail: dulu literal rgba() di globals.css. */
+  --shadow-brand: 0 2px 8px rgba(37, 99, 235, 0.28);
+}
+
+/* 3) SATU GERAK MASUK PER LAYAR. Sebelum audit hanya 4 dari 11 layar punya
+   gerak masuk (Hari Ini, Overview, Recommendations, Evidence); sisanya muncul
+   mendadak sehingga perpindahan tab terasa seperti dua aplikasi berbeda.
+   Reveal ini milik PANEL, bukan setiap kartu: opacity + 6 px, 240 ms, easing
+   standar. Keyframe berakhir di `transform: none` (bukan translateY(0)) supaya
+   tidak meninggalkan containing block yang merusak elemen `position: fixed`
+   di dalam panel. */
+@keyframes page-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .app-content > * {
+    animation: page-reveal var(--dur-3) var(--ease-standard) both;
+  }
 }

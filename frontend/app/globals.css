@@ -1417,7 +1417,7 @@ a:focus-visible {
   border-radius: var(--radius-control);
   background: linear-gradient(135deg, var(--accent-strong) 0%, var(--accent) 100%);
   color: #FFFFFF;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
+  box-shadow: var(--shadow-brand);
 }
 
 .side-brand strong {
@@ -3539,7 +3539,7 @@ a:focus-visible {
   border-radius: var(--radius-chip);
   background: var(--warn-bg);
   color: var(--warn-ink);
-  font-size: 11px;
+  font-size: var(--fs-1);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -3551,7 +3551,7 @@ a:focus-visible {
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius-chip);
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--fs-1);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -3567,7 +3567,7 @@ a:focus-visible {
 
 .sa-legend-note {
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--fs-1);
 }
 
 .sa-seg-pasokan {
@@ -3618,7 +3618,7 @@ a:focus-visible {
 .sa-coverage span {
   margin-top: 3px;
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--fs-1);
 }
 
 .sa-track {
@@ -3732,7 +3732,7 @@ a:focus-visible {
 
 .sa-gap small {
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--fs-1);
   white-space: nowrap;
 }
 
@@ -3999,9 +3999,9 @@ a:focus-visible {
 .integrity-warning {
   margin: 4px 0 6px;
   font-size: var(--fs-1);
-  color: var(--warning-ink, #92400e);
-  background: var(--warning-bg, #fffbeb);
-  border: 1px solid var(--warning-line, #fcd34d);
+  color: var(--warning-ink);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-line);
   border-radius: var(--radius-control-sm);
   padding: 4px 8px;
 }
@@ -7032,7 +7032,7 @@ a:focus-visible {
    di bentuk 183 px, kata dalam Fira Code terbaca seperti potongan kode dan
    membuat satu tile terlihat beda dari empat lainnya. */
 .today-tile-value--teks {
-  font-family: "Fira Sans", Inter, system-ui, sans-serif;
+  font-family: var(--font-ui);
   letter-spacing: normal;
 }
 .today-tile-note {
@@ -8038,7 +8038,7 @@ a:focus-visible {
 
 .safety-filter-count {
   font-variant-numeric: tabular-nums;
-  font-size: 11px;
+  font-size: var(--fs-1);
   line-height: 16px;
   padding: 0 6px;
   border: 1px solid var(--line);
@@ -10987,7 +10987,7 @@ p, li, dd { text-wrap: pretty; }
    hanya 2,47:1. Naikkan spesifisitas agar peringatan tetap terbaca
    (WCAG 2.2 SC 1.4.3, teks 13 px butuh ≥4.5:1). */
 .integrity-trust .integrity-warning {
-  color: var(--warning-ink, #92400e);
+  color: var(--warning-ink);
 }
 
 /* Rincian pengukuran & ekspor di kartu Integritas — gaya sama dengan
@@ -11528,9 +11528,9 @@ p, li, dd { text-wrap: pretty; }
   gap: 6px;
   padding: 10px 12px;
   border: 1px solid var(--line);
-  border-left: 3px solid var(--status-warn, #b45309);
+  border-left: 3px solid var(--status-warn);
   border-radius: var(--radius-control);
-  background: var(--surface-2, var(--surface));
+  background: var(--surface-2);
 }
 .dc-rebuild-sub {
   margin: 0;
@@ -11578,10 +11578,10 @@ p, li, dd { text-wrap: pretty; }
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
-  background: var(--surface-2, var(--surface));
+  background: var(--surface-2);
 }
 .dc-session[data-keadaan="berjalan"] {
-  border-color: color-mix(in srgb, var(--safe, #1e8e3e) 40%, var(--line));
+  border-color: color-mix(in srgb, var(--safe) 40%, var(--line));
 }
 .dc-session-line {
   margin: 0;
@@ -11602,7 +11602,7 @@ p, li, dd { text-wrap: pretty; }
   margin: 0;
   flex-basis: 100%;
   font-size: var(--fs-2);
-  color: var(--warn, #8a5a00);
+  color: var(--warn);
 }
 .dc-session-actions {
   display: flex;
@@ -11621,9 +11621,9 @@ p, li, dd { text-wrap: pretty; }
   margin: 0 0 12px;
   padding: 12px 14px;
   border: 1px solid var(--line);
-  border-left: 3px solid var(--warn, #8a5a00);
+  border-left: 3px solid var(--warn);
   border-radius: var(--radius-control);
-  background: var(--surface-2, var(--surface));
+  background: var(--surface-2);
 }
 .demo-kosong-teks {
   margin: 0;

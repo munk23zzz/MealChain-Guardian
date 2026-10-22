@@ -388,3 +388,41 @@ Temuan dan perbaikan (diverifikasi di aplikasi hidup, gate frontend hijau):
 (f) Popup mencetak "Sisa ± -200 menit" untuk kiriman yang sudah tiba (remaining_min
     negatif dari server). Kini sisa hanya ditulis bila > 0; selain itu
     "100% perjalanan ditempuh".
+
+## 2026-10-22 — Audit UI/UX + animasi seluruh halaman (12 layar)
+
+Metode: pemindaian token statis + sweep computed style per tab di DOM hidup, satu turn.
+Artefak: `_qa/design-consistency/00-ringkasan-2026-10-22.md` + 11 laporan per halaman.
+
+Tiga cacat "diam" yang ditutup (tanpa error, hanya tampil beda):
+
+(a) KONTROL FORM tidak mewarisi tipografi proyek: `button`/`input`/`select` tampil Arial
+    13,3333 px bawaan peramban di SEMUA halaman (terukur 70–146 elemen per halaman), dan
+    `select.dc-select` berteks hitam murni. Kini `button,input,select,textarea{font:inherit;
+    color:inherit}` di `theme-ext.css` (dimuat terakhir, tanpa !important). Terukur sesudah:
+    satu keluarga huruf per halaman, 0 elemen Arial.
+
+(b) 7 TOKEN HANTU dipakai sebagai `var(--x, #hex)` tanpa deklarasi, jadi fallback yang menang:
+    `--warning-ink/-bg/-line`, `--status-warn`, `--safe`, `--warn`, `--surface-2`. Kini alias
+    di `:root` theme-ext → `--warn-ink`, `--warn-bg`, `--warn-border`, `--status-warning`,
+    `--status-safe`, `--surface-sunken`; 11 cadangan hex di globals.css dihapus. Bukti:
+    `.integrity-warning` berubah dari #92400e/#fcd34d ke --warn-ink/--warn-border.
+
+(c) BAHASA GERAK tidak merata: 4 dari 11 tab beranimasi masuk, 7 tidak. Ditambah SATU reveal
+    panel (`page-reveal`, opacity + 6 px, `--dur-3` 240 ms, `--ease-standard`) untuk
+    `.app-content > *`, hanya pada `prefers-reduced-motion: no-preference`. Keyframe berakhir
+    `transform: none` supaya tidak meninggalkan containing block untuk elemen fixed.
+
+Ikutan yang ikut ditutup: lantai tipografi 12 px ditegakkan (11 px di Overview & Keamanan
+Pangan; 8,5–10,5 px di popup peta → `--fs-1`); popup peta dibatasi `max-height: 340px` +
+`overflow-y:auto` karena pada 12 px tingginya 402 px > kanvas 400 px sehingga `jagaPopup`
+menyerah; dua hex di luar palet (`#FAFBFC`, `#fbfcfe`) → token; `font-family` literal di
+`.today-tile-value--teks` → `var(--font-ui)`; bayangan logo rail → token `--shadow-brand`.
+
+TIDAK diubah (keputusan, bukan cacat): angka tile "Hari Ini" 16 px (pemilik 17 Okt: 18 px
+terbaca seperti judul); warna pil komoditas aktif = warna kategori (`--cat-amber-solid`).
+Bersih tanpa perubahan: radius 100% token, keluarga lencana seragam 22/12 px tanpa label
+terpotong, 28 blok reduced-motion menutup semua keyframe.
+
+Kontrak baru: `frontend/tests/design-tokens-kontrak.test.ts` (8 tes). Gerbang: tsc 0,
+161 berkas / 1760 tes, lint 0.
