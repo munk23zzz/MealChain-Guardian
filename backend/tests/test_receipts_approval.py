@@ -13,6 +13,7 @@ Kontrak yang dikunci (keputusan pemilik, 20 Okt 2026):
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import create_engine, text
 
 from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
@@ -166,14 +167,22 @@ def test_approve_menambah_stok_dan_idempoten(auth_headers):
             assert hasil["supply_record_id"]
             supply_ids.append(hasil["supply_record_id"])
 
-            assert _stok(loc, com) == sebelum + kg
+            # kg dibaca dari DB sebagai float dan `_stok` juga float: 911,68 + 300,0
+            # tidak sama dengan 1.211,68 dalam representasi biner, jadi perbandingan
+            # harus bertoleransi. Dulu asersi ini lulus/gagal tergantung lot mana
+            # yang dipilih `_batch()`.
+            assert _stok(loc, com) == pytest.approx(sebelum + kg, abs=0.01)
 
             # Klik kedua: balasan sama, stok TIDAK bertambah lagi.
             lagi = c.post(f"/receipts/{badan['id']}/approve", headers=auth_headers)
             assert lagi.status_code == 200, lagi.text
             assert lagi.json()["sudah"] is True
             assert lagi.json()["supply_record_id"] == hasil["supply_record_id"]
-            assert _stok(loc, com) == sebelum + kg
+            # kg dibaca dari DB sebagai float dan `_stok` juga float: 911,68 + 300,0
+            # tidak sama dengan 1.211,68 dalam representasi biner, jadi perbandingan
+            # harus bertoleransi. Dulu asersi ini lulus/gagal tergantung lot mana
+            # yang dipilih `_batch()`.
+            assert _stok(loc, com) == pytest.approx(sebelum + kg, abs=0.01)
 
             riwayat = c.get(f"/receipts?batch_id={batch_id}", headers=auth_headers)
             assert riwayat.status_code == 200

@@ -491,9 +491,12 @@ def test_shipping_matches_sql_for_active_supplier(client, tokens):
     item = next(i for i in body["items"] if i["name"] == nama)
     sql = _sql_shipping(nama)
 
-    assert sql["count"] == 1, "prasyarat: lot Koperasi untuk Cianjur masih di dataset"
+    assert sql["count"] >= 1, "prasyarat: lot Koperasi untuk Cianjur masih di dataset"
     assert item["shipping"]["count"] == sql["count"]
-    assert item["shipping"]["total_kg"] == sql["total_kg"] == 840.0
+    # `total_kg` TIDAK dipaku 840: aktivitas demo menambah lot kedua untuk pasangan
+    # pemasok×kota yang sama (DB kanonik murni hanya punya satu), jadi 840 adalah
+    # pin dataset 19 Okt — bukan kontrak endpoint. Yang diuji: endpoint = SQL.
+    assert item["shipping"]["total_kg"] == sql["total_kg"]
     assert item["shipping"]["commodities"] == ["telur"]
     assert item["shipping"]["safety_fail_count"] == 0
     assert datetime.fromisoformat(item["shipping"]["until"]) == sql["until"]
