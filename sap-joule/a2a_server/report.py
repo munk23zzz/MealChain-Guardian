@@ -303,8 +303,13 @@ def supplier_directory_report(
             + _footnote([note or "sumber: GET /suppliers"])
         )
 
-    def urut(row: Mapping[str, Any]) -> tuple[str, str]:
-        return (str(row.get("location") or ""), str(row.get("name") or ""))
+    def urut(row: Mapping[str, Any]) -> tuple[int, str, str]:
+        # 22 Okt 2026: tabel dipangkas 25 baris. Sebelumnya pemasok bertanda
+        # "dikecualikan di hub" bisa jatuh di luar potongan, sehingga penanda
+        # yang katanya "tidak disaring diam-diam" justru tidak pernah terlihat.
+        # Yang bertanda selalu didahulukan.
+        bertanda = 0 if row.get("excludedAtHub") else 1
+        return (bertanda, str(row.get("location") or ""), str(row.get("name") or ""))
 
     tampil, sisa = _cap(sorted(pemasok, key=urut), limit)
     baris: list[list[str]] = []
