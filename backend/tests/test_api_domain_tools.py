@@ -311,6 +311,18 @@ def test_malformed_payload_422(client):
     assert client.post("/price/deviation", json={"location": "Cianjur"}).status_code == 422
 
 
+def test_batch_id_tidak_sah_422_bukan_500(client):
+    """batch_id kosong/bukan UUID harus ditolak skema, bukan meledak jadi 500.
+
+    Dulu tipenya `str` dan diteruskan apa adanya ke asyncpg: pengguna yang salah
+    kirim id mendapat 500 "invalid UUID". Terukur di audit 2026-10-22.
+    """
+    for batch_id in ("", "bukan-uuid", "12345"):
+        for jalur in ("/freshness/evaluate", "/safety/evaluate"):
+            resp = client.post(jalur, json={"batch_id": batch_id})
+            assert resp.status_code == 422, f"{jalur} batch_id={batch_id!r} -> {resp.status_code}"
+
+
 def test_router_no_domain_duplication():
     """Router tidak memuat rumus domain — semua lewat core."""
     import inspect

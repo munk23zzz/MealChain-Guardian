@@ -1,5 +1,7 @@
 """Router safety (Task 12) — status API uppercase, DB lowercase, tanpa override."""
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -15,7 +17,10 @@ router = APIRouter()
 
 
 class SafetyRequest(BaseModel):
-    batch_id: str
+    # UUID, bukan str: id yang tidak valid harus ditolak 422 oleh Pydantic.
+    # Sebelumnya string mentah diteruskan ke asyncpg dan endpoint membalas 500
+    # (terukur: batch_id '' -> DataError 'invalid UUID').
+    batch_id: UUID
 
 
 @router.post("/safety/evaluate")

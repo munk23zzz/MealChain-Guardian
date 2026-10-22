@@ -1,6 +1,7 @@
 """Router freshness (Task 12) — tipis: validasi, ambil batch, panggil core, persist."""
 
 from datetime import datetime
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -30,7 +31,10 @@ _SHELF_LIFE_BY_COMMODITY = {
 
 
 class FreshnessRequest(BaseModel):
-    batch_id: str
+    # UUID, bukan str: id yang tidak valid harus ditolak 422 oleh Pydantic.
+    # Sebelumnya string mentah diteruskan ke asyncpg dan endpoint membalas 500
+    # (terukur: batch_id '' -> DataError 'invalid UUID').
+    batch_id: UUID
     as_of: datetime | None = None
 
 
