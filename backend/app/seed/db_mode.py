@@ -270,18 +270,27 @@ async def cmd_init_demo(session, refresh: bool = False) -> dict:
 
     hasil: dict[str, object] = {"langkah": "init-demo", "refresh": refresh}
 
-    # 22 Okt 2026: init-demo HARUS deterministik dari keadaan apa pun. Setelah
-    # tombol "Siapkan data demo" (demo_template), baris kanonik punya kunci unik
-    # (lokasi, komoditas, waktu, sumber) yang sama dengan id berbeda, lalu
-    # `load_seed` menabrak `uq_supply_records_loc_com_time_source` dan seluruh
-    # init-demo berhenti (exit 1) di tengah jalan. Data demo dibersihkan lebih
-    # dulu — sama seperti `reset-demo`, dan tetap hanya di DB lokal.
-    dibersihkan: dict[str, int] = {}
-    for model in URUTAN_HAPUS:
-        r = await session.execute(delete(model))
-        dibersihkan[model.__tablename__] = int(r.rowcount or 0)
+    # 22 Okt 2026: baris demo yang menempati kunci alami baris kanonik harus
+    # dibuang lebih dulu. `load_seed` memakai `merge()` per ID, jadi setelah
+    # jalur tombol "Siapkan data demo" (kunci alami sama, ID berbeda) merge
+    # jatuh ke INSERT dan menabrak `uq_supply_records_loc_com_time_source —
+    # init-demo berhenti exit 1 di tengah jalan. Hanya baris BERTANDA demo pada
+    # detik referensi kanonik yang dibuang; sisa data demo tidak disentuh dan
+    # deret waktunya dibangun ulang di langkah 2.
+    from app.models import DemandRecord, PriceSignal, SupplyRecord
+
+    bentrok = {}
+    for model in (SupplyRecord, DemandRecord, PriceSignal):
+        # supply/demand: cukup baris ber-stempel demo. price_signals: SEMUA baris
+        # pada detik referensi (kunci uniknya tidak memuat `origin`, jadi baris
+        # kanonik versi template pun menabrak `uq_price_signals_reference`).
+        kondisi = [model.recorded_at == REFERENSI_KANONIK]
+        if model is not PriceSignal:
+            kondisi.append(model.origin == "demo")
+        r = await session.execute(delete(model).where(*kondisi))
+        bentrok[model.__tablename__] = int(r.rowcount or 0)
     await session.commit()
-    hasil["dibersihkan"] = {k: v for k, v in dibersihkan.items() if v}
+    hasil["bentrok_kanonik_dibuang"] = {k: v for k, v in bentrok.items() if v}
 
     hasil["referensi_dinormalisasi"] = await _normalisasi_referensi(session)
     hasil["referensi"] = await seed_reference(session)
