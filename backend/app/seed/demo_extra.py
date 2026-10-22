@@ -634,10 +634,12 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
         ).scalars():
             durasi[r.route_key] = float(r.duration_s or 0)
 
-    diberangkatkan = 0
+    # Urutkan menurut DURASI rute terpanjang, bukan berat: kiriman 5-15 menit
+    # sudah "tiba" sebelum juri sempat melihat peta (terukur: 8 truk di jalan
+    # saat semai, tinggal 1 beberapa jam kemudian — dan per komoditas 0). Rute
+    # antarkota (1-3 jam) membuat truk tetap bergerak sepanjang sesi demo.
+    calon_berangkat: list[tuple[float, Batch]] = []
     for b in kandidat:
-        if diberangkatkan >= 8:
-            break
         pemasok = await session.get(Supplier, b.supplier_id)
         lokasi = await session.get(Location, b.location_id)
         if pemasok is None or lokasi is None:
@@ -653,6 +655,13 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
         )
         if d <= 0:
             continue
+        calon_berangkat.append((d, b))
+
+    calon_berangkat.sort(key=lambda pasangan: pasangan[0], reverse=True)
+    diberangkatkan = 0
+    for d, b in calon_berangkat:
+        if diberangkatkan >= 8:
+            break
         # 35% perjalanan sudah ditempuh: truk terlihat di tengah rute, bukan
         # menempel di titik asal, dan masih "di jalan" saat layar dibuka.
         b.dispatched_at = now - timedelta(seconds=d * 0.35)
