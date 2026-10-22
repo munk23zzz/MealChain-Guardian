@@ -1,6 +1,6 @@
 # Matriks Cakupan Database — MealChain Guardian
 
-Dibuat otomatis oleh `scripts/audit/db_coverage.py` pada 2026-10-22 14:29 WIB. Seluruh angka di bawah diambil dari kondisi live saat skrip berjalan; berkas ini ditulis ulang setiap kali skrip dijalankan.
+Dibuat otomatis oleh `scripts/audit/db_coverage.py` pada 2026-10-22 15:01 WIB. Seluruh angka di bawah diambil dari kondisi live saat skrip berjalan; berkas ini ditulis ulang setiap kali skrip dijalankan.
 
 **Sumber bukti:** route dari `app.main` (kontainer backend), skema dari `Base.metadata` + `information_schema`, kosakata dari `pg_constraint` + `Literal[...]` kode, respons dari panggilan HTTP nyata dengan akun demo, dan satu query SQL per baris matriks. Tidak ada angka yang ditulis tangan.
 
@@ -25,8 +25,8 @@ Dibuat otomatis oleh `scripts/audit/db_coverage.py` pada 2026-10-22 14:29 WIB. S
 | Enum diperiksa | 11 |
 | Enum dengan ketidaksinkronan (kode vs skema vs data) | 3 |
 | Sel state tampilan diperiksa | 612 |
-| Sel state TERBUKTI | 271 |
-| Sel state GAP | 310 |
+| Sel state TERBUKTI | 289 |
+| Sel state GAP | 292 |
 | Sel state tidak berlaku (N/A) | 31 |
 | Komponen di `frontend/components` | 56 |
 | Komponen tidak terpasang di layar mana pun | 5 |
@@ -39,28 +39,28 @@ Jumlah baris dihitung dengan `count(*)` (bukan `n_live_tup`) pada awal dan akhir
 
 | Tabel | Baris (awal) | Baris (akhir) | origin: seed / demo | Baris ber-sesi demo | Bergerak |
 |---|---|---|---|---|---|
-| `agent_traces` | 40 | 40 | — | — | tidak |
+| `agent_traces` | 106 | 106 | — | — | tidak |
 | `alembic_version` | 1 | 1 | — | — | tidak |
-| `approvals` | 13 | 13 | — | — | tidak |
-| `batch_receipts` | 5 | 5 | — | 0 | tidak |
+| `approvals` | 19 | 19 | — | — | tidak |
+| `batch_receipts` | 7 | 7 | — | 0 | tidak |
 | `batches` | 125 | 125 | 78 / 47 | 0 | tidak |
 | `commodities` | 4 | 4 | — | — | tidak |
-| `decision_evidence` | 18 | 18 | — | — | tidak |
-| `decisions` | 14 | 14 | 0 / 14 | 0 | tidak |
-| `delivery_events` | 360 | 360 | 70 / 290 | 0 | tidak |
+| `decision_evidence` | 46 | 46 | — | — | tidak |
+| `decisions` | 47 | 47 | 31 / 16 | 0 | tidak |
+| `delivery_events` | 290 | 290 | 70 / 220 | 0 | tidak |
 | `demand_records` | 1360 | 1360 | 280 / 1080 | 0 | tidak |
-| `demo_sessions` | 3 | 3 | — | — | tidak |
-| `disposal_events` | 83 | 83 | 20 / 63 | 0 | tidak |
+| `demo_sessions` | 4 | 4 | — | — | tidak |
+| `disposal_events` | 83 | 83 | 22 / 61 | 0 | tidak |
 | `ledger_blocks` | 72 | 72 | — | — | tidak |
 | `locations` | 10 | 10 | — | — | tidak |
 | `menu_plans` | 660 | 660 | 70 / 590 | 0 | tidak |
-| `price_signals` | 5885 | 5885 | 100 / 5785 | 0 | tidak |
+| `price_signals` | 6015 | 6015 | 124 / 5891 | 0 | tidak |
 | `road_routes` | 51 | 51 | — | 0 | tidak |
 | `sap_mock_material_stock` | 40 | 40 | — | 0 | tidak |
-| `sap_mock_purchase_orders` | 20 | 20 | 12 / 8 | 0 | tidak |
-| `supplier_exclusions` | 4 | 4 | — | 0 | tidak |
+| `sap_mock_purchase_orders` | 20 | 20 | 16 / 4 | 0 | tidak |
+| `supplier_exclusions` | 6 | 6 | — | 0 | tidak |
 | `suppliers` | 61 | 61 | — | — | tidak |
-| `supply_records` | 5200 | 5200 | 40 / 5160 | 0 | tidak |
+| `supply_records` | 5240 | 5240 | 40 / 5200 | 0 | tidak |
 | `users` | 7 | 7 | — | — | tidak |
 
 ## 1. Matriks layar → data
@@ -69,41 +69,41 @@ Kolom *fungsi api* dan *endpoint* dihasilkan dari rantai nyata: nama fungsi dipa
 
 | # | Layar | Bagian/panel | Terpasang | Field/kartu (terverifikasi di komponen) | Fungsi api | Endpoint backend | Tabel.kolom sumber | Bukti demo (query + HTTP) | Status |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | Hari Ini | Tile status hari ini | ya | Hari Ini · Menunggu persetujuan · Ditandai verifikator · Rekomendasi | fetchDecisions, fetchBatches, fetchKpis | GET /batches<br>GET /decisions<br>GET /kpi | decisions.status, decisions.expires_at, decisions.decision_type, batches.usable_until, batches.safety_status, delivery_events.delivered_at | SQL 3 baris, contoh `102dd6ea-7959-5806-aceb-48866c019d10` ; sppg_head 200/3 baris · bgn_monitor 200/14 baris | TERBUKTI |
-| 2 | Hari Ini | Agenda harian | ya | Agenda harian · Tidak ada agenda yang belum lewat tenggat | fetchAgenda | GET /agenda | menu_plans.plan_date, menu_plans.planned_portions, delivery_events.delivered_at | SQL 660 baris, contoh `2026-09-01` ; sppg_head 200/36 baris · bgn_monitor 200/36 baris | TERBUKTI |
+| 1 | Hari Ini | Tile status hari ini | ya | Hari Ini · Menunggu persetujuan · Ditandai verifikator · Rekomendasi | fetchDecisions, fetchBatches, fetchKpis | GET /batches<br>GET /decisions<br>GET /kpi | decisions.status, decisions.expires_at, decisions.decision_type, batches.usable_until, batches.safety_status, delivery_events.delivered_at | SQL 21 baris, contoh `0652c9bb-f35f-49d6-bda0-d3b87d350893` ; sppg_head 200/17 baris · bgn_monitor 200/47 baris | TERBUKTI |
+| 2 | Hari Ini | Agenda harian | ya | Agenda harian · Tidak ada agenda yang belum lewat tenggat | fetchAgenda | GET /agenda | menu_plans.plan_date, menu_plans.planned_portions, delivery_events.delivered_at | SQL 660 baris, contoh `2026-09-01` ; sppg_head 200/29 baris · bgn_monitor 200/29 baris | TERBUKTI |
 | 3 | Hari Ini | Rantai audit (Merkle ledger) | ya | Rantai audit · Blok terverifikasi · Kode verifikasi | verifyLedger | GET /ledger/verify | ledger_blocks.payload_hash, ledger_blocks.prev_hash, ledger_blocks.height | SQL 72 baris, contoh `1` ; sppg_head 200/1 baris · bgn_monitor 200/1 baris | TERBUKTI |
 | 4 | Overview | Ringkasan peta pasokan (bento KPI) | ya | Overview Pasokan &amp; Distribusi · Selisih pasokan jaringan · Data simulasi · Sinkron otomatis | fetchBalanceMap | GET /balance/map | supply_records.quantity_kg, demand_records.quantity_kg, locations.name, locations.role_hint | SQL 10 baris, contoh `Bandung` ; sppg_head 200/1 baris · bgn_monitor 200/10 baris | TERBUKTI |
 | 5 | Overview | Peta kondisi komoditas | ya | Peta kondisi komoditas · Legenda status · Status Lokasi · Pemasok | fetchBalanceMap, fetchBalance | GET /balance/map<br>GET /balance/{location}/{commodity} | supply_records.quantity_kg, locations.latitude, locations.longitude, suppliers.latitude, suppliers.longitude | SQL 10 baris, contoh `0d54faa0-89a5-5861-bbb8-95ec97ca2381` ; sppg_head 200/1 baris · bgn_monitor 200/10 baris | TERBUKTI |
 | 6 | Overview | Grafik kecukupan pasokan | ya | Kecukupan pasokan · Kesegaran · Legenda kualitas stok | fetchBalanceMap | GET /balance/map | batches.freshness_score, supply_records.quantity_kg, demand_records.quantity_kg | SQL 124 baris, contoh `0334b041-a05a-5848-b25d-bbbedf6cdceb` ; sppg_head 200/1 baris · bgn_monitor 200/10 baris | TERBUKTI |
-| 7 | Overview | Grafik keseimbangan pasokan | ya | Pasokan per lokasi · Legenda keseimbangan pasokan | fetchBalanceMap | GET /balance/map | supply_records.quantity_kg, demand_records.quantity_kg, locations.name | SQL 1360 baris, contoh `0020abdf-2aaa-5919-9ee8-3857affe0bf8` ; sppg_head 200/1 baris · bgn_monitor 200/10 baris | TERBUKTI |
-| 8 | Overview | Kartu informasi pengiriman | ya | Informasi pengiriman · Periksa kiriman | fetchSupplierRoutes | GET /supplier-routes | road_routes.distance_m, road_routes.duration_s, batches.dispatched_at, suppliers.latitude | SQL 51 baris, contoh `driving:-2.9641,104.7634>-2.9761,104.7754` ; sppg_head 200/14 baris · bgn_monitor 200/50 baris | TERBUKTI |
+| 7 | Overview | Grafik keseimbangan pasokan | ya | Pasokan per lokasi · Legenda keseimbangan pasokan | fetchBalanceMap | GET /balance/map | supply_records.quantity_kg, demand_records.quantity_kg, locations.name | SQL 1360 baris, contoh `001a358d-56a9-4e1a-8c9d-4a65c0f7398a` ; sppg_head 200/1 baris · bgn_monitor 200/10 baris | TERBUKTI |
+| 8 | Overview | Kartu informasi pengiriman | ya | Informasi pengiriman · Periksa kiriman | fetchSupplierRoutes | GET /supplier-routes | road_routes.distance_m, road_routes.duration_s, batches.dispatched_at, suppliers.latitude | SQL 51 baris, contoh `driving:-2.9641,104.7634>-2.9761,104.7754` ; sppg_head 200/15 baris · bgn_monitor 200/50 baris | TERBUKTI |
 | 9 | Overview | Telemetri node | ya | Telemetri node · Memuat kondisi lokasi… | fetchBalanceMap | GET /balance/map | supply_records.quantity_kg, locations.latitude, locations.longitude | SQL 10 baris, contoh `Bandung` ; sppg_head 200/1 baris · bgn_monitor 200/10 baris | TERBUKTI |
-| 10 | Recommendations | Feed rekomendasi + filter/sort + pager | ya | Rekomendasi baru · Alokasi regional direkomendasikan · Lewat tenggat | fetchDecisions | GET /decisions | decisions.decision_type, decisions.status, decisions.quantity_kg, decisions.safe_delivered_cost, decisions.expires_at | SQL 14 baris, contoh `102dd6ea-7959-5806-aceb-48866c019d10` ; sppg_head 200/3 baris · bgn_monitor 200/14 baris | TERBUKTI |
-| 11 | Recommendations | Konsol operasi — snapshot kondisi | **tidak** | Muat kondisi · Pasokan · Permintaan · Surplus · Shortage | fetchBalance | GET /balance/{location}/{commodity} | supply_records.quantity_kg, demand_records.quantity_kg, locations.name | SQL 520 baris, contoh `0009a45f-9076-46b9-be93-3a287737fa4f` ; sppg_head 200/1 baris · bgn_monitor 200/1 baris | DIPENSIUNKAN |
-| 12 | Recommendations | Konsol operasi — analisis agent & usulan | **tidak** | Jalankan Analisis Agent · SDC · Ajukan · Hasil Event 1 penuh | runAnalysis, createDecision, proposeAction, runEvent1 | POST /actions/propose<br>POST /balance/analyze<br>POST /decisions<br>POST /demo/event1 | decisions.safe_delivered_cost, decisions.quantity_kg, price_signals.price_per_kg, agent_traces.step_name | SQL 5885 baris, contoh `00052854-89bd-4916-9e95-76b214a99c81` ; sppg_head 200/21 baris · bgn_monitor 403/1 baris | DIPENSIUNKAN |
-| 13 | Recommendations | Panel anomali harga (Event 2) | ya | Event 2 — Deteksi Anomali Harga · Deviasi · Klasifikasi · Masuk review queue | fetchPriceQuotes | GET /price/quotes/{location}/{commodity} | price_signals.price_per_kg, price_signals.source, price_signals.supplier_id | SQL 672 baris, contoh `pihps_reference` ; sppg_head 200/20 baris · bgn_monitor 200/20 baris | TERBUKTI |
-| 14 | Decision & Evidence | Ringkasan keputusan & bukti | ya | Ringkasan keputusan · Keputusan yang diperiksa · Terbaca · Unduh bukti (JSON) | fetchDecision, fetchDecisionTraces | GET /decisions/{decision_id}<br>GET /decisions/{decision_id}/traces | decisions.status, decisions.safe_delivered_cost, decision_evidence.evidence_type, decision_evidence.payload, agent_traces.step_name | SQL 18 baris, contoh `gps` ; sppg_head 200/1 baris · bgn_monitor 200/1 baris | TERBUKTI |
-| 15 | Decision & Evidence | Jejak & riwayat persetujuan | ya | Jejak & riwayat · Kelola persetujuan… · Peran penyetuju | fetchDecisionChain, fetchApprovalSummary | GET /decisions/{decision_id}/approval-summary<br>GET /decisions/{decision_id}/chain | approvals.approved, approvals.comment, approvals.approved_at, decisions.iteration, decisions.supersedes_id | SQL 13 baris, contoh `3d9df3fd-309b-52ef-bbdd-7e07e802a984` ; sppg_head 200/1 baris · bgn_monitor 200/1 baris | TERBUKTI |
-| 16 | Decision & Evidence | Integritas bukti & dossier | ya | Integritas Bukti · Merkle Ledger · Dossier Keputusan · Tanda tangan · Blok | fetchDossier, verifyLedger | GET /decisions/{decision_id}/dossier<br>GET /ledger/verify | ledger_blocks.payload_hash, ledger_blocks.entity_id, decision_evidence.payload | SQL 72 baris, contoh `0077f63c-c5f0-4f9f-80b7-e2e5b264e4b2` ; sppg_head 200/1 baris · bgn_monitor 200/1 baris | TERBUKTI |
+| 10 | Recommendations | Feed rekomendasi + filter/sort + pager | ya | Rekomendasi baru · Alokasi regional direkomendasikan · Lewat tenggat | fetchDecisions | GET /decisions | decisions.decision_type, decisions.status, decisions.quantity_kg, decisions.safe_delivered_cost, decisions.expires_at | SQL 47 baris, contoh `01cc3ea0-d5ae-4146-9e23-49fdcabaa4ce` ; sppg_head 200/17 baris · bgn_monitor 200/47 baris | TERBUKTI |
+| 11 | Recommendations | Konsol operasi — snapshot kondisi | **tidak** | Muat kondisi · Pasokan · Permintaan · Surplus · Shortage | fetchBalance | GET /balance/{location}/{commodity} | supply_records.quantity_kg, demand_records.quantity_kg, locations.name | SQL 524 baris, contoh `003e5ac7-407c-4e71-b48d-985ab86c0c98` ; sppg_head 200/1 baris · bgn_monitor 200/1 baris | DIPENSIUNKAN |
+| 12 | Recommendations | Konsol operasi — analisis agent & usulan | **tidak** | Jalankan Analisis Agent · SDC · Ajukan · Hasil Event 1 penuh | runAnalysis, createDecision, proposeAction, runEvent1 | POST /actions/propose<br>POST /balance/analyze<br>POST /decisions<br>POST /demo/event1 | decisions.safe_delivered_cost, decisions.quantity_kg, price_signals.price_per_kg, agent_traces.step_name | SQL 6015 baris, contoh `000a09f2-d0f3-41e5-9e93-03768dbe9fb6` ; sppg_head 200/24 baris · bgn_monitor 403/1 baris | DIPENSIUNKAN |
+| 13 | Recommendations | Panel anomali harga (Event 2) | ya | Event 2 — Deteksi Anomali Harga · Deviasi · Klasifikasi · Masuk review queue | fetchPriceQuotes | GET /price/quotes/{location}/{commodity} | price_signals.price_per_kg, price_signals.source, price_signals.supplier_id | SQL 706 baris, contoh `pihps_reference` ; sppg_head 200/20 baris · bgn_monitor 200/20 baris | TERBUKTI |
+| 14 | Decision & Evidence | Ringkasan keputusan & bukti | ya | Ringkasan keputusan · Keputusan yang diperiksa · Terbaca · Unduh bukti (JSON) | fetchDecision, fetchDecisionTraces | GET /decisions/{decision_id}<br>GET /decisions/{decision_id}/traces | decisions.status, decisions.safe_delivered_cost, decision_evidence.evidence_type, decision_evidence.payload, agent_traces.step_name | SQL 46 baris, contoh `gps` ; sppg_head 200/1 baris · bgn_monitor 200/1 baris | TERBUKTI |
+| 15 | Decision & Evidence | Jejak & riwayat persetujuan | ya | Jejak & riwayat · Kelola persetujuan… · Peran penyetuju | fetchDecisionChain, fetchApprovalSummary | GET /decisions/{decision_id}/approval-summary<br>GET /decisions/{decision_id}/chain | approvals.approved, approvals.comment, approvals.approved_at, decisions.iteration, decisions.supersedes_id | SQL 19 baris, contoh `220b90b5-728d-59b8-84e8-9425a768a240` ; sppg_head 200/1 baris · bgn_monitor 200/1 baris | TERBUKTI |
+| 16 | Decision & Evidence | Integritas bukti & dossier | ya | Integritas Bukti · Merkle Ledger · Dossier Keputusan · Tanda tangan · Blok | fetchDossier, verifyLedger | GET /decisions/{decision_id}/dossier<br>GET /ledger/verify | ledger_blocks.payload_hash, ledger_blocks.entity_id, decision_evidence.payload | SQL 72 baris, contoh `01cc3ea0-d5ae-4146-9e23-49fdcabaa4ce` ; sppg_head 200/1 baris · bgn_monitor 200/1 baris | TERBUKTI |
 | 17 | Decision & Evidence | Daftar purchase order (SAP simulasi) | ya | Data berasal dari SAP simulasi · SAP simulasi · Unduh PDF · Belum ada purchase order tercatat. | fetchPurchaseOrders, fetchPurchaseOrderSummary, fetchPurchaseOrderPdf | GET /sap/purchase-orders<br>GET /sap/purchase-orders/summary<br>GET /sap/purchase-orders/{po_number}/pdf | sap_mock_purchase_orders.po_number, sap_mock_purchase_orders.status, sap_mock_purchase_orders.price, sap_mock_purchase_orders.ordered_quantity, sap_mock_purchase_orders.decision_id | SQL 20 baris, contoh `4500000001` ; sppg_head 200/2 baris · bgn_monitor 200/20 baris | TERBUKTI |
 | 18 | Keamanan Pangan | Papan batch & uji keamanan | ya | Periksa kiriman · Batch diperiksa · Kesegaran · Layak sampai · Berat batch gagal | fetchBatches, evaluateSafety, evaluateFreshness | GET /batches<br>POST /freshness/evaluate<br>POST /safety/evaluate | batches.safety_status, batches.freshness_score, batches.usable_until, batches.temperature_log, batches.certification_status | SQL 125 baris, contoh `0334b041-a05a-5848-b25d-bbbedf6cdceb` ; sppg_head 200/125 baris · bgn_monitor 200/125 baris | TERBUKTI |
-| 19 | Keamanan Pangan | Penerimaan barang | ya | Penerimaan barang · Catat hasil terima & hitung ulang · Kirim penolakan · Menunggu persetujuan | fetchReceipts, fetchPendingReceipts, recordReceipt, approveReceipt, rejectReceipt | GET /receipts<br>GET /receipts/menunggu<br>POST /receipts<br>POST /receipts/{receipt_id}/approve<br>POST /receipts/{receipt_id}/reject | batch_receipts.status, batch_receipts.checked, batch_receipts.review_note, batch_receipts.recorded_at | SQL 5 baris, contoh `126d2330-f98a-5df2-88e9-cb108919c0ac` ; sppg_head 200/1 baris · bgn_monitor 200/3 baris | TERBUKTI |
-| 20 | Keamanan Pangan | Karantina batch | ya | Lepas dari karantina · Nyatakan gagal · Ditahan (karantina) · Alasan (tercatat di ledger) | ubahKarantina | POST /batches/{batch_id}/quarantine | batches.quarantine_status, batches.quarantine_reason, batches.quarantined_at, batches.quarantine_actor_id | SQL 3 baris, contoh `6f1f29fa-50e6-50b8-9d7a-930068e64f9b` ; sppg_head 200/125 baris · bgn_monitor 200/125 baris | TERBUKTI |
-| 21 | Surplus & Limbah | Rencana alokasi surplus | ya | Rencana alokasi surplus · Total surplus · Total kekurangan · Tujuan · Dari | fetchSurplusAllocations | GET /surplus/allocations | supply_records.quantity_kg, demand_records.quantity_kg, locations.name, locations.latitude | SQL 40 baris, contoh `0c3c5195-2861-4e8f-9fb3-cf34f076b743` ; sppg_head 200/1 baris · bgn_monitor 200/1 baris | TERBUKTI |
+| 19 | Keamanan Pangan | Penerimaan barang | ya | Penerimaan barang · Catat hasil terima & hitung ulang · Kirim penolakan · Menunggu persetujuan | fetchReceipts, fetchPendingReceipts, recordReceipt, approveReceipt, rejectReceipt | GET /receipts<br>GET /receipts/menunggu<br>POST /receipts<br>POST /receipts/{receipt_id}/approve<br>POST /receipts/{receipt_id}/reject | batch_receipts.status, batch_receipts.checked, batch_receipts.review_note, batch_receipts.recorded_at | SQL 7 baris, contoh `126d2330-f98a-5df2-88e9-cb108919c0ac` ; sppg_head 200/3 baris · bgn_monitor 200/5 baris | TERBUKTI |
+| 20 | Keamanan Pangan | Karantina batch | ya | Lepas dari karantina · Nyatakan gagal · Ditahan (karantina) · Alasan (tercatat di ledger) | ubahKarantina | POST /batches/{batch_id}/quarantine | batches.quarantine_status, batches.quarantine_reason, batches.quarantined_at, batches.quarantine_actor_id | SQL 4 baris, contoh `467caaad-9d7b-559d-8f81-3e5efd48d53f` ; sppg_head 200/125 baris · bgn_monitor 200/125 baris | TERBUKTI |
+| 21 | Surplus & Limbah | Rencana alokasi surplus | ya | Rencana alokasi surplus · Total surplus · Total kekurangan · Tujuan · Dari | fetchSurplusAllocations | GET /surplus/allocations | supply_records.quantity_kg, demand_records.quantity_kg, locations.name, locations.latitude | SQL 40 baris, contoh `0d82762a-f042-4283-89b5-6e11be4965dc` ; sppg_head 200/1 baris · bgn_monitor 200/1 baris | TERBUKTI |
 | 22 | Surplus & Limbah | Pencatatan limbah | ya | Pencatatan limbah · Neraca hari ini | fetchWasteSummary | GET /waste/summary | disposal_events.quantity_kg, disposal_events.reason, disposal_events.partner_name | SQL 83 baris, contoh `0277eae3-926a-5cfd-b018-2be538ae4680` ; sppg_head 200/1 baris · bgn_monitor 200/10 baris | TERBUKTI |
 | 23 | Pemasok | Daftar pemasok + pencarian | ya | Daftar pemasok · Pemasok terdaftar · Rata-rata keandalan · Dalam jangkauan · Hapus pencarian | fetchSuppliers | GET /suppliers | suppliers.name, suppliers.reliability_score, suppliers.certification_status, suppliers.capacity_kg_per_week, suppliers.latitude, suppliers.address | SQL 61 baris, contoh `CV Ambarawa Telur Utama` ; sppg_head 200/61 baris · bgn_monitor 200/61 baris | TERBUKTI |
-| 24 | Pemasok | Jalur kiriman (jalan) | ya | Jalur kirim · Jalur kiriman (jalan) · Sedang mengirim barang | fetchSupplierRoutes | GET /supplier-routes | road_routes.distance_m, road_routes.duration_s, road_routes.geometry, batches.dispatched_at | SQL 51 baris, contoh `driving:-2.9641,104.7634>-2.9761,104.7754` ; sppg_head 200/14 baris · bgn_monitor 200/105 baris | TERBUKTI |
-| 25 | Pemasok | Supplier governance (eksklusi/pemulihan) | ya | Supplier governance · Ajukan exclusion · Ajukan pemulihan · Alasan exclusion · ID bukti tersimpan (opsional bila memilih di atas) | fetchExclusions, fetchSupplierContext, proposeSupplierExclusion, proposeSupplierRestoration | GET /supplier-exclusions<br>GET /supplier-exclusions/context/{decision_id}<br>POST /supplier-exclusions/proposals<br>POST /supplier-exclusions/{exclusion_id}/restore | supplier_exclusions.status, supplier_exclusions.reason, supplier_exclusions.evidence_refs, supplier_exclusions.scope_location_id | SQL 4 baris, contoh `05dbb8ed-3f19-58ee-8b51-1448ae13f491` ; sppg_head 200/1 baris · bgn_monitor 200/4 baris | TERBUKTI |
-| 26 | Agent Log | Status provider model | ya | Status provider model · Verifier · Forecast · Supervisor | fetchDecisionTraces | GET /decisions/{decision_id}/traces | agent_traces.step_name, agent_traces.output_summary, agent_traces.agent_name | SQL 17 baris, contoh `PREDICT` ; sppg_head 200/4 baris · bgn_monitor 200/4 baris | TERBUKTI |
-| 27 | Agent Log | Jejak langkah agen (trace viewer) | ya | SUPERVISE | fetchDecisionTraces | GET /decisions/{decision_id}/traces | agent_traces.tool_called, agent_traces.duration_ms, agent_traces.input_summary, agent_traces.citations, agent_traces.run_id | SQL 40 baris, contoh `ACT` ; sppg_head 200/4 baris · bgn_monitor 200/4 baris | TERBUKTI |
-| 28 | KPI & Kualitas Agen | KPI (jendela periode) | ya | Jendela periode KPI · Avoidable Food Loss · Procurement Price Deviation | fetchKpis | GET /kpi | delivery_events.delivered_portions, menu_plans.planned_portions, disposal_events.quantity_kg, decisions.safe_delivered_cost | SQL 360 baris, contoh `00b2036d-7439-5206-b9ab-14b3c030c829` ; sppg_head 200/7 baris · bgn_monitor 200/7 baris | TERBUKTI |
-| 29 | KPI & Kualitas Agen | Kualitas agen (sampel run) | ya | Kualitas Agen · Run dinilai · Rata-rata durasi · Tingkat fallback · Kesesuaian verifier | fetchDecisionTraces, fetchApprovalSummary | GET /decisions/{decision_id}/approval-summary<br>GET /decisions/{decision_id}/traces | agent_traces.step_name, agent_traces.duration_ms, agent_traces.output_summary, approvals.approved | SQL 40 baris, contoh `00fcf4f9-38bb-5057-a6e5-33d737e1391d` ; sppg_head 200/4 baris · bgn_monitor 200/4 baris | TERBUKTI |
+| 24 | Pemasok | Jalur kiriman (jalan) | ya | Jalur kirim · Jalur kiriman (jalan) · Sedang mengirim barang | fetchSupplierRoutes | GET /supplier-routes | road_routes.distance_m, road_routes.duration_s, road_routes.geometry, batches.dispatched_at | SQL 51 baris, contoh `driving:-2.9641,104.7634>-2.9761,104.7754` ; sppg_head 200/15 baris · bgn_monitor 200/124 baris | TERBUKTI |
+| 25 | Pemasok | Supplier governance (eksklusi/pemulihan) | ya | Supplier governance · Ajukan exclusion · Ajukan pemulihan · Alasan exclusion · ID bukti tersimpan (opsional bila memilih di atas) | fetchExclusions, fetchSupplierContext, proposeSupplierExclusion, proposeSupplierRestoration | GET /supplier-exclusions<br>GET /supplier-exclusions/context/{decision_id}<br>POST /supplier-exclusions/proposals<br>POST /supplier-exclusions/{exclusion_id}/restore | supplier_exclusions.status, supplier_exclusions.reason, supplier_exclusions.evidence_refs, supplier_exclusions.scope_location_id | SQL 6 baris, contoh `05dbb8ed-3f19-58ee-8b51-1448ae13f491` ; sppg_head 200/3 baris · bgn_monitor 200/6 baris | TERBUKTI |
+| 26 | Agent Log | Status provider model | ya | Status provider model · Verifier · Forecast · Supervisor | fetchDecisionTraces | GET /decisions/{decision_id}/traces | agent_traces.step_name, agent_traces.output_summary, agent_traces.agent_name | SQL 26 baris, contoh `PREDICT` ; sppg_head 200/4 baris · bgn_monitor 200/4 baris | TERBUKTI |
+| 27 | Agent Log | Jejak langkah agen (trace viewer) | ya | SUPERVISE | fetchDecisionTraces | GET /decisions/{decision_id}/traces | agent_traces.tool_called, agent_traces.duration_ms, agent_traces.input_summary, agent_traces.citations, agent_traces.run_id | SQL 106 baris, contoh `ACT` ; sppg_head 200/4 baris · bgn_monitor 200/4 baris | TERBUKTI |
+| 28 | KPI & Kualitas Agen | KPI (jendela periode) | ya | Jendela periode KPI · Avoidable Food Loss · Procurement Price Deviation | fetchKpis | GET /kpi | delivery_events.delivered_portions, menu_plans.planned_portions, disposal_events.quantity_kg, decisions.safe_delivered_cost | SQL 290 baris, contoh `00ef6ba7-2a59-58fe-9281-cf47be633720` ; sppg_head 200/7 baris · bgn_monitor 200/7 baris | TERBUKTI |
+| 29 | KPI & Kualitas Agen | Kualitas agen (sampel run) | ya | Kualitas Agen · Run dinilai · Rata-rata durasi · Tingkat fallback · Kesesuaian verifier | fetchDecisionTraces, fetchApprovalSummary | GET /decisions/{decision_id}/approval-summary<br>GET /decisions/{decision_id}/traces | agent_traces.step_name, agent_traces.duration_ms, agent_traces.output_summary, approvals.approved | SQL 106 baris, contoh `00fcf4f9-38bb-5057-a6e5-33d737e1391d` ; sppg_head 200/4 baris · bgn_monitor 200/4 baris | TERBUKTI |
 | 30 | Pengaturan | Pengguna (admin) | ya | Memuat pengguna & lokasi… · Peran · Nama · Simpan | fetchAdminUsers, updateAdminUser | GET /admin/users<br>PATCH /admin/users/{user_id} | users.role, users.email, users.location_id, users.name | SQL 7 baris, contoh `bgn.monitor@demo.local` ; sppg_head 403/1 baris · bgn_monitor 200/7 baris | TERBUKTI |
 | 31 | Pengaturan | Lokasi (admin) | ya | Wilayah · Koordinat · Lokasi | fetchAdminLocations, updateAdminLocation | GET /admin/locations<br>PATCH /admin/locations/{location_id} | locations.name, locations.region, locations.role_hint, locations.latitude, locations.longitude | SQL 10 baris, contoh `Bandung` ; sppg_head 403/1 baris · bgn_monitor 200/10 baris | TERBUKTI |
-| 32 | Demo Control | Status data demo & sesi | ya | Demo Control · Siapkan data demo · Akhiri sesi · Perpanjang 30 menit | fetchDemoDataStatus, fetchDemoSession, fetchDemoPreview, startDemoSession, extendDemoSession, endDemoSession, refreshDemoToToday | GET /demo/data-status<br>GET /demo/preview<br>GET /demo/session<br>POST /demo/refresh<br>POST /demo/session/end<br>POST /demo/session/extend<br>POST /demo/session/start | demo_sessions.status, demo_sessions.expires_at, demo_sessions.anchor_now, batches.demo_session_id, decisions.demo_session_id | SQL 3 baris, contoh `ended` ; sppg_head 200/1 baris · bgn_monitor 403/1 baris | TERBUKTI |
-| 33 | Demo Control | Jalankan agent + bukti pipeline | ya | Jalankan agent · Langkah pipeline yang tercatat · Tujuh agen review · Bukti agent | fetchDemoAgentCommodities, fetchDemoAgentLastRun, runDemoAgent | GET /demo/agent/commodities<br>GET /demo/agent/last-run<br>POST /demo/agent/run | agent_traces.agent_name, agent_traces.step_name, decisions.demo_case, decisions.origin | SQL 6 baris, contoh `agent:allocation-optimizer` ; sppg_head 200/1 baris · bgn_monitor 403/1 baris | TERBUKTI |
+| 32 | Demo Control | Status data demo & sesi | ya | Demo Control · Siapkan data demo · Akhiri sesi · Perpanjang 30 menit | fetchDemoDataStatus, fetchDemoSession, fetchDemoPreview, startDemoSession, extendDemoSession, endDemoSession, refreshDemoToToday | GET /demo/data-status<br>GET /demo/preview<br>GET /demo/session<br>POST /demo/refresh<br>POST /demo/session/end<br>POST /demo/session/extend<br>POST /demo/session/start | demo_sessions.status, demo_sessions.expires_at, demo_sessions.anchor_now, batches.demo_session_id, decisions.demo_session_id | SQL 4 baris, contoh `active` ; sppg_head 200/1 baris · bgn_monitor 403/1 baris | TERBUKTI |
+| 33 | Demo Control | Jalankan agent + bukti pipeline | ya | Jalankan agent · Langkah pipeline yang tercatat · Tujuh agen review · Bukti agent | fetchDemoAgentCommodities, fetchDemoAgentLastRun, runDemoAgent | GET /demo/agent/commodities<br>GET /demo/agent/last-run<br>POST /demo/agent/run | agent_traces.agent_name, agent_traces.step_name, decisions.demo_case, decisions.origin | SQL 19 baris, contoh `agent:allocation-optimizer` ; sppg_head 200/1 baris · bgn_monitor 403/1 baris | TERBUKTI |
 | 34 | Global (di luar tab) | Login & identitas sesi | ya | Masuk ke konsol · Email · Password | login, fetchMe | GET /auth/me<br>POST /auth/login | users.email, users.password_hash, users.role, users.location_id | SQL 7 baris, contoh `bgn.monitor@demo.local` ; sppg_head 200/1 baris · bgn_monitor 200/1 baris | TERBUKTI |
-| 35 | Global (di luar tab) | Top bar: notifikasi & cakupan lokasi | ya | Rekomendasi baru · Tidak ada keputusan menunggu tindakan · Pilih lokasi yang disorot di peta · Buka informasi notifikasi | fetchMe, fetchDecisions | GET /auth/me<br>GET /decisions | decisions.status, decisions.expires_at, users.location_id, locations.name | SQL 2 baris, contoh `36465d64-522a-57f5-8bdc-ba62e38739a0` ; sppg_head 200/3 baris · bgn_monitor 200/14 baris | TERBUKTI |
+| 35 | Global (di luar tab) | Top bar: notifikasi & cakupan lokasi | ya | Rekomendasi baru · Tidak ada keputusan menunggu tindakan · Pilih lokasi yang disorot di peta · Buka informasi notifikasi | fetchMe, fetchDecisions | GET /auth/me<br>GET /decisions | decisions.status, decisions.expires_at, users.location_id, locations.name | SQL 16 baris, contoh `0652c9bb-f35f-49d6-bda0-d3b87d350893` ; sppg_head 200/17 baris · bgn_monitor 200/47 baris | TERBUKTI |
 | 36 | Global (di luar tab) | Status integrasi (panel tidak terpasang) | **tidak** | Bukti integrasi per komponen · Memuat status integrasi… | fetchIntegrationStatus | GET /integrations/status | — | tanpa tabel data (status dibaca dari env/artefak) ; sppg_head 200/7 baris · bgn_monitor 200/7 baris | DIPENSIUNKAN |
 
 ## 2. Peta layar → komponen → fungsi api
@@ -133,16 +133,16 @@ Tiga sumber dibandingkan: kosakata **kode** (`Literal[...]`, tuple konstanta, un
 | Enum | Kolom | Nilai di kode | CHECK di DB | Nilai di data (n) | Warna StatusBadge | Sinkron? | Catatan |
 |---|---|---|---|---|---|---|---|
 | role user | `users.role` | `auth.py:MUTATING_ROLES`: sppg_head, sppg_nutritionist; `page.tsx:ROLE_LABEL`: bgn_monitor, sppg_head, sppg_nutritionist | sppg_head, sppg_nutritionist, bgn_monitor | bgn_monitor (1), sppg_head (3), sppg_nutritionist (3) | — | ya | — |
-| decision_type | `decisions.decision_type` | `decisions.py:decision_type`: price_anomaly, regional_balance, safety_disruption, supplier_exclusion, supplier_exclusion_restoration, supplier_procurement; `RecommendationCard.tsx:DECISION_TYPE_LABELS`: price_anomaly, regional_balance, safety_disruption, supplier_exclusion, supplier_exclusion_restoration, supplier_procurement, surplus_redistribution | regional_balance, price_anomaly, safety_disruption, supplier_exclusion, supplier_exclusion_restoration, supplier_procurement | price_anomaly (2), regional_balance (6), safety_disruption (2), supplier_exclusion (1), supplier_exclusion_restoration (1), supplier_procurement (2) | — | **tidak** | — |
-| status keputusan | `decisions.status` | — | proposed, verifier_flagged, pending_approval, approved, rejected, executed, review_only | approved (1), executed (7), pending_approval (2), proposed (1), rejected (1), review_only (1), verifier_flagged (1) | APPROVED, EXECUTED, FAIL, NEEDS_VERIFICATION, PASS, PENDING_APPROVAL, PROPOSED, REJECTED, SHORTAGE, SURPLUS, TIGHT, VERIFIER_FLAGGED | **tidak** | kode tidak punya enum; nilai ditulis tersebar sebagai string |
-| safety_status batch | `batches.safety_status` | `quarantine.py:SAFETY_VALID`: fail, needs_verification, pass, pending; `safety.py:safety_status`: fail, needs_verification, pass | pending, pass, fail, needs_verification | fail (3), needs_verification (14), pass (103), pending (5) | APPROVED, EXECUTED, FAIL, NEEDS_VERIFICATION, PASS, PENDING_APPROVAL, PROPOSED, REJECTED, SHORTAGE, SURPLUS, TIGHT, VERIFIER_FLAGGED | ya | FoodSafetyBoard merender status ini sebagai teks, bukan StatusBadge |
+| decision_type | `decisions.decision_type` | `decisions.py:decision_type`: price_anomaly, regional_balance, safety_disruption, supplier_exclusion, supplier_exclusion_restoration, supplier_procurement; `RecommendationCard.tsx:DECISION_TYPE_LABELS`: price_anomaly, regional_balance, safety_disruption, supplier_exclusion, supplier_exclusion_restoration, supplier_procurement, surplus_redistribution | regional_balance, price_anomaly, safety_disruption, supplier_exclusion, supplier_exclusion_restoration, supplier_procurement | price_anomaly (7), regional_balance (19), safety_disruption (13), supplier_exclusion (3), supplier_exclusion_restoration (2), supplier_procurement (3) | — | **tidak** | — |
+| status keputusan | `decisions.status` | — | proposed, verifier_flagged, pending_approval, approved, rejected, executed, review_only | approved (3), executed (9), pending_approval (16), proposed (2), rejected (10), review_only (2), verifier_flagged (5) | APPROVED, EXECUTED, FAIL, NEEDS_VERIFICATION, PASS, PENDING_APPROVAL, PROPOSED, REJECTED, SHORTAGE, SURPLUS, TIGHT, VERIFIER_FLAGGED | **tidak** | kode tidak punya enum; nilai ditulis tersebar sebagai string |
+| safety_status batch | `batches.safety_status` | `quarantine.py:SAFETY_VALID`: fail, needs_verification, pass, pending; `safety.py:safety_status`: fail, needs_verification, pass | pending, pass, fail, needs_verification | fail (3), needs_verification (15), pass (102), pending (5) | APPROVED, EXECUTED, FAIL, NEEDS_VERIFICATION, PASS, PENDING_APPROVAL, PROPOSED, REJECTED, SHORTAGE, SURPLUS, TIGHT, VERIFIER_FLAGGED | ya | FoodSafetyBoard merender status ini sebagai teks, bukan StatusBadge |
 | kesegaran (turunan freshness_score) | `batches.freshness_score` | `freshness.py:classify_freshness`: fail, needs_verification, pass | fail, needs_verification, pass | (NULL) (1), fail (4), needs_verification (42), pass (78) | — | ya | status turunan: pass / needs_verification / fail dari freshness_score |
-| status penerimaan (receipt) | `batch_receipts.status` | — | menunggu, disetujui, ditolak | disetujui (1), ditolak (1), menunggu (3) | — | ya | default "menunggu" di api/receipts.py; status lain ditulis endpoint approve/reject |
-| status eksklusi pemasok | `supplier_exclusions.status` | `supplier_exclusions.py:status`: active, proposed, rejected, revoked; `supplier-exclusions.ts:SupplierExclusion`: active, proposed, rejected, revoked | proposed, active, rejected, revoked | active (1), proposed (1), rejected (1), revoked (1) | — | ya | — |
+| status penerimaan (receipt) | `batch_receipts.status` | — | menunggu, disetujui, ditolak | disetujui (1), ditolak (1), menunggu (5) | — | ya | default "menunggu" di api/receipts.py; status lain ditulis endpoint approve/reject |
+| status eksklusi pemasok | `supplier_exclusions.status` | `supplier_exclusions.py:status`: active, proposed, rejected, revoked; `supplier-exclusions.ts:SupplierExclusion`: active, proposed, rejected, revoked | proposed, active, rejected, revoked | active (2), proposed (2), rejected (1), revoked (1) | — | ya | — |
 | origin data | `batches.origin` | `timeseries.py:origin`: demo, seed | seed, demo | demo (47), seed (78) | — | ya | — |
 | status PO (SAP mock) | `sap_mock_purchase_orders.status` | `sap_orders.py:status`: confirmed, draft, submitted | draft, submitted, confirmed | confirmed (15), draft (2), submitted (3) | — | ya | — |
-| status pengiriman (delivery) | `delivery_events.status` | `kpi_facts.py:status`: delivered | **tidak ada CHECK** | delivered (360) | — | **tidak** | status hanya punya server_default; tidak ada CHECK maupun enum di kode |
-| status karantina batch | `batches.quarantine_status` | — | none, quarantined, released, failed | failed (1), none (122), quarantined (1), released (1) | APPROVED, EXECUTED, FAIL, NEEDS_VERIFICATION, PASS, PENDING_APPROVAL, PROPOSED, REJECTED, SHORTAGE, SURPLUS, TIGHT, VERIFIER_FLAGGED | ya | input API memakai aksi tahan/lepas/gagal (Literal) yang dipetakan ke status ini |
+| status pengiriman (delivery) | `delivery_events.status` | `kpi_facts.py:status`: delivered | **tidak ada CHECK** | delivered (290) | — | **tidak** | status hanya punya server_default; tidak ada CHECK maupun enum di kode |
+| status karantina batch | `batches.quarantine_status` | — | none, quarantined, released, failed | failed (1), none (121), quarantined (2), released (1) | APPROVED, EXECUTED, FAIL, NEEDS_VERIFICATION, PASS, PENDING_APPROVAL, PROPOSED, REJECTED, SHORTAGE, SURPLUS, TIGHT, VERIFIER_FLAGGED | ya | input API memakai aksi tahan/lepas/gagal (Literal) yang dipetakan ke status ini |
 
 ### 3.1 Ketidaksinkronan kode vs skema vs data
 
@@ -161,7 +161,7 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 
 | Layar / bagian | kosong | satu_item | banyak_halaman | filter_tanpa_hasil | sort | error | loading | null_opsional | teks_panjang | angka_nol | angka_negatif | angka_besar | tanggal_lampau | tanggal_hari_ini | tanggal_masa_depan | unicode | format_lokal |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Hari Ini — Tile status hari ini | GAP | ✓ | ✓ | GAP | ✓ | ✓ | ✓ | ✓ | GAP | GAP | GAP | GAP | GAP | GAP | ✓ | GAP | GAP |
+| Hari Ini — Tile status hari ini | GAP | ✓ | ✓ | GAP | ✓ | ✓ | ✓ | ✓ | GAP | GAP | GAP | GAP | ✓ | ✓ | ✓ | ✓ | GAP |
 | Hari Ini — Agenda harian | GAP | GAP | ✓ | GAP | ✓ | ✓ | ✓ | GAP | GAP | GAP | GAP | GAP | ✓ | ✓ | ✓ | GAP | GAP |
 | Hari Ini — Rantai audit (Merkle ledger) | GAP | GAP | ✓ | GAP | ✓ | ✓ | ✓ | GAP | ✓ | GAP | GAP | GAP | ✓ | ✓ | GAP | GAP | GAP |
 | Overview — Ringkasan peta pasokan (bento KPI) | GAP | GAP | ✓ | GAP | ✓ | ✓ | ✓ | GAP | GAP | GAP | – | GAP | ✓ | ✓ | ✓ | GAP | ✓ |
@@ -170,7 +170,7 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Overview — Grafik keseimbangan pasokan | GAP | GAP | ✓ | GAP | ✓ | ✓ | ✓ | GAP | GAP | GAP | – | GAP | ✓ | ✓ | ✓ | GAP | ✓ |
 | Overview — Kartu informasi pengiriman | GAP | GAP | ✓ | GAP | ✓ | ✓ | GAP | GAP | GAP | ✓ | – | GAP | ✓ | ✓ | GAP | GAP | GAP |
 | Overview — Telemetri node | GAP | GAP | ✓ | GAP | ✓ | ✓ | ✓ | GAP | GAP | GAP | – | GAP | ✓ | ✓ | ✓ | GAP | ✓ |
-| Recommendations — Feed rekomendasi + filter/sort + pager | GAP | ✓ | ✓ | GAP | ✓ | ✓ | GAP | ✓ | GAP | GAP | GAP | ✓ | GAP | GAP | ✓ | GAP | ✓ |
+| Recommendations — Feed rekomendasi + filter/sort + pager | GAP | ✓ | ✓ | GAP | ✓ | ✓ | GAP | ✓ | GAP | GAP | GAP | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Recommendations — Konsol operasi — snapshot kondisi | GAP | GAP | ✓ | GAP | ✓ | ✓ | ✓ | GAP | GAP | GAP | – | GAP | ✓ | ✓ | ✓ | GAP | ✓ |
 | Recommendations — Konsol operasi — analisis agent & usulan | GAP | GAP | ✓ | GAP | ✓ | ✓ | ✓ | GAP | GAP | – | – | GAP | ✓ | ✓ | ✓ | GAP | ✓ |
 | Recommendations — Panel anomali harga (Event 2) | GAP | GAP | ✓ | GAP | ✓ | ✓ | ✓ | GAP | GAP | – | – | GAP | ✓ | ✓ | ✓ | GAP | ✓ |
@@ -179,23 +179,23 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Decision & Evidence — Integritas bukti & dossier | GAP | GAP | ✓ | GAP | ✓ | ✓ | ✓ | GAP | ✓ | GAP | GAP | GAP | ✓ | ✓ | GAP | GAP | GAP |
 | Decision & Evidence — Daftar purchase order (SAP simulasi) | GAP | GAP | ✓ | GAP | ✓ | ✓ | ✓ | ✓ | GAP | – | – | GAP | ✓ | ✓ | GAP | GAP | ✓ |
 | Keamanan Pangan — Papan batch & uji keamanan | GAP | GAP | ✓ | GAP | ✓ | ✓ | ✓ | GAP | GAP | GAP | – | GAP | ✓ | ✓ | ✓ | GAP | GAP |
-| Keamanan Pangan — Penerimaan barang | ✓ | ✓ | GAP | ✓ | ✓ | ✓ | ✓ | ✓ | GAP | GAP | GAP | GAP | ✓ | ✓ | GAP | GAP | GAP |
+| Keamanan Pangan — Penerimaan barang | ✓ | ✓ | GAP | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | GAP | GAP | GAP | ✓ | ✓ | GAP | ✓ | GAP |
 | Keamanan Pangan — Karantina batch | GAP | GAP | ✓ | GAP | ✓ | ✓ | ✓ | ✓ | GAP | GAP | GAP | GAP | ✓ | ✓ | GAP | GAP | GAP |
 | Surplus & Limbah — Rencana alokasi surplus | GAP | GAP | ✓ | GAP | ✓ | ✓ | ✓ | GAP | GAP | GAP | – | GAP | ✓ | ✓ | ✓ | GAP | ✓ |
 | Surplus & Limbah — Pencatatan limbah | GAP | GAP | ✓ | GAP | ✓ | ✓ | ✓ | ✓ | GAP | GAP | GAP | GAP | ✓ | ✓ | ✓ | GAP | ✓ |
 | Pemasok — Daftar pemasok + pencarian | GAP | GAP | ✓ | GAP | ✓ | ✓ | ✓ | GAP | GAP | GAP | – | GAP | ✓ | ✓ | GAP | GAP | ✓ |
 | Pemasok — Jalur kiriman (jalan) | GAP | GAP | ✓ | GAP | ✓ | ✓ | ✓ | GAP | GAP | ✓ | – | GAP | ✓ | ✓ | GAP | GAP | GAP |
-| Pemasok — Supplier governance (eksklusi/pemulihan) | ✓ | ✓ | GAP | ✓ | ✓ | ✓ | GAP | ✓ | ✓ | GAP | GAP | GAP | ✓ | GAP | GAP | ✓ | GAP |
-| Agent Log — Status provider model | ✓ | GAP | ✓ | ✓ | ✓ | ✓ | GAP | ✓ | GAP | GAP | GAP | GAP | ✓ | ✓ | GAP | GAP | GAP |
-| Agent Log — Jejak langkah agen (trace viewer) | ✓ | GAP | ✓ | ✓ | ✓ | ✓ | GAP | ✓ | GAP | GAP | GAP | GAP | ✓ | ✓ | GAP | GAP | GAP |
+| Pemasok — Supplier governance (eksklusi/pemulihan) | ✓ | ✓ | GAP | ✓ | ✓ | ✓ | GAP | ✓ | ✓ | GAP | GAP | GAP | ✓ | ✓ | GAP | ✓ | GAP |
+| Agent Log — Status provider model | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | GAP | ✓ | GAP | GAP | GAP | GAP | ✓ | ✓ | GAP | GAP | GAP |
+| Agent Log — Jejak langkah agen (trace viewer) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | GAP | ✓ | GAP | GAP | GAP | GAP | ✓ | ✓ | GAP | GAP | GAP |
 | KPI & Kualitas Agen — KPI (jendela periode) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | GAP | GAP | GAP | GAP | GAP | ✓ | ✓ | ✓ | GAP | ✓ |
-| KPI & Kualitas Agen — Kualitas agen (sampel run) | ✓ | GAP | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | GAP | GAP | GAP | GAP | ✓ | ✓ | GAP | GAP | GAP |
+| KPI & Kualitas Agen — Kualitas agen (sampel run) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | GAP | GAP | GAP | GAP | ✓ | ✓ | GAP | GAP | GAP |
 | Pengaturan — Pengguna (admin) | GAP | GAP | GAP | GAP | ✓ | ✓ | ✓ | ✓ | GAP | GAP | GAP | GAP | ✓ | ✓ | GAP | GAP | GAP |
 | Pengaturan — Lokasi (admin) | GAP | GAP | GAP | GAP | ✓ | ✓ | ✓ | GAP | GAP | GAP | GAP | GAP | ✓ | ✓ | GAP | GAP | GAP |
-| Demo Control — Status data demo & sesi | GAP | GAP | GAP | GAP | ✓ | ✓ | ✓ | GAP | GAP | GAP | GAP | GAP | ✓ | ✓ | GAP | GAP | GAP |
-| Demo Control — Jalankan agent + bukti pipeline | ✓ | GAP | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | GAP | GAP | GAP | GAP | ✓ | ✓ | GAP | GAP | GAP |
+| Demo Control — Status data demo & sesi | GAP | GAP | GAP | GAP | ✓ | ✓ | ✓ | ✓ | GAP | GAP | GAP | GAP | ✓ | ✓ | ✓ | GAP | GAP |
+| Demo Control — Jalankan agent + bukti pipeline | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | GAP | GAP | GAP | GAP | ✓ | ✓ | GAP | GAP | GAP |
 | Global (di luar tab) — Login & identitas sesi | GAP | GAP | GAP | GAP | ✓ | ✓ | ✓ | ✓ | GAP | GAP | GAP | GAP | ✓ | ✓ | GAP | GAP | GAP |
-| Global (di luar tab) — Top bar: notifikasi & cakupan lokasi | GAP | ✓ | ✓ | GAP | ✓ | ✓ | GAP | ✓ | GAP | GAP | GAP | ✓ | GAP | GAP | ✓ | GAP | GAP |
+| Global (di luar tab) — Top bar: notifikasi & cakupan lokasi | GAP | ✓ | ✓ | GAP | ✓ | ✓ | GAP | ✓ | GAP | GAP | GAP | ✓ | ✓ | ✓ | ✓ | ✓ | GAP |
 | Global (di luar tab) — Status integrasi (panel tidak terpasang) | – | – | – | – | – | ✓ | ✓ | – | – | – | – | – | – | – | – | – | GAP |
 
 ### 4.1 Arti tiap state
@@ -225,21 +225,21 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Layar / bagian | State | Status | Bukti / alasan |
 |---|---|---|---|
 | Tile status hari ini | `kosong` | GAP | belum ada kunci dimensi yang kosong |
-| Tile status hari ini | `satu_item` | TERBUKTI | 7 kunci dimensi berisi tepat 1 baris |
-| Tile status hari ini | `banyak_halaman` | TERBUKTI | 14 baris > 10/halaman |
+| Tile status hari ini | `satu_item` | TERBUKTI | 6 kunci dimensi berisi tepat 1 baris |
+| Tile status hari ini | `banyak_halaman` | TERBUKTI | 47 baris > 10/halaman |
 | Tile status hari ini | `filter_tanpa_hasil` | GAP | belum ada kunci dimensi yang kosong |
 | Tile status hari ini | `sort` | TERBUKTI | 7 nilai berbeda |
 | Tile status hari ini | `error` | TERBUKTI | HTTP 401 pada /decisions?limit=abc |
 | Tile status hari ini | `loading` | TERBUKTI | cabang 'Memuat'/LoadingState ditemukan di komponen |
-| Tile status hari ini | `null_opsional` | TERBUKTI | 13 baris NULL |
-| Tile status hari ini | `teks_panjang` | GAP | panjang maks 45 karakter |
+| Tile status hari ini | `null_opsional` | TERBUKTI | 37 baris NULL |
+| Tile status hari ini | `teks_panjang` | GAP | panjang maks 63 karakter |
 | Tile status hari ini | `angka_nol` | GAP | tidak ada nilai 0 |
 | Tile status hari ini | `angka_negatif` | GAP | tidak ada nilai negatif |
 | Tile status hari ini | `angka_besar` | GAP | maks 0 |
-| Tile status hari ini | `tanggal_lampau` | GAP | tidak ada tanggal lampau |
-| Tile status hari ini | `tanggal_hari_ini` | GAP | tidak ada baris bertanggal hari ini (WIB) |
-| Tile status hari ini | `tanggal_masa_depan` | TERBUKTI | 14 baris |
-| Tile status hari ini | `unicode` | GAP | teks hanya ASCII |
+| Tile status hari ini | `tanggal_lampau` | TERBUKTI | 9 baris |
+| Tile status hari ini | `tanggal_hari_ini` | TERBUKTI | 28 baris |
+| Tile status hari ini | `tanggal_masa_depan` | TERBUKTI | 38 baris |
+| Tile status hari ini | `unicode` | TERBUKTI | 9 baris non-ASCII |
 | Tile status hari ini | `format_lokal` | GAP | tidak ada kolom uang pada baris ini / formatter tidak ditemukan |
 | Agenda harian | `kosong` | GAP | belum ada kunci dimensi yang kosong |
 | Agenda harian | `satu_item` | GAP | belum ada kunci dimensi berisi tepat 1 baris |
@@ -277,9 +277,9 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Rantai audit (Merkle ledger) | `format_lokal` | GAP | tidak ada kolom uang pada baris ini / formatter tidak ditemukan |
 | Ringkasan peta pasokan (bento KPI) | `kosong` | GAP | belum ada kunci dimensi yang kosong |
 | Ringkasan peta pasokan (bento KPI) | `satu_item` | GAP | belum ada kunci dimensi berisi tepat 1 baris |
-| Ringkasan peta pasokan (bento KPI) | `banyak_halaman` | TERBUKTI | 5200 baris > 10/halaman |
+| Ringkasan peta pasokan (bento KPI) | `banyak_halaman` | TERBUKTI | 5240 baris > 10/halaman |
 | Ringkasan peta pasokan (bento KPI) | `filter_tanpa_hasil` | GAP | belum ada kunci dimensi yang kosong |
-| Ringkasan peta pasokan (bento KPI) | `sort` | TERBUKTI | 4973 nilai berbeda |
+| Ringkasan peta pasokan (bento KPI) | `sort` | TERBUKTI | 5012 nilai berbeda |
 | Ringkasan peta pasokan (bento KPI) | `error` | TERBUKTI | HTTP 401 pada /balance/map (tanpa parameter query) |
 | Ringkasan peta pasokan (bento KPI) | `loading` | TERBUKTI | cabang 'Memuat'/LoadingState ditemukan di komponen |
 | Ringkasan peta pasokan (bento KPI) | `null_opsional` | GAP | kolom opsional terisi semua / tidak ada kolom opsional |
@@ -287,16 +287,16 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Ringkasan peta pasokan (bento KPI) | `angka_nol` | GAP | tidak ada nilai 0 |
 | Ringkasan peta pasokan (bento KPI) | `angka_negatif` | N/A | skema melarang nilai negatif (CHECK >= 0) |
 | Ringkasan peta pasokan (bento KPI) | `angka_besar` | GAP | maks 2543.77 |
-| Ringkasan peta pasokan (bento KPI) | `tanggal_lampau` | TERBUKTI | 4120 baris |
-| Ringkasan peta pasokan (bento KPI) | `tanggal_hari_ini` | TERBUKTI | 80 baris |
+| Ringkasan peta pasokan (bento KPI) | `tanggal_lampau` | TERBUKTI | 4160 baris |
+| Ringkasan peta pasokan (bento KPI) | `tanggal_hari_ini` | TERBUKTI | 120 baris |
 | Ringkasan peta pasokan (bento KPI) | `tanggal_masa_depan` | TERBUKTI | 1080 baris |
 | Ringkasan peta pasokan (bento KPI) | `unicode` | GAP | teks hanya ASCII |
 | Ringkasan peta pasokan (bento KPI) | `format_lokal` | TERBUKTI | formatIDR (lib/auth) + formatDateTime (lib/datetime) dipakai; ada kolom uang |
 | Peta kondisi komoditas | `kosong` | GAP | belum ada kunci dimensi yang kosong |
 | Peta kondisi komoditas | `satu_item` | GAP | belum ada kunci dimensi berisi tepat 1 baris |
-| Peta kondisi komoditas | `banyak_halaman` | TERBUKTI | 5200 baris > 10/halaman |
+| Peta kondisi komoditas | `banyak_halaman` | TERBUKTI | 5240 baris > 10/halaman |
 | Peta kondisi komoditas | `filter_tanpa_hasil` | GAP | belum ada kunci dimensi yang kosong |
-| Peta kondisi komoditas | `sort` | TERBUKTI | 4973 nilai berbeda |
+| Peta kondisi komoditas | `sort` | TERBUKTI | 5012 nilai berbeda |
 | Peta kondisi komoditas | `error` | TERBUKTI | HTTP 401 pada /balance/map (tanpa parameter query) |
 | Peta kondisi komoditas | `loading` | TERBUKTI | cabang 'Memuat'/LoadingState ditemukan di komponen |
 | Peta kondisi komoditas | `null_opsional` | GAP | kolom opsional terisi semua / tidak ada kolom opsional |
@@ -304,8 +304,8 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Peta kondisi komoditas | `angka_nol` | GAP | tidak ada nilai 0 |
 | Peta kondisi komoditas | `angka_negatif` | N/A | skema melarang nilai negatif (CHECK >= 0) |
 | Peta kondisi komoditas | `angka_besar` | GAP | maks 2543.77 |
-| Peta kondisi komoditas | `tanggal_lampau` | TERBUKTI | 4120 baris |
-| Peta kondisi komoditas | `tanggal_hari_ini` | TERBUKTI | 80 baris |
+| Peta kondisi komoditas | `tanggal_lampau` | TERBUKTI | 4160 baris |
+| Peta kondisi komoditas | `tanggal_hari_ini` | TERBUKTI | 120 baris |
 | Peta kondisi komoditas | `tanggal_masa_depan` | TERBUKTI | 1080 baris |
 | Peta kondisi komoditas | `unicode` | GAP | teks hanya ASCII |
 | Peta kondisi komoditas | `format_lokal` | TERBUKTI | formatIDR (lib/auth) + formatDateTime (lib/datetime) dipakai; ada kolom uang |
@@ -338,9 +338,9 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Grafik keseimbangan pasokan | `angka_nol` | GAP | tidak ada nilai 0 |
 | Grafik keseimbangan pasokan | `angka_negatif` | N/A | skema melarang nilai negatif (CHECK >= 0) |
 | Grafik keseimbangan pasokan | `angka_besar` | GAP | maks 3061.42 |
-| Grafik keseimbangan pasokan | `tanggal_lampau` | TERBUKTI | 720 baris |
+| Grafik keseimbangan pasokan | `tanggal_lampau` | TERBUKTI | 440 baris |
 | Grafik keseimbangan pasokan | `tanggal_hari_ini` | TERBUKTI | 40 baris |
-| Grafik keseimbangan pasokan | `tanggal_masa_depan` | TERBUKTI | 640 baris |
+| Grafik keseimbangan pasokan | `tanggal_masa_depan` | TERBUKTI | 920 baris |
 | Grafik keseimbangan pasokan | `unicode` | GAP | teks hanya ASCII |
 | Grafik keseimbangan pasokan | `format_lokal` | TERBUKTI | formatIDR (lib/auth) + formatDateTime (lib/datetime) dipakai; ada kolom uang |
 | Kartu informasi pengiriman | `kosong` | GAP | belum ada kunci dimensi yang kosong |
@@ -362,9 +362,9 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Kartu informasi pengiriman | `format_lokal` | GAP | tidak ada kolom uang pada baris ini / formatter tidak ditemukan |
 | Telemetri node | `kosong` | GAP | belum ada kunci dimensi yang kosong |
 | Telemetri node | `satu_item` | GAP | belum ada kunci dimensi berisi tepat 1 baris |
-| Telemetri node | `banyak_halaman` | TERBUKTI | 5200 baris > 10/halaman |
+| Telemetri node | `banyak_halaman` | TERBUKTI | 5240 baris > 10/halaman |
 | Telemetri node | `filter_tanpa_hasil` | GAP | belum ada kunci dimensi yang kosong |
-| Telemetri node | `sort` | TERBUKTI | 4973 nilai berbeda |
+| Telemetri node | `sort` | TERBUKTI | 5012 nilai berbeda |
 | Telemetri node | `error` | TERBUKTI | HTTP 401 pada /balance/map (tanpa parameter query) |
 | Telemetri node | `loading` | TERBUKTI | cabang 'Memuat'/LoadingState ditemukan di komponen |
 | Telemetri node | `null_opsional` | GAP | kolom opsional terisi semua / tidak ada kolom opsional |
@@ -372,33 +372,33 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Telemetri node | `angka_nol` | GAP | tidak ada nilai 0 |
 | Telemetri node | `angka_negatif` | N/A | skema melarang nilai negatif (CHECK >= 0) |
 | Telemetri node | `angka_besar` | GAP | maks 2543.77 |
-| Telemetri node | `tanggal_lampau` | TERBUKTI | 4120 baris |
-| Telemetri node | `tanggal_hari_ini` | TERBUKTI | 80 baris |
+| Telemetri node | `tanggal_lampau` | TERBUKTI | 4160 baris |
+| Telemetri node | `tanggal_hari_ini` | TERBUKTI | 120 baris |
 | Telemetri node | `tanggal_masa_depan` | TERBUKTI | 1080 baris |
 | Telemetri node | `unicode` | GAP | teks hanya ASCII |
 | Telemetri node | `format_lokal` | TERBUKTI | formatIDR (lib/auth) + formatDateTime (lib/datetime) dipakai; ada kolom uang |
 | Feed rekomendasi + filter/sort + pager | `kosong` | GAP | belum ada kunci dimensi yang kosong |
-| Feed rekomendasi + filter/sort + pager | `satu_item` | TERBUKTI | 7 kunci dimensi berisi tepat 1 baris |
-| Feed rekomendasi + filter/sort + pager | `banyak_halaman` | TERBUKTI | 14 baris > 10/halaman |
+| Feed rekomendasi + filter/sort + pager | `satu_item` | TERBUKTI | 6 kunci dimensi berisi tepat 1 baris |
+| Feed rekomendasi + filter/sort + pager | `banyak_halaman` | TERBUKTI | 47 baris > 10/halaman |
 | Feed rekomendasi + filter/sort + pager | `filter_tanpa_hasil` | GAP | belum ada kunci dimensi yang kosong |
-| Feed rekomendasi + filter/sort + pager | `sort` | TERBUKTI | 11 nilai berbeda |
+| Feed rekomendasi + filter/sort + pager | `sort` | TERBUKTI | 22 nilai berbeda |
 | Feed rekomendasi + filter/sort + pager | `error` | TERBUKTI | HTTP 401 pada /decisions (tanpa parameter query) |
 | Feed rekomendasi + filter/sort + pager | `loading` | GAP | komponen tanpa cabang memuat |
-| Feed rekomendasi + filter/sort + pager | `null_opsional` | TERBUKTI | 13 baris NULL |
-| Feed rekomendasi + filter/sort + pager | `teks_panjang` | GAP | panjang maks 45 karakter |
+| Feed rekomendasi + filter/sort + pager | `null_opsional` | TERBUKTI | 37 baris NULL |
+| Feed rekomendasi + filter/sort + pager | `teks_panjang` | GAP | panjang maks 63 karakter |
 | Feed rekomendasi + filter/sort + pager | `angka_nol` | GAP | tidak ada nilai 0 |
 | Feed rekomendasi + filter/sort + pager | `angka_negatif` | GAP | tidak ada nilai negatif |
 | Feed rekomendasi + filter/sort + pager | `angka_besar` | TERBUKTI | maks 28775093.86 |
-| Feed rekomendasi + filter/sort + pager | `tanggal_lampau` | GAP | tidak ada tanggal lampau |
-| Feed rekomendasi + filter/sort + pager | `tanggal_hari_ini` | GAP | tidak ada baris bertanggal hari ini (WIB) |
-| Feed rekomendasi + filter/sort + pager | `tanggal_masa_depan` | TERBUKTI | 14 baris |
-| Feed rekomendasi + filter/sort + pager | `unicode` | GAP | teks hanya ASCII |
+| Feed rekomendasi + filter/sort + pager | `tanggal_lampau` | TERBUKTI | 9 baris |
+| Feed rekomendasi + filter/sort + pager | `tanggal_hari_ini` | TERBUKTI | 28 baris |
+| Feed rekomendasi + filter/sort + pager | `tanggal_masa_depan` | TERBUKTI | 38 baris |
+| Feed rekomendasi + filter/sort + pager | `unicode` | TERBUKTI | 9 baris non-ASCII |
 | Feed rekomendasi + filter/sort + pager | `format_lokal` | TERBUKTI | formatIDR (lib/auth) + formatDateTime (lib/datetime) dipakai; ada kolom uang |
 | Konsol operasi — snapshot kondisi | `kosong` | GAP | belum ada kunci dimensi yang kosong |
 | Konsol operasi — snapshot kondisi | `satu_item` | GAP | belum ada kunci dimensi berisi tepat 1 baris |
-| Konsol operasi — snapshot kondisi | `banyak_halaman` | TERBUKTI | 5200 baris > 10/halaman |
+| Konsol operasi — snapshot kondisi | `banyak_halaman` | TERBUKTI | 5240 baris > 10/halaman |
 | Konsol operasi — snapshot kondisi | `filter_tanpa_hasil` | GAP | belum ada kunci dimensi yang kosong |
-| Konsol operasi — snapshot kondisi | `sort` | TERBUKTI | 4973 nilai berbeda |
+| Konsol operasi — snapshot kondisi | `sort` | TERBUKTI | 5012 nilai berbeda |
 | Konsol operasi — snapshot kondisi | `error` | TERBUKTI | HTTP 401 pada /balance/00000000-0000-0000-0000-000000000000/telur |
 | Konsol operasi — snapshot kondisi | `loading` | TERBUKTI | cabang 'Memuat'/LoadingState ditemukan di komponen |
 | Konsol operasi — snapshot kondisi | `null_opsional` | GAP | kolom opsional terisi semua / tidak ada kolom opsional |
@@ -406,16 +406,16 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Konsol operasi — snapshot kondisi | `angka_nol` | GAP | tidak ada nilai 0 |
 | Konsol operasi — snapshot kondisi | `angka_negatif` | N/A | skema melarang nilai negatif (CHECK >= 0) |
 | Konsol operasi — snapshot kondisi | `angka_besar` | GAP | maks 2543.77 |
-| Konsol operasi — snapshot kondisi | `tanggal_lampau` | TERBUKTI | 4120 baris |
-| Konsol operasi — snapshot kondisi | `tanggal_hari_ini` | TERBUKTI | 80 baris |
+| Konsol operasi — snapshot kondisi | `tanggal_lampau` | TERBUKTI | 4160 baris |
+| Konsol operasi — snapshot kondisi | `tanggal_hari_ini` | TERBUKTI | 120 baris |
 | Konsol operasi — snapshot kondisi | `tanggal_masa_depan` | TERBUKTI | 1080 baris |
 | Konsol operasi — snapshot kondisi | `unicode` | GAP | teks hanya ASCII |
 | Konsol operasi — snapshot kondisi | `format_lokal` | TERBUKTI | formatIDR (lib/auth) + formatDateTime (lib/datetime) dipakai; ada kolom uang |
 | Konsol operasi — analisis agent & usulan | `kosong` | GAP | belum ada kunci dimensi yang kosong |
 | Konsol operasi — analisis agent & usulan | `satu_item` | GAP | belum ada kunci dimensi berisi tepat 1 baris |
-| Konsol operasi — analisis agent & usulan | `banyak_halaman` | TERBUKTI | 5885 baris > 10/halaman |
+| Konsol operasi — analisis agent & usulan | `banyak_halaman` | TERBUKTI | 6015 baris > 10/halaman |
 | Konsol operasi — analisis agent & usulan | `filter_tanpa_hasil` | GAP | belum ada kunci dimensi yang kosong |
-| Konsol operasi — analisis agent & usulan | `sort` | TERBUKTI | 5833 nilai berbeda |
+| Konsol operasi — analisis agent & usulan | `sort` | TERBUKTI | 5963 nilai berbeda |
 | Konsol operasi — analisis agent & usulan | `error` | TERBUKTI | HTTP 401 pada /balance/analyze?limit=abc |
 | Konsol operasi — analisis agent & usulan | `loading` | TERBUKTI | cabang 'Memuat'/LoadingState ditemukan di komponen |
 | Konsol operasi — analisis agent & usulan | `null_opsional` | GAP | kolom opsional terisi semua / tidak ada kolom opsional |
@@ -423,16 +423,16 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Konsol operasi — analisis agent & usulan | `angka_nol` | N/A | skema mewajibkan > 0 (CHECK) |
 | Konsol operasi — analisis agent & usulan | `angka_negatif` | N/A | skema melarang nilai negatif (CHECK >= 0) |
 | Konsol operasi — analisis agent & usulan | `angka_besar` | GAP | maks 87500.00 |
-| Konsol operasi — analisis agent & usulan | `tanggal_lampau` | TERBUKTI | 4685 baris |
-| Konsol operasi — analisis agent & usulan | `tanggal_hari_ini` | TERBUKTI | 105 baris |
-| Konsol operasi — analisis agent & usulan | `tanggal_masa_depan` | TERBUKTI | 1200 baris |
+| Konsol operasi — analisis agent & usulan | `tanggal_lampau` | TERBUKTI | 4797 baris |
+| Konsol operasi — analisis agent & usulan | `tanggal_hari_ini` | TERBUKTI | 205 baris |
+| Konsol operasi — analisis agent & usulan | `tanggal_masa_depan` | TERBUKTI | 1218 baris |
 | Konsol operasi — analisis agent & usulan | `unicode` | GAP | teks hanya ASCII |
 | Konsol operasi — analisis agent & usulan | `format_lokal` | TERBUKTI | formatIDR (lib/auth) + formatDateTime (lib/datetime) dipakai; ada kolom uang |
 | Panel anomali harga (Event 2) | `kosong` | GAP | belum ada kunci dimensi yang kosong |
 | Panel anomali harga (Event 2) | `satu_item` | GAP | belum ada kunci dimensi berisi tepat 1 baris |
-| Panel anomali harga (Event 2) | `banyak_halaman` | TERBUKTI | 5885 baris > 10/halaman |
+| Panel anomali harga (Event 2) | `banyak_halaman` | TERBUKTI | 6015 baris > 10/halaman |
 | Panel anomali harga (Event 2) | `filter_tanpa_hasil` | GAP | belum ada kunci dimensi yang kosong |
-| Panel anomali harga (Event 2) | `sort` | TERBUKTI | 5833 nilai berbeda |
+| Panel anomali harga (Event 2) | `sort` | TERBUKTI | 5963 nilai berbeda |
 | Panel anomali harga (Event 2) | `error` | TERBUKTI | HTTP 401 pada /price/quotes/00000000-0000-0000-0000-000000000000/telur |
 | Panel anomali harga (Event 2) | `loading` | TERBUKTI | cabang 'Memuat'/LoadingState ditemukan di komponen |
 | Panel anomali harga (Event 2) | `null_opsional` | GAP | kolom opsional terisi semua / tidak ada kolom opsional |
@@ -440,15 +440,15 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Panel anomali harga (Event 2) | `angka_nol` | N/A | skema mewajibkan > 0 (CHECK) |
 | Panel anomali harga (Event 2) | `angka_negatif` | N/A | skema melarang nilai negatif (CHECK >= 0) |
 | Panel anomali harga (Event 2) | `angka_besar` | GAP | maks 87500.00 |
-| Panel anomali harga (Event 2) | `tanggal_lampau` | TERBUKTI | 4685 baris |
-| Panel anomali harga (Event 2) | `tanggal_hari_ini` | TERBUKTI | 105 baris |
-| Panel anomali harga (Event 2) | `tanggal_masa_depan` | TERBUKTI | 1200 baris |
+| Panel anomali harga (Event 2) | `tanggal_lampau` | TERBUKTI | 4797 baris |
+| Panel anomali harga (Event 2) | `tanggal_hari_ini` | TERBUKTI | 205 baris |
+| Panel anomali harga (Event 2) | `tanggal_masa_depan` | TERBUKTI | 1218 baris |
 | Panel anomali harga (Event 2) | `unicode` | GAP | teks hanya ASCII |
 | Panel anomali harga (Event 2) | `format_lokal` | TERBUKTI | formatIDR (lib/auth) + formatDateTime (lib/datetime) dipakai; ada kolom uang |
-| Ringkasan keputusan & bukti | `kosong` | TERBUKTI | 4 kunci dimensi tanpa baris |
-| Ringkasan keputusan & bukti | `satu_item` | TERBUKTI | 6 kunci dimensi berisi tepat 1 baris |
-| Ringkasan keputusan & bukti | `banyak_halaman` | TERBUKTI | 18 baris > 10/halaman |
-| Ringkasan keputusan & bukti | `filter_tanpa_hasil` | TERBUKTI | 4 kunci dimensi tanpa baris |
+| Ringkasan keputusan & bukti | `kosong` | TERBUKTI | 17 kunci dimensi tanpa baris |
+| Ringkasan keputusan & bukti | `satu_item` | TERBUKTI | 26 kunci dimensi berisi tepat 1 baris |
+| Ringkasan keputusan & bukti | `banyak_halaman` | TERBUKTI | 46 baris > 10/halaman |
+| Ringkasan keputusan & bukti | `filter_tanpa_hasil` | TERBUKTI | 17 kunci dimensi tanpa baris |
 | Ringkasan keputusan & bukti | `sort` | TERBUKTI | 6 nilai berbeda |
 | Ringkasan keputusan & bukti | `error` | TERBUKTI | HTTP 401 pada /decisions/00000000-0000-0000-0000-000000000000 |
 | Ringkasan keputusan & bukti | `loading` | TERBUKTI | cabang 'Memuat'/LoadingState ditemukan di komponen |
@@ -457,25 +457,25 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Ringkasan keputusan & bukti | `angka_nol` | GAP | tidak ada nilai 0 |
 | Ringkasan keputusan & bukti | `angka_negatif` | GAP | tidak ada nilai negatif |
 | Ringkasan keputusan & bukti | `angka_besar` | GAP | maks 0 |
-| Ringkasan keputusan & bukti | `tanggal_lampau` | TERBUKTI | 18 baris |
-| Ringkasan keputusan & bukti | `tanggal_hari_ini` | TERBUKTI | 18 baris |
+| Ringkasan keputusan & bukti | `tanggal_lampau` | TERBUKTI | 46 baris |
+| Ringkasan keputusan & bukti | `tanggal_hari_ini` | TERBUKTI | 45 baris |
 | Ringkasan keputusan & bukti | `tanggal_masa_depan` | GAP | tidak ada tanggal masa depan |
 | Ringkasan keputusan & bukti | `unicode` | GAP | teks hanya ASCII |
 | Ringkasan keputusan & bukti | `format_lokal` | TERBUKTI | formatIDR (lib/auth) + formatDateTime (lib/datetime) dipakai; ada kolom uang |
-| Jejak & riwayat persetujuan | `kosong` | TERBUKTI | 5 kunci dimensi tanpa baris |
-| Jejak & riwayat persetujuan | `satu_item` | TERBUKTI | 5 kunci dimensi berisi tepat 1 baris |
-| Jejak & riwayat persetujuan | `banyak_halaman` | TERBUKTI | 13 baris > 10/halaman |
-| Jejak & riwayat persetujuan | `filter_tanpa_hasil` | TERBUKTI | 5 kunci dimensi tanpa baris |
-| Jejak & riwayat persetujuan | `sort` | TERBUKTI | 3 nilai berbeda |
+| Jejak & riwayat persetujuan | `kosong` | TERBUKTI | 34 kunci dimensi tanpa baris |
+| Jejak & riwayat persetujuan | `satu_item` | TERBUKTI | 7 kunci dimensi berisi tepat 1 baris |
+| Jejak & riwayat persetujuan | `banyak_halaman` | TERBUKTI | 19 baris > 10/halaman |
+| Jejak & riwayat persetujuan | `filter_tanpa_hasil` | TERBUKTI | 34 kunci dimensi tanpa baris |
+| Jejak & riwayat persetujuan | `sort` | TERBUKTI | 9 nilai berbeda |
 | Jejak & riwayat persetujuan | `error` | TERBUKTI | HTTP 401 pada /decisions/00000000-0000-0000-0000-000000000000/chain |
 | Jejak & riwayat persetujuan | `loading` | TERBUKTI | cabang 'Memuat'/LoadingState ditemukan di komponen |
 | Jejak & riwayat persetujuan | `null_opsional` | GAP | kolom opsional terisi semua / tidak ada kolom opsional |
-| Jejak & riwayat persetujuan | `teks_panjang` | GAP | panjang maks 49 karakter |
+| Jejak & riwayat persetujuan | `teks_panjang` | GAP | panjang maks 68 karakter |
 | Jejak & riwayat persetujuan | `angka_nol` | GAP | tidak ada nilai 0 |
 | Jejak & riwayat persetujuan | `angka_negatif` | GAP | tidak ada nilai negatif |
 | Jejak & riwayat persetujuan | `angka_besar` | GAP | maks 0 |
-| Jejak & riwayat persetujuan | `tanggal_lampau` | TERBUKTI | 13 baris |
-| Jejak & riwayat persetujuan | `tanggal_hari_ini` | TERBUKTI | 13 baris |
+| Jejak & riwayat persetujuan | `tanggal_lampau` | TERBUKTI | 19 baris |
+| Jejak & riwayat persetujuan | `tanggal_hari_ini` | TERBUKTI | 15 baris |
 | Jejak & riwayat persetujuan | `tanggal_masa_depan` | GAP | tidak ada tanggal masa depan |
 | Jejak & riwayat persetujuan | `unicode` | GAP | teks hanya ASCII |
 | Jejak & riwayat persetujuan | `format_lokal` | GAP | tidak ada kolom uang pada baris ini / formatter tidak ditemukan |
@@ -521,31 +521,31 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Papan batch & uji keamanan | `error` | TERBUKTI | HTTP 401 pada /batches (tanpa parameter query) |
 | Papan batch & uji keamanan | `loading` | TERBUKTI | cabang 'Memuat'/LoadingState ditemukan di komponen |
 | Papan batch & uji keamanan | `null_opsional` | GAP | kolom opsional terisi semua / tidak ada kolom opsional |
-| Papan batch & uji keamanan | `teks_panjang` | GAP | panjang maks 24 karakter |
+| Papan batch & uji keamanan | `teks_panjang` | GAP | panjang maks 55 karakter |
 | Papan batch & uji keamanan | `angka_nol` | GAP | tidak ada nilai 0 |
 | Papan batch & uji keamanan | `angka_negatif` | N/A | skema melarang nilai negatif (CHECK >= 0) |
 | Papan batch & uji keamanan | `angka_besar` | GAP | maks 0.98 |
-| Papan batch & uji keamanan | `tanggal_lampau` | TERBUKTI | 20 baris |
+| Papan batch & uji keamanan | `tanggal_lampau` | TERBUKTI | 1 baris |
 | Papan batch & uji keamanan | `tanggal_hari_ini` | TERBUKTI | 1 baris |
-| Papan batch & uji keamanan | `tanggal_masa_depan` | TERBUKTI | 105 baris |
+| Papan batch & uji keamanan | `tanggal_masa_depan` | TERBUKTI | 124 baris |
 | Papan batch & uji keamanan | `unicode` | GAP | teks hanya ASCII |
 | Papan batch & uji keamanan | `format_lokal` | GAP | tidak ada kolom uang pada baris ini / formatter tidak ditemukan |
-| Penerimaan barang | `kosong` | TERBUKTI | 121 kunci dimensi tanpa baris |
-| Penerimaan barang | `satu_item` | TERBUKTI | 3 kunci dimensi berisi tepat 1 baris |
-| Penerimaan barang | `banyak_halaman` | GAP | 5 baris <= 10/halaman |
-| Penerimaan barang | `filter_tanpa_hasil` | TERBUKTI | 121 kunci dimensi tanpa baris |
+| Penerimaan barang | `kosong` | TERBUKTI | 119 kunci dimensi tanpa baris |
+| Penerimaan barang | `satu_item` | TERBUKTI | 5 kunci dimensi berisi tepat 1 baris |
+| Penerimaan barang | `banyak_halaman` | GAP | 7 baris <= 10/halaman |
+| Penerimaan barang | `filter_tanpa_hasil` | TERBUKTI | 119 kunci dimensi tanpa baris |
 | Penerimaan barang | `sort` | TERBUKTI | 3 nilai berbeda |
 | Penerimaan barang | `error` | TERBUKTI | HTTP 401 pada /receipts/menunggu?limit=abc |
 | Penerimaan barang | `loading` | TERBUKTI | cabang 'Memuat'/LoadingState ditemukan di komponen |
-| Penerimaan barang | `null_opsional` | TERBUKTI | 3 baris NULL |
-| Penerimaan barang | `teks_panjang` | GAP | panjang maks 24 karakter |
+| Penerimaan barang | `null_opsional` | TERBUKTI | 5 baris NULL |
+| Penerimaan barang | `teks_panjang` | TERBUKTI | panjang maks 301 karakter |
 | Penerimaan barang | `angka_nol` | GAP | tidak ada nilai 0 |
 | Penerimaan barang | `angka_negatif` | GAP | tidak ada nilai negatif |
 | Penerimaan barang | `angka_besar` | GAP | maks 0 |
-| Penerimaan barang | `tanggal_lampau` | TERBUKTI | 5 baris |
-| Penerimaan barang | `tanggal_hari_ini` | TERBUKTI | 5 baris |
+| Penerimaan barang | `tanggal_lampau` | TERBUKTI | 7 baris |
+| Penerimaan barang | `tanggal_hari_ini` | TERBUKTI | 7 baris |
 | Penerimaan barang | `tanggal_masa_depan` | GAP | tidak ada tanggal masa depan |
-| Penerimaan barang | `unicode` | GAP | teks hanya ASCII |
+| Penerimaan barang | `unicode` | TERBUKTI | 1 baris non-ASCII |
 | Penerimaan barang | `format_lokal` | GAP | tidak ada kolom uang pada baris ini / formatter tidak ditemukan |
 | Karantina batch | `kosong` | GAP | belum ada kunci dimensi yang kosong |
 | Karantina batch | `satu_item` | GAP | belum ada kunci dimensi berisi tepat 1 baris |
@@ -554,21 +554,21 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Karantina batch | `sort` | TERBUKTI | 4 nilai berbeda |
 | Karantina batch | `error` | TERBUKTI | HTTP 401 pada /batches (tanpa parameter query) |
 | Karantina batch | `loading` | TERBUKTI | cabang 'Memuat'/LoadingState ditemukan di komponen |
-| Karantina batch | `null_opsional` | TERBUKTI | 122 baris NULL |
-| Karantina batch | `teks_panjang` | GAP | panjang maks 24 karakter |
+| Karantina batch | `null_opsional` | TERBUKTI | 121 baris NULL |
+| Karantina batch | `teks_panjang` | GAP | panjang maks 55 karakter |
 | Karantina batch | `angka_nol` | GAP | tidak ada nilai 0 |
 | Karantina batch | `angka_negatif` | GAP | tidak ada nilai negatif |
 | Karantina batch | `angka_besar` | GAP | maks 0 |
-| Karantina batch | `tanggal_lampau` | TERBUKTI | 3 baris |
-| Karantina batch | `tanggal_hari_ini` | TERBUKTI | 3 baris |
+| Karantina batch | `tanggal_lampau` | TERBUKTI | 4 baris |
+| Karantina batch | `tanggal_hari_ini` | TERBUKTI | 4 baris |
 | Karantina batch | `tanggal_masa_depan` | GAP | tidak ada tanggal masa depan |
 | Karantina batch | `unicode` | GAP | teks hanya ASCII |
 | Karantina batch | `format_lokal` | GAP | tidak ada kolom uang pada baris ini / formatter tidak ditemukan |
 | Rencana alokasi surplus | `kosong` | GAP | belum ada kunci dimensi yang kosong |
 | Rencana alokasi surplus | `satu_item` | GAP | belum ada kunci dimensi berisi tepat 1 baris |
-| Rencana alokasi surplus | `banyak_halaman` | TERBUKTI | 5200 baris > 10/halaman |
+| Rencana alokasi surplus | `banyak_halaman` | TERBUKTI | 5240 baris > 10/halaman |
 | Rencana alokasi surplus | `filter_tanpa_hasil` | GAP | belum ada kunci dimensi yang kosong |
-| Rencana alokasi surplus | `sort` | TERBUKTI | 4973 nilai berbeda |
+| Rencana alokasi surplus | `sort` | TERBUKTI | 5012 nilai berbeda |
 | Rencana alokasi surplus | `error` | TERBUKTI | HTTP 401 pada /surplus/allocations (tanpa parameter query) |
 | Rencana alokasi surplus | `loading` | TERBUKTI | cabang 'Memuat'/LoadingState ditemukan di komponen |
 | Rencana alokasi surplus | `null_opsional` | GAP | kolom opsional terisi semua / tidak ada kolom opsional |
@@ -576,8 +576,8 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Rencana alokasi surplus | `angka_nol` | GAP | tidak ada nilai 0 |
 | Rencana alokasi surplus | `angka_negatif` | N/A | skema melarang nilai negatif (CHECK >= 0) |
 | Rencana alokasi surplus | `angka_besar` | GAP | maks 2543.77 |
-| Rencana alokasi surplus | `tanggal_lampau` | TERBUKTI | 4120 baris |
-| Rencana alokasi surplus | `tanggal_hari_ini` | TERBUKTI | 80 baris |
+| Rencana alokasi surplus | `tanggal_lampau` | TERBUKTI | 4160 baris |
+| Rencana alokasi surplus | `tanggal_hari_ini` | TERBUKTI | 120 baris |
 | Rencana alokasi surplus | `tanggal_masa_depan` | TERBUKTI | 1080 baris |
 | Rencana alokasi surplus | `unicode` | GAP | teks hanya ASCII |
 | Rencana alokasi surplus | `format_lokal` | TERBUKTI | formatIDR (lib/auth) + formatDateTime (lib/datetime) dipakai; ada kolom uang |
@@ -633,61 +633,61 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Jalur kiriman (jalan) | `unicode` | GAP | teks hanya ASCII |
 | Jalur kiriman (jalan) | `format_lokal` | GAP | tidak ada kolom uang pada baris ini / formatter tidak ditemukan |
 | Supplier governance (eksklusi/pemulihan) | `kosong` | TERBUKTI | 6 kunci dimensi tanpa baris |
-| Supplier governance (eksklusi/pemulihan) | `satu_item` | TERBUKTI | 4 kunci dimensi berisi tepat 1 baris |
-| Supplier governance (eksklusi/pemulihan) | `banyak_halaman` | GAP | 4 baris <= 10/halaman |
+| Supplier governance (eksklusi/pemulihan) | `satu_item` | TERBUKTI | 3 kunci dimensi berisi tepat 1 baris |
+| Supplier governance (eksklusi/pemulihan) | `banyak_halaman` | GAP | 6 baris <= 10/halaman |
 | Supplier governance (eksklusi/pemulihan) | `filter_tanpa_hasil` | TERBUKTI | 6 kunci dimensi tanpa baris |
 | Supplier governance (eksklusi/pemulihan) | `sort` | TERBUKTI | 4 nilai berbeda |
 | Supplier governance (eksklusi/pemulihan) | `error` | TERBUKTI | HTTP 401 pada /supplier-exclusions?limit=abc |
 | Supplier governance (eksklusi/pemulihan) | `loading` | GAP | komponen tanpa cabang memuat |
-| Supplier governance (eksklusi/pemulihan) | `null_opsional` | TERBUKTI | 3 baris NULL |
+| Supplier governance (eksklusi/pemulihan) | `null_opsional` | TERBUKTI | 5 baris NULL |
 | Supplier governance (eksklusi/pemulihan) | `teks_panjang` | TERBUKTI | panjang maks 301 karakter |
 | Supplier governance (eksklusi/pemulihan) | `angka_nol` | GAP | tidak ada nilai 0 |
 | Supplier governance (eksklusi/pemulihan) | `angka_negatif` | GAP | tidak ada nilai negatif |
 | Supplier governance (eksklusi/pemulihan) | `angka_besar` | GAP | maks 0 |
-| Supplier governance (eksklusi/pemulihan) | `tanggal_lampau` | TERBUKTI | 4 baris |
-| Supplier governance (eksklusi/pemulihan) | `tanggal_hari_ini` | GAP | tidak ada baris bertanggal hari ini (WIB) |
+| Supplier governance (eksklusi/pemulihan) | `tanggal_lampau` | TERBUKTI | 6 baris |
+| Supplier governance (eksklusi/pemulihan) | `tanggal_hari_ini` | TERBUKTI | 1 baris |
 | Supplier governance (eksklusi/pemulihan) | `tanggal_masa_depan` | GAP | tidak ada tanggal masa depan |
 | Supplier governance (eksklusi/pemulihan) | `unicode` | TERBUKTI | 1 baris non-ASCII |
 | Supplier governance (eksklusi/pemulihan) | `format_lokal` | GAP | tidak ada kolom uang pada baris ini / formatter tidak ditemukan |
-| Status provider model | `kosong` | TERBUKTI | 7 kunci dimensi tanpa baris |
-| Status provider model | `satu_item` | GAP | belum ada kunci dimensi berisi tepat 1 baris |
-| Status provider model | `banyak_halaman` | TERBUKTI | 40 baris > 10/halaman |
-| Status provider model | `filter_tanpa_hasil` | TERBUKTI | 7 kunci dimensi tanpa baris |
+| Status provider model | `kosong` | TERBUKTI | 9 kunci dimensi tanpa baris |
+| Status provider model | `satu_item` | TERBUKTI | 3 kunci dimensi berisi tepat 1 baris |
+| Status provider model | `banyak_halaman` | TERBUKTI | 106 baris > 10/halaman |
+| Status provider model | `filter_tanpa_hasil` | TERBUKTI | 9 kunci dimensi tanpa baris |
 | Status provider model | `sort` | TERBUKTI | 8 nilai berbeda |
 | Status provider model | `error` | TERBUKTI | HTTP 401 pada /decisions/00000000-0000-0000-0000-000000000000/traces |
 | Status provider model | `loading` | GAP | komponen tanpa cabang memuat |
-| Status provider model | `null_opsional` | TERBUKTI | 16 baris NULL |
-| Status provider model | `teks_panjang` | GAP | panjang maks 14 karakter |
+| Status provider model | `null_opsional` | TERBUKTI | 82 baris NULL |
+| Status provider model | `teks_panjang` | GAP | panjang maks 24 karakter |
 | Status provider model | `angka_nol` | GAP | tidak ada nilai 0 |
 | Status provider model | `angka_negatif` | GAP | tidak ada nilai negatif |
 | Status provider model | `angka_besar` | GAP | maks 1600 |
-| Status provider model | `tanggal_lampau` | TERBUKTI | 40 baris |
-| Status provider model | `tanggal_hari_ini` | TERBUKTI | 40 baris |
+| Status provider model | `tanggal_lampau` | TERBUKTI | 106 baris |
+| Status provider model | `tanggal_hari_ini` | TERBUKTI | 103 baris |
 | Status provider model | `tanggal_masa_depan` | GAP | tidak ada tanggal masa depan |
 | Status provider model | `unicode` | GAP | teks hanya ASCII |
 | Status provider model | `format_lokal` | GAP | tidak ada kolom uang pada baris ini / formatter tidak ditemukan |
-| Jejak langkah agen (trace viewer) | `kosong` | TERBUKTI | 7 kunci dimensi tanpa baris |
-| Jejak langkah agen (trace viewer) | `satu_item` | GAP | belum ada kunci dimensi berisi tepat 1 baris |
-| Jejak langkah agen (trace viewer) | `banyak_halaman` | TERBUKTI | 40 baris > 10/halaman |
-| Jejak langkah agen (trace viewer) | `filter_tanpa_hasil` | TERBUKTI | 7 kunci dimensi tanpa baris |
+| Jejak langkah agen (trace viewer) | `kosong` | TERBUKTI | 9 kunci dimensi tanpa baris |
+| Jejak langkah agen (trace viewer) | `satu_item` | TERBUKTI | 3 kunci dimensi berisi tepat 1 baris |
+| Jejak langkah agen (trace viewer) | `banyak_halaman` | TERBUKTI | 106 baris > 10/halaman |
+| Jejak langkah agen (trace viewer) | `filter_tanpa_hasil` | TERBUKTI | 9 kunci dimensi tanpa baris |
 | Jejak langkah agen (trace viewer) | `sort` | TERBUKTI | 8 nilai berbeda |
 | Jejak langkah agen (trace viewer) | `error` | TERBUKTI | HTTP 401 pada /decisions/00000000-0000-0000-0000-000000000000/traces |
 | Jejak langkah agen (trace viewer) | `loading` | GAP | komponen tanpa cabang memuat |
-| Jejak langkah agen (trace viewer) | `null_opsional` | TERBUKTI | 16 baris NULL |
-| Jejak langkah agen (trace viewer) | `teks_panjang` | GAP | panjang maks 14 karakter |
+| Jejak langkah agen (trace viewer) | `null_opsional` | TERBUKTI | 82 baris NULL |
+| Jejak langkah agen (trace viewer) | `teks_panjang` | GAP | panjang maks 24 karakter |
 | Jejak langkah agen (trace viewer) | `angka_nol` | GAP | tidak ada nilai 0 |
 | Jejak langkah agen (trace viewer) | `angka_negatif` | GAP | tidak ada nilai negatif |
 | Jejak langkah agen (trace viewer) | `angka_besar` | GAP | maks 1600 |
-| Jejak langkah agen (trace viewer) | `tanggal_lampau` | TERBUKTI | 40 baris |
-| Jejak langkah agen (trace viewer) | `tanggal_hari_ini` | TERBUKTI | 40 baris |
+| Jejak langkah agen (trace viewer) | `tanggal_lampau` | TERBUKTI | 106 baris |
+| Jejak langkah agen (trace viewer) | `tanggal_hari_ini` | TERBUKTI | 103 baris |
 | Jejak langkah agen (trace viewer) | `tanggal_masa_depan` | GAP | tidak ada tanggal masa depan |
 | Jejak langkah agen (trace viewer) | `unicode` | GAP | teks hanya ASCII |
 | Jejak langkah agen (trace viewer) | `format_lokal` | GAP | tidak ada kolom uang pada baris ini / formatter tidak ditemukan |
-| KPI (jendela periode) | `kosong` | TERBUKTI | 300 kunci dimensi tanpa baris |
-| KPI (jendela periode) | `satu_item` | TERBUKTI | 360 kunci dimensi berisi tepat 1 baris |
-| KPI (jendela periode) | `banyak_halaman` | TERBUKTI | 360 baris > 10/halaman |
-| KPI (jendela periode) | `filter_tanpa_hasil` | TERBUKTI | 300 kunci dimensi tanpa baris |
-| KPI (jendela periode) | `sort` | TERBUKTI | 108 nilai berbeda |
+| KPI (jendela periode) | `kosong` | TERBUKTI | 370 kunci dimensi tanpa baris |
+| KPI (jendela periode) | `satu_item` | TERBUKTI | 290 kunci dimensi berisi tepat 1 baris |
+| KPI (jendela periode) | `banyak_halaman` | TERBUKTI | 290 baris > 10/halaman |
+| KPI (jendela periode) | `filter_tanpa_hasil` | TERBUKTI | 370 kunci dimensi tanpa baris |
+| KPI (jendela periode) | `sort` | TERBUKTI | 98 nilai berbeda |
 | KPI (jendela periode) | `error` | TERBUKTI | HTTP 401 pada /kpi (tanpa parameter query) |
 | KPI (jendela periode) | `loading` | TERBUKTI | cabang 'Memuat'/LoadingState ditemukan di komponen |
 | KPI (jendela periode) | `null_opsional` | GAP | kolom opsional terisi semua / tidak ada kolom opsional |
@@ -695,25 +695,25 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | KPI (jendela periode) | `angka_nol` | GAP | tidak ada nilai 0 |
 | KPI (jendela periode) | `angka_negatif` | GAP | tidak ada nilai negatif |
 | KPI (jendela periode) | `angka_besar` | GAP | maks 1224 |
-| KPI (jendela periode) | `tanggal_lampau` | TERBUKTI | 210 baris |
+| KPI (jendela periode) | `tanggal_lampau` | TERBUKTI | 140 baris |
 | KPI (jendela periode) | `tanggal_hari_ini` | TERBUKTI | 10 baris |
 | KPI (jendela periode) | `tanggal_masa_depan` | TERBUKTI | 150 baris |
 | KPI (jendela periode) | `unicode` | GAP | teks hanya ASCII |
 | KPI (jendela periode) | `format_lokal` | TERBUKTI | formatIDR (lib/auth) + formatDateTime (lib/datetime) dipakai; ada kolom uang |
-| Kualitas agen (sampel run) | `kosong` | TERBUKTI | 7 kunci dimensi tanpa baris |
-| Kualitas agen (sampel run) | `satu_item` | GAP | belum ada kunci dimensi berisi tepat 1 baris |
-| Kualitas agen (sampel run) | `banyak_halaman` | TERBUKTI | 40 baris > 10/halaman |
-| Kualitas agen (sampel run) | `filter_tanpa_hasil` | TERBUKTI | 7 kunci dimensi tanpa baris |
+| Kualitas agen (sampel run) | `kosong` | TERBUKTI | 9 kunci dimensi tanpa baris |
+| Kualitas agen (sampel run) | `satu_item` | TERBUKTI | 3 kunci dimensi berisi tepat 1 baris |
+| Kualitas agen (sampel run) | `banyak_halaman` | TERBUKTI | 106 baris > 10/halaman |
+| Kualitas agen (sampel run) | `filter_tanpa_hasil` | TERBUKTI | 9 kunci dimensi tanpa baris |
 | Kualitas agen (sampel run) | `sort` | TERBUKTI | 8 nilai berbeda |
 | Kualitas agen (sampel run) | `error` | TERBUKTI | HTTP 401 pada /decisions/00000000-0000-0000-0000-000000000000/traces |
 | Kualitas agen (sampel run) | `loading` | TERBUKTI | cabang 'Memuat'/LoadingState ditemukan di komponen |
-| Kualitas agen (sampel run) | `null_opsional` | TERBUKTI | 16 baris NULL |
-| Kualitas agen (sampel run) | `teks_panjang` | GAP | panjang maks 14 karakter |
+| Kualitas agen (sampel run) | `null_opsional` | TERBUKTI | 82 baris NULL |
+| Kualitas agen (sampel run) | `teks_panjang` | GAP | panjang maks 24 karakter |
 | Kualitas agen (sampel run) | `angka_nol` | GAP | tidak ada nilai 0 |
 | Kualitas agen (sampel run) | `angka_negatif` | GAP | tidak ada nilai negatif |
 | Kualitas agen (sampel run) | `angka_besar` | GAP | maks 1600 |
-| Kualitas agen (sampel run) | `tanggal_lampau` | TERBUKTI | 40 baris |
-| Kualitas agen (sampel run) | `tanggal_hari_ini` | TERBUKTI | 40 baris |
+| Kualitas agen (sampel run) | `tanggal_lampau` | TERBUKTI | 106 baris |
+| Kualitas agen (sampel run) | `tanggal_hari_ini` | TERBUKTI | 103 baris |
 | Kualitas agen (sampel run) | `tanggal_masa_depan` | GAP | tidak ada tanggal masa depan |
 | Kualitas agen (sampel run) | `unicode` | GAP | teks hanya ASCII |
 | Kualitas agen (sampel run) | `format_lokal` | GAP | tidak ada kolom uang pada baris ini / formatter tidak ditemukan |
@@ -753,35 +753,35 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Lokasi (admin) | `format_lokal` | GAP | tidak ada kolom uang pada baris ini / formatter tidak ditemukan |
 | Status data demo & sesi | `kosong` | GAP | belum ada kunci dimensi yang kosong |
 | Status data demo & sesi | `satu_item` | GAP | belum ada kunci dimensi berisi tepat 1 baris |
-| Status data demo & sesi | `banyak_halaman` | GAP | 3 baris <= 10/halaman |
+| Status data demo & sesi | `banyak_halaman` | GAP | 4 baris <= 10/halaman |
 | Status data demo & sesi | `filter_tanpa_hasil` | GAP | belum ada kunci dimensi yang kosong |
-| Status data demo & sesi | `sort` | TERBUKTI | 3 nilai berbeda |
+| Status data demo & sesi | `sort` | TERBUKTI | 4 nilai berbeda |
 | Status data demo & sesi | `error` | TERBUKTI | HTTP 401 pada /demo/data-status?limit=abc |
 | Status data demo & sesi | `loading` | TERBUKTI | cabang 'Memuat'/LoadingState ditemukan di komponen |
-| Status data demo & sesi | `null_opsional` | GAP | kolom opsional terisi semua / tidak ada kolom opsional |
+| Status data demo & sesi | `null_opsional` | TERBUKTI | 1 baris NULL |
 | Status data demo & sesi | `teks_panjang` | GAP | panjang maks 7 karakter |
 | Status data demo & sesi | `angka_nol` | GAP | tidak ada nilai 0 |
 | Status data demo & sesi | `angka_negatif` | GAP | tidak ada nilai negatif |
 | Status data demo & sesi | `angka_besar` | GAP | maks 0 |
 | Status data demo & sesi | `tanggal_lampau` | TERBUKTI | 3 baris |
-| Status data demo & sesi | `tanggal_hari_ini` | TERBUKTI | 1 baris |
-| Status data demo & sesi | `tanggal_masa_depan` | GAP | tidak ada tanggal masa depan |
+| Status data demo & sesi | `tanggal_hari_ini` | TERBUKTI | 2 baris |
+| Status data demo & sesi | `tanggal_masa_depan` | TERBUKTI | 1 baris |
 | Status data demo & sesi | `unicode` | GAP | teks hanya ASCII |
 | Status data demo & sesi | `format_lokal` | GAP | tidak ada kolom uang pada baris ini / formatter tidak ditemukan |
-| Jalankan agent + bukti pipeline | `kosong` | TERBUKTI | 7 kunci dimensi tanpa baris |
-| Jalankan agent + bukti pipeline | `satu_item` | GAP | belum ada kunci dimensi berisi tepat 1 baris |
-| Jalankan agent + bukti pipeline | `banyak_halaman` | TERBUKTI | 40 baris > 10/halaman |
-| Jalankan agent + bukti pipeline | `filter_tanpa_hasil` | TERBUKTI | 7 kunci dimensi tanpa baris |
+| Jalankan agent + bukti pipeline | `kosong` | TERBUKTI | 9 kunci dimensi tanpa baris |
+| Jalankan agent + bukti pipeline | `satu_item` | TERBUKTI | 3 kunci dimensi berisi tepat 1 baris |
+| Jalankan agent + bukti pipeline | `banyak_halaman` | TERBUKTI | 106 baris > 10/halaman |
+| Jalankan agent + bukti pipeline | `filter_tanpa_hasil` | TERBUKTI | 9 kunci dimensi tanpa baris |
 | Jalankan agent + bukti pipeline | `sort` | TERBUKTI | 8 nilai berbeda |
 | Jalankan agent + bukti pipeline | `error` | TERBUKTI | HTTP 401 pada /demo/agent/last-run?limit=abc |
 | Jalankan agent + bukti pipeline | `loading` | TERBUKTI | cabang 'Memuat'/LoadingState ditemukan di komponen |
-| Jalankan agent + bukti pipeline | `null_opsional` | TERBUKTI | 16 baris NULL |
+| Jalankan agent + bukti pipeline | `null_opsional` | TERBUKTI | 82 baris NULL |
 | Jalankan agent + bukti pipeline | `teks_panjang` | GAP | panjang maks 26 karakter |
 | Jalankan agent + bukti pipeline | `angka_nol` | GAP | tidak ada nilai 0 |
 | Jalankan agent + bukti pipeline | `angka_negatif` | GAP | tidak ada nilai negatif |
 | Jalankan agent + bukti pipeline | `angka_besar` | GAP | maks 1600 |
-| Jalankan agent + bukti pipeline | `tanggal_lampau` | TERBUKTI | 40 baris |
-| Jalankan agent + bukti pipeline | `tanggal_hari_ini` | TERBUKTI | 40 baris |
+| Jalankan agent + bukti pipeline | `tanggal_lampau` | TERBUKTI | 106 baris |
+| Jalankan agent + bukti pipeline | `tanggal_hari_ini` | TERBUKTI | 103 baris |
 | Jalankan agent + bukti pipeline | `tanggal_masa_depan` | GAP | tidak ada tanggal masa depan |
 | Jalankan agent + bukti pipeline | `unicode` | GAP | teks hanya ASCII |
 | Jalankan agent + bukti pipeline | `format_lokal` | GAP | tidak ada kolom uang pada baris ini / formatter tidak ditemukan |
@@ -803,21 +803,21 @@ State diuji dengan data nyata, bukan dengan membaca kode saja. `✓` = TERBUKTI 
 | Login & identitas sesi | `unicode` | GAP | teks hanya ASCII |
 | Login & identitas sesi | `format_lokal` | GAP | tidak ada kolom uang pada baris ini / formatter tidak ditemukan |
 | Top bar: notifikasi & cakupan lokasi | `kosong` | GAP | belum ada kunci dimensi yang kosong |
-| Top bar: notifikasi & cakupan lokasi | `satu_item` | TERBUKTI | 7 kunci dimensi berisi tepat 1 baris |
-| Top bar: notifikasi & cakupan lokasi | `banyak_halaman` | TERBUKTI | 14 baris > 10/halaman |
+| Top bar: notifikasi & cakupan lokasi | `satu_item` | TERBUKTI | 6 kunci dimensi berisi tepat 1 baris |
+| Top bar: notifikasi & cakupan lokasi | `banyak_halaman` | TERBUKTI | 47 baris > 10/halaman |
 | Top bar: notifikasi & cakupan lokasi | `filter_tanpa_hasil` | GAP | belum ada kunci dimensi yang kosong |
-| Top bar: notifikasi & cakupan lokasi | `sort` | TERBUKTI | 11 nilai berbeda |
+| Top bar: notifikasi & cakupan lokasi | `sort` | TERBUKTI | 37 nilai berbeda |
 | Top bar: notifikasi & cakupan lokasi | `error` | TERBUKTI | HTTP 401 pada /decisions?limit=abc |
 | Top bar: notifikasi & cakupan lokasi | `loading` | GAP | komponen tanpa cabang memuat |
-| Top bar: notifikasi & cakupan lokasi | `null_opsional` | TERBUKTI | 13 baris NULL |
-| Top bar: notifikasi & cakupan lokasi | `teks_panjang` | GAP | panjang maks 45 karakter |
+| Top bar: notifikasi & cakupan lokasi | `null_opsional` | TERBUKTI | 37 baris NULL |
+| Top bar: notifikasi & cakupan lokasi | `teks_panjang` | GAP | panjang maks 63 karakter |
 | Top bar: notifikasi & cakupan lokasi | `angka_nol` | GAP | tidak ada nilai 0 |
 | Top bar: notifikasi & cakupan lokasi | `angka_negatif` | GAP | tidak ada nilai negatif |
 | Top bar: notifikasi & cakupan lokasi | `angka_besar` | TERBUKTI | maks 28775093.86 |
-| Top bar: notifikasi & cakupan lokasi | `tanggal_lampau` | GAP | tidak ada tanggal lampau |
-| Top bar: notifikasi & cakupan lokasi | `tanggal_hari_ini` | GAP | tidak ada baris bertanggal hari ini (WIB) |
-| Top bar: notifikasi & cakupan lokasi | `tanggal_masa_depan` | TERBUKTI | 14 baris |
-| Top bar: notifikasi & cakupan lokasi | `unicode` | GAP | teks hanya ASCII |
+| Top bar: notifikasi & cakupan lokasi | `tanggal_lampau` | TERBUKTI | 9 baris |
+| Top bar: notifikasi & cakupan lokasi | `tanggal_hari_ini` | TERBUKTI | 28 baris |
+| Top bar: notifikasi & cakupan lokasi | `tanggal_masa_depan` | TERBUKTI | 38 baris |
+| Top bar: notifikasi & cakupan lokasi | `unicode` | TERBUKTI | 9 baris non-ASCII |
 | Top bar: notifikasi & cakupan lokasi | `format_lokal` | GAP | tidak ada kolom uang pada baris ini / formatter tidak ditemukan |
 | Status integrasi (panel tidak terpasang) | `kosong` | N/A | baris tanpa tabel data |
 | Status integrasi (panel tidak terpasang) | `satu_item` | N/A | baris tanpa tabel data |
@@ -860,19 +860,17 @@ Tidak ada.
 | State | Jumlah layar | Layar |
 |---|---|---|
 | `kosong` | 26 | Tile status hari ini, Agenda harian, Rantai audit (Merkle ledger), Ringkasan peta pasokan (bento KPI), Peta kondisi komoditas, Grafik kecukupan pasokan, Grafik keseimbangan pasokan, Kartu informasi pengiriman, Telemetri node, Feed rekomendasi + filter/sort + pager, Konsol operasi — snapshot kondisi, Konsol operasi — analisis agent & usulan, Panel anomali harga (Event 2), Integritas bukti & dossier, Daftar purchase order (SAP simulasi), Papan batch & uji keamanan, Karantina batch, Rencana alokasi surplus, Pencatatan limbah, Daftar pemasok + pencarian, Jalur kiriman (jalan), Pengguna (admin), Lokasi (admin), Status data demo & sesi, Login & identitas sesi, Top bar: notifikasi & cakupan lokasi |
-| `satu_item` | 27 | Agenda harian, Rantai audit (Merkle ledger), Ringkasan peta pasokan (bento KPI), Peta kondisi komoditas, Grafik kecukupan pasokan, Grafik keseimbangan pasokan, Kartu informasi pengiriman, Telemetri node, Konsol operasi — snapshot kondisi, Konsol operasi — analisis agent & usulan, Panel anomali harga (Event 2), Integritas bukti & dossier, Daftar purchase order (SAP simulasi), Papan batch & uji keamanan, Karantina batch, Rencana alokasi surplus, Pencatatan limbah, Daftar pemasok + pencarian, Jalur kiriman (jalan), Status provider model, Jejak langkah agen (trace viewer), Kualitas agen (sampel run), Pengguna (admin), Lokasi (admin), Status data demo & sesi, Jalankan agent + bukti pipeline, Login & identitas sesi |
+| `satu_item` | 23 | Agenda harian, Rantai audit (Merkle ledger), Ringkasan peta pasokan (bento KPI), Peta kondisi komoditas, Grafik kecukupan pasokan, Grafik keseimbangan pasokan, Kartu informasi pengiriman, Telemetri node, Konsol operasi — snapshot kondisi, Konsol operasi — analisis agent & usulan, Panel anomali harga (Event 2), Integritas bukti & dossier, Daftar purchase order (SAP simulasi), Papan batch & uji keamanan, Karantina batch, Rencana alokasi surplus, Pencatatan limbah, Daftar pemasok + pencarian, Jalur kiriman (jalan), Pengguna (admin), Lokasi (admin), Status data demo & sesi, Login & identitas sesi |
 | `banyak_halaman` | 6 | Penerimaan barang, Supplier governance (eksklusi/pemulihan), Pengguna (admin), Lokasi (admin), Status data demo & sesi, Login & identitas sesi |
 | `filter_tanpa_hasil` | 26 | Tile status hari ini, Agenda harian, Rantai audit (Merkle ledger), Ringkasan peta pasokan (bento KPI), Peta kondisi komoditas, Grafik kecukupan pasokan, Grafik keseimbangan pasokan, Kartu informasi pengiriman, Telemetri node, Feed rekomendasi + filter/sort + pager, Konsol operasi — snapshot kondisi, Konsol operasi — analisis agent & usulan, Panel anomali harga (Event 2), Integritas bukti & dossier, Daftar purchase order (SAP simulasi), Papan batch & uji keamanan, Karantina batch, Rencana alokasi surplus, Pencatatan limbah, Daftar pemasok + pencarian, Jalur kiriman (jalan), Pengguna (admin), Lokasi (admin), Status data demo & sesi, Login & identitas sesi, Top bar: notifikasi & cakupan lokasi |
 | `loading` | 6 | Kartu informasi pengiriman, Feed rekomendasi + filter/sort + pager, Supplier governance (eksklusi/pemulihan), Status provider model, Jejak langkah agen (trace viewer), Top bar: notifikasi & cakupan lokasi |
-| `null_opsional` | 21 | Agenda harian, Rantai audit (Merkle ledger), Ringkasan peta pasokan (bento KPI), Peta kondisi komoditas, Grafik kecukupan pasokan, Grafik keseimbangan pasokan, Kartu informasi pengiriman, Telemetri node, Konsol operasi — snapshot kondisi, Konsol operasi — analisis agent & usulan, Panel anomali harga (Event 2), Ringkasan keputusan & bukti, Jejak & riwayat persetujuan, Integritas bukti & dossier, Papan batch & uji keamanan, Rencana alokasi surplus, Daftar pemasok + pencarian, Jalur kiriman (jalan), KPI (jendela periode), Lokasi (admin), Status data demo & sesi |
-| `teks_panjang` | 32 | Tile status hari ini, Agenda harian, Ringkasan peta pasokan (bento KPI), Peta kondisi komoditas, Grafik kecukupan pasokan, Grafik keseimbangan pasokan, Kartu informasi pengiriman, Telemetri node, Feed rekomendasi + filter/sort + pager, Konsol operasi — snapshot kondisi, Konsol operasi — analisis agent & usulan, Panel anomali harga (Event 2), Ringkasan keputusan & bukti, Jejak & riwayat persetujuan, Daftar purchase order (SAP simulasi), Papan batch & uji keamanan, Penerimaan barang, Karantina batch, Rencana alokasi surplus, Pencatatan limbah, Daftar pemasok + pencarian, Jalur kiriman (jalan), Status provider model, Jejak langkah agen (trace viewer), KPI (jendela periode), Kualitas agen (sampel run), Pengguna (admin), Lokasi (admin), Status data demo & sesi, Jalankan agent + bukti pipeline, Login & identitas sesi, Top bar: notifikasi & cakupan lokasi |
+| `null_opsional` | 20 | Agenda harian, Rantai audit (Merkle ledger), Ringkasan peta pasokan (bento KPI), Peta kondisi komoditas, Grafik kecukupan pasokan, Grafik keseimbangan pasokan, Kartu informasi pengiriman, Telemetri node, Konsol operasi — snapshot kondisi, Konsol operasi — analisis agent & usulan, Panel anomali harga (Event 2), Ringkasan keputusan & bukti, Jejak & riwayat persetujuan, Integritas bukti & dossier, Papan batch & uji keamanan, Rencana alokasi surplus, Daftar pemasok + pencarian, Jalur kiriman (jalan), KPI (jendela periode), Lokasi (admin) |
+| `teks_panjang` | 31 | Tile status hari ini, Agenda harian, Ringkasan peta pasokan (bento KPI), Peta kondisi komoditas, Grafik kecukupan pasokan, Grafik keseimbangan pasokan, Kartu informasi pengiriman, Telemetri node, Feed rekomendasi + filter/sort + pager, Konsol operasi — snapshot kondisi, Konsol operasi — analisis agent & usulan, Panel anomali harga (Event 2), Ringkasan keputusan & bukti, Jejak & riwayat persetujuan, Daftar purchase order (SAP simulasi), Papan batch & uji keamanan, Karantina batch, Rencana alokasi surplus, Pencatatan limbah, Daftar pemasok + pencarian, Jalur kiriman (jalan), Status provider model, Jejak langkah agen (trace viewer), KPI (jendela periode), Kualitas agen (sampel run), Pengguna (admin), Lokasi (admin), Status data demo & sesi, Jalankan agent + bukti pipeline, Login & identitas sesi, Top bar: notifikasi & cakupan lokasi |
 | `angka_nol` | 30 | Tile status hari ini, Agenda harian, Rantai audit (Merkle ledger), Ringkasan peta pasokan (bento KPI), Peta kondisi komoditas, Grafik kecukupan pasokan, Grafik keseimbangan pasokan, Telemetri node, Feed rekomendasi + filter/sort + pager, Konsol operasi — snapshot kondisi, Ringkasan keputusan & bukti, Jejak & riwayat persetujuan, Integritas bukti & dossier, Papan batch & uji keamanan, Penerimaan barang, Karantina batch, Rencana alokasi surplus, Pencatatan limbah, Daftar pemasok + pencarian, Supplier governance (eksklusi/pemulihan), Status provider model, Jejak langkah agen (trace viewer), KPI (jendela periode), Kualitas agen (sampel run), Pengguna (admin), Lokasi (admin), Status data demo & sesi, Jalankan agent + bukti pipeline, Login & identitas sesi, Top bar: notifikasi & cakupan lokasi |
 | `angka_negatif` | 21 | Tile status hari ini, Agenda harian, Rantai audit (Merkle ledger), Feed rekomendasi + filter/sort + pager, Ringkasan keputusan & bukti, Jejak & riwayat persetujuan, Integritas bukti & dossier, Penerimaan barang, Karantina batch, Pencatatan limbah, Supplier governance (eksklusi/pemulihan), Status provider model, Jejak langkah agen (trace viewer), KPI (jendela periode), Kualitas agen (sampel run), Pengguna (admin), Lokasi (admin), Status data demo & sesi, Jalankan agent + bukti pipeline, Login & identitas sesi, Top bar: notifikasi & cakupan lokasi |
 | `angka_besar` | 33 | Tile status hari ini, Agenda harian, Rantai audit (Merkle ledger), Ringkasan peta pasokan (bento KPI), Peta kondisi komoditas, Grafik kecukupan pasokan, Grafik keseimbangan pasokan, Kartu informasi pengiriman, Telemetri node, Konsol operasi — snapshot kondisi, Konsol operasi — analisis agent & usulan, Panel anomali harga (Event 2), Ringkasan keputusan & bukti, Jejak & riwayat persetujuan, Integritas bukti & dossier, Daftar purchase order (SAP simulasi), Papan batch & uji keamanan, Penerimaan barang, Karantina batch, Rencana alokasi surplus, Pencatatan limbah, Daftar pemasok + pencarian, Jalur kiriman (jalan), Supplier governance (eksklusi/pemulihan), Status provider model, Jejak langkah agen (trace viewer), KPI (jendela periode), Kualitas agen (sampel run), Pengguna (admin), Lokasi (admin), Status data demo & sesi, Jalankan agent + bukti pipeline, Login & identitas sesi |
-| `tanggal_lampau` | 3 | Tile status hari ini, Feed rekomendasi + filter/sort + pager, Top bar: notifikasi & cakupan lokasi |
-| `tanggal_hari_ini` | 4 | Tile status hari ini, Feed rekomendasi + filter/sort + pager, Supplier governance (eksklusi/pemulihan), Top bar: notifikasi & cakupan lokasi |
-| `tanggal_masa_depan` | 20 | Rantai audit (Merkle ledger), Grafik kecukupan pasokan, Kartu informasi pengiriman, Ringkasan keputusan & bukti, Jejak & riwayat persetujuan, Integritas bukti & dossier, Daftar purchase order (SAP simulasi), Penerimaan barang, Karantina batch, Daftar pemasok + pencarian, Jalur kiriman (jalan), Supplier governance (eksklusi/pemulihan), Status provider model, Jejak langkah agen (trace viewer), Kualitas agen (sampel run), Pengguna (admin), Lokasi (admin), Status data demo & sesi, Jalankan agent + bukti pipeline, Login & identitas sesi |
-| `unicode` | 34 | Tile status hari ini, Agenda harian, Rantai audit (Merkle ledger), Ringkasan peta pasokan (bento KPI), Peta kondisi komoditas, Grafik kecukupan pasokan, Grafik keseimbangan pasokan, Kartu informasi pengiriman, Telemetri node, Feed rekomendasi + filter/sort + pager, Konsol operasi — snapshot kondisi, Konsol operasi — analisis agent & usulan, Panel anomali harga (Event 2), Ringkasan keputusan & bukti, Jejak & riwayat persetujuan, Integritas bukti & dossier, Daftar purchase order (SAP simulasi), Papan batch & uji keamanan, Penerimaan barang, Karantina batch, Rencana alokasi surplus, Pencatatan limbah, Daftar pemasok + pencarian, Jalur kiriman (jalan), Status provider model, Jejak langkah agen (trace viewer), KPI (jendela periode), Kualitas agen (sampel run), Pengguna (admin), Lokasi (admin), Status data demo & sesi, Jalankan agent + bukti pipeline, Login & identitas sesi, Top bar: notifikasi & cakupan lokasi |
+| `tanggal_masa_depan` | 19 | Rantai audit (Merkle ledger), Grafik kecukupan pasokan, Kartu informasi pengiriman, Ringkasan keputusan & bukti, Jejak & riwayat persetujuan, Integritas bukti & dossier, Daftar purchase order (SAP simulasi), Penerimaan barang, Karantina batch, Daftar pemasok + pencarian, Jalur kiriman (jalan), Supplier governance (eksklusi/pemulihan), Status provider model, Jejak langkah agen (trace viewer), Kualitas agen (sampel run), Pengguna (admin), Lokasi (admin), Jalankan agent + bukti pipeline, Login & identitas sesi |
+| `unicode` | 30 | Agenda harian, Rantai audit (Merkle ledger), Ringkasan peta pasokan (bento KPI), Peta kondisi komoditas, Grafik kecukupan pasokan, Grafik keseimbangan pasokan, Kartu informasi pengiriman, Telemetri node, Konsol operasi — snapshot kondisi, Konsol operasi — analisis agent & usulan, Panel anomali harga (Event 2), Ringkasan keputusan & bukti, Jejak & riwayat persetujuan, Integritas bukti & dossier, Daftar purchase order (SAP simulasi), Papan batch & uji keamanan, Karantina batch, Rencana alokasi surplus, Pencatatan limbah, Daftar pemasok + pencarian, Jalur kiriman (jalan), Status provider model, Jejak langkah agen (trace viewer), KPI (jendela periode), Kualitas agen (sampel run), Pengguna (admin), Lokasi (admin), Status data demo & sesi, Jalankan agent + bukti pipeline, Login & identitas sesi |
 | `format_lokal` | 21 | Tile status hari ini, Agenda harian, Rantai audit (Merkle ledger), Kartu informasi pengiriman, Jejak & riwayat persetujuan, Integritas bukti & dossier, Papan batch & uji keamanan, Penerimaan barang, Karantina batch, Jalur kiriman (jalan), Supplier governance (eksklusi/pemulihan), Status provider model, Jejak langkah agen (trace viewer), Kualitas agen (sampel run), Pengguna (admin), Lokasi (admin), Status data demo & sesi, Jalankan agent + bukti pipeline, Login & identitas sesi, Top bar: notifikasi & cakupan lokasi, Status integrasi (panel tidak terpasang) |
 
 ### 5.4 Ketidaksinkronan enum
@@ -893,11 +891,11 @@ Lihat §3.1 — 3 enum dengan 4 temuan. Yang paling berdampak: decision_type (ko
 | Parameter | Nilai | Asal |
 |---|---|---|
 | `decision_id` | `661695b2-c685-5eb2-83e9-d705e0b37960` | keputusan dengan jejak terbanyak pada cakupan Jakarta (`agent_traces`) |
-| `batch_id` | `8ee9f272-ca34-5db9-a4cf-b2be39050fb0` | batch Jakarta yang punya baris penerimaan (`batch_receipts`) |
+| `batch_id` | `45204477-090b-5f69-94ba-bf1544be4b99` | batch Jakarta yang punya baris penerimaan (`batch_receipts`) |
 | `receipt_id` | `126d2330-f98a-5df2-88e9-cb108919c0ac` | `batch_receipts.id` pertama |
 | `exclusion_id` | `05dbb8ed-3f19-58ee-8b51-1448ae13f491` | `supplier_exclusions.id` pertama |
 | `po_number` | `MC-661695B2C685` | PO pertama yang punya `decision_id` |
-| `start_iso` | `2026-10-01T00:00:00+07:00` | `min(delivery_events.delivered_at)` WIB |
+| `start_iso` | `2026-10-08T00:00:00+07:00` | `min(delivery_events.delivered_at)` WIB |
 | `end_iso` | `2026-11-05T23:59:59+07:00` | `max(delivery_events.delivered_at)` WIB |
 
 ### 6.2 Template query state per baris

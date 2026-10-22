@@ -368,7 +368,14 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
                 status=status,
                 reviewed_by=(kepala.id if status != "menunggu" else None),
                 reviewed_at=(now - timedelta(hours=urut) if status != "menunggu" else None),
-                review_note=("Sesuai catatan lapangan." if status != "menunggu" else None),
+                # urut==4 sengaja memakai catatan panjang ber-Unicode: satu-satunya
+                # kolom teks bebas yang dibaca layar Penerimaan. Tanpa ini state
+                # "catatan sangat panjang / karakter non-ASCII" tidak pernah terlihat.
+                review_note=(
+                    None
+                    if status == "menunggu"
+                    else (CATATAN_PANJANG if urut == 4 else "Sesuai catatan lapangan.")
+                ),
             ),
         )
         jumlah["batch_receipts"] += 1
@@ -500,6 +507,75 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
         ),
     )
     jumlah["suppliers"] += 1
+
+    # --------------------------------------------- kapasitas pemasok (kolom UI)
+    # Kolom "Kapasitas/minggu" di direktori hanya terisi untuk 1 pemasok, sisanya
+    # "—" walau panel mengklaim kapasitas tersedia. Diisi bervariasi; dua pemasok
+    # sengaja DIBIARKAN kosong supaya state "—" tetap punya bukti.
+    semua_pemasok = sorted(
+        (await session.execute(select(Supplier))).scalars().all(), key=lambda x: str(x.id)
+    )
+    for urut, s in enumerate(semua_pemasok):
+        if s.capacity_kg_per_week is not None:
+            continue
+        s.capacity_kg_per_week = Decimal(800 + (urut % 7) * 350)
+        jumlah["suppliers_capacity"] += 1
+    # Dua pemasok pertama (urut id, jadi deterministik antar-run) dikosongkan lagi
+    # sebagai bukti state "—". Tanpa penegasan ini, run berikutnya mengisi sisa
+    # baris dan bukti state kosong ikut hilang (terukur: 60 -> 61).
+    for s in semua_pemasok[:2]:
+        s.capacity_kg_per_week = None
+
+    # ------------------------------------------- keputusan lama (riwayat/audit)
+    # Seluruh keputusan demo jatuh dalam 2 hari terakhir, sehingga filter tanggal
+    # "minggu lalu" dan panel riwayat tidak punya baris. Dua keputusan ditambah
+    # ke masa lalu; keduanya sudah dieksekusi sehingga aman dilihat sebagai audit.
+    for urut, (umur, status) in enumerate(((12, "executed"), (21, "approved"))):
+        lok = sppg[urut % len(sppg)]
+        kom = komoditas[urut % len(komoditas)]
+        did, _ = await _ambil_atau_buat(
+            session,
+            Decision,
+            f"decision:histori:{umur}",
+            dict(
+                decision_type="regional_balance",
+                status=status,
+                proposed_by="agent:regional_balance",
+                verified_by="verifier:otomatis",
+                verifier_note="Audit berkala: selisih stok antar-SPPG masih dalam ambang.",
+                iteration=1,
+                demo_case="extra:histori",
+                source_location_id=lok.id,
+                target_location_id=sppg[(urut + 2) % len(sppg)].id,
+                supplier_id=pemasok[urut % len(pemasok)].id,
+                commodity_id=kom.id,
+                quantity_kg=Decimal("310.00"),
+                safe_delivered_cost=Decimal("9876.54"),
+                cost_breakdown={"harga": 9000, "angkut": 700, "risiko": 176.54},
+                expires_at=now + timedelta(days=30),
+                generated_at=now - timedelta(days=umur),
+                created_at=now - timedelta(days=umur),
+                origin="demo",
+            ),
+        )
+        jumlah["decisions"] += 1
+        await _ambil_atau_buat(
+            session,
+            Approval,
+            f"approval:histori:{umur}",
+            dict(
+                decision_id=did,
+                approved_by=kepala.id,
+                approved=status == "executed",
+                approved_at=now - timedelta(days=umur, hours=2),
+                comment=(
+                    "Disetujui; pengiriman sudah diterima SPPG tujuan."
+                    if status == "executed"
+                    else "Disetujui dengan catatan: pantau susulan minggu depan."
+                ),
+            ),
+        )
+        jumlah["approvals"] += 1
 
     await session.commit()
     return dict(jumlah)
