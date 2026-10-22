@@ -62,11 +62,18 @@ tujuan berimpit, 10 baris) dulu dilaporkan sebagai `road` berdurasi 0 menit pada
 sengaja tidak membuat ETA untuk durasi 0 — kontrak yang bertentangan sendiri dan membuat
 `test_supplier_routes_api` gagal. Sekarang baris itu jujur berstatus "tanpa jalan".
 
-Angka peta saat ini (nasional, BGN Monitor): 105 kiriman aktif, 88 bergeometri jalan,
-8 di jalan, 50 sudah tiba, 17 belum berangkat, 30 tidak diketahui; per komoditas telur 27,
-ayam 25, beras 27, wortel 26 kiriman. Batas yang perlu diketahui juri: peta menampilkan SATU
+Angka peta saat ini (nasional, BGN Monitor): 105 kiriman aktif, 70 bergeometri jalan,
+8 di jalan, 50 sudah tiba, 18 belum berangkat, 29 tidak diketahui; per komoditas telur 29,
+ayam 11, beras 31, wortel 30 kiriman. Batas yang perlu diketahui juri: peta menampilkan SATU
 komoditas pada satu waktu (chip telur/ayam/beras/wortel) — tidak ada mode "semua komoditas
 sekaligus".
+
+**Batas kedua, penting untuk gladi:** semua rute demo bersifat dalam kota (3–10 km, 7–10 menit),
+jadi 8 truk yang diberangkatkan "tiba" sekitar 5–9 menit setelah penyemaian. Untuk segmen peta,
+tekan "Siapkan data demo" (33 detik) tepat sebelum menampilkan peta. Kalau truk harus bergerak
+sepanjang demo 20–30 menit, pilihannya adalah menugaskan sebagian batch demo ke hub kota lain
+(perubahan data, memengaruhi angka distribusi) atau menambah jam simulasi untuk lapisan peta —
+keduanya keputusan produk, bukan cacat data.
 
 ## 1. Ringkasan: masalah dan akar penyebab
 
