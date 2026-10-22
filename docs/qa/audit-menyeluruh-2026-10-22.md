@@ -64,7 +64,8 @@ Bukti sesudah: `""` → 422, `"bukan-uuid"` → 422, UUID tak ada → 404, UUID 
 |---|---|
 | `tsc -p tsconfig.json --noEmit` | bersih |
 | `vitest run` (frontend) | **1761 lulus / 0 gagal** (62,8 detik) |
-| Gerbang backend terpisah | lihat laporan `docs/db-fix-report.md` §verifikasi (dijalankan ulang setelah perbaikan ini) |
+| Gerbang backend terpisah (`scripts/gerbang-db-terpisah.sh`) | **1283 lulus / 18 skip / 0 gagal** (784,2 detik), termasuk tes regresi `batch_id` |
+| Joule (bridge A2A, mode DEMO) | **14/14 lulus**, agent card 1.4.0 / 13 skill |
 | Sapu endpoint | 156 panggilan, 0 gagal |
 | Telusur layar | 29 tab lintas 3 peran, 0 galat konsol |
 
