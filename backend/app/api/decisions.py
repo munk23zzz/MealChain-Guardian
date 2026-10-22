@@ -35,9 +35,18 @@ DECISION_MUTATING_ROLES = ("sppg_head",)
 class DecisionCreate(BaseModel):
     recommendation: dict
     ttl_minutes: int = Field(default=DEFAULT_TTL_MINUTES, ge=1, le=1440)
-    decision_type: Literal["regional_balance", "price_anomaly", "safety_disruption"] = (
-        "regional_balance"
-    )
+    # 22 Okt 2026: disamakan dengan CHECK constraint `decisions_decision_type_check`.
+    # Sebelumnya API hanya menerima 3 dari 6 nilai yang sah di skema, sehingga
+    # keputusan eksklusi/pemulihan pemasok dan pengadaan tidak bisa dibuat lewat
+    # endpoint walau DB mengizinkannya (matriks §3: Literal vs CHECK).
+    decision_type: Literal[
+        "regional_balance",
+        "price_anomaly",
+        "safety_disruption",
+        "supplier_exclusion",
+        "supplier_exclusion_restoration",
+        "supplier_procurement",
+    ] = "regional_balance"
 
 
 async def _assert_target_location_allowed(db: AsyncSession, user: User, target_location_id) -> None:
