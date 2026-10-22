@@ -7,6 +7,38 @@ frontend Next.js, `sap-joule/` jembatan A2A).
 
 ---
 
+## 0. Temuan utama susulan (22 Okt 2026, sesi lanjutan)
+
+Sesudah laporan pertama, penelusuran dilanjutkan sampai akar yang sebenarnya dari gejala
+"database tidak sesuai / data demo hilang sendiri":
+
+1. **`DEMO_SESSION_ENFORCE=true` di kontainer + `uvicorn --reload`.** Setiap kali berkas
+   backend berubah, uvicorn restart, dan hook `lifespan` (`app/api/dependencies.py:85`)
+   memanggil `kosongkan_bertanda()` karena tidak ada sesi demo aktif. Hasilnya: seluruh baris
+   ber-stempel sesi dihapus **tepat setelah** disemai. Ini yang membuat data "hilang sendiri"
+   dan membuat init-demo tampak tidak bekerja padahal ia menulis 5.200 baris. Perbaikan:
+   `.env` disetel `DEMO_SESSION_ENFORCE=false` dan kontainer **di-recreate** (bukan `restart`,
+   karena `restart` tidak memuat ulang env). Terukur: supply 5.200 tetap 5.200 setelah 20 detik.
+2. **`init-demo` tidak idempoten pada run kedua**, dua sebab yang saling menutupi:
+   `_normalisasi_referensi` menilai "database kosong" dari subset tabel laporan sehingga
+   menghapus baris referensi (FK CASCADE ikut meratakan data bisnis); dan penandaan ulang
+   `origin='seed'`->`'demo'` menghapus jangkar yang dibaca generator, sehingga run kedua
+   merencanakan 0 baris tanpa pesan galat. Keduanya diperbaiki; `init-demo` 2x sekarang
+   menghasilkan angka identik.
+3. **`delivery_events` menabrak FK** ketika menu demo kalah oleh menu kanonik pada kunci unik
+   `(location_id, plan_date)` — id rencana yang dipakai tidak pernah ada. Rencana kini
+   disaring ke id yang benar-benar ada.
+4. **Panel "bukti pipeline" selalu kosong** karena semua jejak demo ber-`agent_name = null`,
+   padahal panel itu menyaring `agent_name is not null`. Ditambahkan 6 jejak ber-agen.
+5. **`DecisionCreate.decision_type` hanya menerima 3 dari 6 nilai** yang sah di CHECK
+   (`supplier_exclusion`, `supplier_exclusion_restoration`, `supplier_procurement` ditolak 422).
+6. **Pemasok bertanda eksklusi tidak pernah tampil** di direktori Joule karena tabel dipangkas
+   25 baris dan diurutkan per hub; yang bertanda kini didahulukan.
+
+Dampak ke matriks: **33 baris terbukti, 0 GAP, 3 dipensiunkan** (sebelumnya 32/1/3), dengan
+panel-panel yang sengaja tidak dipasang kini punya bukti tes dan tidak lagi dilaporkan sebagai
+cacat data.
+
 ## 1. Ringkasan: masalah dan akar penyebab
 
 Keluhan awal "database tidak sesuai kebutuhan project" ternyata **bukan satu bug**, melainkan

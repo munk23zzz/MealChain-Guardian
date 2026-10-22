@@ -641,6 +641,22 @@ def S(table: str, **kw) -> dict:
     return base
 
 
+# Panel yang sengaja dipensiunkan (bukan cacat data). Bukti: tes PRD mengunci
+# `page.tsx` agar tidak memuat komponennya, jadi memasangnya kembali akan
+# memerahkan tes. Nilainya = kutipan bukti yang ikut dicetak di matriks.
+RETIRED: dict[str, str] = {
+    "Konsol operasi — snapshot kondisi": (
+        "sengaja: `tests/prd-nav.test.tsx:60` menuntut `page.tsx` TANPA `<OpsConsole`"
+    ),
+    "Konsol operasi — analisis agent & usulan": (
+        "sengaja: sama, `tests/prd-nav.test.tsx:60` (console tidak dipasang)"
+    ),
+    "Status integrasi (panel tidak terpasang)": (
+        "sengaja: `tests/prd-nav.test.tsx:50-52` menuntut `page.tsx` TANPA "
+        "`IntegrationStatusPanel`/`useIntegrationStatus`"
+    ),
+}
+
 SECTIONS: list[dict] = [
     # ---------------- Hari Ini ----------------
     {
@@ -1665,6 +1681,12 @@ def evaluate(rows_ctx: dict) -> list[dict]:
     out = []
     for row in SECTIONS:
         problems: list[str] = []
+        # Panel yang SENGAJA tidak dipasang: tes PRD mengunci `page.tsx` supaya
+        # tidak memuat komponen ini, jadi "tidak dirender" di sini adalah
+        # keputusan produk yang punya bukti, bukan cacat data. Tanpa daftar ini
+        # matriks melaporkan GAP dan pembaca akan mengejar komponen yang memang
+        # sudah dipensiunkan.
+        retired_evidence = RETIRED.get(row["section"])
         anchor_src = rel_source(row["anchor"])
         if not anchor_src:
             problems.append(f"komponen {row['anchor']} tidak ada")
@@ -1673,7 +1695,7 @@ def evaluate(rows_ctx: dict) -> list[dict]:
         # Anchor `app/page.tsx` selalu terpasang.
         anchor_stem = Path(row["anchor"]).stem
         installed = anchor_stem == "page" or anchor_stem not in rows_ctx["orphans"]
-        if not installed:
+        if not installed and not retired_evidence:
             problems.append("komponen ada di repo tetapi tidak dirender oleh layar mana pun")
         missing_fields = [f for f in row["fields"] if f not in anchor_src]
         if missing_fields:
@@ -1850,13 +1872,17 @@ def evaluate(rows_ctx: dict) -> list[dict]:
             data_ok = any(p["count"] > 0 for p in probes)
         else:
             data_ok = evidence_n > 0
-        status = "TERBUKTI" if (data_ok and ok_probe and not problems) else "GAP"
+        if retired_evidence and not installed:
+            status = "DIPENSIUNKAN"
+        else:
+            status = "TERBUKTI" if (data_ok and ok_probe and not problems) else "GAP"
         if row["evidence"] and not data_ok:
             problems.append("query bukti mengembalikan 0 baris")
         elif row["evidence"] is None and not data_ok:
             problems.append("respons endpoint kosong")
         out.append({
             **row,
+            "retired_evidence": retired_evidence,
             "endpoints": sorted(set(endpoints)),
             "probe_results": probes,
             "evidence_n": evidence_n,
@@ -2004,6 +2030,7 @@ def render(rows: list[dict], enums: list[dict], ctx: dict) -> tuple[str, dict]:
 
     gap_rows = [r for r in rows_sorted if r["status"] == "GAP"]
     proven_rows = [r for r in rows_sorted if r["status"] == "TERBUKTI"]
+    retired_rows = [r for r in rows_sorted if r["status"] == "DIPENSIUNKAN"]
     unverified = [r for r in rows_sorted if r["problems"]]
     # "tanpa data" = punya tabel data tetapi query buktinya 0 baris. Baris tanpa
     # tabel (status integrasi) dihitung terpisah: bukan kekosongan data.
@@ -2052,9 +2079,11 @@ def render(rows: list[dict], enums: list[dict], ctx: dict) -> tuple[str, dict]:
     add(f"| Baris matriks (layar/bagian) | {len(rows_sorted)} |")
     add(f"| Baris TERBUKTI (data ada + endpoint 2xx) | {len(proven_rows)} |")
     add(f"| Baris GAP (belum ada data demo / klaim gagal) | {len(gap_rows)} |")
+    add(f"| Baris DIPENSIUNKAN (panel sengaja tidak dipasang, ada bukti tes) | {len(retired_rows)} |")
     add(f"| Baris tanpa baris data sama sekali | {len(demo_rows)} |")
     add(f"| Baris tanpa tabel data (status dari env/artefak) | {len(no_table_rows)} |")
-    add(f"| Baris yang panelnya tidak terpasang di layar | {len(uninstalled)} |")
+    add(f"| Baris yang panelnya tidak terpasang di layar | {len(uninstalled)} "
+        f"(dari itu {len(retired_rows)} dipensiunkan sengaja) |")
     add(f"| Baris dengan klaim tak terverifikasi | {len(unverified)} |")
     add(f"| Tabel di `Base.metadata` | {len(schema)} |")
     add(f"| Tabel di DB (`information_schema`) | {len(db_cols)} |")
@@ -2256,7 +2285,18 @@ def render(rows: list[dict], enums: list[dict], ctx: dict) -> tuple[str, dict]:
     else:
         add("Tidak ada: setiap baris matriks punya minimal satu baris data.")
     add("")
-    add("### 5.2 Baris GAP karena klaim gagal (bukan karena data kosong)")
+    add("### 5.2 Panel yang sengaja dipensiunkan (bukan GAP, ada bukti tes)")
+    add("")
+    if retired_rows:
+        add("| Layar | Bagian | Bukti keputusan |")
+        add("|---|---|---|")
+        for row in retired_rows:
+            add(f"| {md_escape(SCREEN_TITLES.get(row['screen'], row['screen']))} | "
+                f"{md_escape(row['section'])} | {md_escape(row.get('retired_evidence') or '—')} |")
+    else:
+        add("Tidak ada.")
+    add("")
+    add("### 5.3 Baris GAP karena klaim gagal (bukan karena data kosong)")
     add("")
     failed = [r for r in gap_rows if r["evidence_n"] > 0]
     if failed:
@@ -2268,7 +2308,7 @@ def render(rows: list[dict], enums: list[dict], ctx: dict) -> tuple[str, dict]:
     else:
         add("Tidak ada.")
     add("")
-    add("### 5.3 State tampilan yang belum bisa dibuktikan")
+    add("### 5.4 State tampilan yang belum bisa dibuktikan")
     add("")
     per_state: dict[str, list[str]] = {}
     for row, key in state_gap:
