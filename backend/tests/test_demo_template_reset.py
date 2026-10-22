@@ -79,15 +79,39 @@ def test_memanggil_penyemai_dengan_opsi_yang_benar(monkeypatch):
     async def sesi_palsu(db):
         return None
 
+    # 22 Okt 2026: sesudah template, bangun ulang juga mengisi deret waktu,
+    # aktivitas, dan pelengkap cakupan — kalau tidak, tombol "Siapkan data demo"
+    # meninggalkan grafik kosong (supply 5.200 -> 40). Ketiga langkah dipalsukan
+    # di sini, dan tes memastikan ketiganya benar-benar dipanggil: tanpa asersi
+    # ini, menghapus salah satunya tidak akan ketahuan.
+    dilengkapi: dict = {}
+
+    async def deret_palsu():
+        dilengkapi["deret"] = True
+        return {"counts": {"supply": 5200}}
+
+    async def aktivitas_palsu(db, sekarang):
+        dilengkapi["aktivitas"] = True
+        return {"aktivitas": {}, "keputusan_selesai": {}, "harga_harian": {}}
+
+    async def cakupan_palsu(db, sekarang):
+        dilengkapi["pelengkap"] = True
+        return {"decisions": 10}
+
     monkeypatch.setattr(reset, "pastikan_sesi", sesi_palsu)
     monkeypatch.setattr(reset, "build_into", build_palsu)
+    monkeypatch.setattr(reset, "_bangun_deret", deret_palsu)
+    monkeypatch.setattr(reset, "_lengkapi_aktivitas", aktivitas_palsu)
+    monkeypatch.setattr(reset, "_lengkapi_cakupan", cakupan_palsu)
 
     async def skenario() -> dict:
         return await reset.bangun_ulang(DbPalsu())  # type: ignore[arg-type]
 
     hasil = asyncio.run(skenario())
     assert dipanggil == {"purge": True, "freeze": True, "bersihkan_sisa": False}
+    assert dilengkapi == {"deret": True, "aktivitas": True, "pelengkap": True}
     assert hasil["hitung"]["batches"] == 121
+    assert hasil["pelengkap"] == {"decisions": 10}
     assert "durasi_detik" in hasil
 
 

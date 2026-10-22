@@ -27,6 +27,36 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.seed.demo_template import build_into, pastikan_sesi
 
 
+async def _bangun_deret() -> dict:
+    """Deret waktu demo (dibangun ulang sesudah template)."""
+    from app.seed.timeseries import generate_timeseries
+
+    return await generate_timeseries()
+
+
+async def _lengkapi_aktivitas(db: AsyncSession, sekarang) -> dict:
+    """Aktivitas hari ini + keputusan selesai + harga harian."""
+    from app.seed.demo_activity import (
+        seed_demo_activity,
+        seed_demo_completed_decisions,
+        seed_demo_daily_prices,
+    )
+
+    hasil = {
+        "aktivitas": await seed_demo_activity(db, sekarang),
+        "keputusan_selesai": await seed_demo_completed_decisions(db, sekarang),
+        "harga_harian": await seed_demo_daily_prices(db, sekarang),
+    }
+    return hasil
+
+
+async def _lengkapi_cakupan(db: AsyncSession, sekarang) -> dict:
+    """Pelengkap cakupan matriks (semua enum/status, kasus ekstrem)."""
+    from app.seed.demo_extra import build_demo_extra
+
+    return await build_demo_extra(db, sekarang)
+
+
 class Sibuk(RuntimeError):
     """Bangun ulang lain sedang berjalan di proses ini."""
 
@@ -58,24 +88,16 @@ async def bangun_ulang(db: AsyncSession) -> dict:
         # terukur: 20 PO demo -> 12, penerimaan 5 -> 0. Builder pelengkap
         # idempoten, jadi aman dipanggil sesudah template.
         # Deret waktu + aktivitas juga lahir dari jalur demo dan ikut ter-purge
-        # oleh `build_into`. Tanpa dua langkah ini, setelah menekan "Siapkan
-        # data demo" grafik dan KPI kosong (terukur: supply_records 5.200 -> 40).
+        # oleh `build_into`. Tanpa langkah ini, setelah menekan "Siapkan data
+        # demo" grafik dan KPI kosong (terukur: supply_records 5.200 -> 40,
+        # PO demo 20 -> 12, penerimaan 5 -> 0). Tiap langkah dipisah sebagai
+        # helper modul supaya tes bisa memalsukannya tanpa DB sungguhan.
         from datetime import datetime, timezone
 
-        from app.seed.demo_activity import (
-            seed_demo_activity,
-            seed_demo_completed_decisions,
-            seed_demo_daily_prices,
-        )
-        from app.seed.demo_extra import build_demo_extra
-        from app.seed.timeseries import generate_timeseries
-
-        laporan["deret"] = await generate_timeseries()
+        laporan["deret"] = await _bangun_deret()
         sekarang = datetime.now(timezone.utc)
-        laporan["aktivitas"] = await seed_demo_activity(db, sekarang)
-        laporan["keputusan_selesai"] = await seed_demo_completed_decisions(db, sekarang)
-        laporan["harga_harian"] = await seed_demo_daily_prices(db, sekarang)
-        laporan["pelengkap"] = await build_demo_extra(db, sekarang)
+        laporan.update(await _lengkapi_aktivitas(db, sekarang))
+        laporan["pelengkap"] = await _lengkapi_cakupan(db, sekarang)
         await db.commit()
     except Exception:
         await db.rollback()
@@ -90,4 +112,11 @@ async def bangun_ulang(db: AsyncSession) -> dict:
         "penerimaan": laporan.get("penerimaan") or {},
         "eksklusi": laporan.get("eksklusi") or {},
         "bukti": laporan.get("bukti") or {},
+        # 22 Okt 2026: langkah pelengkap yang membuat tombol "Siapkan data demo"
+        # tetap menghasilkan dataset lengkap (deret + aktivitas + cakupan).
+        "deret": laporan.get("deret") or {},
+        "aktivitas": laporan.get("aktivitas") or {},
+        "keputusan_selesai": laporan.get("keputusan_selesai") or {},
+        "harga_harian": laporan.get("harga_harian") or {},
+        "pelengkap": laporan.get("pelengkap") or {},
     }
