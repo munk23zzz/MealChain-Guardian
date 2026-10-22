@@ -336,3 +336,13 @@ Delapan commit, tiap satu tema:
 
 Verifikasi ulang sesudah semua commit: gerbang backend **1282 passed / 18 skipped / 0 failed**,
 sap-joule **123 passed / 14 skipped**, Joule DEMO **14/14**, DEFAULT **14/14**.
+
+## Audit menyeluruh pemakaian (22 Oktober 2026)
+
+Selain kelengkapan data, seluruh proses dipakai-uji: 40 endpoint GET × 3 peran (156 panggilan,
+0 gagal), alur tulis lengkap (keputusan, penerimaan, karantina, eksklusi, sesi demo, agent run),
+29 tab lintas tiga peran lewat browser tanpa galat konsol, dan 9 kombinasi parameter ngawur yang
+semuanya dijawab 4xx. Dua cacat nyata ditemukan dan diperbaiki: layar BGN Monitor kosong karena
+layer peta ditambah sebelum gaya siap, dan 500 pada `batch_id` tidak sah di endpoint evaluasi
+kesegaran/keamanan. Detail, bukti, dan daftar yang belum diuji ada di
+`docs/qa/audit-menyeluruh-2026-10-22.md`.
