@@ -259,7 +259,12 @@ async def list_suppliers(
                 # "Sedang mengirim" = punya batch kiriman yang masih layak hari ini
                 # (keputusan pemilik 2026-10-16). null = tidak sedang mengirim.
                 "shipping": _shipping_payload(shipping_for(shipping_map, supplier.id)),
-                "excluded_at_hub": location_name in scopes,
+                # 22 Okt 2026: dulu dibandingkan dengan lokasi PEMASOK sendiri,
+                # sehingga penanda tidak pernah menyala walau eksklusi aktif
+                # (scope berisi nama hub, bukan nama lokasi pemasok). Arti yang
+                # benar: ada eksklusi aktif pada pemasok ini di hub mana pun.
+                # Rincian hub-nya tetap ada di `excluded_scope_locations`.
+                "excluded_at_hub": bool(scopes),
                 "excluded_scope_locations": scopes,
             }
         )

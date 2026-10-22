@@ -10,7 +10,7 @@
       "skill": "supply_situation",
       "tanya": "Bagaimana situasi pasokan beras di SPPG Jakarta hari ini?",
       "endpoint": "GET /balance/map?commodity=beras, /supply/{loc}/{com}",
-      "detik": 0.71,
+      "detik": 0.7,
       "lulus": true,
       "cocok": [
         "beras",
@@ -24,7 +24,7 @@
       "skill": "supplier_risk",
       "tanya": "Pemasok mana yang berisiko dikeluarkan di Bandung dan mengapa?",
       "endpoint": "GET /supplier-exclusions, /supplier-routes",
-      "detik": 0.46,
+      "detik": 0.45,
       "lulus": true,
       "cocok": [
         "pemasok"
@@ -37,7 +37,7 @@
       "skill": "approval_queue",
       "tanya": "Tampilkan antrean usulan keputusan yang menunggu persetujuan saya.",
       "endpoint": "GET /decisions, /decisions/{id}/approval-summary",
-      "detik": 0.67,
+      "detik": 0.66,
       "lulus": true,
       "cocok": [
         "usulan",
@@ -51,7 +51,7 @@
       "skill": "kpi_snapshot",
       "tanya": "Berapa indikator kinerja KPI program dalam 7 hari terakhir?",
       "endpoint": "GET /kpi?start&end",
-      "detik": 0.59,
+      "detik": 0.6,
       "lulus": true,
       "cocok": [
         "kpi",
@@ -78,7 +78,7 @@
       "skill": "price_intelligence",
       "tanya": "Berapa harga acuan dan kuotasi pemasok untuk wortel di Jakarta?",
       "endpoint": "GET /price/{loc}/{com}, /price/quotes/{loc}/{com}",
-      "detik": 0.46,
+      "detik": 0.48,
       "lulus": true,
       "cocok": [
         "wortel",
@@ -92,7 +92,7 @@
       "skill": "demand_forecast",
       "tanya": "Bagaimana prakiraan kebutuhan telur untuk SPPG Jakarta?",
       "endpoint": "GET /demand/forecast/{loc}/{com}",
-      "detik": 0.45,
+      "detik": 0.49,
       "lulus": true,
       "cocok": [
         "telur",
@@ -106,21 +106,21 @@
       "skill": "food_loss",
       "tanya": "Berapa kehilangan pangan 30 hari terakhir dan mana yang sudah dialihkan?",
       "endpoint": "GET /waste/summary?days=30",
-      "detik": 0.5,
+      "detik": 0.47,
       "lulus": true,
       "cocok": [
         "limbah",
         "kg"
       ],
       "galat": null,
-      "jawaban": "Kehilangan pangan dan pengalihannya (MealChain Guardian)\n\n- **Limbah tercatat:** 410,7 kg · 53 kejadian\n- **Dialihkan ke mitra:** 58,5 kg · 3 kejadian\n- **Tercatat tanpa mitra:** 352,2 kg · 50 kejadian\n- **Periode:** 22 Sep 2026 08.53 WIB – 22 Okt 2026 08.53 WIB (30 hari)\n- **Cakupan:** bgn_monitor · 10 SPPG\n- **Dihitung pada:** 22 Okt 2026 08.53 WIB\n\nMitra pengalihan limbah:\n\n| Mitra | Jumlah | Kejadian |\n|---|---|---|\n| Kompos Bersama | 26,5 kg | 1 |\n| Bank Pangan Nusantara | 19,5 kg | 1 |\n| Bank Sampah Melati | 12,5 kg | 1 |\n\n_Sumber: `GET /waste/summary` (tabel `disposal_events`) — angka dihitung backend, jembatan hanya memformat._\n_Tanpa mitra artinya limbah tercatat tetapi belum dialihkan ke pengolahan — bukan berarti dibuang; backend tidak menyimpulkan hal itu._"
+      "jawaban": "Kehilangan pangan dan pengalihannya (MealChain Guardian)\n\n- **Limbah tercatat:** 410,7 kg · 53 kejadian\n- **Dialihkan ke mitra:** 58,5 kg · 3 kejadian\n- **Tercatat tanpa mitra:** 352,2 kg · 50 kejadian\n- **Periode:** 22 Sep 2026 09.02 WIB – 22 Okt 2026 09.02 WIB (30 hari)\n- **Cakupan:** bgn_monitor · 10 SPPG\n- **Dihitung pada:** 22 Okt 2026 09.02 WIB\n\nMitra pengalihan limbah:\n\n| Mitra | Jumlah | Kejadian |\n|---|---|---|\n| Kompos Bersama | 26,5 kg | 1 |\n| Bank Pangan Nusantara | 19,5 kg | 1 |\n| Bank Sampah Melati | 12,5 kg | 1 |\n\n_Sumber: `GET /waste/summary` (tabel `disposal_events`) — angka dihitung backend, jembatan hanya memformat._\n_Tanpa mitra artinya limbah tercatat tetapi belum dialihkan ke pengolahan — bukan berarti dibuang; backend tidak menyimpulkan hal itu._"
     },
     {
       "id": "penerimaan-menunggu",
       "skill": "receipts_queue",
       "tanya": "Penerimaan barang mana yang masih menunggu pemeriksaan?",
       "endpoint": "GET /receipts/menunggu, /receipts?batch_id",
-      "detik": 0.44,
+      "detik": 0.42,
       "lulus": true,
       "cocok": [
         "menunggu"
@@ -133,21 +133,21 @@
       "skill": "quarantine_status",
       "tanya": "Apakah ada batch yang sedang dikarantina atau gagal keamanan pangan?",
       "endpoint": "GET /batches",
-      "detik": 0.43,
+      "detik": 0.44,
       "lulus": true,
       "cocok": [
         "karantina",
         "batch"
       ],
       "galat": null,
-      "jawaban": "Ada 2 batch berstatus karantina:\n\n| Batch | Komoditas | Jumlah | Lokasi | Keamanan |\n|---|---|---|---|---|\n| — | beras | 540 kg | Jakarta | needs_verification |\n| — | telur | 180 kg | Jakarta | needs_verification |\n\n_Sumber: `GET /batches` (kolom `quarantine_status`), angka apa adanya dari backend._"
+      "jawaban": "Ada 2 batch berstatus karantina:\n\n| Batch | Komoditas | Jumlah | Lokasi | Keamanan |\n|---|---|---|---|---|\n| 467caaad | beras | 540 kg | Jakarta | needs_verification |\n| 8ee9f272 | telur | 180 kg | Jakarta | needs_verification |\n\n_Sumber: `GET /batches` (kolom `quarantine_status`), angka apa adanya dari backend._"
     },
     {
       "id": "bukti-keputusan",
       "skill": "decision_evidence",
       "tanya": "Perlihatkan bukti keputusan terbaru: apakah tanda tangannya masih sah?",
       "endpoint": "GET /decisions/{id}/compliance, /chain, /traces",
-      "detik": 0.61,
+      "detik": 0.56,
       "lulus": true,
       "cocok": [
         "bukti",
@@ -161,14 +161,14 @@
       "skill": "system_status",
       "tanya": "Bagaimana status integrasi sistem dan verifikasi ledger?",
       "endpoint": "GET /integrations/status, /ledger/verify, /sap/purchase-orders/summary",
-      "detik": 0.56,
+      "detik": 0.62,
       "lulus": true,
       "cocok": [
         "integrasi",
         "ledger"
       ],
       "galat": null,
-      "jawaban": "Komponen integrasi (7 komponen, diperiksa 22 Okt 2026 08.53 WIB):\n\n| Komponen | Status | Bukti |\n|---|---|---|\n| AgentCore Runtime (Strands supervisor) | terkonfigurasi | env AGENTCORE_RUNTIME_ARN terisi |\n| SAP AI Core (SAP-RPT-1.6) | kontrak diuji | env SAP_AI_CORE_CLIENT_ID terisi |\n| Mock SAP (sap_integration) | kontrak diuji | layanan mock-sap + tes kontrak PO |\n| Observability | gagal-tertutup | kebijakan: tanpa kredensial → galat eksplisit, bukan laporan palsu |\n| AgentCore Gateway | belum dimulai | env AGENTCORE_GATEWAY_URL kosong |\n| AWS for SAP MCP | belum dimulai | belum ada implementasi/tenant |\n| AgentCore Memory | tersedia, belum dipakai aplikasi | env AGENTCORE_MEMORY_ID terisi |\n\nLedger bukti (rantai blok):\n\n- **Status verifikasi:** SAH\n- **Blok:** 72 (terhubung 72, yatim 0)\n- **Rasio blok terhubung (0–1):** 1,00\n- **Kepala rantai:** f267b4272bf4ea538ec2f8645778ab9d07ea1d83d92d110acae2848a3b29483e\n- **Peringatan cakupan:** tidak ada\n\nPurchase order (mock SAP):\n\n- **Jumlah PO:** 20\n- **Total nilai:** Rp100.195.448.434\n- **Per status:** rancangan=2, terkirim=3, dikonfirmasi=15\n- **Cakupan:** nasional · sumber mock_sap_table\n\nJaringan SPPG (10 lokasi):\n\nBandung (Jawa B"
+      "jawaban": "Komponen integrasi (7 komponen, diperiksa 22 Okt 2026 09.02 WIB):\n\n| Komponen | Status | Bukti |\n|---|---|---|\n| AgentCore Runtime (Strands supervisor) | terkonfigurasi | env AGENTCORE_RUNTIME_ARN terisi |\n| SAP AI Core (SAP-RPT-1.6) | kontrak diuji | env SAP_AI_CORE_CLIENT_ID terisi |\n| Mock SAP (sap_integration) | kontrak diuji | layanan mock-sap + tes kontrak PO |\n| Observability | gagal-tertutup | kebijakan: tanpa kredensial → galat eksplisit, bukan laporan palsu |\n| AgentCore Gateway | belum dimulai | env AGENTCORE_GATEWAY_URL kosong |\n| AWS for SAP MCP | belum dimulai | belum ada implementasi/tenant |\n| AgentCore Memory | tersedia, belum dipakai aplikasi | env AGENTCORE_MEMORY_ID terisi |\n\nLedger bukti (rantai blok):\n\n- **Status verifikasi:** SAH\n- **Blok:** 72 (terhubung 72, yatim 0)\n- **Rasio blok terhubung (0–1):** 1,00\n- **Kepala rantai:** f267b4272bf4ea538ec2f8645778ab9d07ea1d83d92d110acae2848a3b29483e\n- **Peringatan cakupan:** tidak ada\n\nPurchase order (mock SAP):\n\n- **Jumlah PO:** 20\n- **Total nilai:** Rp100.195.448.434\n- **Per status:** rancangan=2, terkirim=3, dikonfirmasi=15\n- **Cakupan:** nasional · sumber mock_sap_table\n\nJaringan SPPG (10 lokasi):\n\nBandung (Jawa B"
     },
     {
       "id": "direktori-pemasok",
@@ -188,7 +188,7 @@
       "skill": "purchase_order",
       "tanya": "Show me the latest purchase orders and their suppliers, please.",
       "endpoint": "GET /sap/purchase-orders?limit",
-      "detik": 0.42,
+      "detik": 0.46,
       "lulus": true,
       "cocok": [
         "po"

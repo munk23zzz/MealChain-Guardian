@@ -726,7 +726,10 @@ def agent_card(app_url: str) -> AgentCard:
             "dilakukan manusia."
         ),
         url=app_url,
-        version="1.3.0",
+        # Disamakan dengan `metadata.version` di capability.sapdas.yaml: agent
+        # card yang lebih tua dari capability membuat operator mengira Joule
+        # memakai definisi lama padahal scenario-nya sudah 1.4.0.
+        version="1.4.0",
         capabilities=AgentCapabilities(streaming=False),
         skills=[
             AgentSkill(

@@ -1337,7 +1337,14 @@ def quarantine_report(
         )
     baris = [
         [
-            _text(row.get("code") or row.get("batch_code")),
+            # 22 Okt 2026: `/batches` tidak mengirim `code`/`batch_code`, jadi
+            # kolom Batch selalu "—" pada jawaban Joule. Pakai potongan id supaya
+            # batch karantina tetap bisa dirujuk operator.
+            _text(
+                row.get("code")
+                or row.get("batch_code")
+                or str(row.get("id") or "")[:8]
+            ),
             _text(row.get("commodity")),
             kg(row.get("quantity_kg")),
             _text(row.get("location")),

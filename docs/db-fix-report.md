@@ -172,8 +172,18 @@ Yang diperiksa dan diubah:
   **DEMO 14/14 lulus**, **DEFAULT 14/14 lulus** (jawaban "belum ada data … belum bisa diambil"
   yang jujur, bukan nol palsu). Berkas hasil: `docs/qa/joule-pertanyaan-2026-10-22-demo.json` (14/14) dan
  `docs/qa/joule-pertanyaan-2026-10-22-default.json` (14/14).
-- **Dua bug nyata yang ditemukan uji ini**: `/batches` 500 (FK eksklusi, §2) dan `403`
-  `/admin/locations` saat jembatan login sebagai `sppg_head` — akun baca harus `bgn_monitor`.
+- **Bug nyata yang ditemukan uji ini**:
+  1. `/batches` 500 akibat FK eksklusi (§2);
+  2. `403` `/admin/locations` saat jembatan login sebagai `sppg_head` — akun baca harus
+     `bgn_monitor` (pola repo: `/admin/*` = BGN);
+  3. kolom "Batch" pada jawaban karantina selalu `—` karena laporan membaca `code`/`batch_code`
+     yang tidak dikirim `/batches` → kini jatuh ke potongan `id` (`467caaad`);
+  4. `excluded_at_hub` di `/suppliers` membandingkan nama **lokasi pemasok** dengan daftar hub
+     eksklusi, sehingga penanda "dikecualikan di hub" tidak pernah menyala walau eksklusi aktif;
+     kini `bool(scopes)` (terukur: 2 dari 61 pemasok bertanda, sebelumnya 0);
+  5. agent card jembatan masih `1.3.0` sementara capability `1.4.0` → disamakan.
+  Sisa keterbatasan (bukan bug): tabel direktori pemasok dipangkas, sehingga pemasok bertanda
+  eksklusi bisa berada di luar baris yang tampil pada satu jawaban.
 - Tes `sap-joule/a2a_server/tests`: **123 passed, 14 skipped** (dijalankan dengan
   `a2a_server/requirements.txt` yang mematok `a2a-sdk[http-server]==0.3.25`; versi `a2a-sdk` bebas
   gagal impor `MessageSendParams`).
