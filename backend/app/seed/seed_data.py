@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.core.journey import dispatch_time, validate_dispatch
@@ -448,7 +448,28 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
                 ).scalars()
             }
 
+            # 22 Okt 2026: `merge()` mencari berdasarkan ID, bukan kunci alami.
+            # Setelah jalur "Siapkan data demo" (demo_template) ada baris dengan
+            # (lokasi, komoditas, recorded_at, source) sama tetapi ID berbeda,
+            # sehingga merge jatuh ke INSERT dan menabrak
+            # `uq_supply_records_loc_com_time_source` — seluruh semai berhenti.
+            # Baris berbenturan itu dibuang lebih dulu: kanonik yang menang.
             for item in rows["supply"]:
+                bentrok = (
+                    await session.execute(
+                        select(SupplyRecord.id).where(
+                            SupplyRecord.location_id == loc_by_name[item["location"]].id,
+                            SupplyRecord.commodity_id == com_by_name[item["commodity"]].id,
+                            SupplyRecord.recorded_at == item["recorded_at"],
+                            SupplyRecord.source == item["source"],
+                            SupplyRecord.id != item["id"],
+                        )
+                    )
+                ).scalars().all()
+                if bentrok:
+                    await session.execute(
+                        delete(SupplyRecord).where(SupplyRecord.id.in_(bentrok))
+                    )
                 await session.merge(
                     SupplyRecord(
                         id=item["id"],
@@ -460,6 +481,20 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
                     )
                 )
             for item in rows["demand"]:
+                bentrok = (
+                    await session.execute(
+                        select(DemandRecord.id).where(
+                            DemandRecord.location_id == loc_by_name[item["location"]].id,
+                            DemandRecord.commodity_id == com_by_name[item["commodity"]].id,
+                            DemandRecord.recorded_at == item["recorded_at"],
+                            DemandRecord.id != item["id"],
+                        )
+                    )
+                ).scalars().all()
+                if bentrok:
+                    await session.execute(
+                        delete(DemandRecord).where(DemandRecord.id.in_(bentrok))
+                    )
                 await session.merge(
                     DemandRecord(
                         id=item["id"],
