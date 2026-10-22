@@ -170,8 +170,8 @@ Yang diperiksa dan diubah:
 - **Uji nyata**: `sap-joule/scripts/uji-pertanyaan-joule.py` mengirim 14 pertanyaan meniru Joule
   (JSON-RPC `message/send` ke jembatan A2A), bukan memanggil backend langsung. Hasil:
   **DEMO 14/14 lulus**, **DEFAULT 14/14 lulus** (jawaban "belum ada data … belum bisa diambil"
-  yang jujur, bukan nol palsu). Berkas hasil: `_qa/joule-pertanyaan-demo.json`,
-  `_qa/joule-pertanyaan-default.json`.
+  yang jujur, bukan nol palsu). Berkas hasil: `docs/qa/joule-pertanyaan-2026-10-22-demo.json` (14/14) dan
+ `docs/qa/joule-pertanyaan-2026-10-22-default.json` (14/14).
 - **Dua bug nyata yang ditemukan uji ini**: `/batches` 500 (FK eksklusi, §2) dan `403`
   `/admin/locations` saat jembatan login sebagai `sppg_head` — akun baca harus `bgn_monitor`.
 - Tes `sap-joule/a2a_server/tests`: **123 passed, 14 skipped** (dijalankan dengan
@@ -198,7 +198,7 @@ Konfigurasi destination (`MEALCHAIN_AGENT_01`) tidak diubah.
 | Frontend mode DEFAULT | empty state benar ("Belum ada data …", 0 kg), tanpa error/NaN, tanpa spinner menggantung |
 | 14 pertanyaan Joule DEMO / DEFAULT | 14/14 dan 14/14 |
 | `ruff` berkas yang diubah | bersih (kecuali `N818` lama pada `Sibuk` di `demo_template_reset.py`, sudah ada sebelum pekerjaan ini) |
-| Gerbang backend terpisah (`scripts/gerbang-db-terpisah.sh`) | **hasil menyusul di bagian bawah** (dijalankan ulang setelah semua perubahan) |
+| Gerbang backend terpisah (`scripts/gerbang-db-terpisah.sh`) | **1282 passed, 18 skipped, 0 failed** (785,94 detik ≈ 13 menit), log `_qa/gerbang-db-terpisah-2026-10-22.txt` |
 | Frontend/tes frontend | tidak diubah pada pekerjaan ini; suite terakhir 160 berkas / 1.746 tes lulus (sesi sebelumnya hari ini) |
 
 ## 8. Asumsi, risiko, dan sisa pekerjaan
@@ -235,6 +235,18 @@ Backup sebelum tindakan destruktif (format `pg_dump -Fc`):
 - `data/backups/pre-dbfix-gate-20261022-0810.dump` (844 KB) — DB gerbang
 
 Branch: `feature/db-modes-demo-coverage` (dari `feature/sprint2-decision-intelligence` @ `569266b`).
+Delapan commit, tiap satu tema:
 
-Daftar commit: **diisi pada bagian akhir berkas ini setelah commit dijalankan** (lihat riwayat
-`git log --oneline feature/db-modes-demo-coverage`).
+| Commit | Isi |
+|---|---|
+| `bf757fe` | Migrasi 028: penanda demo pada PO, index pencarian Joule, FK eksklusi CASCADE/SET NULL |
+| `bf8c3df` | DB mode DEFAULT/DEMO: `app.seed.db_mode`, `reference`, `demo_extra`, `scripts/db-mode.sh`, rebuild mempertahankan cakupan, `.env.example` |
+| `a747612` | Skills `db-mode` + `demo-data-builder` |
+| `2de443d` | Joule: 3 scenario baru, capability 1.4.0, peta 13 skill, uji 14 pertanyaan |
+| `68cf944` | Rebuild demo: langkah pelengkap jadi helper yang bisa diuji (+ tes menegaskan ketiganya dipanggil) |
+| `ea03e60` | `docs/db-coverage-matrix.md`, `docs/db-fix-report.md`, `scripts/audit/db_coverage.py` |
+| `42c475c` | `db-mode status` tidak lagi mengarang `DB_MODE` bawaan (menghindari peringatan palsu) |
+| `d593832` | Onboarding: penyiapan DB diarahkan ke `scripts/db-mode.sh` |
+
+Verifikasi ulang sesudah semua commit: gerbang backend **1282 passed / 18 skipped / 0 failed**,
+sap-joule **123 passed / 14 skipped**, Joule DEMO **14/14**, DEFAULT **14/14**.

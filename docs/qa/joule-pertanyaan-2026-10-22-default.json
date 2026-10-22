@@ -1,0 +1,195 @@
+{
+  "mode": "default",
+  "url": "http://127.0.0.1:8099/",
+  "total": 14,
+  "lulus": 14,
+  "gagal": 0,
+  "hasil": [
+    {
+      "id": "supply-beras-jakarta",
+      "skill": "supply_situation",
+      "tanya": "Bagaimana situasi pasokan beras di SPPG Jakarta hari ini?",
+      "endpoint": "GET /balance/map?commodity=beras, /supply/{loc}/{com}",
+      "detik": 1.46,
+      "lulus": true,
+      "cocok": [
+        "belum"
+      ],
+      "galat": null,
+      "jawaban": "Belum ada data pasokan yang dikirim backend MealChain.\n\n_sumber: GET /batches + GET /balance/map_"
+    },
+    {
+      "id": "risiko-pemasok-bandung",
+      "skill": "supplier_risk",
+      "tanya": "Pemasok mana yang berisiko dikeluarkan di Bandung dan mengapa?",
+      "endpoint": "GET /supplier-exclusions, /supplier-routes",
+      "detik": 0.45,
+      "lulus": true,
+      "cocok": [
+        "belum"
+      ],
+      "galat": null,
+      "jawaban": "Belum ada data pemasok yang dikirim backend MealChain.\n\n_sumber: GET /suppliers_"
+    },
+    {
+      "id": "antrean-usulan",
+      "skill": "approval_queue",
+      "tanya": "Tampilkan antrean usulan keputusan yang menunggu persetujuan saya.",
+      "endpoint": "GET /decisions, /decisions/{id}/approval-summary",
+      "detik": 0.44,
+      "lulus": true,
+      "cocok": [
+        "belum"
+      ],
+      "galat": null,
+      "jawaban": "Belum ada usulan keputusan di MealChain Guardian.\n\n_sumber: GET /decisions_"
+    },
+    {
+      "id": "kpi-mingguan",
+      "skill": "kpi_snapshot",
+      "tanya": "Berapa indikator kinerja KPI program dalam 7 hari terakhir?",
+      "endpoint": "GET /kpi?start&end",
+      "detik": 0.51,
+      "lulus": true,
+      "cocok": [
+        "belum",
+        "tidak ada"
+      ],
+      "galat": null,
+      "jawaban": "Indikator kinerja MealChain Guardian (7 metrik, angka dari backend):\n\n| Indikator | Nilai |\n|---|---|\n| Meal Continuity Rate | — (tidak ada menu plan pada periode ini — unavailable bila tabel facts belum dimigrasi (009)) |\n| Avoidable Food Loss | — (tidak ada record pada periode ini) |\n| Regional Imbalance Resolution Rate | — (tidak ada DETECT pada periode ini) |\n| Safe Delivered Cost | — (tidak ada record pada periode ini) |\n| Procurement Price Deviation | — (tidak ada record pada periode ini) |\n| Decision Time | — (tidak ada record pada periode ini) |\n| Evidence Completeness | — (belum ada keputusan yang disetujui pada periode ini — tanpa approval tidak ada cutoff untuk menilai bukti) |\n\n_7 indikator belum bisa dihitung dan ditandai alasannya, bukan diisi nol._\n_Sumber: GET /kpi (jendela waktu diminta oleh jembatan)._"
+    },
+    {
+      "id": "po-dari-keputusan",
+      "skill": "purchase_order",
+      "tanya": "Tunjukkan PO MC-EXTRA000 dan dari keputusan mana PO itu lahir.",
+      "endpoint": "GET /sap/purchase-orders?limit",
+      "detik": 0.43,
+      "lulus": true,
+      "cocok": [
+        "belum"
+      ],
+      "galat": null,
+      "jawaban": "Belum ada purchase order yang terbaca di MealChain Guardian.\n\n_sumber: GET /sap/purchase-orders_"
+    },
+    {
+      "id": "harga-wortel",
+      "skill": "price_intelligence",
+      "tanya": "Berapa harga acuan dan kuotasi pemasok untuk wortel di Jakarta?",
+      "endpoint": "GET /price/{loc}/{com}, /price/quotes/{loc}/{com}",
+      "detik": 0.43,
+      "lulus": true,
+      "cocok": [
+        "belum"
+      ],
+      "galat": null,
+      "jawaban": "Belum ada data harga yang dikirim backend MealChain.\n\n_sumber: GET /price/{lokasi}/{komoditas}_"
+    },
+    {
+      "id": "prakiraan-kebutuhan",
+      "skill": "demand_forecast",
+      "tanya": "Bagaimana prakiraan kebutuhan telur untuk SPPG Jakarta?",
+      "endpoint": "GET /demand/forecast/{loc}/{com}",
+      "detik": 0.44,
+      "lulus": true,
+      "cocok": [
+        "belum"
+      ],
+      "galat": null,
+      "jawaban": "Belum ada data kebutuhan yang dikirim backend MealChain.\n\n_sumber: GET /demand/{lokasi}/{komoditas}_"
+    },
+    {
+      "id": "kehilangan-pangan",
+      "skill": "food_loss",
+      "tanya": "Berapa kehilangan pangan 30 hari terakhir dan mana yang sudah dialihkan?",
+      "endpoint": "GET /waste/summary?days=30",
+      "detik": 0.52,
+      "lulus": true,
+      "cocok": [
+        "belum",
+        "tidak ada"
+      ],
+      "galat": null,
+      "jawaban": "Kehilangan pangan dan pengalihannya (MealChain Guardian)\n\n- **Limbah tercatat:** — (tidak ada limbah tercatat pada periode ini)\n- **Dialihkan ke mitra:** — (tidak ada limbah tercatat pada periode ini)\n- **Tercatat tanpa mitra:** — (tidak ada limbah tercatat pada periode ini)\n- **Periode:** 22 Sep 2026 08.24 WIB – 22 Okt 2026 08.24 WIB (30 hari)\n- **Cakupan:** bgn_monitor · 0 SPPG\n- **Dihitung pada:** 22 Okt 2026 08.24 WIB\n\n_Sumber: `GET /waste/summary` (tabel `disposal_events`) — angka dihitung backend, jembatan hanya memformat._\n_Tanpa mitra artinya limbah tercatat tetapi belum dialihkan ke pengolahan — bukan berarti dibuang; backend tidak menyimpulkan hal itu._"
+    },
+    {
+      "id": "penerimaan-menunggu",
+      "skill": "receipts_queue",
+      "tanya": "Penerimaan barang mana yang masih menunggu pemeriksaan?",
+      "endpoint": "GET /receipts/menunggu, /receipts?batch_id",
+      "detik": 0.48,
+      "lulus": true,
+      "cocok": [
+        "tidak ada",
+        "kosong"
+      ],
+      "galat": null,
+      "jawaban": "Tidak ada penerimaan barang yang menunggu keputusan.\n\n_Sumber: `GET /receipts/menunggu` — daftar kosong berarti setiap catatan penerimaan sudah diputuskan (disetujui/ditolak)._"
+    },
+    {
+      "id": "batch-karantina",
+      "skill": "quarantine_status",
+      "tanya": "Apakah ada batch yang sedang dikarantina atau gagal keamanan pangan?",
+      "endpoint": "GET /batches",
+      "detik": 0.47,
+      "lulus": true,
+      "cocok": [
+        "tidak ada"
+      ],
+      "galat": null,
+      "jawaban": "Tidak ada batch berstatus karantina saat ini.\n\n_Sumber: `GET /batches` — kolom `quarantine_status` disaring di jembatan, tanpa menambah endpoint baru._"
+    },
+    {
+      "id": "bukti-keputusan",
+      "skill": "decision_evidence",
+      "tanya": "Perlihatkan bukti keputusan terbaru: apakah tanda tangannya masih sah?",
+      "endpoint": "GET /decisions/{id}/compliance, /chain, /traces",
+      "detik": 0.43,
+      "lulus": true,
+      "cocok": [
+        "belum"
+      ],
+      "galat": null,
+      "jawaban": "Belum ada keputusan yang bisa dibuka bukti dan jejaknya.\n\n_sumber: GET /decisions + /decisions/{id}/compliance_"
+    },
+    {
+      "id": "status-sistem",
+      "skill": "system_status",
+      "tanya": "Bagaimana status integrasi sistem dan verifikasi ledger?",
+      "endpoint": "GET /integrations/status, /ledger/verify, /sap/purchase-orders/summary",
+      "detik": 0.64,
+      "lulus": true,
+      "cocok": [
+        "integrasi",
+        "ledger"
+      ],
+      "galat": null,
+      "jawaban": "Komponen integrasi (7 komponen, diperiksa 22 Okt 2026 08.24 WIB):\n\n| Komponen | Status | Bukti |\n|---|---|---|\n| AgentCore Runtime (Strands supervisor) | terkonfigurasi | env AGENTCORE_RUNTIME_ARN terisi |\n| SAP AI Core (SAP-RPT-1.6) | kontrak diuji | env SAP_AI_CORE_CLIENT_ID terisi |\n| Mock SAP (sap_integration) | kontrak diuji | layanan mock-sap + tes kontrak PO |\n| Observability | gagal-tertutup | kebijakan: tanpa kredensial → galat eksplisit, bukan laporan palsu |\n| AgentCore Gateway | belum dimulai | env AGENTCORE_GATEWAY_URL kosong |\n| AWS for SAP MCP | belum dimulai | belum ada implementasi/tenant |\n| AgentCore Memory | tersedia, belum dipakai aplikasi | env AGENTCORE_MEMORY_ID terisi |\n\nLedger bukti (rantai blok):\n\n- **Status verifikasi:** SAH\n- **Blok:** 72 (terhubung 0, yatim 72)\n- **Rasio blok terhubung (0–1):** 0,00\n- **Kepala rantai:** 794642bc49a600e1cf5fdf9fbcc533332ad00c420f8d2111e5b53498e53da8ca\n- **Peringatan cakupan:** rantai utuh, tetapi 72 blok menunjuk entitas yang sudah tidak ada\n\nPurchase order (mock SAP):\n\n- **Jumlah PO:** 0\n- **Total nilai:** Rp0\n- **Per status:** rancangan=0, terkirim=0, dikonfirmasi=0\n- **Cakupan:** nasional · sumber mock_sap_table\n\nJar"
+    },
+    {
+      "id": "direktori-pemasok",
+      "skill": "supplier_directory",
+      "tanya": "Daftar pemasok yang terdaftar beserta komoditasnya.",
+      "endpoint": "GET /suppliers?limit",
+      "detik": 0.46,
+      "lulus": true,
+      "cocok": [
+        "belum"
+      ],
+      "galat": null,
+      "jawaban": "Belum ada data pemasok yang dikirim backend MealChain.\n\n_sumber: GET /suppliers_"
+    },
+    {
+      "id": "po-inggris",
+      "skill": "purchase_order",
+      "tanya": "Show me the latest purchase orders and their suppliers, please.",
+      "endpoint": "GET /sap/purchase-orders?limit",
+      "detik": 0.49,
+      "lulus": true,
+      "cocok": [
+        "belum"
+      ],
+      "galat": null,
+      "jawaban": "Belum ada purchase order yang terbaca di MealChain Guardian.\n\n_sumber: GET /sap/purchase-orders_"
+    }
+  ]
+}
