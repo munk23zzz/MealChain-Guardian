@@ -105,6 +105,7 @@ agent/.tunnel_state.json
 # Log mentah QA, berkas pid, jejak audit token, cadangan DB, dan probe sekali pakai
 # sengaja TIDAK dilacak; laporan QA yang sudah ditulis tangan tetap dilacak.
 _qa/*.txt
+_qa/*.json
 _qa/design-consistency/*.json
 agent/.tunnel_watchdog.pid
 backend/.token_audit
