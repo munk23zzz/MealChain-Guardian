@@ -113,6 +113,25 @@ async def _ambil_atau_buat(session, model, key: str, nilai: dict):
     return kunci, False
 
 
+async def pastikan_pemasok_unicode(session, pemasok: list) -> str | None:
+    """Pasang nama ber-em dash pada satu pemasok yang sudah ada (idempoten).
+
+    Mengembalikan id pemasok yang dipilih, atau None bila direktori kosong.
+    Pilihan deterministik: pemasok yang sudah bernama itu (kalau ada), kalau
+    tidak ada maka id terkecil — supaya dua kali jalankan tidak menukar-nukar
+    baris dan tampilan demo tetap sama.
+    """
+    if not pemasok:
+        return None
+    sudah = next((s for s in pemasok if s.name == PEMASOK_UNICODE), None)
+    target = sudah or sorted(pemasok, key=lambda s: str(s.id))[0]
+    if target.name != PEMASOK_UNICODE:
+        target.name = PEMASOK_UNICODE
+        target.address = "Jl. Raya Cianjur No. 12, Cipanas, Cianjur 43253"
+        target.contact_name = "Ibu Siti Nurhaliza"
+    return str(target.id)
+
+
 async def build_demo_extra(session, now: datetime | None = None) -> dict[str, int]:
     now = now or datetime.now(timezone.utc)
     ctx = await _konteks(session)
@@ -489,24 +508,13 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
         jumlah["demo_sessions"] += 1
 
     # ------------------------------------- pemasok demo ber-Unicode (nama panjang)
-    await _ambil_atau_buat(
-        session,
-        Supplier,
-        "supplier:unicode",
-        dict(
-            name=PEMASOK_UNICODE,
-            location_id=lok.id,
-            reliability_score=Decimal("0.91"),
-            latitude=Decimal("-6.8200"),
-            longitude=Decimal("107.1400"),
-            commodity_id=kom.id,
-            capacity_kg_per_week=Decimal("2400.00"),
-            certification_status="haccp",
-            address="Jl. Raya Cianjur No. 12, Cipanas, Cianjur 43253",
-            contact_name="Ibu Siti Nurhaliza",
-        ),
-    )
-    jumlah["suppliers"] += 1
+    # Nama ber-em dash ini ada untuk menguji kolom sempit di UI. Dulu baris ini
+    # MENAMBAH pemasok ke-61: direktori demo berubah 60 -> 61 setelah "Siapkan
+    # data demo", padahal `suppliers` tidak punya kolom `origin` dan tidak ikut
+    # dibersihkan purge — baris itu menetap selamanya, sehingga angka di
+    # runbook (60 pemasok) tidak cocok dengan layar. Sekarang nama itu
+    # dipasang pada salah satu pemasok yang SUDAH ada; jumlah tidak berubah.
+    await pastikan_pemasok_unicode(session, pemasok)
 
     # --------------------------------------------- kapasitas pemasok (kolom UI)
     # Kolom "Kapasitas/minggu" di direktori hanya terisi untuk 1 pemasok, sisanya
