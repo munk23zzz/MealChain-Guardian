@@ -120,16 +120,39 @@ def test_cakupan_hanya_menghitung_generasi_aktif():
 
 
 def test_rantai_dan_generasi_tetap_konsisten_setelah_bump():
+    """Bump generasi tidak memutus rantai — termasuk di database yang masih kosong.
+
+    Versi lama memaku `blocks > 0`, sehingga tes gagal di database bersih (CI:
+    migrasi + seed kanonik belum menulis satu blok pun). Blok bukti dibuat di
+    sini kalau belum ada, lalu dibersihkan lagi, supaya tes tidak bergantung
+    pada state DB mana pun.
+    """
+
     async def _t(db):
         awal = await ledger_service.current_generation(db)
+        puncak = int(
+            (await db.execute(text("SELECT coalesce(max(height), 0) FROM ledger_blocks"))).scalar()
+            or 0
+        )
         try:
             await ledger_service.bump_generation(db)
+            entitas = uuid.uuid4()
+            await ledger_service.append_block(
+                db,
+                action="decision.created",
+                entity_id=entitas,
+                actor_id=None,
+                payload={"decision_id": str(entitas), "uji": "generasi"},
+            )
             await db.commit()
             hasil = await ledger_service.verify_chain(db)
             assert hasil["valid"] is True, hasil
             assert hasil["generation"] == awal + 1
-            assert hasil["blocks"] > 0
+            assert hasil["blocks"] >= 1
         finally:
+            await db.execute(
+                text("DELETE FROM ledger_blocks WHERE height > :h"), {"h": puncak}
+            )
             await db.execute(
                 text("UPDATE ledger_meta SET generation = :g WHERE id = 1"),
                 {"g": awal},

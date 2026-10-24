@@ -34,48 +34,50 @@ def test_jalur_reset_tidak_menghapus_ledger():
 
 
 def test_bump_lalu_append_menyisakan_arsip_dan_rantai_tetap_valid():
+    """Meniru langkah reset: blok lama jadi arsip, blok baru menyambung rantai.
+
+    Baseline sengaja dibuat di dalam tes, supaya kontrak ini juga terbukti di
+    database yang baru dimigrasi (CI tidak punya blok dari demo).
+    """
+
     async def _t(db):
         awal = await ledger_service.current_generation(db)
-        baris = (
-            await db.execute(
-                text(
-                    "SELECT count(*) FILTER (WHERE generation < :g) FROM ledger_blocks"
-                ),
-                {"g": awal},
-            )
-        ).scalar()
-        arsip_awal = int(baris or 0)
         puncak = int(
-            (
-                await db.execute(text("SELECT coalesce(max(height), 0) FROM ledger_blocks"))
-            ).scalar()
+            (await db.execute(text("SELECT coalesce(max(height), 0) FROM ledger_blocks"))).scalar()
             or 0
         )
-
-        # Meniru langkah reset: naikkan generasi, lalu tulis blok baru.
-        generasi_baru = await ledger_service.bump_generation(db)
-        entitas = uuid.uuid4()
-        await ledger_service.append_block(
-            db,
-            action="decision.created",
-            entity_id=entitas,
-            actor_id=None,
-            payload={"decision_id": str(entitas), "uji": "arsip-rebuild"},
-        )
-        await db.commit()
-
         try:
+            lama = uuid.uuid4()
+            await ledger_service.append_block(
+                db,
+                action="decision.created",
+                entity_id=lama,
+                actor_id=None,
+                payload={"decision_id": str(lama), "uji": "sebelum-reset"},
+            )
+            await db.commit()
+
+            generasi_baru = await ledger_service.bump_generation(db)
+            baru = uuid.uuid4()
+            await ledger_service.append_block(
+                db,
+                action="decision.created",
+                entity_id=baru,
+                actor_id=None,
+                payload={"decision_id": str(baru), "uji": "sesudah-reset"},
+            )
+            await db.commit()
+
             assert generasi_baru == awal + 1
-            # Blok lama TIDAK hilang: jumlah total bertambah satu, bukan kembali ke 1.
             total = int(
                 (await db.execute(text("SELECT count(*) FROM ledger_blocks"))).scalar()
             )
-            assert total >= puncak + 1
+            assert total == puncak + 2, "blok lama tidak boleh hilang"
 
             laporan = await ledger_service.verify_chain(db)
             assert laporan["valid"] is True
             assert laporan["generation"] == generasi_baru
-            assert laporan["archived_blocks"] >= arsip_awal + 1
+            assert laporan["archived_blocks"] >= 1
             # Blok baru menunjuk entitas yang tidak ada -> yatim, dan itu jujur.
             assert laporan["orphan_blocks"] >= 1
         finally:

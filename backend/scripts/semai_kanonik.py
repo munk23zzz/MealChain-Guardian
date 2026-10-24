@@ -1,0 +1,73 @@
+"""Semai data kanonik satu perintah (dipakai CI dan lingkungan bersih).
+
+Kenapa ada skrip ini: suite tes mengharapkan data dengan **jangkar waktu yang
+dipaku** — `--reference-time 2026-10-08T12:00:00+00:00` lalu `generate_timeseries()`
+(lihat `docs/design.md`). Menjalankan `seed_data` dengan "hari ini" menggeser
+jangkar dan membuat `test_agenda_api` serta KPI merah, sehingga urutan dua
+langkah itu tidak boleh dihafal orang — harus jadi satu perintah.
+
+Contoh:
+    DATABASE_URL=postgresql+asyncpg://... python scripts/semai_kanonik.py --skip-routes
+
+`--skip-routes` wajib di lingkungan tanpa OSRM (CI), karena `seed_data` secara
+default menyinkronkan rute jalan dan akan menunggu timeout.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import subprocess
+import sys
+from datetime import datetime
+
+from app.seed.timeseries import generate_timeseries
+
+REFERENSI_BAKU = "2026-10-08T12:00:00+00:00"
+
+
+def _semai_dasar(reference_time: str, *, skip_routes: bool) -> None:
+    perintah = [
+        sys.executable,
+        "-m",
+        "app.seed.seed_data",
+        "--reference-time",
+        reference_time,
+        "--with-demo-users",
+        "--with-demo-suppliers",
+    ]
+    if skip_routes:
+        perintah.append("--skip-routes")
+    print("+ " + " ".join(perintah[1:]), flush=True)
+    subprocess.run(perintah, check=True)
+
+
+async def _deret_waktu() -> dict:
+    # `generate_timeseries` membuka engine-nya sendiri dari DATABASE_URL dan
+    # commit per tahap; tidak perlu sesi dari pemanggil.
+    return await generate_timeseries()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Semai data kanonik (deterministik)")
+    parser.add_argument(
+        "--reference-time",
+        default=REFERENSI_BAKU,
+        help=f"ISO 8601 tz-aware (default: {REFERENSI_BAKU})",
+    )
+    parser.add_argument(
+        "--skip-routes",
+        action="store_true",
+        help="Jangan sinkronkan rute OSRM (wajib di CI)",
+    )
+    args = parser.parse_args()
+
+    datetime.fromisoformat(args.reference_time)  # gagal cepat bila format salah
+
+    _semai_dasar(args.reference_time, skip_routes=args.skip_routes)
+    hasil = asyncio.run(_deret_waktu())
+    print(f"deret waktu: {hasil}")
+
+
+if __name__ == "__main__":
+    main()
