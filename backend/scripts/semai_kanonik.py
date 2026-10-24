@@ -20,8 +20,15 @@ import asyncio
 import subprocess
 import sys
 from datetime import datetime
+from pathlib import Path
 
-from app.seed.timeseries import generate_timeseries
+# Dijalankan sebagai berkas (`python scripts/semai_kanonik.py`), sys.path[0]
+# adalah folder scripts/ — bukan akar backend — sehingga `import app` gagal
+# (terbukti saat menguji stack produksi 24 Okt 2026). Sisipkan akar backend.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from app.seed.timeseries import generate_timeseries  # noqa: E402
 
 REFERENSI_BAKU = "2026-10-08T12:00:00+00:00"
 
