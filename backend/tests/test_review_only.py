@@ -64,7 +64,8 @@ def _buat_quote_sintetis() -> tuple[str, str]:
         "(SELECT price_per_kg FROM price_signals WHERE commodity_id = c.id "
         " AND source = 'pihps_reference' ORDER BY recorded_at DESC LIMIT 1) AS ref "
         "FROM commodities c, locations l, suppliers s "
-        "WHERE c.name = 'telur' AND l.name = 'Cianjur' AND s.name = 'Koperasi Telur Cipanas Bersama'"
+        "WHERE c.name = 'telur' AND l.name = 'Cianjur'"
+        " AND s.name = 'Koperasi Telur Cipanas Bersama'"
     )
     assert baris, "butuh komoditas/lokasi/pemasok kanonik"
     komoditas, lokasi, supplier, ref = baris[0]

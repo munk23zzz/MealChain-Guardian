@@ -33,9 +33,11 @@ type LedgerResult = {
   head?: string | null;
   broken_at?: number | null;
   reason?: string | null;
+  generation?: number;
   entity_blocks?: number;
   linked_blocks?: number;
   orphan_blocks?: number;
+  archived_blocks?: number;
   linked_ratio?: number | null;
   coverage_warning?: string | null;
 };

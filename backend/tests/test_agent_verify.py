@@ -7,15 +7,23 @@ manusia. Semua pemeriksaan di sini deterministik — tidak memanggil model.
 
 from uuid import uuid4
 
-from agent.contracts import (
+import pytest
+
+# `agent/` adalah runtime TERPISAH di akar repo (image sendiri). Tanpa mount
+# ./agent:/agent (lihat docker-compose.yml), impor di bawah gagal dan pytest
+# berhenti "Interrupted: 1 error during collection" (audit DEP-04).
+pytest.importorskip("agent")
+
+from agent.contracts import (  # noqa: E402
+    ANALYST_AGENTS,
     AgentFinding,
     AgentName,
     AgentRun,
     RunStatus,
     WorkerStatus,
 )
-from agent.registry import get_spec
-from agent.verify import verify_run
+from agent.registry import get_spec  # noqa: E402
+from agent.verify import verify_run  # noqa: E402
 
 
 def _finding(
@@ -48,7 +56,7 @@ def _run(
         decision_id="decision-1",
         mode="advisory",
         status=status,
-        findings=findings or [_finding(name) for name in AgentName],
+        findings=findings or [_finding(name) for name in ANALYST_AGENTS],
         narrative=narrative,
         safety_veto=safety_veto,
     )
@@ -63,7 +71,7 @@ def test_semua_ok_dan_status_konsisten_lolos() -> None:
 
 def test_safety_veto_aktif_tapi_status_completed_ditandai() -> None:
     """Veto keamanan aktif tidak boleh dilaporkan sebagai putaran selesai."""
-    findings = [_finding(name) for name in AgentName]
+    findings = [_finding(name) for name in ANALYST_AGENTS]
     idx = next(i for i, f in enumerate(findings) if f.agent is AgentName.SAFETY)
     findings[idx] = _finding(AgentName.SAFETY, blocking=True)
 
@@ -75,7 +83,7 @@ def test_safety_veto_aktif_tapi_status_completed_ditandai() -> None:
 
 def test_narasi_menghaluskan_temuan_degraded_ditandai() -> None:
     """Worker degraded tetapi narasi bilang 'semua aman' harus ditandai."""
-    findings = [_finding(name) for name in AgentName]
+    findings = [_finding(name) for name in ANALYST_AGENTS]
     idx = next(i for i, f in enumerate(findings) if f.agent is AgentName.PRICE)
     findings[idx] = _finding(AgentName.PRICE, status=WorkerStatus.DEGRADED)
 

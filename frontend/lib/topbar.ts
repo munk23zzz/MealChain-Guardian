@@ -165,7 +165,14 @@ export type ActionableCounts = {
   actionable: number;
   /** Berstatus menunggu tindakan tetapi sudah lewat tenggat. */
   expired: number;
-  /** Semua yang berstatus menunggu tindakan (actionable + expired). */
+  /**
+   * Draf `proposed` yang sudah lewat tenggat: usulan lama yang tidak pernah
+   * dimajukan. Bukan pekerjaan (tidak bisa diajukan lagi), dan bukan pula
+   * "tunggakan tindakan" — dilaporkan terpisah supaya lonceng tidak berbunyi
+   * "47 lewat tenggat" karena tumpukan draf (audit 24 Okt 2026).
+   */
+  draft: number;
+  /** Semua yang berstatus menunggu tindakan (actionable + expired + draft). */
   total: number;
 };
 
@@ -173,6 +180,9 @@ export type ActionableCounts = {
  * Pecah hitungan "menunggu tindakan" jadi yang masih hidup dan yang sudah lewat
  * tenggat. Yang lewat TIDAK dihitung sebagai pekerjaan (backend menolak tindakan
  * atasnya dengan 409), tetapi juga tidak disembunyikan: angkanya dilaporkan.
+ *
+ * Draf `proposed` yang kedaluwarsa masuk `draft`, bukan `expired`: hanya Kepala
+ * SPPG yang bisa mengajukannya, dan setelah tenggat lewat pun tombolnya hilang.
  */
 export function countActionableBreakdown(
   decisions: readonly ExpiryRow[] | null | undefined,
@@ -181,12 +191,18 @@ export function countActionableBreakdown(
 ): ActionableCounts {
   let actionable = 0;
   let expired = 0;
+  let draft = 0;
   for (const decision of decisions ?? []) {
     if (!isActionableForRole(decision?.status, role)) continue;
-    if (isExpired(decision, now)) expired += 1;
+    const lewat = isExpired(decision, now);
+    if (String(decision?.status ?? "").toUpperCase() === "PROPOSED" && lewat) {
+      draft += 1;
+      continue;
+    }
+    if (lewat) expired += 1;
     else actionable += 1;
   }
-  return { actionable, expired, total: actionable + expired };
+  return { actionable, expired, draft, total: actionable + expired + draft };
 }
 
 /** Berapa keputusan yang benar-benar menunggu tindakan manusia (masih berlaku). */
@@ -205,6 +221,15 @@ export function countExpiredActionable(
   role?: string | null
 ): number {
   return countActionableBreakdown(decisions, now, role).expired;
+}
+
+/** Berapa draf `proposed` kedaluwarsa (usulan lama yang tak pernah dimajukan). */
+export function countDraftActionable(
+  decisions: readonly ExpiryRow[] | null | undefined,
+  now?: Date | null,
+  role?: string | null
+): number {
+  return countActionableBreakdown(decisions, now, role).draft;
 }
 
 /** Jumlah maksimum baris notifikasi yang ditampilkan di popup lonceng. */
@@ -230,6 +255,13 @@ export type NotifList = {
   rest: number;
   /** Menunggu tindakan tetapi sudah lewat tenggat — TIDAK ikut `total`. */
   expired: number;
+  /**
+   * Draf `proposed` kedaluwarsa — dipisah dari `expired` karena bukan tunggakan
+   * tindakan: tombol "Ajukan" sudah tidak ada, jadi tidak ada yang bisa
+   * dikerjakan (audit 24 Okt 2026: 27 draf membuat lonceng berbunyi
+   * "31 lewat tenggat").
+   */
+  draft: number;
 };
 
 /**
@@ -252,10 +284,14 @@ export function notifList(
   };
 
   let expired = 0;
+  let draft = 0;
   const menunggu = (decisions ?? []).filter((decision) => {
     if (!isActionableForRole(decision?.status, role)) return false;
     if (isExpired(decision)) {
-      expired += 1;
+      // Draf usulan yang kedaluwarsa bukan tunggakan tindakan: setelah tenggat
+      // lewat, "Ajukan" tidak tersedia lagi. Dihitung terpisah.
+      if (String(decision?.status ?? "").toUpperCase() === "PROPOSED") draft += 1;
+      else expired += 1;
       return false;
     }
     return true;
@@ -274,6 +310,7 @@ export function notifList(
     shown: urut.slice(0, batas),
     rest: Math.max(0, urut.length - batas),
     expired,
+    draft,
   };
 }
 

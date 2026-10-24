@@ -161,10 +161,13 @@ export function fetchComplianceDossier(decisionId: string, token: string): Promi
  });
 }
 
-export async function fetchDecisions(token: string) {
-  return request("/decisions", {
+export async function fetchDecisions(
+  token: string,
+  window?: string | null
+) {
+  return request(`/decisions${window ? `?window=${encodeURIComponent(window)}` : ""}`, {
     headers: { Authorization: `Bearer ${token}` },
- });
+  });
 }
 
 export async function fetchDecision(decisionId: string, token: string) {

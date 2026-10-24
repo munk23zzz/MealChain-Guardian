@@ -11,7 +11,7 @@
 
 import StatusBadge from "./StatusBadge";
 import { cardEdge } from "../lib/recommendations";
-import { ClockIcon } from "./NavIcon";
+import { ClockIcon, TruckIcon } from "./NavIcon";
 import { formatIDR } from "../lib/auth";
 import { formatDateTime } from "../lib/datetime";
 import { formatKg } from "../lib/overview-format";
@@ -53,14 +53,22 @@ const CASE_LABELS: Record<string, string> = {
   "shortage-darurat": "Kasus: Shortage Darurat",
   "supplier-janggal": "Kasus: Supplier Janggal",
   "gangguan-logistik": "Kasus: Gangguan Logistik",
+  // Demo 2026-10-23: kasus sengaja tinggal di jendela 24 jam supaya operator
+  // punya satu keputusan berbukti lengkap untuk disetujui saat demo.
+  "bukti-hari-ini": "Kasus: Alokasi Bandung–Jakarta",
 };
 
 // Judul dari decision_type — kosakatanya mengikuti schema backend. Diekspor
 // karena dipakai dua tempat (kartu rekomendasi + halaman "Hari Ini") dan dua
 // peta label akan cepat menyimpang.
 export const DECISION_TYPE_LABELS: Record<string, string> = {
-  regional_balance: "Alokasi regional direkomendasikan",
-  safety_disruption: "Pengalihan pasokan (gangguan keamanan)",
+  // 24 Okt 2026: "Alokasi regional" tidak menjawab pertanyaan pertama pengguna
+  // ("ini pengiriman dari pemasok atau dari SPPG lain?"). Jenis ini MEMANG dua-
+  // duanya: menutup kekurangan satu SPPG dengan pasokan pemasok ATAU surplus
+  // SPPG lain. Karena itu namanya menyebut tindakannya (penyeimbangan), dan
+  // kartu menambahkan baris pengirim yang eksplisit.
+  regional_balance: "Penyeimbangan pasokan regional",
+  safety_disruption: "Ganti sumber pasokan (gangguan keamanan)",
   price_anomaly: "Penyesuaian harga direkomendasikan",
   surplus_redistribution: "Redistribusi surplus direkomendasikan",
   supplier_exclusion: "Usulan pengecualian pemasok",
@@ -75,6 +83,34 @@ export const DECISION_TYPE_LABELS: Record<string, string> = {
 
 // Catatan yang isinya hanya kata penanda: bukan narasi, jangan dicetak.
 const PLACEHOLDER_NOTES = new Set(["unavailable", "n/a", "na", "-", "none", "null", "undefined"]);
+
+/**
+ * Siapa yang mengirim — satu kalimat, tanpa tebakan (24 Okt 2026).
+ *
+ * Pemilik bingung karena kartu hanya menyebut WILAYAH ("Bandung"), sehingga
+ * tidak jelas apakah barang datang dari pemasok atau dari SPPG lain. Backend
+ * mengirim `pengirim` ("pemasok" | "antar_sppg") + `supplier_name` +
+ * `target_location_name`; kalau ketiganya kosong, kalimat ini tidak ditampilkan
+ * sama sekali — lebih baik tidak ada baris daripada baris yang mengarang.
+ */
+export function routeLineOf(decision: any): string | null {
+  const tujuan = decision?.target_location_name
+    ? ` ke ${decision.target_location_name}`
+    : "";
+  // Status menentukan kata kerja: sebelum disetujui belum ada barang yang
+  // jalan, jadi menulis "Dikirim" akan berbohong. Sesudah dieksekusi, "Dikirim"
+  // memang yang terjadi.
+  const sudahJalan = ["approved", "executed"].includes(String(decision?.status));
+  if (decision?.supplier_name) {
+    return sudahJalan
+      ? `Dikirim pemasok ${decision.supplier_name}${tujuan}`
+      : `Rencana kirim dari pemasok ${decision.supplier_name}${tujuan}`;
+  }
+  if (decision?.pengirim === "antar_sppg") {
+    return `Bukan dari pemasok — stok dipindahkan antar-SPPG${tujuan}`;
+  }
+  return null;
+}
 
 
 // Ajakan pada kartu. Hanya berlaku di FEED, karena di sana seluruh kartu
@@ -105,6 +141,7 @@ export default function RecommendationCard({
 }) {
   const typeLabel = DECISION_TYPE_LABELS[decision.decision_type] ?? "Rekomendasi baru";
   const caseLabel = caseLabelOf(decision);
+  const routeLine = routeLineOf(decision);
   const edge = cardEdge(decision);
   // Alasan penolakan / catatan verifier = satu-satunya narasi yang benar-benar
   // ada di data; kalau dua-duanya kosong, tidak ada paragraf yang ditampilkan.
@@ -147,6 +184,13 @@ export default function RecommendationCard({
           </span>
         </div>
       </div>
+
+      {routeLine && (
+        <p className="rec-route">
+          <TruckIcon aria-hidden="true" />
+          <span>{routeLine}</span>
+        </p>
+      )}
 
       <div className="rec-foot">
         {caseLabel && <span className="badge rec-case">{caseLabel}</span>}

@@ -31,7 +31,7 @@ from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
 ENGINE_URL = DSN_SYNC
 HARI_SEED = "2026-10-02"      # ada rencana + kiriman + pasokan
 HARI_RENCANA_SAJA = "2026-10-20"  # rencana ada; tanpa kiriman/limbah
-HARI_TANPA_RENCANA = "2026-11-06"  # setelah rencana menu berakhir (5 Nov)
+HARI_TANPA_RENCANA = "2026-11-07"  # setelah deret berakhir (5 Nov UTC = 6 Nov 07.00 WIB)
 WIB_8_OKT_0030 = datetime(2026, 10, 7, 17, 30, tzinfo=timezone.utc)
 WIB_9_OKT_0030 = datetime(2026, 10, 8, 17, 30, tzinfo=timezone.utc)
 
@@ -46,6 +46,81 @@ def _engine():
     from sqlalchemy import create_engine
 
     return create_engine(ENGINE_URL)
+
+
+def _hari_dengan_kiriman(lokasi: str = "Jakarta") -> str:
+    """Tanggal WIB terakhir yang punya kiriman untuk lokasi itu (dari DB)."""
+    from sqlalchemy import text
+
+    eng = _engine()
+    try:
+        with eng.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT max((d.delivered_at AT TIME ZONE 'Asia/Jakarta')::date) "
+                    "FROM delivery_events d "
+                    "JOIN menu_plans m ON m.id = d.menu_plan_id "
+                    "JOIN locations l ON l.id = m.location_id "
+                    "WHERE l.name = :l"
+                ),
+                {"l": lokasi},
+            ).scalar()
+    finally:
+        eng.dispose()
+    assert row is not None, f"tidak ada kiriman untuk {lokasi}"
+    return row.isoformat()
+
+
+def _rencana_db(tanggal: str, lokasi: str | None = None) -> tuple[int, int]:
+    """(jumlah rencana, total porsi) dari DB — bukan angka seed yang dipaku.
+
+    Porsi rencana TIDAK konstan 1200: `timeseries.planned_portions()` memberi
+    variasi ±2% per (lokasi, hari) supaya deret tidak terlihat sintetis. Tes yang
+    memaku 1200/12000 pecah setiap data demo dibangun ulang (terukur 24 Okt 2026:
+    Jakarta 2 Okt = 1207 porsi).
+    """
+    from sqlalchemy import text
+
+    sql = (
+        "SELECT count(*), coalesce(sum(m.planned_portions), 0) FROM menu_plans m "
+        "JOIN locations l ON l.id = m.location_id "
+        "WHERE m.plan_date = :t"
+    )
+    params = {"t": tanggal}
+    if lokasi is not None:
+        sql += " AND l.name = :l"
+        params["l"] = lokasi
+    eng = _engine()
+    try:
+        with eng.connect() as conn:
+            row = conn.execute(text(sql), params).one()
+    finally:
+        eng.dispose()
+    return int(row[0]), int(row[1])
+
+
+def _kiriman_db(tanggal: str, lokasi: str | None = None) -> tuple[int, int]:
+    """(jumlah baris kiriman, total porsi terkirim) untuk satu hari WIB."""
+    from sqlalchemy import text
+
+    sql = (
+        "SELECT count(*), coalesce(sum(d.delivered_portions), 0) "
+        "FROM delivery_events d "
+        "JOIN menu_plans m ON m.id = d.menu_plan_id "
+        "JOIN locations l ON l.id = m.location_id "
+        "WHERE (d.delivered_at AT TIME ZONE 'Asia/Jakarta')::date = :t"
+    )
+    params = {"t": tanggal}
+    if lokasi is not None:
+        sql += " AND l.name = :l"
+        params["l"] = lokasi
+    eng = _engine()
+    try:
+        with eng.connect() as conn:
+            row = conn.execute(text(sql), params).one()
+    finally:
+        eng.dispose()
+    return int(row[0]), int(row[1])
 
 
 def _mk_token(user_id, role, loc_id=None) -> str:
@@ -163,14 +238,32 @@ def test_hari_berdata_dihitung_benar(client, sppg_head):
     r = _get(client, sppg_head["token"], HARI_SEED, HARI_SEED)
     assert r.status_code == 200, r.text
     d = _hari(r.json(), HARI_SEED)
-    # Jakarta: 1 rencana menu 1200 porsi pada 2 Okt (deret seed).
-    assert d["menu"]["rows"] == 1
-    assert d["menu"]["planned_portions"] == 1200
-    assert d["delivery"]["rows"] >= 1
-    assert d["delivery"]["delivered_portions"] == 1200
+    # Jakarta: satu rencana menu pada 2 Okt. Angka PORSI dibaca dari DB:
+    # variasi ±2% membuat 1200 hanya kebetulan satu hari.
+    rencana_rows, rencana_porsi = _rencana_db(HARI_SEED, "Jakarta")
+    assert rencana_rows == 1
+    assert d["menu"]["rows"] == rencana_rows
+    assert d["menu"]["planned_portions"] == rencana_porsi
     assert d["supply"]["rows"] > 0
     assert d["supply"]["available"] is True
     assert d["activity"] > 0
+
+    # Kiriman: deret aktual baru mulai 8 Okt, jadi HARI_SEED memang TANPA
+    # kiriman (2 Okt = 0 baris). Jangan dipaku "ada kiriman" di tanggal itu;
+    # periksa hari yang benar-benar punya kiriman, dan bandingkan dengan DB.
+    kiriman_rows, kiriman_porsi = _kiriman_db(HARI_SEED, "Jakarta")
+    assert d["delivery"]["rows"] == kiriman_rows
+    assert d["delivery"]["delivered_portions"] == kiriman_porsi
+
+    hari_kirim = _hari_dengan_kiriman("Jakarta")
+    r2 = _get(client, sppg_head["token"], hari_kirim, hari_kirim)
+    assert r2.status_code == 200, r2.text
+    d2 = _hari(r2.json(), hari_kirim)
+    kirim_rows2, kirim_porsi2 = _kiriman_db(hari_kirim, "Jakarta")
+    assert kirim_rows2 >= 1
+    assert d2["delivery"]["rows"] == kirim_rows2
+    assert d2["delivery"]["delivered_portions"] == kirim_porsi2
+    assert d2["delivery"]["available"] is True
 
 
 def test_hari_tanpa_catatan_menulis_available_false(client, sppg_head):
@@ -178,8 +271,11 @@ def test_hari_tanpa_catatan_menulis_available_false(client, sppg_head):
 
     Sejak deret aktual mengisi 1 Sep → 5 Nov, hari di dalam rentang itu tidak lagi
     "kosong" untuk pasokan/harga. Karena itu kasus "tanpa catatan" diuji di hari
-    SETELAH rencana berakhir (6 Nov), dan hari tanpa kiriman/limbah diuji terpisah
-    di bawah — supaya aturan anti-deret-nol tetap terjaga, bukan sekadar dilonggarkan.
+    SETELAH rencana berakhir. Batasnya 7 Nov, bukan 6 Nov: `DEFAULT_END` deret
+    adalah 2026-11-05 00.00 UTC (= 5 Nov 07.00 WIB) dan jaring `ACTUAL_HORIZON_MARGIN`
+    menambah satu hari, sehingga 6 Nov WIB masih terisi beberapa jam pertama.
+    Hari tanpa kiriman/limbah diuji terpisah di bawah — supaya aturan anti-deret-nol
+    tetap terjaga, bukan sekadar dilonggarkan.
     """
     r = _get(client, sppg_head["token"], HARI_TANPA_RENCANA, HARI_TANPA_RENCANA)
     assert r.status_code == 200, r.text
@@ -264,9 +360,13 @@ def test_scope_sppg_sempit_monitor_luas(client, sppg_head, monitor):
     r_mon = _get(client, monitor["token"], HARI_SEED, HARI_SEED).json()
     d_sppg = _hari(r_sppg, HARI_SEED)
     d_mon = _hari(r_mon, HARI_SEED)
-    assert d_sppg["menu"]["rows"] == 1      # hanya Jakarta
-    assert d_mon["menu"]["rows"] == 10      # sepuluh lokasi
-    assert d_mon["menu"]["planned_portions"] == 12000
+    jakarta_rows, jakarta_porsi = _rencana_db(HARI_SEED, "Jakarta")
+    semua_rows, semua_porsi = _rencana_db(HARI_SEED)
+    assert d_sppg["menu"]["rows"] == jakarta_rows      # hanya Jakarta
+    assert d_sppg["menu"]["planned_portions"] == jakarta_porsi
+    assert d_mon["menu"]["rows"] == semua_rows         # sepuluh lokasi
+    assert d_mon["menu"]["planned_portions"] == semua_porsi
+    assert semua_rows > jakarta_rows, "monitor harus melihat lebih luas dari SPPG"
     assert r_sppg["scope"]["national"] is False
     assert r_mon["scope"]["national"] is True
 

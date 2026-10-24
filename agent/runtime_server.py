@@ -64,7 +64,7 @@ def _parse_json_prompt(prompt: str) -> dict | None:
 
 
 def _review_response(decision_id: str) -> dict:
-    """Jalankan review 7 worker; payload hasil berbentuk JSON di `response`."""
+    """Jalankan review 8 agent; payload hasil berbentuk JSON di `response`."""
     try:
         run = run_review(decision_id)
     except Exception as exc:  # runtime tidak boleh memalsukan hasil

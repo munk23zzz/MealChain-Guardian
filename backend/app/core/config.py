@@ -60,6 +60,15 @@ class Settings(BaseSettings):
     menu_grams_telur: float = 60.0
     menu_grams_ayam: float = 50.0
     menu_grams_wortel: float = 40.0
+    #: Beras tidak dipakai modul rekomendasi, tetapi penulis KPI
+    #: (`services/settlement.py`) membutuhkannya untuk mengubah kg beras yang
+    #: diterima menjadi porsi tersampaikan. Asumsi porsi demo, dinyatakan
+    #: terbuka dan bisa diubah lewat env.
+    menu_grams_beras: float = 100.0
+    #: Penulis data KPI dari aksi nyata: approve penerimaan -> delivery_events,
+    #: PO terbit -> price_signals, catat limbah -> disposal_events. Default
+    #: aktif untuk demo; set false bila ingin KPI hanya bergerak dari seeder.
+    demo_kpi_writeback: bool = True
     continuity_reserve_days: float = 1.0
 
     # Safe range suhu rantai dingin demo (°C)

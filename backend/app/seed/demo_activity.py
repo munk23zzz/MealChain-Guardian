@@ -161,12 +161,47 @@ async def seed_demo_activity(session: AsyncSession, now: datetime) -> dict:
     ).all():
         kanonik.setdefault((loc_id, com_id), set()).add(sup_id)
 
-    dibuat = 0
+    # Bersihkan batch demo LAMA yang pemasoknya tidak ada di himpunan kanonik.
+    # Tanpa ini, satu batch basi (dibuat sebelum aturan kanonik berlaku) membuat
+    # pasangan punya dua pemasok selamanya dan `resolve_binding` menolak
+    # menyimpulkan pemasok — persis yang dikunci test_demo_batch_pemasok_tunggal.
+    # Hanya batch demo; batch kanonik tidak pernah disentuh.
     dihapus = 0
+    id_kanonik_per_pasangan = {
+        pair: sups for pair, sups in kanonik.items() if sups
+    }
+    if id_kanonik_per_pasangan:
+        basi = (
+            await session.execute(
+                select(Batch).where(Batch.origin == "demo")
+            )
+        ).scalars().all()
+        for b in basi:
+            sups = id_kanonik_per_pasangan.get((b.location_id, b.commodity_id))
+            if sups and b.supplier_id not in sups:
+                await session.delete(b)
+                dihapus += 1
+        await session.flush()
+
+    dibuat = 0
     id_dipakai: list[uuid.UUID] = []
+    # Pemasok dikelompokkan per komoditas: batch ayam tidak boleh dipasok
+    # pemasok telur. Slot bergilir lama mengabaikan hal ini sehingga muncul
+    # baris "beras dipasok CV Barokah Telur Cianjur" — data yang tidak masuk
+    # akal dan membuat profil pemasok bohong.
+    per_komoditas: dict[uuid.UUID, list[Supplier]] = {}
+    for s in pemasok:
+        per_komoditas.setdefault(s.commodity_id, []).append(s)
+    for daftar in per_komoditas.values():
+        daftar.sort(key=lambda x: x.name)
+
     for i, loc in enumerate(lokasi):
-        for j, sup in enumerate(_slot(loc.name, i, pemasok)):
+        for j, _slot_lama in enumerate(_slot(loc.name, i, pemasok)):
             nama_komoditas = tersedia[(i + j) % len(tersedia)]
+            kandidat_kom = per_komoditas.get(komoditas[nama_komoditas], [])
+            if not kandidat_kom:
+                continue
+            sup = kandidat_kom[j % len(kandidat_kom)]
             rotasi = ROTASI[(i + j) % len(ROTASI)]
             id_batch = demo_batch_id(loc.name, sup.name, nama_komoditas)
             id_dipakai.append(id_batch)
@@ -250,7 +285,11 @@ async def _seed_barang_datang(
     jakarta = next((loc for loc in lokasi if loc.name == "Jakarta"), None)
     if jakarta is None:
         return 0
-    rencana = (("ayam", Decimal("90"), 4.1), ("beras", Decimal("300"), 27.0), ("wortel", Decimal("120"), 4.2))
+    rencana = (
+        ("ayam", Decimal("90"), 4.1),
+        ("beras", Decimal("300"), 27.0),
+        ("wortel", Decimal("120"), 4.2),
+    )
     jumlah = 0
     for nama, kg, suhu in rencana:
         com_id = komoditas.get(nama)
@@ -401,15 +440,40 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
     for nama_kota, loc, nama_komoditas in pekerjaan:
         kepala_kota = approver[(loc.id, "sppg_head")]
         nutrisi_kota = approver[(loc.id, "sppg_nutritionist")]
-        sup = pemasok[pekerjaan.index((nama_kota, loc, nama_komoditas)) % len(pemasok)]
-        if nama_komoditas == "beras":
-            # Pemasok beras dulu; kalau tidak ada, jatuh ke pemasok rotasi.
-            sup = next((p for p in pemasok if p.name.startswith("Beras")), sup)
+        # Pemasok WAJIB yang menjual komoditas ini. Rotasi lama memilih pemasok
+        # ke-N dari daftar tanpa melihat komoditasnya, sehingga lahir baris
+        # "keputusan beras dieksekusi oleh CV Barokah Telur Cianjur".
+        # Utamakan pemasok di kota itu; kalau kota tidak punya, pakai pemasok
+        # berkomoditas sama dari kota lain (jangkauan sudah dijaga rute).
+        # Pemasok di KOTA ITU lebih dulu: beras Jakarta tidak masuk akal kalau
+        # dipasok pemasok Medan. Pemasok kota lain hanya dipakai bila kota ini
+        # tidak punya pemasok untuk komoditas tersebut.
+        sekota = sorted(
+            (
+                p for p in pemasok
+                if p.commodity_id == komoditas[nama_komoditas]
+                and p.location_id == loc.id
+            ),
+            key=lambda p: p.name,
+        )
+        kandidat_sup = sekota or sorted(
+            (p for p in pemasok if p.commodity_id == komoditas[nama_komoditas]),
+            key=lambda p: p.name,
+        )
+        if not kandidat_sup:
+            continue
+        sup = kandidat_sup[
+            pekerjaan.index((nama_kota, loc, nama_komoditas)) % len(kandidat_sup)
+        ]
         did = demo_decision_id(nama_kota, nama_komoditas)
         mulai = now - timedelta(minutes=44)
         nilai = {
             "id": did,
-            "decision_type": "regional_balance",
+            # Barang dibeli dari PEMASOK (baris di bawah menunjuk supplier_id),
+            # jadi tipenya pengadaan — bukan penyeimbangan antar-SPPG. Versi
+            # lama memberi tipe `regional_balance` sehingga kartunya berbunyi
+            # "Penyeimbangan pasokan regional" padahal pengirimnya perusahaan.
+            "decision_type": "supplier_procurement",
             "status": "executed",
             "proposed_by": "supervisor_agent",
             "verified_by": "verifier_agent",

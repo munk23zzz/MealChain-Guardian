@@ -367,6 +367,11 @@ async def _tandai_demo(session) -> dict[str, int]:
 
 async def cmd_reset_demo(session, konfirmasi: bool = False) -> dict:
     _pengaman_demo("reset-demo", konfirmasi)
+    # Kutipan harga yang lahir dari PO demo ikut hilang bersama PO-nya; kalau
+    # tidak, metrik Price Deviation memuat angka yang tidak bisa ditelusuri.
+    from app.services.settlement import bersihkan_kutipan_tanpa_po
+
+    await bersihkan_kutipan_tanpa_po(session)
     sebelum = await _hitung(session)
     dihapus: dict[str, int] = {}
     for model in URUTAN_HAPUS:

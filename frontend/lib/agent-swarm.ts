@@ -1,9 +1,9 @@
 /**
- * Data panel review 7 agen untuk Agent Log (P5).
+ * Data panel review 8 agen untuk Agent Log (P5).
  *
  * Trace worker disimpan sebagai baris `agent_traces` dengan `run_id`,
  * `agent_name`, `confidence`, dan `citations`. Modul ini murni: memilih satu
- * putaran TERBARU dan membentuk tujuh kartu. Nilai yang tidak ada tetap "—",
+ * putaran TERBARU dan membentuk delapan kartu. Nilai yang tidak ada tetap "—",
  * bukan 0 atau enum mentah.
  */
 
@@ -16,7 +16,8 @@ export type SwarmAgentKey =
   | "safety"
   | "price"
   | "logistics"
-  | "evidence";
+  | "evidence"
+  | "verifier";
 
 export const SWARM_AGENTS: ReadonlyArray<{
   key: SwarmAgentKey;
@@ -30,6 +31,9 @@ export const SWARM_AGENTS: ReadonlyArray<{
   { key: "price", label: "Harga", stage: "OPTIMIZE" },
   { key: "logistics", label: "Logistik", stage: "OPTIMIZE" },
   { key: "evidence", label: "Bukti", stage: "TRACE" },
+  // Agent ke-8: auditor. Dijalankan setelah narasi supervisor, tampil sebagai
+  // kartu sendiri supaya juri melihat siapa yang mengaudit siapa.
+  { key: "verifier", label: "Verifikasi", stage: "VERIFY" },
 ];
 
 const WORKER_KEYS = new Set<string>(SWARM_AGENTS.map((agent) => agent.key));
@@ -227,7 +231,7 @@ export function supervisorSummary(run: SwarmRun): {
  * keputusan itu punya review; kalau tidak, ambil keputusan terbaru yang PUNYA
  * review (`has_agent_review` dihitung backend dari `agent_traces`). Bila tak ada
  * satu pun punya review, kembalikan pilihan semula supaya pesan "Belum ada
- * review 7 agen" tetap jujur — bukan menyembunyikannya.
+ * review 8 agen" tetap jujur — bukan menyembunyikannya.
  */
 export function defaultAgentLogId(
   decisions:

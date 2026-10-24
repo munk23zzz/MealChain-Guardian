@@ -8,7 +8,7 @@ menutup sesi dan TANPA membuka terminal. Itulah satu-satunya tugas modul ini.
 Aturan yang dijaga:
 - **Satu proses pada satu waktu.** Bangun ulang mem-purge seluruh baris
   operasional; dua permintaan bersamaan akan saling menghapus. Kunci dipegang
-  di proses, dicoba tanpa menunggu, dan permintaan kedua ditolak `Sibuk`
+  di proses, dicoba tanpa menunggu, dan permintaan kedua ditolak `SibukError`
   (bukan diantrikan diam-diam sampai klien kehabisan waktu).
 - **Sesi tidak disentuh.** Fungsi ini tidak memanggil `mulai/akhiri`; jendela
   waktu yang sedang berjalan tetap berjalan, hanya isinya yang dibangun ulang.
@@ -57,7 +57,7 @@ async def _lengkapi_cakupan(db: AsyncSession, sekarang) -> dict:
     return await build_demo_extra(db, sekarang)
 
 
-class Sibuk(RuntimeError):
+class SibukError(RuntimeError):
     """Bangun ulang lain sedang berjalan di proses ini."""
 
 
@@ -72,7 +72,7 @@ async def bangun_ulang(db: AsyncSession) -> dict:
     ada dua pemanggil yang sama-sama lolos.
     """
     if _KUNCI.locked():
-        raise Sibuk("bangun ulang sedang berjalan")
+        raise SibukError("bangun ulang sedang berjalan")
     await _KUNCI.acquire()
     mulai = time.monotonic()
     try:

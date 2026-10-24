@@ -1,5 +1,5 @@
-// Panel review 7 agen di tab Agent Log (P5).
-// Satu run = tujuh kartu worker + ringkasan SUPERVISE. Kartu tanpa baris trace
+// Panel review 8 agen di tab Agent Log (P5): tujuh analitik + verifier.
+// Satu run = tujuh kartu worker + kartu verifier + ringkasan SUPERVISE. Kartu tanpa baris trace
 // ditulis "Belum tercatat" — bukan diisi angka/enum karangan.
 
 import {
@@ -22,8 +22,8 @@ export default function AgentSwarmPanel({
     return (
       <p className="empty-state">
         {decisionId
-          ? "Belum ada review 7 agen untuk keputusan ini."
-          : "Pilih keputusan dulu untuk melihat review 7 agen."}
+          ? "Belum ada review 8 agen untuk keputusan ini."
+          : "Pilih keputusan dulu untuk melihat review 8 agen."}
       </p>
     );
   }
@@ -42,12 +42,14 @@ export default function AgentSwarmPanel({
     <section className="swarm-panel" aria-labelledby="swarm-title">
       <div className="swarm-head">
         <div>
-          <p className="swarm-kicker">Review 7 agen · advisory</p>
+          <p className="swarm-kicker">Review 8 agen · advisory</p>
           <h2 id="swarm-title">Pemeriksaan lintas domain</h2>
         </div>
         <div className="swarm-meta">
           <span className="swarm-run">run {shortRunId(run.runId)}</span>
-          <span className="swarm-count">{recorded}/7 tercatat</span>
+          <span className="swarm-count">
+            {recorded}/{cards.length} tercatat
+          </span>
         </div>
       </div>
       <p className="swarm-note">

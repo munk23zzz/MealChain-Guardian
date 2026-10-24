@@ -92,15 +92,15 @@ describe("decisionGroups — label memakai bahasa manusia", () => {
     expect(teks).not.toContain("safety_disruption");
     expect(teks).not.toContain("price_anomaly");
     expect(teks).not.toContain("pending_approval");
-    expect(teks).toContain("Alokasi regional direkomendasikan");
-    expect(teks).toContain("Pengalihan pasokan (gangguan keamanan)");
+    expect(teks).toContain("Penyeimbangan pasokan regional");
+    expect(teks).toContain("Ganti sumber pasokan (gangguan keamanan)");
     expect(teks).toContain("Penyesuaian harga direkomendasikan");
   });
 
   it("yang menunggu tindakan memuat sisa waktu dan id pendek 8 karakter", () => {
     const [action] = decisionGroups(DECISIONS, NOW);
     expect(action.options[0].label).toBe(
-      "Alokasi regional direkomendasikan · Lewat 13 menit · ef347f91"
+      "Penyeimbangan pasokan regional · Lewat 13 menit · ef347f91"
     );
     expect(action.options[1].label).toContain("6 jam 30 menit lagi");
   });
@@ -113,7 +113,7 @@ describe("decisionGroups — label memakai bahasa manusia", () => {
 
   it("kalau jam klien belum siap (now null), tidak ada klaim sisa waktu", () => {
     const [action] = decisionGroups(DECISIONS, null);
-    expect(action.options[0].label).toBe("Alokasi regional direkomendasikan · ef347f91");
+    expect(action.options[0].label).toBe("Penyeimbangan pasokan regional · ef347f91");
   });
 
   it("status yang sudah diputus ditulis dalam bahasa manusia", () => {

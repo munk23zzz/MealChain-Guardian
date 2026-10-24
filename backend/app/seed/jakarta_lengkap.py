@@ -88,7 +88,7 @@ HARGA = {
 
 UMUR_SIMPAN = {"telur": 28, "ayam": 5, "wortel": 21, "beras": 180}
 
-#: Tujuh worker + supervisor untuk panel review 7 agen (lib/agent-swarm.ts).
+#: Tujuh worker analitik + verifier untuk panel review 8 agen (lib/agent-swarm.ts).
 PEKERJA = (
     ("supply", "DETECT", "supply_agent"),
     ("demand", "PREDICT", "demand_agent"),
@@ -97,6 +97,8 @@ PEKERJA = (
     ("price", "OPTIMIZE", "price_agent"),
     ("logistics", "OPTIMIZE", "logistics_agent"),
     ("evidence", "TRACE", "evidence_agent"),
+    # Agent ke-8: auditor. Baris ini membuat kartu Verifikasi terisi di data demo.
+    ("verifier", "VERIFY", "verifier_agent"),
 )
 
 MITRA_LIMBAH = ("Bank Sampah Melati", "Komposter Komunitas Cakung", "PT Biogas Nusantara")
@@ -675,7 +677,7 @@ async def seed_decisions(session: AsyncSession, now: datetime) -> dict:
                     setattr(ada_ev, k, v)
             jumlah["bukti"] += 1
 
-        # ------------------------------------------------ jejak 7 agen + supervisor
+        # ------------------------------------------------ jejak 8 agen + supervisor
         run_id = _id("run", str(indeks))
         # `agent_name` HARUS kunci worker apa adanya ("supply", "demand", …):
         # `lib/agent-swarm.ts` mencocokkan nama itu untuk delapan kartu. Memakai
@@ -683,10 +685,11 @@ async def seed_decisions(session: AsyncSession, now: datetime) -> dict:
         # barisnya ada (dan itu yang terjadi sebelum perbaikan ini).
         urutan = [("supervisor", "DECIDE", "supervisor", 0)]
         urutan += [(k, s, k, i) for i, (k, s, a) in enumerate(PEKERJA)]
-        # ACT wajib ada untuk keputusan yang sudah dieksekusi: metrik Decision
-        # Time membaca rentang DETECT..ACT + PO terbit. Tanpa baris ini kartu itu
-        # hanya punya dua sampel lama.
-        if status in ("executed", "approved"):
+        # ACT wajib ada untuk keputusan yang sudah DIEKSEKUSI: metrik Decision
+        # Time membaca rentang DETECT..ACT + PO terbit. `approved` sengaja tidak
+        # diberi ACT — keputusan itu belum pernah dijalankan, dan jejak ACT di
+        # sana membuat invarian "ACT hanya pada executed" merah.
+        if status == "executed":
             urutan.append(("act", "ACT", "supervisor", 8))
         for key, tahap, agen, urut in urutan:
             kunci_tr = _id("jejak", str(indeks), key)
@@ -866,6 +869,46 @@ async def seed_exclusions(session: AsyncSession, now: datetime) -> dict:
         else:
             for k, v in nilai.items():
                 setattr(ada, k, v)
+
+        # Keputusan ini berstatus `executed`, jadi rantainya harus lengkap:
+        # satu baris approval (four-eyes tercatat di DB, bukan hanya di narasi
+        # `SupplierExclusion.approved_at`) dan jejak langkah agen. Tanpa keduanya
+        # `verify/invariants.spec.json` melaporkan "executed tanpa persetujuan"
+        # dan "keputusan tanpa satu pun jejak langkah".
+        kunci_appr = _id("setuju-eksklusi", str(urut))
+        if await session.get(Approval, kunci_appr) is None:
+            session.add(
+                Approval(
+                    id=kunci_appr,
+                    decision_id=kunci_dec,
+                    approved_by=kepala.id,
+                    approved=True,
+                    comment=f"Disetujui: {alasan}",
+                    approved_at=dibuat + timedelta(hours=2),
+                )
+            )
+        for tahap, menit, alat in (
+            ("DETECT", 0, "safety.alert"),
+            ("VERIFY", 4, "evidence.attach"),
+            ("ACT", 12, "supplier.exclude"),
+        ):
+            kunci_tr = _id("jejak-eksklusi", str(urut), tahap)
+            if await session.get(AgentTrace, kunci_tr) is None:
+                session.add(
+                    AgentTrace(
+                        id=kunci_tr,
+                        decision_id=kunci_dec,
+                        step_name=tahap,
+                        tool_called=alat,
+                        input_summary={"decision_id": str(kunci_dec), "alasan": alasan},
+                        output_summary={"status": "executed"},
+                        duration_ms=18,
+                        agent_name="supervisor",
+                        confidence=Decimal("0.86"),
+                        step_at=dibuat + timedelta(minutes=menit),
+                    )
+                )
+        await session.flush()
         jumlah += 1
     await session.flush()
     return {"eksklusi": jumlah}

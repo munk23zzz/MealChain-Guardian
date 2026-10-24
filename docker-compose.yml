@@ -45,6 +45,9 @@ services:
       - secrets/aws-app.env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mealchain}:${POSTGRES_PASSWORD:-mealchain_local}@postgres:5432/${POSTGRES_DB:-mealchain}
+      # `/` agar `import agent` menemukan mount ./agent:/agent (DEP-04). Aplikasi
+      # sendiri tetap diimpor dari /app (cwd), jadi urutannya tidak mengubah apa pun.
+      PYTHONPATH: /app:/
       DEMO_MODE: ${DEMO_MODE:-false}
       DEBUG: ${DEBUG:-false}
       # P4: review 7 worker agent — default MATI agar perilaku lama tidak berubah.
@@ -112,23 +115,49 @@ services:
       - ./backend:/app
       # Seed sintetis read-only (Task 10) — jangan di-copy ke image
       - ./data:/data:ro
+      # Paket agen: runtime TERPISAH (image sendiri, dideploy ke AgentCore),
+      # tetapi 9 tes di backend/tests mengimpornya sebagai `agent`. Tanpa mount
+      # ini pytest berhenti dengan ModuleNotFoundError (audit DEP-04). Read-only:
+      # kontainer backend tidak boleh mengubah kode agen.
+      - ./agent:/agent:ro
     # --reload sudah aktif dan TERBUKTI bekerja dari sisi host (uji 11 Okt:
     # GET /health berubah dalam 15 detik setelah berkas disunting dari Windows),
     # jadi TIDAK perlu WATCHFILES_FORCE_POLLING di sini. Cakupan pantau
     # dirapatkan ke paket app/ dan __pycache__ dikecualikan supaya penulisan
     # bytecode saat pytest tidak memicu reload beruntun.
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/app --reload-exclude "*__pycache__*"
+    # Audit DEP-01: backend dulu tanpa healthcheck, jadi `docker compose ps`
+    # hanya tahu "running" walau aplikasi belum siap menerima request.
+    # Cek nyata ke /health (GET, tanpa auth) — bukan cek port.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3).status==200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     networks:
       - mealchain-network
 
   frontend:
     restart: unless-stopped
+    # Nama image dipisah dari image produksi: Dockerfile punya dua target
+    # (dev/runner) dan `build` keduanya tidak boleh saling menimpa.
+    image: mealchain-frontend-dev:latest
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      # Target `dev` (bukan `runner`): stack ini untuk kerja harian — `next dev`
+      # + bind mount. Image produksi (`next build` + `next start`) dibangun oleh
+      # `docker-compose.prod.yml` (audit DEP-01).
+      target: dev
     container_name: mealchain-frontend
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:${BACKEND_PORT:-8000}
       # Dev experience (arah Roy 2026-10-11): bind mount dari drive E: (exFAT)

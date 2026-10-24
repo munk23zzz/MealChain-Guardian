@@ -12,7 +12,19 @@ import {
 
 describe("queryKeys", () => {
   it("kunci dengan input sama identik (dibandingkan per elemen)", () => {
-    expect([...queryKeys.decisions("jakarta")]).toEqual(["decisions", "jakarta"]);
+    // 24 Okt 2026: kunci feed membawa JENDELA juga — dua jendela berbeda tidak
+    // boleh berbagi cache (kalau tidak, pilih "7 hari" bisa menampilkan isi
+    // "Hari ini" dari cache).
+    expect([...queryKeys.decisions("jakarta")]).toEqual([
+      "decisions",
+      "jakarta",
+      "all",
+    ]);
+    expect([...queryKeys.decisions("jakarta", "7d")]).toEqual([
+      "decisions",
+      "jakarta",
+      "7d",
+    ]);
     expect([...queryKeys.kpi("a", "b", "jakarta")]).toEqual(["kpi", "a", "b", "jakarta"]);
     expect([...queryKeys.batches()]).toEqual(["batches"]);
   });

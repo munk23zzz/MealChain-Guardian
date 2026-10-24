@@ -172,7 +172,21 @@ _KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # Risiko pemasok sebelum direktori: "pemasok yang dikecualikan" memuat `pemasok` milik direktori.
     (
         SKILL_SUPPLIER_RISK,
-        ("eksklusi", "exclusion", "dikecualikan", "blacklist", "rute", "route", "jarak"),
+        (
+            "eksklusi",
+            "exclusion",
+            "dikecualikan",
+            "blacklist",
+            "rute",
+            "route",
+            "jarak",
+            # "pemasok mana yang berisiko?" dulu jatuh ke direktori karena hanya kata
+            # `pemasok` yang dikenali — jawabannya daftar 61 pemasok, bukan risiko.
+            "berisiko",
+            "risiko",
+            "risk",
+            "rawan",
+        ),
     ),
     # Harga sebelum direktori: "harga dari pemasok" adalah pertanyaan harga.
     (SKILL_PRICE, ("harga", "price", "kuotasi", "quote", "tarif")),
@@ -198,9 +212,50 @@ _KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
 )
 
+#: Pertanyaan bantuan/sapaan: dijawab daftar kemampuan, bukan tabel 40 baris.
+_HELP_WORDS: tuple[str, ...] = (
+    "halo",
+    "hallo",
+    "hai",
+    "hello",
+    "selamat pagi",
+    "selamat siang",
+    "selamat malam",
+    "bisa bantu",
+    "bisa apa",
+    "bisa melakukan apa",
+    "siapa kamu",
+    "kamu siapa",
+    "apa yang bisa",
+    "bantuan",
+    "help",
+)
+
+#: Pertanyaan tentang batch yang harus dibuang/kedaluwarsa. Backend tidak punya endpoint
+#: "pembuangan", jadi yang disajikan kandidat tinjauan (keamanan GAGAL / dikarantina) dan
+#: keputusannya tetap milik manusia.
+_BUANG_WORDS: tuple[str, ...] = (
+    "dibuang",
+    "buang",
+    "kedaluwarsa",
+    "kadaluarsa",
+    "expired",
+    "basi",
+    "tidak layak",
+    "rusak",
+)
+
 #: Nomor PO kanonik: `MC-<12 hex>` (satu pembentuk, `backend/app/core/po_number`). Dibaca
 #: lebih dulu daripada kata kunci mana pun karena bentuknya tidak ambigu.
 _PO_NUMBER = re.compile(r"\b(MC-[0-9A-Fa-f]{6,})\b")
+
+#: Nomor PO gaya SAP (hanya angka, mis. `4500000001`). Hanya diakui kalau menempel pada kata
+#: `PO`, supaya nominal rupiah 10 digit tidak diperlakukan sebagai nomor dokumen.
+_PO_ANGKA = re.compile(
+    r"(?<![A-Za-z])(?:po|purchase[\s-]?orders?|pesanan[\s-]+pembelian)"
+    r"\s*(?:nomor|no\.?|#|:)?\s*([0-9]{8,12})(?![0-9])",
+    re.IGNORECASE,
+)
 
 #: Sebutan PO tanpa nomor. Batas kata dipakai supaya `po` di dalam "produk"/"pasokan" tidak
 #: ikut tertangkap — routing yang salah tebak lebih mahal daripada tidak menangkap.
@@ -213,6 +268,14 @@ _PO_WORD = re.compile(
 _UUID = re.compile(
     r"\b([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\b"
 )
+#: Rujukan pendek yang tampil di tabel chat (8 karakter pertama sebuah id). Tanpa ini,
+#: pengguna harus menyalin 36 karakter dari layar untuk membuka satu keputusan/batch.
+_ID_PENDEK = re.compile(r"\b([0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){0,4}|[0-9a-fA-F]{9,36})\b")
+
+
+def _nomor_rujukan(pesan: str) -> re.Match[str] | None:
+    """Id utuh kalau ada, kalau tidak potongan 8+ karakter yang tampil di tabel."""
+    return _UUID.search(pesan) or _ID_PENDEK.search(pesan)
 
 #: Kata yang menandakan permintaan PENERIMAAN BARANG untuk satu batch, bukan bukti keputusan.
 _RECEIPT_WORDS = (
@@ -267,6 +330,9 @@ def _po_request(teks: str) -> Mapping[str, Any] | None:
     nomor = _PO_NUMBER.search(teks)
     if nomor:
         return {"po_number": nomor.group(1).upper()}
+    angka = _PO_ANGKA.search(teks)
+    if angka:
+        return {"po_number": angka.group(1)}
     if _PO_WORD.search(teks):
         return {}
     return None
@@ -295,7 +361,7 @@ def resolve_skill(user_input: str) -> tuple[str, Mapping[str, Any]]:
     # Kontrak lama yang harus tetap jalan: "penerimaan barang batch <uuid>" membaca
     # catatan SATU batch lewat `GET /receipts?batch_id=…`, bukan antrean. Diperiksa
     # sebelum kata kunci supaya skill antrean penerimaan tidak mencurinya.
-    nomor_batch = _UUID.search(pesan)
+    nomor_batch = _nomor_rujukan(pesan)
     if nomor_batch and any(k in teks for k in _RECEIPT_WORDS):
         return SKILL_SUPPLY, {"batch_id": nomor_batch.group(1)}
     for skill, kata_kunci in _KEYWORDS:
@@ -305,13 +371,13 @@ def resolve_skill(user_input: str) -> tuple[str, Mapping[str, Any]]:
             continue
         payload: dict[str, Any] = {}
         if skill == SKILL_EVIDENCE:
-            nomor = _UUID.search(pesan)
+            nomor = _nomor_rujukan(pesan)
             if nomor:
                 payload["decision_id"] = nomor.group(1)
         return skill, payload
     # Default = situasi pasokan. Penerimaan barang tetap mungkin diminta tanpa kata kunci
     # skill lain, jadi id batch diambil di sini.
-    nomor = _UUID.search(pesan)
+    nomor = _nomor_rujukan(pesan)
     if nomor and any(k in teks for k in _RECEIPT_WORDS):
         return SKILL_SUPPLY, {"batch_id": nomor.group(1)}
     return SKILL_SUPPLY, {}
@@ -340,6 +406,39 @@ def _disebut(teks_kecil: str, nama: str) -> bool:
         return False
     pola = rf"(?<![a-z0-9]){re.escape(nama.lower())}(?![a-z0-9])"
     return re.search(pola, teks_kecil) is not None
+
+
+def _permintaan_bantuan(teks: str) -> bool:
+    """Sapaan / permintaan bantuan: dijawab daftar kemampuan, bukan tabel data."""
+    kecil = (teks or "").lower()
+    return any(kata in kecil for kata in _HELP_WORDS)
+
+
+def _permintaan_buang(teks: str) -> bool:
+    """Pertanyaan tentang batch yang harus dibuang / sudah kedaluwarsa."""
+    kecil = (teks or "").lower()
+    return any(kata in kecil for kata in _BUANG_WORDS)
+
+
+def teks_bantuan() -> str:
+    """Daftar kemampuan Joule untuk MealChain Guardian (tanpa satu pun angka)."""
+    return (
+        "Saya Joule untuk MealChain Guardian: saya membaca data operasional SPPG yang tersimpan "
+        "di sistem, lalu menyajikannya dalam tabel. Saya tidak menghitung ulang angka dan tidak "
+        "menyetujui apa pun.\n\n"
+        "Contoh yang bisa Anda tanyakan:\n"
+        "- **Pasokan**: \"bagaimana kondisi pasokan?\" · \"berapa stok telur di Bandung?\"\n"
+        "- **Kebutuhan & prakiraan**: \"prakiraan kebutuhan beras di Jakarta\"\n"
+        "- **Harga**: \"harga telur di Bandung\"\n"
+        "- **Antrean keputusan**: \"usulan yang menunggu persetujuan\"\n"
+        "- **Penerimaan barang**: \"antrean penerimaan barang\"\n"
+        "- **Karantina & batch bermasalah**: \"batch yang dikarantina\" · \"batch mana yang harus dibuang?\"\n"
+        "- **Purchase order**: \"PO MC-661695B2C685\" · \"PO mana yang sudah disetujui?\"\n"
+        "- **Pemasok**: \"direktori pemasok\" · \"pemasok yang dikecualikan\"\n"
+        "- **Kehilangan pangan**: \"limbah minggu ini\"\n"
+        "- **KPI**, **bukti keputusan** (sebut nomor keputusan), dan **status integrasi**.\n\n"
+        "Persetujuan, eksekusi, dan pembuangan tetap dilakukan manusia di UI MealChain."
+    )
 
 
 def _pairs(client: ReadOnlyBackend, teks: str = "") -> tuple[list[dict[str, str]], int, int]:
@@ -439,11 +538,25 @@ def render_skill(
     Skill berpasangan (harga, kebutuhan) mengiterasi pasangan yang ada di inventaris; skill
     bukti & sistem membaca endpoint keputusan/ledger/integrasi. Semua angka tetap milik backend.
     """
+    # Sapaan / "bisa bantu apa?" tidak boleh dijawab tabel 40 baris: itu terasa seperti
+    # jawaban asal-asalan. Dijawab daftar kemampuan, tanpa memanggil backend sama sekali.
+    if skill == SKILL_SUPPLY and _permintaan_bantuan(teks or ""):
+        return teks_bantuan()
+
     note = _data_source_note(client)
     if skill == SKILL_KPI:
         return report.kpi_report(client.kpi(), note=note)
     if skill == SKILL_QUEUE:
-        return report.approval_queue_report(client.pending_decisions(), note=note)
+        # `pending_decisions()` hanya melengkapi DETAIL_LIMIT baris teratas; jumlah terbuka
+        # yang sebenarnya dihitung dari daftar keputusan mentah supaya judul tidak berbohong.
+        terbuka = sum(
+            1
+            for row in client.decisions()
+            if str(row.get("status")) in report.UNFINISHED_STATUS
+        )
+        return report.approval_queue_report(
+            client.pending_decisions(), note=note, total_belum=terbuka
+        )
     if skill == SKILL_RECEIPTS:
         return report.receipts_queue_report(client.receipts_menunggu(), note=note)
     if skill == SKILL_QUARANTINE:
@@ -451,11 +564,20 @@ def render_skill(
     if skill == SKILL_GAP:
         return report.unsupported_report(
             "pengiriman barang, surat jalan, atau stok material SAP",
-            "backend MealChain belum menyediakan endpoint baca untuk domain ini.",
+            "datanya belum tersedia di MealChain Guardian — belum ada sumber data untuk pengiriman, surat jalan, atau stok material SAP.",
         )
     if skill == SKILL_PO:
         nomor = str((payload or {}).get("po_number") or "").strip() or None
-        return report.purchase_order_report(client.purchase_orders(), po_number=nomor, note=note)
+        kecil = (teks or "").lower()
+        hanya_disetujui = any(
+            kata in kecil for kata in ("disetujui", "dieksekusi", "approved", "sudah disetujui")
+        )
+        return report.purchase_order_report(
+            client.purchase_orders(),
+            po_number=nomor,
+            note=note,
+            hanya_disetujui=hanya_disetujui,
+        )
     if skill == SKILL_DIRECTORY:
         return report.supplier_directory_report(client.suppliers(), note=note)
 
@@ -532,7 +654,14 @@ def render_skill(
     if skill == SKILL_EVIDENCE:
         diminta = str((payload or {}).get("decision_id") or "").strip()
         if diminta:
-            ids = [diminta]
+            utuh, galat = _resolve_id(
+                diminta,
+                [str(row.get("decision_id")) for row in client.decisions() if row.get("decision_id")],
+                sebutan="keputusan",
+            )
+            if galat:
+                return galat
+            ids = [utuh]
         else:
             ids = [
                 str(row.get("decision_id"))
@@ -545,7 +674,7 @@ def render_skill(
             try:
                 compliance = client.decision_compliance(satu)
             except MealchainRejected as exc:
-                gagal_ev.append(f"kepatuhan {satu} ({exc})")
+                gagal_ev.append(report.short_id(satu))
                 continue
             rantai: Mapping[str, Any] = {}
             jejak: Mapping[str, Any] = {}
@@ -560,7 +689,17 @@ def render_skill(
             cases.append({"id": satu, "compliance": compliance, "chain": rantai, "traces": jejak})
         return report.decision_evidence_report(
             cases,
-            note=_gabung(note, ("Tidak terbaca: " + "; ".join(gagal_ev)) if gagal_ev else None),
+            note=_gabung(
+                note,
+                (
+                    "Keputusan "
+                    + ", ".join(gagal_ev)
+                    + " tidak ditemukan di data yang aktif sekarang — salin ulang 8 karakter"
+                    " pertama ID dari tabel antrean. Tidak ada angka pengganti yang dikarang."
+                )
+                if gagal_ev
+                else None,
+            ),
         )
 
     if skill == SKILL_SYSTEM:
@@ -572,7 +711,36 @@ def render_skill(
             note=note,
         )
 
-    batches = client.batches()
+    batches_semua = client.batches()
+
+    # Pertanyaan "batch mana yang harus dibuang?" tidak dijawab tabel pasokan: tampilkan
+    # kandidat tinjauan (keamanan GAGAL / dikarantina) dan tegaskan keputusan ada di manusia.
+    if _permintaan_buang(teks or ""):
+        return report.batch_disposal_report(batches_semua, note=note)
+
+    # Kalau pertanyaan menyebut SPPG dan/atau komoditas, saring ke pasangan itu saja: jawaban
+    # "berapa stok telur di Bandung?" tidak boleh berupa 40 baris yang harus dibaca sendiri.
+    kecil = (teks or "").lower()
+    lokasi_disebut = {
+        str(row.get("location"))
+        for row in batches_semua
+        if _disebut(kecil, str(row.get("location") or ""))
+    }
+    komoditas_disebut = {
+        str(row.get("commodity"))
+        for row in batches_semua
+        if _disebut(kecil, str(row.get("commodity") or ""))
+    }
+    batches = [
+        row
+        for row in batches_semua
+        if (not lokasi_disebut or str(row.get("location")) in lokasi_disebut)
+        and (not komoditas_disebut or str(row.get("commodity")) in komoditas_disebut)
+    ]
+    if not batches:  # nama disebut tetapi tidak ada di inventaris: jangan tampilkan laporan kosong
+        batches = batches_semua
+        lokasi_disebut, komoditas_disebut = set(), set()
+
     komoditas = sorted(
         {str(row.get("commodity")) for row in batches if row.get("commodity")}
     )
@@ -580,12 +748,24 @@ def render_skill(
     gagal: list[str] = []
     for nama in komoditas:
         try:
-            balance[nama] = client.balance_map(nama)
+            payload_balance = client.balance_map(nama)
         except MealchainRejected as exc:
             # Satu komoditas yang tidak punya data keseimbangan tidak boleh mematikan seluruh
             # laporan: tabel batch (keamanan/kesegaran) tetap berguna. Kekosongannya disebut
             # apa adanya — bukan diisi nol, karena nol terbaca "tidak ada masalah".
             gagal.append(f"{nama} ({exc})")
+            continue
+        if lokasi_disebut and isinstance(payload_balance, Mapping):
+            baris_lokasi = payload_balance.get("locations") or ()
+            payload_balance = {
+                **payload_balance,
+                "locations": [
+                    row
+                    for row in baris_lokasi
+                    if str(row.get("location")) in lokasi_disebut
+                ],
+            }
+        balance[nama] = payload_balance
     if gagal:
         tambahan = (
             "Keseimbangan tidak terbaca untuk: "
@@ -593,12 +773,13 @@ def render_skill(
             + " — komoditas itu tidak muncul di tabel keseimbangan, bukan berarti nol."
         )
         note = f"{note}\n\n{tambahan}" if note else tambahan
-    laporan = report.supply_report(batches, balance, note=note)
+
+    satu = _satu_pasangan(batches_semua, teks or "")
+    laporan = report.supply_report(batches, balance, note=note, pasangan=satu)
 
     # Kalau pertanyaannya menyebut SATU SPPG dan SATU komoditas, sebutkan baris sumbernya:
-    # `/balance/map` memberi `supply_kg` hasil hitungan backend, `/supply/…` memberi baris
+    # `/balance/map` memberi `supply_kg` hasil hitungan backend, `/supply/…` memberi catatan
     # pasokan terakhir apa adanya (kg, waktu catat, sumber) — satu panggilan, tanpa agregasi.
-    satu = _satu_pasangan(batches, teks or "")
     if satu:
         try:
             titik = client.supply_point(satu["location_id"], satu["commodity"])
@@ -606,25 +787,82 @@ def render_skill(
             titik = {}
         if titik:
             laporan += (
-                f"\n\nBaris pasokan terakhir {satu['location']} / {satu['commodity']}: "
-                f"{report.kg(titik.get('quantity_kg'))} dicatat "
-                f"{report.wib(titik.get('recorded_at'))}, sumber "
-                f"{titik.get('source') or report.MISSING}."
+                f"\n\nCatatan pasokan terakhir yang dilaporkan SAP untuk {satu['location']} / "
+                f"{satu['commodity']}: {report.kg(titik.get('quantity_kg'))}, dicatat "
+                f"{report.wib(titik.get('recorded_at'))} (sumber "
+                f"{report._label(report.PRICE_SOURCE_LABEL, titik.get('source') or report.MISSING)}). "
+                "Angka ini catatan pengiriman pemasok, "
+                "bukan stok batch yang bisa dipakai."
             )
 
     # Penerimaan barang (goods receipt) selalu per batch: `/receipts` mewajibkan `batch_id`.
-    # Jalur ini hanya aktif kalau pengguna menyebut satu batch, supaya jembatan tidak
-    # memanggil 158 kali untuk seluruh inventaris.
+    # Kalau pengguna menyebut SATU batch, jawabannya adalah catatan penerimaan batch itu saja —
+    # bukan seluruh tabel pasokan dengan catatan batch ditempel di ujung.
     batch_id = str((payload or {}).get("batch_id") or "").strip()
     if not batch_id:
         return laporan
+    batch_id, galat_batch = _resolve_id(
+        batch_id,
+        [str(row.get("id")) for row in batches_semua if row.get("id")],
+        sebutan="batch",
+    )
+    if galat_batch:
+        return galat_batch
     try:
         receipts = client.receipts(batch_id)
     except MealchainRejected as exc:
-        return f"{laporan}\n\n---\n\n_Penerimaan barang batch {batch_id} tidak terbaca: {exc}_"
-    return (
-        f"{laporan}\n\n---\n\n"
-        + report.receipt_report(receipts, batch_id=batch_id, note=note)
+        return (
+            f"Penerimaan barang batch {batch_id} tidak terbaca: {exc}.\n\n"
+            "Batch yang tidak terdaftar atau di luar cakupan akun baca tidak akan muncul — "
+            "bukan berarti catatannya tidak ada."
+        )
+    return report.receipt_report(receipts, batch_id=batch_id, note=note)
+
+
+def _resolve_id(
+    diminta: str,
+    kandidat: Sequence[str],
+    *,
+    sebutan: str = "data",
+) -> tuple[str, str | None]:
+    """Cocokkan id yang disebut pengguna (boleh 8 karakter pertama) ke id utuh.
+
+    Urutan: cocok PERSIS → awalan unik → selain itu tidak ditebak. Hasil `(id, pesan_galat)`;
+    `pesan_galat` sudah berbahasa pengguna dan siap dikirim sebagai artefak chat.
+
+    Id panjang (≥32 karakter) yang tidak ada di daftar tetap diteruskan apa adanya supaya
+    record di luar cakupan daftar masih bisa dibuka lewat endpoint-nya sendiri — backend yang
+    memutuskan, bukan tebakan pencocokan di jembatan.
+    """
+    kunci = (diminta or "").strip()
+    if not kunci:
+        return diminta, None
+
+    def sama(nilai: str) -> bool:
+        return nilai.lower() == kunci.lower()
+
+    def awalan(nilai: str) -> bool:
+        return nilai.lower().startswith(kunci.lower())
+
+    persis = [nilai for nilai in kandidat if sama(nilai)]
+    if persis:
+        return persis[0], None
+
+    mirip = [nilai for nilai in kandidat if awalan(nilai)]
+    if len(mirip) == 1:
+        return mirip[0], None
+    if len(mirip) > 1:
+        contoh = ", ".join(report.short_id(nilai) for nilai in mirip[:5])
+        return diminta, (
+            f"Ada {len(mirip)} {sebutan} yang cocok dengan awalan `{kunci}` ({contoh}). "
+            "Sebutkan lebih banyak karakter supaya saya membuka yang tepat — saya tidak memilih "
+            "salah satu atas nama Anda."
+        )
+    if len(kunci) >= 32:
+        return kunci, None
+    return diminta, (
+        f"Tidak ada {sebutan} dengan awalan `{kunci}` di data yang bisa saya baca sekarang. "
+        "Coba salin ulang id dari tabel sebelumnya."
     )
 
 

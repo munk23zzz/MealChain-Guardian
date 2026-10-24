@@ -46,7 +46,10 @@ DSN = os.environ.get(
 # Jalankan terpisah: DEMO_SESSION_ENFORCE=true pytest tests/test_demo_session.py
 pytestmark = pytest.mark.skipif(
     not settings.demo_session_enforce,
-    reason="tes sesi mengosongkan tabel operasional — jalankan terpisah dengan DEMO_SESSION_ENFORCE=true",
+    reason=(
+        "tes sesi mengosongkan tabel operasional — jalankan terpisah"
+        " dengan DEMO_SESSION_ENFORCE=true"
+    ),
 )
 
 
@@ -535,7 +538,10 @@ def test_akhiri_sesi_tidak_menghapus_kanonik_terstempel():
                 kanonik = await _buat_batch(db, loc, com, sup, sid=sid, bypass=True)
                 async with _db() as lain:
                     await lain.execute(
-                        text("update batches set demo_session_id = :s, origin = 'seed' where id = :i"),
+                        text(
+                            "update batches set demo_session_id = :s, origin = 'seed'"
+                            " where id = :i"
+                        ),
                         {"s": sid, "i": kanonik.id},
                     )
                     await lain.commit()
@@ -549,7 +555,10 @@ def test_akhiri_sesi_tidak_menghapus_kanonik_terstempel():
                 assert tetap == 1, "baris kanonik berstempel tidak boleh ikut terhapus"
             finally:
                 async with _db() as bersih:
-                    await bersih.execute(text("delete from batches where id = :i"), {"i": kanonik.id})
+                    await bersih.execute(
+                        text("delete from batches where id = :i"),
+                        {"i": kanonik.id},
+                    )
                     await bersih.commit()
                 await _hapus_sesi(db, sid)
                 await _hapus_bahan(db, loc, com, sup)

@@ -7,7 +7,7 @@ Role: sppg_head | sppg_nutritionist | bgn_monitor.
 
 import uuid
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,6 +29,7 @@ class User(Base):
             " OR (role = 'bgn_monitor' AND location_id IS NULL)",
             name="check_user_role_location_scope",
         ),
+        Index("idx_users_location", "location_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

@@ -126,8 +126,8 @@ async def hitung_biaya_demo(
         return False
 
     lokasi = {
-        l.id: l
-        for l in (
+        lok.id: lok
+        for lok in (
             await db.execute(
                 select(Location).where(
                     Location.id.in_(
@@ -196,7 +196,11 @@ async def hitung_biaya_demo(
     qty = Decimal(str(decision.quantity_kg))
     purchase = _money(qty * harga)
     linehaul_cost = _money(TRANSPORT_RATE * linehaul_km * qty / 1000)
-    leg_cost = _money(TRANSPORT_RATE * leg_km * qty / 1000) if leg_km is not None else _money(Decimal("0"))
+    leg_cost = (
+        _money(TRANSPORT_RATE * leg_km * qty / 1000)
+        if leg_km is not None
+        else _money(Decimal("0"))
+    )
     transport = linehaul_cost + leg_cost
 
     # Kesegaran & keamanan datang dari batch yang benar-benar terikat. Tanpa

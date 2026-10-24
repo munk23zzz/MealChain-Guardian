@@ -48,8 +48,6 @@ async def _kosongkan_bila_tanpa_sesi(maker) -> None:
     """
     from app.core.config import settings
 
-    from app.services import demo_session as ds
-
     async def _bersihkan(fn) -> None:
         try:
             async with maker() as db:

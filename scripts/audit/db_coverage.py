@@ -815,7 +815,7 @@ SECTIONS: list[dict] = [
         "screen": "recommendations",
         "section": "Feed rekomendasi + filter/sort + pager",
         "anchor": "frontend/components/RecommendationCard.tsx",
-        "fields": ["Rekomendasi baru", "Alokasi regional direkomendasikan", "Lewat tenggat"],
+        "fields": ["Rekomendasi baru", "Penyeimbangan pasokan regional", "Lewat tenggat"],
         "api": ["fetchDecisions"],
         "tables": [
             "decisions.decision_type", "decisions.status", "decisions.quantity_kg",

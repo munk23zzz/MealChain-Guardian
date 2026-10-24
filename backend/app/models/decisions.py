@@ -14,6 +14,7 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
+    String,
     Text,
     func,
 )
@@ -51,7 +52,9 @@ class Decision(Base):
             name="decisions_quantity_positive_check",
         ),
         Index("idx_decisions_status", "status"),
-        Index("idx_decisions_origin_created_at", "origin", "created_at"),
+        Index("ix_decisions_origin_created_at", "origin", "created_at"),
+        Index("idx_decisions_demo_case", "demo_case"),
+        Index("idx_decisions_supersedes_id", "supersedes_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -108,7 +111,7 @@ class Decision(Base):
         DateTime(timezone=True), nullable=False
     )
     origin: Mapped[str] = mapped_column(
-        Text, nullable=False, server_default="seed"
+        String, nullable=False, server_default="seed"
     )
     generated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -128,6 +131,7 @@ class DecisionEvidence(Base):
             "'gps','temperature','human_inspection','market_price')",
             name="decision_evidence_type_check",
         ),
+        Index("ix_decision_evidence_decision_id", "decision_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -150,6 +154,13 @@ class Approval(Base):
     """Catatan approval manusia (human-in-the-loop, tidak otomatis)."""
 
     __tablename__ = "approvals"
+    # Four-eyes ditegakkan DB (migrasi 030): satu akun = satu baris per usulan.
+    # Tanpa ini, dua request dari akun yang sama bisa memenuhi syarat "dua role
+    # berbeda" karena quorum dihitung dari baris approval, bukan dari user unik.
+    __table_args__ = (
+        Index("uq_approvals_decision_user", "decision_id", "approved_by", unique=True),
+        Index("ix_approvals_decision_id", "decision_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
@@ -179,6 +190,7 @@ class AgentTrace(Base):
             "'DECIDE','SUPERVISE','ACT','LEARN')",
             name="agent_traces_step_name_check",
         ),
+        Index("ix_agent_traces_decision_id", "decision_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

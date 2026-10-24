@@ -26,6 +26,22 @@ describe("coverageNote (keterkaitan blok ledger)", () => {
     expect(coverageNote(null)).toBeNull();
   });
 
+  it("menyebut blok arsip generasi lama tanpa menuduhnya sebagai kerusakan", () => {
+    const note = coverageNote({
+      valid: true,
+      blocks: 1541,
+      generation: 2,
+      entity_blocks: 40,
+      linked_blocks: 40,
+      orphan_blocks: 0,
+      archived_blocks: 1501,
+      coverage_warning: null,
+    });
+    expect(note).toBe(
+      "1501 blok generasi lama diarsipkan (rantai tetap terverifikasi)"
+    );
+  });
+
   it("tetap menampilkan peringatan walau angka tidak lengkap", () => {
     expect(coverageNote({ coverage_warning: "rantai utuh, tetapi 2 blok yatim" })).toBe(
       "rantai utuh, tetapi 2 blok yatim"

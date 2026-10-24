@@ -34,7 +34,14 @@ TABLES = ("supply_records", "demand_records", "price_signals", "menu_plans")
 
 
 def _kanonik_pada_stempel() -> int:
-    """Baris seed yang menempati stempel 8 Okt 12:00 (= yang tidak "added")."""
+    """Baris seed yang MENEMPATI stempel deret (00:00/12:00 UTC di dalam rentang).
+
+    Kenapa tidak dipaku ke 8 Okt 12:00: "Segarkan ke hari ini" dan reset template
+    memindahkan snapshot kanonik ke REF baru, sehingga stempel lama kosong dan
+    generator menulis baris demo di sana — `added` jadi `planned`, bukan
+    `planned - 40`. Yang benar-benar diuji adalah "baris yang sudah ada tidak
+    dihitung sebagai added", dan itu harus dibaca dari DB.
+    """
     engine = create_engine(DB_URL)
     try:
         with engine.connect() as conn:
@@ -42,9 +49,14 @@ def _kanonik_pada_stempel() -> int:
                 conn.execute(
                     text(
                         "SELECT count(*) FROM supply_records"
-                        " WHERE origin='seed' AND recorded_at = :t"
+                        " WHERE origin = 'seed'"
+                        "   AND recorded_at >= :mulai AND recorded_at < :akhir"
+                        "   AND date_part('hour', recorded_at AT TIME ZONE 'UTC')"
+                        "       IN (0, 12)"
+                        "   AND date_part('minute', recorded_at AT TIME ZONE 'UTC') = 0"
+                        "   AND date_part('second', recorded_at AT TIME ZONE 'UTC') = 0"
                     ),
-                    {"t": datetime(2026, 10, 8, 12, tzinfo=UTC)},
+                    {"mulai": DEFAULT_START, "akhir": DEFAULT_END},
                 ).scalar()
                 or 0
             )
@@ -137,14 +149,29 @@ def demo_state(auth_headers):
         _teardown_counts(before)
 
 
-def _menu_coverage() -> tuple[int, int, int]:
-    """(jumlah baris rencana, jumlah tanggal unik, hari tanpa rencana)."""
+def _menu_coverage() -> tuple[int, int, int, int]:
+    """(baris rencana, tanggal unik, baris ganda, hari tanpa rencana).
+
+    `baris ganda` = lebih dari satu rencana untuk (lokasi, tanggal) yang sama —
+    dulu tidak diperiksa, padahal justru itu yang membuat angka total bergeser
+    tanpa cakupan bertambah.
+    """
     engine = create_engine(DB_URL)
     try:
         with engine.connect() as conn:
             total = int(conn.execute(text("SELECT count(*) FROM menu_plans")).scalar() or 0)
             tanggal = int(
                 conn.execute(text("SELECT count(DISTINCT plan_date) FROM menu_plans")).scalar()
+                or 0
+            )
+            kembar = int(
+                conn.execute(
+                    text(
+                        "SELECT count(*) FROM ("
+                        "  SELECT location_id, plan_date FROM menu_plans"
+                        "  GROUP BY 1, 2 HAVING count(*) > 1) d"
+                    )
+                ).scalar()
                 or 0
             )
             kosong = int(
@@ -164,7 +191,87 @@ def _menu_coverage() -> tuple[int, int, int]:
             )
     finally:
         engine.dispose()
-    return total, tanggal, kosong
+    return total, tanggal, kembar, kosong
+
+
+def _jumlah_lokasi() -> int:
+    engine = create_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            return int(conn.execute(text("SELECT count(*) FROM locations")).scalar() or 0)
+    finally:
+        engine.dispose()
+
+
+def _jumlah_hari_rentang() -> int:
+    """Jumlah tanggal dalam rentang default (inklusif)."""
+    return (DEFAULT_END.date() - DEFAULT_START.date()).days + 1
+
+
+def _jumlah_pasokan() -> int:
+    """Pasangan lokasi×komoditas pada snapshot kanonik (dulu dipaku 40)."""
+    engine = create_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            return int(
+                conn.execute(
+                    text(
+                        "SELECT count(DISTINCT (location_id, commodity_id)) "
+                        "FROM supply_records WHERE origin = 'seed'"
+                    )
+                ).scalar()
+                or 0
+            )
+    finally:
+        engine.dispose()
+
+
+def _jumlah_stempel_demo() -> int:
+    engine = create_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            return int(
+                conn.execute(
+                    text(
+                        "SELECT count(DISTINCT recorded_at) FROM supply_records "
+                        "WHERE origin = 'demo'"
+                    )
+                ).scalar()
+                or 0
+            )
+    finally:
+        engine.dispose()
+
+
+def _stempel_demo_terakhir() -> str:
+    """Stempel terakhir deret demo, format ISO tanpa zona (untuk startswith)."""
+    engine = create_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT max(recorded_at) FROM supply_records WHERE origin = 'demo'"
+                )
+            ).scalar()
+    finally:
+        engine.dispose()
+    assert row is not None, "deret demo belum dibangun"
+    return row.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def _stempel_seed_pertama() -> str:
+    engine = create_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT min(recorded_at) FROM supply_records WHERE origin = 'seed'"
+                )
+            ).scalar()
+    finally:
+        engine.dispose()
+    assert row is not None, "snapshot kanonik tidak ditemukan"
+    return row.isoformat()
 
 
 def test_preview_tidak_menulis(demo_state, auth_headers):
@@ -190,13 +297,20 @@ def test_membangun_deret_tidak_menggeser_jangkar(demo_state, auth_headers, monit
     # (10 lokasi × 4 komoditas = 40 baris). Angka 3.870 yang dulu dipaku di sini
     # pecah saat beras masuk, padahal yang diuji adalah "kanonik tidak dihitung
     # sebagai added" — jadi hitung dari kontraknya, bukan dari angka tetap.
+    planned = body["counts"]["supply"]["planned"]
     kanonik = _kanonik_pada_stempel()
-    assert kanonik == 40
-    assert body["counts"]["supply"]["added"] == body["counts"]["supply"]["planned"] - kanonik
+    pasokan = _jumlah_pasokan()
+    assert pasokan > 0, "snapshot kanonik tidak ditemukan"
+    assert planned % pasokan == 0, "planned harus kelipatan pasokan lokasi×komoditas"
+    assert body["counts"]["supply"]["added"] == planned - kanonik, body["counts"]["supply"]
     # Rencana menu harus menutup SELURUH rentang tanpa lubang. Angka "520"
     # sempat dipaku di sini dan pecah begitu jumlah hari kanonik berubah —
     # yang benar adalah cakupan, bukan selisih yang bergantung susunan lama.
-    assert _menu_coverage() == (660, 66, 0)
+    lokasi_menu, hari, kembar, kosong = _menu_coverage()
+    assert kosong == 0, "ada hari tanpa rencana di dalam rentang"
+    assert kembar == 0, "ada lebih dari satu rencana untuk satu lokasi+tanggal"
+    assert hari == _jumlah_hari_rentang()
+    assert lokasi_menu == hari * _jumlah_lokasi()
     assert body["purged"]["total"] >= 0
     assert set(body["purged"]["deleted"]) == {
         "supply_records",
@@ -218,7 +332,7 @@ def test_membangun_deret_tidak_menggeser_jangkar(demo_state, auth_headers, monit
     # keseluruhan kini berasal dari deret demo (ujung rencana 4 Nov 12:00).
     sup = demo_state.get("/supply/Cianjur/telur", headers=monitor_headers)
     assert sup.status_code == 200, sup.text
-    assert sup.json()["recorded_at"].startswith("2026-11-04T12:00:00")
+    assert sup.json()["recorded_at"].startswith(_stempel_demo_terakhir())
     assert _seed_supply_terbaru()[1] == 1400.0
 
     # Jangkar peta: angka peta = baris TERBARU tiap lokasi yang SUDAH TERJADI
@@ -394,6 +508,33 @@ def test_baris_aktual_berhenti_di_batas_rencana(demo_state, auth_headers):
 # --------------------------------------------------------------------------
 
 
+def _snapshot_ids_kanonik() -> dict[str, set[str]]:
+    """Id baris KANONIK (origin='seed' / bukan demo) per tabel deret waktu."""
+    engine = create_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            return {
+                t: {
+                    str(r[0])
+                    for r in conn.execute(
+                        text(
+                            f"SELECT id::text FROM {t} WHERE "
+                            + ("origin<>'demo'" if t == "batches" else "origin='seed'")
+                        )
+                    )
+                }
+                for t in (
+                    "supply_records",
+                    "demand_records",
+                    "price_signals",
+                    "batches",
+                    "menu_plans",
+                )
+            }
+    finally:
+        engine.dispose()
+
+
 def _snapshot_ids() -> dict[str, set[str]]:
     """Id baris kanonik per tabel — dipakai untuk membuktikan refresh bisa dibalik."""
     engine = create_engine(DB_URL)
@@ -486,7 +627,7 @@ def test_data_status_membaca_db(demo_state, auth_headers):
     r = demo_state.get("/demo/data-status", headers=auth_headers)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["canonical_ref"] == "2026-10-08T12:00:00+00:00"
+    assert body["canonical_ref"] == CANONICAL_REF.isoformat()
     supply = body["tables"]["supply_records"]
     # Angka `seed` TIDAK dipaku 40: setiap generasi kanonik memang 40 baris
     # (10 lokasi × 4 komoditas), tetapi jumlah generasi bergantung pada berapa
@@ -517,10 +658,14 @@ def test_data_status_membaca_db(demo_state, auth_headers):
         )
     assert supply["seed"] == seed_supply
     assert pasangan_ganda == 0, "satu generasi kanonik = satu baris per pasangan"
-    assert seed_supply == 40 * int(generasi or 0), "setiap generasi wajib 40 baris"
-    assert supply["demo"] == 5160, "40 pasangan × 130 stempel − 40 kanonik"
-    assert supply["demo_to"].startswith("2026-11-04T12:00:00")
-    assert supply["seed_from"] == "2026-10-08T12:00:00+00:00"
+    pasokan = _jumlah_pasokan()
+    assert seed_supply == pasokan * int(generasi or 0), "satu generasi = satu baris per pasangan"
+    # Deret demo = satu baris per pasangan per stempel yang ditulis generator.
+    # Jumlah stempelnya bergantung state (snapshot kanonik bisa digeser), jadi
+    # dihitung dari DB — bukan dipaku 130 stempel / 5160 baris.
+    assert supply["demo"] == pasokan * _jumlah_stempel_demo()
+    assert supply["demo_to"].startswith(_stempel_demo_terakhir())
+    assert supply["seed_from"] == _stempel_seed_pertama()
     assert supply["generated_at"] is not None
     # Permintaan ikut dilaporkan: tanpa ini panel hanya melihat 3 tabel dan
     # menyembunyikan 864 baris permintaan demo.
@@ -752,137 +897,49 @@ def _kembalikan_baseline() -> None:
     asyncio.run(_pulihkan_kegiatan_demo())
 
 
-def test_refresh_hari_ini_bergeser_dan_bisa_dikembalikan(
+def test_refresh_hari_ini_tidak_menggandakan_snapshot_kanonik(
     demo_state, auth_headers, monitor_headers
 ):
-    """Tombol hari demo: snapshot kanonik pindah ke hari ini, lalu dikembalikan.
+    """Tombol hari demo TIDAK memanggal tanggal snapshot kanonik.
 
-    Yang dibuktikan: (1) baris kanonik BARU benar-benar dibuat dan record
-    terbaru Cianjur ikut pindah ke hari ini, (2) NILAI jangkar tidak berubah
-    (angkanya dari berkas seed yang sama), (3) peringatannya dibawa di respons,
-    (4) keadaan sebelum bisa dipulihkan — generasi kanonik kembali tepat satu
-    (40 baris di 8 Okt, jangkar 1.400 kg) dan deret demo dibangun ulang pada
-    jangkar itu, bukan dibiarkan kosong. Jadi tes ini tidak merusak DB demo.
-    Angka per `origin` untuk deret demo TIDAK dipaku: panjang jendela ikut
-    bergeser saat jangkar pindah, jadi jumlah barisnya sah berbeda.
+    Kontrak lama ("snapshot kanonik pindah ke hari ini") menghasilkan baris
+    yatim: id baris kanonik diturunkan dari tanggal acuan, jadi memuat ulang
+    pada tanggal hari ini membuat generasi baru sementara generasi lama tetap
+    ada — 100 `price_signals` duplikat dan 40 `pihps_reference` ganda, dan
+    akhirnya empat tes invarian merah SETELAH tombol ditekan.
+
+    Kontrak yang berlaku: snapshot kanonik dipertahankan (dilewati bila sudah
+    ada), sedangkan baris DEMO yang bergerak ke hari ini — kiriman, kasus
+    skrip, keputusan selesai, harga harian, dan seed hari-ini.
     """
-    before_ids = _snapshot_ids()
-    before_counts = _origin_counts()
-    awal = demo_state.get("/supply/Cianjur/telur", headers=monitor_headers).json()
-    # Kontrak endpoint, bukan tanggal: kembalikan baris TERBARU dari origin mana pun.
-    # Tanggalnya tidak dipaku karena "Segarkan ke hari ini" memang memindahkan baris
-    # kanonik ke hari ini — memakunya membuat tes merah hanya karena fitur itu dipakai.
-    assert awal["recorded_at"] == _terbaru_semua()
-
-    # Record kanonik terbaru ikut pindah ke HARI INI, nilai kanonik tidak berubah.
-    # (Record terbaru keseluruhan berasal dari deret demo — 4 Nov 12:00 — karena itu
-    # jangkar dibaca lewat `origin='seed'`.)
+    # Hanya baris KANONIK yang dipakai sebagai pembanding: refresh memang
+    # menambah baris demo hari ini (itu tugasnya).
+    sebelum_kanonik = _snapshot_ids_kanonik()
     awal_seed, kg_awal = _seed_supply_terbaru()
     assert kg_awal == 1400.0
 
-    try:
-        r = demo_state.post("/demo/refresh", headers=auth_headers)
-        assert r.status_code == 200, r.text
-        body = r.json()
-        assert body["rows"], "seeder relatif harus melaporkan baris yang dimuat"
-        assert body["cases"]["seeded"] is True
-        assert "TANGGALNYA" in body["warning"]
+    r = demo_state.post("/demo/refresh", headers=auth_headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["rows"]["dilewati"] == "snapshot kanonik sudah ada"
+    assert body["cases"]["seeded"] is True
+    assert body["hari_ini"]["keputusan"] == 9
+    assert "TANGGALNYA" in body["warning"]
 
-        added = {t: _snapshot_ids()[t] - before_ids[t] for t in before_ids}
-        # Snapshot kanonik baru = satu baris per pasangan lokasi×komoditas:
-        # 10 lokasi × 4 komoditas (beras ikut sejak komoditas ke-4).
-        assert len(added["supply_records"]) == 40, "snapshot REF baru = 40 baris pasokan"
-        # Rencana menu TIDAK digandakan: untuk tanggal yang sudah punya rencana
-        # (deret demo menutup 8 Okt–5 Nov), seeder memakai rencana yang ada. Menu
-        # boleh 0 baris baru — yang wajib bertambah adalah snapshot pasokan.
-        assert _menu_duplikat() == 0, "refresh menggandakan rencana menu (lokasi, tanggal)"
-        sesudah_counts = _origin_counts()
-        # Batch memakai id yang TIDAK bergantung waktu referensi → ia di-UPDATE di
-        # tempat (tanggal panen ikut pindah), bukan ditambah. Menambah baris di sini
-        # akan berarti dua snapshot batch sekaligus.
-        # Batch tidak boleh MENYUSUT; bertambah satu-dua lot sah bila berkas
-        # seed punya lot kedua untuk pasangan itu. Yang dilarang: batch ganda
-        # untuk (pemasok, lokasi, komoditas, panen) yang sama.
-        assert sesudah_counts["batches"]["seed"] >= before_counts["batches"]["seed"]
-        assert _batch_duplikat() == 0
+    # Kanonik: baris seed TIDAK bertambah/berubah tanggal (tidak ada generasi
+    # kedua). Baris demo boleh bertambah — itu justru tugas refresh.
+    # Set id kanonik dibandingkan lewat potongan yang sama: baris seed saja.
+    dengan_kanonik = _snapshot_ids_kanonik()
+    for tabel, ids in sebelum_kanonik.items():
+        assert dengan_kanonik[tabel] == ids, f"{tabel}: refresh membuat generasi kanonik baru"
+    recorded_seed, kg_sesudah = _seed_supply_terbaru()
+    assert recorded_seed == awal_seed
+    assert kg_sesudah == 1400.0
 
-        # Snapshot kanonik terbaru kini bertanggal HARI INI, nilainya tetap kanonik.
-        recorded_seed, kg_sesudah = _seed_supply_terbaru()
-        assert recorded_seed != awal_seed
-        assert recorded_seed.startswith(str(datetime.now(UTC).year))
-        assert kg_sesudah == 1400.0
-    finally:
-        # ---- rollback SELALU jalan: (a) buang baris yang ditambahkan refresh,
-        # (b) kembalikan baris yang di-update di tempat lewat seed pada REF kanonik,
-        # (c) isi ulang baris deret waktu demo yang tanggalnya diambil alih.
-        #
-        # Dulu ketiga langkah ini berada SESUDAH asersi tanpa `try/finally`, jadi
-        # satu kegagalan di tengah (mis. asersi cap waktu) meninggalkan baris
-        # ber-REF jam di DB kerja. Residunya nyata: 120 baris `demand_records`
-        # ber-`needed_by` 2026-10-19 tertinggal dan menyusup ke jendela "3
-        # observasi terbaru", sehingga `/demand/forecast/Jakarta/telur` meleset
-        # (2.140 alih-alih 2.120).
-        added = {t: _snapshot_ids()[t] - before_ids[t] for t in before_ids}
-        _delete_ids(added)
-        _kembalikan_baseline()
-
-    # `/demo/refresh` juga memuat ulang 4 kasus skrip. Kalau tes lain lebih dulu
-    # mem-purge baris demo, refresh MENAMBAH ulang keputusan demo (7 → 10) — itu
-    # perilaku yang benar, bukan kegagalan rollback. Jadi yang dibandingkan
-    # ketat hanyalah tabel deret waktu; keputusan demo diperiksa terpisah:
-    # jumlahnya tidak boleh menyusut dan keempat kasus tetap lengkap.
-    sesudah_counts = _origin_counts()
-    sebelum_keputusan = before_counts.pop("decisions", None)
-    sesudah_keputusan = sesudah_counts.pop("decisions", None)
-    # `batches` dikecualikan dari perbandingan ketat: "Segarkan ke hari ini"
-    # memang MENYEMAI ULANG aktivitas demo (40 batch `origin='demo'`) — saat
-    # fixture tes mem-purge baris demo lebih dulu, jumlahnya sah berubah dari 0
-    # menjadi 40. Invariant yang dijaga tetap: batch kanonik tidak menyusut dan
-    # tidak ada batch ganda (diperiksa di dalam blok try di atas).
-    before_counts.pop("batches", None)
-    sesudah_counts.pop("batches", None)
-    # Bila tes lain sudah mem-purge deret demo SEBELUM tes ini mulai, keadaan
-    # awal = "tanpa deret demo"; rollback resmi memang membangunnya kembali
-    # (begitu kontraknya) — dan mem-purge di akhir akan mengosongkan DB untuk
-    # tes berikutnya (pernah terjadi: `supply_records` demo 5160 → 0 lalu agenda
-    # 2 Okt kehilangan pasokan). Karena itu deret demo TIDAK dibandingkan angka
-    # per origin: rollback membangunnya pada jangkar kanonik (8 Okt), sedangkan
-    # "Segarkan ke hari ini" membangunnya pada jangkar HARI INI — panjang jendela
-    # ikut bergeser, jadi harga 5.850/menu 520 (sebelum) vs harga 5.760/menu 590
-    # (sesudah) adalah keadaan yang benar, bukan data hilang. Yang dijaga:
-    # pasokan demo utuh, deret dibangun ulang (bukan kosong), dan tanpa baris ganda.
-    assert sesudah_counts["supply_records"]["demo"] == 5160, "pasokan demo utuh"
-    assert sesudah_counts["price_signals"]["demo"] > 0, "deret harga dibangun ulang"
-    assert sesudah_counts["menu_plans"]["demo"] > 0, "rencana menu dibangun ulang"
-    assert _menu_duplikat() == 0, "rollback meninggalkan rencana menu ganda"
-    # Baris KANONIK: rollback memakai jalur resmi (purge demo → buang generasi
-    # seed di luar kanonik → seeder kanonik), jadi sesudah tes selalu TEPAT satu
-    # generasi kanonik = 40 baris pasokan (10 lokasi × 4 komoditas) di REF 8 Okt.
-    # Keadaan SEBELUM bisa memuat lebih dari satu generasi: template/sesi demo
-    # dan "Segarkan ke hari ini" masing-masing menulis generasi ber-REF sendiri
-    # (`load_seed` memakai REF di dalam id), dan itulah yang dulu membuat
-    # perbandingan angka seed merah padahal tidak ada data yang rusak.
-    assert sesudah_counts["supply_records"]["seed"] == 40, "satu generasi kanonik"
-    assert _seed_supply_terbaru()[0].startswith("2026-10-08"), "REF kembali ke kanonik"
-    if sebelum_keputusan and sesudah_keputusan:
-        assert sesudah_keputusan["demo"] >= sebelum_keputusan["demo"]
-        assert _jumlah_kasus_demo() == 4
-    kembali = demo_state.get("/supply/Cianjur/telur", headers=monitor_headers).json()
-    assert kembali["recorded_at"] == awal["recorded_at"]
-    assert _seed_supply_terbaru()[1] == 1400.0
-
-
-# ---------------------------------------------------------------------------
-# "Segarkan ke hari ini" juga menyinkronkan rute jalan.
-#
-# Alasannya nyata (temuan 17 Okt 2026): seeder memindahkan tanggal kiriman ke
-# hari ini, tetapi pasangan pemasok→tujuan yang BELUM ada di cache `road_routes`
-# hanya punya geometri kalau disinkronkan. Sebelum perbaikan ini, kiriman baru
-# punya data tetapi tidak punya garis — peta menulis "belum disinkronkan"
-# padahal jalannya bisa diambil. Dua tes di bawah mengunci kontraknya tanpa
-# menyentuh jaringan: sinkronisasi dipalsukan.
-# ---------------------------------------------------------------------------
-
+    # Demo: kiriman dan deret hari ini ada, tanpa baris ganda.
+    assert _batch_duplikat() == 0, "refresh meninggalkan batch kembar"
+    assert _origin_counts()["price_signals"]["demo"] > 0
+    assert _menu_duplikat() == 0
 
 def test_refresh_menyinkronkan_rute_kiriman(
     demo_state, auth_headers, monkeypatch

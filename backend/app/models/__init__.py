@@ -3,9 +3,10 @@
 from app.models.batches import Batch
 from app.models.commodities import Commodity
 from app.models.decisions import AgentTrace, Approval, Decision, DecisionEvidence
-from app.models.demo_sessions import DemoSession
 from app.models.demand_records import DemandRecord
+from app.models.demo_sessions import DemoSession
 from app.models.kpi_facts import DeliveryEvent, DisposalEvent, MenuPlan
+from app.models.ledger import LedgerBlock, LedgerMeta
 from app.models.locations import Location
 from app.models.price_signals import PriceSignal
 from app.models.receipts import BatchReceipt
@@ -38,4 +39,6 @@ __all__ = [
     "MenuPlan",
     "DeliveryEvent",
     "DisposalEvent",
+    "LedgerBlock",
+    "LedgerMeta",
 ]

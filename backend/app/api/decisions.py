@@ -18,7 +18,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import get_current_user
 from app.api.dependencies import get_db
 from app.core.scope import apply_location_scope, assert_in_scope
-from app.models import AgentTrace, Commodity, Decision, Location, Supplier, User
+from app.core.window import window_start
+from app.models import (
+    AgentTrace,
+    Commodity,
+    Decision,
+    DecisionEvidence,
+    Location,
+    Supplier,
+    User,
+)
 from app.services.approval_summary import build_approval_summary
 
 router = APIRouter()
@@ -173,6 +182,13 @@ async def create_decision(
 async def list_decisions(
     limit: int | None = Query(default=None, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    window: Literal["24h", "7d", "30d"] | None = Query(
+        default=None,
+        description=(
+            "Jendela waktu menurut `created_at`: 24h (hari ini), 7d, 30d "
+            "(bulan berjalan WIB). Tanpa parameter = seluruh riwayat."
+        ),
+    ),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -192,6 +208,12 @@ async def list_decisions(
         Decision.target_location_id,
         user,
     )
+    # Jendela waktu (permintaan pemilik 24 Okt 2026): feed bisa dipersempit ke
+    # hari ini / 7 hari / bulan berjalan. `total` ikut jendela supaya angka di
+    # layar dan jumlah baris yang bisa dicapai tidak bertentangan.
+    awal = window_start(window)
+    if awal is not None:
+        dasar = dasar.where(Decision.created_at >= awal)
     total = int(
         (
             await db.execute(select(func.count()).select_from(dasar.order_by(None).subquery()))
@@ -223,8 +245,74 @@ async def list_decisions(
         )
 
     items = []
+    # Identitas pengirim (permintaan pemilik 24 Okt 2026): kartu di layar hanya
+    # memperlihatkan WILAYAH, sehingga pengguna tidak tahu siapa yang mengirim —
+    # pemasok atau SPPG lain. Nama pemasok diambil dari `decisions.supplier_id`;
+    # untuk baris lama yang kolomnya kosong dipakai `supplier_id` di payload
+    # bukti (satu-satunya jejak yang memang tersimpan). Tidak ada tebakan: kalau
+    # dua-duanya kosong, `pengirim` = None dan UI menulis apa adanya.
+    nama_pemasok: dict = {}
+    target_nama: dict = {}
+    dari_bukti: dict = {}
+    jenis = {row.id: row.decision_type for row in rows}
+    if ids:
+        for decision_id, payload in (
+            await db.execute(
+                select(DecisionEvidence.decision_id, DecisionEvidence.payload)
+                .where(DecisionEvidence.decision_id.in_(ids))
+                .order_by(DecisionEvidence.recorded_at.desc())
+            )
+        ).all():
+            if decision_id in dari_bukti:
+                continue
+            sid = (payload or {}).get("supplier_id")
+            if sid:
+                try:
+                    # Kunci peta = UUID keputusan; nilainya juga UUID supaya
+                    # pencocokan nama pemasok tidak bergantung pada string.
+                    dari_bukti[decision_id] = UUID(str(sid))
+                except (ValueError, TypeError):
+                    continue
+        kandidat: set = {row.supplier_id for row in rows if row.supplier_id}
+        for sid in dari_bukti.values():
+            try:
+                kandidat.add(UUID(str(sid)))
+            except (ValueError, TypeError):
+                continue
+        if kandidat:
+            nama_pemasok = {
+                sid: nama
+                for sid, nama in (
+                    await db.execute(
+                        select(Supplier.id, Supplier.name).where(Supplier.id.in_(kandidat))
+                    )
+                ).all()
+            }
+        target_ids = {row.target_location_id for row in rows if row.target_location_id}
+        if target_ids:
+            target_nama = {
+                loc_id: nama
+                for loc_id, nama in (
+                    await db.execute(
+                        select(Location.id, Location.name).where(Location.id.in_(target_ids))
+                    )
+                ).all()
+            }
+
     for row in rows:
         validity = _validity(row.expires_at)
+        sid = row.supplier_id or dari_bukti.get(row.id)
+        # "antar_sppg" hanya untuk jenis yang memang memindahkan stok antar
+        # lokasi; selain itu None (tidak diketahui) — bukan tebakan.
+        pengirim = (
+            "pemasok"
+            if sid
+            else (
+                "antar_sppg"
+                if jenis.get(row.id) in ("regional_balance", "surplus_redistribution")
+                else None
+            )
+        )
         items.append(
             {
                 "decision_id": str(row.id),
@@ -249,6 +337,13 @@ async def list_decisions(
                 "verifier_note": row.verifier_note,
                 # True hanya bila ada baris trace worker (agent_name terisi).
                 "has_agent_review": row.id in dengan_review,
+                # Identitas pengirim + tujuan (24 Okt 2026). `pengirim`:
+                # "pemasok" | "antar_sppg" | None (tidak diketahui) — UI tidak
+                # boleh menebak, jadi nilai null ditulis apa adanya.
+                "supplier_id": (str(sid) if sid else None),
+                "supplier_name": (nama_pemasok.get(sid) if sid else None),
+                "pengirim": pengirim,
+                "target_location_name": target_nama.get(row.target_location_id),
             }
         )
     return {

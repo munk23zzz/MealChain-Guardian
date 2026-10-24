@@ -144,10 +144,10 @@ export function DemoProof({
           </div>
           <p className="dc-line dc-line--muted">
             {running
-              ? "Putaran baru sedang berjalan — ketujuh kartu menyala sampai review menutup putaran."
+              ? "Putaran baru sedang berjalan — kedelapan kartu menyala sampai review menutup putaran."
               : run.agents_run_id
                 ? "Status dibaca dari baris review yang tersimpan, bukan dari langkah pipeline."
-                : "Review 7 agen belum pernah tercatat untuk keputusan ini."}
+                : "Review 8 agen belum pernah tercatat untuk keputusan ini."}
           </p>
         </>
       )}

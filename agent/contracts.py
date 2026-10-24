@@ -1,4 +1,4 @@
-"""Kontrak data tujuh worker agent — belum memanggil model atau API.
+"""Kontrak data delapan agent (tujuh worker + verifier) — belum memanggil model.
 
 Aturan penting:
 - `null` berarti data tidak tersedia; `0` adalah nilai nyata.
@@ -23,6 +23,9 @@ class AgentName(str, Enum):
     PRICE = "price"
     LOGISTICS = "logistics"
     EVIDENCE = "evidence"
+    # Agent audit (23 Okt 2026): berjalan SETELAH supervisor menarasikan, tidak
+    # ikut dinilai oleh narasi itu sendiri. Menghitung sebagai agent ke-8.
+    VERIFIER = "verifier"
 
 
 class Stage(str, Enum):
@@ -54,6 +57,13 @@ class RunStatus(str, Enum):
 
 GUARDIAN_AGENTS = frozenset(
     {AgentName.SAFETY, AgentName.FRESHNESS, AgentName.EVIDENCE}
+)
+
+#: Tujuh worker ANALITIK (semua agent kecuali auditor). Kelengkapan review,
+#: status run, narasi, dan veto dihitung dari himpunan ini. `VERIFIER` sengaja
+#: di luar: ia mengaudit hasil, bukan ikut menentukan hasil.
+ANALYST_AGENTS = frozenset(
+    name for name in AgentName if name is not AgentName.VERIFIER
 )
 
 
@@ -173,7 +183,7 @@ class VerifyResult(BaseModel):
 
 
 class AgentRun(BaseModel):
-    """Satu putaran review tujuh worker; bukan keputusan dan bukan approval."""
+    """Satu putaran review tujuh worker + verifier; bukan keputusan/approval."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -188,16 +198,24 @@ class AgentRun(BaseModel):
     # Hasil gerbang verifikasi deterministik (dijalankan SETELAH supervisor).
     # None berarti belum diverifikasi, bukan berarti lolos.
     verification: VerifyResult | None = None
+    # Temuan agent verifier (agent ke-8). Dipisahkan dari `findings` supaya
+    # status run, narasi, dan veto tetap dihitung dari tujuh worker analitik —
+    # auditor tidak boleh mengubah hasil yang diauditnya.
+    verifier_finding: AgentFinding | None = None
     total_latency_ms: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def _validate_seven_unique_agents_and_veto(self) -> AgentRun:
         names = [finding.agent for finding in self.findings]
-        if len(set(names)) != len(AgentName):
-            raise ValueError("findings harus berisi tepat tujuh agent unik")
-        if set(names) != set(AgentName):
-            missing = set(AgentName) - set(names)
+        if len(set(names)) != len(ANALYST_AGENTS):
+            raise ValueError("findings harus berisi tepat tujuh agent analitik unik")
+        if set(names) != set(ANALYST_AGENTS):
+            missing = set(ANALYST_AGENTS) - set(names)
             raise ValueError(f"agent belum lengkap: {sorted(a.value for a in missing)}")
+        if self.verifier_finding is not None and (
+            self.verifier_finding.agent is not AgentName.VERIFIER
+        ):
+            raise ValueError("verifier_finding harus berasal dari agent verifier")
 
         actual_veto = any(
             finding.blocking

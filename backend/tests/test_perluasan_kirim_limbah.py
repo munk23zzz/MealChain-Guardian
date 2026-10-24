@@ -10,9 +10,10 @@ masih mati di jendela pendek karena `delivery_events` (1–7 Okt) dan
 
 Kontrak yang dikunci di sini:
 
-1. Generator menulis baris demo (`origin='demo'`) untuk SETIAP hari rencana
-   8 Okt–5 Nov pada 10 lokasi — satu kiriman per rencana, dua catatan limbah
-   per hari.
+1. Generator menulis baris demo (`origin='demo'`) untuk setiap hari rencana
+   8 Okt–5 Nov pada 10 lokasi — satu kiriman per rencana YANG SUDAH BERJALAN
+   (tanggal setelah hari ini tidak dikirim, lihat N1), dua catatan limbah per
+   hari.
 2. Baris KANONIK (1–7 Okt) tidak tersentuh: jumlah dan porsinya tetap.
 3. Purge membuang HANYA baris demo pada kedua tabel.
 4. Efeknya di permukaan: KPI jendela 7 hari berisi Meal Continuity (>0) dan
@@ -21,7 +22,7 @@ Kontrak yang dikunci di sini:
 """
 
 import asyncio
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -40,6 +41,9 @@ DB_URL = DSN_SYNC
 HARI_PERTAMA_DEMO = date(2026, 10, 8)
 #: ujung rencana menu (DEFAULT_END = 5 Nov, jam 00:00)
 HARI_TERAKHIR_DEMO = date(2026, 11, 5)
+#: zona WIB + jam kirim yang dipakai generator (14:00 UTC = 21:00 WIB)
+WIB = timezone(timedelta(hours=7))
+JAM_KIRIM_UTC = 14
 
 
 def _q(sql: str, **param):
@@ -91,35 +95,57 @@ def deret_terbangun():
     asyncio.run(generate_timeseries(DEFAULT_START, DEFAULT_END, interval_hours=12))
 
 
-def test_kiriman_demo_menutup_seluruh_hari_rencana():
-    """Satu kiriman per rencana, 8 Okt–5 Nov, 10 lokasi tiap hari."""
+def test_kiriman_demo_hanya_untuk_hari_yang_sudah_berjalan():
+    """Satu kiriman per rencana yang SUDAH terjadi; hari ke depan tidak dikirim.
+
+    Audit ulang 24 Okt 2026 (N1): kiriman berstatus `delivered` untuk tanggal
+    ke depan membuat Meal Continuity tampil 100% padahal barang belum berangkat.
+    Kontrak baru: setiap hari rencana yang jam kirimnya (21:00 WIB) sudah lewat
+    punya tepat satu kiriman per lokasi, dan tidak ada kiriman untuk hari
+    setelah hari ini.
+    """
     hari = _hari_rencana()
     assert hari[0] == HARI_PERTAMA_DEMO.isoformat()
     assert hari[-1] == HARI_TERAKHIR_DEMO.isoformat()
+
+    sekarang = datetime.now(UTC)
+    hari_ini_wib = sekarang.astimezone(WIB).date()
+    batas = hari_ini_wib
+    if sekarang < datetime(hari_ini_wib.year, hari_ini_wib.month, hari_ini_wib.day,
+                          JAM_KIRIM_UTC, tzinfo=UTC):
+        batas = hari_ini_wib - timedelta(days=1)
+    harapan = [h for h in hari if date.fromisoformat(h) <= batas]
+    assert harapan, "minimal satu hari rencana sudah berjalan"
 
     baris = _q(
         "SELECT count(*), count(DISTINCT mp.plan_date), count(DISTINCT mp.location_id) "
         "FROM delivery_events de JOIN menu_plans mp ON mp.id = de.menu_plan_id "
         "WHERE mp.plan_date >= :a AND mp.plan_date <= :b",
-        a=HARI_PERTAMA_DEMO,
-        b=HARI_TERAKHIR_DEMO,
+        a=date.fromisoformat(harapan[0]),
+        b=batas,
     )
     # Dihitung dari SEMUA origin: seeder lain bisa saja menulis baris kanonik pada
-    # hari yang sama. Yang dijaga generator ini adalah "tiap hari rencana punya
-    # tepat satu kiriman per lokasi", bukan "semua barisnya milik demo".
+    # hari yang sama. Yang dijaga generator ini adalah "tiap hari yang sudah
+    # berjalan punya tepat satu kiriman per lokasi", bukan "semua baris milik demo".
     jumlah, hari_tertutup, lokasi = (int(x) for x in baris[0])
-    assert hari_tertutup == len(hari), "setiap hari rencana harus punya kiriman"
+    assert hari_tertutup == len(harapan), "setiap hari yang sudah berjalan harus punya kiriman"
     assert lokasi == 10, "seluruh lokasi demo ikut"
-    assert jumlah == len(hari) * 10, f"harusnya {len(hari) * 10} kiriman, dapat {jumlah}"
+    assert jumlah == len(harapan) * 10, f"harusnya {len(harapan) * 10} kiriman, dapat {jumlah}"
 
-    # Tidak ada kiriman demo di luar rentang rencana.
+    # Tidak ada kiriman demo di masa depan (N1) dan tidak ada di luar rentang rencana.
     liar = _q(
+        "SELECT count(*) FROM delivery_events de JOIN menu_plans mp ON mp.id = de.menu_plan_id "
+        "WHERE de.origin = 'demo' AND mp.plan_date > :batas",
+        batas=batas,
+    )
+    assert int(liar[0][0]) == 0, "kiriman bertanggal setelah hari ini tidak boleh ada"
+    luar = _q(
         "SELECT count(*) FROM delivery_events de JOIN menu_plans mp ON mp.id = de.menu_plan_id "
         "WHERE de.origin = 'demo' AND (mp.plan_date < :a OR mp.plan_date > :b)",
         a=HARI_PERTAMA_DEMO,
         b=HARI_TERAKHIR_DEMO,
     )
-    assert int(liar[0][0]) == 0
+    assert int(luar[0][0]) == 0, "tidak ada kiriman demo di luar rentang rencana"
 
 
 def test_kiriman_tidak_nol_dan_tidak_melebihi_rencana():
@@ -245,7 +271,9 @@ def test_agenda_hari_setelah_kanonik_punya_kiriman_dan_limbah(client, monitor_he
 
     luar = client.get(
         "/agenda",
-        params={"start": "2026-11-06", "end": "2026-11-06"},
+        # 7 Nov, bukan 6 Nov: deret berakhir 5 Nov 00.00 UTC + margin 1 hari,
+        # jadi 6 Nov WIB masih terisi beberapa jam pertama.
+        params={"start": "2026-11-07", "end": "2026-11-07"},
         headers=monitor_headers,
     )
     assert luar.status_code == 200, luar.text

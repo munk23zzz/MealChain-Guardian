@@ -57,8 +57,14 @@ def test_reconciliation_preserves_row_counts():
             # (`origin='demo'`, lihat app/seed/timeseries.py). Kontrak
             # rekonsiliasi ini soal baris KANONIK hasil seed, jadi dihitung
             # dengan `origin='seed'` — bukan lagi count(*) seluruh tabel.
+            # Sejak migrasi 029 baris hasil AKSI (kutipan dari PO terbit) juga
+            # ber-origin 'seed' di luar sesi demo, jadi dibedakan lewat
+            # `source_ref IS NULL`.
             prices = conn.execute(
-                text("SELECT count(*) FROM price_signals WHERE origin='seed'")
+                text(
+                    "SELECT count(*) FROM price_signals "
+                    "WHERE origin='seed' AND source_ref IS NULL"
+                )
             ).scalar()
             suppliers = conn.execute(
                 text("SELECT count(*) FROM suppliers")
@@ -66,13 +72,13 @@ def test_reconciliation_preserves_row_counts():
             refs = conn.execute(
                 text(
                     "SELECT count(*) FROM price_signals "
-                    "WHERE source='pihps_reference' AND origin='seed'"
+                    "WHERE source='pihps_reference' AND origin='seed' AND source_ref IS NULL"
                 )
             ).scalar()
             quotes = conn.execute(
                 text(
                     "SELECT count(*) FROM price_signals "
-                    "WHERE source='supplier_quote' AND origin='seed'"
+                    "WHERE source='supplier_quote' AND origin='seed' AND source_ref IS NULL"
                 )
             ).scalar()
         # Angka TURUNAN dari berkas seed, bukan konstanta: dataset 19 Okt 2026

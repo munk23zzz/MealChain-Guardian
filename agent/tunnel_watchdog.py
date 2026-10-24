@@ -10,6 +10,8 @@ Cara kerja:
   1. jalankan cloudflared sebagai anak proses, baca URL dari keluarannya
   2. bila URL berbeda dari yang tercatat, panggil `agent/set_runtime_env.py`
      (menunggu runtime READY, bukan sekadar "update dikirim")
+  2b. arahkan aplikasi Joule di Cloud Foundry ke URL yang sama (`cf set-env` +
+     `cf restage`), supaya chat dan agent tidak menunjuk tunnel berbeda
   3. verifikasi `/health` pada URL itu benar-benar 200 dari luar
   4. bila cloudflared mati, ulangi — URL baru otomatis disinkronkan lagi
 
@@ -20,8 +22,11 @@ Jalankan:  python agent/tunnel_watchdog.py            (loop, untuk service/task)
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -33,6 +38,8 @@ ROOT = Path(__file__).resolve().parent.parent
 STATE = ROOT / "agent" / ".tunnel_state.json"
 CLOUDFLARED = Path(r"C:/Program Files (x86)/cloudflared/cloudflared.exe")
 BACKEND = "http://localhost:8000"
+#: Aplikasi Joule di Cloud Foundry yang juga memakai URL tunnel ini.
+CF_APP = "mealchain-joule-bridge-4sehat3trio"
 URL_RE = re.compile(r"https://[a-z0-9][a-z0-9-]*\.trycloudflare\.com")
 
 
@@ -119,6 +126,43 @@ def sinkron(url: str, timeout_runtime: int = 300) -> bool:
     return ok
 
 
+def sinkron_aplikasi_cf(url: str) -> bool:
+    """Arahkan aplikasi Joule (Cloud Foundry) ke URL backend yang SAMA.
+
+    Tanpa langkah ini, dua penjalan bisa menunjuk tunnel berbeda: agent hidup
+    tapi chat mati (atau sebaliknya). Sinkronisasi ini bagian dari tugas
+    watchdog, bukan pekerjaan manual setelah tunnel berubah.
+    """
+    if shutil.which("cf") is None:
+        print("[watchdog] cf CLI tidak ada; aplikasi CF tidak disinkronkan", flush=True)
+        return False
+    try:
+        setenv = subprocess.run(
+            # `cf set-env` menuntut tiga argumen posisi (APP, KEY, VALUE);
+            # bentuk "KEY=VALUE" ditolak dengan "ENV_VAR_VALUE was not provided".
+            ["cf", "set-env", CF_APP, "MEALCHAIN_API_URL", url],
+            capture_output=True, text=True, timeout=240,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(f"[watchdog] cf set-env gagal: {type(exc).__name__}", flush=True)
+        return False
+    if setenv.returncode != 0:
+        print("[watchdog] cf set-env GAGAL", flush=True)
+        for baris in ((setenv.stdout or "") + (setenv.stderr or "")).strip().splitlines()[-3:]:
+            print(f"[watchdog]   {baris}", flush=True)
+        return False
+    try:
+        restage = subprocess.run(
+            ["cf", "restage", CF_APP], capture_output=True, text=True, timeout=900,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(f"[watchdog] cf restage gagal: {type(exc).__name__}", flush=True)
+        return False
+    ok = restage.returncode == 0
+    print(f"[watchdog] aplikasi CF {'disinkronkan' if ok else 'GAGAL di-restage'}: {CF_APP}", flush=True)
+    return ok
+
+
 def jalankan_tunnel() -> subprocess.Popen[str]:
     return subprocess.Popen(
         [str(CLOUDFLARED), "tunnel", "--url", BACKEND],
@@ -129,7 +173,53 @@ def jalankan_tunnel() -> subprocess.Popen[str]:
     )
 
 
+PID_FILE = ROOT / "agent" / ".tunnel_watchdog.pid"
+
+
+def _proses_hidup(pid: int) -> bool:
+    """True bila PID itu masih ada (Windows: tasklist; POSIX: os.kill 0)."""
+    if pid <= 0:
+        return False
+    if sys.platform.startswith("win"):
+        hasil = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+            capture_output=True, text=True,
+        )
+        return str(pid) in (hasil.stdout or "")
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def sudah_ada_instance() -> int | None:
+    """Cegah dua watchdog: dua instance = dua tunnel = URL saling menimpa.
+
+    Tanpa penjaga ini, menjalankan watchdog dari terminal saat task logon juga
+    aktif membuat runtime diarahkan bergantian ke dua tunnel yang berbeda.
+    """
+    try:
+        pid = int(PID_FILE.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
+    return pid if _proses_hidup(pid) else None
+
+
+def _hapus_pid() -> None:
+    try:
+        PID_FILE.unlink()
+    except OSError:
+        pass
+
+
 def main_loop() -> int:
+    lain = sudah_ada_instance()
+    if lain is not None:
+        print(f"[watchdog] sudah berjalan (pid {lain}); instance ini berhenti", flush=True)
+        return 0
+    PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+    atexit.register(_hapus_pid)
     state = baca_state()
     while True:
         print("[watchdog] menjalankan cloudflared…", flush=True)
@@ -147,6 +237,7 @@ def main_loop() -> int:
                     if sinkron(url):
                         state = {"url": url, "synced_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
                         tulis_state(state)
+                        sinkron_aplikasi_cf(url)
                         if not panaskan_runtime():
                             print("[watchdog] pemanasan gagal: agent belum bisa memanggil backend", flush=True)
                     else:

@@ -1,4 +1,4 @@
-"""Kumpulan tujuh worker; P1 hanya stub, belum ada model/API."""
+"""Kumpulan agent worker: tujuh analitik + verifier; P1 hanya stub, tanpa model."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from .logistics import LogisticsWorker
 from .price import PriceWorker
 from .safety import SafetyWorker
 from .supply import SupplyWorker
+from .verifier import VerifierWorker
 
 WORKER_CLASSES = (
     SupplyWorker,
@@ -22,10 +23,15 @@ WORKER_CLASSES = (
     PriceWorker,
     LogisticsWorker,
     EvidenceWorker,
+    VerifierWorker,
 )
 
 WORKERS: tuple[StubWorker, ...] = tuple(worker_class() for worker_class in WORKER_CLASSES)
-STUB_WORKERS: tuple[StubWorker, ...] = tuple(StubWorker(name) for name in AgentName)
+# Stub tetap tujuh analitik: auditor tidak boleh disamakan dengan worker yang
+# membaca data (stub tidak punya hasil audit untuk dinilai).
+STUB_WORKERS: tuple[StubWorker, ...] = tuple(
+    StubWorker(name) for name in AgentName if name is not AgentName.VERIFIER
+)
 
 
 def build_workers() -> list[StubWorker]:

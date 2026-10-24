@@ -40,13 +40,15 @@ SUPPLY_STATUS_LABEL = {
 }
 SAFETY_LABEL = {
     "pass": "lolos",
-    "fail": "GAGAL",
+    "fail": "gagal",
     "needs_verification": "perlu verifikasi",
+    "pending": "menunggu pemeriksaan",
     # Nilai huruf besar dari backend versi lama tetap dikenali supaya laporan tidak
     # menampilkan istilah API mentah.
     "PASS": "lolos",
-    "FAIL": "GAGAL",
+    "FAIL": "gagal",
     "NEEDS_VERIFICATION": "perlu verifikasi",
+    "PENDING": "menunggu pemeriksaan",
 }
 DECISION_TYPE_LABEL = {
     "regional_balance": "penyeimbangan wilayah",
@@ -155,10 +157,29 @@ def _footnote(lines: Sequence[str | None]) -> str:
     return "\n".join(f"_{line}_" for line in lines if line)
 
 
-def _cap(rows: Sequence[Any], limit: int) -> tuple[list[Any], str | None]:
-    """Batasi jumlah baris dan kembalikan catatan sisa — supaya tidak ada yang disembunyikan."""
+def short_id(nilai: Any) -> str:
+    """Rujukan pendek (8 karakter) untuk id panjang di tabel chat.
+
+    Jembatan tetap menerima id utuh MAUPUN potongan ini saat pengguna menyebutnya
+    (`server._resolve_id`), jadi kolom tidak perlu menampung 36 karakter per baris.
+    """
+    teks = str(nilai or "").strip()
+    if not teks or teks == "None":
+        return MISSING
+    return teks[:8]
+
+
+def _cap(
+    rows: Sequence[Any], limit: int, *, konteks: str | None = None
+) -> tuple[list[Any], str | None]:
+    """Batasi jumlah baris dan sebutkan sisanya — supaya tidak ada yang disembunyikan.
+
+    Catatan sisa memakai kalimat biasa ("menampilkan 12 dari 40 baris"), bukan jargon
+    endpoint: pembacanya manajer SPPG, bukan pemanggil API.
+    """
     if limit and limit > 0 and len(rows) > limit:
-        return list(rows[:limit]), f"{len(rows) - limit} baris lain tidak ditampilkan."
+        awalan = f"{konteks}: " if konteks else ""
+        return list(rows[:limit]), f"{awalan}Menampilkan {limit} dari {len(rows)} baris."
     return list(rows), None
 
 
@@ -171,6 +192,7 @@ def supply_report(
     *,
     limit: int = 12,
     note: str | None = None,
+    pasangan: Mapping[str, Any] | None = None,
 ) -> str:
     """Situasi pasokan: keseimbangan per lokasi (`/balance/map`) + inventaris batch (`/batches`).
 
@@ -178,6 +200,10 @@ def supply_report(
     (lokasi, komoditas), sedangkan keamanan & kesegaran melekat pada batch. Menggabungkannya
     berarti perender ini harus memilih satu nilai agregat — itu perhitungan, dan perhitungan
     bukan tugasnya.
+
+    `pasangan` diisi pemanggil ketika pertanyaan menyebut tepat satu SPPG dan satu komoditas
+    (mis. "berapa stok telur di Bandung?"). Kalimat pertama laporan lalu menjawab pasangan itu
+    langsung, bukan menyodorkan 40 baris untuk dibaca sendiri.
     """
     batch_rows = list(batches or ())
     balance_by_commodity = balance or {}
@@ -187,7 +213,7 @@ def supply_report(
         payload = balance_by_commodity[commodity] or {}
         commodity_name = payload.get("commodity") or commodity
         for row in payload.get("locations") or ():
-            status = str(row.get("status") or "")
+            status = str(row.get("status") or "").lower()
             location = _text(row.get("location"))
             shortage = row.get("shortage_kg")
             surplus = row.get("surplus_kg")
@@ -217,18 +243,50 @@ def supply_report(
 
     if not balance_rows and not batch_rows:
         return (
-            "Belum ada data pasokan yang dikirim backend MealChain.\n\n"
-            + _footnote([note or "sumber: GET /batches + GET /balance/map"])
+            "Belum ada data pasokan yang tercatat di MealChain Guardian untuk saringan ini."
+            "\n\n" + _footnote([note])
         )
 
     bagian: list[str] = []
     sisa: list[str] = []
 
     if balance_rows:
-        tampil, catatan_sisa = _cap(balance_rows, limit)
+        kurang = sum(1 for rank, _, _ in balance_rows if rank == 0)
+        lebih = sum(1 for rank, _, _ in balance_rows if rank == 2)
+        seimbang = len(balance_rows) - kurang - lebih
+        tampil, catatan_sisa = _cap(balance_rows, limit, konteks="Tabel pasokan")
+
+        kalimat = ""
+        if pasangan:
+            dicari = (
+                str(pasangan.get("location") or "").strip().lower(),
+                str(pasangan.get("commodity") or "").strip().lower(),
+            )
+            for _, _, row in balance_rows:
+                if (row[0].lower(), row[1].lower()) == dicari:
+                    kalimat = (
+                        f"\n\n**{row[0]} · {row[1]}** — pasokan {row[2]} dari kebutuhan "
+                        f"{row[3]}: {row[4]} ({row[5]})."
+                    )
+                    break
+
+        if pasangan and kalimat:
+            judul = (
+                f"Pasokan dan kebutuhan {_text(pasangan.get('commodity'))} "
+                f"di {_text(pasangan.get('location'))}"
+            )
+        else:
+            rincian = [f"{n} {label}" for n, label in
+                       ((kurang, "kurang"), (lebih, "lebih"), (seimbang, "seimbang")) if n]
+            judul = (
+                f"Keseimbangan pasokan per SPPG ({len(balance_rows)} pasangan "
+                f"SPPG–komoditas: {' · '.join(rincian)})"
+            )
+
         bagian.append(
-            f"Keseimbangan pasokan per lokasi ({len(balance_rows)} baris), "
-            "yang kurang ditampilkan lebih dulu:\n\n"
+            judul
+            + kalimat
+            + "\n\n"
             + _table(
                 ["SPPG", "Komoditas", "Pasokan", "Kebutuhan", "Selisih", "Status"],
                 [row for _, _, row in tampil],
@@ -247,9 +305,23 @@ def supply_report(
             )
 
         tersortir = sorted(batch_rows, key=urut_batch)
-        tampil_batch, catatan_batch = _cap(tersortir, limit)
+        tampil_batch, catatan_batch = _cap(tersortir, limit, konteks="Tabel batch")
+
+        hitung: dict[str, int] = {}
+        for row in batch_rows:
+            kunci = str(row.get("safety_status") or "").strip().lower()
+            hitung[kunci] = hitung.get(kunci, 0) + 1
+        urutan = ("fail", "needs_verification", "pending", "pass")
+        ringkas = " · ".join(
+            f"{hitung[k]} {SAFETY_LABEL.get(k, k)}" for k in urutan if hitung.get(k)
+        )
+        lain = sum(n for k, n in hitung.items() if k not in urutan)
+
         bagian.append(
-            f"Inventaris batch ({len(batch_rows)} batch):\n\n"
+            f"Inventaris batch ({len(batch_rows)} batch"
+            + (f": {ringkas}" if ringkas else "")
+            + (f" · {lain} status lain" if lain else "")
+            + "):\n\n"
             + _table(
                 ["SPPG", "Komoditas", "Jumlah", "Keamanan", "Skor kesegaran", "Boleh dipakai sampai"],
                 [
@@ -259,7 +331,7 @@ def supply_report(
                         kg(row.get("quantity_kg")),
                         SAFETY_LABEL.get(str(row.get("safety_status")), _text(row.get("safety_status"))),
                         num(row.get("freshness_score"), digits=2),
-                        _text(row.get("usable_until")),
+                        wib(row.get("usable_until")),
                     ]
                     for row in tampil_batch
                 ],
@@ -268,15 +340,80 @@ def supply_report(
         if catatan_batch:
             sisa.append(catatan_batch)
 
-    return "\n\n".join(bagian) + "\n\n" + _footnote(
+    catatan: list[str | None] = [note]
+    if batch_rows:
+        catatan.append("Skor kesegaran berskala 0–1 dari sistem MealChain: makin tinggi, makin segar.")
+    catatan.extend(sisa)
+    return "\n\n".join(bagian) + "\n\n" + _footnote(catatan)
+
+
+# --- batch bermasalah (kandidat tinjauan pembuangan) ---------------------------------------
+
+QUARANTINE_LABEL = {
+    "quarantined": "dikarantina",
+    "failed": "gagal karantina",
+    "released": "dilepas dari karantina",
+    "none": "tidak dikarantina",
+}
+
+
+def batch_disposal_report(
+    batches: Sequence[Mapping[str, Any]] | None,
+    *,
+    limit: int = 12,
+    note: str | None = None,
+) -> str:
+    """Batch yang perlu ditinjau manusia: keamanan GAGAL atau berstatus karantina/gagal karantina.
+
+    Perender ini TIDAK menyimpulkan "buang" — itu keputusan manusia (Rules.md §1.2). Yang
+    ditampilkan hanya baris yang statusnya dikirim backend, apa adanya, supaya pertanyaan
+    "batch mana yang harus dibuang?" tidak dijawab dengan tabel pasokan.
+    """
+    semua = list(batches or ())
+    kandidat = [
+        row
+        for row in semua
+        if str(row.get("safety_status") or "").lower() == "fail"
+        or str(row.get("quarantine_status") or "").lower() in {"quarantined", "failed"}
+    ]
+    if not kandidat:
+        return (
+            "Tidak ada batch yang berstatus gagal keamanan atau sedang dikarantina di "
+            f"MealChain Guardian saat ini ({len(semua)} batch diperiksa)."
+            "\n\n" + _footnote([note])
+        )
+
+    kandidat.sort(key=lambda row: (str(row.get("location") or ""), str(row.get("commodity") or "")))
+    tampil, catatan_sisa = _cap(kandidat, limit, konteks="Tabel batch")
+    rows = [
         [
-            note,
-            "Sumber angka: backend MealChain `GET /batches` + `GET /balance/map` "
-            "(dihitung modul deterministik backend, bukan oleh model bahasa).",
-            "Kesegaran ditampilkan sebagai skor mentah dari backend; ambang pita kesegaran "
-            "milik backend dan tidak ditaksir ulang di sini.",
-            *sisa,
+            _text(row.get("location")),
+            _text(row.get("commodity")),
+            kg(row.get("quantity_kg")),
+            SAFETY_LABEL.get(str(row.get("safety_status")), _text(row.get("safety_status"))),
+            num(row.get("freshness_score"), digits=2),
+            QUARANTINE_LABEL.get(str(row.get("quarantine_status") or "").lower(), _text(row.get("quarantine_status"))),
+            wib(row.get("usable_until")),
         ]
+        for row in tampil
+    ]
+
+    return (
+        f"Batch yang perlu ditinjau untuk pembuangan ({len(kandidat)} dari {len(semua)} batch):\n\n"
+        + _table(
+            ["SPPG", "Komoditas", "Jumlah", "Keamanan", "Skor kesegaran", "Karantina", "Boleh dipakai sampai"],
+            rows,
+        )
+        + "\n\n"
+        + _footnote(
+            [
+                note,
+                "Baris di atas kandidat tinjauan, bukan perintah buang: keputusan pembuangan "
+                "dilakukan manusia di UI MealChain.",
+                "Skor kesegaran berskala 0–1 dari sistem MealChain: makin tinggi, makin segar.",
+                catatan_sisa,
+            ]
+        )
     )
 
 
@@ -299,8 +436,8 @@ def supplier_directory_report(
     pemasok = list(rows or ())
     if not pemasok:
         return (
-            "Belum ada data pemasok yang dikirim backend MealChain.\n\n"
-            + _footnote([note or "sumber: GET /suppliers"])
+            "Belum ada data pemasok yang tercatat di MealChain Guardian.\n\n"
+            + _footnote([note])
         )
 
     def urut(row: Mapping[str, Any]) -> tuple[int, str, str]:
@@ -344,7 +481,7 @@ def supplier_directory_report(
         + _footnote(
             [
                 note,
-                "Sumber: backend MealChain `GET /suppliers` (baca-saja; Joule tidak menghitung ulang).",
+                "Daftar pemasok disalin dari data MealChain Guardian; Joule tidak menghitung ulang.",
                 "Pemasok tanpa baris kiriman berarti terdaftar tetapi belum/tidak sedang mengirim — "
                 "bukan nol karangan.",
                 sisa,
@@ -356,19 +493,50 @@ def supplier_directory_report(
 # --- KPI ----------------------------------------------------------------------------------
 
 
+#: Nama indikator datang dari backend dalam bahasa Inggris; chat memakai bahasa Indonesia yang
+#: sama dengan label di UI MealChain. Nama yang belum dikenal lolos apa adanya.
+KPI_NAME_LABEL = {
+    "Meal Continuity Rate": "Keberlanjutan menu",
+    "Avoidable Food Loss": "Kehilangan pangan yang bisa dicegah",
+    "Regional Imbalance Resolution Rate": "Penyelesaian ketimpangan wilayah",
+    "Safe Delivered Cost": "Biaya pengiriman aman",
+    "Procurement Price Deviation": "Simpangan harga pengadaan",
+    "Decision Time": "Waktu keputusan",
+    "Evidence Completeness": "Kelengkapan bukti",
+}
+
+#: Jenis keputusan yang belum masuk `DECISION_TYPE_LABEL` di bawah. Kode mentah (snake_case)
+#: terbaca seperti kebocoran di chat, jadi tiap kode yang pernah muncul diberi nama manusiawi.
+JENIS_TAMBAHAN = {
+    "supplier_procurement": "pengadaan pemasok",
+    "food_safety_incident": "gangguan keamanan pangan",
+    "price_anomaly": "anomali harga",
+}
+
+
+def _decision_type(nilai: Any) -> str:
+    """Jenis keputusan dalam bahasa Indonesia; kode tak dikenal dirapikan, tidak dikarang."""
+    kunci = str(nilai or "").strip()
+    if kunci in JENIS_TAMBAHAN:
+        return JENIS_TAMBAHAN[kunci]
+    if kunci in DECISION_TYPE_LABEL:
+        return DECISION_TYPE_LABEL[kunci]
+    return kunci.replace("_", " ").strip() or MISSING
+
+
 def kpi_report(envelope: Mapping[str, Any] | None, *, note: str | None = None) -> str:
     """Daftar KPI dari `/kpi`. Metrik yang tidak bisa dihitung ditampilkan `—` + alasannya."""
     metrics = list((envelope or {}).get("metrics") or ())
     if not metrics:
         return (
-            "Belum ada metrik KPI yang dikirim backend MealChain.\n\n"
-            + _footnote([note or "sumber: GET /kpi"])
+            "Belum ada metrik KPI yang tercatat di MealChain Guardian.\n\n"
+            + _footnote([note])
         )
 
     rows: list[list[str]] = []
     belum = 0
     for metric in metrics:
-        name = _text(metric.get("name"))
+        name = _label(KPI_NAME_LABEL, metric.get("name"))
         state = str(metric.get("state") or "").strip().lower()
         if state == "available" and metric.get("value") is not None:
             rows.append([name, format_metric(metric.get("value"), metric.get("unit"))])
@@ -377,18 +545,22 @@ def kpi_report(envelope: Mapping[str, Any] | None, *, note: str | None = None) -
             rows.append([name, f"{MISSING} ({alasan})"])
             belum += 1
 
-    return (
-        f"Indikator kinerja MealChain Guardian ({len(metrics)} metrik, angka dari backend):\n\n"
-        + _table(["Indikator", "Nilai"], rows)
-        + "\n\n"
-        + _footnote(
-            [
-                note,
-                f"{belum} indikator belum bisa dihitung dan ditandai alasannya, bukan diisi nol.",
-                "Sumber: GET /kpi (jendela waktu diminta oleh jembatan).",
-            ]
-        )
+    catatan = _footnote(
+        [
+            note,
+            (
+                f"{belum} indikator belum bisa dihitung; alasannya ikut ditulis supaya "
+                "tidak terbaca nol."
+            )
+            if belum
+            else None,
+        ]
     )
+    teks = (
+        f"Indikator kinerja MealChain Guardian ({len(metrics)} indikator):\n\n"
+        + _table(["Indikator", "Nilai"], rows)
+    )
+    return f"{teks}\n\n{catatan}" if catatan else teks
 
 
 # --- antrean usulan ----------------------------------------------------------------------
@@ -399,17 +571,21 @@ def approval_queue_report(
     *,
     limit: int = 12,
     note: str | None = None,
+    total_belum: int | None = None,
 ) -> str:
     """Antrean usulan keputusan — untuk dilihat manusia, bukan disetujui agen.
 
     Baris datang dari `/decisions` yang sudah dilengkapi `/decisions/{id}/approval-summary`
     oleh klien; karena itu asal→tujuan dan komoditas sudah berupa NAMA, bukan id.
+
+    `total_belum` = jumlah usulan terbuka yang SEBENARNYA. Klien hanya melengkapi
+    `DETAIL_LIMIT` baris teratas (satu panggilan HTTP per keputusan), jadi tanpa angka ini
+    judul "12 baris" membuat 10 usulan lain seolah tidak ada.
     """
     items = list(decisions or ())
     if not items:
         return (
-            "Belum ada usulan keputusan di MealChain Guardian.\n\n"
-            + _footnote([note or "sumber: GET /decisions"])
+            "Belum ada usulan keputusan di MealChain Guardian.\n\n" + _footnote([note])
         )
 
     items.sort(
@@ -422,26 +598,35 @@ def approval_queue_report(
 
     rows = [
         [
-            _text(row.get("id")),
-            DECISION_TYPE_LABEL.get(str(row.get("decisionType")), _text(row.get("decisionType"))),
+            short_id(row.get("id")),
+            _decision_type(row.get("decisionType")),
             f"{_text(row.get('sourceLocation'))} → {_text(row.get('targetLocation'))}",
             _text(row.get("commodity")),
             kg(row.get("quantityKg")),
-            _text(row.get("status")),
+            _label(DECISION_STATUS_LABEL, row.get("status")),
         ]
         for row in tampil
     ]
     body = _table(["ID", "Jenis", "Asal → tujuan", "Komoditas", "Jumlah", "Status"], rows)
 
+    jumlah_belum = total_belum if isinstance(total_belum, int) and total_belum > 0 else len(items)
+    if jumlah_belum > len(items):
+        judul = (
+            f"Antrean usulan keputusan MealChain Guardian ({jumlah_belum} usulan terbuka, "
+            f"{len(items)} teratas ditampilkan):"
+        )
+    else:
+        judul = f"Antrean usulan keputusan MealChain Guardian ({len(items)} baris):"
+
     return (
-        f"Antrean usulan keputusan MealChain Guardian ({len(items)} baris):\n\n"
+        f"{judul}\n\n"
         f"{body}\n\n"
         + _footnote(
             [
                 note,
-                "Persetujuan TIDAK bisa dilakukan dari Joule: approver menekan Setuju di UI "
-                "MealChain dengan tokennya sendiri (Rules.md §1.2 — tidak ada auto-execute).",
-                "Sumber: GET /decisions + GET /decisions/{id}/approval-summary.",
+                "Sebut 8 karakter pertama ID untuk membuka bukti keputusannya.",
+                "Persetujuan tidak bisa dilakukan dari Joule: approver menekan Setuju di UI "
+                "MealChain dengan tokennya sendiri — tidak ada persetujuan otomatis.",
                 catatan_sisa,
             ]
         )
@@ -465,7 +650,7 @@ DECISION_STATUS_LABEL = {
     "review_only": "tinjauan saja",
 }
 ORIGIN_LABEL = {
-    "execution": "lahir dari eksekusi keputusan",
+    "execution": "dibuat dari eksekusi keputusan",
     "demo": "baris impor SAP (tanpa keputusan)",
 }
 
@@ -503,7 +688,7 @@ def _label(peta: Mapping[str, str], value: Any) -> str:
 
 def _po_detail(po: Mapping[str, Any], *, jumlah_terbaca: int, note: str | None) -> str:
     """Satu PO sebagai daftar kolom→nilai (bukan tabel selebar layar chat)."""
-    keputusan = _text(po.get("decisionId"))
+    keputusan = short_id(po.get("decisionId"))
     if keputusan != MISSING:
         keputusan = f"{keputusan} — {_label(DECISION_STATUS_LABEL, po.get('decisionStatus'))}"
     baris = [
@@ -512,7 +697,6 @@ def _po_detail(po: Mapping[str, Any], *, jumlah_terbaca: int, note: str | None) 
         ("Lokasi tujuan", _text(po.get("locationName"))),
         ("Pemasok", _text(po.get("supplierName"))),
         ("Bahan", _text(po.get("commodityName"))),
-        ("Nomor material SAP", _text(po.get("materialNumber"))),
         ("Jumlah", kg(po.get("quantityKg"))),
         ("Harga per kg", rupiah(po.get("pricePerKg"))),
         ("Total nilai", rupiah(po.get("totalValue"))),
@@ -526,9 +710,9 @@ def _po_detail(po: Mapping[str, Any], *, jumlah_terbaca: int, note: str | None) 
         + _footnote(
             [
                 note,
-                f"Sumber: GET /sap/purchase-orders (tabel mock SAP di backend) — 1 dari "
-                f"{jumlah_terbaca} PO yang terbaca akun baca ini.",
-                "Angka ditampilkan apa adanya; total nilai dihitung backend, bukan oleh jembatan.",
+                f"Diambil dari tabel purchase order SAP simulasi di MealChain Guardian — 1 dari "
+                f"{jumlah_terbaca} PO yang terbaca.",
+                "Angka ditampilkan apa adanya, tanpa hitung ulang.",
                 "Dokumen PDF PO diunduh dari UI MealChain (tab Decision & Evidence) setelah "
                 "keputusan disetujui — Joule hanya mengirim teks, tidak melampirkan berkas.",
             ]
@@ -542,8 +726,13 @@ def purchase_order_report(
     po_number: str | None = None,
     limit: int = 10,
     note: str | None = None,
+    hanya_disetujui: bool = False,
 ) -> str:
     """Daftar purchase order mock SAP, atau satu PO bila nomornya disebut.
+
+    `hanya_disetujui` dipakai saat pertanyaannya "PO mana yang sudah disetujui?": yang
+    ditampilkan hanya PO yang keputusannya sudah disetujui/dieksekusi, bukan seluruh 20 baris
+    termasuk rancangan yang tidak menjawab pertanyaan.
 
     Baris datang dari `/sap/purchase-orders` (read-only, cakupan akun `bgn_monitor` =
     nasional). Nomor PO dicocokkan PERSIS — tidak ada pencarian samar yang bisa menampilkan
@@ -560,7 +749,7 @@ def purchase_order_report(
                 + _footnote(
                     [
                         note,
-                        "Sumber: GET /sap/purchase-orders (tabel mock SAP di backend).",
+                        "Purchase order dibaca dari tabel SAP simulasi di MealChain Guardian.",
                         "Nomor yang tidak terdaftar, atau PO di luar cakupan akun baca, tidak "
                         "akan muncul di sini — bukan berarti PO-nya fiktif.",
                     ]
@@ -568,13 +757,25 @@ def purchase_order_report(
             )
         return _po_detail(cocok[0], jumlah_terbaca=len(items), note=note)
 
+    if hanya_disetujui:
+        items = [
+            row
+            for row in items
+            if str(row.get("decisionStatus") or "").lower() in {"approved", "executed"}
+        ]
+        if not items:
+            return (
+                "Belum ada purchase order yang keputusannya sudah disetujui atau dieksekusi.\n\n"
+                + _footnote([note])
+            )
+
     if not items:
         return (
             "Belum ada purchase order yang terbaca di MealChain Guardian.\n\n"
-            + _footnote([note or "sumber: GET /sap/purchase-orders"])
+            + _footnote([note])
         )
 
-    tampil, catatan_sisa = _cap(items, limit)
+    tampil, catatan_sisa = _cap(items, limit, konteks="Tabel PO")
     rows = [
         [
             _text(row.get("poNumber")),
@@ -593,15 +794,24 @@ def purchase_order_report(
         ["Nomor PO", "Status", "Lokasi tujuan", "Bahan", "Jumlah", "Total", "Keputusan"],
         rows,
     )
+    judul = (
+        f"Purchase order yang sudah disetujui atau dieksekusi ({len(items)} PO):\n\n"
+        if hanya_disetujui
+        else f"Purchase order MealChain Guardian ({len(items)} PO terbaca):\n\n"
+    )
     return (
-        f"Purchase order MealChain Guardian ({len(items)} PO terbaca):\n\n"
-        f"{body}\n\n"
+        judul
+        + f"{body}\n\n"
         + _footnote(
             [
                 note,
-                "Sumber: GET /sap/purchase-orders (tabel mock SAP di backend), urutan "
-                "terbaru lebih dulu — angka apa adanya, tanpa hitung ulang di jembatan.",
-                "Sebut satu nomor PO (mis. `PO MC-661695B2C685`) untuk melihat rinciannya.",
+                "Tabel SAP simulasi di MealChain Guardian, terbaru lebih dulu; angka apa adanya.",
+                (
+                    f"Sebut satu nomor PO (mis. `PO {_text(tampil[0].get('poNumber'))}`)"
+                    " untuk melihat rinciannya."
+                    if tampil
+                    else "Sebut satu nomor PO untuk melihat rinciannya."
+                ),
                 catatan_sisa,
             ]
         )
@@ -613,17 +823,23 @@ def purchase_order_report(
 PRICE_SOURCE_LABEL = {
     "pihps_reference": "acuan PIHPS",
     "price_signal": "sinyal harga",
-    "mock_sap": "mock SAP",
+    "mock_sap": "integrasi SAP simulasi",
+    "mock_sap_table": "integrasi SAP simulasi",
     "mock": "mock",
 }
 #: Metode prakiraan kebutuhan: label Indonesia; nilai tak dikenal tampil apa adanya.
 FORECAST_METHOD_LABEL = {
-    "statistical_fallback": "fallback statistik (model peramal tidak dipakai)",
+    "statistical_fallback": "cadangan statistik",
     "sap_rpt": "SAP-RPT-1.6",
     "sap_rpt_1_6": "SAP-RPT-1.6",
     "moving_average": "rata-rata bergerak",
 }
-EXCLUSION_STATUS_LABEL = {"active": "AKTIF", "revoked": "dicabut", "proposed": "diusulkan"}
+EXCLUSION_STATUS_LABEL = {
+    "active": "aktif",
+    "revoked": "dicabut",
+    "proposed": "diusulkan",
+    "rejected": "ditolak",
+}
 #: Kuotasi yang ditampilkan per pasangan (SPPG, komoditas) sebelum dipotong `_cap`.
 QUOTE_ROWS_PER_PAIR = 3
 
@@ -710,16 +926,14 @@ def price_report(
 
     if not bagian:
         return "Belum ada data harga yang dikirim backend MealChain.\n\n" + _footnote(
-            [note or "sumber: GET /price/{lokasi}/{komoditas}"]
+            [note]
         )
 
     return "\n\n".join(bagian) + "\n\n" + _footnote(
         [
             note,
-            "Sumber: `GET /price/…` + `GET /price/quotes/…` — harga apa adanya dari backend; "
-            "jembatan tidak menghitung termurah atau rata-rata.",
-            "Komoditas tanpa baris harga tidak diisi nol: kekosongan berarti backend belum "
-            "punya sinyal harga untuk pasangan itu.",
+            "Harga disalin apa adanya; Joule tidak menghitung termurah atau rata-rata.",
+            "Pasangan tanpa baris harga dibiarkan kosong, bukan diisi nol.",
             *sisa,
         ]
     )
@@ -742,7 +956,7 @@ def demand_report(
     data = list(rows or ())
     if not data:
         return "Belum ada data kebutuhan yang dikirim backend MealChain.\n\n" + _footnote(
-            [note or "sumber: GET /demand/{lokasi}/{komoditas}"]
+            [note]
         )
 
     urut = sorted(
@@ -779,10 +993,10 @@ def demand_report(
         + _footnote(
             [
                 note,
-                "Sumber: `GET /demand/…` + `GET /demand/forecast/…` (angka dari backend; "
-                "jembatan tidak meramal dan tidak menghitung ulang).",
-                "`fallback statistik` berarti model peramal SAP tidak dipakai untuk pasangan "
-                "itu — prakiraannya tetap angka backend, bukan tebakan jembatan.",
+                "Angka kebutuhan dan prakiraan datang dari sistem MealChain Guardian; Joule "
+                "tidak meramal dan tidak menghitung ulang.",
+                "Cadangan statistik berarti model peramal SAP tidak dipakai untuk pasangan "
+                "itu — prakiraannya tetap angka sistem, bukan tebakan Joule.",
                 sisa,
             ]
         )
@@ -802,7 +1016,7 @@ def food_loss_report(summary: Mapping[str, Any] | None, *, note: str | None = No
     data = summary or {}
     if not data:
         return "Belum ada ringkasan limbah yang dikirim backend MealChain.\n\n" + _footnote(
-            [note or "sumber: GET /waste/summary"]
+            [note]
         )
 
     periode = data.get("period") or {}
@@ -813,7 +1027,7 @@ def food_loss_report(summary: Mapping[str, Any] | None, *, note: str | None = No
         ("Dialihkan ke mitra", _kg_events(data.get("diverted"))),
         ("Tercatat tanpa mitra", _kg_events(data.get("unassigned"))),
         ("Periode", f"{wib(periode.get('start'))} – {wib(periode.get('end'))} ({_text(periode.get('days'))} hari)"),
-        ("Cakupan", f"{_text(scope.get('role'))} · {len(lokasi)} SPPG"),
+        ("Cakupan", f"{len(lokasi)} SPPG · cakupan akun Anda"),
         ("Dihitung pada", wib(data.get("computed_at"))),
     ]
     isi = "\n".join(f"- **{judul}:** {nilai}" for judul, nilai in ringkas)
@@ -835,10 +1049,9 @@ def food_loss_report(summary: Mapping[str, Any] | None, *, note: str | None = No
         + _footnote(
             [
                 note,
-                "Sumber: `GET /waste/summary` (tabel `disposal_events`) — angka dihitung "
-                "backend, jembatan hanya memformat.",
+                "Angka kehilangan pangan dihitung sistem MealChain Guardian; Joule hanya menyajikan.",
                 "Tanpa mitra artinya limbah tercatat tetapi belum dialihkan ke pengolahan — "
-                "bukan berarti dibuang; backend tidak menyimpulkan hal itu.",
+                "bukan berarti dibuang; sistem tidak menyimpulkan hal itu.",
             ]
         )
     )
@@ -916,7 +1129,9 @@ def supplier_risk_report(
                         f"{num(r.get('roadMinutes'))} menit"
                         if r.get("roadMinutes") is not None
                         else MISSING,
-                        _text(r.get("journeyState")),
+                        _text(str(r.get("journeyState") or "").replace("_", " ").capitalize())
+                        if r.get("journeyState")
+                        else MISSING,
                     ]
                     for r in tampil_rute
                 ],
@@ -928,31 +1143,27 @@ def supplier_risk_report(
         ringkasan = payload_rute.get("summary") or {}
         if ringkasan:
             keadaan = ringkasan.get("journey_states") or {}
+            rincian_keadaan = ", ".join(
+                f"{v} {str(k).replace('_', ' ')}" for k, v in keadaan.items() if v
+            )
             sisa.append(
-                "Rute dengan geometri jalan: "
-                f"{_text(ringkasan.get('with_road'))} · tanpa geometri: "
-                f"{_text(ringkasan.get('without_road'))} · cakupan: "
-                f"{_text(ringkasan.get('scope'))}"
-                + (
-                    " · keadaan perjalanan: "
-                    + ", ".join(f"{k}={v}" for k, v in keadaan.items() if v)
-                    if any(keadaan.values())
-                    else ""
-                )
+                f"{_text(ringkasan.get('with_road'))} kiriman punya rute jalan, "
+                f"{_text(ringkasan.get('without_road'))} tanpa rute jalan"
+                + (f"; perjalanan: {rincian_keadaan}" if rincian_keadaan else "")
+                + "."
             )
 
     if not bagian:
         return (
-            "Belum ada data eksklusi pemasok maupun kiriman aktif dari backend MealChain.\n\n"
-            + _footnote([note or "sumber: GET /supplier-exclusions + GET /supplier-routes"])
+            "Belum ada data eksklusi pemasok maupun kiriman aktif di MealChain Guardian.\n\n"
+            + _footnote([note])
         )
 
     return "\n\n".join(bagian) + "\n\n" + _footnote(
         [
             note,
-            "Sumber: `GET /supplier-exclusions` + `GET /supplier-routes` (jarak jalan & durasi "
-            "dari layanan rute backend, bukan taksiran jembatan).",
-            "Eksklusi berstatus AKTIF tetap ditampilkan beserta alasannya — Joule tidak "
+            "Jarak jalan dan durasi dari layanan rute MealChain Guardian, bukan taksiran Joule.",
+            "Eksklusi yang berstatus aktif tetap ditampilkan beserta alasannya — Joule tidak "
             "menyembunyikan pemasok yang dikecualikan.",
             *sisa,
         ]
@@ -992,8 +1203,8 @@ def decision_evidence_report(
     data = list(cases or ())
     if not data:
         return (
-            "Belum ada keputusan yang bisa dibuka bukti dan jejaknya.\n\n"
-            + _footnote([note or "sumber: GET /decisions + /decisions/{id}/compliance"])
+            "Permintaan bukti keputusan ini tidak bisa dilayani.\n\n"
+            + _footnote([note])
         )
 
     tampil, sisa = _cap(data, limit)
@@ -1018,19 +1229,20 @@ def decision_evidence_report(
             (
                 "Penyetuju",
                 # Nama manusia, bukan hanya peran (aditif 21 Okt 2026): pertanyaan
-                # "siapa yang menyetujui" tidak bisa dijawab dengan "sppg_head".
+                # "siapa yang menyetujui" tidak bisa dijawab dengan "sppg_head". Kalau belum
+                # ada persetujuan, itu DINYATAKAN — tanda hubung terbaca seperti data hilang.
                 ", ".join(
                     f"{_text(a.get('approved_by_name'))} ({_text(a.get('role'))})"
                     for a in approval
                     if isinstance(a, Mapping) and a.get("approved")
                 )
-                or MISSING,
+                or "belum ada persetujuan tercatat",
             ),
             ("Iterasi dalam rantai", _text(len(chain)) if chain else MISSING),
         ]
         teks_kasus = "\n".join(f"- **{judul}:** {nilai}" for judul, nilai in isi)
         blok.append(
-            f"**Keputusan {_text(case.get('id') or compliance.get('decision_id'))}**\n\n{teks_kasus}"
+            f"**Keputusan {short_id(case.get('id') or compliance.get('decision_id'))}**\n\n{teks_kasus}"
         )
         if chain:
             blok.append(
@@ -1075,8 +1287,7 @@ def decision_evidence_report(
         + _footnote(
             [
                 note,
-                "Sumber: `/decisions/{id}/compliance` + `/decisions/{id}/chain` + "
-                "`/decisions/{id}/traces` (tanda tangan dan verifikasi dihitung backend).",
+                "Tanda tangan dan verifikasi dihitung sistem MealChain Guardian.",
                 "Tanda tangan kriptografis hanya ditampilkan sebagian supaya muat di chat; "
                 "materi lengkap + berkas bukti ada di UI MealChain.",
                 sisa,
@@ -1154,14 +1365,14 @@ def system_status_report(
             for status, jumlah in per_status.items()
         )
         bagian.append(
-            "Purchase order (mock SAP):\n\n"
+            "Purchase order (SAP simulasi):\n\n"
             + "\n".join(
                 [
                     f"- **Jumlah PO:** {_text(ringkasan_po.get('count'))}",
                     f"- **Total nilai:** {rupiah(ringkasan_po.get('total_value'))}",
                     f"- **Per status:** {rincian or MISSING}",
                     f"- **Cakupan:** {_text(ringkasan_po.get('scope'))} · sumber "
-                    f"{_text(ringkasan_po.get('source'))}",
+                    f"{_label(PRICE_SOURCE_LABEL, ringkasan_po.get('source'))}",
                 ]
             )
         )
@@ -1175,18 +1386,16 @@ def system_status_report(
 
     if not bagian:
         return (
-            "Belum ada status sistem yang dikirim backend MealChain.\n\n"
-            + _footnote([note or "sumber: GET /integrations/status + GET /ledger/verify"])
+            "Belum ada status sistem yang tercatat di MealChain Guardian.\n\n" + _footnote([note])
         )
 
     return "\n\n".join(bagian) + "\n\n" + _footnote(
         [
             note,
-            "Sumber: `GET /integrations/status` + `GET /ledger/verify` + "
-            "`GET /sap/purchase-orders/summary` + `GET /admin/locations`.",
+            "Status komponen, ledger, dan PO dibaca dari sistem MealChain Guardian.",
             "Status ditampilkan apa adanya, termasuk yang belum dimulai; Joule tidak "
             "menaikkan status komponen mana pun.",
-            "Direktori pengguna (`/admin/users`) sengaja TIDAK dibuka lewat chat: baca-saja "
+            "Direktori pengguna sengaja tidak dibuka lewat chat: baca-saja "
             "bukan alasan membocorkan data pribadi ke antarmuka percakapan.",
             *sisa,
         ]
@@ -1226,12 +1435,12 @@ def receipt_report(
     data = list(receipts or ())
     if not data:
         return (
-            f"Belum ada penerimaan barang tercatat untuk batch {_text(batch_id)}.\n\n"
+            f"Belum ada penerimaan barang tercatat untuk batch {short_id(batch_id)}.\n\n"
             + _footnote(
                 [
                     note,
-                    "Sumber: GET /receipts?batch_id=… — backend mewajibkan satu batch per "
-                    "permintaan, jadi Joule tidak menarik seluruh tabel penerimaan.",
+                    "Backend mewajibkan satu batch per permintaan, jadi Joule tidak menarik "
+                    "seluruh tabel penerimaan.",
                 ]
             )
         )
@@ -1245,14 +1454,13 @@ def receipt_report(
         for row in data
     ]
     return (
-        f"Penerimaan barang untuk batch {_text(batch_id)} ({len(data)} catatan):\n\n"
+        f"Penerimaan barang untuk batch {short_id(batch_id)} ({len(data)} catatan):\n\n"
         + _table(["Dicatat", "Oleh", "Pemeriksaan", "Catatan lain"], baris)
         + "\n\n"
         + _footnote(
             [
                 note,
-                "Sumber: `GET /receipts?batch_id=…` — checklist dan catatan apa adanya dari "
-                "backend, tanpa hitung ulang.",
+                "Checklist dan catatan ditampilkan apa adanya, tanpa hitung ulang.",
             ]
         )
     )
@@ -1281,8 +1489,8 @@ def receipts_queue_report(
             + _footnote(
                 [
                     note,
-                    "Sumber: `GET /receipts/menunggu` — daftar kosong berarti setiap "
-                    "catatan penerimaan sudah diputuskan (disetujui/ditolak).",
+                    "Daftar kosong berarti setiap catatan penerimaan sudah diputuskan "
+                    "(disetujui/ditolak).",
                 ]
             )
         )
@@ -1292,7 +1500,7 @@ def receipts_queue_report(
             _text(row.get("commodity")),
             kg(row.get("quantity_kg")),
             _text(row.get("location")),
-            _text(row.get("safety_status")),
+            SAFETY_LABEL.get(str(row.get("safety_status")), _text(row.get("safety_status"))),
             _text(row.get("recorded_by_name")),
             f"{num(row.get('checked_count'), 0)}/3",
             wib(row.get("recorded_at")),
@@ -1309,9 +1517,8 @@ def receipts_queue_report(
         + _footnote(
             [
                 note,
-                "Sumber: `GET /receipts/menunggu` (satu baris per batch, catatan terbaru), "
-                "sudah di-scope ke lokasi pengguna.",
-                "Persetujuan ditulis lewat `POST /receipts/{id}/approve`; barulah stok bertambah.",
+                "Satu baris per batch, catatan terbaru; sudah dibatasi ke lokasi pengguna.",
+                "Persetujuan dilakukan di UI MealChain; setelah itu barulah stok bertambah.",
             ]
         )
     )
@@ -1335,8 +1542,7 @@ def quarantine_report(
             + _footnote(
                 [
                     note,
-                    "Sumber: `GET /batches` — kolom `quarantine_status` disaring di jembatan, "
-                    "tanpa menambah endpoint baru.",
+                    "Status karantina dibaca dari catatan batch MealChain Guardian.",
                 ]
             )
         )
@@ -1348,12 +1554,12 @@ def quarantine_report(
             _text(
                 row.get("code")
                 or row.get("batch_code")
-                or str(row.get("id") or "")[:8]
+                or short_id(row.get("id"))
             ),
             _text(row.get("commodity")),
             kg(row.get("quantity_kg")),
             _text(row.get("location")),
-            _text(row.get("safety_status")),
+            SAFETY_LABEL.get(str(row.get("safety_status")), _text(row.get("safety_status"))),
         ]
         for row in data
     ]
@@ -1364,7 +1570,8 @@ def quarantine_report(
         + _footnote(
             [
                 note,
-                "Sumber: `GET /batches` (kolom `quarantine_status`), angka apa adanya dari backend.",
+                "Sebut 8 karakter pertama ID batch untuk melihat penerimaannya.",
+                "Angka apa adanya dari catatan batch MealChain Guardian.",
             ]
         )
     )

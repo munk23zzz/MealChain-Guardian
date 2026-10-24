@@ -14,6 +14,7 @@ import pydantic
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai_providers.verifier_client import run_verifier
@@ -23,7 +24,16 @@ from app.core.approval_matrix import approval_requirement, evaluate_approvals
 from app.core.decision_validity import is_decision_valid
 from app.core.po_number import nomor_po
 from app.core.scope import assert_in_scope
-from app.models import AgentTrace, Approval, Batch, Commodity, Decision, User
+from app.models import (
+    AgentTrace,
+    Approval,
+    Batch,
+    Commodity,
+    Decision,
+    DecisionEvidence,
+    User,
+)
+from app.services import settlement
 from app.services import supplier_exclusion_service as exclusions
 from app.services.ledger_service import append_block
 
@@ -261,6 +271,57 @@ async def _verifier_ctx(
             f"Audit independen decision {decision.decision_type} " f"iterasi {decision.iteration}"
         ),
     }
+
+
+async def _dispatch_bound_batches(db: AsyncSession, decision: Decision) -> list[dict]:
+    """Eksekusi keputusan pasokan = barang BERANGKAT.
+
+    Kenapa ada (24 Okt 2026): `POST /actions/execute` dulu hanya mengubah status
+    dan menerbitkan PO — tidak ada satu pun penulis `batches.dispatched_at`.
+    Akibatnya demo "setujui pengiriman dari pemasok" berakhir di status
+    `executed` tanpa truk apa pun di peta Overview.
+
+    Batch yang dikirim = batch di `decision_evidence.payload.batch_ids` (jalur
+    yang sama dengan revalidasi safety). Hanya batch yang belum berangkat yang
+    disentuh; ETA dihitung dari `travelMin` yang sudah dipakai peta.
+    """
+    if decision.decision_type in {
+        "supplier_exclusion",
+        "supplier_exclusion_restoration",
+        "price_anomaly",
+    }:
+        return []
+
+    baris = (
+        await db.execute(
+            select(DecisionEvidence.payload).where(
+                DecisionEvidence.decision_id == decision.id
+            )
+        )
+    ).scalars().all()
+    id_batch: set[uuid.UUID] = set()
+    for payload in baris:
+        for nilai in (payload or {}).get("batch_ids") or []:
+            try:
+                id_batch.add(uuid.UUID(str(nilai)))
+            except (ValueError, TypeError):
+                continue
+    if not id_batch:
+        return []
+
+    batch = (
+        (await db.execute(select(Batch).where(Batch.id.in_(id_batch)))).scalars().all()
+    )
+    sekarang = _now_utc()
+    dikirim: list[dict] = []
+    for b in batch:
+        if b.dispatched_at is not None:
+            continue
+        b.dispatched_at = sekarang
+        if b.usable_until is None or b.usable_until < sekarang:
+            b.usable_until = sekarang + timedelta(hours=6)
+        dikirim.append({"batch_id": str(b.id), "dispatched_at": sekarang.isoformat()})
+    return dikirim
 
 
 async def _source_batches_still_safe(db: AsyncSession, decision: Decision) -> bool:
@@ -508,7 +569,13 @@ async def approve_action(
         )
     ).first()
     if existing:
-        raise HTTPException(409, "approval sudah tercatat")
+        # Four-eyes (migrasi 030): satu akun = satu keputusan per usulan. Kunci
+        # unik di DB menutup balapan dua request; pesan ini menjelaskan kenapa.
+        raise HTTPException(
+            409,
+            "approval sudah tercatat untuk akun ini — empat mata berarti approver "
+            "berbeda, bukan akun yang sama dua kali",
+        )
     # Status gate sengaja SETELAH pemeriksaan duplikat: user yang sudah
     # menyetujui keputusan berstatus `approved` harus membaca "approval sudah
     # tercatat", bukan "status approved tidak dapat di-approve" — pesan kedua
@@ -587,7 +654,16 @@ async def approve_action(
             "status": decision.status,
         },
     )
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:  # balapan dua approve bersamaan (unique 030)
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "approval untuk akun ini sudah tercatat; muat ulang lalu periksa kuorum"
+            ),
+        ) from exc
     return {
         "decision_id": str(decision.id),
         "approved_by": str(user.id),
@@ -777,6 +853,20 @@ async def execute_action(
             },
         )
     )
+    # Penulis KPI (migrasi 029): PO yang baru terbit menjadi kutipan harga
+    # pemasok, sehingga Procurement Price Deviation bergerak dari aksi nyata.
+    # Idempoten lewat `source_ref=po:<nomor>`; harga diambil dari PO apa adanya.
+    await settlement.catat_po_terbit(
+        db,
+        decision=decision,
+        po_number=po_number,
+        supplier_id=supplier_id,
+        harga_per_kg=unit_price.quantize(Decimal("0.01")),
+        sekarang=_now_utc(),
+    )
+    # Eksekusi = barang berangkat: batch terikat diberi `dispatched_at` supaya
+    # peta menampilkan truk yang benar-benar jalan setelah disetujui.
+    dikirim = await _dispatch_bound_batches(db, decision)
     # P1 Merkle ledger: eksekusi = block append-only (bukti PO terbit).
     await append_block(
         db,
@@ -798,6 +888,7 @@ async def execute_action(
         "status": "executed",
         "executed_by": str(user.id),
         "executed_at": _now_utc().isoformat(),
+        "dikirim": dikirim,
     }
 
 

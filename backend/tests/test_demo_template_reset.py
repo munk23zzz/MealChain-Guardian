@@ -3,7 +3,7 @@
 Yang dibuktikan, dari yang paling murah ke paling mahal:
 
 1. Kunci proses: permintaan kedua saat bangun-ulang masih berjalan ditolak
-   `Sibuk` — tidak diantrikan sampai klien kehabisan waktu.
+   `SibukError` — tidak diantrikan sampai klien kehabisan waktu.
 2. Argumen penyemai: `purge=True`, `freeze=True`, `bersihkan_sisa=False`.
    Tanpa `freeze` baris template ikut ber-stempel dan bisa terhapus; tanpa
    `purge` sisa aksi geladi sebelumnya menumpuk.
@@ -53,7 +53,7 @@ def test_tolak_saat_kunci_dipegang():
     async def skenario() -> str:
         await reset._KUNCI.acquire()
         try:
-            with pytest.raises(reset.Sibuk):
+            with pytest.raises(reset.SibukError):
                 await reset.bangun_ulang(db=None)  # type: ignore[arg-type]
         finally:
             reset._KUNCI.release()

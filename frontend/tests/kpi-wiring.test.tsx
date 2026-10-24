@@ -51,4 +51,12 @@ describe("wiring KPI di app/page.tsx (S4-03)", () => {
     expect(hookSrc).toMatch(/kpiLive\(scope, windowKey/);
     expect(hookSrc).not.toContain("KPI_WINDOW_MS");
   });
+
+  // 23 Okt 2026: KPI harus terasa realtime saat demo. Kontraknya dipaku di
+  // sini supaya `refetchInterval: false` tidak kembali diam-diam (dulu angka
+  // baru hanya terlihat setelah tab ditinggalkan).
+  it("hook memakai kebijakan polling KPI, bukan mematikan poll", () => {
+    expect(hookSrc).toContain("kpiQueryPolicy");
+    expect(hookSrc).not.toContain("refetchInterval: false");
+  });
 });

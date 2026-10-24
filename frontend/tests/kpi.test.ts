@@ -10,11 +10,13 @@ import { describe, expect, it } from "vitest";
 import {
   KPI_TABS,
   KPI_WINDOWS,
+  kpiQueryPolicy,
   kpiWindowRange,
   metricLabel,
   periodeBulan,
   shouldLoadKpi,
 } from "../lib/kpi";
+import { KPI_POLL_MS, QUERY_POLL_MS } from "../lib/query";
 
 describe("shouldLoadKpi", () => {
   it("memuat di tab yang benar-benar menampilkan KPI", () => {
@@ -54,6 +56,32 @@ describe("shouldLoadKpi", () => {
 // datanya ADA di database, cuma di luar 24 jam. Daftar jendela ditulis
 // eksplisit (bukan angka ajaib di dalam hook) supaya label di layar, jamnya,
 // dan rentang yang dikirim ke API tidak bisa saling menyimpang.
+describe("kebijakan muat KPI (polling demo)", () => {
+  // Permintaan pemilik 23 Okt 2026: panel KPI harus terasa realtime — angka
+  // berubah beberapa detik setelah operator menjalankan aksi, tanpa berpindah
+  // tab atau memuat ulang halaman. Sebelum ini hook memasang
+  // `refetchInterval: false` sehingga angka baru hanya terlihat setelah tab
+  // ditinggalkan/dibuka ulang.
+  it("tab yang menampilkan KPI dipoll dengan jeda demo", () => {
+    for (const tab of ["today", "kpi-kualitas"]) {
+      const policy = kpiQueryPolicy(tab);
+      expect(policy.enabled, tab).toBe(true);
+      expect(policy.staleTime, tab).toBe(0);
+      expect(policy.refetchInterval, tab).toBe(KPI_POLL_MS);
+      expect(KPI_POLL_MS).toBe(20_000);
+      expect(KPI_POLL_MS).toBeLessThan(QUERY_POLL_MS);
+    }
+  });
+
+  it("tab lain tidak memuat dan tidak dipoll (tanpa permintaan sia-sia)", () => {
+    for (const tab of ["overview", "suppliers", "settings", "", null, undefined]) {
+      const policy = kpiQueryPolicy(tab);
+      expect(policy.enabled, String(tab)).toBe(false);
+      expect(policy.refetchInterval, String(tab)).toBe(false);
+    }
+  });
+});
+
 describe("jendela KPI (pemilih periode)", () => {
   it("tiga jendela dengan label Indonesia yang cocok dengan jamnya", () => {
     expect(KPI_WINDOWS.map((w) => w.key)).toEqual(["24h", "7d", "30d"]);

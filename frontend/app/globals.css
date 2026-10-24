@@ -1259,6 +1259,24 @@ a:focus-visible {
 .rec-sep { color: var(--ink-subtle); }
 .rec-time { display: inline-flex; align-items: center; gap: 4px; }
 
+/* Baris pengirim (24 Okt 2026): pemilik bingung karena kartu hanya menyebut
+   wilayah. Satu kalimat tegas "Dikirim pemasok X ke Y" / "antar-SPPG";
+   ikon truk memberi tanda visual tanpa menambah tinggi berlebih. */
+.rec-route {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  font-size: var(--fs-2);
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.rec-route svg {
+  flex: 0 0 auto;
+  color: var(--accent-strong);
+}
+
 .rec-badges {
   display: flex;
   flex: none;
@@ -2892,6 +2910,29 @@ a:focus-visible {
     transparent 68%
   );
   pointer-events: none;
+  /* Audit 24 Okt 2026: pada zoom nasional, perpindahan mobil hanya ~1 px per
+     menit (jalur 300 km digambar selebar ~300 px), sehingga puck terbaca diam
+     walau datanya hidup. Denyut halo menyatakan "ada kiriman bergerak" tanpa
+     memalsukan posisi: titik tetap di koordinat sebenarnya. */
+  animation: truk-denyut 2.4s ease-in-out infinite;
+}
+
+@keyframes truk-denyut {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-truck::before {
+    animation: none;
+  }
 }
 /* Penunjuk arah: segitiga putih di sisi DEPAN puck, ikut berputar bersamanya. */
 .map-truck::after {
@@ -5663,12 +5704,45 @@ a:focus-visible {
   border: 1px solid var(--line, #e2e8f0);
   background: var(--surface);
   color: inherit;
+  /* 24 Okt 2026: pil periode dinaikkan ke ±30 px (dari 22 px) supaya jadi
+     sasaran klik yang nyaman tanpa memakan baris; 44 px tetap berlaku di
+     perangkat sentuh lewat aturan di bawah. Dipakai KPI dan feed — satu ukuran. */
+  padding: 5px 12px;
 }
 
 .kpi-period-pill.is-active {
+  /* 24 Okt 2026: keadaan aktif dibuat TERISI, bukan sekadar garis + tebal.
+     Alasan: sebagai garis tipis ia nyaris tak terbaca di antara chip status yang
+     berjejer di feed rekomendasi. Warna tetap token aksen (`--primary` alias
+     `--accent-strong`, #2563EB vs putih = kontras 5,2:1), jadi bukan bahasa
+     visual baru — hanya bobot yang cukup. */
   border-color: var(--primary);
-  color: var(--primary);
+  background: var(--primary);
+  color: var(--surface);
   font-weight: 600;
+  box-shadow: var(--shadow-pin-soft);
+}
+
+.kpi-period-pill.is-active:hover {
+  background: color-mix(in srgb, var(--primary) 88%, var(--ink));
+}
+
+/* Kontrol periode yang dipakai feed rekomendasi: jarak dan baris bantuan. */
+.feed-period {
+  margin: 0 0 10px;
+}
+
+.feed-period-hint {
+  font-size: var(--fs-2);
+  color: var(--slate);
+  margin-left: 2px;
+}
+
+@media (max-width: 720px) {
+  .feed-period-hint {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
 }
 
 /* Target sentuh tetap terjaga di perangkat sentuh (aturan repo yang sama
@@ -6239,6 +6313,9 @@ a:focus-visible {
    ini judulnya jatuh ke 16px dan kalah tegas dari label di atasnya. */
 .evidence-page .card .evidence-hero-title {
   margin: 0;
+  /* Judul pengadaan dua baris: "Pengadaan 780 kg telur" lalu
+     "UD Sumber Rejeki Telur → Jakarta" (lihat decisionHeadline). */
+  white-space: pre-line;
   /* Judul ini satu kalimat panjang ("Alihkan 712 kg telur: Cianjur → Jakarta"),
      bukan angka metrik. --fs-7 (24px) membuatnya menimpa kartu di sekitarnya;
      judul seksi memakai tangga --fs-5. */

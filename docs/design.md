@@ -2832,3 +2832,442 @@ cleanup). Artefak: `_qa/map-popup/final-sppg-1440.png`,
 padahal token `--route-live-strong` = `#7C3AED`; tes `supplier-routes` dan
 `supply-map-layer` menuntut pasangan yang sama. Nilai dikembalikan ke `#7C3AED`; sisa
 perjalanan tetap `#8B5CF6` (`ROUTE_TODO_COLORS`).
+
+## 27. Verifier menjadi agent ke-8 (23 Okt 2026)
+
+**Permintaan pemilik.** *"tolong Verifier anda jadikan agent jadi anda sesuaikan semuanya
+supaya Verifier bisa jadi agent"*. Sebelumnya verifier hanya dua lapis di luar daftar agent:
+`agent/verify.py` (deterministik, menempel di payload run) dan `verifier_client.py` (REST
+model, dipanggil sebelum approval).
+
+**Keputusan.** Verifier dijadikan agent terdaftar bernama `verifier`, tetapi dengan tiga pagar
+supaya independensinya tidak hilang:
+
+1. **Urutan.** Ia berjalan SESUDAH supervisor menarasikan (`run_review` → tujuh worker →
+   supervisor → `verify_run` → `VerifierWorker.audit`). Narasi tidak bisa meringkas auditornya.
+2. **Wadah terpisah.** Temuannya disimpan di `AgentRun.verifier_finding`, bukan di `findings`.
+   Status run, narasi, dan veto tetap dihitung dari tujuh worker analitik — auditor tidak boleh
+   mengubah hasil yang diauditnya.
+3. **Tidak boleh melonggarkan.** Masukannya hasil gerbang deterministik. Verdict `flag` tidak
+   bisa berubah menjadi `pass` walau model yang disuntikkan mengaku CONSISTENT; model hanya
+   boleh menambah alasan. Model mati/rusak diabaikan (audit tetap terbit dari jalur
+   deterministik). `blocking` selalu `false` — memblokir tetap milik guardian.
+
+**Bentuk teknis.** `AgentName.VERIFIER` + `ANALYST_AGENTS` (tujuh analitik) di
+`agent/contracts.py`; entri `verifier` di `agent/hierarchy.json` (stage VERIFY,
+`blocking_allowed=false`); `agent/workers/verifier.py`; baris trace `agent.verifier` sebelum
+`SUPERVISE` (`agent/telemetry.py`); review kini **9 baris** (7 worker + verifier + SUPERVISE).
+
+**Sesuai di lapisan lain.** `persist_agent_review` menerima 9 baris (8 diterima sebagai
+runtime lama yang belum diperbarui); kartu Agent Log menjadi 8 (`SWARM_AGENTS`), hitungan
+`n/8 tercatat` dinamis; teks "Review 7 agen" → "Review 8 agen"; prompt supervisor menyebut
+verifier berjalan sesudah narasi dan tidak dijalankan oleh supervisor.
+
+**Gerbang.** Tes agent 91 + 6 tes auditor baru lulus; `test_demo_event1_api`,
+`test_trace_persistence` lulus; panel agent vitest 14 tes lulus; `tsc --noEmit` 0 error.
+
+## 28. Watchdog tunnel: satu pemilik, tiga sinkronisasi (23 Okt 2026)
+
+**Masalah.** Quick Tunnel Cloudflare memberi URL acak setiap cloudflared restart. URL yang
+sama dipakai tiga tempat: environment runtime AgentCore (worker agent), `.env`, dan aplikasi
+Joule di Cloud Foundry. Bila hanya satu yang diperbarui, sistem tampak hidup tetapi buta —
+chat menjawab sementara tujuh worker gagal, atau sebaliknya.
+
+**Perbaikan.** `agent/tunnel_watchdog.py` sekarang:
+1. memiliki cloudflared sebagai anak proses dan membaca URL dari keluarannya;
+2. menyinkronkan runtime AgentCore lewat `agent/set_runtime_env.py` (menunggu READY);
+3. menyinkronkan aplikasi CF (`cf set-env <app> MEALCHAIN_API_URL <url>` + `cf restage`);
+   bentuk `KEY=VALUE` ditolak cf — argumen harus tiga posisi terpisah;
+4. memanaskan runtime dengan satu review nyata, bukan `/health`;
+5. menolak instance kedua (`agent/.tunnel_watchdog.pid` + cek PID hidup), karena dua
+   instance berarti dua tunnel yang saling menimpa.
+
+**Autostart.** `schtasks /Create` ditolak tanpa hak admin, jadi dipakai jalur pengguna:
+`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\mealchain-watchdog.cmd` →
+`scripts/nyalakan-watchdog.cmd` (memakai `C:\Python314\python.exe`, log ke
+`.tunnel-watchdog.log`).
+
+**Jalankan manual.** `scripts\nyalakan-watchdog.cmd` (idempoten: instance ganda menolak
+sendiri). Cek status: `type agent\.tunnel_state.json` dan `tasklist /FI "IMAGENAME eq cloudflared.exe"`.
+
+## 29. Audit animasi pengiriman di peta (24 Okt 2026)
+
+**Pertanyaan pemilik.** Kalau ada pengiriman menuju SPPG, apakah animasi di peta muncul?
+
+**Temuan audit.**
+1. Ikon mobil memang hanya dibuat untuk baris `journey.state === "di_jalan"` yang
+   punya geometri jalan; kiriman yang sudah tiba atau belum berangkat tidak
+   digambar. Ini benar dan sudah diuji.
+2. Data tidak pernah disegarkan: `useSupplierRoutes` memakai
+   `refetchInterval: false` + `staleTime` 5 menit. Akibatnya posisi mobil beku di
+   angka saat halaman dibuka, dan kiriman yang tiba tetap tampak "di jalan"
+   sampai tab ditinggalkan.
+3. Perpindahan antar-denyut tidak ada. Satu-satunya gerak adalah ease 700 ms saat
+   angka berubah — dan angka itu hanya berubah tiap 60 detik (denyut global).
+4. Pada zoom nasional, jalur 300 km digambar selebar ~300 px, jadi kecepatan
+   sesungguhnya hanya ~1 px per menit. Walau data hidup, puck terbaca diam.
+
+**Perbaikan.**
+- `lib/query.ts`: `MAP_TRUCK_POLL_MS = 15_000`, dipakai HANYA oleh query peta
+  (`app/page.tsx`); halaman Pemasok dan Keamanan Pangan tetap tanpa polling.
+- `lib/hooks/useSupplierRoutes.ts`: parameter `pollMs`; saat hidup, `staleTime` 0
+  dan `refetchInterval` mengikuti `pollMs`, `refetchIntervalInBackground: false`.
+- `lib/truck-progress.ts`: `fraksiBerjalan(journey, jangkar, now)` — `progress`
+  server menjadi jangkar, lalu dimajukan waktu berjalan dibagi `travelMin`.
+  Jangkar diganti hanya saat angka server berubah, jadi gerak lokal tidak mundur.
+- `SupplyMap.tsx`: detak 1 detik memanggil `syncTruk` selama ada kiriman
+  `di_jalan`; `data-frac` pada elemen truk untuk bukti audit; jangkar dibuang saat
+  kiriman tiba.
+- `app/globals.css`: halo puck berdenyut (`truk-denyut`, 2,4 s) supaya "ada
+  kiriman bergerak" terbaca di zoom nasional tanpa memalsukan posisi; dimatikan
+  pada `prefers-reduced-motion`.
+
+**Bukti.** Di layar (BGN Monitor, komoditas telur): 2 mobil; `data-frac`
+0,19117 → 0,19222 dan 0,45240 → 0,45453 dalam 16 detik; satu kiriman yang tiba
+hilang dari peta tanpa menyisakan ikon. Tes: `tests/truck-progress.test.ts` (7),
+`tests/map-truck-poll.test.ts` (4), `tests/supply-map-layer.test.tsx` (64);
+frontend penuh 1775 tes / 163 berkas lulus, `tsc --noEmit` bersih.
+
+**Catatan jujur.** Di zoom nasional gerak puck tetap ~1 px/menit — itu kecepatan
+sebenarnya, bukan bug; yang membuatnya terbaca hidup adalah denyut halo dan jejak
+ekor. Di zoom kota (mis. Bandung) perpindahannya terlihat jelas.
+
+**Sisa.** Label `aria-label` persentase masih diperbarui saat data datang (≤15
+detik), bukan tiap detik; angka itu tidak dipakai untuk posisi.
+
+## 30. Periode feed rekomendasi: hari ini / 7 hari / 1 bulan (24 Okt 2026)
+
+**Permintaan pemilik.** Di tab Recommendations harus ada menu untuk memilih
+rekomendasi hari ini, 7 hari, atau 1 bulan — dan tampilannya harus menarik
+tetapi tetap satu bahasa desain dengan halaman lain.
+
+**Kontrak data (bukan hitungan peramban).**
+- `GET /decisions?window=24h|7d|30d` menyaring menurut `created_at`.
+  `24h`/`7d` = jendela bergulir; `30d` = **bulan berjalan menurut WIB**
+  (aturan yang sama dengan pemilih periode KPI). Tanpa parameter = seluruh
+  riwayat (perilaku lama). Kunci asing → 422.
+- `total` dan `count` ikut jendela, jadi "10 dari 27" tidak pernah bertentangan
+  dengan banyaknya baris yang bisa dicapai.
+- Aturan jendela hidup di `backend/app/core/window.py`; diuji tanpa database
+  (`tests/test_decisions_window.py`, 8 tes).
+
+**Pemisahan query.** Feed memakai query sendiri (`useDecisions(..., feedWindow)`)
+dan hanya aktif saat tab Recommendations dibuka. Lonceng notifikasi, badge
+sidebar, dan kartu KPI tetap memakai seluruh riwayat — mempersempit feed tidak
+boleh mengubah arti "21 menunggu tindakan".
+
+**Kontrol UI.** Memakai komponen yang SUDAH ADA: `.kpi-period` +
+`.commodity-pill` + `aria-pressed`, dengan tombol asli (bukan `div`), urutan
+`Hari ini → 7 hari → 1 bulan`, baris bantuan ("24 jam terakhir", "bulan berjalan
+(WIB)"), dan chip yang membungkus (`flex-wrap: wrap`). Mengganti periode
+mengembalikan halaman ke 1.
+
+**Penyesuaian visual (agar mencolok tanpa bahasa baru).**
+- Keadaan aktif sekarang **terisi** `--primary` dengan teks `--surface`
+  (kontras 5,2:1), bukan sekadar garis + tebal — garis tipis tenggelam di antara
+  chip status. Berlaku untuk KPI dan feed karena satu selektor.
+- Tinggi pil 22 px → 28 px (padding `5px 12px`); 44 px tetap berlaku di
+  perangkat sentuh lewat aturan `(pointer: coarse)` yang sudah ada.
+- Tanpa hex mentah: warna memakai token (`--primary`, `--ink`, `--surface`),
+  dijaga `design-tokens-kontrak.test.ts` dan `token-alias-css.test.ts`.
+
+**Keadaan kosong.** Jika jendela terpilih kosong, layar menyebut periodenya dan
+menawarkan tombol "Lihat 1 bulan terakhir" — bukan pesan "tidak ada data" yang
+ambigu dengan "tidak cocok dengan filter".
+
+**Bukti.** Di layar (BGN Monitor): "Hari ini" → 27 rekomendasi, 5 perlu tindakan,
+"Menampilkan 10 dari 27"; klik "7 hari" → 90 rekomendasi, 21 perlu tindakan,
+"10 dari 90", `aria-pressed` berpindah, permintaan jaringan `?window=24h` lalu
+`?window=7d`, halaman kembali ke 1. Tes: frontend 1785 lulus / 165 berkas
+(`tests/decisions-window.test.ts`, `tests/feed-window-wiring.test.ts`,
+`tests/query.test.ts` diperbarui), `tsc --noEmit` bersih; backend
+`test_decisions_window.py` 8 lulus.
+
+## 31. "Siapa yang mengirim?" — baris pengirim + label yang jujur (24 Okt 2026)
+
+**Keluhan pemilik.** Di tab Recommendations hanya tampak nama WILAYAH, jadi tidak
+jelas apakah barang datang dari pemasok atau dari SPPG lain; judul "Alokasi
+regional" dan kata "Alihkan" menambah kebingungan.
+
+**Akar masalah.** `GET /decisions` tidak pernah mengirim identitas pengirim:
+yang ada hanya `supplier_id` (kadang kosong) dan `target_location_id` (UUID).
+Kartu lalu hanya bisa menyebut wilayah dari data lain.
+
+**Perubahan data (tanpa tebakan).** `/decisions` kini mengirim:
+- `supplier_name` — dari `decisions.supplier_id`; bila kosong dipakai
+  `supplier_id` di payload `decision_evidence` (satu-satunya jejak tersimpan).
+- `pengirim` — `"pemasok"` bila pemasok teridentifikasi, `"antar_sppg"` untuk
+  `regional_balance`/`surplus_redistribution` tanpa pemasok, selain itu `null`.
+- `target_location_name` — nama lokasi tujuan, bukan UUID.
+
+**Kartu.** `routeLineOf()` merender satu baris berikon truk:
+- "Dikirim pemasok UD Cibinong Telur Berkah ke Bandung"
+- "Bukan dari pemasok — stok dipindahkan antar-SPPG ke Jakarta"
+Bila tidak ada fakta yang cukup, baris TIDAK dirender (tidak ada kalimat karangan).
+
+**Kosakata yang diperbaiki.**
+- `regional_balance`: "Alokasi regional direkomendasikan" → **"Penyeimbangan
+  pasokan regional"**; kata kerja kepala halaman "Alihkan" → **"Seimbangkan"**.
+  Jenis ini menutup kekurangan satu SPPG — bisa dengan pasokan pemasok, bisa
+  dengan surplus SPPG lain; karena itu labelnya tidak mengklaim sumber.
+- `safety_disruption`: "Pengalihan pasokan (gangguan keamanan)" → **"Ganti sumber
+  pasokan (gangguan keamanan)"** — yang terjadi memang mengganti sumber.
+
+**Bukti.** Di layar (BGN Monitor, 27 rekomendasi hari ini): 8 dari 10 kartu
+halaman pertama menampilkan baris pengirim dengan nama pemasok nyata
+(UD Cibinong Telur Berkah, Koperasi Telur Cipanas Bersama); dua kartu
+`price_anomaly` tidak menampilkan baris karena sumbernya memang tidak tercatat.
+Tes: frontend 1789 lulus / 166 berkas (`tests/recommendation-route.test.ts`),
+backend `tests/test_decisions_pengirim.py` 4 lulus; `tsc --noEmit` bersih.
+
+## 32. Satu hari operasional Jakarta: menunggu, berjalan, selesai (24 Okt 2026)
+
+**Yang diminta pemilik.** Dalam jendela 1 hari harus terlihat tiga fase sekaligus
+— ada yang menunggu persetujuan, ada yang sedang dikirim, ada yang sudah selesai
+— dan kartu paling atas adalah **persetujuan pengiriman dari pemasok** supaya
+bisa didemokan langsung. Angka KPI harus lahir dari kejadian itu, bukan ditempel.
+
+**Keadaan sebelum perubahan.** Jakarta 24 jam hanya punya 1 rekomendasi; KPI 3/7
+(4 metrik `no_data`); dan tidak ada satu pun penulis `batches.dispatched_at`,
+jadi menekan Setujui → Eksekusi berakhir di status tanpa truk apa pun di peta.
+
+**Seed baru: `backend/app/seed/hari_ini.py`.** Idempoten (id deterministik,
+`_bersihkan()` menghapus miliknya sendiri), Jakarta-sentris, memakai penulis
+produksi: `settlement.catat_penerimaan / catat_po_terbit / catat_pembuangan`,
+`Approval`, `DecisionEvidence`, `SapMockPurchaseOrder`, `AgentTrace`.
+
+```
+Keputusan (9)                        Status
+Pengadaan dari pemasok 780 kg        pending_approval   ← kartu teratas, expires 18 mnt
+Penyeimbangan pasokan regional       pending_approval
+Pengadaan dari pemasok (beras)       pending_approval   ← expires_at sudah lewat
+Penyesuaian harga                    rejected           + rejection_reason
+Ganti sumber pasokan                 verifier_flagged
+Penyeimbangan pasokan regional       approved           (belum berangkat)
+Pengadaan telur 780 kg               executed           truk berjalan
+Redistribusi wortel 400 kg           executed           truk berjalan
+Pengadaan beras 480 kg               executed           selesai + penerimaan disetujui
+```
+
+**Waktu berangkat diturunkan dari DURASI RUTE.** Versi pertama memakai offset
+tetap (4 jam / 2 jam). Rute Bekasi→Jakarta hanya ±40 menit, jadi truk langsung
+terbaca `sudah_tiba` dan tak pernah muncul sebagai perjalanan aktif. Setelah
+`sync_road_routes` mengisi geometri, `dispatched_at = now − 45% durasi` dan
+`usable_until = now + 55% durasi` — truk selalu lahir di tengah jalan.
+
+**Eksekusi = barang berangkat.** `_dispatch_bound_batches()` di
+`app/api/actions.py` mengisi `dispatched_at` untuk batch di
+`decision_evidence.payload.batch_ids` (jalur yang sama dengan revalidasi safety),
+hanya untuk batch yang belum berangkat, dan tidak menyentuh jenis administratif
+(`supplier_exclusion*`, `price_anomaly`). Respons `/actions/execute` memuat
+`dikirim: [{batch_id, dispatched_at}]`.
+
+**Syarat yang ditemukan saat menguji alur setujui → eksekusi** (semua harus
+dipenuhi seed, kalau tidak tombolnya 409):
+1. `verified_by` + `verifier_note="consistent"` — tanpa verdict, "belum terverifikasi".
+2. Binding butuh batch dengan **supplier, lokasi, dan komoditas yang sama**
+   dengan keputusan; memakai batch komoditas lain → "binding batch/supplier berubah".
+3. Pemasok tidak boleh berstatus eksklusi aktif di SPPG penerima → seed memilih
+   pemasok dengan `SupplierExclusion.status == 'active'` disaring keluar.
+4. Satu batch hanya boleh punya **satu** penerimaan disetujui
+   (`uq_batch_receipts_satu_disetujui`) → kiriman selesai memakai batch sendiri.
+
+**Endpoint.** `POST /demo/hari-ini` (peran `sppg_head`/`sppg_nutritionist`,
+butuh sesi aktif) — memuat ulang satu hari untuk kota pemanggil.
+
+**Metrik yang bergerak** (Jakarta, 24 jam, sesudah seed):
+
+```
+Meal Continuity 100,00%   Avoidable Food Loss 0,53%   Regional Imbalance 42,86%
+Safe Delivered Cost 11.073.548   Price Deviation 4,23%   Decision Time 22 mnt
+Evidence Completeness 100,00%    → 7/7 tersedia (sebelumnya 3/7)
+```
+
+**Bukti.** `/supplier-routes` (SPPG Head): `di_jalan 3`, `with_road 19/19`;
+dua batch seed berjalan dengan progress 0,457 dan 0,458. Di layar, tab wortel
+menampilkan "CV Cipinang Boga Utama → JKT · Di jalan · 6 menit lagi · 400 kg";
+posisi bergerak terukur (`data-frac 0,50500 → 0,52420` dalam 16 detik). Tes:
+`backend/tests/test_hari_ini.py` 8 lulus; 42 tes backend terkait (actions,
+approval, decisions) lulus; frontend 1790 tes / 166 berkas lulus.
+
+### 32b. “Siapkan data demo” = satu hari utuh, bukan sisa potongan (24 Okt 2026)
+
+Terukur sebelum diperbaiki: setujui kartu teratas (2 akun) → tekan
+“Siapkan data demo” → `status=None`, `approvals=0`, feed 24 jam **1** kartu,
+KPI kosong. Penyebabnya `_seed_demo_cases(force=True)` menghapus kasus skrip
+(lalu membuatnya ulang) dan `geser_aksi_ke_riwayat` menggeser baris aksi keluar
+jendela 24 jam.
+
+Perbaikan: `POST /demo/refresh` kini memanggil `susun()` (seed hari-ini) di
+akhir rangkaian. Hasil ukur sesudahnya, satu klik dari keadaan apa pun:
+
+```
+refresh 200 · hari_ini.keputusan = 9
+feed 24 jam = 10 kartu  {pending_approval 4, executed 3, approved 1,
+                         verifier_flagged 1, rejected 1}
+KPI 24 jam = 7/7 tersedia
+```
+
+Konsekuensi yang tetap berlaku dan disengaja: persetujuan yang sudah diberikan
+hilang saat tombol ditekan — reset demo memang harus deterministik. Urutan demo:
+“Siapkan data demo” → setujui → eksekusi → peta.
+
+## 33. Judul pengadaan dua baris (24 Okt 2026)
+
+Permintaan pemilik: ringkasan keputusan jangan satu baris panjang. Bentuk final:
+
+```
+Pengadaan 780 kg telur
+UD Sumber Rejeki Telur → Jakarta
+```
+
+Aturannya di `frontend/lib/evidence.ts::decisionHeadline`: khusus
+`supplier_procurement`, baris pertama memuat **apa** (kata kerja + kuantitas +
+komoditas), baris kedua memuat **dari siapa ke mana** (pemasok → SPPG). Titik
+dua dibuang, kata "pemasok" tidak diulang karena baris kedua sudah nama pemasok.
+`.evidence-hero-title` diberi `white-space: pre-line` supaya `\n` benar-benar
+jadi baris baru. Jenis keputusan lain tetap satu baris (`Seimbangkan 250 kg
+wortel: SPPG … → Jakarta`).
+
+Bukti DOM: `textContent` = `"Pengadaan 780 kg telur\nUD Sumber Rejeki Telur →
+Jakarta"`, `white-space: pre-line`, tinggi kotak judul 58 px (dua baris).
+
+## 34. Data demo harus masuk akal, bukan sekadar terisi (24 Okt 2026)
+
+Tiga baris nyata yang muncul di layar dan salah secara operasional:
+
+```
+Ganti pasokan 300 kg ayam: Surabaya → Jakarta      (663 km, lintas pulau, ayam segar)
+Pengadaan beras dari CV Barokah Telur Cianjur      (pemasok telur memasok beras)
+Penyeimbangan pasokan regional … pemasok UD …      (tipe antar-SPPG tapi pengirim pemasok)
+```
+
+Perbaikan di sumber datanya, bukan di tampilan:
+
+1. **Sumber = pemasok/kota yang benar.** Keputusan yang barangnya dibeli dari
+   pemasok memakai kota PEMASOK (`source_location_id` = kota pemasok, bukan
+   Surabaya/Bandung yang tidak berhubungan). Pemindahan antar-SPPG memakai
+   tetangga terdekat (Jakarta ← Bandung 116 km).
+2. **Jarak dijaga.** `_sumber()` di `api/demo.py` kini memilih kota lain
+   TERDEKAT di pulau yang sama, maksimum 400 km; kalau kota itu tidak punya
+   tetangga dalam batas (Medan, Palembang, Makassar), kasus memakai stok lokal
+   kota itu sendiri. `"Surabaya"` tidak lagi jadi kandidat cadangan.
+3. **Pemasok harus menjual komoditasnya.** `seed_demo_activity` memilih pemasok
+   per komoditas (bukan rotasi buta), `hari_ini._pemasok()` menyaring kandidat
+   kanonik ke pemasok berkomoditas sama, dan modul baru
+   `app/seed/rapikan.py::rapikan_pemasok_batch()` merapikan batch warisan yang
+   terlanjur salah — dipanggil dari `susun()` dan `load_seed()`.
+4. **Tipe keputusan jujur.** `rejection-loop-kuota` kini `supplier_procurement`
+   (siklus penolakan pada pengadaan), bukan `regional_balance` yang membuat
+   kartu berlabel "Penyeimbangan pasokan regional" padahal pengirimnya pemasok.
+5. **Judul dua baris hanya untuk barang dari pemasok**; `price_anomaly`,
+   `supplier_exclusion`, `supplier_reinstatement` tidak menampilkan rute sama
+   sekali karena tidak ada barang yang bergerak.
+
+Kunci regresi: `backend/tests/test_hari_ini.py::test_data_masuk_akal_jarak_dan_jenis_pemasok`
+(gagal bila ada rute >400 km atau batch yang pemasoknya beda komoditas).
+
+Keadaan sesudah perbaikan (24 jam, Jakarta):
+
+```
+10 kartu · pengadaan→UD Sumber Rejeki Telur / CV Cipinang Boga Utama
+         · ganti pasokan→PT Nusantara Prima Ayam / UD Cibinong Telur Berkah
+         · penyeimbangan→antar-SPPG Bandung/Cianjur (≤116 km)
+         · penyesuaian harga→tanpa rute
+jarak maksimum seluruh keputusan: 260 km (Semarang → Surabaya)
+```
+
+### 34b. “Segarkan ke hari ini” tidak lagi menggandakan snapshot kanonik
+
+Empat tes invarian (`price_regional_seed`, `sprint1_contract_reconciliation`,
+`road_route_sync`, `freshness band`) selalu merah **setelah** tombol demo
+ditekan. Penyebabnya tombolnya, bukan tesnya:
+
+```
+load_seed(now)  → id baris kanonik diturunkan dari TANGGAL ACUAN
+                → tanggal baru = id baru, baris acuan lama TETAP ADA
+                → 100 price_signals yatim + 40 pihps_reference ganda
+```
+
+Dua jalan keluar dicoba. Menghapus baris kanonik lama setelah memuat snapshot
+baru **ditolak**: batch yang masih dipakai tes lain (`test_suppliers_api`,
+`test_seed_load_db`) ikut terhapus, dan memuat ulang snapshot lama gagal karena
+baris demo sudah menempati kunci unik `(lokasi, komoditas, recorded_at)`.
+
+Kontrak final: `POST /demo/refresh` memuat snapshot kanonik **hanya bila belum
+ada** (`count(batches WHERE origin <> 'demo') == 0`). Kanonik tetap pada tanggal
+acuannya; yang bergerak ke hari ini hanya baris demo — kiriman, empat kasus
+skrip, keputusan selesai, harga harian, dan seed hari-ini.
+
+Tambahan yang menjaga kebersihan setelah refresh:
+
+* `rapikan_batch_ganda()` menghapus kiriman kembar (pemasok + lokasi +
+  komoditas + waktu panen sama, id berbeda) — 4 baris pada keadaan sekarang;
+* `rapikan_pemasok_batch()` memindahkan batch yang pemasoknya salah komoditas;
+* respons menyebut angkanya (`rows.dilewati`, `batch_kembar_dihapus`,
+  `hari_ini.keputusan`) supaya operator tahu apa yang terjadi.
+
+Kontrak tesnya ikut diperbarui: `test_refresh_hari_ini_tidak_menggandakan_snapshot_kanonik`
+membandingkan **id baris kanonik** sebelum/sesudah (harus sama) dan memastikan
+baris demo bertambah tanpa batch kembar. Bukti: 72 tes terkait hijau —
+`test_demo_timeseries_api`, `price_regional_seed`, `road_route_sync`,
+`seed_load_db`, `suppliers_api`, `seed_menu_plan_anak`, `sprint1_acceptance`.
+
+
+## 35. Audit menyeluruh 24 Okt 2026 — jejak dan persetujuan yang jujur
+
+Audit memakai `fullstack-verification` (gate berlapis) + `dogfood` (penjelajahan
+layar). Laporan penuh: `docs/verification/audit-2026-10-24.md`.
+
+Hasil: process 12/12, be 10/10, db 8/8, compare 4/4, tab × peran 3/3
+(10 tab Jakarta, 9 tab monitor, 10 tab Bandung), invariants 47/47.
+
+Dua cacat data yang ditemukan dan DIPERBAIKI:
+
+1. **Jejak ACT pada keputusan yang tidak dieksekusi (8 baris).** `hari_ini`
+   menulis ACT untuk semua keputusan tanpa `demo_case`; `jakarta_lengkap`
+   menulisnya untuk `executed` DAN `approved`. Keduanya kini hanya menulis ACT
+   saat `status == "executed"`.
+2. **Eksklusi pemasok `executed` tanpa baris approval (3 baris).**
+   `seed_exclusions()` menulis status `executed` dan `SupplierExclusion.approved_at`
+   tetapi tidak pernah menulis `approvals`/`agent_traces`. Kini menulis satu
+   approval (Kepala SPPG Jakarta, +2 jam) dan tiga jejak DETECT/VERIFY/ACT.
+
+Kunci regresinya: `backend/tests/test_invarian_riwayat_demo.py` (dua tes) —
+aturan yang sama dengan `verify/invariants.spec.json`, tanpa perlu menjalankan
+gate.
+
+Spek `stack`/`invariants` sebelumnya memaku revisi Alembic `026` sehingga gate
+tidak akan pernah hijau; kini `030_approval_four_eyes_unique`. Utang kecil yang
+dicatat: nilai itu akan usang lagi tiap ada migrasi (rencana batch D).
+
+### 35b. Batch A+B: bukti kasus skrip & draf usulan (24 Okt 2026)
+
+**Batch A — bukti untuk kartu yang ditolak/di-flag.** `demo.py` mendapat
+`_bukti()` (id deterministik, idempoten). Skrip 4 kasus kini membuktikan juga
+versi yang berakhir `rejected`/`verifier_flagged`: v1 kuota (human_inspection,
+`quota_full`), v2 kuota (market_price, rasio 1,12 + alasan penolakan),
+gangguan-logistik v1 (gps, `disruption: banjir`), supplier-janggal
+(market_price, rasio 0,60, `is_consistent=False`). `hari_ini.susun()` menulis
+bukti untuk KESEMBILAN kartunya (sebelumnya lima), termasuk yang lewat tenggat,
+ditolak, dan di-flag. Terukur: kasus skrip tanpa bukti **22 → 0**, keputusan
+24 jam tanpa bukti **28 → 1**.
+
+**Batch B — draf usulan & angka tenggat.** `_buang_draf_usang()` di
+`POST /demo/refresh` membuang `proposed` tanpa `demo_case`, tanpa approval, tanpa
+PO, dan tanpa bukti, lebih tua dari satu jam (respons: `draf.draf_usang_dihapus`).
+Terukur: **17 + 15** draf terhapus, total `proposed` **58 → 29**.
+Sisi tampilan: `countActionableBreakdown()` dan `notifList()` memisahkan `draft`
+dari `expired`, jadi lonceng berbunyi **"19 menunggu tindakan · 4 lewat tenggat"**
+(bukan lagi "· 31"), dan tooltip tab menambah klausa
+**"27 draf usulan kedaluwarsa"**.
+
+Tes penjaga: `backend/tests/test_bukti_dan_draf_demo.py` (2),
+`frontend/tests/topbar-lib.test.ts` (+2). Frontend: 1792 tes / 166 berkas;
+tsc bersih.
+
+Sisa temuan yang BELUM dikerjakan (rencana terperinci ada di laporan):
+bukti untuk varian kasus skrip yang ditolak/di-flag (28 baris 24 jam),
+tumpukan 58 keputusan `proposed` yang membuat lonceng berbunyi
+"47 lewat tenggat", dua rute cache lintas pulau (Medan→Jakarta/Surabaya) yang
+tidak terpakai, dan `GET /kpi` yang membalas 422 tanpa parameter.

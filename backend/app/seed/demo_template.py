@@ -58,6 +58,8 @@ from app.models import (
     SupplierExclusion,
     User,
 )
+from app.seed.demo_kasus_bukti import semai_kasus_bukti_hari_ini
+from app.seed.demo_kpi_riwayat import geser_aksi_ke_riwayat
 from app.services import demo_session as sesi
 
 KOTA_TEMPLATE = ("Jakarta", "Bandung", "Surabaya")
@@ -600,7 +602,11 @@ async def _perkaya_kasus_jakarta(db: AsyncSession, now: datetime) -> dict:
     await _seed_demo_cases(db, True, jakarta)
     await db.flush()
 
-    telur_id = (await db.execute(select(Commodity.id).where(Commodity.name == "telur"))).scalar_one_or_none()
+    telur_id = (
+        await db.execute(
+            select(Commodity.id).where(Commodity.name == "telur")
+        )
+    ).scalar_one_or_none()
 
     hidup = list(
         (
@@ -1298,8 +1304,14 @@ async def _lengkapi_bukti_kasus(db: AsyncSession, now: datetime) -> dict:
     # market_price. Jenis karangan seperti "inspeksi_pemasok" ditolak Postgres dan
     # menggagalkan seluruh build (terukur 21 Okt 2026: build berhenti di 25 keputusan).
     jenis_bukti = {
-        "supplier_exclusion": ("human_inspection", "Dua kiriman berturut-turut di atas ambang suhu."),
-        "supplier_exclusion_restoration": ("human_inspection", "Pemeriksaan ulang: suhu dan kemasan kembali normal."),
+        "supplier_exclusion": (
+            "human_inspection",
+            "Dua kiriman berturut-turut di atas ambang suhu.",
+        ),
+        "supplier_exclusion_restoration": (
+            "human_inspection",
+            "Pemeriksaan ulang: suhu dan kemasan kembali normal.",
+        ),
         "price_anomaly": ("market_price", "Harga kutipan 32% di atas median pemasok sekitarnya."),
         "regional_balance": ("human_inspection", "Pasokan, kebutuhan, dan jarak dihitung ulang."),
         "safety_disruption": ("temperature", "Log suhu dan hasil uji laboratorium diperiksa."),
@@ -1475,6 +1487,16 @@ async def build_into(db: AsyncSession, *, purge: bool = True, freeze: bool = Tru
     laporan["bukti"] = await _semai_bukti_dan_rantai(db, now)
     laporan["bukti_tambahan"] = await _lengkapi_bukti_kasus(db, now)
     laporan["kiriman_jakarta"] = await _rapikan_kiriman_jakarta(db, now)
+    # KPI 24 jam dimulai dari "belum ada aksi hari ini": jejak aksi (keputusan,
+    # bukti, approval, PO, trace) digeser ke riwayat, sedangkan fakta hari ini
+    # (menu plan, kiriman, limbah, kutipan harga) tetap. Lihat
+    # `app/seed/demo_kpi_riwayat.py` untuk alasan pembagiannya.
+    laporan["kpi_riwayat"] = await geser_aksi_ke_riwayat(db, now)
+    # Satu kasus sengaja TIDAK digeser: keputusan menunggu persetujuan dengan
+    # dua jenis bukti, supaya operator bisa menyalakan "Kelengkapan Bukti"
+    # dengan satu approval tanpa mengubah rumus KPI. Lihat
+    # `app/seed/demo_kasus_bukti.py`.
+    laporan["kasus_bukti"] = await semai_kasus_bukti_hari_ini(db, now)
     await db.commit()
     if freeze:
         laporan["beku"] = await _bekukan(db)

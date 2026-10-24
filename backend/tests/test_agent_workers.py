@@ -3,16 +3,21 @@
 Transport API di-mock. Tidak ada model, tidak ada DB, tidak ada tulisan.
 """
 
-from uuid import uuid4
+from uuid import uuid4  # noqa: I001
 
 import pytest
-from agent.api_client import AgentApiError, MealChainClient
-from agent.contracts import AgentFinding
-from agent.workers.base import WorkerContext
-from agent.workers.demand import DemandWorker
-from agent.workers.freshness import FreshnessWorker
-from agent.workers.safety import SafetyWorker
-from agent.workers.supply import SupplyWorker
+# `agent/` adalah runtime TERPISAH di akar repo (image sendiri). Tanpa mount
+# ./agent:/agent (lihat docker-compose.yml), impor di bawah gagal dan pytest
+# berhenti "Interrupted: 1 error during collection" (audit DEP-04).
+pytest.importorskip("agent")
+
+from agent.api_client import AgentApiError, MealChainClient  # noqa: E402
+from agent.contracts import AgentFinding  # noqa: E402
+from agent.workers.base import WorkerContext  # noqa: E402
+from agent.workers.demand import DemandWorker  # noqa: E402
+from agent.workers.freshness import FreshnessWorker  # noqa: E402
+from agent.workers.safety import SafetyWorker  # noqa: E402
+from agent.workers.supply import SupplyWorker  # noqa: E402
 
 
 class FakeApi:

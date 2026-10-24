@@ -32,6 +32,12 @@ class SupplierExclusion(Base):
             unique=True,
             postgresql_where=("status = 'active'"),
         ),
+        Index(
+            "idx_supplier_exclusions_scope",
+            "supplier_id",
+            "scope_location_id",
+            "status",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

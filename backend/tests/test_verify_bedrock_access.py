@@ -6,7 +6,12 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "infra" / "aws"))
 
-import verify_bedrock_access as probe  # noqa: E402
+import pytest  # noqa: E402
+
+probe = pytest.importorskip(
+    "verify_bedrock_access",
+    reason="skrip probe infra/aws/verify_bedrock_access.py tidak ada di repo",
+)
 
 
 def _mock_session(mock_client: MagicMock) -> MagicMock:

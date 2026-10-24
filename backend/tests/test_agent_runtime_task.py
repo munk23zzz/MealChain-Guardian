@@ -11,8 +11,15 @@ import sys
 import types
 from uuid import uuid4
 
-from agent.contracts import AgentRun, RunStatus
-from agent.workers import build_stub_findings
+import pytest
+
+# `agent/` adalah runtime TERPISAH di akar repo (image sendiri). Tanpa mount
+# ./agent:/agent (lihat docker-compose.yml), impor di bawah gagal dan pytest
+# berhenti "Interrupted: 1 error during collection" (audit DEP-04).
+pytest.importorskip("agent")
+
+from agent.contracts import AgentRun, RunStatus  # noqa: E402
+from agent.workers import build_stub_findings  # noqa: E402
 
 
 def _pasang_sdk_palsu(monkeypatch) -> None:
@@ -72,6 +79,13 @@ def test_runtime_task_review_decision(monkeypatch) -> None:
     )
     monkeypatch.setattr(runtime_server, "run_review", lambda decision_id: run)
 
+    # Agent verifier selalu meninggalkan jejak: runtime asli menambahkannya
+    # sesudah narasi, jadi run tiruan ini pun diberi temuan audit.
+    from agent.workers.verifier import VerifierWorker
+
+    run = run.model_copy(update={"verifier_finding": VerifierWorker().audit(run)})
+    monkeypatch.setattr(runtime_server, "run_review", lambda decision_id: run)
+
     result = runtime_server.invoke(
         {"task": "review_decision", "decision_id": "decision-1"}
     )
@@ -80,7 +94,7 @@ def test_runtime_task_review_decision(monkeypatch) -> None:
     assert payload["run_id"] == str(run_id)
     assert payload["status"] == "partial"
     assert len(payload["findings"]) == 7
-    assert len(payload["trace_rows"]) == 8
+    assert len(payload["trace_rows"]) == 9
     assert payload["trace_rows"][-1]["step_name"] == "SUPERVISE"
     sys.modules.pop("agent.runtime_server", None)
 

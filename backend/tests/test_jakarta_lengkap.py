@@ -16,7 +16,7 @@ from app.seed.jakarta_lengkap import PEKERJA, _id
 
 
 def test_nama_agen_cocok_dengan_kontrak_frontend():
-    """Tujuh worker = kunci `SWARM_AGENTS` di frontend, tanpa akhiran _agent."""
+    """Delapan agen = kunci `SWARM_AGENTS` di frontend, tanpa akhiran _agent."""
     kunci = [k for k, _tahap, _agen in PEKERJA]
     assert kunci == [
         "supply",
@@ -26,6 +26,7 @@ def test_nama_agen_cocok_dengan_kontrak_frontend():
         "price",
         "logistics",
         "evidence",
+        "verifier",
     ]
     # Tahap tiap worker juga dipakai UI (kartu menampilkan tahapnya).
     tahap = {k: t for k, t, _a in PEKERJA}
@@ -36,6 +37,7 @@ def test_nama_agen_cocok_dengan_kontrak_frontend():
     assert tahap["price"] == "OPTIMIZE"
     assert tahap["logistics"] == "OPTIMIZE"
     assert tahap["evidence"] == "TRACE"
+    assert tahap["verifier"] == "VERIFY"
 
 
 def test_id_deterministik_dan_berbeda_per_kunci():

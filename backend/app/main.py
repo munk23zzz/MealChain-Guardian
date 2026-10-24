@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.actions import router as actions_router
 from app.api.admin import router as admin_router
@@ -19,11 +20,6 @@ from app.api.demand import forecast_router
 from app.api.demand import router as demand_router
 from app.api.demo import router as demo_router
 from app.api.demo_session import router as demo_session_router
-from app.api.waste import router as waste_router
-# 2026-10-20: rencana alokasi surplus lintas lokasi. Panel "Rencana alokasi
-# surplus" (halaman Surplus & Limbah) sebelumnya dihitung klien dari
-# /balance/map yang dibatasi cakupan peran -> selalu kosong untuk peran SPPG.
-from app.api.surplus import router as surplus_router
 from app.api.dependencies import lifespan
 from app.api.dossier import router as dossier_router
 from app.api.events import router as events_router
@@ -43,6 +39,12 @@ from app.api.supplier_exclusions import router as supplier_exclusions_router
 from app.api.supplier_routes import router as supplier_routes_router
 from app.api.suppliers import router as suppliers_router
 from app.api.supply import router as supply_router
+
+# 2026-10-20: rencana alokasi surplus lintas lokasi. Panel "Rencana alokasi
+# surplus" (halaman Surplus & Limbah) sebelumnya dihitung klien dari
+# /balance/map yang dibatasi cakupan peran -> selalu kosong untuk peran SPPG.
+from app.api.surplus import router as surplus_router
+from app.api.waste import router as waste_router
 
 
 @asynccontextmanager
@@ -91,6 +93,57 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+# ── SEC-04: dokumentasi API hanya terbuka bila diminta ────────────────────
+# Audit 24 Okt 2026: `/docs`, `/redoc`, dan `/openapi.json` terbuka tanpa
+# autentikasi. Peta endpoint selengkap itu memudahkan pemetaan serangan, dan
+# tidak dibutuhkan UI (UI memakai path eksplisit). Default TERTUTUP; buka
+# sadar-sadar dengan ENABLE_DOCS=true (atau DEBUG=true) saat mengembangkan.
+_DOKUMEN_PATHS = ("/docs", "/redoc", "/openapi.json", "/docs/oauth2-redirect")
+
+
+def _dokumen_boleh() -> bool:
+    """True bila dokumentasi API boleh disajikan (ENABLE_DOCS/DEBUG)."""
+    def _nyala(nama: str) -> bool:
+        return os.environ.get(nama, "").strip().lower() in {"1", "true", "yes", "on"}
+
+    return _nyala("ENABLE_DOCS") or _nyala("DEBUG")
+
+
+@app.middleware("http")
+async def _kunci_dokumen(request, call_next):
+    if request.url.path in _DOKUMEN_PATHS and not _dokumen_boleh():
+        # 404, bukan 403: jangan mengonfirmasi bahwa rutenya ada.
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
+    return await call_next(request)
+
+
+# ── SEC-05: header keamanan ───────────────────────────────────────────────
+# Backend hanya menyajikan JSON, jadi CSP-nya boleh seketat mungkin. Halaman
+# HTML (Next.js) punya kebijakan sendiri di frontend/next.config.js — dua sisi
+# ini sengaja terpisah karena kebutuhannya berbeda.
+@app.middleware("http")
+async def _header_keamanan(request, call_next):
+    resp = await call_next(request)
+    h = resp.headers
+    h.setdefault("X-Content-Type-Options", "nosniff")
+    h.setdefault("X-Frame-Options", "DENY")
+    h.setdefault("Referrer-Policy", "no-referrer")
+    h.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+    h.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    h.setdefault(
+        "Content-Security-Policy",
+        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; "
+        "form-action 'none'",
+    )
+    # HSTS hanya di HTTPS (atau di belakang proxy TLS); pada HTTP lokal header
+    # ini diabaikan browser, tetapi mengirimnya membuat perilaku dev vs prod
+    # berbeda tanpa alasan.
+    proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip()
+    if request.url.scheme == "https" or proto == "https":
+        h.setdefault("Strict-Transport-Security", "max-age=15552000; includeSubDomains")
+    return resp
+
 
 # ── Konteks sesi demo (024) ────────────────────────────────────────────────
 # `do_orm_execute` menyaring kueri berdasarkan ContextVar; ContextVar itu diisi

@@ -400,6 +400,13 @@ async def kosongkan_kecuali(db: AsyncSession, simpan: uuid.UUID | None) -> int:
                 )
             )
         dihapus += int(hasil.rowcount or 0)
+    if dihapus:
+        # Data demo direset -> blok ledger lama menjadi arsip generasi sebelumnya.
+        # Bloknya TIDAK dihapus (rantai hash harus tetap utuh); cakupan dihitung
+        # per generasi. Lihat `ledger_service.bump_generation` (audit N3).
+        from app.services.ledger_service import bump_generation
+
+        await bump_generation(db)
     await db.commit()
     return dihapus
 
@@ -421,6 +428,13 @@ async def bersihkan(db: AsyncSession, sesi_id: uuid.UUID) -> int:
             delete(model).where(model.demo_session_id == sesi_id)
         )
         dihapus += int(hasil.rowcount or 0)
+    if dihapus:
+        # Data demo direset -> blok ledger lama menjadi arsip generasi sebelumnya.
+        # Bloknya TIDAK dihapus (rantai hash harus tetap utuh); cakupan dihitung
+        # per generasi. Lihat `ledger_service.bump_generation` (audit N3).
+        from app.services.ledger_service import bump_generation
+
+        await bump_generation(db)
     await db.commit()
     return dihapus
 

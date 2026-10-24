@@ -154,7 +154,24 @@ describe("top bar — hitungan menghormati kedaluwarsa", () => {
         { status: "verifier_flagged", valid: false },
         { status: "proposed", valid: true }, // bukan tindakan → tidak dihitung
       ]),
-    ).toEqual({ actionable: 1, expired: 3, total: 4 });
+    ).toEqual({ actionable: 1, expired: 3, draft: 0, total: 4 });
+  });
+
+  it("draf proposed yang kedaluwarsa dihitung terpisah, bukan sebagai tunggakan tindakan", () => {
+    // Kepala SPPG satu-satunya yang bisa menekan "Ajukan"; setelah tenggat lewat
+    // tombolnya hilang, jadi baris ini bukan pekerjaan yang bisa diselesaikan.
+    expect(
+      countActionableBreakdown(
+        [
+          HIDUP,
+          { status: "proposed", valid: false },
+          { status: "proposed", valid: false },
+          { status: "proposed", valid: true },
+        ],
+        undefined,
+        "sppg_head",
+      ),
+    ).toEqual({ actionable: 2, expired: 0, draft: 2, total: 4 });
   });
 });
 
@@ -254,12 +271,31 @@ describe("notifList", () => {
     expect(hasil.total).toBe(1);
     expect(hasil.shown.map((d) => d.decision_id)).toEqual(["hidup"]);
     expect(hasil.expired).toBe(1);
+    expect(hasil.draft).toBe(0);
+  });
+
+  it("draf proposed kedaluwarsa dilaporkan sebagai draft, bukan tunggakan tenggat", () => {
+    // Audit 24 Okt 2026: 27 draf membuat lonceng berbunyi "31 lewat tenggat".
+    const hasil = notifList(
+      [
+        { decision_id: "kerja", status: "PENDING_APPROVAL", valid: true, created_at: "2026-10-11T08:00:00Z" },
+        { decision_id: "lewat", status: "PENDING_APPROVAL", valid: false, created_at: "2026-10-11T09:00:00Z" },
+        { decision_id: "draf1", status: "PROPOSED", valid: false, created_at: "2026-10-11T10:00:00Z" },
+        { decision_id: "draf2", status: "PROPOSED", valid: false, created_at: "2026-10-11T11:00:00Z" },
+      ],
+      undefined,
+      "sppg_head",
+    );
+    expect(hasil.total).toBe(1);
+    expect(hasil.expired).toBe(1);
+    expect(hasil.draft).toBe(2);
+    expect(hasil.shown.map((d) => d.decision_id)).toEqual(["kerja"]);
   });
 
   it("daftar kosong / null tidak meledak", () => {
     // `expired` ikut dilaporkan sejak perbaikan F1 (16 Okt).
-    expect(notifList([])).toEqual({ total: 0, shown: [], rest: 0, expired: 0 });
-    expect(notifList(null)).toEqual({ total: 0, shown: [], rest: 0, expired: 0 });
+    expect(notifList([])).toEqual({ total: 0, shown: [], rest: 0, expired: 0, draft: 0 });
+    expect(notifList(null)).toEqual({ total: 0, shown: [], rest: 0, expired: 0, draft: 0 });
     expect(notifList(undefined, 5).total).toBe(0);
   });
 

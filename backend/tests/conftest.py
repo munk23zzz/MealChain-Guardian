@@ -6,6 +6,7 @@ direktori repo yang tidak di-mount ke container (agent/, infra/).
 Di dalam container, modul-modul itu dikoleksi-skip; di host tetap jalan.
 """
 
+import importlib
 from pathlib import Path
 
 import bcrypt
@@ -15,11 +16,10 @@ from sqlalchemy import create_engine, text
 from tests.dsn import DSN_ASYNC, DSN_SYNC  # DSN mengikuti DATABASE_URL
 from tests.gate_lock import ambil_kunci, dsn_psycopg, lepas_kunci
 
-# Test yang butuh modul host-only (agent/, infra/) atau file root repo
-# (compose, .env.example, .gitignore, struktur) — tidak tersedia di container.
-HOST_ONLY_MODULES = [
-    "test_supervisor_agent.py",
-    "test_supervisor_tools.py",
+# Tes yang butuh PAKET `agent` (runtime terpisah di akar repo). Di dev, compose
+# me-mount `./agent:/agent:ro`, jadi paket itu tersedia dan tes ini BENAR-BENAR
+# berjalan. Di image tanpa mount, hanya tes ini yang dilewati.
+AGENT_MODULES = [
     "test_agent_contracts.py",
     "test_agent_workers.py",
     "test_agent_workers_p3.py",
@@ -27,10 +27,16 @@ HOST_ONLY_MODULES = [
     "test_agent_orchestrator.py",
     "test_agent_runtime_task.py",
     "test_agent_golden_cases.py",
-    # d730448 menambah tes ini, tetapi tidak mendaftarkannya di sini: pytest di
-    # kontainer berhenti saat koleksi (`No module named 'agent'`) dan seluruh
-    # gerbang backend ikut batal. Berkas ini mengimpor paket host `agent/`.
     "test_agent_verify.py",
+    "test_agent_verifier.py",
+]
+
+# Tes yang butuh BERKAS AKAR REPO (compose, .env.example, .gitignore, struktur).
+# Kontainer backend hanya memuat backend/, jadi daftar ini tetap diabaikan di
+# sana — tidak bergantung pada keberadaan direktori `agent/`.
+HOST_ONLY_MODULES = [
+    "test_supervisor_agent.py",
+    "test_supervisor_tools.py",
     "test_verify_agentcore_access.py",
     "test_verify_bedrock_access.py",
     "test_compose_contract.py",
@@ -48,14 +54,18 @@ DOCKER_ONLY_MODULES = [
 _backend_dir = Path(__file__).resolve().parents[1]
 _repo_root = _backend_dir.parent
 
-_host_sources_present = all(
-    (_repo_root / dirname).exists() for dirname in ("agent", "infra")
-)
+collect_ignore = list(DOCKER_ONLY_MODULES)
 
-if _host_sources_present:
-    collect_ignore = list(DOCKER_ONLY_MODULES)
-else:
-    collect_ignore = list(HOST_ONLY_MODULES)
+# Paket `agent` dianggap tersedia bila bisa DIIMPOR, bukan bila direktorinya
+# ada: di kontainer, `agent` datang dari mount /agent (lihat docker-compose).
+try:
+    importlib.import_module("agent")
+except Exception:  # noqa: BLE001 - apa pun penyebabnya: paket tidak siap
+    collect_ignore += AGENT_MODULES
+
+# Berkas akar repo (compose, .env.example, struktur) hanya ada di checkout host.
+if not all((_repo_root / nama).exists() for nama in ("docker-compose.yml", "infra")):
+    collect_ignore += HOST_ONLY_MODULES
 
 
 # ---------------------------------------------------------------------------

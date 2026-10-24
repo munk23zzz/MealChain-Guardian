@@ -46,7 +46,7 @@ def _batch(pilih: str = "jakarta") -> tuple[str, str, str, float]:
                     f"WHERE {where} AND b.safety_status <> 'fail' "
                     "AND (b.usable_until IS NULL OR b.usable_until > now()) "
                     "AND NOT EXISTS (SELECT 1 FROM batch_receipts r "
-                    "  WHERE r.batch_id = b.id AND r.status = 'disetujui') "
+                    "  WHERE r.batch_id = b.id AND r.status IN ('menunggu','disetujui')) "
                     "ORDER BY b.usable_until DESC NULLS LAST, b.created_at DESC LIMIT 1"
                 )
             ).one()

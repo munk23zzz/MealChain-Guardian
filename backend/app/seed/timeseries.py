@@ -43,7 +43,7 @@ import asyncio
 import hashlib
 import os
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -391,19 +391,50 @@ def _at(day: date, hour: int) -> datetime:
     return datetime(day.year, day.month, day.day, hour, tzinfo=UTC)
 
 
-def plan_delivery_rows(menu_rows: list[dict]) -> list[dict]:
+#: Zona WIB dipakai untuk memutuskan "hari ini" pada penyemaian kiriman.
+_WIB = timezone(timedelta(hours=7))
+
+
+def kiriman_sudah_terjadi(plan_date: date, now: datetime) -> bool:
+    """True bila kiriman untuk `plan_date` memang sudah berlangsung.
+
+    Aturan tunggal yang dipakai generator DAN penghitung harapan: rencana
+    setelah hari ini (WIB) belum terjadi, dan rencana hari ini baru terjadi
+    setelah pukul kirim 14:00 UTC (21:00 WIB). Tanpa satu sumber aturan,
+    jaring `pastikan_deret_demo` menganggap deret selalu kurang.
+    """
+    hari_ini = now.astimezone(_WIB).date()
+    if plan_date > hari_ini:
+        return False
+    return _at(plan_date, 14) <= now
+
+
+def plan_delivery_rows(
+    menu_rows: list[dict], now: datetime | None = None
+) -> list[dict]:
     """Rencana kiriman demo: satu kiriman per rencana pada/ setelah 8 Okt.
 
     Porsi terkirim 80–100% dari rencana (85% hari penuh, 10% kurang sedikit, 5%
     kurang lebih banyak). Kalau semuanya 100%, "Meal Continuity Rate" hanya bisa
     100% dan deretnya tidak informatif — padahal justru angka itulah yang dibaca
     juri di panel KPI.
+
+    Kiriman hanya ditulis untuk kejadian yang SUDAH berlangsung: rencana setelah
+    hari ini (WIB) dilewati, dan rencana hari ini baru dapat kiriman bila pukul
+    21:00 WIB (14:00 UTC) sudah lewat. Tanpa aturan ini, kartu Meal Continuity
+    menampilkan 100% untuk barang yang belum berangkat — angka palsu yang persis
+    dilarang prinsip proyek (audit ulang 24 Okt 2026, temuan N1).
     """
     batas = EVENT_DEMO_START.date()
+    acuan = now or datetime.now(UTC)
     rows: list[dict] = []
     for item in menu_rows:
         if item["plan_date"] < batas:
             continue
+        # Belum terjadi (besok/lusa, atau hari ini sebelum jam kirim) -> lewati.
+        if not kiriman_sudah_terjadi(item["plan_date"], acuan):
+            continue
+        dikirim_pada = _at(item["plan_date"], 14)
         kunci = f"kirim|{item['location_id']}|{item['plan_date']}"
         u = _unit(kunci)
         if u < Decimal("0.85"):
@@ -423,7 +454,7 @@ def plan_delivery_rows(menu_rows: list[dict]) -> list[dict]:
                 "menu_plan_id": item["menu_plan_id"],
                 "delivered_portions": max(1, porsi),
                 "status": "delivered",
-                "delivered_at": _at(item["plan_date"], 14),
+                "delivered_at": dikirim_pada,
                 "origin": "demo",
             }
         )
@@ -502,9 +533,17 @@ def plan_all(
     hari_berevent = {
         r["plan_date"] for r in menu_rows if r["plan_date"] >= EVENT_DEMO_START.date()
     }
+    # Harapan kiriman DITURUNKAN dari generatornya sendiri (satu sumber aturan):
+    # `plan_delivery_rows` hanya mengirim hari yang sudah berjalan, jadi hitungan
+    # "setiap rencana dapat kiriman" akan salah bila dihitung manual di sini
+    # (jaring `pastikan_deret_demo` lalu menganggap deret selalu kurang dan
+    # memulihkannya terus-menerus).
     event_plan = {
         "deliveries": sum(
-            1 for r in menu_rows if r["plan_date"] >= EVENT_DEMO_START.date()
+            1
+            for r in menu_rows
+            if r["plan_date"] >= EVENT_DEMO_START.date()
+            and kiriman_sudah_terjadi(r["plan_date"], datetime.now(UTC))
         ),
         "disposals": len(hari_berevent) * 2,
         "demand": len(demand_rows),
@@ -870,7 +909,9 @@ async def _insert_events(
         .all()
     )
     kiriman = [
-        r for r in plan_delivery_rows(rencana) if r["menu_plan_id"] not in sudah_punya
+        r
+        for r in plan_delivery_rows(rencana, now=now)
+        if r["menu_plan_id"] not in sudah_punya
     ]
     limbah = plan_disposal_rows(rencana, commodities_by_location)
 
@@ -1046,6 +1087,12 @@ async def purge_demo_rows(database_url: str | None = None) -> dict:
                     delete(model).where(model.origin == "demo")
                 )
                 deleted[model.__tablename__] = int(result.rowcount or 0)
+            if any(deleted.values()):
+                # Reset data demo = generasi ledger baru. Blok lama jadi arsip,
+                # bukan dihapus, supaya rantai hash tetap utuh (audit N3).
+                from app.services.ledger_service import bump_generation
+
+                await bump_generation(session)
             await session.commit()
     finally:
         await engine.dispose()

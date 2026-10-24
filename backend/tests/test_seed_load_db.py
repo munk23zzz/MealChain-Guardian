@@ -98,7 +98,12 @@ def test_supplier_quotes_persisted_as_price_signals(sync_engine):
             text(
                 "SELECT s.name, ps.price_per_kg FROM price_signals ps "
                 "JOIN suppliers s ON s.id = ps.supplier_id "
-                "WHERE ps.source = 'supplier_quote' AND ps.origin = 'seed'"
+                "WHERE ps.source = 'supplier_quote' AND ps.origin = 'seed' "
+                # Baris yang lahir dari AKSI (PO terbit → kutipan) membawa
+                # `source_ref`; ia bukan hasil build_seed_rows sehingga tidak
+                # boleh menimpa nilai kanonik di bawah. Invariant yang dijaga
+                # tes ini: drift kunci natural saat seed dibangun ulang.
+                "AND ps.source_ref IS NULL"
             )
         ).fetchall()
         prices = {r[0]: float(r[1]) for r in rows}

@@ -35,6 +35,7 @@ from app.api.demo_session import butuh_sesi_aktif
 from app.api.dependencies import get_db
 from app.core.scope import assert_in_scope
 from app.models import Batch, BatchReceipt, Commodity, Location, SupplyRecord, User
+from app.services import settlement
 from app.services.demo_session import sesi_sekarang
 
 router = APIRouter()
@@ -192,7 +193,10 @@ async def approve_receipt(
     if receipt.status == "ditolak":
         raise HTTPException(
             status_code=409,
-            detail="penerimaan ini sudah ditolak — catat penerimaan baru bila barang diperiksa ulang",
+            detail=(
+                "penerimaan ini sudah ditolak — catat penerimaan baru bila"
+                " barang diperiksa ulang"
+            ),
         )
     if str(batch.safety_status).lower() == "fail":
         raise HTTPException(
@@ -260,6 +264,13 @@ async def approve_receipt(
     receipt.review_note = None
     await db.flush()
     receipt.supply_record_id = stok.id
+    # Penulis KPI (migrasi 029): kg yang baru diterima menjadi porsi
+    # tersampaikan pada rencana menu hari itu. Idempoten lewat
+    # `source_ref=receipt:<id>`; tanpa ini Meal Continuity hanya bergerak
+    # bila seeder dijalankan ulang.
+    await settlement.catat_penerimaan(
+        db, batch=batch, receipt=receipt, sekarang=sekarang
+    )
     try:
         await db.commit()
     except IntegrityError as exc:  # balapan dua approve bersamaan

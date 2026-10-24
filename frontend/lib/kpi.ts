@@ -10,6 +10,8 @@ secara eksplisit — kalau salah satu dilupakan, angkanya hilang tanpa error, ja
 daftarnya sengaja ditulis sebagai konstanta yang diuji.
  */
 
+import { KPI_POLL_MS } from "./query";
+
 export const KPI_TABS: readonly string[] = ["today", "kpi-kualitas"];
 
 /* ---------------------------------------------------------------------------
@@ -55,6 +57,31 @@ export function kpiWindowRange(
 /** True bila tab ini benar-benar menampilkan angka KPI. */
 export function shouldLoadKpi(tab: string | null | undefined): boolean {
   return KPI_TABS.includes((tab ?? "").trim());
+}
+
+/**
+ * Kebijakan muat KPI: kapan dimuat, seberapa segar, dan seberapa sering dipoll.
+ *
+ * Kenapa ditulis sebagai fungsi murni: `refetchInterval` di hook dulu `false`
+ * ("KPI adalah potret"), sehingga saat demo angka kartu baru terlihat setelah
+ * tab ditinggalkan. Sekarang KPI diperlakukan sebagai panel live: selalu
+ * dianggap basi saat dibuka (`staleTime: 0`) dan dipoll tiap `KPI_POLL_MS`
+ * hanya di tab yang memamerkannya. Kebijakan ini diuji tanpa DOM supaya
+ * kembalinya `refetchInterval: false` tidak lolos diam-diam.
+ */
+export type KpiQueryPolicy = {
+  enabled: boolean;
+  staleTime: number;
+  refetchInterval: number | false;
+};
+
+export function kpiQueryPolicy(tab: string | null | undefined): KpiQueryPolicy {
+  const aktif = shouldLoadKpi(tab);
+  return {
+    enabled: aktif,
+    staleTime: 0,
+    refetchInterval: aktif ? KPI_POLL_MS : false,
+  };
 }
 
 /* ---------------------------------------------------------------------------

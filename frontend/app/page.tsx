@@ -59,7 +59,14 @@ import {
   useDecisions,
 } from "../lib/hooks/useDecisions";
 import { useToday } from "../lib/hooks/useToday";
-import { errorMessage } from "../lib/query";
+import { errorMessage, MAP_TRUCK_POLL_MS } from "../lib/query";
+import {
+  FEED_WINDOWS,
+  FEED_WINDOW_DEFAULT,
+  feedWindowHint,
+  feedWindowLabel,
+  type FeedWindowKey,
+} from "../lib/decisions-window";
 import {
   FEED_SCOPE_ALL,
   FEED_SORT_LABELS,
@@ -80,6 +87,7 @@ import TopBar from "../components/TopBar";
 import {
   ALL_LOCATIONS,
   countActionable,
+  countDraftActionable,
   countExpiredActionable,
   defaultScope,
   initialsOf,
@@ -233,6 +241,10 @@ export default function Home() {
   // + "today" (halaman "Hari Ini", permintaan Roy 2026-10-11). Halaman yang
   // dibuka setelah login tetap Overview — tab baru tidak mengubah alur demo.
   const [tab, setTab] = useState<NavId>("overview");
+  // Periode feed rekomendasi (permintaan pemilik 24 Okt 2026): hari ini /
+  // 7 hari / 1 bulan. Dideklarasikan di sini karena query feed di bawah sudah
+  // memakainya; angkanya tetap dari backend (`GET /decisions?window=…`).
+  const [feedWindow, setFeedWindow] = useState<FeedWindowKey>(FEED_WINDOW_DEFAULT);
   const [mapCommodity, setMapCommodity] = useState("telur");
   // Lokasi aktif yang disorot di peta, dipilih dari dropdown top bar.
   const [activeLocation, setActiveLocation] = useState<string | null>(null);
@@ -306,6 +318,20 @@ export default function Home() {
   const mapError = mapQuery.error;
   const mapUpdatedAt = mapQuery.updatedAt;
   const decisionsQuery = useDecisions(token, identityScope);
+  // Daftar KHUSUS feed rekomendasi (jendela terpilih). Dipisah dari
+  // `decisionsQuery` supaya lonceng notifikasi, badge sidebar, dan KPI tetap
+  // memakai seluruh riwayat — mempersempit feed tidak boleh mengubah arti
+  // angka "21 menunggu tindakan" di luar feed.
+  const feedWindowQuery = useDecisions(
+    token,
+    identityScope,
+    feedWindow,
+    tab === "recommendations"
+  );
+  const feedWindowDecisions = useMemo(
+    () => feedWindowQuery.data?.items ?? [],
+    [feedWindowQuery.data]
+  );
   // Dibungkus useMemo: literal `[]` baru setiap render akan membuat useMemo
   // turunan (sampel → run/pemasok) dihitung ulang tanpa perlu.
   const decisions = useMemo(() => decisionsQuery.data?.items ?? [], [decisionsQuery.data]);
@@ -445,7 +471,13 @@ export default function Home() {
     token,
     identityScope,
     tab,
-    mapData?.commodity ?? null
+    mapData?.commodity ?? null,
+    null,
+    false,
+    // Denyut khusus peta: 15 detik cukup untuk membuat mobil kiriman maju
+    // beberapa persen (animasi geser 700 ms di SupplyMap) tanpa membebani
+    // backend saat tab peta tidak dibuka (query-nya memang tidak aktif).
+    MAP_TRUCK_POLL_MS
   );
   // Sorotan peta (Arah C): baris yang dipilih + jumlah seluruh kiriman tampilan.
   // Keduanya dari data yang SAMA dengan garis di peta (mapSupplierRoutesQuery).
@@ -887,8 +919,12 @@ export default function Home() {
   // Tanpa useMemo: nilainya kecil (126 baris) dan di bawah ini tidak boleh ada
   // hook baru — komponen sudah punya early return untuk layar login.
   const feedFilter = { scope: feedScope, query: feedQuery };
-  const feedChipList = feedChips(decisions);
-  const feedRows = sortFeed(feedVisible(decisions, feedFilter), feedSort, now);
+  const feedChipList = feedChips(feedWindowDecisions);
+  const feedRows = sortFeed(
+    feedVisible(feedWindowDecisions, feedFilter),
+    feedSort,
+    now
+  );
   const feedTotal = feedRows.length;
   const feedPageData = paginate(feedRows, feedPage, FEED_PAGE_SIZE);
   const feedCards = feedPageData.items;
@@ -903,6 +939,16 @@ export default function Home() {
   // mengejar pekerjaan yang tombolnya tidak ada untuknya.
   const perluKeputusan = countActionable(decisions, undefined, role);
   const lewatTenggat = countExpiredActionable(decisions, undefined, role);
+  const drafLewat = countDraftActionable(decisions, undefined, role);
+  // Angka untuk kepala tab Recommendations: HARUS sejendela dengan daftar di
+  // bawahnya, kalau tidak "21 perlu tindakan" bertengger di atas daftar 27
+  // baris "hari ini". Badge sidebar tetap memakai angka seluruh riwayat.
+  const perluKeputusanJendela = countActionable(feedWindowDecisions, undefined, role);
+  const lewatTenggatJendela = countExpiredActionable(
+    feedWindowDecisions,
+    undefined,
+    role
+  );
 
   // PRD 2.4: nav 5 tab (overview/kpi/recommendations/agent-log/demo-control)
   // + tab "Hari Ini" (permintaan Roy 2026-10-11) sebagai halaman pertama;
@@ -928,12 +974,16 @@ export default function Home() {
       id: "recommendations",
       label: `Recommendations${perluKeputusan ? ` (${perluKeputusan})` : ""}`,
       // Angka = yang MASIH bisa ditindak; tunggakan yang lewat tenggat tetap
-      // disebut supaya tidak hilang dari pandangan (temuan QA F1).
+      // disebut supaya tidak hilang dari pandangan (temuan QA F1). Draf usulan
+      // kedaluwarsa dilaporkan terpisah: ia bukan pekerjaan yang bisa
+      // diselesaikan, hanya usulan lama yang tidak pernah dimajukan.
       title: perluKeputusan
-        ? `${perluKeputusan} rekomendasi perlu tindakan${lewatTenggat ? ` · ${lewatTenggat} lewat tenggat` : ""}`
+        ? `${perluKeputusan} rekomendasi perlu tindakan${lewatTenggat ? ` · ${lewatTenggat} lewat tenggat` : ""}${drafLewat ? ` · ${drafLewat} draf usulan kedaluwarsa` : ""}`
         : lewatTenggat
           ? `Tidak ada yang bisa ditindak · ${lewatTenggat} lewat tenggat`
-          : "Tidak ada rekomendasi yang perlu tindakan",
+          : drafLewat
+            ? `Tidak ada yang bisa ditindak · ${drafLewat} draf usulan kedaluwarsa`
+            : "Tidak ada rekomendasi yang perlu tindakan",
     },
     { id: "evidence", label: "Decision & Evidence" },
     { id: "safety", label: "Keamanan Pangan" },
@@ -1554,15 +1604,16 @@ export default function Home() {
                 meta={
                   <>
                     <span className="commodity-pill">
-                      {perluKeputusan} perlu tindakan
+                      {perluKeputusanJendela} perlu tindakan
                     </span>
-                    {lewatTenggat > 0 && (
+                    {lewatTenggatJendela > 0 && (
                       <span className="commodity-pill">
-                        {lewatTenggat} lewat tenggat
+                        {lewatTenggatJendela} lewat tenggat
                       </span>
                     )}
                     <span className="commodity-pill">
-                      {decisions.length} total rekomendasi
+                      {feedWindowDecisions.length} rekomendasi ·{" "}
+                      {feedWindowLabel(feedWindow).toLowerCase()}
                     </span>
                   </>
                 }
@@ -1633,6 +1684,44 @@ export default function Home() {
                     </div>
                   </div>
 
+                  {/* Pemilih periode (permintaan pemilik 24 Okt 2026).
+                      Memakai kontrol yang SAMA dengan pemilih periode KPI
+                      (`.kpi-period` + `.commodity-pill` + `aria-pressed`)
+                      supaya dua tempat tidak punya bahasa visual berbeda.
+                      Tombol asli, bukan div: bisa Tab + Enter, dan keadaan
+                      aktif diumumkan ke pembaca layar — bukan hanya warna. */}
+                  <div
+                    className="kpi-period feed-period"
+                    role="group"
+                    aria-label="Periode rekomendasi"
+                  >
+                    <span className="kpi-period-label">Periode:</span>
+                    {FEED_WINDOWS.map((w) => {
+                      const aktif = w.key === feedWindow;
+                      return (
+                        <button
+                          key={w.key}
+                          type="button"
+                          className={`commodity-pill kpi-period-pill${
+                            aktif ? " is-active" : ""
+                          }`}
+                          data-window={w.key}
+                          aria-pressed={aktif}
+                          title={w.hint}
+                          onClick={() => {
+                            setFeedWindow(w.key);
+                            setFeedPage(1);
+                          }}
+                        >
+                          {w.label}
+                        </button>
+                      );
+                    })}
+                    <span className="feed-period-hint">
+                      {feedWindowHint(feedWindow)}
+                    </span>
+                  </div>
+
                   {/* Filter status: semua status punya chip + count (traceable;
                       EXPIRED tetap ada, tidak pernah disembunyikan by default).
                       Label bahasa manusia + aria-pressed supaya pembaca layar
@@ -1661,7 +1750,7 @@ export default function Home() {
                     <p className="feed-status" role="status" aria-atomic="true">
                       {feedSummary({
                         shown: feedCards.length,
-                        total: decisions.length,
+                        total: feedWindowDecisions.length,
                         scope: feedScope,
                         query: feedQuery,
                       })}
@@ -1682,11 +1771,37 @@ export default function Home() {
                   </div>
 
                   {feedCards.length === 0 ? (
-                    <p className="empty-state feed-empty">
-                      Tidak ada rekomendasi yang cocok dengan filter atau kata
-                      kunci ini. Coba kata lain, atau kosongkan filter untuk
-                      melihat seluruh {decisions.length} rekomendasi.
-                    </p>
+                    <div className="empty-state feed-empty">
+                      {feedFilterActive ? (
+                        <p>
+                          Tidak ada rekomendasi yang cocok dengan filter atau
+                          kata kunci ini. Coba kata lain, atau kosongkan filter
+                          untuk melihat seluruh {feedWindowDecisions.length}{" "}
+                          rekomendasi pada periode{" "}
+                          {feedWindowLabel(feedWindow).toLowerCase()}.
+                        </p>
+                      ) : (
+                        <>
+                          <p>
+                            Tidak ada rekomendasi pada periode{" "}
+                            <strong>{feedWindowLabel(feedWindow).toLowerCase()}</strong>{" "}
+                            ({feedWindowHint(feedWindow)}).
+                          </p>
+                          {feedWindow !== "30d" && (
+                            <button
+                              type="button"
+                              className="feed-reset"
+                              onClick={() => {
+                                setFeedWindow("30d");
+                                setFeedPage(1);
+                              }}
+                            >
+                              Lihat 1 bulan terakhir
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   ) : (
                     <div className="feed">
                       {feedCards.map((d) => (

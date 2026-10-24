@@ -208,6 +208,18 @@ export function ClockIcon({ size = 12 }: { size?: number }) {
 
 // --- Ikon top bar (bentuk mengikuti header acuan) ---
 
+/** Truk pengiriman — dipakai baris "dikirim pemasok … → …" di kartu rekomendasi. */
+export function TruckIcon({ size = 14 }: { size?: number }) {
+  return (
+    <Glyph size={size} strokeWidth={1.8}>
+      <path d="M3 7h10v9H3z" />
+      <path d="M13 10h4l3 3v3h-7z" />
+      <circle cx="7" cy="18" r="1.8" />
+      <circle cx="17" cy="18" r="1.8" />
+    </Glyph>
+  );
+}
+
 export function BellIcon({ size = 16 }: { size?: number }) {
   return (
     <Glyph size={size}>

@@ -419,6 +419,33 @@ def test_routing_json_eksplisit_menang():
     assert server.resolve_skill('{"skill": "approval_queue"}')[0] == "approval_queue"
     assert server.resolve_skill('{"skill": "supply_situation"}')[0] == "supply_situation"
 
+def test_rujukan_pendek_dari_tabel_diteruskan_sebagai_payload():
+    """Yang tampil di tabel (8 karakter) harus bisa dipakai di pertanyaan lanjutan."""
+    skill, payload = server.resolve_skill("bukti keputusan cec7e30d")
+    assert skill == server.SKILL_EVIDENCE
+    assert payload["decision_id"] == "cec7e30d"
+
+    skill, payload = server.resolve_skill("penerimaan barang batch 45204477")
+    assert skill == server.SKILL_SUPPLY
+    assert payload["batch_id"] == "45204477"
+
+    # id utuh tetap diambil utuh, bukan terpotong oleh pola rujukan pendek
+    skill, payload = server.resolve_skill("bukti keputusan cec7e30d-3eb5-4c29-82ee-c5fee581add1")
+    assert payload["decision_id"] == "cec7e30d-3eb5-4c29-82ee-c5fee581add1"
+
+def test_po_bernomor_sap_dibuka_rinciannya():
+    """Nomor PO hasil impor SAP hanya angka; rincian harus tetap bisa dibuka."""
+    skill, payload = server.resolve_skill("tampilkan PO 4500000001")
+    assert skill == server.SKILL_PO
+    assert payload["po_number"] == "4500000001"
+
+    # nominal rupiah tidak boleh diperlakukan sebagai nomor dokumen
+    skill, payload = server.resolve_skill("PO mana yang totalnya Rp14.100.000?")
+    assert skill == server.SKILL_PO
+    assert "po_number" not in payload
+
+
+
 
 def test_routing_json_tidak_dikenal_kembali_ke_kata_kunci():
     assert server.resolve_skill('{"skill": "hapus-semua"}')[0] == "supply_situation"
@@ -638,7 +665,7 @@ def test_skill_antrean_menampilkan_asal_tujuan_dan_komoditas():
     assert "Cianjur → Jakarta" in teks
     assert "telur" in teks
     assert "600 kg" in teks
-    assert "Persetujuan TIDAK bisa dilakukan dari Joule" in teks
+    assert "Persetujuan tidak bisa dilakukan dari Joule" in teks
 
 
 def test_skill_direktori_pemasok_menampilkan_hub_dan_kiriman():
@@ -792,7 +819,7 @@ def test_skill_kebutuhan_menampilkan_prakiraan_dan_metodenya():
 
     assert "957 kg" in teks
     assert "6.697,6 kg" in teks
-    assert "fallback statistik" in teks, "metode prakiraan harus terbaca, bukan disembunyikan"
+    assert "cadangan statistik" in teks, "metode prakiraan harus terbaca, bukan disembunyikan"
     assert "Keyakinan (0–1)" in teks
 
 
@@ -814,7 +841,7 @@ def test_skill_risiko_pemasok_menerjemahkan_id_menjadi_nama():
 
     assert "CV Cipinang Boga Utama" in teks, "supplier_id harus diterjemahkan ke nama"
     assert "Jakarta" in teks
-    assert "AKTIF" in teks and "batch ayam gagal uji antibiotik" in teks
+    assert "aktif" in teks and "batch ayam gagal uji antibiotik" in teks
     assert "9,8 km" in teks and "dalam perjalanan" in teks
 
 
@@ -851,8 +878,39 @@ def test_pasokan_menyebut_satu_pasangan_membaca_baris_pasokan_terakhir():
     teks = _teks_artefak(events[1])
 
     assert "supply_point:loc-1/telur" in fake.dipanggil
-    assert "Baris pasokan terakhir" in teks
-    assert "1.207,3 kg" in teks and "mock_sap" in teks
+    assert "Catatan pasokan terakhir yang dilaporkan SAP" in teks
+    assert "1.207,3 kg" in teks and "integrasi SAP simulasi" in teks  # sumber diterjemahkan, token mentah tidak tampil
+
+def test_rujukan_pendek_membuka_keputusan_yang_tepat():
+    """8 karakter pertama dari tabel chat harus bisa dipakai membuka bukti keputusan."""
+    fake = FakeClient()
+    events = _jalan(server.MealchainExecutor(lambda: fake), "bukti keputusan cec7e30d")
+    teks = _teks_artefak(events[1])
+
+    assert "decision_compliance:cec7e30d-3eb5-4c29-82ee-c5fee581add1" in fake.dipanggil
+    assert "Keputusan cec7e30d" in teks  # tampil pendek, walau yang dibuka id utuh
+
+
+def test_rujukan_pendek_ambigu_tidak_ditebak():
+    utuh, galat = server._resolve_id(
+        "cec7", ["cec7e30d-3eb5-4c29-82ee-c5fee581add1", "cec7ffff-1111-2222-3333-444444444444"],
+        sebutan="keputusan",
+    )
+
+    assert utuh == "cec7" and galat is not None
+    assert "2 keputusan yang cocok" in galat
+    assert "tidak memilih salah satu" in galat
+
+
+def test_rujukan_pendek_tidak_ditemukan_dan_id_utuh_diteruskan():
+    _, galat = server._resolve_id("zzzz", ["cec7e30d-3eb5-4c29-82ee-c5fee581add1"], sebutan="batch")
+    assert galat is not None and "Tidak ada batch" in galat
+
+    # id utuh di luar daftar tetap diteruskan: backend yang memutuskan, bukan jembatan.
+    asing = "1f2e3d4c-5b6a-4798-8a9b-0c1d2e3f4a5b"
+    utuh, galat = server._resolve_id(asing, [], sebutan="keputusan")
+    assert utuh == asing and galat is None
+
 
 
 def test_penerimaan_barang_dibaca_per_batch_yang_disebut():
@@ -865,4 +923,6 @@ def test_penerimaan_barang_dibaca_per_batch_yang_disebut():
 
     assert "receipts:11111111-2222-3333-4444-555555555555" in fake.dipanggil
     assert "Penerimaan barang untuk batch" in teks
+    # Batch spesifik = jawaban spesifik: tabel pasokan tidak ikut disodorkan.
+    assert "Keseimbangan pasokan per SPPG" not in teks
     assert "kemasan: belum" in teks and "selisih 20 kg dilaporkan" in teks

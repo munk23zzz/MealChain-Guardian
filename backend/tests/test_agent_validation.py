@@ -1,8 +1,22 @@
 """Validasi lintas-worker: kelengkapan, kontradiksi, status run."""
 
-from agent.contracts import AgentFinding, AgentName, Citation, Contradiction, WorkerStatus
-from agent.registry import get_spec
-from agent.validation import (
+import pytest
+
+# `agent/` adalah runtime TERPISAH di akar repo (image sendiri). Tanpa mount
+# ./agent:/agent (lihat docker-compose.yml), impor di bawah gagal dan pytest
+# berhenti "Interrupted: 1 error during collection" (audit DEP-04).
+pytest.importorskip("agent")
+
+from agent.contracts import (  # noqa: E402
+    ANALYST_AGENTS,
+    AgentFinding,
+    AgentName,
+    Citation,
+    Contradiction,
+    WorkerStatus,
+)
+from agent.registry import get_spec  # noqa: E402
+from agent.validation import (  # noqa: E402
     detect_contradictions,
     run_status,
     safety_veto,
@@ -30,7 +44,7 @@ def _finding(
 
 
 def _all_findings(**overrides: AgentFinding) -> list[AgentFinding]:
-    return [overrides.get(name.value, _finding(name)) for name in AgentName]
+    return [overrides.get(name.value, _finding(name)) for name in ANALYST_AGENTS]
 
 
 def test_validate_tujuh_worker_lengkap() -> None:

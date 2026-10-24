@@ -170,7 +170,7 @@ def daftar_isi():
         ["2", "Arsitektur per lapisan", "Tujuh lapisan, alur satu permintaan, tiga batas kepercayaan"],
         ["3", "Model data dan tiga lapis penandaan", "Tabel kunci dan arti origin, demo_session_id, demo_case"],
         ["4", "Alur 1 - siklus data demo", "Kosong, aktif, perpanjang, akhiri, kedaluwarsa, tanpa sesi"],
-        ["5", "Alur 2 - pipeline keputusan", "Tujuh tahap, tujuh agen, matriks approval, tujuh status, lima bukti"],
+        ["5", "Alur 2 - pipeline keputusan", "Tujuh tahap, delapan agen (tujuh analitik + verifier), matriks approval, tujuh status, lima bukti"],
         ["6", "Alur 3 - diagnosis pasokan dan rekomendasi", "Neraca, kesegaran, keamanan, Safe Delivered Cost"],
         ["7", "Alur 4 - surplus, kekurangan, dan limbah", "Alokasi greedy di server, aturan lokasi, waste summary"],
         ["8", "Alur 5 - keamanan pangan dan rantai bukti", "Karantina, eksklusi pemasok, fusi bukti, dossier, ledger"],
@@ -202,7 +202,7 @@ def bagian_ringkasan():
            Spacer(1, 5), p(
                "Secara teknis ia terdiri dari lima bagian yang bisa dinyalakan terpisah: API FastAPI 65 endpoint pada "
                "29 router; frontend Next.js 14 (App Router) dengan 11 tab peran; PostgreSQL 16 sebagai satu-satunya "
-               "sumber kebenaran; tujuh agen spesialis (Strands SDK) di Bedrock AgentCore Runtime yang dipanggil "
+               "sumber kebenaran; delapan agen (tujuh spesialis + satu verifier) di Bedrock AgentCore Runtime yang dipanggil "
                "lewat Gateway; dan jembatan A2A di SAP BTP Cloud Foundry yang membuat Joule bisa membaca keadaan "
                "sistem tanpa menulis apa pun.", LEAD),
            Spacer(1, 6),

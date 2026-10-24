@@ -61,6 +61,7 @@ class Supplier(Base):
         ),
         Index("ix_suppliers_location_id", "location_id"),
         Index("ix_suppliers_commodity_id", "commodity_id"),
+        Index("idx_suppliers_location", "location_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

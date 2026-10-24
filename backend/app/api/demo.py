@@ -31,7 +31,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import require_roles
@@ -39,7 +39,6 @@ from app.api.demo_session import butuh_sesi_aktif
 from app.api.dependencies import get_db
 from app.core.config import settings
 from app.core.scope import assert_in_scope
-from app.services.demo_cost import hitung_biaya_demo
 from app.models import (
     AgentTrace,
     Batch,
@@ -61,6 +60,7 @@ from app.seed.timeseries import (
     validate_range,
 )
 from app.services.agent_review_client import AgentReviewResult, review_decision
+from app.services.demo_cost import hitung_biaya_demo
 from app.services.demo_procurement_orchestrator import (
     run_supplier_procurement,
 )
@@ -69,7 +69,7 @@ from app.services.trace_persistence import persist_agent_review
 
 router = APIRouter()
 
-# Tujuh worker review advisory, urutan tampil di panel "Bukti agent".
+# Tujuh worker analitik + verifier, urutan tampil di panel "Bukti agent".
 # Kunci harus sama dengan agent_name yang ditulis runtime AgentCore.
 SWARM_AGENTS: tuple[tuple[str, str], ...] = (
     ("supply", "Pasokan"),
@@ -79,6 +79,7 @@ SWARM_AGENTS: tuple[tuple[str, str], ...] = (
     ("price", "Harga"),
     ("logistics", "Logistik"),
     ("evidence", "Bukti"),
+    ("verifier", "Verifikasi"),
 )
 
 DEMO_CASES = (
@@ -133,6 +134,36 @@ async def _commodity_id(db: AsyncSession, name: str):
         await db.execute(select(Commodity).where(Commodity.name == name))
     ).scalar_one_or_none()
     return row.id if row else None
+
+
+async def _bukti(
+    db: AsyncSession,
+    decision: Decision,
+    jenis: str,
+    muatan: dict,
+    sekarang: datetime,
+    konsisten: bool = True,
+) -> None:
+    """Tulis satu baris bukti deterministik untuk kasus demo.
+
+    Kenapa perlu: kasus yang berakhir `rejected`/`verifier_flagged` tetap punya
+    bukti — justru bukti itulah alasan penolakan/flag-nya. Sebelum ini hanya
+    versi yang masih menunggu approve yang diberi bukti, sehingga 8 kartu di
+    feed punya panel Decision & Evidence kosong (audit 24 Okt 2026).
+    """
+    kunci = uuid.uuid5(decision.id, f"bukti:{jenis}")
+    if await db.get(DecisionEvidence, kunci) is not None:
+        return
+    db.add(
+        DecisionEvidence(
+            id=kunci,
+            decision_id=decision.id,
+            evidence_type=jenis,
+            payload=muatan,
+            is_consistent=konsisten,
+            recorded_at=sekarang,
+        )
+    )
 
 
 async def _ikat_sumber(db: AsyncSession, decision: Decision, sekarang: datetime) -> bool:
@@ -225,12 +256,17 @@ def _decision(
     rejection_reason=None,
     verifier_note=None,
     verified_by=None,
+    supplier_id=None,
 ) -> Decision:
     return Decision(
+        # rejection-loop-kuota = siklus penolakan pada PENGADAAN dari pemasok,
+        # bukan pemindahan stok antar-SPPG. Versi lama memberinya tipe
+        # `regional_balance`, sehingga kartunya berlabel "Penyeimbangan pasokan
+        # regional" padahal baris pengirimnya menyebut nama pemasok.
         decision_type=(
             "safety_disruption"
             if case in {"shortage-darurat", "gangguan-logistik"}
-            else "regional_balance"
+            else "supplier_procurement"
             if case == "rejection-loop-kuota"
             else "price_anomaly"
         ),
@@ -246,6 +282,7 @@ def _decision(
         generated_at=datetime.now(timezone.utc),
         source_location_id=src,
         target_location_id=tgt,
+        supplier_id=supplier_id,
         commodity_id=commodity_id,
         quantity_kg=qty,
         # Biaya diisi sesudah baris ini ada: `_lengkapi_biaya` menghitung dari
@@ -307,30 +344,117 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
     if telur is None:
         raise HTTPException(status_code=422, detail="komoditas telur tidak ada")
 
+    # `pulau` memisahkan data demo per kepulauan: pasokan segar tidak menyeberang
+    # laut dalam satu hari. Sebelumnya kandidat sumber memuat "Surabaya" sebagai
+    # cadangan sehingga kartu Jakarta bisa berbunyi "Ganti pasokan 300 kg ayam:
+    # Surabaya → Jakarta" (663 km) — mustahil untuk ayam segar.
+    pulau = {
+        "Jakarta": "jawa", "Bandung": "jawa", "Bogor": "jawa", "Cianjur": "jawa",
+        "Semarang": "jawa", "Yogyakarta": "jawa", "Surabaya": "jawa",
+        "Medan": "sumatera", "Palembang": "sumatera", "Makassar": "sulawesi",
+    }
+    maks_km = 400.0
+
+    def _km(a: Location, b: Location) -> float:
+        from math import asin, cos, radians, sin, sqrt
+
+        dlat = radians(float(b.latitude) - float(a.latitude))
+        dlon = radians(float(b.longitude) - float(a.longitude))
+        h = sin(dlat / 2) ** 2 + cos(radians(float(a.latitude))) * cos(
+            radians(float(b.latitude))
+        ) * sin(dlon / 2) ** 2
+        return 2 * 6371.0 * asin(sqrt(h))
+
     def _nama_sumber(kandidat: tuple[str, ...]) -> str:
-        """Nama lokasi sumber pertama yang BUKAN kota target."""
+        """Sumber = kota lain TERDEKAT di pulau yang sama, bukan kandidat jauh.
+
+        `kandidat` dipertahankan sebagai urutan preferensi bila masih masuk akal
+        jaraknya; kalau semua terlalu jauh, pakai tetangga terdekat. Bila kota
+        itu tidak punya tetangga dalam `maks_km` (Medan, Palembang, Makassar),
+        sumber = kota target sendiri: stok lokal, bukan pasokan lintas pulau.
+        """
+        sama_pulau = [
+            lok for lok in locations
+            if lok.name != target.name
+            and pulau.get(lok.name) == pulau.get(target.name)
+        ]
+        sama_pulau.sort(key=lambda lok: _km(target, lok))
+        dekat = [lok.name for lok in sama_pulau if _km(target, lok) <= maks_km]
         for nama in kandidat:
-            if nama != target.name:
+            if nama in dekat:
                 return nama
-        raise HTTPException(status_code=422, detail="tidak ada lokasi sumber selain kota target")
+        if dekat:
+            return dekat[0]
+        return target.name
 
     def _sumber(kandidat: tuple[str, ...]):
         """Lokasi sumber (id) — lihat `_nama_sumber`."""
         return loc[_nama_sumber(kandidat)]
 
+    async def _pemasok_kasus(commodity_id, lokasi: Location):
+        """Pemasok untuk kasus skrip: pemasok batch kanonik kalau ada.
+
+        Kasus "rejection-loop-kuota" adalah siklus penolakan pada PENGADAAN,
+        jadi keputusannya harus menunjuk pemasok — sama seperti kartu
+        `supplier_procurement` pada umumnya. Tanpa ini, ringkasan persetujuan
+        menampilkan "pemasok: —" untuk keputusan yang jelas membeli barang.
+        """
+        from app.models import Batch, Supplier
+
+        baris = (
+            await db.execute(
+                select(Batch.supplier_id)
+                .join(Supplier, Supplier.id == Batch.supplier_id)
+                .where(
+                    Batch.location_id == lokasi.id,
+                    Batch.commodity_id == commodity_id,
+                    Batch.origin != "demo",
+                )
+                .limit(1)
+            )
+        ).scalars().first()
+        if baris is not None:
+            return baris
+        return (
+            await db.execute(
+                select(Supplier.id)
+                .where(
+                    Supplier.commodity_id == commodity_id,
+                    Supplier.location_id == lokasi.id,
+                )
+                .order_by(Supplier.name)
+                .limit(1)
+            )
+        ).scalars().first()
+
     created: list[str] = []
     sekarang = datetime.now(timezone.utc)
+    sup_telur_kasus = await _pemasok_kasus(telur, target)
 
     # ---- Kasus 1: rejection-loop-kuota (v1 ditolak → v2 ditolak → v3 fresh)
     v1 = _decision(
         "rejection-loop-kuota", 1, "rejected",
         _sumber(("Cianjur", "Bogor", "Surabaya")), target.id, telur, "600", "16206000.00",
+        supplier_id=sup_telur_kasus,
         ttl_minutes=-60,  # kedaluwarsa (sudah lewat, keputusan mati)
         rejection_reason=f"Kuota SPPG {target.name} penuh minggu ini — coba skema bertahap.",
     )
     db.add(v1)
     await db.flush()
     created.append(v1.id)
+    # Bukti penolakan iterasi 1: kuota SPPG penuh. Tanpa baris ini kartu
+    # `rejected` tampil dengan panel bukti kosong.
+    await _bukti(
+        db,
+        v1,
+        "human_inspection",
+        {
+            "allocation_note": True,
+            "quota_full": True,
+            "rejection_reason": f"Kuota SPPG {target.name} penuh minggu ini — coba skema bertahap.",
+        },
+        sekarang,
+    )
     await _add_trace(db, v1.id, "DETECT", 95, "demand.snapshot",
         {"location": target.name, "window": "7d"},
         {"shortage_kg": 600, "signal": "permintaan naik"})
@@ -348,6 +472,7 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
     v2 = _decision(
         "rejection-loop-kuota", 2, "rejected",
         _sumber(("Cianjur", "Bogor", "Surabaya")), target.id, telur, "600", "16206000.00",
+        supplier_id=sup_telur_kasus,
         ttl_minutes=-30,
         supersedes=v1.id,
         rejection_reason="Harga per kg naik 12% dari referensi — negosiasi ulang dulu.",
@@ -355,6 +480,19 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
     db.add(v2)
     await db.flush()
     created.append(v2.id)
+    # Bukti penolakan: harga kutipan 12% di atas referensi — alasan kartu ini
+    # ditolak, jadi panel bukti TIDAK boleh kosong.
+    await _bukti(
+        db,
+        v2,
+        "market_price",
+        {
+            "reference": "pihps_reference",
+            "harga_per_kg_ratio": 1.12,
+            "rejection_reason": "Harga per kg naik 12% dari referensi — negosiasi ulang dulu.",
+        },
+        sekarang,
+    )
     await _add_trace(db, v2.id, "LEARN", 30, "rejection_loop.repropose",
         {"parent_iteration": 2},
         {"parent_rejection_reason": "Harga per kg naik 12% dari referensi — negosiasi ulang dulu.",
@@ -363,6 +501,7 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
     v3 = _decision(
         "rejection-loop-kuota", 3, "pending_approval",
         _sumber(("Cianjur", "Bogor", "Surabaya")), target.id, telur, "600", "16206000.00",
+        supplier_id=sup_telur_kasus,
         ttl_minutes=480,  # demo-day guard: jangan EXPIRED saat demo (Roy)
         supersedes=v2.id,
         verified_by="verifier_agent",
@@ -415,6 +554,20 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
     db.add(j1)
     await db.flush()
     created.append(j1.id)
+    # Bukti tuduhan: kutipan 40% di bawah referensi PIHPS. `konsisten=False`
+    # karena bukti inilah yang MEMBANTAH kewajaran harga — bukan bukti pendukung.
+    await _bukti(
+        db,
+        j1,
+        "market_price",
+        {
+            "reference": "pihps_reference",
+            "supplier_quote_ratio": 0.60,
+            "flagged_reason": "harga 40% di bawah referensi pihps",
+        },
+        sekarang,
+        konsisten=False,
+    )
     # SENGAJA tanpa binding: kasus ini menuduh HARGA sebuah kutipan pemasok
     # janggal, dan pemasok itu tidak selalu pemilik batch terbesar di lokasi
     # asal. Mengikat batch terbesar = menampilkan pemasok yang bukan subjek
@@ -437,6 +590,19 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
     db.add(g1)
     await db.flush()
     created.append(g1.id)
+    # Bukti penolakan logistik: status rute + perkiraan tunda — kartu ini ditolak
+    # karena rute terganggu, jadi alasannya harus terbaca di panel bukti.
+    await _bukti(
+        db,
+        g1,
+        "gps",
+        {
+            "route": f"{_nama_sumber(('Bogor', 'Cianjur', 'Surabaya'))}→{target.name}",
+            "disruption": "banjir",
+            "eta_delay_hours": 6,
+        },
+        sekarang,
+    )
     await _add_trace(db, g1.id, "DETECT", 70, "logistics.status",
         {"route": f"{_nama_sumber(('Bogor', 'Cianjur', 'Surabaya'))}→{target.name}"},
         {"disruption": "banjir", "eta_delay_hours": 6})
@@ -451,6 +617,7 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
     g2 = _decision(
         "gangguan-logistik", 2, "pending_approval",
         _sumber(("Cianjur", "Bogor", "Surabaya")), target.id, telur, "600", "16206000.00",
+        supplier_id=sup_telur_kasus,
         ttl_minutes=300,  # demo-day guard (Roy)
         supersedes=g1.id,
         verified_by="verifier_agent",
@@ -536,6 +703,28 @@ async def preview_timeseries_data(
     return await preview_timeseries(start, end, interval_hours=interval_hours)
 
 
+@router.post("/demo/hari-ini", status_code=200)
+async def susun_hari_ini(
+    _sesi: object = Depends(butuh_sesi_aktif),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
+) -> dict:
+    """Tulis ulang satu hari operasional kota pemanggil (idempoten).
+
+    Dipakai sebelum demo: kartu paling atas selalu persetujuan pengiriman dari
+    pemasok, ditambah jalur gagal (ditolak / lewat tenggat / ditandai
+    verifikator) dan dua kiriman yang sedang berjalan.
+    """
+    from app.seed.hari_ini import susun
+
+    target = await db.get(Location, user.location_id) if user.location_id else None
+    if target is None:
+        raise HTTPException(status_code=409, detail="akun belum terikat lokasi SPPG")
+    hasil = await susun(db, nama_kota=target.name)
+    await db.commit()
+    return hasil
+
+
 @router.post("/demo/timeseries", status_code=200)
 async def generate_timeseries_data(
     payload: TimeseriesRequest,
@@ -610,6 +799,37 @@ async def _sync_routes_aman(now: datetime) -> tuple[dict, str | None]:
         return {}, f"{type(exc).__name__}: {exc}"
 
 
+async def _buang_draf_usang(db: AsyncSession, sekarang: datetime, jam: int = 1) -> dict:
+    """Hapus draf `proposed` usang yang tidak pernah dimajukan.
+
+    Syaratnya konservatif: `proposed`, tanpa `demo_case`, lebih tua dari `jam`
+    (bawaan 1 jam — draf yang benar-benar ditinggalkan, bukan yang baru dibuat),
+    **tidak** punya approval, **tidak** punya PO, dan **tidak** punya bukti.
+    Semua itu berarti tidak ada seorang pun yang pernah menyentuhnya; keputusan
+    yang sudah punya jejak apa pun TIDAK disentuh.
+    """
+    batas = sekarang - timedelta(hours=jam)
+    hasil = await db.execute(
+        text(
+            """
+            DELETE FROM decisions d
+            WHERE d.status = 'proposed'
+              AND d.demo_case IS NULL
+              AND d.created_at < :batas
+              AND NOT EXISTS (SELECT 1 FROM approvals a WHERE a.decision_id = d.id)
+              AND NOT EXISTS (
+                SELECT 1 FROM sap_mock_purchase_orders p WHERE p.decision_id = d.id
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM decision_evidence e WHERE e.decision_id = d.id
+              )
+            """
+        ),
+        {"batas": batas},
+    )
+    return {"draf_usang_dihapus": getattr(hasil, "rowcount", 0) or 0}
+
+
 @router.post("/demo/refresh", status_code=200)
 async def refresh_to_today(
     _sesi: object = Depends(butuh_sesi_aktif),
@@ -626,10 +846,22 @@ async def refresh_to_today(
         seed_demo_completed_decisions,
         seed_demo_daily_prices,
     )
+    from app.seed.demo_kpi_riwayat import geser_aksi_ke_riwayat
     from app.seed.seed_data import load_seed
 
     now = datetime.now(timezone.utc)
-    rows = await load_seed(now)
+    # Snapshot kanonik HANYA dimuat kalau belum ada. Memuatnya ulang dengan
+    # `now` hari ini memberi id baru (id diturunkan dari tanggal acuan) sementara
+    # baris acuan lama tetap ada: 100 price_signals yatim, 40 pihps_reference
+    # ganda, dan batch yang dipakai tes lain ikut terhapus bila dibersihkan
+    # paksa. Yang bergerak ke hari ini cukup baris DEMO (kiriman, kasus skrip,
+    # keputusan selesai, harga harian, seed hari-ini).
+    kanonik = (
+        await db.execute(
+            select(func.count()).select_from(Batch).where(Batch.origin != "demo")
+        )
+    ).scalar() or 0
+    rows = await load_seed(now) if not kanonik else {"dilewati": "snapshot kanonik sudah ada"}
     # Kiriman demo di SELURUH lokasi (origin='demo'): membuat peta, papan kiriman,
     # dan pemilih kiriman punya bahan nyata untuk dicoba di semua peran. Idempoten,
     # jadi menekan tombol dua kali tidak menggandakan kiriman.
@@ -648,12 +880,47 @@ async def refresh_to_today(
     # padahal datanya ada. Gagal jaringan TIDAK menggagalkan refresh: laporannya
     # dibawa di respons supaya terlihat, bukan disembunyikan.
     routes, route_error = await _sync_routes_aman(now)
-    cases = await _seed_demo_cases(db, force=True, target=await _target_lokasi(db, user))
+    target = await _target_lokasi(db, user)
+    cases = await _seed_demo_cases(db, force=True, target=target)
+    # KPI 24 jam harus mulai dari "belum ada aksi hari ini" (permintaan pemilik
+    # 23 Okt 2026). Tanpa langkah ini, "Segarkan ke hari ini" kembali mengisi
+    # empat metrik berbasis aksi dan panel kehilangan momen realtime-nya.
+    kpi_riwayat = await geser_aksi_ke_riwayat(db, now)
+    # Lihat `app/seed/demo_kasus_bukti.py`: satu kasus tinggal di jendela 24 jam
+    # dengan dua jenis bukti, menunggu approval operator.
+    from app.seed.demo_kasus_bukti import semai_kasus_bukti_hari_ini
+
+    kasus_bukti = await semai_kasus_bukti_hari_ini(db, now)
+    # Satu hari operasional Jakarta (24 Okt 2026). Tanpa langkah ini tombol
+    # "Siapkan data demo" meninggalkan feed 24 jam berisi SATU kartu: kasus
+    # skrip dihapus-lalu-dibuat-ulang dan baris aksi digeser keluar jendela,
+    # sehingga komposisi "menunggu / berjalan / selesai" hilang. Seed hari-ini
+    # menulisnya ulang secara deterministik supaya hasil klik selalu sama.
+    from app.seed.hari_ini import susun as susun_hari_ini
+
+    hari_ini = await susun_hari_ini(db, now=now, nama_kota=target.name)
+    # Kiriman kembar: beberapa penyemai memakai rumus waktu sama dengan skema
+    # id berbeda, sehingga satu kiriman muncul dua kali (dua truk identik).
+    from app.seed.rapikan import rapikan_batch_ganda
+
+    kembar = await rapikan_batch_ganda(db)
+    # Draf usulan yang tidak pernah dimajukan menumpuk setiap kali ada yang
+    # memanggil `POST /decisions` / `/balance/recommend`: 58 baris `proposed`
+    # semuanya lewat tenggat, dan lonceng top bar berbunyi "47 lewat tenggat"
+    # (audit 24 Okt 2026). Draf bukan riwayat keputusan — tidak punya approval,
+    # PO, maupun bukti — jadi dibuang saat hari demo disiapkan.
+    draf = await _buang_draf_usang(db, now)
+    await db.commit()
     return {
         "reference_time": now.isoformat(),
         "rows": rows,
         "cases": cases,
         "activity": {**aktivitas, **selesai, **harga},
+        "kpi_riwayat": kpi_riwayat,
+        "kasus_bukti": kasus_bukti,
+        "hari_ini": hari_ini,
+        "batch_kembar_dihapus": kembar,
+        "draf": draf,
         "routes": routes,
         "route_error": route_error,
         "warning": REFRESH_WARNING,
@@ -763,16 +1030,19 @@ async def _jalankan_agent_review(
 async def _catat_review_sukses(
     db: AsyncSession, decision_id: str, result: AgentReviewResult
 ) -> None:
-    """Persist 8 baris review; kegagalan penyimpanan tidak membatalkan Event 1."""
+    """Persist 9 baris review (7 worker + verifier + SUPERVISE) atau 8 dari runtime lama.
+
+    Kegagalan penyimpanan tidak membatalkan Event 1.
+    """
     rows = (result.payload or {}).get("trace_rows")
-    if not isinstance(rows, list) or len(rows) != 8:
+    if not isinstance(rows, list) or len(rows) not in (8, 9):
         await _catat_review_gagal(
             db,
             decision_id,
             AgentReviewResult(
                 status="failed",
                 run_id=result.run_id,
-                error="payload trace review tidak lengkap (wajib 8 baris)",
+                error="payload trace review tidak lengkap (wajib 9 baris)",
             ),
         )
         return

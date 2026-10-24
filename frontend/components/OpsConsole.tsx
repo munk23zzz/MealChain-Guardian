@@ -294,7 +294,7 @@ export default function OpsConsole({
             <dd>{(event1.trace_steps ?? []).join(" → ")}</dd>
             {event1.agent_review && (
               <>
-                <dt>Review 7 agen</dt>
+                <dt>Review 8 agen</dt>
                 <dd>{labelReview7Agen(event1.agent_review.status)}</dd>
               </>
             )}

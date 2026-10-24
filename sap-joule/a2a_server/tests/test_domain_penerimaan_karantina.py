@@ -82,7 +82,7 @@ def test_laporan_penerimaan_memuat_angka_backend():
     assert "1 penerimaan barang" in teks
     assert "Beras" in teks and "25 kg" in teks
     assert "3/3" in teks
-    assert "/receipts/menunggu" in teks
+    assert "sudah dibatasi ke lokasi pengguna" in teks
 
 
 def test_laporan_penerimaan_kosong_tidak_berbohong():
@@ -127,11 +127,11 @@ def test_bukti_menyebut_nama_penyetuju_bukan_hanya_peran():
 
 def test_domain_belum_tersedia_tidak_meminjam_angka_domain_lain():
     teks = report.unsupported_report(
-        "pengiriman barang", "backend belum menyediakan endpoint baca."
+        "pengiriman barang", "belum ada sumber data untuk pengiriman"
     )
     assert "belum bisa menjawab" in teks
     assert "Keseimbangan pasokan" not in teks
-    assert "belum tersedia" in teks or "belum menyediakan" in teks
+    assert "belum tersedia" in teks or "belum ada sumber data" in teks
 
 
 def test_laporan_karantina_kosong_jujur():

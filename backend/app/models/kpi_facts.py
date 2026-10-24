@@ -21,6 +21,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -80,6 +81,15 @@ class DeliveryEvent(Base):
             "origin IN ('seed','demo')", name="check_delivery_events_origin_vocab"
         ),
         Index("ix_delivery_events_origin_delivered_at", "origin", "delivered_at"),
+        # Index operasional yang lahir dari migrasi 009/013/029 — dideklarasikan
+        # di sini supaya `alembic check` tidak mengusulkan DROP (audit DB-01).
+        Index("idx_delivery_events_menu_plan", "menu_plan_id"),
+        Index(
+            "uq_delivery_events_source_ref",
+            "source_ref",
+            unique=True,
+            postgresql_where=text("source_ref IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -90,11 +100,14 @@ class DeliveryEvent(Base):
     )
     delivered_portions: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="delivered")
+    # Kunci idempotensi penulis KPI (migrasi 029): `receipt:<uuid>` untuk baris
+    # yang lahir dari approve penerimaan. NULL untuk baris seeder lama.
+    source_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: `origin`/`generated_at` (migrasi 017) — penanda asal, pola sama dengan
     #: tabel deret waktu lain. Default 'seed' berarti baris lama otomatis benar
     #: dan baris baru yang lupa mengisi dianggap kanonik (salahnya ke arah
     #: "data tetap ada", bukan "data demo menghapus data kanonik").
-    origin: Mapped[str] = mapped_column(Text, nullable=False, server_default="seed")
+    origin: Mapped[str] = mapped_column(String, nullable=False, server_default="seed")
     generated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -118,6 +131,13 @@ class DisposalEvent(Base):
             "origin IN ('seed','demo')", name="check_disposal_events_origin_vocab"
         ),
         Index("ix_disposal_events_origin_disposed_at", "origin", "disposed_at"),
+        Index("idx_disposal_events_loc_time", "location_id", "disposed_at"),
+        Index(
+            "uq_disposal_events_source_ref",
+            "source_ref",
+            unique=True,
+            postgresql_where=text("source_ref IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -127,16 +147,20 @@ class DisposalEvent(Base):
         UUID(as_uuid=True), ForeignKey("locations.id", ondelete="CASCADE"), nullable=False
     )
     commodity_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("commodities.id"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("commodities.id", ondelete="RESTRICT"),
+        nullable=False,
     )
-    quantity_kg: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    quantity_kg: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     #: Mitra yang menerima limbah (bank sampah / komposter / pakan). NULL =
     #: dibuang tanpa mitra; itu keadaan BERBEDA dari 0 kg, jadi API memisahkan
     #: `diverted` dari `unassigned_kg` alih-alih menyamakannya.
     partner_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Kunci idempotensi penulis KPI (migrasi 029): `disposal:<kunci>`.
+    source_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: Lihat catatan di `DeliveryEvent.origin` (migrasi 017).
-    origin: Mapped[str] = mapped_column(Text, nullable=False, server_default="seed")
+    origin: Mapped[str] = mapped_column(String, nullable=False, server_default="seed")
     generated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

@@ -7,6 +7,11 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "agent"))
 
 import pytest  # noqa: E402
+
+# `strands` hanya ada di image runtime agent, bukan di image backend. Tanpa
+# dependensi itu tes ini tidak bisa mengimpor apa pun, jadi di-skip eksplisit —
+# bukan error koleksi yang memblokir seluruh suite.
+pytest.importorskip("strands")
 import supervisor_agent  # noqa: E402
 
 

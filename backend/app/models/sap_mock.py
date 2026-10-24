@@ -4,7 +4,16 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -56,6 +65,7 @@ class SapMockPurchaseOrder(Base):
         CheckConstraint(
             "origin IN ('seed','demo')", name="sap_mock_po_origin_check"
         ),
+        Index("ix_sap_mock_purchase_orders_decision_id", "decision_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

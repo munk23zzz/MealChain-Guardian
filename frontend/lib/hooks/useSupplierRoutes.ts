@@ -29,14 +29,22 @@ export function useSupplierRoutes(
   tab: string,
   commodity: string | null = null,
   location: string | null = null,
-  forceEnabled = false
+  forceEnabled = false,
+  // Sejak audit 24 Okt 2026: peta butuh kabar jalan yang SEGAR supaya mobil
+  // kiriman benar-benar bergerak (dulu `refetchInterval: false`, jadi posisi
+  // beku di angka saat halaman dimuat — bahkan kiriman yang sudah tiba tetap
+  // tampak "di jalan"). Pemanggil yang tidak menampilkan mobil kiriman tetap
+  // memakai perilaku lama (tanpa polling).
+  pollMs: number | false = false
 ) {
+  const hidup = pollMs !== false && pollMs > 0;
   const query = useQuery({
     queryKey: queryKeys.supplierRoutes(scope, commodity, location),
     queryFn: () => fetchSupplierRoutes(token as string, commodity, location),
     enabled: Boolean(token) && (forceEnabled || shouldLoadSuppliers(tab, token)),
-    staleTime: SUPPLIERS_STALE_MS,
-    refetchInterval: false,
+    staleTime: hidup ? 0 : SUPPLIERS_STALE_MS,
+    refetchInterval: hidup ? (pollMs as number) : false,
+    refetchIntervalInBackground: false,
   });
   return {
     data: query.data ?? null,

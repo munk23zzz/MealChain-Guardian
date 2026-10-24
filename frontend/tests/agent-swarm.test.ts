@@ -1,4 +1,4 @@
-// Data panel review 7 agen — kartu tidak mengarang nilai yang tidak ada.
+// Data panel review 8 agen — kartu tidak mengarang nilai yang tidak ada.
 import { describe, expect, it } from "vitest";
 
 import {
@@ -78,11 +78,11 @@ describe("latestSwarmRun — pilih putaran terbaru", () => {
   });
 });
 
-describe("swarmCards — tepat tujuh kartu, nilai null jadi —", () => {
-  it("tujuh kartu berurutan dan label manusia", () => {
+describe("swarmCards — tepat delapan kartu, nilai null jadi —", () => {
+  it("delapan kartu berurutan dan label manusia", () => {
     const run = latestSwarmRun(runRows());
     const cards = swarmCards(run!);
-    expect(cards).toHaveLength(7);
+    expect(cards).toHaveLength(8);
     expect(cards.map((card) => card.key)).toEqual([
       "supply",
       "demand",
@@ -91,7 +91,10 @@ describe("swarmCards — tepat tujuh kartu, nilai null jadi —", () => {
       "price",
       "logistics",
       "evidence",
+      "verifier",
     ]);
+    expect(cards[7].label).toBe("Verifikasi");
+    expect(cards[7].stage).toBe("VERIFY");
     expect(cards[0].label).toBe("Pasokan");
     expect(cards[0].statusLabel).toBe("Selesai");
     expect(cards[0].duration).toBe("1,5 dtk");
@@ -100,14 +103,14 @@ describe("swarmCards — tepat tujuh kartu, nilai null jadi —", () => {
     expect(cards[0].warningCount).toBe(0);
   });
 
-  it("kartu yang tidak tercatat tetap tujuh, tanpa angka palsu", () => {
+  it("kartu yang tidak tercatat tetap delapan, tanpa angka palsu", () => {
     const run = latestSwarmRun(runRows().slice(0, 3));
     const cards = swarmCards(run!);
-    expect(cards).toHaveLength(7);
-    expect(cards[6].row).toBeNull();
-    expect(cards[6].statusLabel).toBe("Belum tercatat");
-    expect(cards[6].confidence).toBe("—");
-    expect(cards[6].citations).toBe("—");
+    expect(cards).toHaveLength(8);
+    expect(cards[7].row).toBeNull();
+    expect(cards[7].statusLabel).toBe("Belum tercatat");
+    expect(cards[7].confidence).toBe("—");
+    expect(cards[7].citations).toBe("—");
   });
 
   it("supervisor: status/narrative/veto/kontradiksi apa adanya", () => {

@@ -5,13 +5,25 @@ LLM atau API. Fokus: angka wajib punya sitasi, `null` berbeda dari `0`,
 hanya guardian yang boleh memblokir, dan tujuh stub menghasilkan finding valid.
 """
 
-from uuid import uuid4
+from uuid import uuid4  # noqa: I001
 
 import pytest
-from agent.contracts import AgentFinding, AgentName, AgentRun, Citation, Stage
-from agent.registry import AGENTS, LANES, get_spec
-from agent.workers import build_stub_findings
-from pydantic import ValidationError
+# `agent/` adalah runtime TERPISAH di akar repo (image sendiri). Tanpa mount
+# ./agent:/agent (lihat docker-compose.yml), impor di bawah gagal dan pytest
+# berhenti "Interrupted: 1 error during collection" (audit DEP-04).
+pytest.importorskip("agent")
+
+from agent.contracts import (  # noqa: E402
+    ANALYST_AGENTS,
+    AgentFinding,
+    AgentName,
+    AgentRun,
+    Citation,
+    Stage,
+)
+from agent.registry import AGENTS, LANES, get_spec  # noqa: E402
+from agent.workers import build_stub_findings  # noqa: E402
+from pydantic import ValidationError  # noqa: E402
 
 
 def _finding(**overrides: object) -> AgentFinding:
@@ -50,7 +62,7 @@ def test_tujuh_stub_menghasilkan_tujuh_finding_valid() -> None:
     findings = build_stub_findings(run_id=uuid4(), decision_id="decision-1")
 
     assert len(findings) == 7
-    assert {finding.agent for finding in findings} == set(AgentName)
+    assert {finding.agent for finding in findings} == set(ANALYST_AGENTS)
     assert all(finding.status == "skipped" for finding in findings)
     assert all(finding.facts == {} for finding in findings)
     assert all(finding.citations == [] for finding in findings)
@@ -68,13 +80,17 @@ def test_tujuh_stub_menghasilkan_tujuh_finding_valid() -> None:
     assert run.safety_veto is False
 
 
-def test_registry_berisi_tujuh_agent_dan_guardian_yang_benar() -> None:
-    assert len(AGENTS) == 7
+def test_registry_berisi_delapan_agent_dan_guardian_yang_benar() -> None:
+    assert len(AGENTS) == 8
     assert {spec.name for spec in AGENTS} == set(AgentName)
     assert all(spec.endpoints for spec in AGENTS)
 
     blocking = {spec.name for spec in AGENTS if spec.blocking_allowed}
     assert blocking == {AgentName.SAFETY, AgentName.FRESHNESS, AgentName.EVIDENCE}
+
+    verifier = next(spec for spec in AGENTS if spec.name is AgentName.VERIFIER)
+    assert verifier.stage is Stage.VERIFY
+    assert verifier.blocking_allowed is False
 
     flat_lanes = {name for lane in LANES for name in lane}
     assert flat_lanes == {

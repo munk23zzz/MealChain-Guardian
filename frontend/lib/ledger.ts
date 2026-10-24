@@ -8,20 +8,34 @@
 export type LedgerCoverage = {
   valid?: boolean;
   blocks?: number;
+  /** Generasi data demo aktif; blok generasi lama tidak dinilai cakupannya. */
+  generation?: number;
   entity_blocks?: number;
   linked_blocks?: number;
   orphan_blocks?: number;
+  /** Blok generasi lama: entitasnya dibersihkan reset demo, bloknya sengaja
+   *  tidak dihapus supaya rantai hash tetap utuh (audit N3, 24 Okt 2026). */
+  archived_blocks?: number;
   coverage_warning?: string | null;
 };
 
-/** Kalimat peringatan cakupan; `null` bila semua blok masih tertaut. */
+/** Kalimat status cakupan; `null` bila tidak ada yang perlu dikatakan. */
 export function coverageNote(ledger: LedgerCoverage | null | undefined): string | null {
-  const warning = ledger?.coverage_warning;
-  if (!warning) return null;
-  const linked = ledger?.linked_blocks;
-  const total = ledger?.entity_blocks;
-  if (typeof linked === "number" && typeof total === "number") {
-    return `${warning} (${linked} dari ${total} blok masih tertaut)`;
+  if (!ledger) return null;
+  const bagian: string[] = [];
+  const warning = ledger.coverage_warning;
+  if (warning) {
+    const linked = ledger.linked_blocks;
+    const total = ledger.entity_blocks;
+    bagian.push(
+      typeof linked === "number" && typeof total === "number"
+        ? `${warning} (${linked} dari ${total} blok masih tertaut)`
+        : warning
+    );
   }
-  return warning;
+  const arsip = ledger.archived_blocks ?? 0;
+  if (arsip > 0) {
+    bagian.push(`${arsip} blok generasi lama diarsipkan (rantai tetap terverifikasi)`);
+  }
+  return bagian.length > 0 ? bagian.join(" · ") : null;
 }

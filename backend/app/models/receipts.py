@@ -27,7 +27,14 @@ class BatchReceipt(Base):
         index=True,
     )
     __table_args__ = (
-        Index("ix_batch_receipts_batch_recorded", "batch_id", "recorded_at"),
+        # DESC di kolom kedua mengikuti migrasi 019/021 — tanpa ini
+        # `alembic check` mengusulkan drop+create index yang sama (audit DB-01).
+        Index(
+            "ix_batch_receipts_batch_recorded",
+            "batch_id",
+            sql_text("recorded_at DESC"),
+        ),
+        Index("ix_batch_receipts_status_recorded", "status", "recorded_at"),
         # Invarian 026: satu batch paling banyak satu penerimaan disetujui.
         Index(
             "uq_batch_receipts_satu_disetujui",

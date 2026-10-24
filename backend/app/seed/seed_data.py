@@ -503,6 +503,12 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
                         usable_until=item["usable_until"],
                     )
                 )
+            # Batch dari data acuan bisa memakai pemasok yang komoditasnya beda
+            # (mis. beras dipasok pemasok telur). Rapikan sebelum dipakai.
+            from app.seed.rapikan import rapikan_pemasok_batch
+
+            await rapikan_pemasok_batch(session)
+
             for item in rows["material_stock"]:
                 existing_stock = stock_map.get(
                     (item["material_number"], item["plant"], item["batch"])

@@ -224,7 +224,7 @@ async def bangun_ulang_template(
 
     try:
         hasil = await reset.bangun_ulang(db)
-    except reset.Sibuk:
+    except reset.SibukError:
         raise HTTPException(
             status_code=409,
             detail="bangun ulang sedang berjalan — tunggu sampai selesai",

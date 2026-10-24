@@ -148,7 +148,10 @@ def test_no_orphan_price_rows_after_load():
             db_ids = {
                 str(r[0])
                 for r in conn.execute(
-                    text("SELECT id FROM price_signals WHERE origin = 'seed'")
+                    text(
+                        "SELECT id FROM price_signals"
+                        " WHERE origin = 'seed' AND source_ref IS NULL"
+                    )
                 )
             }
     finally:

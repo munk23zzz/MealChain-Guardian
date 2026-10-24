@@ -13,6 +13,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -50,6 +51,13 @@ class SupplyRecord(Base):
             name="uq_supply_records_loc_com_time_source",
         ),
         Index("ix_supply_records_origin_recorded_at", "origin", "recorded_at"),
+        Index("idx_supply_location_commodity", "location_id", "commodity_id"),
+        Index(
+            "idx_supply_latest",
+            "location_id",
+            "commodity_id",
+            text("recorded_at DESC"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

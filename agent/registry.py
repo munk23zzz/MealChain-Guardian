@@ -1,4 +1,4 @@
-"""Registry tujuh worker agent yang dibaca dari `hierarchy.json`.
+"""Registry delapan agent (tujuh worker + verifier) dari `hierarchy.json`.
 
 File JSON adalah sumber konfigurasi; kode ini hanya memvalidasi dan
 mengekspos daftar agent, stage, lane, dan endpoint allowlist. P1 belum
@@ -103,8 +103,10 @@ def load_hierarchy(
     flat_lanes = [name for lane in lanes for name in lane]
     if len(set(flat_lanes)) != len(flat_lanes):
         raise ValueError("agent tidak boleh muncul di dua lane")
-    if set(flat_lanes) != set(AgentName) - {AgentName.EVIDENCE}:
-        raise ValueError("lane harus mencakup enam agent; Evidence berjalan setelah lane")
+    if set(flat_lanes) != set(AgentName) - {AgentName.EVIDENCE, AgentName.VERIFIER}:
+        raise ValueError(
+            "lane harus mencakup enam agent; Evidence dan Verifier berjalan sesudah lane"
+        )
 
     return tuple(specs), tuple(lanes)
 

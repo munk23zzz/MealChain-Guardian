@@ -176,7 +176,7 @@
       {
         "name": "migrasi alembic head",
         "sql": "SELECT version_num FROM alembic_version",
-        "expect": "026_receipt_approval"
+        "expect": "030_approval_four_eyes_unique"
       },
       {
         "name": "jumlah batch di DB",

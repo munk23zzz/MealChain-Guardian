@@ -284,8 +284,8 @@ describe("Decision & Evidence — pemilih keputusan", () => {
     // gepeng berisi istilah backend.
     expect(html).toContain("dpick-group-label");
     expect(html).toContain("Menunggu tindakan (2)");
-    expect(html).toContain("Alokasi regional direkomendasikan");
-    expect(html).toContain("Pengalihan pasokan (gangguan keamanan)");
+    expect(html).toContain("Penyeimbangan pasokan regional");
+    expect(html).toContain("Ganti sumber pasokan (gangguan keamanan)");
     // Bentuk lama label opsi: "<jenis> · <status> · <id 8>".
     expect(html).not.toContain("regional_balance ·");
     expect(html).not.toContain("safety_disruption ·");
@@ -411,7 +411,7 @@ describe("Decision & Evidence — struktur catatan keputusan", () => {
   it("kepala keputusan: aksi + angka kunci dalam bahasa manusia", () => {
     const html = render();
     expect(html).toContain("evidence-hero-title");
-    expect(html).toContain("Alihkan 600 kg telur: Cianjur → Jakarta");
+    expect(html).toContain("Seimbangkan 600 kg telur: Cianjur → Jakarta");
     expect(html).toContain("Kuantitas");
     expect(html).toContain("600 kg");
     expect(html).toContain("Rp16.206.000");

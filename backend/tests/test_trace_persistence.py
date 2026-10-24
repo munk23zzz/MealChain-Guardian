@@ -157,7 +157,7 @@ def test_persist_agent_review_metadata_dan_idempoten(decision_id):
             session, decision_id=decision_id, trace_rows=rows
         )
 
-    assert _run_sync(_do) == 8
+    assert _run_sync(_do) == 9
     # panggilan kedua untuk run_id yang sama tidak menggandakan baris
     assert _run_sync(_do) == 0
 
@@ -172,10 +172,10 @@ def test_persist_agent_review_metadata_dan_idempoten(decision_id):
             {"d": decision_id},
         ).all()
     engine.dispose()
-    assert len(result) == 8
+    assert len(result) == 9
     assert [r[0] for r in result] == [
         "DETECT", "PREDICT", "VERIFY", "VERIFY", "OPTIMIZE",
-        "OPTIMIZE", "TRACE", "SUPERVISE",
+        "OPTIMIZE", "TRACE", "VERIFY", "SUPERVISE",
     ]
     assert result[0][1] == "supply"
     assert result[0][2] == 12
@@ -184,10 +184,10 @@ def test_persist_agent_review_metadata_dan_idempoten(decision_id):
     assert result[0][5] == [{"source": "/balance/Jakarta/telur", "claim": "supply_kg"}]
 
 
-def test_persist_agent_review_wajib_8_dan_satu_run_id(decision_id):
+def test_persist_agent_review_wajib_9_dan_satu_run_id(decision_id):
     from app.services.trace_persistence import persist_agent_review
 
-    with pytest.raises(ValueError, match="8 baris"):
+    with pytest.raises(ValueError, match="9 baris"):
         _run_sync(
             lambda session: persist_agent_review(
                 session, decision_id=decision_id, trace_rows=_review_rows("x")[:7]
@@ -222,6 +222,7 @@ def _review_rows(run_id: str) -> list[dict]:
         ("OPTIMIZE", "price"),
         ("OPTIMIZE", "logistics"),
         ("TRACE", "evidence"),
+        ("VERIFY", "verifier"),
         ("SUPERVISE", "supervisor"),
     ]
     return [

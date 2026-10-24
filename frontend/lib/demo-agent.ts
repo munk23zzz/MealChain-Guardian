@@ -195,21 +195,21 @@ export function supervisorLine(sup: AgentSupervisor | null | undefined): string 
 export function agentReviewLine(review: AgentReview | null | undefined): string {
   const status = review?.status;
   if (!status || status === "missing") {
-    return "Review 7-worker tidak tercatat pada putaran ini.";
+    return "Review 8 agen tidak tercatat pada putaran ini.";
   }
   if (status === "completed" || status === "partial") {
     const run = review?.run_id ? ` · run ${review.run_id.slice(0, 8)}` : "";
-    return `Review 7-worker selesai (${status})${run}.`;
+    return `Review 8 agen selesai (${status})${run}.`;
   }
   if (status === "unavailable") {
     // Detail teknis (alamat runtime) sengaja TIDAK ditampilkan di layar;
     // panel ini membuktikan pipeline utama, bukan kesehatan infrastruktur.
-    return "Review 7-worker tidak terjangkau (unavailable) — pipeline utama di atas tetap selesai.";
+    return "Review 8 agen tidak terjangkau (unavailable) — pipeline utama di atas tetap selesai.";
   }
   if (status === "disabled") {
-    return "Review 7-worker dimatikan di konfigurasi (disabled).";
+    return "Review 8 agen dimatikan di konfigurasi (disabled).";
   }
-  return `Review 7-worker berstatus ${status} — pipeline utama di atas tetap selesai.`;
+  return `Review 8 agen berstatus ${status} — pipeline utama di atas tetap selesai.`;
 }
 
 /** Kalimat progres saat agent bekerja; detik berasal dari jam klien. */

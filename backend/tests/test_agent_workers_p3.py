@@ -2,12 +2,19 @@
 
 from uuid import uuid4
 
-from agent.api_client import AgentApiError
-from agent.contracts import AgentFinding
-from agent.workers.base import WorkerContext, as_number
-from agent.workers.evidence import EvidenceWorker
-from agent.workers.logistics import LogisticsWorker
-from agent.workers.price import PriceWorker
+import pytest
+
+# `agent/` adalah runtime TERPISAH di akar repo (image sendiri). Tanpa mount
+# ./agent:/agent (lihat docker-compose.yml), impor di bawah gagal dan pytest
+# berhenti "Interrupted: 1 error during collection" (audit DEP-04).
+pytest.importorskip("agent")
+
+from agent.api_client import AgentApiError  # noqa: E402
+from agent.contracts import AgentFinding  # noqa: E402
+from agent.workers.base import WorkerContext, as_number  # noqa: E402
+from agent.workers.evidence import EvidenceWorker  # noqa: E402
+from agent.workers.logistics import LogisticsWorker  # noqa: E402
+from agent.workers.price import PriceWorker  # noqa: E402
 
 
 class FakeApi:
@@ -92,7 +99,11 @@ def _price_get() -> dict[str, object]:
             "quantity_kg": 600.0,
             "safe_delivered_cost": 16206000.0,
             "can_execute": False,
-            "supplier": {"id": "s1", "name": "Koperasi Telur Cipanas Bersama", "reliability_score": 0.92},
+            "supplier": {
+                "id": "s1",
+                "name": "Koperasi Telur Cipanas Bersama",
+                "reliability_score": 0.92,
+            },
             "expiry": {"valid": True, "seconds_remaining": 1000},
         },
     }
@@ -447,14 +458,16 @@ def test_post_compute_hanya_allowlist() -> None:
         raise AssertionError("endpoint mutasi tidak boleh lolos")
 
 
-def test_tujuh_worker_nyata_terdaftar() -> None:
+def test_delapan_worker_nyata_terdaftar() -> None:
     from agent.contracts import AgentName
     from agent.workers import build_workers
 
     workers = build_workers()
 
-    assert len(workers) == 7
+    assert len(workers) == 8
     assert {worker.name for worker in workers} == set(AgentName)
+    verifier = next(w for w in workers if w.name is AgentName.VERIFIER)
+    assert callable(getattr(verifier, "audit", None))
 
 
 def test_as_number_tidak_menebak_string_umum() -> None:

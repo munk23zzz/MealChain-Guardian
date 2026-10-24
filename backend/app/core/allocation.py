@@ -83,7 +83,7 @@ def build_allocations(
     direncanakan (permintaan pemilik 20 Okt 2026: di bawah 150 kg tidak
     direncanakan). Ambang berlaku pada SURPLUS LOKASI, bukan pada tiap baris:
     sumber 400 kg tetap boleh mengisi tujuan berkebutuhan 40 kg.
-    
+
 
     Mengembalikan daftar `{from, to, kg, distance_km, region}`. `region` =
     wilayah TUJUAN (yang menerima), sama dengan versi klien.

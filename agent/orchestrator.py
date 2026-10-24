@@ -1,4 +1,4 @@
-"""Orkestrasi review tujuh worker — satu putaran advisory.
+"""Orkestrasi review tujuh worker + verifier — satu putaran advisory.
 
 Tujuh worker membaca API, bukan menulis. Lane pertama Supply+Demand, lane
 kedua Safety+Freshness, lane ketiga Price+Logistics; Evidence Fusion berjalan
@@ -222,7 +222,7 @@ def run_review(
     mode: str = "advisory",
     retry_errors: bool = True,
 ) -> AgentRun:
-    """Jalankan satu review tujuh worker untuk satu decision.
+    """Jalankan satu review tujuh worker (+ audit verifier) untuk satu decision.
 
     Context boleh diberikan oleh pemanggil (tes/probe); bila tidak, fungsi ini
     membaca `approval-summary` dan memakai field yang benar-benar ada. Tidak ada
@@ -287,6 +287,23 @@ def run_review(
     # Gerbang verifikasi deterministik dijalankan SETELAH supervisor menyusun
     # rangkuman, dan hanya menandai — tidak mengubah status atau keputusan.
     run = run.model_copy(update={"verification": verify_run(run)})
+
+    # Agent verifier (agent ke-8) mengaudit hasil yang sudah jadi. Ia TIDAK
+    # masuk `findings` supaya status run, narasi, dan veto tetap milik tujuh
+    # worker analitik; temuannya disimpan terpisah dan tampil sebagai baris
+    # trace sendiri. Ketiadaannya tidak boleh menggagalkan review.
+    verifier = selected.get(AgentName.VERIFIER)
+    audit = getattr(verifier, "audit", None)
+    if not callable(audit):
+        # Worker pengganti (mis. fake di tes) tidak punya audit; audit tetap
+        # harus ada supaya tidak ada putaran review tanpa jejak auditor.
+        from .workers.verifier import VerifierWorker
+
+        audit = VerifierWorker().audit
+    try:
+        run = run.model_copy(update={"verifier_finding": audit(run)})
+    except Exception:  # noqa: BLE001 - auditor gagal ≠ review gagal
+        pass
     return run
 
 

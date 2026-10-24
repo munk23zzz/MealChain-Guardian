@@ -369,12 +369,19 @@ export function zonaShortcut(posisi: Exclude<ZonaPosisi, "terlihat">): {
 
 /** Aksi dalam bahasa manusia untuk judul kepala halaman (bukan label jenis). */
 const HEADLINE_VERBS: Record<string, string> = {
-  regional_balance: "Alihkan",
+  // "Alihkan" terbaca seperti mengalihkan perhatian/alamat, bukan memindahkan
+  // pasokan. "Seimbangkan" menyebut tujuan tindakannya dan tidak mengklaim
+  // sumbernya (bisa pemasok, bisa surplus SPPG lain — lihat baris pengirim).
+  regional_balance: "Seimbangkan",
   safety_disruption: "Ganti pasokan",
   price_anomaly: "Sesuaikan harga",
   surplus_redistribution: "Redistribusikan",
   supplier_exclusion: "Keluarkan pemasok",
-  supplier_procurement: "Adakan dari pemasok",
+  // Judul pengadaan dibaca dua baris (permintaan pemilik 24 Okt 2026):
+  //   Pengadaan 780 kg telur
+  //   UD Sumber Rejeki Telur → Jakarta
+  // Kata "pemasok" tidak perlu diulang karena baris kedua sudah nama pemasok.
+  supplier_procurement: "Pengadaan",
   supplier_restoration: "Pulihkan pemasok",
 };
 
@@ -422,14 +429,31 @@ export function decisionHeadline(decision: unknown, summary: unknown): string {
   if (jumlah) bagian.push(jumlah);
   const komoditas = text(s.commodity) ?? text(d.commodity);
   if (komoditas) bagian.push(komoditas);
-  // Pengadaan: asal = PEMASOK (kolom source_location memang NULL), supaya
-  // judul tidak berbunyi seolah barang datang dari kota tujuan itu sendiri.
-  const asal =
-    type === "supplier_procurement"
-      ? supplierNameOf(s) ?? supplierNameOf(d)
-      : text(s.source_location) ?? text(d.source_location);
+  // Asal barang: PEMASOK bila keputusan menyebut pemasok (kolom
+  // source_location pada kasus itu hanya kota gudang), kota SPPG lain bila
+  // ini pemindahan antar-SPPG. Tanpa pemasok dan tanpa kota asal, tidak ada
+  // baris rute sama sekali — lebih baik diam daripada mengarang asal.
+  const pemasok = supplierNameOf(s) ?? supplierNameOf(d);
+  const kotaAsal = text(s.source_location) ?? text(d.source_location);
+  // Keputusan yang barangnya DIBELI dari pemasok (pengadaan, ganti pasokan)
+  // menyebut nama perusahaan; pemindahan antar-SPPG menyebut kota asal.
+  const dariPemasok = type === "supplier_procurement" || type === "safety_disruption";
+  const asal = dariPemasok ? pemasok ?? kotaAsal : kotaAsal ?? pemasok;
   const tujuan = text(s.target_location) ?? text(d.target_location);
-  const rute = asal && tujuan ? `: ${asal} → ${tujuan}` : "";
+  // Tiga jenis ini BUKAN pengiriman barang: harga, pemasok dikeluarkan,
+  // pemasok dipulihkan. Menampilkan "Cianjur → Jakarta" di judulnya membuat
+  // pembaca mengira ada truk berangkat, padahal tidak ada barang bergerak.
+  const adaRute =
+    type !== "price_anomaly" &&
+    type !== "supplier_exclusion" &&
+    type !== "supplier_reinstatement";
+  const bedaKota = Boolean(adaRute && asal && tujuan && asal !== tujuan);
+  // Barang dari pemasok dibaca dua baris: baris 1 "apa", baris 2 "dari siapa
+  // ke mana". Pemindahan antar-SPPG tetap satu baris karena asalnya kota.
+  if (dariPemasok && pemasok && bedaKota) {
+    return `${bagian.join(" ")}\n${pemasok} → ${tujuan}`;
+  }
+  const rute = bedaKota ? `: ${asal} → ${tujuan}` : "";
   return `${bagian.join(" ")}${rute}`;
 }
 

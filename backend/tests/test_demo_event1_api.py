@@ -302,7 +302,7 @@ def test_agent_review_on_completed_membawa_run_id(
     }
 
 
-def test_agent_review_completed_mempersist_8_baris(client, monkeypatch, pemakai):
+def test_agent_review_completed_mempersist_9_baris(client, monkeypatch, pemakai):
     """P5: payload trace dari runtime disimpan ke agent_traces, lalu dibaca API."""
     from app.services.agent_review_client import AgentReviewResult
 
@@ -324,7 +324,7 @@ def test_agent_review_completed_mempersist_8_baris(client, monkeypatch, pemakai)
         )
     engine.dispose()
 
-    rows = _review_rows_8(run_id)
+    rows = _review_rows_9(run_id)
     monkeypatch.setattr(
         "app.api.demo.run_event1",
         lambda commodity, target_location, **kwargs: {
@@ -355,11 +355,14 @@ def test_agent_review_completed_mempersist_8_baris(client, monkeypatch, pemakai)
             f"/decisions/{decision_id}/traces", headers=headers
         ).json()["steps"]
         review = [row for row in traces if row.get("run_id") == run_id]
-        assert len(review) == 8
+        assert len(review) == 9
         assert [row["agent_name"] for row in review[:7]] == [
             "supply", "demand", "freshness", "safety", "price", "logistics",
             "evidence",
         ]
+        assert review[7]["agent_name"] == "verifier"
+        assert review[7]["step_name"] == "VERIFY"
+        assert review[8]["agent_name"] == "supervisor"
         assert review[0]["duration_ms"] == 12
         assert review[0]["confidence"] == 0.8
         assert review[0]["citations"][0]["claim"] == "supply_kg"
@@ -372,7 +375,7 @@ def test_agent_review_completed_mempersist_8_baris(client, monkeypatch, pemakai)
         engine.dispose()
 
 
-def _review_rows_8(run_id: str) -> list[dict]:
+def _review_rows_9(run_id: str) -> list[dict]:
     stages = [
         ("DETECT", "supply"),
         ("PREDICT", "demand"),
@@ -381,6 +384,7 @@ def _review_rows_8(run_id: str) -> list[dict]:
         ("OPTIMIZE", "price"),
         ("OPTIMIZE", "logistics"),
         ("TRACE", "evidence"),
+        ("VERIFY", "verifier"),
         ("SUPERVISE", "supervisor"),
     ]
     return [

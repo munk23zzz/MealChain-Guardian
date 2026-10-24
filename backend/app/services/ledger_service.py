@@ -17,6 +17,37 @@ from sqlalchemy.ext.asyncio import AsyncSession
 GENESIS = "0" * 64
 
 
+async def current_generation(db: AsyncSession) -> int:
+    """Generasi data demo yang sedang aktif (1 bila tabel penanda belum ada)."""
+    row = (
+        await db.execute(text("SELECT generation FROM ledger_meta WHERE id = 1"))
+    ).fetchone()
+    return int(row[0]) if row else 1
+
+
+async def bump_generation(db: AsyncSession) -> int:
+    """Naikkan generasi: dipanggil setiap data demo direset.
+
+    Blok generasi lama TIDAK dihapus maupun ditulis ulang — rantai hash harus
+    tetap bisa diverifikasi. Yang berubah hanya cara cakupan dilaporkan:
+    `linked_ratio` menghitung generasi aktif, blok lama masuk `archived_blocks`.
+    """
+    row = (
+        await db.execute(
+            text(
+                # UPSERT: DB yang dibuat dari model (bukan migrasi) mungkin belum
+                # punya baris penanda; generasi tetap harus bisa naik.
+                "INSERT INTO ledger_meta (id, generation, updated_at) "
+                "VALUES (1, 2, now()) "
+                "ON CONFLICT (id) DO UPDATE "
+                "SET generation = ledger_meta.generation + 1, updated_at = now() "
+                "RETURNING generation"
+            )
+        )
+    ).fetchone()
+    return int(row[0]) if row else 1
+
+
 def _canonical(payload: dict) -> str:
     def _default(o):
         if isinstance(o, (UUID, Decimal)):
@@ -51,20 +82,22 @@ async def append_block(
     ).fetchone()
     height = (last[0] + 1) if last else 1
     prev_hash = last[1] if last else GENESIS
+    generation = await current_generation(db)
     payload_str = _canonical(payload)
     payload_hash = hashlib.sha256((prev_hash + payload_str).encode()).hexdigest()
     row = (
         await db.execute(
             text(
                 "INSERT INTO ledger_blocks "
-                "(height, prev_hash, payload_hash, action, entity_id, actor_id, payload) "
-                "VALUES (:h, :p, :ph, :a, :e, :act, :pl) "
+                "(height, prev_hash, payload_hash, action, entity_id, actor_id, "
+                "payload, generation) "
+                "VALUES (:h, :p, :ph, :a, :e, :act, :pl, :g) "
                 "RETURNING height, prev_hash, payload_hash"
             ),
             {
                 "h": height, "p": prev_hash, "ph": payload_hash,
                 "a": action, "e": entity_id, "act": actor_id,
-                "pl": payload_str,
+                "pl": payload_str, "g": generation,
             },
         )
     ).fetchone()
@@ -72,6 +105,7 @@ async def append_block(
         "height": row[0],
         "prev_hash": row[1],
         "payload_hash": row[2],
+        "generation": generation,
     }
 
 
@@ -109,38 +143,51 @@ async def verify_chain(db: AsyncSession) -> dict:
 
 
 async def _linkage(db: AsyncSession) -> dict:
-    """Hitung blok yang entitasnya masih ada (keputusan atau batch).
+    """Cakupan blok GENERASI AKTIF (audit N3, 24 Okt 2026).
 
     Blok tanpa `entity_id` (mis. catatan sistem) tidak dihitung sebagai yatim —
     ia memang tidak menunjuk entitas apa pun, jadi tidak bisa "hilang".
+
+    Blok dari generasi sebelumnya TIDAK ikut dinilai: entitasnya memang sudah
+    dibersihkan oleh reset data demo (itu tujuannya), dan bloknya sengaja tidak
+    dihapus supaya rantai hash tetap utuh. Mereka dilaporkan sebagai
+    `archived_blocks`, bukan sebagai kerusakan.
     """
+    generation = await current_generation(db)
     row = (
         await db.execute(
             text(
                 """
                 SELECT
-                  count(*) FILTER (WHERE entity_id IS NOT NULL) AS entity_blocks,
                   count(*) FILTER (
-                    WHERE entity_id IS NOT NULL
+                    WHERE generation = :g AND entity_id IS NOT NULL
+                  ) AS entity_blocks,
+                  count(*) FILTER (
+                    WHERE generation = :g
+                      AND entity_id IS NOT NULL
                       AND NOT EXISTS (SELECT 1 FROM decisions d WHERE d.id = lb.entity_id)
                       AND NOT EXISTS (SELECT 1 FROM batches b WHERE b.id = lb.entity_id)
-                  ) AS orphan_blocks
+                  ) AS orphan_blocks,
+                  count(*) FILTER (WHERE generation < :g) AS archived_blocks
                 FROM ledger_blocks lb
                 """
-            )
+            ),
+            {"g": generation},
         )
     ).one()
-    entity_blocks, orphan_blocks = int(row[0]), int(row[1])
+    entity_blocks, orphan_blocks, archived = int(row[0]), int(row[1]), int(row[2])
     linked_blocks = entity_blocks - orphan_blocks
     return {
+        "generation": generation,
         "entity_blocks": entity_blocks,
         "linked_blocks": linked_blocks,
         "orphan_blocks": orphan_blocks,
+        "archived_blocks": archived,
         "linked_ratio": (
             round(linked_blocks / entity_blocks, 3) if entity_blocks else None
         ),
         "coverage_warning": (
-            f"rantai utuh, tetapi {orphan_blocks} blok menunjuk entitas yang sudah tidak ada"
+            f"{orphan_blocks} blok generasi aktif menunjuk entitas yang sudah tidak ada"
             if orphan_blocks
             else None
         ),

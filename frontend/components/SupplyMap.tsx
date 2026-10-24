@@ -16,6 +16,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import maplibregl from "maplibre-gl";
 import { kodeWilayah } from "../lib/wilayah";
 import { posisiDanArah, siapkanJalur, wakeLine } from "../lib/route-flow";
+import { fraksiBerjalan, type JangkarTruk } from "../lib/truck-progress";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
   dataSourceNote,
@@ -937,6 +938,9 @@ export default function SupplyMap({
   const trukMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   /** Bingkai animasi geser per kiriman (dibatalkan saat posisi baru datang). */
   const trukFrameRef = useRef<Map<string, number>>(new Map());
+  // Jangkar posisi mobil: `progress` server + kapan angka itu diterima. Dipakai
+  // untuk memajukan mobil di antara dua polling (audit 24 Okt 2026).
+  const trukJangkarRef = useRef<Map<string, JangkarTruk>>(new Map());
   const supplierRowsRef = useRef<readonly SupplierPinRow[]>(supplierMapRows);
   const supplierReachRef = useRef<number | null>(reachKm ?? null);
   // Selalu hidup — ref ikut nilai tetapnya, bukan keadaan yang bisa berubah.
@@ -1222,6 +1226,23 @@ export default function SupplyMap({
   );
 
   /**
+   * Jangkar posisi mobil untuk satu kiriman.
+   *
+   * Server hanya mengirim `progress` tiap polling; di antaranya mobil harus
+   * tetap maju. Jangkar diganti HANYA saat angka server berubah, supaya gerak
+   * lokal tidak "mundur" hanya karena satu kiriman belum berubah angkanya.
+   */
+  const jangkarTruk = useCallback((row: SupplierRoute): JangkarTruk => {
+    const peta = trukJangkarRef.current;
+    const angka = Math.min(1, Math.max(0, row.journey?.progress ?? 0));
+    const lama = peta.get(row.id);
+    if (lama && Math.abs(lama.progress - angka) < 1e-9) return lama;
+    const baru: JangkarTruk = { progress: angka, at: Date.now() };
+    peta.set(row.id, baru);
+    return baru;
+  }, []);
+
+  /**
    * Pasang/pindahkan ikon mobil ke posisi kendaraan SEKARANG.
    *
    * Hanya kiriman `di_jalan` yang punya ikon: yang sudah tiba atau belum
@@ -1240,7 +1261,10 @@ export default function SupplyMap({
       if (!koordinat || koordinat.length < 2) continue;
       const jalur = siapkanJalur(koordinat as [number, number][]);
       if (!jalur) continue;
-      const frac = Math.min(1, Math.max(0, row.journey.progress ?? 0));
+      // Posisi dihitung dari waktu, bukan dari angka beku: `progress` server
+      // menjadi jangkar, lalu fraksi dimajukan per detik sehingga mobil benar-
+      // benar berjalan (audit 24 Okt 2026).
+      const frac = fraksiBerjalan(row.journey, jangkarTruk(row), Date.now());
       const { posisi, arah } = posisiDanArah(jalur, frac);
       hidup.add(row.id);
       // Ekor: jejak beberapa kilometer terakhir. Ini yang membuat kendaraan
@@ -1256,16 +1280,23 @@ export default function SupplyMap({
       const derajat = Math.round(arah);
       const ada = trukMarkersRef.current.get(row.id);
       if (ada) {
+        // Jejak untuk audit: fraksi yang benar-benar dipakai tiap detak.
+        // Terbaca di DOM (`data-frac`) tanpa perlu console.log di produksi.
+        ada.getElement().dataset.frac = frac.toFixed(5);
         geserTruk(row.id, ada, posisi, derajat);
         continue;
       }
-      trukMarkersRef.current.set(row.id, createTruckMarker(map, row, posisi, derajat));
+      const baru = createTruckMarker(map, row, posisi, derajat);
+      baru.getElement().dataset.frac = frac.toFixed(5);
+      trukMarkersRef.current.set(row.id, baru);
     }
     // Kiriman yang selesai/berhenti: ikonnya dicabut, bukan dibiarkan menua.
     for (const [id, marker] of Array.from(trukMarkersRef.current.entries())) {
       if (hidup.has(id)) continue;
       marker.remove();
       trukMarkersRef.current.delete(id);
+      // Jangkar ikut dibuang: kiriman yang tiba tidak boleh menyisakan entri.
+      trukJangkarRef.current.delete(id);
     }
     // Ekor digambar sebagai SATU layer (bukan satu per kiriman): menggambar 1–3
     // garis lewat satu source jauh lebih murah daripada menambah layer dinamis.
@@ -1301,7 +1332,7 @@ export default function SupplyMap({
         "line-opacity": 0.55,
       },
     });
-  }, [geserTruk]);
+  }, [geserTruk, jangkarTruk]);
 
   const syncRouteLayer = useCallback(() => {
     const map = mapRef.current;
@@ -1841,6 +1872,12 @@ export default function SupplyMap({
     // tepat saat gaya selesai dimuat.
     const peta = mapRef.current;
     if (peta) peta.on("load", syncTruk);
+    // Audit 24 Okt 2026: mobil harus tetap berjalan DI ANTARA dua polling.
+    // Satu langkah per detik, dihaluskan ease 700 ms di `geserTruk`; tanpa ini
+    // posisi hanya berubah tiap 15 detik dan di layar tampak diam.
+    if (!adaJalan || mediaQueryCocok("(prefers-reduced-motion: reduce)")) return;
+    const detak = window.setInterval(syncTruk, 1000);
+    return () => window.clearInterval(detak);
   }, [
     showRoutes,
     routePinRows,

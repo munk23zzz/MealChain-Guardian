@@ -52,7 +52,10 @@ def test_beras_suhu_ruang_tidak_dinilai_gagal(auth_headers):
         # `timestamp`) sehingga evaluator menyebutnya "log tidak lengkap".
         awal = datetime.now(timezone.utc) - timedelta(hours=3)
         log = [
-            {"timestamp": (awal + timedelta(minutes=30 * i)).isoformat(), "temperature_c": 27.0 + i / 10}
+            {
+                "timestamp": (awal + timedelta(minutes=30 * i)).isoformat(),
+                "temperature_c": 27.0 + i / 10,
+            }
             for i in range(3)
         ]
         with engine.begin() as conn:

@@ -176,6 +176,10 @@ def _mk_batch(location_id: str, fail: bool) -> dict:
 
 
 def _cleanup_batch(b: dict) -> None:
+    # Kutipan harga yang lahir dari PO uji menempel ke pemasok (FK
+    # price_signals.supplier_id), jadi hapus dulu — kalau tidak, pemasok gagal
+    # dihapus dan kutipan yatim tertinggal menggeser metrik Price Deviation.
+    _db_exec("DELETE FROM price_signals WHERE supplier_id = :s", {"s": b["supplier_id"]})
     _db_exec("DELETE FROM batches WHERE id = :b", {"b": b["batch_id"]})
     _db_exec("DELETE FROM suppliers WHERE id = :s", {"s": b["supplier_id"]})
 

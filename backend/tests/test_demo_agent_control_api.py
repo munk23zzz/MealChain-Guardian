@@ -243,8 +243,8 @@ def test_last_run_memakai_keepala_sppg(client, pemakai):
         # dengan baris DB-nya — bukan angka karangan.
         assert body["status"] == _status_keputusan(body["decision_id"])
         assert body["status"] in STATUS_KEPUTUSAN
-        # Tujuh kartu agen di panel "Bukti agent": kunci tetap dan status
-        # hanya dari baris review yang tersimpan.
+        # Delapan kartu agen di panel "Bukti agent" (tujuh analitik + verifier):
+        # kunci tetap dan status hanya dari baris review yang tersimpan.
         assert [a["key"] for a in body["agents"]] == [
             "supply",
             "demand",
@@ -253,6 +253,7 @@ def test_last_run_memakai_keepala_sppg(client, pemakai):
             "price",
             "logistics",
             "evidence",
+            "verifier",
         ]
         for agen in body["agents"]:
             assert agen["status"] in {

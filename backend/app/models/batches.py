@@ -41,6 +41,8 @@ class Batch(Base):
             name="batches_dispatch_after_harvest",
         ),
         Index("ix_batches_origin_harvested_at", "origin", "harvested_at"),
+        Index("idx_batches_safety_status", "safety_status"),
+        Index("ix_batches_quarantine_status", "quarantine_status"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -99,7 +101,7 @@ class Batch(Base):
     # Karantina (migrasi 019): batch ditahan dari kandidat alokasi sampai
     # manusia melepas atau menyatakannya gagal. Lihat core/quarantine.py.
     quarantine_status: Mapped[str] = mapped_column(
-        String, nullable=False, server_default="none"
+        Text, nullable=False, server_default="none"
     )
     quarantine_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     quarantined_at: Mapped[datetime | None] = mapped_column(

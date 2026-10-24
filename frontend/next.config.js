@@ -58,6 +58,47 @@ const API_ROOTS = [
   "sap",
 ];
 
+// ── SEC-05: header keamanan untuk halaman HTML ─────────────────────────────
+// Backend hanya menyajikan JSON (CSP-nya `default-src none`), sedangkan UI
+// butuh izin lebih: Next menyisipkan skrip inline, MapLibre membuat worker dari
+// blob, dan tile/gambar peta datang sebagai data: atau blob:. Karena itu
+// kebijakan di bawah dibuat per direktif, bukan "semua dilarang".
+//
+// Catatan dev: Next dev memakai eval untuk HMR, jadi `unsafe-eval` hanya
+// ditambahkan saat NODE_ENV=development. Build produksi tidak memuatnya —
+// itu sebabnya nilai ini disusun dari variabel, bukan konstanta.
+const DEV = process.env.NODE_ENV === "development";
+
+const CSP = [
+  "default-src 'self'",
+  `script-src 'self' 'unsafe-inline'${DEV ? " 'unsafe-eval'" : ""}`,
+  "style-src 'self' 'unsafe-inline'",
+  // Tile peta: MapLibre mengambil raster OSM (lihat SupplyMap.tsx). Tanpa host
+  // ini peta tampil kosong dan konsol dipenuhi "Failed to fetch" — terukur
+  // 24 Okt 2026 saat CSP pertama dipasang.
+  "img-src 'self' data: blob: https://tile.openstreetmap.org",
+  "font-src 'self' data:",
+  // UI memanggil API lewat origin sendiri (rewrites); ws: untuk HMR di dev.
+  // MapLibre juga mem-fetch tile (bukan hanya <img>), jadi host tile harus ada
+  // di connect-src; `ws:`/`wss:` khusus dev untuk HMR.
+  `connect-src 'self' https://tile.openstreetmap.org${DEV ? " ws: wss:" : ""}`,
+  "worker-src 'self' blob:",
+  "child-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
+const HEADER_KEAMANAN = [
+  { key: "Content-Security-Policy", value: CSP },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Referrer-Policy", value: "no-referrer" },
+  { key: "Permissions-Policy", value: "geolocation=(), microphone=(), camera=()" },
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+];
+
 const nextConfig = {
   output: "standalone",
   reactStrictMode: true,
@@ -76,6 +117,16 @@ const nextConfig = {
     // 3 menit memberi ruang untuk rantai provider yang lambat; batas keras
     // per provider tetap berlaku di backend.
     proxyTimeout: 180000,
+  },
+  async headers() {
+    return [
+      {
+        // Semua halaman & aset. Proxy API (/auth, /kpi, ...) ikut terkena,
+        // dan itu tidak masalah: header ini tidak mengubah isi respons JSON.
+        source: "/:path*",
+        headers: HEADER_KEAMANAN,
+      },
+    ];
   },
   async rewrites() {
     return API_ROOTS.map((root) => ({

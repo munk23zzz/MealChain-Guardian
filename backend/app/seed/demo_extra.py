@@ -584,15 +584,14 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
     # tetapi journey `di_jalan` = 0, jadi selama demo tidak ada satu pun truk
     # bergerak walau 114 rute sudah punya geometri. Di sini aturan yang sama
     # diterapkan memakai cache yang sudah ada (tanpa memanggil OSRM).
-    from app.core.road_route import route_key
-    from app.models.road_routes import RoadRoute
-
     # Cache rute dibersihkan bersama tabel bisnis lain di awal init-demo, jadi
     # tanpa langkah ini peta kehilangan SELURUH garis jalur (terukur: road 114
     # -> 0 setelah init-demo, hanya tombol "Siapkan data demo" yang menyinkronkan
     # ulang). Sinkronisasi memakai fungsi yang sama dengan tombol itu; kalau OSRM
     # mati, init-demo tetap lanjut tanpa garis dan alasannya tercatat.
     from app.api.demo import _sync_routes_aman
+    from app.core.road_route import route_key
+    from app.models.road_routes import RoadRoute
 
     _, galat_rute = await _sync_routes_aman(now)
     if galat_rute:

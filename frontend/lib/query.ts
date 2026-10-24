@@ -15,6 +15,17 @@ export const QUERY_STALE_MS = 30_000;
 export const QUERY_POLL_MS = 60_000;
 
 /**
+ * Interval poll panel KPI (permintaan pemilik 23 Okt 2026: "realtime").
+ *
+ * Lebih rapat daripada poll umum karena KPI adalah bukti utama saat demo: kartu
+ * harus berubah beberapa detik setelah operator menjalankan Event 1 →
+ * approve → execute. Biayanya kecil dan terukur: `GET /kpi` 24 jam/7 hari/
+ * 1 bulan dijawab ~0,10 detik (agregat SQL, tanpa LLM), dan query ini HANYA
+ * hidup di tab yang benar-benar menampilkan KPI (`kpiQueryPolicy`).
+ */
+export const KPI_POLL_MS = 20_000;
+
+/**
  * Data pemasok nyaris statis (profil + koordinat) — cukup segar 5 menit dan
  * TIDAK di-poll: kalau di-poll, 44 baris × 15 field ikut terkirim tiap putaran
  * padahal isinya tidak berubah. Tombol "Coba lagi"/invalidasi tetap bisa
@@ -23,13 +34,23 @@ export const QUERY_POLL_MS = 60_000;
 export const SUPPLIERS_STALE_MS = 5 * 60_000;
 
 /**
+ * Denyut data kiriman KHUSUS peta (24 Okt 2026).
+ *
+ * Peta menggambar mobil kiriman dari `journey.progress`; kalau data tidak
+ * pernah disegarkan, mobil berhenti selamanya di posisi saat halaman dimuat.
+ * Nilai ini dipakai hanya oleh query peta, bukan halaman Pemasok.
+ */
+export const MAP_TRUCK_POLL_MS = 15_000;
+
+/**
  * Kunci query terpusat. Sengaja berupa fungsi (bukan literal yang tersebar) agar
  * invalidasi setelah mutasi menyasar kunci yang sama persis — salah satu penyebab
  * umum data basi di UI.
  */
 export const queryKeys = {
   today: (scope: string) => ["today", scope] as const,
-  decisions: (scope: string) => ["decisions", scope] as const,
+  decisions: (scope: string, window: string = "all") =>
+    ["decisions", scope, window] as const,
   batches: () => ["batches"] as const,
   kpi: (start: string, end: string, scope: string) =>
     ["kpi", start, end, scope] as const,

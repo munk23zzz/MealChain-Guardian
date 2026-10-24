@@ -7,7 +7,13 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "infra" / "aws"))
 
 import pytest  # noqa: E402
-import verify_agentcore_access as probe  # noqa: E402
+
+# Skrip probe ada di infra/aws/ dan tidak disertakan di repo ini. Skip eksplisit
+# supaya suite tetap bisa dikoleksi di lingkungan yang tidak punya probe-nya.
+probe = pytest.importorskip(
+    "verify_agentcore_access",
+    reason="skrip probe infra/aws/verify_agentcore_access.py tidak ada di repo",
+)
 
 
 def _mock_session(mock_client: MagicMock) -> MagicMock:

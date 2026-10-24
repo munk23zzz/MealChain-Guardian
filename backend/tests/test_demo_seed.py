@@ -62,7 +62,9 @@ def test_seed_idempotent_dan_lengkap():
                         )
                     ).all()
                 )
-            assert set(per_case) == CASES
+            # Kasus skrip harus ada (boleh ada kasus tambahan dari seed lain,
+            # mis. "bukti-hari-ini" milik tombol "Siapkan data demo").
+            assert CASES <= set(per_case)
             assert per_case["rejection-loop-kuota"] == 3
             assert per_case["gangguan-logistik"] == 2
 
@@ -108,7 +110,7 @@ def test_seed_idempotent_dan_lengkap():
                         "AND d.status IN ('pending_approval', 'verifier_flagged')"
                     )
                 ).all()
-            assert len(ttl_rows) == 4, ttl_rows
+            assert len(ttl_rows) >= 4, ttl_rows
             for case, it, secs in ttl_rows:
                 assert secs >= 3600, (case, it, secs)
     finally:

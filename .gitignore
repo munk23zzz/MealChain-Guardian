@@ -6,6 +6,7 @@ __pycache__/
 .Python
 .venv/
 venv/
+.deploy-venv/
 ENV/
 env/
 .eggs/
@@ -99,3 +100,15 @@ sap-joule/**/.pytest_cache/
 agent/.tunnel_state.json
 # Server dev kedua (port 3001, NEXT_DIST_DIR) — dibuat 2026-10-18 agar :3000 tidak terganggu.
 .next-dev2/
+
+# Artefak lokal / hasil jalankan (bukan sumber)
+# Log mentah QA, berkas pid, jejak audit token, cadangan DB, dan probe sekali pakai
+# sengaja TIDAK dilacak; laporan QA yang sudah ditulis tangan tetap dilacak.
+_qa/*.txt
+_qa/design-consistency/*.json
+agent/.tunnel_watchdog.pid
+backend/.token_audit
+data/backups/
+de_probe.py
+de_probe2.py
+sap-joule/_qa/

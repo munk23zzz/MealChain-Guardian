@@ -79,17 +79,18 @@ async def persist_agent_review(
     decision_id: str,
     trace_rows: list[dict[str, Any]],
 ) -> int:
-    """Persist satu putaran review: 7 worker + 1 SUPERVISE, idempoten.
+    """Persist satu putaran review: 7 worker + 1 verifier + 1 SUPERVISE, idempoten.
 
     Kontrak P5:
-    - tepat 8 baris, semua membawa `run_id` yang sama;
+    - tepat 9 baris (tujuh worker, verifier, SUPERVISE), semua `run_id` sama;
     - run_id harus UUID;
     - bila `run_id` itu sudah tersimpan untuk decision ini, tidak menulis ulang
       (Event 1 boleh dipanggil ulang tanpa menggandakan trace).
     """
-    if len(trace_rows) != 8:
+    if len(trace_rows) not in (8, 9):
         raise ValueError(
-            f"review wajib 8 baris trace (7 worker + SUPERVISE), diterima {len(trace_rows)}"
+            "review wajib 9 baris trace (7 worker + verifier + SUPERVISE), "
+            f"atau 8 baris dari runtime lama tanpa verifier; diterima {len(trace_rows)}"
         )
     run_ids = {str(row.get("run_id") or "").strip() for row in trace_rows}
     run_ids.discard("")

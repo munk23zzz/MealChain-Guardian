@@ -8,7 +8,9 @@ terbaca sebagai "bukti lengkap".
 Kontrak baru: `valid` tetap berarti integritas rantai (jangan diubah — itu
 kebenaran teknis), dan respons WAJIB menyatakan berapa blok yang masih tertaut:
 `entity_blocks`, `linked_blocks`, `orphan_blocks`, `linked_ratio`, plus
-`coverage_warning` bila ada blok yatim.
+`coverage_warning` bila ada blok yatim — semuanya untuk generasi data demo
+yang aktif (`generation`), sedangkan blok generasi lama dilaporkan sebagai
+`archived_blocks` (lihat `tests/test_ledger_generasi.py`).
 
 Tes ini tidak menyuntik blok baru (ledger append-only milik DB bersama); ia
 membandingkan angka respons dengan hitungan langsung dari tabel.
@@ -24,6 +26,9 @@ DB_URL = (
     DSN_ASYNC
 ).replace("+asyncpg", "+psycopg")
 
+# Cakupan dihitung pada GENERASI AKTIF saja (N3, 24 Okt 2026): blok generasi
+# lama tidak dihapus, tetapi entitasnya memang sudah dibersihkan reset demo,
+# sehingga dinilai terpisah sebagai `archived_blocks`.
 LINKAGE_SQL = """
 SELECT
   count(*) FILTER (WHERE entity_id IS NOT NULL) AS entity_blocks,
@@ -32,7 +37,9 @@ SELECT
       AND NOT EXISTS (SELECT 1 FROM decisions d WHERE d.id = lb.entity_id)
       AND NOT EXISTS (SELECT 1 FROM batches b WHERE b.id = lb.entity_id)
   ) AS orphan_blocks
-FROM ledger_blocks lb
+FROM ledger_blocks lb,
+     (SELECT coalesce((SELECT generation FROM ledger_meta WHERE id = 1), 1) AS g) gen
+WHERE lb.generation = gen.g
 """
 
 

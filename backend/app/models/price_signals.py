@@ -11,6 +11,7 @@ from sqlalchemy import (
     Index,
     Numeric,
     String,
+    Text,
     func,
     text,
 )
@@ -66,6 +67,13 @@ class PriceSignal(Base):
             postgresql_where=text("source = 'supplier_quote'"),
         ),
         Index("ix_price_signals_origin_recorded_at", "origin", "recorded_at"),
+        Index("idx_price_signals_supplier", "supplier_id"),
+        Index(
+            "uq_price_signals_source_ref",
+            "source_ref",
+            unique=True,
+            postgresql_where=text("source_ref IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -91,6 +99,9 @@ class PriceSignal(Base):
     generated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Kunci idempotensi penulis KPI (migrasi 029): `po:<nomor>` untuk kutipan
+    # yang lahir dari PO yang benar-benar terbit.
+    source_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -2,10 +2,11 @@
 
 Ruling O-KPI (plan addendum §23): state available/no_data/unavailable +
 reason eksplisit; TANPA fake 0/proxy. Definisi per worksheet §10:
-- Meal Continuity Rate: butuh facts menu/fulfilment yang tidak ada di
-  schema → `unavailable` (bukan 0, bukan proxy PO).
-- Avoidable Food Loss: butuh disposal event (discarded_at/reason) yang
-  tidak ada → `unavailable`.
+- Meal Continuity Rate: porsi terkirim ÷ porsi rencana, KEDUA sisi memakai
+  sumbu `plan_date` (tanggal rencana WIB, batas inklusif) dari facts
+  `menu_plans` ⋈ `delivery_events`; `no_data` hanya bila tak ada rencana.
+- Avoidable Food Loss: kg buangan ÷ (buangan + pasokan tercatat) dari
+  `disposal_events` ⋈ `supply_records`; `no_data` bila penyebut nol.
 - Regional Imbalance Resolution Rate: root lineage (supersedes chain)
   dedupe; denominator DETECT root cases; numerator root dengan status
   executed di window.
@@ -77,6 +78,22 @@ async def _rows(db: AsyncSession, stmt: str, params: dict | None = None):
     return result.fetchall()
 
 
+def _plan_date_range(alias: str = "") -> str:
+    """Predikat rentang `plan_date` (tanggal rencana, WIB) — inklusif dua ujung.
+
+    `start`/`end` adalah instan; `plan_date` adalah date WIB. Konversi dilakukan
+    di SQL (instan → Asia/Jakarta → date) supaya batas atas "hari ini" benar
+    walau jam server UTC (00:30 WIB masih tanggal kemarin di UTC).
+    Batas atas inklusif: `end` = sekarang, jadi `<` akan membuang rencana hari
+    ini dan membuat kartu 24 jam selalu kosong (audit 2026-10-23, KPI-01).
+    """
+    kol = f"{alias}plan_date"
+    return (
+        f"{kol} >= (CAST(:start AS timestamptz) AT TIME ZONE 'Asia/Jakarta')::date "
+        f"AND {kol} <= (CAST(:end AS timestamptz) AT TIME ZONE 'Asia/Jakarta')::date"
+    )
+
+
 async def compute_kpis(
     db: AsyncSession,
     start: datetime,
@@ -94,7 +111,13 @@ async def compute_kpis(
 
     # ---- 1. Meal Continuity Rate (P6, 009: facts menu/fulfilment kini ada)
     # = SUM(delivered_portions) / SUM(planned_portions) pada window.
-    # delivered_at = anchor; delivery tanpa menu plan tidak mungkin (FK).
+    # Sumbu waktu KEDUA sisi = plan_date (tanggal rencana, WIB) — bukan
+    # delivered_at: kalau pembilang difilter delivered_at sementara penyebut
+    # difilter plan_date, rencana kemarin ikut penyebut padahal kirimannya
+    # sudah keluar jendela 24 jam → rasio mentok ~50% secara struktural
+    # (audit 2026-10-23, KPI-01). delivered_at tetap disimpan sebagai fakta.
+    # Batas atas INKLUSIF (<=): `end` = sekarang, jadi `< end::date` membuang
+    # rencana HARI INI dan membuat kartu 24 jam selalu 0,00%.
     # delivered_portions > planned → tetap dibatasi planned per plan (over-
     # delivery bukan continuity >100%, dibatasi 100% per plan-day).
     mc_rows = await _rows(
@@ -103,12 +126,11 @@ async def compute_kpis(
         "SUM(LEAST(COALESCE(de.delivered, 0), mp.planned_portions)) "
         "FROM menu_plans mp LEFT JOIN ("
         "SELECT menu_plan_id, SUM(delivered_portions) AS delivered "
-        "FROM delivery_events WHERE delivered_at >= :start "
-        "AND delivered_at < :end GROUP BY menu_plan_id"
+        "FROM delivery_events GROUP BY menu_plan_id"
         ") de ON de.menu_plan_id = mp.id "
         # plan_date (bukan created_at): window continuity = tanggal rencana,
         # bukan kapan row dibuat (seed idempoten bisa dibuat ulang kapan pun).
-        "WHERE mp.plan_date >= CAST(:start AS date) AND mp.plan_date < CAST(:end AS date) "
+        f"WHERE {_plan_date_range()} "
         + ("AND mp.location_id = :loc" if location_id else ""),
         {"start": start, "end": end, **loc_param},
     )
@@ -118,8 +140,7 @@ async def compute_kpis(
         mc_rate = Decimal(delivered_total) * 100 / Decimal(planned_total)
         plan_days = await _rows(
             db,
-            "SELECT COUNT(*) FROM menu_plans WHERE plan_date >= CAST(:start AS date) "
-            "AND plan_date < CAST(:end AS date)"
+            f"SELECT COUNT(*) FROM menu_plans WHERE {_plan_date_range()} "
             + (" AND location_id = :loc" if location_id else ""),
             {"start": start, "end": end, **loc_param},
         )

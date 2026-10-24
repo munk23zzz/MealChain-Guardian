@@ -6,13 +6,20 @@ kartu/temuan sukses yang dikarang. Kartu UI dan ARN AgentCore baru diuji di P4.
 
 from uuid import uuid4
 
-from agent.api_client import AgentApiError
-from agent.workers.base import WorkerContext
-from agent.workers.freshness import FreshnessWorker
-from agent.workers.logistics import LogisticsWorker
-from agent.workers.price import PriceWorker
-from agent.workers.safety import SafetyWorker
-from agent.workers.supply import SupplyWorker
+import pytest
+
+# `agent/` adalah runtime TERPISAH di akar repo (image sendiri). Tanpa mount
+# ./agent:/agent (lihat docker-compose.yml), impor di bawah gagal dan pytest
+# berhenti "Interrupted: 1 error during collection" (audit DEP-04).
+pytest.importorskip("agent")
+
+from agent.api_client import AgentApiError  # noqa: E402
+from agent.workers.base import WorkerContext  # noqa: E402
+from agent.workers.freshness import FreshnessWorker  # noqa: E402
+from agent.workers.logistics import LogisticsWorker  # noqa: E402
+from agent.workers.price import PriceWorker  # noqa: E402
+from agent.workers.safety import SafetyWorker  # noqa: E402
+from agent.workers.supply import SupplyWorker  # noqa: E402
 
 
 class FakeApi:
@@ -36,6 +43,16 @@ class FakeApi:
             raise response
         assert isinstance(response, dict)
         return response
+
+    def semua_batch(self, page_size: int = 500, max_rows: int = 5000) -> list[dict]:
+        """Tiru klien nyata: worker membaca batch lewat helper paginasi ini."""
+        response = self.get_responses.get("/batches")
+        if response is None:
+            raise AssertionError("GET tak terduga: /batches")
+        if isinstance(response, Exception):
+            raise response
+        assert isinstance(response, dict)
+        return list(response.get("batches") or [])
 
     def post_compute(self, path: str, body: dict) -> dict:
         self.post_calls.append((path, body))
@@ -88,7 +105,11 @@ def _price_api(
                 "quantity_kg": 600.0,
                 "safe_delivered_cost": 16206000.0,
                 "can_execute": valid,
-                "supplier": supplier if supplier is not None else {"name": "Koperasi Telur Cipanas Bersama"},
+                "supplier": (
+                    supplier
+                    if supplier is not None
+                    else {"name": "Koperasi Telur Cipanas Bersama"}
+                ),
                 "expiry": {"valid": valid},
             },
         },

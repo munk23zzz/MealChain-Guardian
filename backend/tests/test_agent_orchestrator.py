@@ -1,16 +1,22 @@
 """P4 — orkestrasi 7 worker: lane, trace 8 baris, veto, timeout."""
 
-from __future__ import annotations
+from __future__ import annotations  # noqa: I001
 
 import time
 from uuid import uuid4
 
 import pytest
-from agent.contracts import AgentFinding, AgentName, WorkerStatus
-from agent.orchestrator import context_from_approval, run_review
-from agent.registry import get_spec
-from agent.telemetry import build_trace_rows
-from agent.workers.base import WorkerContext
+# `agent/` adalah runtime TERPISAH di akar repo (image sendiri). Tanpa mount
+# ./agent:/agent (lihat docker-compose.yml), impor di bawah gagal dan pytest
+# berhenti "Interrupted: 1 error during collection" (audit DEP-04).
+pytest.importorskip("agent")
+
+from agent.contracts import ANALYST_AGENTS, AgentFinding, AgentName, WorkerStatus  # noqa: E402
+from agent.orchestrator import context_from_approval, run_review  # noqa: E402
+from agent.registry import get_spec  # noqa: E402
+from agent.telemetry import build_trace_rows  # noqa: E402
+from agent.workers.base import WorkerContext  # noqa: E402
+from agent.workers.verifier import VerifierWorker  # noqa: E402
 
 
 class FixedWorker:
@@ -44,9 +50,17 @@ class FixedWorker:
 
 
 def _workers(**overrides) -> dict[AgentName, FixedWorker]:
+    """Worker palsu untuk tujuh analitik; auditor memakai VerifierWorker nyata.
+
+    Verifier harus nyata karena temuannya diturunkan dari hasil verifikasi,
+    bukan dari data palsu.
+    """
     workers: dict[AgentName, FixedWorker] = {}
     for name in AgentName:
-        workers[name] = overrides.get(name, FixedWorker(name))
+        if name is AgentName.VERIFIER:
+            workers[name] = VerifierWorker()
+        else:
+            workers[name] = overrides.get(name, FixedWorker(name))
     return workers
 
 
@@ -70,18 +84,29 @@ class SummaryApi:
         return self.summary
 
 
-def test_review_tujuh_worker_dan_delapan_trace() -> None:
+def test_review_tujuh_worker_dan_sembilan_trace() -> None:
     run = run_review("decision-1", context=_context(), workers=_workers())
 
     assert len(run.findings) == 7
-    assert {finding.agent for finding in run.findings} == set(AgentName)
+    assert {finding.agent for finding in run.findings} == set(ANALYST_AGENTS)
     assert run.status == "completed"
     assert run.safety_veto is False
+
+    # Agent ke-8: auditor. Temuannya terpisah dari findings supaya status dan
+    # veto tetap milik tujuh worker analitik.
+    assert run.verifier_finding is not None
+    assert run.verifier_finding.agent is AgentName.VERIFIER
+    assert run.verifier_finding.agent not in {f.agent for f in run.findings}
+
     rows = build_trace_rows(run)
-    assert len(rows) == 8
+    assert len(rows) == 9
     assert [row["agent_name"] for row in rows][:7] == [
-        name.value for name in AgentName
+        "supply", "demand", "freshness", "safety", "price", "logistics",
+        "evidence",
     ]
+    assert rows[7]["agent_name"] == "verifier"
+    assert rows[7]["step_name"] == "VERIFY"
+    assert rows[7]["tool_called"] == "agent.verifier"
     assert rows[-1]["step_name"] == "SUPERVISE"
     assert rows[-1]["agent_name"] == "supervisor"
 

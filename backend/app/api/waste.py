@@ -21,14 +21,16 @@ Kontrak:
 
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import get_current_user
+from app.api.auth import MUTATING_ROLES, get_current_user, require_roles
+from app.core.scope import scope_location_id
 from app.db import get_db
 from app.models import DisposalEvent, Location, User
-from app.core.scope import scope_location_id
+from app.services import settlement
 
 router = APIRouter(prefix="", tags=["waste"])
 
@@ -115,3 +117,72 @@ async def waste_summary(
             key=lambda x: (-x["kg"], x["name"]),
         ),
     }
+
+
+class LimbahBaru(BaseModel):
+    """Satu kejadian limbah yang dicatat operator.
+
+    `kunci` opsional membuat penulisan idempoten (mis. id keputusan); tanpa
+    kunci, setiap permintaan dianggap kejadian baru — karena dua pencatatan
+    bisa memang dua kejadian.
+    """
+
+    location_id: str | None = None
+    commodity_id: str
+    quantity_kg: float = Field(gt=0)
+    reason: str = Field(min_length=1, max_length=200)
+    partner_name: str | None = None
+    kunci: str | None = None
+
+
+@router.post("/waste/disposals", status_code=201)
+async def catat_limbah(
+    payload: LimbahBaru,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles(*MUTATING_ROLES)),
+) -> dict:
+    """Catat limbah → `disposal_events`. Inilah satu-satunya jalan agar
+    Avoidable Food Loss bergerak tanpa menjalankan seeder.
+
+    Cakupan: akun SPPG hanya boleh mencatat untuk lokasinya sendiri; BGN Monitor
+    wajib menyebut `location_id`. Alasan yang tidak terbaca ditolak 422 — angka
+    limbah tanpa alasan tidak bisa ditindaklanjuti.
+    """
+    import uuid as _uuid
+    from decimal import Decimal as _Decimal
+
+    scope_id = scope_location_id(user)
+    if scope_id is not None:
+        lokasi = scope_id
+        if payload.location_id is not None and str(payload.location_id) != str(scope_id):
+            raise HTTPException(
+                status_code=403, detail="akun ini hanya boleh mencatat limbah lokasinya sendiri"
+            )
+    elif payload.location_id:
+        try:
+            lokasi = _uuid.UUID(str(payload.location_id))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="location_id bukan UUID") from exc
+    else:
+        raise HTTPException(
+            status_code=422, detail="location_id wajib diisi untuk akun lintas lokasi"
+        )
+
+    try:
+        komoditas = _uuid.UUID(str(payload.commodity_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="commodity_id bukan UUID") from exc
+
+    sekarang = datetime.now(UTC)
+    hasil = await settlement.catat_pembuangan(
+        db,
+        location_id=lokasi,
+        commodity_id=komoditas,
+        quantity_kg=_Decimal(str(payload.quantity_kg)),
+        reason=payload.reason,
+        partner_name=payload.partner_name,
+        sekarang=sekarang,
+        kunci=payload.kunci,
+    )
+    await db.commit()
+    return {"dicatat_oleh": user.email, **hasil}

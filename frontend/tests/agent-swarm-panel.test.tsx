@@ -1,4 +1,4 @@
-// Kontrak render panel 7 agen: tujuh kartu, status manusia, dan empty state
+// Kontrak render panel 8 agen: delapan kartu, status manusia, dan empty state
 // yang membedakan "belum pilih keputusan" vs "keputusan ini belum direview".
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -51,11 +51,11 @@ function rows() {
 }
 
 describe("AgentSwarmPanel", () => {
-  it("merender tepat 7 kartu + ringkasan, status manusia", () => {
+  it("merender tepat 8 kartu + ringkasan, status manusia", () => {
     const html = renderToStaticMarkup(
       <AgentSwarmPanel steps={rows() as any} decisionId="d1" />
     );
-    expect(html.match(/class="swarm-card"/g)).toHaveLength(7);
+    expect(html.match(/class="swarm-card"/g)).toHaveLength(8);
     expect(html).toContain("Pasokan");
     expect(html).toContain("Keamanan Pangan");
     expect(html).toContain("Selesai");
@@ -68,9 +68,9 @@ describe("AgentSwarmPanel", () => {
     const html = renderToStaticMarkup(
       <AgentSwarmPanel steps={rows().slice(0, 3) as any} decisionId="d1" />
     );
-    expect(html.match(/class="swarm-card"/g)).toHaveLength(7);
+    expect(html.match(/class="swarm-card"/g)).toHaveLength(8);
     expect(html).toContain("Belum tercatat");
-    expect(html).toContain("3/7 tercatat");
+    expect(html).toContain("3/8 tercatat");
   });
 
   it("dua empty state yang berbeda", () => {
@@ -81,6 +81,6 @@ describe("AgentSwarmPanel", () => {
     const kosong = renderToStaticMarkup(
       <AgentSwarmPanel steps={[] as any} decisionId="d1" />
     );
-    expect(kosong).toContain("Belum ada review 7 agen untuk keputusan ini.");
+    expect(kosong).toContain("Belum ada review 8 agen untuk keputusan ini.");
   });
 });

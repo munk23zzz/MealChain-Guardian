@@ -11,13 +11,14 @@ from uuid import UUID
 
 import bcrypt
 import jwt as pyjwt
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db
+from app.core import rate_limit
 from app.models import Location, User
 
 router = APIRouter()
@@ -44,8 +45,25 @@ def _algorithm() -> str:
     return os.environ.get("JWT_ALGORITHM", "HS256")
 
 
+#: Batas umur token. 24 jam = cukup untuk satu hari demo, tetap jauh di bawah
+#: "praktis selamanya" yang dulu dipakai (5.256.000 menit ≈ 10 tahun, SEC-02).
+UMUR_MAKS_MENIT = 1440
+UMUR_MIN_MENIT = 5
+
+
 def _expire_minutes() -> int:
-    return int(os.environ.get("JWT_EXPIRE_MINUTES", "30"))
+    """Umur token dalam menit, DIJEPIT ke rentang yang masuk akal.
+
+    SEC-02 (audit 24 Okt 2026): `.env` berisi 5256000 menit (±10 tahun). Token
+    yang tidak pernah kedaluwarsa membuat satu kebocoran token berlaku selamanya.
+    Nilai di luar rentang tidak dipakai apa adanya — dijepit, bukan dibiarkan
+    (fail-safe ke nilai aman, tanpa membuat login gagal).
+    """
+    try:
+        menit = int(os.environ.get("JWT_EXPIRE_MINUTES", "30"))
+    except ValueError:
+        menit = 30
+    return max(UMUR_MIN_MENIT, min(UMUR_MAKS_MENIT, menit))
 
 
 def _issue_token(user: User) -> str:
@@ -116,19 +134,40 @@ def require_roles(*allowed: str):
 MUTATING_ROLES = ("sppg_head", "sppg_nutritionist")
 
 
+def _kunci_laju(request: Request, email: str) -> str:
+    """Kunci pembatas: IP + email. NAT kantor tidak saling memblokir."""
+    ip = request.client.host if request.client else "tanpa-ip"
+    return f"login:{ip}:{email}"
+
+
 @router.post("/auth/login")
-async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
-    user = (
-        await db.execute(
-            select(User).where(User.email == payload.email.lower().strip())
+async def login(
+    payload: LoginRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    email = payload.email.lower().strip()
+    kunci = _kunci_laju(request, email)
+    tunggu = rate_limit.sisa_tunggu(kunci)
+    if tunggu > 0:
+        # SEC-03: tanpa pembatas, satu skrip bisa menebak kata sandi tanpa jeda.
+        raise HTTPException(
+            status_code=429,
+            detail="terlalu banyak percobaan login, coba lagi nanti",
+            headers={"Retry-After": str(int(tunggu) + 1)},
         )
+    user = (
+        await db.execute(select(User).where(User.email == email))
     ).scalar_one_or_none()
     if user is None:
         # Timing konsisten untuk email tak dikenal.
         bcrypt.checkpw(payload.password.encode(), _DUMMY_HASH.encode())
+        rate_limit.catat_gagal(kunci)
         raise HTTPException(status_code=401, detail="email atau password salah")
     if not bcrypt.checkpw(payload.password.encode(), user.password_hash.encode()):
+        rate_limit.catat_gagal(kunci)
         raise HTTPException(status_code=401, detail="email atau password salah")
+    rate_limit.lupakan(kunci)
     return {
         "access_token": _issue_token(user),
         "token_type": "bearer",

@@ -119,26 +119,39 @@ def test_freshness_evaluate_pass_band_persists(client):
 
 
 def test_freshness_evaluate_fail_band(client):
-    # Semarang ayam freshness 0.00 → fail.
-    # `origin='seed'` WAJIB: DB ini dipakai bersama tes lain dan penyemai demo,
-    # jadi `WHERE c.name='ayam' LIMIT 1` bisa memilih batch ayam lain (mis. batch
-    # demo ber-freshness 0.92) dan asersi fail berubah jadi needs_verification
-    # hanya karena urutan baris — bukan karena endpoint salah.
-    with _db().connect() as conn:
+    """Batch yang JELAS basi → status `fail`.
+
+    Dulu tes ini memilih batch seed ber-`freshness_score < 0.60` dari DB. Itu
+    time-bomb: skornya adalah nilai SIMPANAN dari penyemaian lama, sedangkan
+    `/freshness/evaluate` MENGHITUNG ULANG dari `harvested_at` relatif sekarang.
+    Begitu data demo dibangun ulang ke tanggal hari ini (24 Okt 2026), batch itu
+    jadi segar dan hasilnya `needs_verification` — tes merah padahal endpoint benar.
+    Batch sekarang dibuat tes sendiri dengan umur 30 hari, jadi hasilnya tidak
+    bergantung pada state seed maupun jam pemakaian.
+    """
+    with _db().begin() as conn:
         batch_id = str(
             conn.execute(
                 text(
-                    "SELECT b.id FROM batches b "
-                    "JOIN commodities c ON c.id = b.commodity_id "
-                    "WHERE c.name = 'ayam' AND b.origin = 'seed' "
-                    "AND b.freshness_score < 0.60 "
-                    "ORDER BY b.harvested_at, b.id LIMIT 1"
+                    "INSERT INTO batches (commodity_id, location_id, supplier_id, "
+                    "quantity_kg, harvested_at, temperature_log) "
+                    "SELECT c.id, l.id, (SELECT id FROM suppliers LIMIT 1), "
+                    "498.77, now() - interval '30 days', '[]'::jsonb "
+                    "FROM commodities c, locations l "
+                    "WHERE c.name = 'ayam' AND l.name = 'Semarang' "
+                    "RETURNING id"
                 )
             ).scalar_one()
         )
-    resp = client.post("/freshness/evaluate", json={"batch_id": batch_id})
-    assert resp.status_code == 200
-    assert resp.json()["status"] == "fail"
+    try:
+        resp = client.post("/freshness/evaluate", json={"batch_id": batch_id})
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["freshness_score"] < 0.60, body
+        assert body["status"] == "fail", body
+    finally:
+        with _db().begin() as conn:
+            conn.execute(text("DELETE FROM batches WHERE id = :id"), {"id": batch_id})
 
 
 def test_freshness_as_of_rejected_when_not_demo(client):

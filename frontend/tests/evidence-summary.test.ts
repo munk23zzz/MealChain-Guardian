@@ -515,20 +515,20 @@ describe("langkah berikutnya: satu kalimat yang menjawab \"apa yang harus saya l
 describe("kepala keputusan: satu kalimat aksi + angka kunci", () => {
   it("judul menyebut aksi, jumlah, komoditas, dan rute", () => {
     expect(decisionHeadline({ decision_type: "regional_balance", quantity_kg: 600 }, SUMMARY)).toBe(
-      "Alihkan 600 kg telur: Cianjur → Jakarta"
+      "Seimbangkan 600 kg telur: Cianjur → Jakarta"
     );
   });
 
   it("tanpa nama lokasi: rute tidak dikarang, sisanya tetap", () => {
     const hasil = decisionHeadline({ decision_type: "regional_balance", quantity_kg: 600 }, { commodity: "telur" });
-    expect(hasil).toBe("Alihkan 600 kg telur");
+    expect(hasil).toBe("Seimbangkan 600 kg telur");
     expect(hasil).not.toContain("→");
     expect(hasil).not.toContain("null");
   });
 
   it("jenis tak dikenal memakai kata manusia dari peta yang ada, bukan istilah mentah", () => {
     const hasil = decisionHeadline({ decision_type: "regional_balance" }, { quantity_kg: 1, commodity: "beras" });
-    expect(hasil.startsWith("Alihkan")).toBe(true);
+    expect(hasil.startsWith("Seimbangkan")).toBe(true);
     const asing = decisionHeadline({ decision_type: "sesuatu_baru" }, {});
     expect(asing).not.toContain("_");
   });
@@ -804,8 +804,11 @@ describe("decisionFacts — pengadaan pemasok", () => {
 
   it("judul menyebut pemasok, bukan kota tujuan sebagai asal", () => {
     const judul = decisionHeadline(PENGADAAN, null);
-    expect(judul).toContain("Adakan dari pemasok");
-    expect(judul).toContain("Telur Berkah Bekasi → Jakarta");
+    // Dua baris: baris 1 "apa", baris 2 "dari siapa ke mana".
+    const [baris1, baris2] = judul.split("\n");
+    expect(baris1).toMatch(/^Pengadaan .+ kg telur$/);
+    expect(baris2).toBe("Telur Berkah Bekasi → Jakarta");
+    expect(judul).not.toContain("Adakan dari pemasok");
   });
 
   it("tanpa nama pemasok tetap jujur (—), bukan ditebak dari lokasi", () => {

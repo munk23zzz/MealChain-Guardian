@@ -12,6 +12,9 @@ from typing import Any
 
 from .contracts import AgentFinding, AgentName, Contradiction, RunStatus, WorkerStatus
 
+ANALYST_AGENTS = frozenset(
+    name for name in AgentName if name is not AgentName.VERIFIER
+)
 GUARDIANS = frozenset({AgentName.SAFETY, AgentName.FRESHNESS, AgentName.EVIDENCE})
 
 
@@ -25,11 +28,14 @@ class ValidationIssue:
 def validate_findings(findings: list[AgentFinding]) -> list[ValidationIssue]:
     """Periksa kelengkapan dan duplikasi; schema/citation sudah dijaga kontrak."""
     issues: list[ValidationIssue] = []
-    if len(findings) != len(AgentName):
+    if len(findings) != len(ANALYST_AGENTS):
         issues.append(
             ValidationIssue(
                 code="worker_count",
-                message=f"review harus berisi {len(AgentName)} worker, dapat {len(findings)}",
+                message=(
+                    f"review harus berisi {len(ANALYST_AGENTS)} worker analitik, "
+                    f"dapat {len(findings)}"
+                ),
             )
         )
     names = [finding.agent for finding in findings]
@@ -41,7 +47,7 @@ def validate_findings(findings: list[AgentFinding]) -> list[ValidationIssue]:
                 message=f"worker ganda: {', '.join(duplicated)}",
             )
         )
-    missing = sorted(set(AgentName) - set(names), key=lambda name: name.value)
+    missing = sorted(ANALYST_AGENTS - set(names), key=lambda name: name.value)
     if missing:
         issues.append(
             ValidationIssue(

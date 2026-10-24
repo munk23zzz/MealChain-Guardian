@@ -40,7 +40,9 @@ describe("wiring sidebar + map di app/page.tsx (S4-06 polish)", () => {
     // 14 Okt 2026: chip + angkanya dihitung lib/decision-feed (label bahasa
     // manusia, "Perlu tindakan" di chip pertama).
     expect(pageSrc).toMatch(/feed-filters/);
-    expect(pageSrc).toMatch(/feedChips\(decisions\)/);
+    // 24 Okt 2026: chip menghitung daftar BERJENDELA (periode terpilih), bukan
+    // seluruh riwayat — angka chip harus cocok dengan kartu di bawahnya.
+    expect(pageSrc).toMatch(/feedChips\(feedWindowDecisions\)/);
     expect(pageSrc).toMatch(/filter-chip/);
   });
 

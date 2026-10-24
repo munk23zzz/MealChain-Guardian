@@ -66,9 +66,21 @@ def test_kasus_demo_punya_binding_pemasok_yang_cocok_dengan_batch() -> None:
                         "       d.commodity_id "
                         "FROM decisions d JOIN locations l ON l.id = d.target_location_id "
                         "WHERE d.demo_case IS NOT NULL AND l.name = 'Jakarta' "
-                        "AND d.status = ANY(:aktif)"
+                        "AND d.status = ANY(:aktif) "
+                        # Hanya empat kasus SKRIP: kasus tambahan seperti
+                        # "bukti-hari-ini" adalah pemindahan antar-SPPG tanpa
+                        # pemasok, jadi memang tidak punya allocation_binding.
+                        "AND d.demo_case = ANY(:kasus)"
                     ),
-                    {"aktif": list(AKTIF)},
+                    {
+                        "aktif": list(AKTIF),
+                        "kasus": [
+                            "shortage-darurat",
+                            "gangguan-logistik",
+                            "rejection-loop-kuota",
+                            "supplier-janggal",
+                        ],
+                    },
                 ).all()
             assert kasus, "seed demo tidak membuat keputusan yang bisa ditindaklanjuti"
 

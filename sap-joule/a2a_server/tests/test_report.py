@@ -77,7 +77,8 @@ def test_supply_report_mengutamakan_lokasi_kurang_dan_memakai_nama():
     assert "kurang 430 kg" in teks
     assert "KURANG" in teks
     assert "Rp" not in teks  # laporan pasokan tidak memuat harga
-    assert "bukan oleh model bahasa" in teks
+    assert "1 kurang · 1 lebih" in teks  # ringkasan jumlah, bukan hanya baris teratas
+    assert "Skor kesegaran berskala 0–1" not in teks  # catatan kesegaran hanya untuk tabel batch
     assert "**" not in teks  # tabel markdown biasa, bukan penekanan liar
 
 
@@ -91,8 +92,8 @@ def test_supply_report_menampilkan_inventaris_batch_dengan_keamanan_dan_skor():
 
     teks = report.supply_report(batches, None)
 
-    assert "Inventaris batch (2 batch)" in teks
-    assert "GAGAL" in teks and "lolos" in teks
+    assert "Inventaris batch (2 batch: 1 gagal · 1 lolos)" in teks
+    assert "1 gagal" in teks and "lolos" in teks
     assert "0,69" in teks  # skor apa adanya dari backend
     # Batch gagal keamanan tampil lebih dulu: itu yang butuh perhatian.
     assert teks.index("SPPG Palembang") < teks.index("SPPG Bandung")
@@ -118,7 +119,7 @@ def test_supply_report_membatasi_baris_dan_menyebut_sisanya():
 
     teks = report.supply_report(batches, None, limit=5)
 
-    assert "10 baris lain tidak ditampilkan." in teks
+    assert "Tabel batch: Menampilkan 5 dari 15 baris." in teks
 
 
 def test_supply_report_selisih_tidak_dikirim_backend_jadi_strip():
@@ -179,7 +180,7 @@ def test_supplier_directory_kosong_jujur_dan_membatasi_baris():
         for i in range(30)
     ]
     teks = report.supplier_directory_report(banyak, limit=25)
-    assert "5 baris lain tidak ditampilkan." in teks
+    assert "Menampilkan 25 dari 30 baris." in teks
 
 
 # --- KPI ----------------------------------------------------------------------------------
@@ -198,10 +199,10 @@ def test_kpi_report_menampilkan_metrik_tersedia_dengan_satuannya():
     )
 
     assert "74,95%" in teks
-    assert "Meal Continuity Rate" in teks
+    assert "Keberlanjutan menu" in teks  # nama indikator tampil dalam bahasa Indonesia
     assert f"{report.MISSING} (tidak ada record pada periode ini)" in teks
     assert "1 indikator belum bisa dihitung" in teks
-    assert "bukan diisi nol" in teks
+    assert "tidak terbaca nol" in teks
 
 
 def test_kpi_report_tanpa_metrik_jujur():
@@ -230,8 +231,8 @@ def test_approval_queue_menegaskan_persetujuan_tidak_lewat_joule():
     assert teks.index("dec-001") < teks.index("dec-002")  # belum tuntas lebih dulu
     assert "Cianjur → Jakarta" in teks
     assert "telur" in teks and "700 kg" in teks
-    assert "Persetujuan TIDAK bisa dilakukan dari Joule" in teks
-    assert "Rules.md" in teks
+    assert "Persetujuan tidak bisa dilakukan dari Joule" in teks
+    assert "Rules.md" not in teks  # rujukan dokumen internal tidak untuk pembaca chat
 
 
 def test_approval_queue_baris_tanpa_nama_lokasi_jadi_strip_bukan_karangan():
@@ -247,6 +248,19 @@ def test_approval_queue_baris_tanpa_nama_lokasi_jadi_strip_bukan_karangan():
     assert "gangguan keamanan pangan" in teks
 
 
+def test_approval_queue_menyebut_jumlah_terbuka_sebenarnya():
+    decisions = [
+        {"id": f"dec-{i:03d}", "status": "pending_approval", "decisionType": "regional_balance",
+         "sourceLocation": "A", "targetLocation": "B", "commodity": "telur", "quantityKg": 10.0}
+        for i in range(12)
+    ]
+
+    teks = report.approval_queue_report(decisions, limit=12, total_belum=22)
+
+    # 10 usulan lain tidak boleh seolah tidak ada hanya karena ringkasannya tidak ditarik.
+    assert "22 usulan terbuka, 12 teratas ditampilkan" in teks
+
+
 def test_approval_queue_membatasi_baris_dan_menyebut_sisanya():
     decisions = [
         {"id": f"dec-{i:03d}", "status": "proposed", "decisionType": "regional_balance",
@@ -257,7 +271,7 @@ def test_approval_queue_membatasi_baris_dan_menyebut_sisanya():
 
     teks = report.approval_queue_report(decisions, limit=12)
 
-    assert "3 baris lain tidak ditampilkan." in teks
+    assert "Menampilkan 12 dari 15 baris." in teks
 
 
 def test_unavailable_report_jujur_bahwa_tidak_ada_angka():
@@ -299,12 +313,12 @@ def test_po_detail_menampilkan_kolom_dari_backend_dan_waktu_wib():
     assert "20 Okt 2026 09.20 WIB" in teks   # 02.20 UTC -> 09.20 WIB
     assert "SPPG Jakarta Pusat" in teks
     assert "Telur Berkah" in teks
-    assert "MAT-BERA" in teks
+    assert "MAT-BERA" not in teks  # kode material SAP internal tidak ditampilkan
     assert "600 kg" in teks
     assert "Rp18.000" in teks
     assert "Rp10.800.000" in teks
     assert "dieksekusi" in teks
-    assert "lahir dari eksekusi keputusan" in teks
+    assert "dibuat dari eksekusi keputusan" in teks
     # PDF bukan lampiran chat — keterbatasan itu disebut, bukan disembunyikan.
     assert "tidak melampirkan berkas" in teks
 
@@ -349,7 +363,7 @@ def test_po_daftar_membatasi_baris_dan_menyebut_sisanya():
     teks = report.purchase_order_report(rows, limit=10)
 
     assert "12 PO terbaca" in teks
-    assert "2 baris lain tidak ditampilkan." in teks
+    assert "Tabel PO: Menampilkan 10 dari 12 baris." in teks
 
 
 def test_wib_tidak_mengarang_zona_bila_offset_hilang():
@@ -423,7 +437,7 @@ def test_kebutuhan_menampilkan_metode_prakiraan_apa_adanya():
     )
 
     assert "957 kg" in teks and "6.697,6 kg" in teks
-    assert "fallback statistik" in teks
+    assert "cadangan statistik" in teks
     assert "Keyakinan (0–1)" in teks and "| 1,00 |" in teks
 
 
@@ -448,7 +462,7 @@ def test_kehilangan_pangan_memisahkan_tiga_angka():
     assert "332,5 kg · 41 kejadian" in teks
     assert "299 kg · 45 kejadian" in teks
     assert "PT Biogas Nusantara" in teks
-    assert "bgn_monitor · 2 SPPG" in teks
+    assert "2 SPPG · cakupan akun Anda" in teks  # slug peran tidak tampil di chat
 
 
 def test_kehilangan_pangan_yang_tidak_tersedia_menyebut_alasannya():
@@ -493,10 +507,10 @@ def test_risiko_pemasok_menampilkan_eksklusi_dan_rute():
         },
     )
 
-    assert "AKTIF" in teks and "batch ayam gagal uji antibiotik" in teks
+    assert "aktif" in teks and "batch ayam gagal uji antibiotik" in teks
     assert "9,8 km" in teks and "12,2 menit" in teks
     assert "dalam perjalanan" in teks
-    assert "tanpa geometri: 0" in teks
+    assert "1 kiriman punya rute jalan, 0 tanpa rute jalan" in teks
 
 
 def test_bukti_keputusan_menampilkan_tanda_tangan_dan_jejak():
@@ -588,7 +602,8 @@ def test_status_sistem_tidak_menaikkan_status_komponen():
     assert "SAH" in teks and "Rasio blok terhubung (0–1):** 1" in teks
     assert "Rp227.295.034" in teks
     assert "Jaringan SPPG (1 lokasi)" in teks and "Bandung (Jawa Barat)" in teks
-    assert "/admin/users" in teks  # alasan tidak dibuka, dinyatakan
+    assert "/admin/users" not in teks  # path internal tidak untuk pembaca chat
+    assert "tidak dibuka lewat chat" in teks  # alasannya tetap dinyatakan
 
 
 def test_penerimaan_barang_satu_batch():
