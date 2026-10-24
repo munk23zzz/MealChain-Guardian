@@ -1142,9 +1142,15 @@ async def _semai_bukti_dan_rantai(db: AsyncSession, now: datetime) -> dict:
        bisa bergerak saat demo (setujui satu keputusan baru -> penyebut naik).
     """
     from app.models import Approval, DecisionEvidence
-    from app.services.ledger_service import append_block
+    from app.services.ledger_service import append_block, bump_generation
 
-    await db.execute(text("DELETE FROM ledger_blocks"))
+    # Residu audit N3 (24 Okt 2026): dulu baris ini mengosongkan tabel ledger,
+    # sehingga "Siapkan data demo" menghapus SELURUH jejak audit — termasuk arsip
+    # generasi lama yang justru bukti bahwa data pernah ada. Sekarang cukup
+    # naikkan generasi: blok lama tetap tersimpan (dilaporkan `archived_blocks`),
+    # dan blok baru ditulis di atas rantai yang sama sehingga `prev_hash` tetap
+    # nyambung.
+    await bump_generation(db)
     keputusan = list(
         (await db.execute(select(Decision).order_by(Decision.created_at))).scalars()
     )

@@ -151,13 +151,35 @@ async def compute_kpis(
             coverage=Decimal(1),
         )
     else:
-        mc_metric = _no_data(
-            "Meal Continuity Rate", "percent",
-            reason=(
-                "tidak ada menu plan pada periode ini — "
-                "unavailable bila tabel facts belum dimigrasi (009)"
-            ),
+        # KPI-02 (audit 24 Okt 2026): dulu semua keadaan jatuh ke satu kalimat,
+        # sehingga "belum ada data" tidak bisa dibedakan dari "ada data, tetapi
+        # penyebutnya nol". Dua sebab itu butuh tindakan berbeda: yang pertama
+        # menunggu data masuk, yang kedua menandakan rencana tanpa porsi.
+        cek_rencana = await _rows(
+            db,
+            f"SELECT COUNT(*), COALESCE(SUM(planned_portions), 0) "
+            f"FROM menu_plans WHERE {_plan_date_range()} "
+            + ("AND location_id = :loc" if location_id else ""),
+            {"start": start, "end": end, **loc_param},
         )
+        jml_rencana = int(cek_rencana[0][0] or 0) if cek_rencana else 0
+        if jml_rencana > 0:
+            mc_metric = _no_data(
+                "Meal Continuity Rate", "percent",
+                sample_count=jml_rencana,
+                reason=(
+                    f"{jml_rencana} menu plan ada, tetapi total porsi rencana 0 — "
+                    "penyebut nol, bukan data hilang"
+                ),
+            )
+        else:
+            mc_metric = _no_data(
+                "Meal Continuity Rate", "percent",
+                reason=(
+                    "tidak ada menu plan pada periode ini — "
+                    "unavailable bila tabel facts belum dimigrasi (009)"
+                ),
+            )
     metrics.append(mc_metric)
 
     # ---- 2. Avoidable Food Loss (P6, 009: disposal event kini ada)
@@ -199,7 +221,13 @@ async def compute_kpis(
             reason="tidak ada disposal event pada periode ini",
         )
     else:
-        fl_metric = _no_data("Avoidable Food Loss", "percent")
+        fl_metric = _no_data(
+            "Avoidable Food Loss", "percent",
+            reason=(
+                "tidak ada disposal event maupun pasokan tercatat pada periode "
+                "ini — penyebut nol"
+            ),
+        )
     metrics.append(fl_metric)
 
     # ---- 3. Regional Imbalance Resolution Rate (dedupe root lineage) ----
@@ -255,7 +283,13 @@ async def compute_kpis(
             coverage=Decimal(1),
         )
     else:
-        sdc_metric = _no_data("Safe Delivered Cost", "IDR")
+        sdc_metric = _no_data(
+            "Safe Delivered Cost", "IDR",
+            reason=(
+                "tidak ada batch terkirim yang punya biaya pada periode ini "
+                "(penyebut kosong)"
+            ),
+        )
     metrics.append(sdc_metric)
 
     # ---- 5. Procurement Price Deviation (absolut, pairing per lokasi) ----
@@ -292,7 +326,20 @@ async def compute_kpis(
             coverage=Decimal(1),
         )
     else:
-        price_metric = _no_data("Procurement Price Deviation", "percent")
+        if ps_rows:
+            price_metric = _no_data(
+                "Procurement Price Deviation", "percent",
+                sample_count=len(ps_rows),
+                reason=(
+                    f"{len(ps_rows)} kutipan pemasok ada, tetapi tidak ada "
+                    "pembanding harga referensi (PIHPS) — penyebut nol"
+                ),
+            )
+        else:
+            price_metric = _no_data(
+                "Procurement Price Deviation", "percent",
+                reason="tidak ada kutipan pemasok (supplier_quote) pada periode ini",
+            )
     metrics.append(price_metric)
 
     # ---- 6. Decision Time: mean first DETECT → last ACT (ACT committed) ---
@@ -334,7 +381,20 @@ async def compute_kpis(
             if eligible else None,
         )
     else:
-        dt_metric = _no_data("Decision Time", "minutes")
+        if eligible:
+            dt_metric = _no_data(
+                "Decision Time", "minutes",
+                sample_count=eligible,
+                reason=(
+                    f"{eligible} keputusan punya jejak DETECT, tetapi belum ada "
+                    "ACT yang committed — penyebut nol"
+                ),
+            )
+        else:
+            dt_metric = _no_data(
+                "Decision Time", "minutes",
+                reason="tidak ada keputusan dengan jejak DETECT pada periode ini",
+            )
     metrics.append(dt_metric)
 
     # ---- 7. Evidence Completeness: ≥2 distinct consistent sebelum cutoff --
@@ -403,8 +463,12 @@ async def compute_kpis(
             "Evidence Completeness", "percent",
             sample_count=0,
             reason=(
-                "belum ada keputusan yang disetujui pada periode ini — "
-                "tanpa approval tidak ada cutoff untuk menilai bukti"
+                "tidak ada keputusan pada periode ini"
+                if not ev_rows
+                else (
+                    f"{len(ev_rows)} keputusan ada, tetapi belum satu pun "
+                    "disetujui — tanpa approval tidak ada cutoff untuk menilai bukti"
+                )
             ),
         )
     metrics.append(ev_metric)

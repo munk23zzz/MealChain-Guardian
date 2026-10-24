@@ -1,0 +1,87 @@
+"""Residu N3: "Siapkan data demo" tidak boleh menghapus jejak audit.
+
+Sebelum perbaikan (24 Okt 2026), `app/seed/demo_template.py` memanggil
+`DELETE FROM ledger_blocks` sebelum membangun ulang rantai. Akibatnya setiap
+reset demo membuang SELURUH ledger — termasuk arsip generasi lama yang justru
+menjadi bukti bahwa data pernah ada. Generasi ledger (N3) jadi tidak ada artinya
+pada jalur yang paling sering dipakai saat demo.
+
+Kontrak baru: reset cukup menaikkan generasi. Blok lama tetap tersimpan dan
+dilaporkan sebagai `archived_blocks`; blok baru menyambung rantai yang sama
+(`prev_hash` tidak putus), dan cakupan generasi aktif tetap 100% tertaut.
+
+Tes ini mengunci dua hal: mekanisme ledger-nya (bump + append) dan fakta bahwa
+jalur reset memakai mekanisme itu, bukan `DELETE`.
+"""
+
+from __future__ import annotations
+
+import uuid
+from pathlib import Path
+
+from sqlalchemy import text
+
+from app.services import ledger_service
+from tests.test_ledger_generasi import _jalankan, _kembalikan
+
+
+def test_jalur_reset_tidak_menghapus_ledger():
+    sumber = Path("app/seed/demo_template.py").read_text(encoding="utf-8")
+    assert "DELETE FROM ledger_blocks" not in sumber, (
+        "reset demo tidak boleh menghapus ledger; naikkan generasi saja"
+    )
+    assert "bump_generation" in sumber
+
+
+def test_bump_lalu_append_menyisakan_arsip_dan_rantai_tetap_valid():
+    async def _t(db):
+        awal = await ledger_service.current_generation(db)
+        baris = (
+            await db.execute(
+                text(
+                    "SELECT count(*) FILTER (WHERE generation < :g) FROM ledger_blocks"
+                ),
+                {"g": awal},
+            )
+        ).scalar()
+        arsip_awal = int(baris or 0)
+        puncak = int(
+            (
+                await db.execute(text("SELECT coalesce(max(height), 0) FROM ledger_blocks"))
+            ).scalar()
+            or 0
+        )
+
+        # Meniru langkah reset: naikkan generasi, lalu tulis blok baru.
+        generasi_baru = await ledger_service.bump_generation(db)
+        entitas = uuid.uuid4()
+        await ledger_service.append_block(
+            db,
+            action="decision.created",
+            entity_id=entitas,
+            actor_id=None,
+            payload={"decision_id": str(entitas), "uji": "arsip-rebuild"},
+        )
+        await db.commit()
+
+        try:
+            assert generasi_baru == awal + 1
+            # Blok lama TIDAK hilang: jumlah total bertambah satu, bukan kembali ke 1.
+            total = int(
+                (await db.execute(text("SELECT count(*) FROM ledger_blocks"))).scalar()
+            )
+            assert total >= puncak + 1
+
+            laporan = await ledger_service.verify_chain(db)
+            assert laporan["valid"] is True
+            assert laporan["generation"] == generasi_baru
+            assert laporan["archived_blocks"] >= arsip_awal + 1
+            # Blok baru menunjuk entitas yang tidak ada -> yatim, dan itu jujur.
+            assert laporan["orphan_blocks"] >= 1
+        finally:
+            await db.execute(
+                text("DELETE FROM ledger_blocks WHERE height > :h"), {"h": puncak}
+            )
+            await _kembalikan(db, puncak, awal)
+
+    _jalankan(_t)
