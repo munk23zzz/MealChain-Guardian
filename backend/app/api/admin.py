@@ -26,6 +26,7 @@ from app.core.admin_rules import (
 from app.db import get_db
 from app.models.locations import Location
 from app.models.users import User
+from app.services.ledger_service import append_block
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -122,8 +123,29 @@ async def update_user(
     except AdminRuleError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    # AUTH-01 (audit 24 Okt 2026): `bgn_monitor` memegang pengelolaan
+    # pengguna/lokasi karena skema tidak punya peran `admin`. Karena itu setiap
+    # perubahan WAJIB meninggalkan jejak di ledger — perubahan hak akses tanpa
+    # jejak tidak bisa diaudit setelah kejadian.
+    role_lama = user.role
+    lokasi_lama = user.location_id
+    lokasi_baru = uuid.UUID(location_id) if location_id else None
     user.role = role
-    user.location_id = uuid.UUID(location_id) if location_id else None
+    user.location_id = lokasi_baru
+    if (role, lokasi_baru) != (role_lama, lokasi_lama):
+        await append_block(
+            db,
+            action="admin.user.update",
+            entity_id=user.id,
+            actor_id=_admin.id,
+            payload={
+                "user_id": str(user.id),
+                "role_sebelum": role_lama,
+                "role_sesudah": role,
+                "lokasi_sebelum": str(lokasi_lama) if lokasi_lama else None,
+                "lokasi_sesudah": str(lokasi_baru) if lokasi_baru else None,
+            },
+        )
     await db.commit()
     await db.refresh(user)
     lokasi = await db.get(Location, user.location_id) if user.location_id else None
@@ -166,8 +188,25 @@ async def update_location(
     except AdminRuleError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    nilai_lama = {kunci: getattr(lokasi, kunci) for kunci in perubahan}
     for kunci_field, nilai in perubahan.items():
         setattr(lokasi, kunci_field, nilai)
+    await append_block(
+        db,
+        action="admin.location.update",
+        entity_id=lokasi.id,
+        actor_id=_admin.id,
+        payload={
+            "location_id": str(lokasi.id),
+            "perubahan": {
+                kunci: {
+                    "sebelum": str(nilai_lama[kunci]),
+                    "sesudah": str(nilai),
+                }
+                for kunci, nilai in perubahan.items()
+            },
+        },
+    )
     try:
         await db.commit()
     except IntegrityError as exc:  # nama lokasi UNIQUE

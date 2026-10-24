@@ -36,6 +36,9 @@ SELECT
     WHERE entity_id IS NOT NULL
       AND NOT EXISTS (SELECT 1 FROM decisions d WHERE d.id = lb.entity_id)
       AND NOT EXISTS (SELECT 1 FROM batches b WHERE b.id = lb.entity_id)
+      -- Entitas sah lainnya: pengguna & lokasi (blok `admin.*`, AUTH-01).
+      AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = lb.entity_id)
+      AND NOT EXISTS (SELECT 1 FROM locations lc WHERE lc.id = lb.entity_id)
   ) AS orphan_blocks
 FROM ledger_blocks lb,
      (SELECT coalesce((SELECT generation FROM ledger_meta WHERE id = 1), 1) AS g) gen

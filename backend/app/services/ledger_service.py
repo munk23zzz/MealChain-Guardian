@@ -167,6 +167,11 @@ async def _linkage(db: AsyncSession) -> dict:
                       AND entity_id IS NOT NULL
                       AND NOT EXISTS (SELECT 1 FROM decisions d WHERE d.id = lb.entity_id)
                       AND NOT EXISTS (SELECT 1 FROM batches b WHERE b.id = lb.entity_id)
+                      -- Sejak AUTH-01, perubahan pengguna/lokasi juga berblok
+                      -- (`admin.user.update` / `admin.location.update`), jadi
+                      -- users & locations adalah entitas yang sah — bukan yatim.
+                      AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = lb.entity_id)
+                      AND NOT EXISTS (SELECT 1 FROM locations lc WHERE lc.id = lb.entity_id)
                   ) AS orphan_blocks,
                   count(*) FILTER (WHERE generation < :g) AS archived_blocks
                 FROM ledger_blocks lb

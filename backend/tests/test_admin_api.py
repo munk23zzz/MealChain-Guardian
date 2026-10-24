@@ -64,6 +64,9 @@ def skenario():
             .all()
         )
         lokasi_ids = [r["id"] for r in lokasi_awal]
+        tinggi_ledger = int(
+            conn.execute(text("SELECT coalesce(max(height), 0) FROM ledger_blocks")).scalar()
+        )
     try:
         yield engine, lokasi_ids, users_awal, lokasi_awal
     finally:
@@ -87,6 +90,12 @@ def skenario():
                         "i": lok["id"],
                     },
                 )
+            # AUTH-01: PATCH admin kini menambah blok ledger. Tes ini menulis ke
+            # DB bersama, jadi blok yang dibuatnya harus dipangkas dari ekor rantai
+            # (bukan dihapus di tengah — itu memutus prev_hash).
+            conn.execute(
+                text("DELETE FROM ledger_blocks WHERE height > :h"), {"h": tinggi_ledger}
+            )
         engine.dispose()
 
 
