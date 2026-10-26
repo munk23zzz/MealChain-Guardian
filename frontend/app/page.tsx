@@ -755,30 +755,22 @@ export default function Home() {
   }
 
   if (!token) {
+    // 26 Okt 2026 (SEC-02): kata sandi demo TIDAK lagi ditulis di bundel klien.
+    // Sebelumnya ketujuh akun demo membawa literal kata sandi di berkas ini,
+    // sehingga siapa pun yang membuka bundle bisa membacanya. Tombol hanya
+    // mengisi email; kata sandi diketik operator (ada di `.env`, tidak di repo).
     const demoAccounts = [
-      { label: "SPPG Head", email: "sppg.head@demo.local", password: "Demo#SPPG2026" },
-      { label: "Nutritionist", email: "sppg.nutritionist@demo.local", password: "Demo#Nut2026" },
-      { label: "BGN Monitor", email: "bgn.monitor@demo.local", password: "Demo#BGN2026" },
+      { label: "SPPG Head", email: "sppg.head@demo.local" },
+      { label: "Nutritionist", email: "sppg.nutritionist@demo.local" },
+      { label: "BGN Monitor", email: "bgn.monitor@demo.local" },
     ];
     // Keputusan produk 3A (18 Okt): Bandung & Surabaya punya approver sendiri,
     // jadi alur approval bisa didemokan di kota yang bukan Jakarta.
     const demoKota = [
-      { label: "Kepala Bandung", email: "sppg.head.bandung@demo.local", password: "Demo#SPPG2026" },
-      {
-        label: "Gizi Bandung",
-        email: "sppg.nutritionist.bandung@demo.local",
-        password: "Demo#Nut2026",
-      },
-      {
-        label: "Kepala Surabaya",
-        email: "sppg.head.surabaya@demo.local",
-        password: "Demo#SPPG2026",
-      },
-      {
-        label: "Gizi Surabaya",
-        email: "sppg.nutritionist.surabaya@demo.local",
-        password: "Demo#Nut2026",
-      },
+      { label: "Kepala Bandung", email: "sppg.head.bandung@demo.local" },
+      { label: "Gizi Bandung", email: "sppg.nutritionist.bandung@demo.local" },
+      { label: "Kepala Surabaya", email: "sppg.head.surabaya@demo.local" },
+      { label: "Gizi Surabaya", email: "sppg.nutritionist.surabaya@demo.local" },
     ];
     return (
       <main className="login-shell">
@@ -838,7 +830,7 @@ export default function Home() {
                       className="demo-link"
                       onClick={() => {
                         setEmail(acc.email);
-                        setPassword(acc.password);
+                        setPassword("");
                         setLoginError(null);
                       }}
                     >
@@ -849,6 +841,10 @@ export default function Home() {
               </p>
               {/* Approver Kota lain — supaya alur dua approval bisa dicoba di
                   Bandung/Surabaya, bukan hanya di Jakarta. */}
+              <p className="demo-hint demo-hint-terbatas">
+                Kata sandi tidak dikirim ke browser — operator memasukkannya dari
+                berkas lingkungan saat sesi demo.
+              </p>
               <p className="demo-hint demo-hint-kota">Kota lain:</p>
               <p className="demo-links">
                 {demoKota.map((acc, i) => (
@@ -859,7 +855,7 @@ export default function Home() {
                       className="demo-link"
                       onClick={() => {
                         setEmail(acc.email);
-                        setPassword(acc.password);
+                        setPassword("");
                         setLoginError(null);
                       }}
                     >

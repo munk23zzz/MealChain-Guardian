@@ -9,18 +9,20 @@ perintah pengukurnya dicantumkan supaya siapa pun bisa mengulang.
 
 | Hal | Nilai |
 |---|---|
-| Waktu ukur keadaan data | 26 Oktober 2026, 13.52 WIB (`docs/state-snapshot.json`) |
-| Waktu ukur KPI | 26 Oktober 2026, ±17.57 WIB (`GET /kpi?periode=today\|7d\|1bulan`) |
+| Waktu ukur keadaan data | 26 Oktober 2026, 19.29 WIB (`docs/state-snapshot.json`) — sesudah build kanonik |
+| Waktu ukur KPI | 26 Oktober 2026, 19.30 WIB (`GET /kpi?periode=today\|7d\|1bulan`) |
 | Repo | `E:\hackathon\HackathonAWS\mealchain-guardian` |
-| Branch / HEAD | `feature/db-modes-demo-coverage` / `d414957` (25 Okt 2026) |
+| Branch / HEAD | `feature/db-modes-demo-coverage` / `8741d6c` + 7 commit sesudah `d414957` |
 | Migrasi Alembic | 33 berkas, head `033_indeks_fk_hilang` |
-| Ukuran kode | backend `app/` 31.896 baris · frontend `app+components+lib` 30.875 baris |
-| Berkas uji | 235 berkas backend · 166 berkas frontend |
+| Ukuran kode | backend `app/` 31.958 baris · frontend `app+components+lib+tests` 55.944 baris |
+| Berkas uji | 240 berkas backend · 167 berkas frontend (1.818 tes) |
+| API | 32 modul router · 75 path · 77 operasi (`backend/openapi.json`) |
+| Tabel | 22 tabel domain + `alembic_version` + `ledger_meta` |
 
-> **Catatan kejujuran data.** Seluruh isi database saat ini berasal dari
-> penyemai demo (`origin='seed'`/`'demo'`) atau `mock-sap`. Tidak ada koneksi
-> keluar ke SAP, PIHPS, atau sensor. Jangan menyebutnya "data operasional nyata"
-> atau "data eksternal aktual" di depan siapa pun.
+> **Catatan kejujuran data.** Seluruh isi database berasal dari penyemai demo
+> (`origin='seed'`/`'demo'`) atau `mock-sap`. Tidak ada koneksi keluar ke SAP,
+> PIHPS, atau sensor. Jangan menyebutnya "data operasional nyata" atau "data
+> eksternal aktual" di depan siapa pun.
 
 ---
 
@@ -33,14 +35,15 @@ perintah pengukurnya dicantumkan supaya siapa pun bisa mengulang.
 | Di folder mana kode apa | 4 |
 | Tabel apa saja yang ada, dan apa artinya | 5 |
 | Siapa boleh apa | 6 |
-| Bagaimana satu keputusan bergerak dari usul ke kiriman | 7 |
+| Bagaimana satu keputusan bergerak dari usul ke kiriman | 3.2, 7 |
 | Agen bekerja dengan tahap apa | 8 |
 | Endpoint apa yang tersedia | 9 |
 | Layar menyajikan apa, dan seberapa segar | 10 |
 | Angka KPI dihitung bagaimana | 11 |
 | Mengapa angka berubah/tidak berubah saat demo | 12 |
 | Keamanan dan risikonya | 13 |
-| Apa yang sudah diuji, apa yang belum | 14, 15 |
+| Apa yang sudah diuji, apa yang belum | 14 |
+| Batas kemampuan | 15 |
 | Apa yang perlu diputuskan pemilik produk | 16 |
 | Dokumen lain yang harus dibaca | 17 |
 
@@ -67,18 +70,26 @@ Tiga nilai yang dijual, dan di mana ia terlihat di aplikasi:
 | Keamanan pangan tidak bisa dinegosiasikan | `safety_status` per batch, karantina, gerbang eksekusi, CCP |
 | Pemborosan dan biaya bisa dilacak | KPI Food Loss, Safe Delivered Cost, surplus allocation, disposal |
 
-Angka kunci keadaan demo (26 Okt 2026 13.52 WIB):
+### 1.1 Angka kunci (keluaran builder, 26 Okt 2026 19.29 WIB)
 
 | Entitas | Jumlah |
 |---|---|
-| Batch | 120 (lulus 100 · perlu verifikasi 14 · gagal 3 · belum diuji 3 · ditahan 1 · kedaluwarsa <48 jam 8) |
-| Keputusan | 36 (terbuka 19: 15 menunggu approval + 4 ditandai verifier) |
-| Pemasok | 60 (HACCP 17 · hygiene 35 · tanpa sertifikat 8) |
+| Batch | **125** (wortel 32 · beras 32 · telur 31 · ayam 30); `pass` 102 · `needs_verification` 15 · `fail` 3 (740 kg) · `pending` 5 · karantina 2 (1 dilepas, 1 gagal) · kedaluwarsa <48 jam 8 |
+| Keputusan | **48** — 17 `pending_approval` · 10 `rejected` · 9 `executed` · 5 `verifier_flagged` · 3 `approved` · 2 `proposed` · 2 `review_only` (22 terbuka) |
+| Approval / bukti / jejak | **28 / 57 / 118** |
+| Pemasok / lokasi / komoditas | **61 / 10 / 4** (HACCP 17 · hygiene 36 · tanpa sertifikat 8) |
 | Rencana menu | 660 |
-| Catatan pasokan | 5.240 · kutipan harga 5.924 · permintaan 1.360 · pengiriman 180 · pembuangan 80 |
-| Blok ledger | 1.598 (valid, 1.526 arsip, 72 blok entitas tertaut, 0 yatim; +72 setiap build) |
-| Rute jalan | 53 · penerimaan menunggu 2 · PO 16 (14 confirmed, 2 submitted) |
-| Sesi demo | 3, semuanya `expired` |
+| Deret | pasokan 5.240 · harga 6.015 · permintaan 1.360 · pengiriman 180 · pembuangan 83 |
+| Blok ledger | **1.598** (valid, 1.526 arsip, 72 blok entitas tertaut, 0 yatim; **+72 setiap build**) |
+| Rute jalan | 54 baris cache; 15 kiriman Jakarta (7 di jalan · 6 tiba · 1 belum berangkat · 1 tanpa geometri) |
+| PO mock SAP | **20** (15 `confirmed` · 3 `submitted` · 2 `draft`) |
+| Penerimaan | **7** (5 `menunggu` · 1 `disetujui` · 1 `ditolak`) |
+| Kartu 24 jam Jakarta | **14** (10 menunggu · 2 ditandai verifier · 2 sudah dieksekusi) |
+| Sesi demo | 6 baris riwayat, 1 aktif pada snapshot |
+
+> **Angka ini bergerak.** Ledger bertambah 72 blok setiap build/rebuild, dan
+> jam kejadian mengikuti `datetime.now()`. Yang tetap adalah **jumlah** baris;
+> yang bergeser adalah stempel waktu dan arsip ledger.
 
 ---
 
@@ -86,12 +97,15 @@ Angka kunci keadaan demo (26 Okt 2026 13.52 WIB):
 
 Empat container, satu jaringan Docker (`mealchain-network`):
 
-| Container | Port host | Status ukur | Isi |
-|---|---|---|---|
-| `mealchain-backend` | 8000 | healthy, Up 14 jam | FastAPI + SQLAlchemy + Alembic |
-| `mealchain-frontend` | 3010 → 3000 | healthy, Up 23 jam | Next.js 14.2.14 (App Router) |
-| `mealchain-postgres` | 15432 → 5432 | healthy, Up 23 jam | PostgreSQL, volume persisten |
-| `mealchain-mock-sap` | 8001 | Up 23 jam | Tiruan endpoint SAP (PO, stok) |
+| Container | Port host | Isi |
+|---|---|---|
+| `mealchain-backend` | 8000 | FastAPI + SQLAlchemy async + Alembic |
+| `mealchain-frontend` | 3010 → 3000 | Next.js 14.2.14 (App Router) |
+| `mealchain-postgres` | 15432 → 5432 | PostgreSQL, volume persisten |
+| `mealchain-mock-sap` | 8001 | Tiruan endpoint SAP (PO, stok) |
+
+Layanan di luar Compose: jembatan Joule `sap-joule/a2a_server` (:8099) dan
+runtime agen `agent/runtime_server.py` (AWS AgentCore).
 
 Konfigurasi yang menentukan perilaku demo (`.env`, tidak ikut di-commit):
 
@@ -100,7 +114,8 @@ Konfigurasi yang menentukan perilaku demo (`.env`, tidak ikut di-commit):
 | `DEMO_SESSION_ENFORCE` | `true` | Tanpa sesi demo aktif, semua POST/PUT/PATCH/DELETE → 409 |
 | `DEMO_SESSION_MINUTES` | `120` | Umur sesi bawaan |
 | `DEMO_SESSION_MAX_MINUTES` | `120` | Plafon absolut START maupun EXTEND |
-| `sap_provider` | `mock` | Adapter SAP aktif = tiruan, bukan koneksi asli |
+| `DEMO_MODE` | `False` | **Bukan** gerbang router demo (lihat §16) |
+| `sap_provider` | `mock` | Adapter SAP aktif = tiruan |
 
 `docker-compose.yml` mendefinisikan empat service itu; tidak ada worker,
 scheduler, Redis, atau message broker. Tidak ada proses yang berjalan sendiri
@@ -117,95 +132,89 @@ Browser (Next.js, satu konsol 11 tab)
    │  fetch /api/* → proxy Next ke backend
    ▼
 FastAPI (backend/app)
-   ├── api/          33 router, 77 operasi HTTP (75 path)
+   ├── api/          32 modul router, 77 operasi HTTP (75 path)
    ├── services/     logika bisnis: kpi, agenda, kandidat, eligibility,
    │                 journey, demo_session, ledger, event1..3
-   ├── core/         aturan keras: approval_matrix, kpi_period, journey,
+   ├── core/         aturan keras: approval_matrix, kpi_period, safety_gate,
    │                 hash (ledger), security (JWT), pagination
    ├── models/       SQLAlchemy 22 tabel
    ├── sap_integration/  adapter: mock (aktif) · aws_mcp/odata (stub jujur)
-   └── seed/         init master, timeseries, demo_template
+   └── seed/         init master, timeseries, demo_template, demo_extra
    ▼
 PostgreSQL — system of fact untuk keputusan, bukti, ledger
 ```
 
 ### 3.2 Perjalanan satu keputusan (contoh: transfer penyeimbang)
 
-1. **DETECT** — `POST /demo/event1` (atau pemanggilan `/balance/analyze`)
-   menemukan lokasi surplus dan lokasi kekurangan untuk komoditas yang sama.
-   Tertulis baris `decisions` (status `proposed`) + `agent_traces` tahap
-   `DETECT`.
-2. **PREDICT/OPTIMIZE** — kebutuhan beberapa hari dihitung dari
-   `demand_records`; kandidat pemasok disaring (`supplier_eligibility`):
-   sertifikat, jarak, status karantina, kesegaran batch.
-3. **DECIDE** — angka deterministik dihitung: `safe_delivered_cost`, skor
-   kandidat, alasan penolakan kandidat lain.
-4. **VERIFY** — `/actions/verify` menghasilkan verdict `consistent`,
-   `flagged`, atau `unavailable`. `flagged` mengubah status ke
-   `verifier_flagged`; `unavailable` berarti belum dinilai.
-5. **Propose** — `/actions/propose` memindahkan `proposed|verifier_flagged`
-   → `pending_approval` dan mengisi `expires_at`.
-6. **Approval empat mata** — `/actions/approve`, kuorum sesuai
-   `approval_matrix`. Kuorum penuh → status `approved` (belum berangkat).
-7. **Execute** — `/actions/execute` memvalidasi ulang safety/freshness batch,
-   menulis `batches.dispatched_at`, membuat PO di `sap_mock_purchase_orders`,
-   mengisi `safe_delivered_cost`, menambah blok ledger, status → `executed`.
-8. **Journey** — status truk **dihitung**, bukan disimpan:
-   `belum_berangkat` → `di_jalan` → `sudah_tiba` (atau `tidak_diketahui`
-   bila durasi rute belum ada).
+1. **DETECT** — `POST /demo/event1` (atau `/balance/analyze`) menemukan lokasi
+   surplus dan kekurangan. Tertulis `decisions` (status `proposed`) +
+   `agent_traces` tahap `DETECT`.
+2. **PREDICT/OPTIMIZE** — kebutuhan dihitung dari `demand_records`; kandidat
+   pemasok disaring (`supplier_eligibility`): sertifikat, jarak, karantina,
+   kesegaran.
+3. **DECIDE** — angka deterministik: `safe_delivered_cost`, skor kandidat,
+   alasan penolakan kandidat lain.
+4. **VERIFY** — `/actions/verify` → `consistent`, `flagged`, atau `unavailable`.
+5. **Propose** — `/actions/propose` memindahkan `proposed|verifier_flagged` →
+   `pending_approval` dan mengisi `expires_at`.
+6. **Approval empat mata** — `/actions/approve`; kuorum penuh → `approved`
+   (belum berangkat).
+7. **Execute** — `/actions/execute` memvalidasi ulang safety/freshness, menulis
+   `batches.dispatched_at`, membuat PO di `sap_mock_purchase_orders`, mengisi
+   SDC, menambah blok ledger, status → `executed`.
+8. **Journey** — status truk **dihitung**, bukan disimpan (lihat §7.2).
 9. **Receive** — `/receipts` + approve/reject menutup siklus; batch gagal uji
-   bisa dikarantina (`POST /batches/{id}/quarantine`).
-10. **LEARN** — mencatat iterasi ulang setelah keputusan ditolak (`repropose`)
-    sebagai langkah `LEARN` di `agent_traces`. Skor keandalan pemasok **tidak**
-    diperbarui otomatis; nilainya hanya dinormalisasi saat dibaca
-    (`core/reliability.py`).
+   bisa dikarantina.
+10. **LEARN** — mencatat iterasi `repropose` sebagai langkah `LEARN`. Skor
+    keandalan pemasok **tidak** diperbarui otomatis; hanya dinormalisasi saat
+    dibaca (`core/reliability.py`).
 
 ---
 
 ## 4. Struktur kode
 
-### 4.1 Backend (`backend/app`, 31.896 baris)
+### 4.1 Backend (`backend/app`, 31.958 baris)
 
 | Folder | Isi |
 |---|---|
-| `api/` | 33 router: `decisions`, `actions`, `kpi`, `agenda`, `batches`, `suppliers`, `supplier_exclusions`, `supplier_routes`, `receipts`, `waste`, `surplus`, `ledger`, `demo`, `admin`, `auth`, `balance`, `price`, `demand`, `evidence`, `freshness`, `logistics`, `safety`, `compliance`, `dossier`, `sap`, `integrations`, `quarantine`, `events/*`, `health` |
-| `services/` | `kpi_service`, `agenda_service`, `demo_session`, `demo_template` (di `seed/`), `supplier_eligibility`, `journey`, `event1/2/3`, `ledger`, `forecasting` |
-| `core/` | `approval_matrix`, `kpi_period`, `journey`, `hash`, `security`, `config`, `pagination`, `cost` |
+| `api/` | 32 modul router: `decisions`, `actions`, `kpi`, `agenda`, `batches`, `suppliers`, `supplier_exclusions`, `supplier_routes`, `receipts`, `waste`, `surplus`, `ledger`, `demo`, `demo_session`, `admin`, `auth`, `balance`, `price`, `demand`, `evidence`, `freshness`, `logistics`, `safety`, `sap`, `integrations`, `quarantine`, `events/*`, `health` |
+| `services/` | `kpi_service`, `agenda_service`, `demo_session`, `demo_template_reset`, `supplier_eligibility`, `journey`, `event1/2/3`, `ledger_service`, `forecasting` |
+| `core/` | `approval_matrix`, `kpi_period`, `journey`, `safety_gate`, `commodity_limits`, `safe_delivered_cost`, `hash`, `security`, `config`, `pagination` |
 | `models/` | 22 tabel SQLAlchemy + constraint + index |
 | `sap_integration/` | `interface`, `mock` (aktif), `aws_mcp`/`odata` (stub yang menolak jalan), `mapping`, `factory` |
-| `seed/` | `init` master data, `timeseries`, `demo_template`, `demo_kpi_riwayat` |
+| `seed/` | `seed_data`, `timeseries`, `demo_template`, `demo_activity`, `demo_extra`, `demo_kasus_bukti`, `demo_kpi_riwayat`, `suppliers_demo` |
 
-### 4.2 Frontend (`frontend`, 30.875 baris)
+### 4.2 Frontend (`frontend`, 55.944 baris TS/TSX termasuk tes)
 
 | Bagian | Isi |
 |---|---|
-| `app/page.tsx` | konsol satu halaman, 2.035 baris, 11 tab |
-| `components/` | 56 komponen: papan per domain (`KPIDashboard`, `FoodSafetyBoard`, `SupplierBoard`, `TodayDashboard`, `DemoControlPanel`, `AgentTraceViewer`, …) |
-| `lib/` | 63 modul: pemformatan (`today`, `kpi`, `food-safety`, `supplier-pins`, `agenda`), aturan tampilan, tipe |
-| `lib/hooks/` | 17 hook React Query (keputusan, KPI, saldo, rute, hari ini, sesi, …) |
-| `tests/` | 166 berkas uji (vitest) |
+| `app/page.tsx` | konsol satu halaman, ±2.035 baris, 11 tab |
+| `components/` | papan per domain (`KPIDashboard`, `FoodSafetyBoard`, `SupplierBoard`, `TodayDashboard`, `DemoControlPanel`, `AgentTraceViewer`, …) |
+| `lib/` | pemformatan (`today`, `kpi`, `food-safety`, `supplier-pins`, `agenda`), aturan tampilan, tipe |
+| `lib/hooks/` | hook React Query (keputusan, KPI, saldo, rute, hari ini, sesi, …) |
+| `tests/` | 167 berkas uji, 1.818 tes (vitest) |
 
 ### 4.3 Basis data
 
-22 tabel, tidak ada tabel riwayat bayangan: perubahan status dicatat di
+22 tabel domain, tanpa tabel riwayat bayangan: perubahan status dicatat di
 `approvals`, `agent_traces`, `decision_evidence`, dan `ledger_blocks`.
 
 ---
 
 ## 5. Model data
 
-### 5.1 Kelompok tabel
+### 5.1 Kelompok tabel (jumlah baris = snapshot 19.29 WIB)
 
 | Kelompok | Tabel | Peran |
 |---|---|---|
-| Master | `locations` (10), `commodities` (4), `suppliers` (60), `users` (11) | Acuan yang tidak ikut dihapus saat reset demo |
-| Pasokan | `supply_records` (5.240), `price_signals` (5.924), `demand_records` (1.360) | Fakta harian per lokasi+komoditas |
-| Operasi | `menu_plans` (660), `delivery_events` (180), `batches` (120), `disposal_events` (80), `road_routes` (53) | Rencana, pengiriman, batch fisik, limbah, geometri rute |
-| Keputusan | `decisions` (36), `approvals` (21), `decision_evidence` (51), `agent_traces` (85) | Inti nilai: usul, persetujuan, bukti, jejak |
-| Keamanan & pemasok | `supplier_exclusions` (2), `batch_receipts` (2) | Eksklusi/usulan pemasok, penerimaan barang |
-| Audit | `ledger_blocks` (1.598) | Hash-chain append-only |
-| SAP tiruan | `sap_mock_purchase_orders` (16), `sap_mock_material_stock` (40) | Cermin dokumen SAP |
-| Demo | `demo_sessions` (3) | Sesi 120 menit, penjaga tulisan |
+| Master | `locations` (10), `commodities` (4), `suppliers` (61), `users` (8) | Acuan yang tidak dihapus saat reset demo |
+| Pasokan | `supply_records` (5.240), `price_signals` (6.015), `demand_records` (1.360) | Fakta harian per lokasi+komoditas |
+| Operasi | `menu_plans` (660), `delivery_events` (180), `batches` (125), `disposal_events` (83), `road_routes` (54) | Rencana, pengiriman, batch fisik, limbah, geometri rute |
+| Keputusan | `decisions` (48), `approvals` (28), `decision_evidence` (57), `agent_traces` (118) | Inti nilai: usul, persetujuan, bukti, jejak |
+| Keamanan & pemasok | `supplier_exclusions` (6), `batch_receipts` (7) | Eksklusi/usulan pemasok, penerimaan barang |
+| Audit | `ledger_blocks` (1.598), `ledger_meta` | Hash-chain append-only |
+| SAP tiruan | `sap_mock_purchase_orders` (20), `sap_mock_material_stock` (40) | Cermin dokumen SAP |
+| Demo | `demo_sessions` (6, 1 aktif) | Sesi 120 menit, penjaga tulisan |
 
 Komoditas: ayam, beras, telur, wortel.
 Lokasi (10): Bandung, Bogor, Cianjur, Jakarta, Makassar, Medan, Palembang,
@@ -213,19 +222,21 @@ Semarang, Surabaya, Yogyakarta.
 
 ### 5.2 Aturan integritas yang ditegakkan database
 
-- **`origin`** pada tabel fakta hanya menerima `'seed'` dan `'demo'`. Tidak ada
-  jalur untuk data "nyata" hari ini — ini batas penting kalau kelak ingin mode
-  live (perlu migrasi baru).
+- **`origin`** pada tabel fakta hanya menerima `'seed'` dan `'demo'` (CHECK di
+  6 tabel). Jalur `live`/`scheduled` butuh migrasi baru — rencana MG memesan
+  `034`–`038`, jadi pekerjaan lain mulai **039**.
 - **Satu keputusan = satu approval per akun** (unique index migrasi 030);
-  pelanggaran ditangani sebagai 409, bukan 500.
-- **Satu sesi demo aktif** (partial unique index
-  `uq_demo_sessions_satu_aktif` pada `status='active'`, migrasi 032).
+  pelanggaran → 409, bukan 500.
+- **Satu sesi demo aktif** (`uq_demo_sessions_satu_aktif`, migrasi 032).
 - **Status keputusan** dibatasi CHECK: `proposed`, `verifier_flagged`,
   `pending_approval`, `approved`, `rejected`, `executed`, `review_only`.
-- **PO tiruan** hanya menerima status `confirmed`/`submitted`; kolom uangnya
-  (`ordered_quantity`, `material_number`) dipakai untuk jejak, bukan total.
-- **Ledger** append-only: tiap blok menyimpan `prev_hash` dan `hash`; tidak ada
-  endpoint untuk mengubah/menghapus blok.
+- **Setiap keputusan wajib punya ≥ 1 `agent_traces`.** Dijaga gate invariant;
+  pernah gagal untuk 11 keputusan `extra:*` dan sudah diperbaiki 26 Okt 2026.
+- **Setiap keputusan `rejected` wajib punya approval negatif.**
+- **PO demo** tidak boleh `ordered_quantity <= 0` dan tidak boleh `MAT-UMUM`.
+- **SDC keputusan = jumlah komponen `cost_breakdown`** (0 selisih).
+- **Ledger append-only**: tiap blok menyimpan `prev_hash` dan `payload_hash`;
+  reset menaikkan `generation`, blok lama menjadi arsip.
 
 ### 5.3 Hubungan yang sering disalahpahami
 
@@ -233,22 +244,24 @@ Semarang, Surabaya, Yogyakarta.
 |---|---|
 | `delivery_events` per lokasi? | Tidak ada `location_id`; lokasi diturunkan lewat `menu_plans.location_id` |
 | Status perjalanan truk | Tidak ada kolomnya; dihitung `journey.py` dari `dispatched_at` + `road_routes.duration_s` |
-| Status keamanan batch | Kolom `safety_status` di `batches`, diisi hasil uji; tidak pernah di-override agent |
-| Kutipan harga | `price_signals` punya `supplier_id`; 143 grup (lokasi, komoditas, sumber, waktu) bisa memuat 1–4 pemasok berbeda pada jam yang sama — itu wajar, bukan duplikasi |
-| Bukti keputusan | `decision_evidence` menyimpan tipe bukti + `is_consistent`; kelengkapan bukti dihitung terhadap waktu approval pertama |
+| Status keamanan batch | Kolom `safety_status` di `batches`; tidak pernah di-override agent |
+| Kutipan harga | `price_signals` punya `supplier_id`; beberapa pemasok pada jam sama itu wajar, bukan duplikasi |
+| Bukti keputusan | `decision_evidence` menyimpan tipe bukti + `is_consistent`; kelengkapan dihitung terhadap approval pertama |
+| Supplier tambahan | Builder membuat 1 pemasok di luar `data/seed/suppliers_demo.json` ("Koperasi Tani Makmur — Cianjur (Unit SPPG)") → DB 61 vs JSON 60; ini penyebab kegagalan beberapa tes (§14.1) |
 
 ---
 
 ## 6. Peran dan wewenang
 
-Tiga peran, 8 baris akun: 7 akun resmi aktif (`sppg_head` 3, `sppg_nutritionist` 3, `bgn_monitor` 1)
-+ 1 akun uji yang **dinonaktifkan** (password dirotasi, tidak bisa login) karena memegang 2 approval historis.
+Tiga peran, 8 baris akun: 7 akun resmi aktif (`sppg_head` 3, `sppg_nutritionist`
+3, `bgn_monitor` 1) + 1 akun uji **dinonaktifkan** (password dirotasi, tidak
+bisa login) karena memegang 2 approval historis.
 
 | Peran | Boleh | Tidak boleh |
 |---|---|---|
-| `sppg_head` | Approval, eksekusi, penerimaan, tab Demo Control | Pengelolaan pengguna/lokasi (itu milik `bgn_monitor`) |
-| `sppg_nutritionist` | Approval (wajib berpasangan untuk keputusan operasional), verifikasi keamanan pangan | Eksekusi tanpa pasangan |
-| `bgn_monitor` | Membaca seluruh dashboard, KPI, agent log; mengelola pengguna & lokasi (`/admin/*`, tab Pengaturan) | Approval/eksekusi (tidak termasuk `APPROVER_ROLES`) |
+| `sppg_head` | Approval, eksekusi, penerimaan, tab Demo Control | Pengelolaan pengguna/lokasi (milik `bgn_monitor`) |
+| `sppg_nutritionist` | Approval (wajib berpasangan), verifikasi keamanan pangan | Eksekusi tanpa pasangan |
+| `bgn_monitor` | Membaca seluruh dashboard, KPI, agent log; mengelola pengguna & lokasi (`/admin/*`, tab Pengaturan) | Approval/eksekusi (bukan `APPROVER_ROLES`) |
 
 Matriks kuorum (`core/approval_matrix.py`):
 
@@ -260,7 +273,10 @@ Matriks kuorum (`core/approval_matrix.py`):
 
 Aturan tambahan: satu penolakan menggugurkan kuorum; approval dari lokasi lain
 tidak dihitung saat eksekusi; kuorum penuh hanya berarti `approved` — PO dan
-keberangkatan baru lahir di `execute`.
+keberangkatan lahir di `execute`.
+
+Kata sandi akun demo **tidak** ada di bundel klien (SEC-02, 26 Okt 2026):
+tombol akun demo hanya mengisi email; operator mengetik kata sandi dari `.env`.
 
 ---
 
@@ -294,9 +310,8 @@ ulang.
 | `sudah_tiba` | sekarang ≥ `eta` |
 | `tidak_diketahui` | sudah berangkat, durasi rute belum ada — tidak diklaim "di jalan" |
 
-Batch yang ditahan (`batch_blokir_eksekusi`: safety, karantina,
-`usable_until`, suhu) tidak diberi `dispatched_at`, sehingga tidak pernah
-digambar sebagai truk.
+Batch yang ditahan (safety, karantina, `usable_until`, suhu) tidak diberi
+`dispatched_at`, sehingga tidak pernah digambar sebagai truk.
 
 ### 7.3 Sesi demo
 
@@ -309,15 +324,14 @@ kosong ──START──► active (≤120 menit) ──expired──► kosong
 ```
 
 Kedaluwarsa dinilai **malas** saat ada request, bukan oleh cron. Tidak ada
-pembekuan jam: `anchor_now` dicatat, waktu berjalan normal.
+pembekuan jam: `anchor_now` dicatat, waktu berjalan normal. Tanpa sesi aktif,
+semua tulisan → 409; bacaan tetap jalan.
 
 ---
 
 ## 8. Pipeline agen
 
-Tujuh tahap yang tercatat di `agent_traces.step_name`, dengan jumlah baris pada
-dataset sekarang: `DETECT` 27 · `DECIDE` 27 · `LEARN` 9 · `VERIFY` 8 ·
-`PREDICT` 6 · `ACT` 5 · `OPTIMIZE` 3.
+Tujuh tahap tercatat di `agent_traces.step_name`. Total jejak sekarang **118**.
 
 | Tahap | Yang terjadi | Deterministik? |
 |---|---|---|
@@ -332,11 +346,11 @@ dataset sekarang: `DETECT` 27 · `DECIDE` 27 · `LEARN` 9 · `VERIFY` 8 ·
 Angka safety-critical — `safe_delivered_cost`, skor, gerbang — tidak pernah
 dihitung LLM. Bila Verifier tidak tersedia, statusnya `unavailable` dan
 keputusan tidak bisa dieksekusi; nilai kosong tidak diganti 0. `agent_traces`
-tidak menyimpan slot model penyedia (primary/fallback) — jadi jangan mengklaim
+tidak menyimpan slot model penyedia (primary/fallback), jadi jangan mengklaim
 atribusi model per langkah dari tabel itu.
 
-Jejak agen menyimpan **fakta keputusan** (kg, `safe_delivered_cost`, durasi),
-bukan teks template. UI menampilkan kalimat ringkas + lipatan "Data mentah".
+Jejak agen menyimpan **fakta keputusan** (kg, SDC, durasi), bukan teks template.
+UI menampilkan kalimat ringkas + lipatan "Data mentah".
 
 ---
 
@@ -366,8 +380,8 @@ bukan teks template. UI menampilkan kalimat ringkas + lipatan "Data mentah".
 | Integrasi | `GET /integrations/status`, `GET /health` |
 
 Kontrak galat yang sering muncul: **409** (tanpa sesi demo, kuorum belum
-lengkap, sudah dieksekusi, kedaluwarsa), **422** (periode tidak sah, mis.
-`24h` atau campuran `periode`+`start`), **401/403** (token/peran).
+lengkap, sudah dieksekusi, kedaluwarsa), **422** (periode tidak sah, mis. `24h`
+atau campuran `periode`+`start`), **401/403** (token/peran).
 
 ---
 
@@ -386,7 +400,7 @@ lengkap, sudah dieksekusi, kedaluwarsa), **422** (periode tidak sah, mis.
 | Pemasok | Daftar pemasok, sertifikat, eksklusi/usulan, detail `?pemasok=` | semua |
 | Agent Log | Jejak agen per putaran | semua |
 | KPI & Kualitas Agen | 7 KPI, sampel kualitas | semua |
-| Pengaturan | Pengguna & lokasi (`/admin/users`, `/admin/locations`) | peran `bgn_monitor` |
+| Pengaturan | Pengguna & lokasi (`/admin/users`, `/admin/locations`) | `bgn_monitor` |
 | Demo Control | Siapkan/bangun ulang data, jalankan agen, akhiri sesi | approver |
 
 Pola data dan kesegaran layar (semua **polling**, tidak ada WebSocket/SSE):
@@ -400,7 +414,7 @@ Pola data dan kesegaran layar (semua **polling**, tidak ada WebSocket/SSE):
 | KPI | 20 detik |
 | Kueri umum (Hari Ini dsb.) | 60 detik |
 | Agenda | stale 5 menit |
-| Pemasok | tanpa polling (data nyaris statis) |
+| Pemasok | 5 menit |
 
 Aturan tampilan yang mengikat:
 
@@ -414,6 +428,7 @@ Aturan tampilan yang mengikat:
   dengan beras.
 - Label pasokan berbunyi **"Stok layak · N kiriman"** — bukan "sedang
   mengirim", karena status kirim dan stok layak dua hal berbeda.
+- Error fetch detail keputusan **ditampilkan**, tidak ditelan.
 
 ---
 
@@ -432,7 +447,7 @@ Definisi lengkap + diskrepansi terhadap `docs/Skill.md` ada di
 | Decision Time | `mean(ACT − DETECT)` untuk ACT committed | `agent_traces.step_at` | `no_data` + coverage |
 | Evidence Completeness | `lengkap sebelum approval pertama / keputusan ber-approval` | `approved_at` pertama | `no_data` tanpa approval |
 
-Nilai terukur (lokasi Jakarta, 26 Okt 2026 19.32 WIB, sesudah rebuild kanonik):
+Nilai terukur (lokasi Jakarta, 26 Okt 2026 19.30 WIB, sesudah rebuild kanonik):
 
 | KPI | Hari ini | 7 hari | 1 bulan |
 |---|---|---|---|
@@ -448,6 +463,9 @@ Kontrak periode ditegakkan server: `periode=today|7d|1bulan` atau `start`+`end`,
 maksimum 366 hari, campuran keduanya → 422. Envelope respons memuat `period`
 yang benar-benar dipakai, jadi UI tidak menebak.
 
+Dua keputusan pemilik yang masih terbuka: Regional Imbalance mengecualikan baris
+`demo_case`, dan SDC memakai keberadaan PO (bukan status `executed`).
+
 ---
 
 ## 12. Arsitektur demo (mengapa angka bergerak atau tidak)
@@ -461,17 +479,21 @@ yang benar-benar dipakai, jadi UI tidak menebak.
 
 Tampilan default kosong. Menekan **Siapkan data demo** membangun template lebih
 dulu, baru membuka sesi — urutan ini wajib, karena sesi yang habis di tengah
-pembangunan membuat penyapu menghapus baris demo yang baru ditulis (pernah
-terjadi: 36 keputusan → 5).
+pembangunan membuat penyapu menghapus baris demo yang baru ditulis.
+
+**Keluaran builder adalah baseline yang benar:** 48 keputusan, 125 batch, 28
+approval, 61 pemasok, 1.598 blok. Angka 36/120/1.382 yang sempat dipakai
+dokumen lama berasal dari DB yang sudah dipurge suite tes — bukan keluaran
+builder.
 
 ### 12.2 Angka yang bergerak dan yang tidak
 
 | Aksi | Yang berubah |
 |---|---|
 | Approve | `approvals`, status keputusan, kuorum di UI |
-| Execute | batch berangkat, PO bertambah, `safe_delivered_cost`, blok ledger, Decision Time/SDC |
+| Execute | batch berangkat, PO bertambah, SDC, blok ledger, Decision Time/SDC |
 | Penerimaan | `batch_receipts`, stok SAP tiruan |
-| Bangun ulang | seluruh dataset kembali ke angka awal (terukur 41 detik) |
+| Bangun ulang | isi kembali ke jumlah awal (48/125/28/61), **tetapi** ledger +72 blok (arsip generasi) dan jam kejadian di-anchor ulang |
 | Waktu berjalan | "x menit lalu", posisi truk (interpolasi), sisa masa layak, jendela KPI melebar |
 
 ### 12.3 Dua jangkar waktu yang belum seragam
@@ -479,25 +501,25 @@ terjadi: 36 keputusan → 5).
 - Kejadian operasional (batch, keputusan, PO, jejak) dihitung relatif ke
   `datetime.now()` saat build → **ikut jam dinding**.
 - Deret 65 hari (pasokan, harga, menu, permintaan, pengiriman, limbah) dipatok
-  `2026-09-01 .. 2026-11-05` → **tidak ikut jam**.
+  `2026-09-01 .. 2026-11-05` (`app/seed/timeseries.py`) → **tidak ikut jam**.
 
-Konsekuensi terukur: 760 baris `supply_records` dan 880 baris `price_signals`
-bertanggal **masa depan** (deret s/d 4 Nov 2026 19.00). Hari ini Jakarta punya
-12 baris pasokan dan 25 baris kutipan harga; **4 di antaranya** (masing-masing)
-bertanda waktu setelah sekarang, yaitu slot 19.00 yang belum terjadi. KPI tidak terpengaruh (jendela berakhir di `now`), tetapi label
-"tercatat hari ini" sedikit melebihkan. Setelah 5 November 2026 deret berhenti,
-sehingga "hari ini" tidak punya baris lagi — KPI dan agenda akan kosong tanpa
-error.
+Konsekuensi terukur pada snapshot ini: **720 baris `supply_records` dan 858
+baris `price_signals` bertanggal masa depan**. KPI tidak terpengaruh (jendela
+berakhir di `now`), tetapi label "tercatat hari ini" sedikit melebihkan. Setelah
+5 November 2026 deret berhenti, sehingga "hari ini" tidak punya baris lagi —
+KPI dan agenda kosong tanpa error.
 
 ### 12.4 Jebakan operasional
 
-- **Jangan** menjalankan `docker compose exec backend pytest` pada database
-  yang dipakai demo: tes mem-purge baris `origin='demo'` (pernah membuat
-  keputusan 36 → 9 dan meninggalkan 15 akun `@test.local`). Pakai DB klon.
+- **Jangan** menjalankan `pytest` pada database yang dipakai demo: tes mem-purge
+  baris `origin='demo'` (pernah membuat keputusan 48 → 9). Pakai DB klon
+  (`mealchain_gate`, `mealchain_idem2`, `mealchain_suite`).
 - Sesi demo adalah satu-satunya penjaga tulisan; tanpa sesi, POST → 409
   (baca tetap jalan).
-- Menekan "Siapkan data demo" memakan ±41 detik; jangan dilakukan di detik
+- Menekan "Siapkan data demo" memakan 38–42 detik; jangan dilakukan di detik
   terakhir sebelum presentasi.
+- Laporan endpoint `rebuild` kini **sama dengan isi tabel** (bug F7 diperbaiki
+  26 Okt 2026 dan dijaga tes integrasi).
 
 ---
 
@@ -509,13 +531,14 @@ error.
 | Otorisasi | Peran + cakupan lokasi; approver dibatasi `APPROVER_ROLES` |
 | CORS | Dikonfigurasi dari `CORS_ORIGINS`; default hanya origin UI |
 | Ledger | Hash-chain di Postgres; `GET /ledger/verify` → `valid=true`, 1.598 blok, 72/72 blok entitas tertaut, 0 yatim |
-| Rahasia | `.env` tidak dilacak git, tetapi **pernah masuk riwayat** → rotasi wajib sebelum publik (SEC-01) |
-| Kredensial demo | 7 akun demo tertanam di bundel klien (SEC-02) — siapa pun yang membuka instance bisa masuk sebagai approver. Aman hanya untuk demo tertutup |
-| Dependensi | `next@14.2.14` dan `maplibre-gl@4.7.1` berstatus critical, `postcss` high (SEC-04) — risiko diterima untuk demo, bukan untuk produksi |
+| Rahasia (SEC-01) | `.env` tidak dilacak git, tetapi nilainya harus dianggap bocor → **rotasi wajib** sebelum publik |
+| Kredensial demo (SEC-02) | **Ditutup di kode 26 Okt 2026**: tidak ada kata sandi di bundel klien; tombol login hanya mengisi email |
+| Dependensi (SEC-04) | `next@14.2.14` dan `maplibre-gl@4.7.1` critical, `postcss` high; `npm audit fix` tanpa `--force` tidak menyelesaikan apa pun. Perbaikan menuntut Next 16 + maplibre 6 → rencana di `docs/audit/SECURITY.md` |
 
 Mitigasi yang sudah dilakukan: dokumen operasional diberi header snapshot,
-perintah pytest destruktif diganti resep DB klon di `AGENTS.md`, dan sesi demo
-dibuat wajib (`DEMO_SESSION_ENFORCE=true`) dengan satu sesi aktif.
+perintah pytest destruktif diganti resep DB klon di `AGENTS.md`, sesi demo wajib
+(`DEMO_SESSION_ENFORCE=true`) dengan satu sesi aktif, dan kata sandi demo
+dihapus dari bundel.
 
 ---
 
@@ -523,16 +546,33 @@ dibuat wajib (`DEMO_SESSION_ENFORCE=true`) dengan satu sesi aktif.
 
 | Lapis | Hasil terukur | Cara |
 |---|---|---|
-| Frontend unit/komponen | 1.818 lulus / 166 berkas; `tsc --noEmit` exit 0; ESLint bersih | `npx vitest run` |
-| Backend | 1.487 tes: 1.450 lulus, 24 skip, 13 gagal **order-dependent** (lulus saat dijalankan sendiri) | diukur 25 Okt; jalankan pada DB klon, bukan DB demo |
-| Invarian data | 52 PASS / 0 FAIL / 1 SKIP | `python …/verify_stack.py verify/invariants.spec.json` |
+| Frontend unit/komponen | **1.818 lulus / 167 berkas**; `tsc --noEmit` exit 0; ESLint bersih | `npx vitest run` |
+| Backend (target + integrasi) | 32 lulus (subset target) · **3 lulus** tes integrasi build (167 dtk) | DB klon `mealchain_idem2` |
+| **Backend suite penuh** | **1.536 lulus, 27 gagal, 28 skip** (557 dtk) | `pytest -q` pada DB klon `mealchain_suite` |
+| Invarian data | **52 PASS / 0 FAIL / 1 SKIP** | `python …/verify_stack.py verify/invariants.spec.json` |
 | OpenAPI | `openapi.json` cocok dengan kode (drift test) | bagian suite backend |
+| Lint backend | `ruff check app tests` bersih | — |
 | UI hidup (Playwright) | 10 tab, 0 console error, semua endpoint 200 | `scratch/harvest_ui.py` |
-| Rekonsiliasi angka | Food Loss 0,5862% · Price Deviation 2,6553% dihitung ulang dari DB | `scratch/data_quality.py` |
 
-Yang **belum** diverifikasi dan tidak boleh diklaim: uji beban, `axe-core`
-aksesibilitas, `pip-audit`/`bandit`, build produksi `next build` pada mesin
-bersih, verifikasi visual manual seluruh 11 tab.
+### 14.1 Tiga keluarga kegagalan suite backend (bukan 27 bug produk)
+
+1. **Konstanta jumlah lama.** Tes menuliskan 60 pemasok / 120 batch / 36
+   keputusan, sedangkan builder kanonik menghasilkan 61 / 125 / 48. Contoh
+   nyata: `test_suppliers_data.py::test_every_supplier_has_map_coordinates`
+   gagal `61 != 60` karena builder menambah pemasok "Koperasi Tani Makmur —
+   Cianjur (Unit SPPG)" yang belum ada di `data/seed/suppliers_demo.json`.
+2. **Prasyarat keadaan.** `test_suppliers_api.py::test_expired_batch_is_not_counted`
+   mensyaratkan ada lot lewat tenggat; pada snapshot ini tidak ada.
+3. **Order-dependent** di `test_tool_contracts.py` (sudah dikenal sebelum
+   perubahan hari ini; lulus saat dijalankan sendiri).
+
+Keputusan yang diambil: **tidak** melonggarkan tes dan **tidak** mengubah angka
+produk demi meluluskan suite. Pekerjaan menyelaraskan konstanta/seed menjadi
+butir terbuka §16.
+
+Yang **belum** diverifikasi dan tidak boleh diklaim: uji beban, `axe-core`,
+`pip-audit`/`bandit`, build produksi `next build` pada mesin bersih, verifikasi
+visual manual seluruh 11 tab.
 
 ---
 
@@ -555,17 +595,21 @@ WebSocket). Skema keputusan, state machine, dan KPI tidak perlu diubah.
 
 ---
 
-## 16. Risiko dan keputusan yang masih terbuka
+## 16. Risiko dan pekerjaan terbuka
 
 | # | Hal | Dampak | Status |
 |---|---|---|---|
-| 1 | Regional Imbalance mengecualikan `demo_case` | Metrik tidak bergerak saat kartu demo dieksekusi | Menunggu keputusan pemilik |
-| 2 | SDC memakai keberadaan PO, bukan status `executed` | PO yang dibatalkan tetap terhitung | Menunggu keputusan |
-| 3 | Baris bertanda waktu masa depan (760 + 880) | Label "tercatat hari ini" melebihkan; agenda menghitung jam yang belum terjadi | Perlu perbaikan penyemai |
-| 4 | Deret berhenti 5 Nov 2026 | Setelah itu KPI/agenda kosong tanpa error | Perlu jendela relatif |
-| 5 | 13 tes backend order-dependent | Gate penuh belum bisa dipercaya sebagai hijau | Perlu isolasi/DB klon |
-| 6 | SEC-01 rotasi `.env`, SEC-04 CVE, SEC-02 kredensial demo di bundel | Tidak layak produksi | Sebelum rilis |
-| 7 | Belum ada `next build` bersih + axe-core + uji beban | Kualitas produksi belum terbukti | Sebelum rilis |
+| 1 | Fase 2–6 rencana MG: 7 butir kontrak bisnis | Fase tidak boleh mulai | Menunggu keputusan pemilik |
+| 2 | Regional Imbalance mengecualikan `demo_case` | Metrik tidak bergerak saat kartu demo dieksekusi | Menunggu keputusan |
+| 3 | SDC memakai keberadaan PO, bukan status `executed` | PO yang dibatalkan tetap terhitung | Menunggu keputusan |
+| 4 | Suite backend 27 gagal (3 keluarga di §14.1) | Gate penuh belum bisa disebut hijau | Perlu penyelarasan seed + konstanta tes |
+| 5 | Baris bertanda waktu masa depan (720 + 858) | Label "tercatat hari ini" melebihkan | Perbaiki penyemai / watermark `recorded_at <= now()` |
+| 6 | Deret berhenti 5 Nov 2026 | Setelah itu KPI/agenda kosong tanpa error | Perlu jendela relatif |
+| 7 | Migrasi 034–038 dipesan rencana | Pekerjaan baru (live/scheduled) mulai 039 | Catatan |
+| 8 | SEC-01 rotasi kredensial | Tidak layak produksi | Tindakan pemilik |
+| 9 | SEC-04 CVE `next`/`maplibre-gl`/`postcss` | Tidak layak produksi | Migrasi mayor terpisah |
+| 10 | `next build` bersih + axe-core + uji beban | Kualitas produksi belum terbukti | Sebelum rilis |
+| 11 | `DEMO_MODE` bukan gerbang router | Menutup router tidak berefek apa pun | Diketahui; gerbang sesi yang berlaku |
 
 ---
 
@@ -580,11 +624,13 @@ WebSocket). Skema keputusan, state machine, dan KPI tidak perlu diubah.
 | `docs/Skill.md` | Definisi KPI versi proposal (bandingkan dengan kode di kamus) |
 | `docs/kamus-kpi-dan-state-machine.md` | Rumus KPI yang benar-benar dijalankan + 5 state machine |
 | `docs/state-snapshot.md` / `.json` | **Sumber angka resmi**; dihasilkan `scripts/snapshot_state.py` |
-| `docs/demo/panduan-demo-singkat.md` | Panduan panggung 8 menit |
+| `docs/demo/panduan-demo-singkat.md` | Panduan panggung |
 | `docs/demo/alur-demo-juri.md` | Alur demo juri babak demi babak |
-| `docs/laporan/alur-fitur-mealchain.pdf` | Laporan alur semua fitur (12 halaman) |
-| `UI_REAL_DATA_VALIDATION_REPORT.md` | Audit 46 klaim UI terhadap DB/API |
-| `docs/audit/AUDIT_01…11` | Audit per lapisan (data, backend, frontend, keamanan, …) |
+| `docs/laporan/alur-fitur-mealchain.pdf` | Laporan alur semua fitur (12 halaman, angka kanonik) |
+| `docs/audit/SECURITY.md` | Status SEC-01/02/04 + rencana upgrade |
+| `docs/verification/phase-01-baseline.md` | Bukti Fase 1 rencana MG |
+| `MG/audit-rencana-vs-kode.md` | Audit rencana 12 fase terhadap kode |
+| `UI_REAL_DATA_VALIDATION_REPORT.md` | Audit 46 klaim UI terhadap DB/API (dengan koreksi pasca-suite) |
 | `verify/invariants.spec.json` | 52+ invarian yang dijalankan gate |
 
 ### Memperbarui angka
@@ -593,8 +639,8 @@ WebSocket). Skema keputusan, state machine, dan KPI tidak perlu diubah.
 python scripts/snapshot_state.py          # tulis docs/state-snapshot.json + .md (baca-saja)
 ```
 
-Skrip itu hanya membaca (22 tabel + endpoint + KPI + ledger), tidak menulis ke
-database, tidak menyentuh container. Dokumen hidup menyalin angka dari situ;
+Skrip itu hanya membaca (seluruh tabel + endpoint + KPI + ledger), tidak menulis
+ke database, tidak menyentuh container. Dokumen hidup menyalin angka dari situ;
 laporan bertanggal tidak diubah angkanya, hanya diberi header "Snapshot
 <tanggal>" lewat `scripts/tandai_snapshot_docs.py`.
 
@@ -614,4 +660,5 @@ laporan bertanggal tidak diubah angkanya, hanya diberi header "Snapshot
 | Ledger | Rantai blok hash sebagai bukti audit yang tidak bisa diubah diam-diam |
 | Template demo | Dataset cetakan (`origin='seed'`) yang bertahan setelah sesi berakhir |
 | Adonan | Baris `origin='demo'` yang lahir selama sesi dan dibuang saat sesi berakhir |
+| Kanonik | Keadaan hasil builder — bukan keadaan DB yang sudah dipakai tes |
 | `no_data` | Keadaan sah KPI ketika penyebut kosong — bukan 0 |

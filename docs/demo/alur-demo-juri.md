@@ -55,8 +55,10 @@ lisan.
 
 ### Babak 0 — Pembuka (Overview, 1,5 menit)
 
-1. Login **SPPG Head** (`sppg.head@demo.local`, password di `Demo Control` →
-   tombol akun demo; jangan ditulis di slide).
+1. Login **SPPG Head** (`sppg.head@demo.local`). Kata sandi **tidak** ada di
+   bundel klien maupun layar login (SEC-02, 26 Okt 2026): operator membacanya
+   dari `.env` (`DEMO_PASSWORD…`) dan mengetiknya. Tombol akun demo hanya
+   mengisi email. Jangan menulis kata sandi di slide.
 2. Overview memuat otomatis. Biarkan 5 detik agar `Live Sync (5s)` selesai.
 3. Tunjuk, jangan klik:
    - **Kartu selisih pasokan**: `−780 kg` (kurang 72% dari kebutuhan), `0 lokasi
