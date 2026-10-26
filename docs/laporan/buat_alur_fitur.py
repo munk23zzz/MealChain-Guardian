@@ -141,7 +141,7 @@ def ringkasan():
     out.append(p("Angka kunci pada lingkungan demo", H2))
     out.append(tabel([
         ["Objek", "Jumlah", "Arti operasional"],
-        ["Keputusan agen", "36 (19 terbuka)", "19 kartu menunggu tindakan manusia; 17 sisanya sudah selesai/ditolak"],
+        ["Keputusan agen", "48 (22 terbuka)", "22 kartu terbuka (17 menunggu tindakan + 5 ditandai verifier); 26 sisanya selesai/ditolak"],
         ["Batch barang", "120", "satu batch = satu kiriman dengan berat, umur simpan, dan status uji sendiri"],
         ["Catatan pasokan", "5.240", "deret waktu pasokan 1 Sep - 4 Nov 2026 (basis grafik dan KPI)"],
         ["Rencana menu", "660", "rencana porsi per lokasi per hari (basis Meal Continuity)"],
@@ -153,7 +153,7 @@ def ringkasan():
         ["Pesanan SAP", "16", "terbit setelah eksekusi; nomor MC-xxxx dapat ditelusuri ke keputusan"],
         ["Persetujuan", "21 baris", "empat mata: dua akun berbeda; penolakan juga dicatat dengan alasan"],
         ["Bukti keputusan", "51 dokumen", "minimal dua jenis bukti sebelum persetujuan (dasar Evidence Completeness)"],
-        ["Blok rantai audit", "1.382 (1.310 arsip)", "hash chain append-only; generasi lama disimpan sebagai arsip"],
+        ["Blok rantai audit", "1.598 (1.526 arsip)", "hash chain append-only; generasi lama disimpan sebagai arsip"],
         ["Akun", "11", "3 peran sah; sisanya akun demo per lokasi"],
     ], [34 * mm, 30 * mm, 104 * mm]))
     out.append(Spacer(1, 2 * mm))
@@ -346,7 +346,7 @@ def fitur_bukti():
         ["Detail & bukti", "GET /decisions/{id}, /dossier, /chain, /traces, /approval-summary, /compliance", "decisions, decision_evidence, agent_traces, approvals, ledger_blocks"],
         ["Tindakan", "POST /actions/verify, /propose, /approve, /execute, /repropose", "decisions, approvals, sap_mock_purchase_orders, ledger_blocks"],
         ["Konteks pemasok", "GET /supplier-exclusions/context/{id}", "suppliers, batches, supplier_exclusions"],
-        ["Angka terukur", "21 approval · 51 bukti · 16 PO · sdc jejak = sdc keputusan (0 selisih)", "—"],
+        ["Angka terukur", "28 approval · 57 bukti · 20 PO · sdc jejak = sdc keputusan (0 selisih)", "—"],
     ], [30 * mm, 66 * mm, 72 * mm]))
     out.append(Spacer(1, 2 * mm))
     out.append(callout("<b>Batas peran dalam satu alur:</b> verifikasi, persetujuan, dan eksekusi "
@@ -379,7 +379,7 @@ def fitur_keamanan():
         ["Penerimaan", "GET /receipts/menunggu, POST /receipts, POST /receipts/{id}/approve|reject", "batch_receipts, batches"],
         ["Karantina & uji", "POST /batches/{id}/quarantine, POST /safety/evaluate", "batches"],
         ["Keputusan keamanan", "GET /decisions (decision_type = safety_disruption)", "decisions, approvals"],
-        ["Angka terukur", "14 batch cakupan Jakarta · 8 aman · 2 gagal uji (920 kg) · 2 perlu verifikasi · 2 belum diuji · 1 ditahan 540 kg · 2 kedaluwarsa · 2 catatan penerimaan menunggu", "—"],
+        ["Angka terukur", "16 batch cakupan Jakarta · 9 aman · 1 gagal uji (120 kg) · 2 perlu verifikasi · 4 belum diuji · 1 ditahan 540 kg · 2 kedaluwarsa · 2 catatan penerimaan menunggu", "—"],
     ], [30 * mm, 64 * mm, 74 * mm]))
     out.append(p("Aturan: satu keputusan ditolak tidak lagi dihitung dua kali sebagai \"ditolak\" dan "
                  "\"kedaluwarsa\"; setiap keadaan dihitung sekali dan beratnya disebut.", KECIL))
@@ -484,7 +484,7 @@ def fitur_kpi():
         ["Kualitas agen", "GET /decisions + /traces + /approval-summary per sampel", "decisions, agent_traces, approvals, decision_evidence"],
         ["Angka terukur (Hari ini)", "Susut pangan 0,59% (2 sampel) · Simpangan harga 2,66% (17) · lima metrik no_data dengan alasan masing-masing", "—"],
     ], [30 * mm, 62 * mm, 76 * mm]))
-    out.append(p("Aturan: angka nol hanya sah bila memang terukur nol. \"KPI tersedia 2/7\" adalah "
+    out.append(p("Aturan: angka nol hanya sah bila memang terukur nol. \"KPI tersedia 6/7\" adalah "
                  "keadaan normal pagi hari, bukan kegagalan.", KECIL))
     return out
 
@@ -508,7 +508,7 @@ def fitur_demo():
         ["Sesi", "GET/POST /demo/session, /start, /extend, /end, /demo/template/rebuild", "demo_sessions"],
         ["Data & agent", "GET /demo/data-status, /demo/agent/last-run, POST /demo/agent/run, /demo/seed", "semua tabel operasional + agent_traces"],
         ["Integrasi", "GET /integrations/status, /health", "konfigurasi layanan"],
-        ["Angka terukur", "sesi demo 120 menit (plafon, tidak bisa diperpanjang) · 41 detik rebuild · 36 keputusan setelah siapkan data", "—"],
+        ["Angka terukur", "sesi demo 120 menit (plafon, tidak bisa diperpanjang) · 41 detik rebuild · 48 keputusan setelah siapkan data", "—"],
     ], [28 * mm, 66 * mm, 74 * mm]))
     out.append(Spacer(1, 2 * mm))
     out.append(callout("<b>Peringatan operasional:</b> begitu sesi kedaluwarsa, penjaga mutasi "
@@ -591,7 +591,7 @@ def kpi_tabel():
     ], [46 * mm, 20 * mm, 18 * mm, 84 * mm]))
     out.append(Spacer(1, 2 * mm))
     out.append(callout("Membaca tabel ini: dua metrik sudah punya angka, lima belum bisa dinilai — "
-                       "dan itu memang keadaan pagi hari sebelum ada aksi. \"KPI tersedia 2/7\" "
+                       "dan itu memang keadaan pagi hari sebelum ada aksi. \"KPI tersedia 6/7\" "
                        "bukan kegagalan; ia menyatakan dengan jujur mana yang terukur."))
     return out
 
@@ -627,7 +627,7 @@ def alur_demo():
         ["Babak", "Tab", "Yang dilakukan", "Angka/bukti yang bergerak"],
         ["0", "Overview", "menunjukkan peta pasokan, kiriman berjalan, dan cakupan", "12 rute, 11 berjalur"],
         ["1", "Recommendations -> Decision & Evidence", "buka satu rekomendasi, verifikasi, setujui dengan dua akun, eksekusi", "status -> approved -> executed; PO baru terbit; blok ledger bertambah"],
-        ["2", "Keamanan Pangan", "batch gagal uji, karantina, keputusan keamanan", "2 gagal uji (920 kg); tile status uji menjumlah ke 14"],
+        ["2", "Keamanan Pangan", "batch gagal uji, karantina, keputusan keamanan", "3 gagal uji (740 kg); tile status uji menjumlah ke 125"],
         ["3", "Keamanan Pangan (penerimaan)", "catat penerimaan kiriman yang tiba", "batch pindah dari belum diuji -> status hasil hitung server"],
         ["4", "Pemasok", "register eksklusi + usul eksklusi dari keputusan", "1 aktif + 1 menunggu; pemasok hilang dari usulan berikutnya"],
         ["5", "Surplus & Limbah", "neraca limbah dan alokasi surplus", "Food Loss bergerak sesuai buangan yang dicatat"],
