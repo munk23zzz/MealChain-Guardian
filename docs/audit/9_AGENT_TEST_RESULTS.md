@@ -158,7 +158,7 @@ dengan benar di skrip 2 dan hasilnya 409.
 | 19 | `GET /kpi?location=Jakarta&periode=today` | 200 | Regional Imbalance Resolution 50,00% (n=6); SDC hari ini 16.934.625,76 |
 | 20 | `GET /kpi?…&periode=7d` | 200 | Meal Continuity 99,70%; Food Loss 0,08%; SDC 17.142.848,27; Price Deviation 4,05% |
 | 21 | **NEG** evidence dihapus lalu execute | **409** | "supplier_unknown: keputusan lama perlu binding batch eksplisit" — bukti hilang memutus binding → eksekusi tertolak |
-| 22 | **NEG** batch sumber `safety_status='fail'` | **409** | "safety revalidation gagal: batch sumber kini FAIL" |
+| 22 | **NEG** batch sumber `safety_status='fail'` | **200 (seharusnya 409)** | **FAIL** — harness E2E mencatat `execute D4: 200 expect=409`; konsisten dengan AUD-9B-29 (gate membaca batch lokasi tujuan, bukan sumber) |
 | 23 | **NEG** batch sumber `usable_until` lewat | **409** | revalidasi keselamatan/kesegaran saat eksekusi |
 | 24 | **NEG** 4× execute bersamaan | **1×200 + 3×409**, 1 baris PO | `_load_decision` `SELECT … FOR UPDATE` + nomor PO deterministik |
 | 25 | **NEG** `POST /price/deviation` `supplier_price=-5` / `0` | **500 / 500** (harusnya 4xx) | **AUD-9B-31** (sudah tercatat di audit data & math) — `ValueError` core tidak ditangkap endpoint |
