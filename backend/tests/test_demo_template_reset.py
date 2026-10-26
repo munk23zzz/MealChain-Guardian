@@ -104,6 +104,14 @@ def test_memanggil_penyemai_dengan_opsi_yang_benar(monkeypatch):
     monkeypatch.setattr(reset, "_lengkapi_aktivitas", aktivitas_palsu)
     monkeypatch.setattr(reset, "_lengkapi_cakupan", cakupan_palsu)
 
+    # 26 Okt 2026 (F7): laporan dibaca ULANG sesudah semua langkah, jadi `hitung`
+    # dipanggil dengan DB sungguhan. Tes unit ini memakai DB palsu yang tidak
+    # punya `execute`, jadi hitung-nya ikut dipalsukan.
+    async def hitung_palsu(db):
+        return {"batches": 121, "decisions": 48}
+
+    monkeypatch.setattr(reset, "hitung", hitung_palsu)
+
     async def skenario() -> dict:
         return await reset.bangun_ulang(DbPalsu())  # type: ignore[arg-type]
 
@@ -111,6 +119,7 @@ def test_memanggil_penyemai_dengan_opsi_yang_benar(monkeypatch):
     assert dipanggil == {"purge": True, "freeze": True, "bersihkan_sisa": False}
     assert dilengkapi == {"deret": True, "aktivitas": True, "pelengkap": True}
     assert hasil["hitung"]["batches"] == 121
+    assert hasil["hitung"]["decisions"] == 48  # dibaca sesudah langkah pelengkap
     assert hasil["pelengkap"] == {"decisions": 10}
     assert "durasi_detik" in hasil
 
