@@ -166,7 +166,10 @@ def test_verdict_tercatat_tidak_bisa_ditimpa(client):
         pertama = client.post("/actions/verify", json={"decision_id": did}, headers=headers)
         assert pertama.status_code == 200, pertama.text
         assert pertama.json()["recorded"] is True
-        assert _baris(did)["verifier_note"] == "consistent"
+        # `flagged`, bukan `consistent`: guard certified menurunkan CONSISTENT
+        # model untuk freshness 0,82 data demo (AUD-9A-03). Yang diuji di sini
+        # adalah "verdict tercatat tidak bisa ditimpa", bukan nilai verdict-nya.
+        assert _baris(did)["verifier_note"] == "flagged"
 
         # Provider sekarang akan menjawab FLAGGED; hasilnya TIDAK boleh menimpa.
         restore()
@@ -175,8 +178,8 @@ def test_verdict_tercatat_tidak_bisa_ditimpa(client):
         assert kedua.status_code == 409, kedua.text
         assert "verdict sudah tercatat" in kedua.json()["detail"].lower()
         baris = _baris(did)
-        assert baris["verifier_note"] == "consistent"
-        assert baris["status"] == "pending_approval"
+        assert baris["verifier_note"] == "flagged"
+        assert baris["status"] == "verifier_flagged"
     finally:
         restore()
         _bersihkan(did)
@@ -200,7 +203,7 @@ def test_retry_setelah_unavailable_tetap_boleh(client):
         dua = client.post("/actions/verify", json={"decision_id": did}, headers=headers)
         assert dua.status_code == 200, dua.text
         assert dua.json()["recorded"] is True
-        assert _baris(did)["verifier_note"] == "consistent"
+        assert _baris(did)["verifier_note"] == "flagged"  # guard certified, AUD-9A-03
     finally:
         restore()
         _bersihkan(did)
@@ -226,9 +229,10 @@ def test_setiap_percobaan_meninggalkan_trace_verify(client):
         assert jumlah == 2, f"harus ada 2 baris VERIFY (2 percobaan), dapat {jumlah}"
         terakhir = _hitung(
             "SELECT count(*) FROM agent_traces WHERE decision_id = :d AND step_name = 'VERIFY' "
-            "AND output_summary->>'verdict' = 'CONSISTENT'",
+            "AND output_summary->>'verdict' = 'FLAGGED'",
             {"d": did},
         )
+        # CONSISTENT model diturunkan guard certified (freshness 0,82) → AUD-9A-03.
         assert terakhir == 1
     finally:
         restore()
@@ -255,7 +259,7 @@ def test_verdict_tercatat_menambah_satu_blok_ledger(client):
         assert sesudah == sebelum + 1
         blok = _hitung(
             "SELECT count(*) FROM ledger_blocks WHERE action = 'verify' "
-            "AND entity_id = :d AND payload::jsonb->>'verdict' = 'CONSISTENT'",
+            "AND entity_id = :d AND payload::jsonb->>'verdict' = 'FLAGGED'",
             {"d": did},
         )
         assert blok == 1

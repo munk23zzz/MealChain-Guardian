@@ -8,7 +8,9 @@ Kontrak:
 - verdict terstruktur CONSISTENT | FLAGGED | UNAVAILABLE
 - output tak terbaca / provider tidak ada → UNAVAILABLE (konservatif)
 - safety guard keras via `enforce_verifier_guard`: safety FAIL dari core
-  tidak dapat dihidupkan kembali oleh output model
+  tidak dapat dihidupkan kembali oleh output model, dan skor kesegaran di
+  bawah ambang certified (PASS >= 0,85) juga tidak dapat dinaikkan menjadi
+  CONSISTENT (AUD-9A-03/AUD-9A-05)
 - attempts hanya merekam provider yang benar-benar dicoba
 - prompt TIDAK memuat secret/credential
 """
@@ -19,6 +21,8 @@ import json
 from dataclasses import dataclass, field
 from importlib import resources
 from typing import Callable
+
+from app.core.freshness import PASS_THRESHOLD, classify_freshness
 
 VALID_VERDICTS = ("CONSISTENT", "FLAGGED", "UNAVAILABLE")
 
@@ -83,21 +87,59 @@ def _extract_verdict(raw: str) -> tuple[str, str | None] | None:
     return verdict, str(reason) if reason is not None else None
 
 
+def freshness_gate_score(score: object) -> str | None:
+    """Klasifikasi skor kesegaran memakai gerbang CERTIFIED `core/freshness.py`.
+
+    Kembalian: ``pass`` | ``needs_verification`` | ``fail`` | ``invalid`` |
+    ``None`` (skor tidak dikirim). ``invalid`` dipakai untuk nilai yang tidak
+    bisa dibaca atau di luar [0, 1]: lebih baik ditandai daripada dipercaya.
+    """
+    if score is None:
+        return None
+    if isinstance(score, bool):
+        return "invalid"
+    try:
+        value = float(score)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return "invalid"
+    if value != value:  # NaN
+        return "invalid"
+    try:
+        return classify_freshness(value)
+    except ValueError:
+        return "invalid"
+
+
 def enforce_verifier_guard(
     *,
     model_verdict: str,
     safety_status: str,
     model_says_safe: bool,
+    freshness_score: object = None,
 ) -> str:
-    """Guard keras: safety FAIL dari core tidak bisa dihidupkan kembali.
+    """Guard keras: verdict core tidak bisa dihidupkan kembali oleh model.
 
     - verdict model tidak valid → UNAVAILABLE (konservatif)
-    - safety FAIL + model klaim CONSISTENT → FLAGGED (bukan CONSISTENT)
+    - safety FAIL dari core + model klaim CONSISTENT → FLAGGED
+    - freshness di bawah ambang certified (`core/freshness.py`: PASS ≥ 0,85,
+      needs_verification ≥ 0,60) + model klaim CONSISTENT → FLAGGED
+
+    Kenapa freshness ikut dijaga (audit 9 agen, AUD-9A-03/05): sebelum ini
+    hanya `safety_status == "FAIL"` yang diperiksa, sehingga model yang sama
+    dengan penulis narasi bisa menyebut "freshness 0,82 mendukung distribusi"
+    dan verdiktnya tetap CONSISTENT, padahal gerbang resmi menyebut skor itu
+    `needs_verification`. Skor yang tidak bisa dibaca/keluar rentang juga
+    TIDAK boleh menaikkan CONSISTENT (fail-closed), sedangkan skor yang tidak
+    ada (None) bukan klaim apa pun — dimensi itu memang tidak dikirim.
     """
     verdict = (model_verdict or "").strip().upper()
     if verdict not in VALID_VERDICTS:
         return "UNAVAILABLE"
-    if (safety_status or "").strip().upper() == "FAIL" and verdict == "CONSISTENT":
+    if verdict != "CONSISTENT":
+        return verdict
+    if (safety_status or "").strip().upper() == "FAIL":
+        return "FLAGGED"
+    if freshness_gate_score(freshness_score) in {"needs_verification", "fail", "invalid"}:
         return "FLAGGED"
     return verdict
 
@@ -186,7 +228,20 @@ def run_verifier(
         model_verdict=verdict,
         safety_status=safety_status,
         model_says_safe=verdict == "CONSISTENT",
+        freshness_score=ctx.get("freshness_score"),
     )
+    if guarded != verdict and verdict == "CONSISTENT":
+        # Jejak eksplisit: pembaca (dan juri) harus tahu verdict diturunkan oleh
+        # gerbang deterministik, bukan oleh model — AUD-9A-03.
+        status_kesegaran = freshness_gate_score(ctx.get("freshness_score"))
+        alasan = (
+            "safety_status FAIL dari core"
+            if safety_status.strip().upper() == "FAIL"
+            else f"kesegaran {ctx.get('freshness_score')} = {status_kesegaran} "
+            f"(PASS >= {PASS_THRESHOLD})"
+        )
+        catatan = f"guard: CONSISTENT model diturunkan ke FLAGGED — {alasan}"
+        reason = f"{reason} | {catatan}" if reason else catatan
     return VerifierResult(
         verdict=guarded,
         reason=reason,

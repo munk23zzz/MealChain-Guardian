@@ -115,13 +115,18 @@ def test_verify_memakai_chain_server_side(client, fake_verifier):
         )
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert body["verdict"] == "CONSISTENT"
+        # Verdict CONSISTENT dari provider NYATA tetap diturunkan guard bila
+        # freshness pada ctx (batch terakhir lokasi sumber = 0,82 pada data
+        # demo) belum lolos ambang certified 0,85 — AUD-9A-03. Yang dibuktikan
+        # di sini adalah chain SERVER-SIDE yang dipakai (bukan echo client) dan
+        # gerbang kesegaran yang berlaku di atasnya.
+        assert body["verdict"] == "FLAGGED"
         assert body["provider"] == "test_provider"
         # Transfer = keputusan OPERASIONAL → matriks S3-01 `dua_role_wajib`
-        # menuntut dua approval (head + nutritionist) meski verdict CONSISTENT.
+        # menuntut dua approval (head + nutritionist).
         assert body["approval_requirement"]["min_approvals"] == 2
         _v, note, _s = _verifier_row(decision_id)
-        assert note == "consistent"
+        assert note == "flagged"
     finally:
         _cleanup(decision_id, [head["email"]])
 
@@ -176,6 +181,8 @@ def test_verify_ditolak_409_setelah_approved(client, fake_verifier):
         )
         assert resp.status_code == 409, resp.text
         _v, note, _s = _verifier_row(decision_id)
-        assert note == "consistent"  # tidak berubah oleh verify late
+        # Verdict pertama tercatat sebagai `flagged` (freshness 0,82 diturunkan
+        # guard certified — AUD-9A-03) dan TIDAK berubah oleh verify late.
+        assert note == "flagged"
     finally:
         _cleanup(decision_id, [head["email"], nutritionist["email"]])

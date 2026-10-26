@@ -166,9 +166,11 @@ def test_akun_sama_tidak_bisa_memberi_keputusan_dua_kali(client):
             headers=headers,
         )
         assert pertama.status_code == 200, pertama.text
-        # Keputusan operasional (transfer) menuntut dua role berbeda walau
-        # verdict CONSISTENT — jadi satu approval belum memenuhi kuorum.
-        assert pertama.json()["decision_status"] == "pending_approval"
+        # Keputusan operasional (transfer) tetap menuntut dua role berbeda —
+        # satu approval belum memenuhi kuorum. Status `verifier_flagged` (bukan
+        # `pending_approval`) muncul karena guard certified menurunkan CONSISTENT
+        # model untuk freshness 0,82 data demo — AUD-9A-03.
+        assert pertama.json()["decision_status"] == "verifier_flagged"
         assert _jumlah_approval(did) == 1
 
         kedua = client.post(

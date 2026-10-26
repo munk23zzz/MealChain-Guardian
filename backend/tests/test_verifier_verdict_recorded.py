@@ -201,7 +201,9 @@ def test_consistent_mencatat_verified_by(client):
         assert resp.json()["recorded"] is True
         baris = _status_verify(did)
         assert baris["verified_by"] is not None
-        assert baris["verifier_note"] == "consistent"
+        # Guard certified menurunkan CONSISTENT model untuk freshness 0,82 data
+        # demo menjadi `flagged` (AUD-9A-03); `verified_by` tetap tercatat.
+        assert baris["verifier_note"] == "flagged"
         ok = client.post(
             "/actions/approve", json={"decision_id": did, "approved": True}, headers=headers
         )
