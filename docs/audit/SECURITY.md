@@ -7,7 +7,7 @@ untuk temuan yang masih terbuka.
 | ID | Temuan | Status 26 Okt 2026 | Bukti / alasan |
 |---|---|---|---|
 | SEC-01 | Kredensial `.env` pernah terekspos (repo sudah publik sejak klon demo) | **TERBUKA — tindakan pemilik** | Rotasi kata sandi Postgres, `DEMO_PASSWORD*`, dan kunci agen hanya bisa dilakukan di mesin/akun pemilik. `.env` tidak pernah di-track (`git check-ignore .env` → cocok), tetapi nilainya harus dianggap bocor. |
-| SEC-02 | Kata sandi akun demo ditulis di bundel klien | **DITUTUP (kode)** | `frontend/app/page.tsx` tidak lagi memuat 7 literal kata sandi; tombol akun demo hanya mengisi email, kata sandi diketik operator dari `.env`. Verifikasi: `grep -c "Demo#SPPG2026" frontend/app/page.tsx` → 0. |
+| SEC-02 | Kata sandi akun demo ditulis di bundel klien | **DITUTUP (kode)** | `frontend/app/page.tsx` tidak lagi memuat 7 literal kata sandi; tombol akun demo hanya mengisi email. Kata sandi tetap ada di sisi server (`backend/app/seed/demo_credentials.py`, hanya aktif bila `DEMO_MODE` benar) atau lewat `DEMO_PASSWORD_<ROLE>`. Verifikasi: `grep -c "Demo#SPPG2026" frontend/app/page.tsx` → 0. |
 | SEC-04 | CVE dependensi frontend: `next` (critical), `maplibre-gl` (critical), `postcss` (high), `eslint-config-next`/`glob` (high), `vitest`/`esbuild` (moderate, dev) | **TERBUKA — butuh migrasi mayor** | `npm audit fix` tanpa `--force` tidak mengubah apa pun (15 temuan tetap: 4 critical, 5 high, 6 moderate). Perbaikan menuntut Next 14 → 16 dan maplibre-gl 4 → 6, keduanya breaking. |
 | AUD-TEST-02 | Perintah `pytest` di DB kerja mem-purge baris demo | **DIMITIGASI** | `AGENTS.md` melarangnya; tes berat dijalankan pada DB klon (`mealchain_gate`, `mealchain_idem2`, `mealchain_suite`). |
 

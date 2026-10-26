@@ -56,8 +56,9 @@ lisan.
 ### Babak 0 — Pembuka (Overview, 1,5 menit)
 
 1. Login **SPPG Head** (`sppg.head@demo.local`). Kata sandi **tidak** ada di
-   bundel klien maupun layar login (SEC-02, 26 Okt 2026): operator membacanya
-   dari `.env` (`DEMO_PASSWORD…`) dan mengetiknya. Tombol akun demo hanya
+   bundel klien maupun layar login (SEC-02, 26 Okt 2026): nilainya ada di sisi
+   server — `backend/app/seed/demo_credentials.py` (aktif bila `DEMO_MODE`) atau
+   `DEMO_PASSWORD_<ROLE>` di `.env`. Operator mengetiknya; tombol akun demo hanya
    mengisi email. Jangan menulis kata sandi di slide.
 2. Overview memuat otomatis. Biarkan 5 detik agar `Live Sync (5s)` selesai.
 3. Tunjuk, jangan klik:

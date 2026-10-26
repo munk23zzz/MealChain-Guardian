@@ -276,7 +276,10 @@ tidak dihitung saat eksekusi; kuorum penuh hanya berarti `approved` — PO dan
 keberangkatan lahir di `execute`.
 
 Kata sandi akun demo **tidak** ada di bundel klien (SEC-02, 26 Okt 2026):
-tombol akun demo hanya mengisi email; operator mengetik kata sandi dari `.env`.
+tombol akun demo hanya mengisi email. Kata sandi tetap tersedia di sisi server
+untuk juri — `backend/app/seed/demo_credentials.py` (hanya berlaku bila
+`DEMO_MODE` aktif) atau variabel `DEMO_PASSWORD_<ROLE>` — bukan di JavaScript
+yang bisa dibaca siapa pun.
 
 ---
 
