@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
 from sqlalchemy import select, text
 
 from app.core.config import settings
@@ -46,6 +47,31 @@ def _koneksi():
 
 
 # ── D-04: penanda beku tidak boleh mengubah provenance ──────────────────────
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _kasus_demo_ada():
+    """Pastikan KASUS DEMO ada sebelum modul ini mengukur provenance.
+
+    Modul sebelumnya (mis. `test_demo_seed*`, reset template, purge) menghapus
+    keputusan demo. Tanpa prasyarat ini `_bekukan()` tidak menemukan satu pun
+    baris `demo_case`, dan tes gagal dengan "keputusan demo_case tidak lagi
+    ber-origin demo" — pesan yang menyalahkan kontrak provenance padahal yang
+    kosong adalah datanya (terukur: merah di suite penuh, lulus sendiri).
+    Penyemaian memakai jalur resmi `_seed_demo_cases(force=True)`, bukan INSERT
+    karangan, dan idempoten.
+    """
+    from app.api.demo import _seed_demo_cases
+    from app.models import Location
+
+    async def _siapkan(db) -> None:
+        jakarta = (
+            await db.execute(select(Location).where(Location.name == "Jakarta"))
+        ).scalar_one()
+        await _seed_demo_cases(db, True, jakarta)
+        await db.commit()
+
+    _jalankan(_siapkan)
 
 
 def test_bekukan_mempertahankan_origin_demo():
@@ -131,10 +157,18 @@ def test_hapus_kasus_demo_menaikkan_generasi_ledger():
     yang dihapus tidak punya blok dan versi yang mengandalkan keadaan DB gagal
     dengan "generasi tidak naik" — merah palsu yang menyalahkan kode padahal
     keadaan data (terukur: 1 kegagalan di suite penuh, lulus saat berdiri sendiri).
+
+    Keputusan yang dipilih WAJIB ber-`demo_case` di `DEMO_CASES`: itulah himpunan
+    yang benar-benar dihapus `_seed_demo_cases(force=True)`. Dulu tes mengambil
+    `limit(1)` tanpa filter, sehingga di suite penuh ia bisa memilih baris
+    `bukti-hari-ini` (dari seeder lain) yang TIDAK ikut terhapus — generasi
+    memang tidak naik, dan tes merah padahal kode benar.
     """
-    from app.api.demo import _seed_demo_cases
+    from app.api.demo import DEMO_CASES, _seed_demo_cases
     from app.models import Decision, Location
     from app.services.ledger_service import append_block
+
+    dipilih: list = []
 
     async def _siapkan(db) -> None:
         jakarta = (
@@ -146,13 +180,14 @@ def test_hapus_kasus_demo_menaikkan_generasi_ledger():
             await db.execute(
                 select(Decision.id)
                 .where(
-                    Decision.demo_case.is_not(None),
+                    Decision.demo_case.in_(DEMO_CASES),
                     Decision.target_location_id == jakarta.id,
                 )
                 .limit(1)
             )
         ).scalar_one_or_none()
         assert kasus is not None, "seed demo tidak menghasilkan kasus Jakarta"
+        dipilih.append(kasus)
         # Satu blok di generasi aktif menunjuk keputusan yang akan dihapus.
         await append_block(db, "uji_generasi", kasus, None, {"uji": True})
         await db.commit()
@@ -162,6 +197,15 @@ def test_hapus_kasus_demo_menaikkan_generasi_ledger():
             await db.execute(select(Location).where(Location.name == "Jakarta"))
         ).scalar_one()
         await _seed_demo_cases(db, True, jakarta)
+        # Prasyarat yang dulu tersirat: keputusan berblok benar-benar terhapus.
+        tersisa = (
+            await db.execute(select(Decision.id).where(Decision.id == dipilih[0]))
+        ).scalar_one_or_none()
+        assert tersisa is None, (
+            "prasyarat: keputusan berblok harus ikut terhapus oleh "
+            "`_seed_demo_cases(force=True)` — kalau tidak, generasi memang "
+            "tidak akan naik"
+        )
         await db.commit()
 
     _jalankan(_siapkan)

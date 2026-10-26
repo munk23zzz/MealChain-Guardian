@@ -609,6 +609,11 @@ _MODUL_BUTUH_KANDIDAT = frozenset(
         "test_demo_batch_pemasok_tunggal.py",
         "test_demo_harian.py",
         "test_api_domain_tools.py",
+        # 26 Okt 2026: /balance/analyze & /evidence/fuse membangun kandidat dari
+        # BATCH, bukan dari deret timeseries. Modul ini dulu ikut merah di suite
+        # penuh ("minimal 1 rekomendasi") karena tes lain sudah mem-purge batch
+        # `origin='demo'`; `pastikan_deret_demo()` tidak memulihkan batch.
+        "test_tool_contracts.py",
     }
 )
 

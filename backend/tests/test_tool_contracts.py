@@ -26,6 +26,12 @@ def _deret_demo_ada():
     Modul yang berjalan sesudah tes purge (`/demo/timeseries/purge`) menemukan
     tabel demo kosong, lalu `/balance/analyze` menjawab daftar kosong dan tes
     tampak seperti bug produk. `pastikan_deret_demo()` hanya mengisi yang hilang.
+
+    Deret saja TIDAK cukup: kandidat rekomendasi lahir dari **batch**, dan
+    `pastikan_deret_demo()` tidak memulihkan batch. Karena itu modul ini terdaftar
+    di `_MODUL_BUTUH_KANDIDAT` (conftest) yang menyemai ulang kiriman demo lewat
+    penyemai resmi (`seed_demo_activity`) begitu tabel batch demo kosong —
+    terukur 26 Okt 2026: 0 batch demo di suite penuh → 0 rekomendasi.
     """
     import asyncio
 
