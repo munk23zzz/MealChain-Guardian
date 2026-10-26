@@ -141,13 +141,22 @@ def _kunci_laju(request: Request, email: str) -> str:
 
 
 @router.get("/auth/demo-accounts")
-async def demo_accounts():
+async def demo_accounts(
+    _admin: User = Depends(require_roles("bgn_monitor")),
+):
     """Akun demo siap-pakai untuk layar login — HANYA saat `DEMO_MODE` aktif.
 
-    Tombol peran di UI mengisi email DAN kata sandi, jadi demo cukup satu klik.
-    Sandi tidak pernah ditanam di bundle frontend: ia dikirim endpoint ini hanya
-    ketika instalasi menyatakan dirinya mode demo. Di mode non-demo jawabannya
-    `enabled:false` tanpa daftar akun, sehingga tidak ada kredensial yang bocor.
+    Kenapa di balik auth (26 Okt 2026): endpoint ini mengembalikan KREDENSIAL
+    (email + kata sandi yang berlaku). Sebelumnya siapa pun yang bisa menjangkau
+    backend dapat membacanya tanpa token. Skema tidak punya peran `admin`
+    (Schema.md §1: tiga peran final), jadi penjaganya mengikuti pola yang sudah
+    dipakai `/admin/*`: `require_roles("bgn_monitor")` — satu-satunya peran
+    nasional, lihat `app/core/admin_rules.py`. Tanpa token → 401, token non-admin
+    → 403. Di mode non-demo jawabannya tetap `{enabled:false, accounts:[]}`.
+
+    Konsumen: layar login publik TIDAK memanggil endpoint ini (ia memakai daftar
+    tanpa sandi di `frontend/lib/demo-accounts.ts`); pemanggilnya adalah skrip
+    demo/operator yang sudah punya sesi admin.
     """
     from app.seed.demo_credentials import DemoCredentialError, akun_demo_untuk_browser
 

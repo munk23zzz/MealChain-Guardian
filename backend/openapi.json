@@ -1561,6 +1561,28 @@
         ]
       }
     },
+    "/auth/demo-accounts": {
+      "get": {
+        "summary": "Demo Accounts",
+        "description": "Akun demo siap-pakai untuk layar login — HANYA saat `DEMO_MODE` aktif.\n\nKenapa di balik auth (26 Okt 2026): endpoint ini mengembalikan KREDENSIAL\n(email + kata sandi yang berlaku). Sebelumnya siapa pun yang bisa menjangkau\nbackend dapat membacanya tanpa token. Skema tidak punya peran `admin`\n(Schema.md §1: tiga peran final), jadi penjaganya mengikuti pola yang sudah\ndipakai `/admin/*`: `require_roles(\"bgn_monitor\")` — satu-satunya peran\nnasional, lihat `app/core/admin_rules.py`. Tanpa token → 401, token non-admin\n→ 403. Di mode non-demo jawabannya tetap `{enabled:false, accounts:[]}`.\n\nKonsumen: layar login publik TIDAK memanggil endpoint ini (ia memakai daftar\ntanpa sandi di `frontend/lib/demo-accounts.ts`); pemanggilnya adalah skrip\ndemo/operator yang sudah punya sesi admin.",
+        "operationId": "demo_accounts_auth_demo_accounts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/auth/login": {
       "post": {
         "summary": "Login",
@@ -3703,23 +3725,6 @@
                   "type": "object",
                   "title": "Response Health Check Health Get"
                 }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/auth/demo-accounts": {
-      "get": {
-        "summary": "Demo Accounts",
-        "description": "Akun demo siap-pakai untuk layar login — HANYA saat `DEMO_MODE` aktif.\n\nTombol peran di UI mengisi email DAN kata sandi, jadi demo cukup satu klik.\nSandi tidak pernah ditanam di bundle frontend: ia dikirim endpoint ini hanya\nketika instalasi menyatakan dirinya mode demo. Di mode non-demo jawabannya\n`enabled:false` tanpa daftar akun, sehingga tidak ada kredensial yang bocor.",
-        "operationId": "demo_accounts_auth_demo_accounts_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
               }
             }
           }

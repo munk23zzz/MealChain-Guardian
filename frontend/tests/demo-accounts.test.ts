@@ -1,59 +1,52 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { describe, expect, it } from "vitest";
 
 import {
   AKUN_DEMO_CADANGAN,
   kelompokkanAkun,
-  muatAkunDemo,
 } from "../lib/demo-accounts";
 
-function balas(body: unknown, status = 200) {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => new Response(JSON.stringify(body), {
-      status,
-      headers: { "Content-Type": "application/json" },
-    })),
-  );
+const akar = join(__dirname, "..");
+
+// Kontrak 26 Okt 2026: `GET /auth/demo-accounts` menuntut Bearer token
+// ber-peran admin (`bgn_monitor`; skema tidak punya peran `admin`). Halaman
+// login bersifat publik, jadi ia TIDAK boleh memanggil endpoint itu — kalau
+// dipanggil, jawabannya 401 dan pengunjung melihat pesan error sebelum masuk.
+// Daftar akun cukup datang dari konstanta tanpa sandi.
+const POLA_PANGGILAN = /request\(\s*["'`]\/auth\/demo-accounts/;
+
+function baca(relatif: string): string {
+  return readFileSync(join(akar, relatif), "utf8");
 }
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
 describe("akun demo di layar login", () => {
-  it("mengisi email DAN sandi saat DEMO_MODE aktif", async () => {
-    balas({
-      enabled: true,
-      accounts: [
-        { label: "SPPG Head", email: "sppg.head@demo.local", role: "sppg_head", grup: "utama", password: "rahasia-demo" },
-      ],
-    });
-
-    const akun = await muatAkunDemo();
-
-    expect(akun).toHaveLength(1);
-    expect(akun[0].password).toBe("rahasia-demo");
-    expect(akun[0].email).toBe("sppg.head@demo.local");
+  it("tidak pernah memuat sandi di bundel klien", () => {
+    expect(AKUN_DEMO_CADANGAN).toHaveLength(7); // 3 peran utama + 4 approver kota
+    for (const akun of AKUN_DEMO_CADANGAN) {
+      expect(akun).not.toHaveProperty("password");
+      expect(akun.email.endsWith("@demo.local")).toBe(true);
+      expect(akun.label.length).toBeGreaterThan(0);
+      expect(["sppg_head", "sppg_nutritionist", "bgn_monitor"]).toContain(akun.role);
+    }
   });
 
-  it("tidak menebak sandi saat endpoint mematikan mode demo", async () => {
-    balas({ enabled: false, accounts: [] });
-
-    const akun = await muatAkunDemo();
-
-    expect(akun).toEqual(AKUN_DEMO_CADANGAN);
-    expect(akun.every((a) => a.password === undefined)).toBe(true);
+  it("halaman login publik tidak memanggil endpoint akun demo", () => {
+    for (const berkas of ["lib/demo-accounts.ts", "app/page.tsx"]) {
+      expect(baca(berkas), `${berkas} masih memanggil /auth/demo-accounts`).not.toMatch(
+        POLA_PANGGILAN,
+      );
+    }
   });
 
-  it("tetap memberi daftar saat backend gagal (jaringan/500)", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => {
-      throw new Error("network down");
-    }));
-
-    const akun = await muatAkunDemo();
-
-    expect(akun.length).toBeGreaterThan(0);
-    expect(akun.every((a) => a.password === undefined)).toBe(true);
+  it("menyediakan akun untuk tiap peran yang dipakai demo", () => {
+    const email = AKUN_DEMO_CADANGAN.map((a) => a.email);
+    expect(email).toContain("sppg.head@demo.local");
+    expect(email).toContain("sppg.nutritionist@demo.local");
+    expect(email).toContain("bgn.monitor@demo.local");
+    expect(email).toContain("sppg.head.bandung@demo.local");
+    expect(email).toContain("sppg.nutritionist.surabaya@demo.local");
   });
 
   it("memisahkan tombol utama dan approver kota", () => {

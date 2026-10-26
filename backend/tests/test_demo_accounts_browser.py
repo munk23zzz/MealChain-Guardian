@@ -1,15 +1,18 @@
-"""Akun demo untuk layar login (26 Okt 2026).
+"""Akun demo: daftar + penjagaan akses (26 Okt 2026).
 
-Latar: sebelumnya tombol peran di layar login hanya mengisi email, dan kata sandi
-diketik operator dari berkas lingkungan. Untuk demo, satu klik harus langsung siap
-masuk — tanpa menaruh sandi di bundle frontend (yang bisa dibaca siapa pun).
+Latar: endpoint `GET /auth/demo-accounts` mengembalikan KREDENSIAL (email +
+sandi yang berlaku). Sejak 26 Okt ia menuntut Bearer token ber-peran admin;
+skema tidak punya peran `admin` (Schema.md §1), jadi penjaganya mengikuti pola
+`/admin/*`: `require_roles("bgn_monitor")` — lihat `app/core/admin_rules.py`.
+Halaman login publik tidak lagi memanggilnya (daftar tanpa sandi ada di
+`frontend/lib/demo-accounts.ts`).
 
 Kontrak yang dikunci berkas ini:
 
-1. `DEMO_MODE` aktif  → `GET /auth/demo-accounts` mengirim email + sandi yang benar,
-   diambil dari satu sumber (`DEMO_PASSWORDS_JURI` lewat `resolve_demo_password`).
-2. `DEMO_MODE` mati   → endpoint TIDAK mengirim satu pun sandi (dan tidak mengirim
-   daftar akun), supaya instalasi non-demo tidak membocorkan kredensial.
+1. tanpa token                                    → 401 (tidak ada kebocoran),
+2. token non-admin (sppg_head)                    → 403,
+3. token admin (bgn_monitor) + `DEMO_MODE` aktif  → 200, email + sandi benar,
+4. token admin + `DEMO_MODE` mati                 → 200, `{enabled:false, accounts:[]}`.
 """
 
 from __future__ import annotations
@@ -27,12 +30,33 @@ def client():
         yield c
 
 
-def test_demo_mode_aktif_mengirim_email_dan_sandi_yang_benar(client, monkeypatch):
+def test_tanpa_token_401(client, monkeypatch):
     monkeypatch.setenv("DEMO_MODE", "true")
 
     r = client.get("/auth/demo-accounts")
 
-    assert r.status_code == 200
+    assert r.status_code == 401
+    assert "Demo#" not in r.text
+
+
+def test_token_non_admin_403(client, auth_headers, monkeypatch):
+    """`sppg_head` bukan pengelola pengguna/kredensial — 403, bukan 200."""
+    monkeypatch.setenv("DEMO_MODE", "true")
+
+    r = client.get("/auth/demo-accounts", headers=auth_headers)
+
+    assert r.status_code == 403, r.text
+    assert "Demo#" not in r.text
+
+
+def test_admin_demo_mode_aktif_mengirim_email_dan_sandi_yang_benar(
+    client, monitor_headers, monkeypatch
+):
+    monkeypatch.setenv("DEMO_MODE", "true")
+
+    r = client.get("/auth/demo-accounts", headers=monitor_headers)
+
+    assert r.status_code == 200, r.text
     data = r.json()
     assert data["enabled"] is True
     akun = data["accounts"]
@@ -54,22 +78,25 @@ def test_demo_mode_aktif_mengirim_email_dan_sandi_yang_benar(client, monkeypatch
     assert {"sppg.head.bandung@demo.local", "sppg.nutritionist.surabaya@demo.local"} <= email
 
 
-def test_demo_mode_mati_tidak_membocorkan_sandi(client, monkeypatch):
+def test_admin_demo_mode_mati_tidak_membocorkan_sandi(client, monitor_headers, monkeypatch):
     monkeypatch.setenv("DEMO_MODE", "false")
 
-    r = client.get("/auth/demo-accounts")
+    r = client.get("/auth/demo-accounts", headers=monitor_headers)
 
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
     data = r.json()
     assert data["enabled"] is False
     assert data["accounts"] == []
     assert "Demo#" not in r.text
 
 
-def test_tanpa_demo_mode_env_tetap_tidak_membocorkan_sandi(client, monkeypatch):
+def test_admin_tanpa_demo_mode_env_tetap_tidak_membocorkan_sandi(
+    client, monitor_headers, monkeypatch
+):
     monkeypatch.delenv("DEMO_MODE", raising=False)
 
-    r = client.get("/auth/demo-accounts")
+    r = client.get("/auth/demo-accounts", headers=monitor_headers)
 
+    assert r.status_code == 200, r.text
     assert r.json()["accounts"] == []
     assert "Demo#" not in r.text

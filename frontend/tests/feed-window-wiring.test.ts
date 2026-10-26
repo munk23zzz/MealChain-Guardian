@@ -12,7 +12,10 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const pageSrc = readFileSync(join(process.cwd(), "app/page.tsx"), "utf8");
+const pageSrc = readFileSync(join(process.cwd(), "app/page.tsx"), "utf8").replace(
+  /\r\n/g,
+  "\n",
+);
 const cssSrc = readFileSync(join(process.cwd(), "app/globals.css"), "utf8");
 
 describe("feed rekomendasi — pemilih periode", () => {
