@@ -24,7 +24,7 @@ import time
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.seed.demo_template import build_into, pastikan_sesi
+from app.seed.demo_template import build_into, hitung, pastikan_sesi
 
 
 async def _bangun_deret() -> dict:
@@ -99,6 +99,11 @@ async def bangun_ulang(db: AsyncSession) -> dict:
         laporan.update(await _lengkapi_aktivitas(db, sekarang))
         laporan["pelengkap"] = await _lengkapi_cakupan(db, sekarang)
         await db.commit()
+        # 26 Okt 2026 (F7): tiga langkah di atas MENAMBAH baris (12 keputusan,
+        # 5 batch, 7 approval terukur). `hitung` dari `build_into` diambil
+        # sebelum langkah-langkah itu, jadi laporan ke operator berbunyi
+        # 36/120 padahal isi tabel 48/125. Baca ulang sesudah commit.
+        laporan["hitung"] = await hitung(db)
     except Exception:
         await db.rollback()
         raise

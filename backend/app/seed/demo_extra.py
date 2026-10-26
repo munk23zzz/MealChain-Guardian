@@ -283,6 +283,42 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
             )
             jumlah["agent_traces"] += 1
 
+    # Setiap keputusan wajib punya minimal satu langkah jejak. Tanpa ini, 9 dari
+    # 12 keputusan `extra:*` tampil sebagai kartu tanpa jejak dan gate
+    # `verify/invariants.spec.json` menolaknya (terukur 26 Okt 2026: 9 yatim).
+    # Yang sudah punya jejak (tiga di atas) dilewati supaya tidak dobel DETECT.
+    sudah = set(
+        (
+            await session.execute(
+                select(AgentTrace.decision_id).where(
+                    AgentTrace.decision_id.in_([did for _, _, did in id_keputusan])
+                )
+            )
+        ).scalars()
+    )
+    for tipe, status, did in id_keputusan:
+        if did in sudah:
+            continue
+        await _ambil_atau_buat(
+            session,
+            AgentTrace,
+            f"trace-dasar:{did}",
+            dict(
+                decision_id=did,
+                step_name="DETECT",
+                tool_called="demand.snapshot",
+                input_summary={"komoditas": tipe, "status": status},
+                output_summary={"hasil": "terdeteksi", "catatan": "kasus cakupan"},
+                duration_ms=700,
+                run_id=stable_uuid("extra", "run-dasar", str(did)),
+                agent_name=None,
+                confidence=0.80,
+                citations=[{"source": "extra", "ref": "dasar"}],
+                step_at=now - timedelta(hours=2),
+            ),
+        )
+        jumlah["agent_traces"] += 1
+
     # ------------------------------------------------------------------- PO
     # Satu PO untuk setiap keputusan berstatus executed: inilah bukti bahwa
     # "dua approval -> PO terbit" bisa ditunjukkan di UI dan dijawab Joule.
@@ -584,6 +620,27 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
             ),
         )
         jumlah["approvals"] += 1
+        # Jejak untuk keputusan historis: tanpa ini dua baris `extra:histori`
+        # tampil tanpa penalaran dan gate invariant menolaknya (2 yatim).
+        await _ambil_atau_buat(
+            session,
+            AgentTrace,
+            f"trace-histori:{umur}",
+            dict(
+                decision_id=did,
+                step_name="DETECT",
+                tool_called="demand.snapshot",
+                input_summary={"komoditas": kom.name, "hari_lalu": umur},
+                output_summary={"hasil": "terdeteksi", "catatan": "audit berkala"},
+                duration_ms=650,
+                run_id=stable_uuid("extra", "run-histori", str(umur)),
+                agent_name=None,
+                confidence=0.78,
+                citations=[{"source": "extra", "ref": "histori"}],
+                step_at=now - timedelta(days=umur, hours=3),
+            ),
+        )
+        jumlah["agent_traces"] += 1
 
     # ------------------------------- kiriman yang SEDANG DI JALAN (lapisan peta)
     # Jalur "Siapkan data demo" (demo_template) memberangkatkan sebagian batch
