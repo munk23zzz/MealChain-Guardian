@@ -43,7 +43,14 @@ def _batch(pilih: str = "jakarta") -> tuple[str, str, str, float]:
                 text(
                     "SELECT b.id, b.location_id, b.commodity_id, b.quantity_kg "
                     "FROM batches b JOIN locations l ON l.id = b.location_id "
-                    f"WHERE {where} AND b.safety_status <> 'fail' "
+                    f"WHERE {where} "
+                    # Sejak gate keselamatan 25 Okt 2026 (F-01) persetujuan
+                    # hanya sah untuk batch `pass` yang bukti suhunya lengkap.
+                    # Fixture ini mencari batch yang MEMANG layak disetujui,
+                    # supaya yang diuji tetap idempotensi stok — bukan aturan
+                    # keamanan (itu diuji di test_receipts_safety_gate.py).
+                    "AND b.safety_status = 'pass' "
+                    "AND jsonb_array_length(COALESCE(b.temperature_log, '[]'::jsonb)) >= 2 "
                     "AND (b.usable_until IS NULL OR b.usable_until > now()) "
                     "AND NOT EXISTS (SELECT 1 FROM batch_receipts r "
                     "  WHERE r.batch_id = b.id AND r.status IN ('menunggu','disetujui')) "

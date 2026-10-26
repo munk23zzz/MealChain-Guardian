@@ -21,6 +21,12 @@ class SupplierExclusion(Base):
         index=True,
     )
     __table_args__ = (
+        # Indeks FK (migrasi 033): DB sudah punya indeks ini; tanpa
+        # deklarasi di sini `alembic check` akan mengusulkan drop.
+        Index("ix_supplier_exclusions_proposed_by", "proposed_by"),
+        Index("ix_supplier_exclusions_restoration_decision_id", "restoration_decision_id"),
+        Index("ix_supplier_exclusions_scope_location_id", "scope_location_id"),
+        Index("ix_supplier_exclusions_source_decision_id", "source_decision_id"),
         CheckConstraint(
             "status IN ('proposed','active','rejected','revoked')",
             name="supplier_exclusions_status_check",

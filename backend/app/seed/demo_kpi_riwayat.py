@@ -16,6 +16,13 @@ Pembagiannya bukan karangan, melainkan mengikuti penulis data yang ada:
   Decision Time (trace DETECT..ACT + PO committed), Evidence Completeness
   (`decisions.created_at` + `approvals` + `decision_evidence` di jendela).
 
+Pengecualian yang ditambahkan 25 Okt 2026: **kartu yang masih menunggu tindakan
+manusia** (`pending_approval`, `verifier_flagged`) TIDAK ikut digeser. Tanpa
+pengecualian ini feed "Rekomendasi hari ini" Jakarta hanya berisi 2–3 kartu,
+karena keempat kasus skrip template ikut mendarat di kemarin — bertabrakan
+dengan permintaan "lima rekomendasi valid hari ini". Jejak aksinya (trace,
+bukti, approval, PO) tetap digeser, jadi KPI berbasis aksi tetap mulai dari nol.
+
 Yang dilakukan fungsi ini hanya MEMINDAHKAN tanggal baris yang sudah ada:
 tidak ada nilai yang dikarang, tidak ada baris yang dihapus, dan status tidak
 diubah. `expires_at` sengaja tidak ikut bergeser supaya keputusan yang menunggu
@@ -45,6 +52,20 @@ AKTIF = True
 #: baris aksi lokasi ini yang digeser; kota lain tetap seperti disemai supaya
 #: pandangan global BGN Monitor tidak ikut kosong. `None` = semua lokasi.
 LOKASI_DEMO = "Jakarta"
+
+#: Status yang kartunya HARUS tetap terlihat di feed "hari ini" meskipun
+#: penyemai menggeser jejak aksi. Permintaan pemilik 25 Okt 2026: skenario
+#: Jakarta menyediakan lima rekomendasi yang bisa ditindak hari ini. Sebelum
+#: ini `decisions.created_at` ikut digeser untuk SEMUA status, sehingga kartu
+#: `pending_approval` hasil penyemaian template mendarat di kemarin dan feed
+#: "hari ini" tinggal 2–3 kartu.
+#:
+#: Yang tetap digeser adalah jejak AKSI-nya (trace, bukti, approval, PO):
+#: kartu boleh menunggu tindakan hari ini, tetapi belum ada aksi yang selesai.
+#: Status lain sengaja tidak masuk daftar: `approved`/`executed`/`rejected`/
+#: `review_only` sudah pernah ditindak, dan `proposed` adalah draf agen yang
+#: belum sampai ke meja penyetuju.
+STATUS_KARTU_HARI_INI: tuple[str, ...] = ("pending_approval", "verifier_flagged")
 
 #: Tabel + kolom waktu yang menentukan empat metrik berbasis aksi. Nama tabel
 #: dan kolom adalah konstanta modul (bukan input pengguna), jadi aman
@@ -142,6 +163,25 @@ async def geser_aksi_ke_riwayat(
             }
         params["loc"] = loc_id
         saringan = {tabel: f"({filter_})" for tabel, _kolom, filter_ in KOLOM_AKSI}
+
+    # Kartu yang masih menunggu tindakan tetap bertanggal hari ini; hanya baris
+    # dengan status itu yang dikecualikan dari pergeseran `decisions`. Jejak
+    # aksinya (trace/bukti/approval/PO) tetap ikut digeser lewat filter yang
+    # menunjuk `decisions` — di sana tidak ada pengecualian.
+    daftar_status = ", ".join(f"'{s}'" for s in STATUS_KARTU_HARI_INI)
+    dasar = saringan["decisions"]
+    saringan["decisions"] = f"({dasar}) AND status NOT IN ({daftar_status})"
+    # KECUALI trace milik KARTU DEMO yang tetap hari ini (26 Okt 2026): DETECT/
+    # PREDICT/DECIDE-nya dipertahankan supaya pasangan DETECT→ACT masih ada saat
+    # kartu dieksekusi dan "Decision Time" bisa bergerak. Kartu non-demo tetap
+    # digeser seperti semula — jejaknya dipakai Regional Imbalance (yang
+    # mengecualikan `demo_case`), jadi menahannya akan menambah penyebut metrik
+    # itu tanpa alasan.
+    saringan["agent_traces"] = (
+        "decision_id IN (SELECT id FROM decisions WHERE "
+        f"({dasar}) AND NOT (demo_case IS NOT NULL AND status IN "
+        f"({daftar_status})))"
+    )
 
     terbaru: datetime | None = None
     for tabel, kolom, _filter in KOLOM_AKSI:

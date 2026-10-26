@@ -10,7 +10,7 @@ from sqlalchemy import select
 from app.api.auth import get_current_user, require_roles
 from app.api.dependencies import get_db
 from app.core.scope import assert_in_scope, is_national_scope
-from app.models import SupplierExclusion
+from app.models import Supplier, SupplierExclusion
 from app.services import supplier_exclusion_service as service
 
 router = APIRouter()
@@ -114,4 +114,19 @@ async def listing(
         .scalars()
         .all()
     )
-    return {"items": [service.serialize(row) for row in rows], "count": len(rows)}
+    # Nama pemasok ikut dikirim (audit 26 Okt 2026): sebelumnya register di UI
+    # hanya punya `supplier_id`, sehingga kolom "Pemasok" selalu tampil "—"
+    # meski barisnya ada. Satu query tambahan untuk seluruh baris, bukan N+1.
+    nama: dict[uuid.UUID, str] = {}
+    if rows:
+        pasangan = await db.execute(
+            select(Supplier.id, Supplier.name).where(
+                Supplier.id.in_({row.supplier_id for row in rows})
+            )
+        )
+        nama = {sid: nm for sid, nm in pasangan.all()}
+    items = [
+        {**service.serialize(row), "supplier_name": nama.get(row.supplier_id)}
+        for row in rows
+    ]
+    return {"items": items, "count": len(items)}

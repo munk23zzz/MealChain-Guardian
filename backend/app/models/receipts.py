@@ -27,6 +27,11 @@ class BatchReceipt(Base):
         index=True,
     )
     __table_args__ = (
+        # Indeks FK (migrasi 033): DB sudah punya indeks ini; tanpa
+        # deklarasi di sini `alembic check` akan mengusulkan drop.
+        Index("ix_batch_receipts_recorded_by", "recorded_by"),
+        Index("ix_batch_receipts_reviewed_by", "reviewed_by"),
+        Index("ix_batch_receipts_supply_record_id", "supply_record_id"),
         # DESC di kolom kedua mengikuti migrasi 019/021 — tanpa ini
         # `alembic check` mengusulkan drop+create index yang sama (audit DB-01).
         Index(

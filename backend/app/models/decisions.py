@@ -36,6 +36,12 @@ class Decision(Base):
         index=True,
     )
     __table_args__ = (
+        # Indeks FK (migrasi 033): DB sudah punya indeks ini; tanpa
+        # deklarasi di sini `alembic check` akan mengusulkan drop.
+        Index("ix_decisions_commodity_id", "commodity_id"),
+        Index("ix_decisions_source_location_id", "source_location_id"),
+        Index("ix_decisions_supplier_id", "supplier_id"),
+        Index("ix_decisions_target_location_id", "target_location_id"),
         CheckConstraint(
             "decision_type IN ('regional_balance','price_anomaly',"
             "'safety_disruption','supplier_exclusion',"
@@ -158,6 +164,7 @@ class Approval(Base):
     # Tanpa ini, dua request dari akun yang sama bisa memenuhi syarat "dua role
     # berbeda" karena quorum dihitung dari baris approval, bukan dari user unik.
     __table_args__ = (
+        Index("ix_approvals_approved_by", "approved_by"),
         Index("uq_approvals_decision_user", "decision_id", "approved_by", unique=True),
         Index("ix_approvals_decision_id", "decision_id"),
     )

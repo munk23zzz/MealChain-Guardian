@@ -126,6 +126,9 @@ class DisposalEvent(Base):
         index=True,
     )
     __table_args__ = (
+        # Indeks FK (migrasi 033): DB sudah punya indeks ini; tanpa
+        # deklarasi di sini `alembic check` akan mengusulkan drop.
+        Index("ix_disposal_events_commodity_id", "commodity_id"),
         CheckConstraint("quantity_kg >= 0", name="disposal_qty_check"),
         CheckConstraint(
             "origin IN ('seed','demo')", name="check_disposal_events_origin_vocab"

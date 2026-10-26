@@ -15,6 +15,7 @@ Revises: 021_po_number_seragam
 """
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "022_disposal_partner"

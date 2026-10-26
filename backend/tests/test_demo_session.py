@@ -43,12 +43,20 @@ DSN = os.environ.get(
 # Tes di berkas ini memang mengubah seluruh tabel operasional (mulai/akhiri/
 # kosongkan). Itu tidak aman dijalankan di tengah suite yang memakai DB sama:
 # terukur 20 Okt 2026 — 17 tes lain gagal karena data kanonik ikut terhapus.
-# Jalankan terpisah: DEMO_SESSION_ENFORCE=true pytest tests/test_demo_session.py
+#
+# Gerbangnya SENGAJA bukan `demo_session_enforce` lagi: sejak 25 Okt 2026 flag
+# itu menyala secara bawaan, sehingga memakainya sebagai gerbang berarti suite
+# biasa tiba-tiba menghapus data demo. Opt-in eksplisit + DB sekali-pakai:
+#   DEMO_SESSION_TESTS_ENFORCE=1 TEST_DATABASE_URL=...mealchain_sesiuji \
+#     pytest tests/test_demo_session.py
 pytestmark = pytest.mark.skipif(
-    not settings.demo_session_enforce,
+    not settings.demo_session_enforce
+    or os.environ.get("DEMO_SESSION_TESTS_ENFORCE", "").strip().lower()
+    not in {"1", "true", "yes", "on"},
     reason=(
-        "tes sesi mengosongkan tabel operasional — jalankan terpisah"
-        " dengan DEMO_SESSION_ENFORCE=true"
+        "tes sesi mengosongkan tabel operasional — butuh opt-in eksplisit"
+        " DEMO_SESSION_TESTS_ENFORCE=1 (dan disarankan TEST_DATABASE_URL"
+        " menunjuk DB sekali-pakai)"
     ),
 )
 

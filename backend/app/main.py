@@ -149,6 +149,25 @@ async def _header_keamanan(request, call_next):
 # `do_orm_execute` menyaring kueri berdasarkan ContextVar; ContextVar itu diisi
 # di sini, satu kali per request, hanya bila DEMO_SESSION_ENFORCE menyala.
 # Tanpa flag, middleware hanya meneruskan request (biaya nol, tes tidak berubah).
+#: Endpoint yang tetap boleh dipanggil TANPA sesi aktif saat enforcement menyala:
+#: pengelola sesi itu sendiri (`start`/`extend`/`end`), login, kesehatan, dan
+#: dokumentasi. Semua pembacaan (GET/HEAD/OPTIONS) selalu terbuka — yang ditolak
+#: hanyalah MUTASI, karena hanya mutasi yang bisa mengubah data demo.
+_JALUR_TANPA_SESI = frozenset(
+    {
+        "/health",
+        "/auth/login",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+        "/demo/session/start",
+        "/demo/session/extend",
+        "/demo/session/end",
+    }
+)
+_METODE_MUTASI = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
 @app.middleware("http")
 async def _konteks_sesi_demo(request, call_next):
     from app.core.config import settings as _settings
@@ -164,7 +183,25 @@ async def _konteks_sesi_demo(request, call_next):
     try:
         async with maker() as db:
             # `aktif()` juga menutup sesi yang sudah lewat waktu (kedaluwarsa malas).
-            await _sesi.aktif(db)
+            aktif = await _sesi.aktif(db)
+        # Permintaan produk (25 Okt 2026): sesudah sesi kedaluwarsa, backend
+        # MENOLAK aksi — bukan hanya berhenti menyapu data. Tanpa gerbang ini
+        # keputusan tetap bisa disetujui/dieksekusi lewat API walau sesi sudah
+        # habis, dan klien hanya mendapati datanya berubah tanpa sebab.
+        if (
+            aktif is None
+            and request.method in _METODE_MUTASI
+            and request.url.path not in _JALUR_TANPA_SESI
+        ):
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "detail": (
+                        "sesi demo belum aktif atau sudah kedaluwarsa — tekan "
+                        "\"Siapkan data demo\" lebih dulu; aksi tulis ditolak"
+                    )
+                },
+            )
         return await call_next(request)
     finally:
         _sesi.set_sesi(None)

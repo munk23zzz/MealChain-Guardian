@@ -14,7 +14,11 @@ class Settings(BaseSettings):
     )
 
     # Database
-    database_url: str = "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+    # WAJIB dari env (`.env` lokal, env kontainer, atau CI). Sengaja TIDAK punya
+    # default: dulu di sini ada DSN dev lengkap dengan kata sandi (audit lineage
+    # F-08), sehingga lingkungan yang lupa menyetel env diam-diam menulis ke DB
+    # dev. Tanpa `DATABASE_URL`, Settings gagal dibuat — fail-fast.
+    database_url: str
 
     # App
     debug: bool = False
@@ -27,12 +31,15 @@ class Settings(BaseSettings):
     app_name: str = "MealChain Guardian"
 
     # Sesi demo (permintaan 20 Okt 2026): default KOSONG, data hidup hanya
-    # selama sesi. `demo_session_enforce` MATI secara bawaan supaya suite tes
-    # (1.200+ kasus) tetap bisa menyemai data tanpa sesi; di lingkungan demo
-    # nyalakan lewat env DEMO_SESSION_ENFORCE=true.
-    demo_session_enforce: bool = False
+    # selama sesi. Sejak 25 Okt 2026 `demo_session_enforce` MENYALA secara
+    # bawaan (keputusan owner): endpoint mutasi menolak 409 bila tidak ada sesi
+    # aktif. Suite tes mematikannya sendiri di `tests/conftest.py` — bukan
+    # diam-diam, tetapi karena 1.200+ tes menyemai data tanpa sesi.
+    demo_session_enforce: bool = True
     demo_session_minutes: int = 120
-    demo_session_max_minutes: int = 240
+    #: Plafon ABSOLUT satu sesi (2 jam). Dipakai START dan EXTEND; `extend` hanya
+    #: boleh menambal sampai plafon ini, tidak pernah melewatinya.
+    demo_session_max_minutes: int = 120
     #: Riwayat data yang disemai saat sesi dimulai. Tanpa ini, semua fakta jatuh
     #: di hari yang sama dan pemilih periode KPI (24 jam / 7 hari / 30 hari)
     #: menampilkan angka identik — bukan karena jendelanya salah, tetapi karena

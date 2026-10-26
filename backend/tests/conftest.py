@@ -6,7 +6,10 @@ direktori repo yang tidak di-mount ke container (agent/, infra/).
 Di dalam container, modul-modul itu dikoleksi-skip; di host tetap jalan.
 """
 
+import asyncio
 import importlib
+import os
+import sys
 from pathlib import Path
 
 import bcrypt
@@ -15,6 +18,32 @@ from sqlalchemy import create_engine, text
 
 from tests.dsn import DSN_ASYNC, DSN_SYNC  # DSN mengikuti DATABASE_URL
 from tests.gate_lock import ambil_kunci, dsn_psycopg, lepas_kunci
+
+# Suite ini menguji permukaan demo. Password demo hanya boleh dipasang bila
+# `DEMO_MODE` aktif (temuan D-01). Nilai ambient (mis. `.env` yang di-source
+# operator) tidak boleh membuat tes gagal, jadi proses tes menetapkannya
+# sendiri; aplikasi & seeder produksi tetap default mati (`.env`/compose).
+os.environ["DEMO_MODE"] = "true"
+
+# Enforcement sesi demo MENYALA secara bawaan sejak 25 Okt 2026 (keputusan
+# owner): endpoint mutasi menolak 409 tanpa sesi aktif. Suite ini menyemai data
+# tanpa sesi di 1.200+ tes, jadi proses tes mematikannya secara EKSPLISIT di
+# sini. Ini bukan melumpuhkan fitur: tes yang memang menguji sesi menyalakannya
+# sendiri (monkeypatch `settings.demo_session_enforce`) dan berkas destruktif
+# `test_demo_session.py` hanya berjalan dengan opt-in `DEMO_SESSION_TESTS_ENFORCE=1`.
+if os.environ.get("DEMO_SESSION_TESTS_ENFORCE", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}:
+    os.environ["DEMO_SESSION_ENFORCE"] = "true"
+else:
+    os.environ["DEMO_SESSION_ENFORCE"] = "false"
+
+# psycopg async menolak ProactorEventLoop bawaan Windows.
+if sys.platform == "win32":  # pragma: no cover - hanya Windows
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # Tes yang butuh PAKET `agent` (runtime terpisah di akar repo). Di dev, compose
 # me-mount `./agent:/agent:ro`, jadi paket itu tersedia dan tes ini BENAR-BENAR
@@ -663,13 +692,21 @@ def jaga_deret_demo_utuh():
     except Exception as exc:  # DB tak terjangkau: jangan halangi tes
         print(f"[conftest] cek deret demo dilewati: {exc}")
         return
-    if jumlah and int(jumlah.get("supply_records", 0)) == 0:
-        import asyncio
+    if jumlah:
+        # Jangan hanya memeriksa `supply_records`: modul yang mem-purge bisa
+        # meninggalkan tabel lain kosong (menu/limbah/kiriman), dan tes KPI
+        # membaca tabel-tabel itu — gejalanya "angka 0" yang tampak seperti bug.
+        kosong = sorted(nama for nama, n in jumlah.items() if int(n) == 0)
+        if kosong:
+            import asyncio
 
-        from app.seed.timeseries import pastikan_deret_demo
+            from app.seed.timeseries import pastikan_deret_demo
 
-        print("[conftest] deret demo habis — dibangun ulang sebelum modul ini")
-        asyncio.run(pastikan_deret_demo())
+            print(
+                "[conftest] deret demo tidak utuh "
+                f"({', '.join(kosong)}) — dibangun ulang sebelum modul ini"
+            )
+            asyncio.run(pastikan_deret_demo())
 
 
 @pytest.fixture(scope="module", autouse=True)

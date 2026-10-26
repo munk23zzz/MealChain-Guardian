@@ -102,6 +102,19 @@ def _menit_valid(menit: int | None, bawaan: int) -> int:
     return max(1, min(nilai, maks))
 
 
+def _batas_akhir(started_at: datetime) -> datetime:
+    """Plafon absolut satu sesi: `DEMO_SESSION_MAX_MINUTES` menit (2 jam).
+
+    Satu sumber untuk START dan EXTEND. Sebelumnya hanya `extend` yang memakai
+    plafon ini sementara durasi awal masih menerima nilai apa pun dari payload,
+    sehingga "sesi 2 jam" bisa dimulai sebagai 4 jam. Perpanjangan hanya boleh
+    MENAMBAL sampai plafon — meminta 240 menit pada sesi 110 menit tetap
+    berhenti di 120 menit.
+    """
+    return started_at + timedelta(minutes=max(1, int(settings.demo_session_max_minutes)))
+
+
+
 def status_payload(sesi: DemoSession | None, saat: datetime | None = None) -> dict[str, Any]:
     """Bentuk balasan stabil untuk UI (hitungan mundur dihitung SERVER)."""
     saat = saat or sekarang()
@@ -281,7 +294,7 @@ async def perpanjang(db: AsyncSession, *, menit: int = 30) -> DemoSession | None
     if sesi.expires_at <= sekarang():
         await akhiri(db, sesi)
         return None
-    batas = sesi.started_at + timedelta(minutes=int(settings.demo_session_max_minutes))
+    batas = _batas_akhir(sesi.started_at)
     baru = min(sesi.expires_at + timedelta(minutes=_menit_valid(menit, 30)), batas)
     sesi.expires_at = baru
     await db.commit()

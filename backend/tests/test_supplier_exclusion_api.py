@@ -153,6 +153,21 @@ def test_proposal_preserves_fail_and_creates_null_quantity_decision(scenario):
     assert client.get("/supplier-exclusions").json()["items"][0]["id"] == row["id"]
 
 
+def test_register_membawa_nama_pemasok_dan_id_keputusan(scenario):
+    """Register harus bisa menyebut SIAPA yang dikecualikan (audit 26 Okt 2026).
+
+    Sebelumnya endpoint hanya mengirim `supplier_id`, sehingga kolom "Pemasok"
+    di tab Pemasok selalu "—" meski barisnya ada; kolom "Keputusan" juga kosong
+    karena UI membaca `decision_id` padahal yang dikirim `source_decision_id`.
+    """
+    client, ids, _engine, _ = scenario
+    dibuat = client.post("/supplier-exclusions/proposals", json=body(ids)).json()
+    item = client.get("/supplier-exclusions").json()["items"][0]
+    assert item["supplier_id"] == str(ids["supplier"])
+    assert item["supplier_name"] and item["supplier_name"] != "—"
+    assert item["source_decision_id"] == dibuat["source_decision_id"]
+
+
 def test_exclusion_requires_verify_dual_approval_then_execute_once(scenario):
     client, ids, engine, actor = scenario
     row = client.post("/supplier-exclusions/proposals", json=body(ids)).json()

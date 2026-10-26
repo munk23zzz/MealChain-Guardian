@@ -31,6 +31,9 @@ class SupplyRecord(Base):
         index=True,
     )
     __table_args__ = (
+        # Indeks FK (migrasi 033): DB sudah punya indeks ini; tanpa
+        # deklarasi di sini `alembic check` akan mengusulkan drop.
+        Index("ix_supply_records_commodity_id", "commodity_id"),
         CheckConstraint(
             "quantity_kg >= 0", name="supply_records_quantity_nonneg_check"
         ),

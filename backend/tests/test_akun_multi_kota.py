@@ -25,6 +25,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
 from app.main import app
+from app.seed.demo_credentials import resolve_demo_password
 from app.seed.seed_data import DEMO_USERS, ensure_demo_users
 from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 
@@ -50,8 +51,24 @@ def _rows(sql: str, params: dict | None = None):
 
 @pytest.fixture(scope="module")
 def seed_akun():
-    """Pastikan akun demo per kota ada (idempoten, sama seperti seed produksi)."""
-    ensure_demo_users()
+    """Pastikan akun demo per kota ada (idempoten, sama seperti seed produksi).
+
+    Sejak temuan D-01 (25 Okt 2026) password demo hanya dipasang bila
+    `DEMO_MODE` aktif, jadi fixture ini menyatakan mode demo secara eksplisit
+    selama penyemaian dan mengembalikan nilai sebelumnya setelah selesai.
+    """
+    import os
+
+    sebelumnya = os.environ.get("DEMO_MODE")
+    os.environ["DEMO_MODE"] = "true"
+    try:
+        ensure_demo_users()
+        yield
+    finally:
+        if sebelumnya is None:
+            os.environ.pop("DEMO_MODE", None)
+        else:
+            os.environ["DEMO_MODE"] = sebelumnya
 
 
 @pytest.fixture(scope="module")
@@ -80,7 +97,7 @@ def test_password_akun_kota_bisa_dipakai_login(seed_akun, client):
                 continue
             resp = client.post(
                 "/auth/login",
-                json={"email": akun["email"], "password": akun["password"]},
+                json={"email": akun["email"], "password": resolve_demo_password(akun["role"])},
             )
             assert resp.status_code == 200, f"{akun['email']}: {resp.text}"
             assert resp.json()["access_token"]
@@ -96,7 +113,9 @@ def test_password_demo_cocok_dengan_hash_di_db(seed_akun):
         )
         assert rows, f"{akun['email']} tidak ada di DB"
         hash_db = rows[0]["password_hash"]
-        assert bcrypt.checkpw(akun["password"].encode(), hash_db.encode()), akun["email"]
+        assert bcrypt.checkpw(
+            resolve_demo_password(akun["role"]).encode(), hash_db.encode()
+        ), akun["email"]
 
 
 def test_approval_riwayat_demo_sesuai_lokasi_target(seed_akun):
@@ -146,7 +165,8 @@ def test_kepala_bandung_hanya_melihat_keputusan_bandung(seed_akun, client):
         if u["location"] == "Bandung" and u["role"] == "sppg_head"
     )
     token = client.post(
-        "/auth/login", json={"email": akun["email"], "password": akun["password"]}
+        "/auth/login",
+        json={"email": akun["email"], "password": resolve_demo_password(akun["role"])},
     ).json()["access_token"]
     resp = client.get("/decisions", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200, resp.text

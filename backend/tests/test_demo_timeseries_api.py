@@ -916,7 +916,12 @@ def test_refresh_hari_ini_tidak_menggandakan_snapshot_kanonik(
     # menambah baris demo hari ini (itu tugasnya).
     sebelum_kanonik = _snapshot_ids_kanonik()
     awal_seed, kg_awal = _seed_supply_terbaru()
-    assert kg_awal == 1400.0
+    # Dulu 1400,0 kg (baris kanonik semata). Sejak `build_into` juga
+    # menjalankan `generate_timeseries`, baris pasokan "terbaru" untuk Jakarta
+    # datang dari deret sintesis sehingga angkanya tidak lagi bulat. Yang
+    # diuji di sini bukan angka mutlaknya, melainkan bahwa refresh TIDAK
+    # menggandakan baris kanonik — jadi cukup pastikan nilainya ada.
+    assert kg_awal > 0
 
     r = demo_state.post("/demo/refresh", headers=auth_headers)
     assert r.status_code == 200, r.text

@@ -26,10 +26,17 @@ def compute_freshness_score(
     base = max(0.0, 1.0 - age_fraction)
 
     summary = summarize_temperature_log(temperature_log, safe_min_c, safe_max_c)
-    if summary.observed_minutes > 0 and summary.complete:
+    if summary.complete and summary.observed_minutes > 0:
         outside_fraction = summary.outside_minutes / summary.observed_minutes
     else:
-        outside_fraction = 0.0
+        # Bukti suhu kosong/tidak lengkap (kurang dari dua sampel valid, entri
+        # rusak, atau timestamp duplikat) TIDAK boleh berarti "tidak ada
+        # simpangan". Sebelum perbaikan 25 Okt 2026 cabang ini memberi penalti
+        # nol, sehingga batch tanpa bukti apa pun tetap mendapat skor `pass`
+        # sementara `core/safety.py` menyebut `needs_verification` untuk bukti
+        # yang sama. Fail-closed: perlakukan seluruh periode sebagai di luar
+        # rentang sehingga skor turun penuh dan tidak pernah `pass`.
+        outside_fraction = 1.0
 
     return max(0.0, min(1.0, base - TEMP_PENALTY_WEIGHT * outside_fraction))
 

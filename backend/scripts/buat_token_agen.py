@@ -75,6 +75,24 @@ def cari_user(url: str, email: str) -> tuple[str, str, str | None]:
     return baris[0], baris[1], baris[2]
 
 
+#: Batas atas umur token agen (temuan D-04). Cukup untuk rotasi mingguan dan
+#: masih bisa diturunkan operator lewat `TOKEN_AGEN_MAKS_HARI`.
+MASA_BERLAKU_MAKS_DETIK = int(os.environ.get("TOKEN_AGEN_MAKS_HARI", "7")) * 24 * 3600
+
+
+def umur_token_detik(hari: int, *, maks_detik: int) -> int:
+    """Umur token agen dalam detik, DIJEPIT ke `maks_detik` (temuan D-04).
+
+    `/auth/login` menjepit umur token, tetapi skrip ini menerbitkan JWT sendiri
+    dengan `exp = now + hari*86400` tanpa batas — token `bgn_monitor` yang bocor
+    lalu hidup berhari-hari dan diterima semua endpoint. Nilai <= 0 tidak
+    diartikan "abadi", melainkan satu jam.
+    """
+    if hari is None or hari <= 0:
+        return min(3600, maks_detik)
+    return min(int(hari) * 24 * 3600, maks_detik)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Buat token JWT untuk agent MealChain.")
     parser.add_argument("--email", default="bgn.monitor@demo.local")
@@ -102,7 +120,7 @@ def main() -> int:
             "role": role,
             "loc": lokasi,
             "iat": sekarang,
-            "exp": sekarang + args.hari * 24 * 3600,
+            "exp": sekarang + umur_token_detik(args.hari, maks_detik=MASA_BERLAKU_MAKS_DETIK),
         },
         secret,
         algorithm=env.get("JWT_ALGORITHM", "HS256"),

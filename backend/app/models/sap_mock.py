@@ -54,6 +54,9 @@ class SapMockPurchaseOrder(Base):
         index=True,
     )
     __table_args__ = (
+        # Indeks FK (migrasi 033): DB sudah punya indeks ini; tanpa
+        # deklarasi di sini `alembic check` akan mengusulkan drop.
+        Index("ix_sap_mock_purchase_orders_supplier_id", "supplier_id"),
         CheckConstraint(
             "status IN ('draft','submitted','confirmed')",
             name="sap_mock_po_status_check",

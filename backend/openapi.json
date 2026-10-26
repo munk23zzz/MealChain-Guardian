@@ -282,6 +282,61 @@
         ]
       }
     },
+    "/price/quotes/{location}/{commodity}": {
+      "get": {
+        "summary": "List Quotes",
+        "description": "Daftar supplier_quote + reference terkini (S4-01 UI Event 2).\n\nRead-only (semua role ter-autentikasi). Reference diambil pada\nlokasi/komoditas yang SAMA dengan quote — anti pencampuran lintas\nlokasi/period.",
+        "operationId": "list_quotes_price_quotes__location___commodity__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "location",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Location"
+            }
+          },
+          {
+            "name": "commodity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Commodity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response List Quotes Price Quotes  Location   Commodity  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/price/{location}/{commodity}": {
       "get": {
         "summary": "Get Price",
@@ -451,6 +506,25 @@
               "type": "string",
               "title": "Commodity"
             }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Batas atas waktu baris (default: sekarang)",
+              "title": "As Of"
+            },
+            "description": "Batas atas waktu baris (default: sekarang)"
           }
         ],
         "responses": {
@@ -496,17 +570,514 @@
         ]
       }
     },
-    "/balance/analyze": {
-      "post": {
-        "summary": "Post Analyze",
-        "description": "Pipeline penuh + ringkasan hitung (S3-02, carry-over Sprint 2).\n\nTipis: rekomendasi dari service yang sama dengan /balance/recommend;\nsummary murni agregasi hitung, tanpa logika baru.",
-        "operationId": "post_analyze_balance_analyze_post",
+    "/balance/map": {
+      "get": {
+        "summary": "Get Balance Map",
+        "description": "S4-06 polish (arah Roy 2026-10-08): kondisi semua lokasi utk map.\n\nRead-only (JWT, semua role boleh baca). Satu komoditas → snapshot\nsupply/demand TERBARU tiap lokasi YANG SUDAH TERJADI (`recorded_at <=\nas_of`, default sekarang), aturan sama dengan GET /balance/{loc}/{com},\ngap via `calculate_supply_gap` — formula yang sama dengan panel, tanpa\nrumus kedua. Lokasi tanpa data → zeros (map tetap lengkap).\nKoordinat dari DB.",
+        "operationId": "get_balance_map_balance_map_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "commodity",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Commodity"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Batas atas waktu baris (default: sekarang)",
+              "title": "As Of"
+            },
+            "description": "Batas atas waktu baris (default: sekarang)"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/balance/analyze": {
+      "post": {
+        "summary": "Post Analyze",
+        "description": "Pipeline penuh + ringkasan hitung (S3-02, carry-over Sprint 2).\n\nTipis: rekomendasi dari service yang sama dengan /balance/recommend;\nsummary murni agregasi hitung, tanpa logika baru.\nRuling S4-05: `commodity` (opsional) memfilter pipeline ke komoditas\npanel; tanpa body → global (perilaku lama, kompatibilitas).",
+        "operationId": "post_analyze_balance_analyze_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AnalyzeRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/batches": {
+      "get": {
+        "tags": [
+          "batches"
+        ],
+        "summary": "List Batches",
+        "description": "Daftar batch untuk panel chaos Event 3.\n\nCATATAN audit 2026-10-11: daftar ini sengaja lintas lokasi (batch source\nchaos bisa berada di lokasi mana pun) — kalau O-SEC-2 dikunci untuk\n/events/*, daftar ini juga wajib di-scope, dan panel akan kosong untuk\nSPPG Head di Jakarta (seed tidak punya batch Jakarta).\n\n`total` dikirim supaya konsumen tahu berapa baris sebenarnya: batas `limit` tidak boleh\nlagi tampak seperti \"hanya ini yang ada di database\".",
+        "operationId": "list_batches_batches_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "jumlah baris yang dikembalikan (plafon 500)",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "jumlah baris yang dikembalikan (plafon 500)"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "baris yang dilewati, untuk paginasi",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "baris yang dilewati, untuk paginasi"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response List Batches Batches Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/batches/{batch_id}": {
+      "get": {
+        "tags": [
+          "batches"
+        ],
+        "summary": "Get Batch",
+        "description": "Satu batch (audit 21 Okt 2026, P6).\n\nSebelumnya tidak ada rute ini: semua peran menerima 404, sehingga tautan dalam\ndan pertanyaan \"batch ini apa?\" hanya bisa dijawab dengan menarik seluruh daftar.\nVisibilitas mengikuti daftar (lintas lokasi, sengaja: panel chaos membaca batch\ndari lokasi mana pun), jadi endpoint ini tidak menambah aturan cakupan baru.",
+        "operationId": "get_batch_batches__batch_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Batch Batches  Batch Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/batches/{batch_id}/quarantine": {
+      "post": {
+        "tags": [
+          "quarantine"
+        ],
+        "summary": "Ubah Status Karantina",
+        "description": "201 saat batch baru ditahan, 200 saat dilepas/dinyatakan gagal.",
+        "operationId": "ubah_status_karantina_batches__batch_id__quarantine_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Batch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KarantinaRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Ubah Status Karantina Batches  Batch Id  Quarantine Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/receipts": {
+      "post": {
+        "summary": "Create Receipt",
+        "description": "Catat satu penerimaan barang. 201 = tersimpan; 404 = batch tidak ada.\n\nScope: barang hanya bisa diterima di dapur sendiri (ruling 2026-10-14) —\nperan SPPG yang mencoba mencatat batch milik lokasi lain dibalas 403.",
+        "operationId": "create_receipt_receipts_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReceiptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Create Receipt Receipts Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List Receipts",
+        "description": "Riwayat catatan penerimaan sebuah batch, terbaru dulu.\n\nTidak dibatasi lokasi (pengawas nasional perlu bisa membacanya), tetapi\nhanya untuk batch yang diminta — bukan papan catatan seluruh jaringan.",
+        "operationId": "list_receipts_receipts_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Batch Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 5,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response List Receipts Receipts Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/receipts/{receipt_id}/approve": {
+      "post": {
+        "summary": "Approve Receipt",
+        "description": "Setujui penerimaan → barang masuk stok (idempoten).\n\nPersetujuan menulis SATU baris `supply_records` sebesar `batch.quantity_kg`\nuntuk lokasi & komoditas batch. Overview membaca supply terbaru per lokasi,\njadi angka pasokan/gap berubah setelah ini — bukan karena UI mengarang.\n\nKlik kedua tidak menambah stok: bila catatan sudah `disetujui`, balasan\nmengembalikan baris yang sama (`sudah: true`) tanpa menulis apa pun.",
+        "operationId": "approve_receipt_receipts__receipt_id__approve_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "receipt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Receipt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Approve Receipt Receipts  Receipt Id  Approve Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/receipts/{receipt_id}/reject": {
+      "post": {
+        "summary": "Reject Receipt",
+        "description": "Tolak penerimaan dengan alasan. Tidak menulis stok.\n\nAlasan wajib: tanpa itu petugas tidak tahu apa yang harus diperbaiki dan\nriwayat hanya menyimpan \"ditolak\" tanpa sebab.",
+        "operationId": "reject_receipt_receipts__receipt_id__reject_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "receipt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Receipt Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Reject Receipt Receipts  Receipt Id  Reject Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/receipts/menunggu": {
+      "get": {
+        "summary": "List Receipts Menunggu",
+        "description": "Catatan penerimaan yang SUDAH dicatat tetapi belum diputuskan.\n\nDipisah dari daftar batch penerimaan (20 Okt 2026): layar \"Penerimaan\nbarang\" hanya menawarkan barang yang BELUM dinilai/dicatat. Begitu catatan\ndibuat, batch itu keluar dari pilihan dan pindah ke antrean ini supaya\nkepala SPPG tetap bisa menyetujui/menolak tanpa mencari batch lagi.\n\nSatu baris per batch (catatan terbaru), di-scope ke lokasi pengguna bila\npengguna punya lokasi; pemantau tanpa lokasi melihat seluruh jaringan.",
+        "operationId": "list_receipts_menunggu_receipts_menunggu_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response List Receipts Menunggu Receipts Menunggu Get"
+                }
               }
             }
           }
@@ -607,41 +1178,110 @@
       }
     },
     "/decisions": {
-      "get": {
-        "summary": "List Decisions",
-        "description": "Feed keputusan (S3-12): baris aktual, terbaru dulu, tanpa karangan.",
-        "operationId": "list_decisions_decisions_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
+      "post": {
+        "summary": "Create Decision",
+        "operationId": "create_decision_decisions_post",
         "security": [
           {
             "HTTPBearer": []
           }
-        ]
-      },
-      "post": {
-        "summary": "Create Decision",
-        "operationId": "create_decision_decisions_post",
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/DecisionCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List Decisions",
+        "description": "Feed keputusan (S3-12): baris aktual, terbaru dulu, tanpa karangan.\n\nRuling 2026-10-14: peran SPPG hanya melihat keputusan yang menyasar\nlokasinya; `bgn_monitor` melihat semuanya (read-only nasional).\n\nPaginasi (audit 21 Okt 2026, P6): `limit`/`offset` dulu diterima lalu\ndiabaikan tanpa galat, dan tidak ada `total` — pemanggil tidak bisa tahu\nberapa baris yang belum tampil. Sekarang bentuknya sama dengan `/batches`:\n`count` (panjang halaman), `total` (seluruh baris pada cakupan pengguna),\n`offset`. Tanpa `limit`, perilaku lama dipertahankan (seluruh baris).",
+        "operationId": "list_decisions_decisions_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 500,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "window",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "24h",
+                    "7d",
+                    "30d"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Jendela waktu menurut `created_at`: 24h (hari ini), 7d, 30d (bulan berjalan WIB). Tanpa parameter = seluruh riwayat.",
+              "title": "Window"
+            },
+            "description": "Jendela waktu menurut `created_at`: 24h (hari ini), 7d, 30d (bulan berjalan WIB). Tanpa parameter = seluruh riwayat."
+          }
+        ],
+        "responses": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -750,10 +1390,16 @@
         }
       }
     },
-    "/decisions/{decision_id}": {
+    "/decisions/{decision_id}/approval-summary": {
       "get": {
-        "summary": "Get Decision",
-        "operationId": "get_decision_decisions__decision_id__get",
+        "summary": "Get Approval Summary",
+        "description": "S4-04: read model kanonik approval — modal UI tidak menghitung apa pun.\n\nScope: SPPG hanya target lokasinya (O-SEC-2); bgn_monitor read-only\nboleh membaca semua. Tanpa mutation, tanpa call provider.",
+        "operationId": "get_approval_summary_decisions__decision_id__approval_summary_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "decision_id",
@@ -786,6 +1432,133 @@
             }
           }
         }
+      }
+    },
+    "/decisions/{decision_id}": {
+      "get": {
+        "summary": "Get Decision",
+        "operationId": "get_decision_decisions__decision_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Decision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/price-anomaly": {
+      "post": {
+        "summary": "Trigger Price Anomaly",
+        "description": "Event 2 — price anomaly (review-only; TANPA auto-PO).\n\n201: anomali terdeteksi → decision price_anomaly + evidence + trace.\n200: tidak ada anomali → decision_id null, tanpa write.\n409: operation_key sama dipakai untuk payload berbeda.",
+        "operationId": "trigger_price_anomaly_events_price_anomaly_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceAnomalyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/events/safety-disruption": {
+      "post": {
+        "summary": "Trigger Safety Disruption",
+        "description": "Event 3 — safety disruption (deterministik; TANPA override client).\n\n201: batch FAIL → exclude → alternatif eligible → decision\n     safety_disruption + evidence temperature + trace DETECT/OPTIMIZE.\n200: batch aman (no_disruption) → decision_id null, tanpa decision.\n409: operation_key dipakai batch lain / tidak ada alternatif eligible.\n404: batch tidak ditemukan.\nSafety dihitung server-side dari temperature_log persisted (core\nSprint 1, ambang 30 menit terkunci) — bukan dari payload browser.",
+        "operationId": "trigger_safety_disruption_events_safety_disruption_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SafetyDisruptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/auth/login": {
@@ -889,7 +1662,7 @@
     "/actions/verify": {
       "post": {
         "summary": "Verify Action",
-        "description": "Catat verdict verifier (dipanggil supervisor pipeline, bukan LLM).\n\nVerdict WAJIB tertulis ke decisions.verifier_note — nilai inilah\nyang dibaca approval matrix saat approve/execute. Verdict tidak\ndikenal ditolak 422 SEBELUM mutasi apa pun.",
+        "description": "Verifikasi independen SERVER-SIDE (O-SEC-3, plan §10).\n\nBrowser TIDAK mengirim verdict — request hanya decision_id. Server\nmenyusun ctx kanonik dari DB lalu menjalankan verifier via chain\nprovider; tanpa provider → UNAVAILABLE (fail-closed, konservatif).\nVerify di luar fase pra-approval ditolak 409 (integritas matrix §22).",
         "operationId": "verify_action_actions_verify_post",
         "requestBody": {
           "content": {
@@ -1044,12 +1817,178 @@
               }
             }
           }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/sap/purchase-orders": {
+      "get": {
+        "summary": "Daftar Purchase Order",
+        "description": "Daftar PO mock SAP yang boleh dibaca user ini (read-only).",
+        "operationId": "daftar_purchase_order_sap_purchase_orders_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "draft",
+                    "submitted",
+                    "confirmed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Saring satu status PO",
+              "title": "Status"
+            },
+            "description": "Saring satu status PO"
+          },
+          {
+            "name": "decision_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "PO milik satu keputusan",
+              "title": "Decision Id"
+            },
+            "description": "PO milik satu keputusan"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Dijepit ke 200",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Dijepit ke 200"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Daftar Purchase Order Sap Purchase Orders Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sap/purchase-orders/summary": {
+      "get": {
+        "summary": "Ringkas Purchase Order",
+        "description": "Jumlah per status + total nilai, dengan cakupan yang sama seperti daftar.",
+        "operationId": "ringkas_purchase_order_sap_purchase_orders_summary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Ringkas Purchase Order Sap Purchase Orders Summary Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/sap/purchase-orders/{po_number}/pdf": {
+      "get": {
+        "summary": "Unduh Purchase Order Pdf",
+        "description": "Unduh satu purchase order sebagai PDF, lengkap dengan dasar persetujuannya.\n\nCakupan sama dengan daftar (`core/scope.py`): PO di luar lokasi peran SPPG\ndijawab 404 — sama seperti daftar yang tidak memuatnya, supaya keberadaan\nPO lokasi lain tidak bocor lewat pesan galat.",
+        "operationId": "unduh_purchase_order_pdf_sap_purchase_orders__po_number__pdf_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "po_number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Po Number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/demo/seed": {
       "post": {
         "summary": "Seed Demo",
+        "description": "Muat 4 kasus skrip UNTUK KOTA PEMANGGIL. Idempoten per kota; `force=true`\nhanya menghapus ulang baris demo kota itu.",
         "operationId": "seed_demo_demo_seed_post",
         "requestBody": {
           "content": {
@@ -1060,6 +1999,443 @@
             }
           },
           "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Seed Demo Demo Seed Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/demo/preview": {
+      "get": {
+        "summary": "Preview Timeseries Data",
+        "description": "Pratinjau: berapa baris yang AKAN ditambah. Tidak menulis apa pun.",
+        "operationId": "preview_timeseries_data_demo_preview_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "default": "2026-09-01T00:00:00Z",
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "default": "2026-11-05T00:00:00Z",
+              "title": "End"
+            }
+          },
+          {
+            "name": "interval_hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 168,
+              "minimum": 1,
+              "default": 12,
+              "title": "Interval Hours"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Preview Timeseries Data Demo Preview Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/demo/hari-ini": {
+      "post": {
+        "summary": "Susun Hari Ini",
+        "description": "Tulis ulang satu hari operasional kota pemanggil (idempoten).\n\nDipakai sebelum demo: kartu paling atas selalu persetujuan pengiriman dari\npemasok, ditambah jalur gagal (ditolak / lewat tenggat / ditandai\nverifikator) dan dua kiriman yang sedang berjalan.",
+        "operationId": "susun_hari_ini_demo_hari_ini_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Susun Hari Ini Demo Hari Ini Post"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/demo/timeseries": {
+      "post": {
+        "summary": "Generate Timeseries Data",
+        "description": "Buat/perbarui baris demo `origin='demo'`. Idempoten.\n\n`force=true` menghapus dulu baris demo (bukan baris kanonik) supaya rentang\nbisa diganti bersih — pola yang sama dengan `POST /demo/seed`.",
+        "operationId": "generate_timeseries_data_demo_timeseries_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimeseriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Generate Timeseries Data Demo Timeseries Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/demo/timeseries/purge": {
+      "post": {
+        "summary": "Purge Timeseries Data",
+        "description": "Hapus HANYA baris deret waktu `origin='demo'`; snapshot kanonik tidak disentuh.",
+        "operationId": "purge_timeseries_data_demo_timeseries_purge_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Purge Timeseries Data Demo Timeseries Purge Post"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/demo/data-status": {
+      "get": {
+        "summary": "Get Data Status",
+        "description": "Keadaan data demo SEKARANG (baca DB, bukan ingatan klien).\n\nPanel Demo Control memakainya untuk baris status; kalau operator membuka\ntab baru atau kontainer di-restart, UI tetap jujur.",
+        "operationId": "get_data_status_demo_data_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Data Status Demo Data Status Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/demo/refresh": {
+      "post": {
+        "summary": "Refresh To Today",
+        "description": "Tombol hari demo: seeder relatif `now` + muat ulang 4 kasus skrip.\n\nAkun demo TIDAK disentuh (password tidak direset) dan baris deret waktu\ndemo TIDAK dihapus — keduanya punya tombol sendiri di panel.",
+        "operationId": "refresh_to_today_demo_refresh_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Refresh To Today Demo Refresh Post"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/demo/event1": {
+      "post": {
+        "summary": "Run Demo Event1",
+        "description": "Jalankan Event 1 penuh untuk satu komoditas + satu lokasi tujuan.\n\nCakupan lokasi ditegakkan atas lokasi TUJUAN (Ruling 2026-10-14): kepala\nSPPG hanya boleh menjalankan Event 1 untuk SPPG-nya sendiri; `bgn_monitor`\nditolak guard peran (read-only).\n\nKegagalan karena tidak ada kandidat eligible dijawab **409**, bukan 500 —\nitu keadaan domain, bukan kerusakan server.",
+        "operationId": "run_demo_event1_demo_event1_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Event1Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Run Demo Event1 Demo Event1 Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/demo/agent/run": {
+      "post": {
+        "summary": "Run Demo Agent",
+        "description": "Jalankan pipeline agent penuh untuk lokasi akun sendiri (DETECT → SUPERVISE).\n\nObjek penilaian = pemasok yang SUDAH memasok SPPG akun ini: stok batch,\npenawaran harga untuk SPPG itu, jarak pemasok→SPPG, reliabilitas, dan\nstatus pengecualian. Tidak ada pemasok dari kota lain yang ditebak.\n\nBatas jujur yang sama dengan `/demo/event1`: tidak ada approve/execute.\nKeputusan lahir `proposed` dan tetap menunggu loop approval manusia.",
+        "operationId": "run_demo_agent_demo_agent_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AgentRunRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Run Demo Agent Demo Agent Run Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/demo/agent/commodities": {
+      "get": {
+        "summary": "List Agent Commodities",
+        "description": "Pilihan dropdown komoditas — nama yang ADA di database, bukan daftar karangan.\n\nPanel demo tidak boleh menawarkan komoditas yang tidak punya data: memilihnya\nhanya akan berakhir `409 tidak ada kandidat eligible`.",
+        "operationId": "list_agent_commodities_demo_agent_commodities_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response List Agent Commodities Demo Agent Commodities Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/demo/agent/last-run": {
+      "get": {
+        "summary": "Get Last Agent Run",
+        "description": "Bukti putaran agent terakhir, dibaca ulang dari DB (tahan reload halaman).",
+        "operationId": "get_last_agent_run_demo_agent_last_run_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Last Agent Run Demo Agent Last Run Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/demo/session": {
+      "get": {
+        "summary": "Status Sesi",
+        "description": "Status sesi + hitungan mundur. Aman dipanggil berkali-kali (poling UI).",
+        "operationId": "status_sesi_demo_session_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/demo/session/start": {
+      "post": {
+        "summary": "Mulai Sesi",
+        "description": "Siapkan data demo: buat sesi, semai data, aktifkan satu jendela waktu.\n\nIdempoten terhadap klik ganda: kalau sesi masih berjalan, sesi itu yang\ndikembalikan (`created=false`) — data dan jam tidak di-reset diam-diam.",
+        "operationId": "mulai_sesi_demo_session_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/MulaiRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
         },
         "responses": {
           "200": {
@@ -1077,6 +2453,1231 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/demo/session/extend": {
+      "post": {
+        "summary": "Perpanjang Sesi",
+        "description": "Tambah waktu sesi berjalan tanpa mengganti sesi atau menyentuh data.",
+        "operationId": "perpanjang_sesi_demo_session_extend_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PerpanjangRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/demo/session/end": {
+      "post": {
+        "summary": "Akhiri Sesi",
+        "description": "Tutup sesi sekarang juga (tombol Darurat): data sesi dibersihkan.",
+        "operationId": "akhiri_sesi_demo_session_end_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/demo/template/rebuild": {
+      "post": {
+        "summary": "Bangun Ulang Template",
+        "description": "Bangun ulang seluruh data demo ke keadaan awal, tanpa menutup sesi.\n\nDipakai saat geladi berulang: setelah beberapa aksi dicoba, angka tidak\nkembali ke awal dengan sendirinya (memang begitu desainnya — data tidak\ndihapus saat sesi ditutup). Endpoint ini mem-purge baris operasional lalu\nmenyemai template lagi, dan **tidak** menyentuh jendela waktu sesi.\n\nHanya kepala SPPG: ini operasi destruktif. Permintaan kedua saat proses\nmasih berjalan ditolak 409, bukan diantrikan sampai klien kehabisan waktu.",
+        "operationId": "bangun_ulang_template_demo_template_rebuild_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/kpi": {
+      "get": {
+        "tags": [
+          "kpi"
+        ],
+        "summary": "Get Kpi",
+        "description": "KPI tujuh metrik, state available/no_data/unavailable + reason.\n\nSPPG hanya scope lokasinya (403 foreign); bgn_monitor global atau\nlokasi mana pun (read-only). Naive timestamp ditolak 422 (kontrak\nRFC3339 dengan offset eksplisit).",
+        "operationId": "get_kpi_kpi_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "periode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Kunci periode yang dihitung server (Asia/Jakarta): today | 7d | 1bulan. Tidak boleh dikirim bersama start/end.",
+              "title": "Periode"
+            },
+            "description": "Kunci periode yang dihitung server (Asia/Jakarta): today | 7d | 1bulan. Tidak boleh dikirim bersama start/end."
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          },
+          {
+            "name": "location_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Kpi Kpi Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/waste/summary": {
+      "get": {
+        "tags": [
+          "waste"
+        ],
+        "summary": "Waste Summary",
+        "description": "Ringkasan limbah + mitra pengolahan dalam `days` hari terakhir.",
+        "operationId": "waste_summary_waste_summary_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Waste Summary Waste Summary Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/waste/disposals": {
+      "post": {
+        "tags": [
+          "waste"
+        ],
+        "summary": "Catat Limbah",
+        "description": "Catat limbah → `disposal_events`. Inilah satu-satunya jalan agar\nAvoidable Food Loss bergerak tanpa menjalankan seeder.\n\nCakupan: akun SPPG hanya boleh mencatat untuk lokasinya sendiri; BGN Monitor\nwajib menyebut `location_id`. Alasan yang tidak terbaca ditolak 422 — angka\nlimbah tanpa alasan tidak bisa ditindaklanjuti.",
+        "operationId": "catat_limbah_waste_disposals_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LimbahBaru"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Catat Limbah Waste Disposals Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/surplus/allocations": {
+      "get": {
+        "tags": [
+          "surplus"
+        ],
+        "summary": "Surplus Allocations",
+        "description": "Pasangan surplus -> kekurangan lintas lokasi untuk satu komoditas.\n\nSengaja TIDAK memakai `apply_location_scope`: rencana pengalihan antar-SPPG\ntidak punya arti di dalam satu lokasi. Yang dikirim hanya pasangan (dari, ke,\nkg, jarak) — bukan tabel supply/demand.",
+        "operationId": "surplus_allocations_surplus_allocations_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "commodity",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Commodity"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 20,
+              "minimum": 1,
+              "default": 6,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Batas atas waktu baris (default: sekarang)",
+              "title": "As Of"
+            },
+            "description": "Batas atas waktu baris (default: sekarang)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agenda": {
+      "get": {
+        "tags": [
+          "agenda"
+        ],
+        "summary": "Get Agenda",
+        "description": "Agenda harian: rencana menu, kiriman, limbah, pasokan, harga, batch\nkedaluwarsa, dan keputusan per hari.",
+        "operationId": "get_agenda_agenda_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "tanggal awal (YYYY-MM-DD), hari WIB",
+              "title": "Start"
+            },
+            "description": "tanggal awal (YYYY-MM-DD), hari WIB"
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "tanggal akhir (YYYY-MM-DD), inklusif",
+              "title": "End"
+            },
+            "description": "tanggal akhir (YYYY-MM-DD), inklusif"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Agenda Agenda Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ledger/verify": {
+      "get": {
+        "tags": [
+          "ledger"
+        ],
+        "summary": "Ledger Verify",
+        "description": "Verifikasi rantai Merkle dari genesis (jujur: valid/broken_at).",
+        "operationId": "ledger_verify_ledger_verify_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Ledger Verify Ledger Verify Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/decisions/{decision_id}/dossier": {
+      "get": {
+        "tags": [
+          "dossier"
+        ],
+        "summary": "Decision Dossier",
+        "description": "Dossier bukti keputusan: address konten + tanda tangan ECDSA.\n\n- address  : hash konten (ala-CID, offline) — isi berubah → address berubah\n- signature: ECDSA-secp256k1 atas dossier; unsigned jujur bila kunci\n             SIGNING_KEY_HEX belum diset di .env\n- verify   : verifikasi mandiri signature (True/False)",
+        "operationId": "decision_dossier_decisions__decision_id__dossier_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Decision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Decision Dossier Decisions  Decision Id  Dossier Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/decisions/{decision_id}/compliance": {
+      "get": {
+        "tags": [
+          "compliance"
+        ],
+        "summary": "Decision Compliance",
+        "description": "Return persisted decision/evidence/approval/trace data plus integrity metadata.",
+        "operationId": "decision_compliance_decisions__decision_id__compliance_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Decision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Decision Compliance Decisions  Decision Id  Compliance Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/supplier-exclusions/proposals": {
+      "post": {
+        "summary": "Propose",
+        "operationId": "propose_supplier_exclusions_proposals_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/supplier-exclusions/{exclusion_id}/restore": {
+      "post": {
+        "summary": "Restore",
+        "operationId": "restore_supplier_exclusions__exclusion_id__restore_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "exclusion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Exclusion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/supplier-exclusions": {
+      "get": {
+        "summary": "Listing",
+        "description": "Register eksklusi. Ruling 2026-10-14: peran SPPG hanya melihat eksklusi\nber-scope lokasinya (parameter `scope_location_id` asing → 403, bukan\ndiabaikan diam-diam); bgn_monitor melihat semua.",
+        "operationId": "listing_supplier_exclusions_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supplier_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Supplier Id"
+            }
+          },
+          {
+            "name": "scope_location_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scope Location Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "proposed",
+                    "active",
+                    "rejected",
+                    "revoked"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suppliers": {
+      "get": {
+        "summary": "List Suppliers",
+        "description": "Daftar pemasok + profil peta (koordinat, kapasitas, sertifikasi, jarak).",
+        "operationId": "list_suppliers_suppliers_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "commodity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "nama komoditas, mis. telur",
+              "title": "Commodity"
+            },
+            "description": "nama komoditas, mis. telur"
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "nama hub pemasok, mis. Cianjur",
+              "title": "Location"
+            },
+            "description": "nama hub pemasok, mis. Cianjur"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "cari nama/alamat/kontak (case-insensitive)",
+              "title": "Q"
+            },
+            "description": "cari nama/alamat/kontak (case-insensitive)"
+          },
+          {
+            "name": "max_distance_km",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "maximum": 2000.0,
+                  "minimum": 0.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "penyaring RELEVANSI: hanya pemasok dalam radius ini dari titik rujukan (lokasi user, atau hub pada `location=`). Butuh rujukan -> 422 tanpa itu.",
+              "title": "Max Distance Km"
+            },
+            "description": "penyaring RELEVANSI: hanya pemasok dalam radius ini dari titik rujukan (lokasi user, atau hub pada `location=`). Butuh rujukan -> 422 tanpa itu."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/supplier-routes": {
+      "get": {
+        "summary": "List Supplier Routes",
+        "description": "Kiriman aktif + geometri rute jalan (bila sudah ada di cache).",
+        "operationId": "list_supplier_routes_supplier_routes_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "commodity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "nama komoditas, mis. telur",
+              "title": "Commodity"
+            },
+            "description": "nama komoditas, mis. telur"
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "nama lokasi TUJUAN (kiriman adalah data sisi tujuan). Diabaikan bila peran user terikat lokasi — cakupan user selalu menang.",
+              "title": "Location"
+            },
+            "description": "nama lokasi TUJUAN (kiriman adalah data sisi tujuan). Diabaikan bila peran user terikat lokasi — cakupan user selalu menang."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "reference_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO 8601. Kiriman dianggap aktif bila `usable_until >= ` waktu ini. Default: sekarang. Dipakai untuk meniru keadaan demo pada tanggal lain.",
+              "title": "Reference Time"
+            },
+            "description": "ISO 8601. Kiriman dianggap aktif bila `usable_until >= ` waktu ini. Default: sekarang. Dipakai untuk meniru keadaan demo pada tanggal lain."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/supplier-exclusions/context/{decision_id}": {
+      "get": {
+        "summary": "Exclusion Context",
+        "operationId": "exclusion_context_supplier_exclusions_context__decision_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Decision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Exclusion Context Supplier Exclusions Context  Decision Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/users": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List Users",
+        "operationId": "list_users_admin_users_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response List Users Admin Users Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/admin/users/{user_id}": {
+      "patch": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Update User",
+        "operationId": "update_user_admin_users__user_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Update User Admin Users  User Id  Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/locations": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List Locations",
+        "operationId": "list_locations_admin_locations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response List Locations Admin Locations Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/admin/locations/{location_id}": {
+      "patch": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Update Location",
+        "operationId": "update_location_admin_locations__location_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Location Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Update Location Admin Locations  Location Id  Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/integrations/status": {
+      "get": {
+        "summary": "Status Integrasi",
+        "description": "Papan status integrasi (read-only) — sumber: env + artefak, bukan probe.",
+        "operationId": "status_integrasi_integrations_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           }
@@ -1111,6 +3712,44 @@
   },
   "components": {
     "schemas": {
+      "AgentRunRequest": {
+        "properties": {
+          "commodity": {
+            "type": "string",
+            "title": "Commodity",
+            "default": "beras"
+          },
+          "ttl_minutes": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 1.0,
+            "title": "Ttl Minutes",
+            "default": 30
+          }
+        },
+        "type": "object",
+        "title": "AgentRunRequest",
+        "description": "Payload opsional; UI sederhana cukup memanggil tanpa body."
+      },
+      "AnalyzeRequest": {
+        "properties": {
+          "commodity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commodity"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AnalyzeRequest",
+        "description": "Body opsional /balance/analyze (ruling S4-05 p10).\n\n`commodity` = filter pipeline ke 1 komoditas (mengikuti panel).\nTidak dikirim = perilaku lama (global). `location` TIDAK memfilter\nsupply/demand — rantai pasok lintas wilayah by design (Sprint 2/3)."
+      },
       "ApproveRequest": {
         "properties": {
           "decision_id": {
@@ -1156,6 +3795,14 @@
           },
           "decision_type": {
             "type": "string",
+            "enum": [
+              "regional_balance",
+              "price_anomaly",
+              "safety_disruption",
+              "supplier_exclusion",
+              "supplier_exclusion_restoration",
+              "supplier_procurement"
+            ],
             "title": "Decision Type",
             "default": "regional_balance"
           }
@@ -1214,6 +3861,57 @@
         ],
         "title": "DeviationRequest"
       },
+      "Event1Request": {
+        "properties": {
+          "commodity": {
+            "type": "string",
+            "title": "Commodity"
+          },
+          "target_location": {
+            "type": "string",
+            "title": "Target Location"
+          },
+          "ttl_minutes": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 1.0,
+            "title": "Ttl Minutes",
+            "default": 30
+          }
+        },
+        "type": "object",
+        "required": [
+          "commodity",
+          "target_location"
+        ],
+        "title": "Event1Request",
+        "description": "Permintaan menjalankan Event 1 penuh dari panel Demo Control.\n\n`commodity` + `target_location` memakai NAMA (bukan id) karena itu yang\ndipakai pipeline rekomendasi deterministik; lokasinya diresolusi di sini\nsupaya cakupan peran bisa ditegakkan sebelum orchestrator jalan."
+      },
+      "EvidenceRef": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "batch",
+              "incident",
+              "decision"
+            ],
+            "title": "Type"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "id"
+        ],
+        "title": "EvidenceRef"
+      },
       "ExecuteRequest": {
         "properties": {
           "decision_id": {
@@ -1255,6 +3953,7 @@
         "properties": {
           "batch_id": {
             "type": "string",
+            "format": "uuid",
             "title": "Batch Id"
           },
           "as_of": {
@@ -1301,6 +4000,139 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "KarantinaRequest": {
+        "properties": {
+          "aksi": {
+            "type": "string",
+            "enum": [
+              "tahan",
+              "lepas",
+              "gagal"
+            ],
+            "title": "Aksi"
+          },
+          "alasan": {
+            "type": "string",
+            "title": "Alasan"
+          }
+        },
+        "type": "object",
+        "required": [
+          "aksi",
+          "alasan"
+        ],
+        "title": "KarantinaRequest"
+      },
+      "LimbahBaru": {
+        "properties": {
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "commodity_id": {
+            "type": "string",
+            "title": "Commodity Id"
+          },
+          "quantity_kg": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Quantity Kg"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "partner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Name"
+          },
+          "kunci": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kunci"
+          }
+        },
+        "type": "object",
+        "required": [
+          "commodity_id",
+          "quantity_kg",
+          "reason"
+        ],
+        "title": "LimbahBaru",
+        "description": "Satu kejadian limbah yang dicatat operator.\n\n`kunci` opsional membuat penulisan idempoten (mis. id keputusan); tanpa\nkunci, setiap permintaan dianggap kejadian baru — karena dua pencatatan\nbisa memang dua kejadian."
+      },
+      "LocationUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          }
+        },
+        "type": "object",
+        "title": "LocationUpdate"
       },
       "LoginRequest": {
         "properties": {
@@ -1356,6 +4188,104 @@
         ],
         "title": "LogisticsRequest"
       },
+      "MulaiRequest": {
+        "properties": {
+          "menit": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1440.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Menit",
+            "description": "Durasi sesi dalam menit; kosong = nilai bawaan server."
+          }
+        },
+        "type": "object",
+        "title": "MulaiRequest"
+      },
+      "PerpanjangRequest": {
+        "properties": {
+          "menit": {
+            "type": "integer",
+            "maximum": 240.0,
+            "minimum": 1.0,
+            "title": "Menit",
+            "default": 30
+          }
+        },
+        "type": "object",
+        "title": "PerpanjangRequest"
+      },
+      "PriceAnomalyRequest": {
+        "properties": {
+          "quote_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Quote Id"
+          },
+          "target_location_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Target Location Id"
+          },
+          "operation_key": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Operation Key"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "quote_id",
+          "target_location_id",
+          "operation_key"
+        ],
+        "title": "PriceAnomalyRequest"
+      },
+      "ProposalRequest": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "evidence_refs": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceRef"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Evidence Refs"
+          },
+          "supplier_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Supplier Id"
+          },
+          "scope_location_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Scope Location Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reason",
+          "evidence_refs",
+          "supplier_id",
+          "scope_location_id"
+        ],
+        "title": "ProposalRequest"
+      },
       "ProposeRequest": {
         "properties": {
           "decision_id": {
@@ -1376,18 +4306,98 @@
             "title": "Supplier Id"
           },
           "material_number": {
-            "type": "string",
-            "maxLength": 64,
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Material Number"
           }
         },
         "type": "object",
         "required": [
-          "decision_id",
-          "material_number"
+          "decision_id"
         ],
         "title": "ProposeRequest"
+      },
+      "ReasonRequest": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "evidence_refs": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceRef"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Evidence Refs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reason",
+          "evidence_refs"
+        ],
+        "title": "ReasonRequest"
+      },
+      "ReceiptRequest": {
+        "properties": {
+          "batch_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Batch Id"
+          },
+          "checked": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Checked"
+          },
+          "other_note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Other Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "batch_id"
+        ],
+        "title": "ReceiptRequest"
+      },
+      "RejectRequest": {
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "note"
+        ],
+        "title": "RejectRequest"
       },
       "ReproposeRequest": {
         "properties": {
@@ -1473,10 +4483,50 @@
         ],
         "title": "SafeDeliveredRequest"
       },
+      "SafetyDisruptionRequest": {
+        "properties": {
+          "batch_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Batch Id"
+          },
+          "target_location_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Target Location Id"
+          },
+          "operation_key": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Operation Key"
+          },
+          "previous_decision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Decision Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "batch_id",
+          "target_location_id",
+          "operation_key"
+        ],
+        "title": "SafetyDisruptionRequest"
+      },
       "SafetyRequest": {
         "properties": {
           "batch_id": {
             "type": "string",
+            "format": "uuid",
             "title": "Batch Id"
           }
         },
@@ -1496,6 +4546,63 @@
         },
         "type": "object",
         "title": "SeedRequest"
+      },
+      "TimeseriesRequest": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start",
+            "default": "2026-09-01T00:00:00Z"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "End",
+            "default": "2026-11-05T00:00:00Z"
+          },
+          "interval_hours": {
+            "type": "integer",
+            "title": "Interval Hours",
+            "default": 12
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "TimeseriesRequest"
+      },
+      "UserUpdate": {
+        "properties": {
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          }
+        },
+        "type": "object",
+        "title": "UserUpdate"
       },
       "ValidationError": {
         "properties": {
@@ -1536,16 +4643,12 @@
             "type": "string",
             "format": "uuid",
             "title": "Decision Id"
-          },
-          "verdict": {
-            "type": "string",
-            "title": "Verdict"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
-          "decision_id",
-          "verdict"
+          "decision_id"
         ],
         "title": "VerifyRequest"
       }

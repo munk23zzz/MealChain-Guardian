@@ -32,6 +32,7 @@ from app.models import (
     Supplier,
     SupplyRecord,
 )
+from app.seed.demo_credentials import AkunDemo, DemoCredentialError, resolve_demo_password
 from app.seed.supplier_profile import derive_supplier_profiles
 
 SEED_PATH = Path(os.environ.get("SEED_PATH", "/data/seed/sprint1_seed.json"))
@@ -708,27 +709,24 @@ async def _load_p6_facts(session, rows: dict, loc_by_name, com_by_name,
 # UNAVAILABLE tidak bisa didemokan. bgn_monitor tetap nasional (tanpa lokasi).
 # ---------------------------------------------------------------------------
 
-DEMO_USERS = [
+_AKUN_DEMO_MENTAH = [
     {
         "email": "sppg.head@demo.local",
         "name": "SPPG Head Demo",
         "role": "sppg_head",
         "location": "Jakarta",
-        "password": "Demo#SPPG2026",
     },
     {
         "email": "sppg.nutritionist@demo.local",
         "name": "SPPG Nutritionist Demo",
         "role": "sppg_nutritionist",
         "location": "Jakarta",  # satu SPPG dengan kepala demo (Ruling 2026-10-14)
-        "password": "Demo#Nut2026",
     },
     {
         "email": "bgn.monitor@demo.local",
         "name": "BGN Monitor Demo",
         "role": "bgn_monitor",
         "location": None,
-        "password": "Demo#BGN2026",
     },
     # Keputusan produk 3A (18 Okt 2026): setiap kota yang menyimpan riwayat demo
     # punya approver SENDIRI. Tanpa ini, keputusan bertarget Bandung/Surabaya
@@ -739,30 +737,30 @@ DEMO_USERS = [
         "name": "SPPG Head Bandung Demo",
         "role": "sppg_head",
         "location": "Bandung",
-        "password": "Demo#SPPG2026",
     },
     {
         "email": "sppg.nutritionist.bandung@demo.local",
         "name": "SPPG Nutritionist Bandung Demo",
         "role": "sppg_nutritionist",
         "location": "Bandung",
-        "password": "Demo#Nut2026",
     },
     {
         "email": "sppg.head.surabaya@demo.local",
         "name": "SPPG Head Surabaya Demo",
         "role": "sppg_head",
         "location": "Surabaya",
-        "password": "Demo#SPPG2026",
     },
     {
         "email": "sppg.nutritionist.surabaya@demo.local",
         "name": "SPPG Nutritionist Surabaya Demo",
         "role": "sppg_nutritionist",
         "location": "Surabaya",
-        "password": "Demo#Nut2026",
     },
 ]
+
+# Satu pintu: pembacaan `akun["password"]` diselesaikan lewat
+# `resolve_demo_password` (guard DEMO_MODE), bukan literal di dalam dict.
+DEMO_USERS: list[AkunDemo] = [AkunDemo(akun) for akun in _AKUN_DEMO_MENTAH]
 
 
 def ensure_demo_users() -> None:
@@ -775,6 +773,11 @@ async def _ensure_demo_users_async() -> None:
 
     from app.models import User
 
+    # Fail-fast SEBELUM menyentuh database: bila kredensial demo tidak
+    # diizinkan (DEMO_MODE mati dan DEMO_PASSWORD_<ROLE> tidak disuplai),
+    # seed berhenti tanpa menulis apa pun (temuan D-01).
+    sandi_demo = {u["email"]: resolve_demo_password(u["role"]) for u in DEMO_USERS}
+
     engine = create_engine(_seed_database_url())
     try:
         session_maker = create_session_maker(engine)
@@ -785,8 +788,12 @@ async def _ensure_demo_users_async() -> None:
             }
             for u in DEMO_USERS:
                 uid = stable_uuid("user", u["email"])
+                # Password datang dari `resolve_demo_password` — bukan literal
+                # di daftar ini. Seed menolak berjalan bila DEMO_MODE tidak
+                # aktif dan operator tidak menyuplai DEMO_PASSWORD_<ROLE>
+                # (temuan D-01, 25 Okt 2026).
                 digest = bcrypt.hashpw(
-                    u["password"].encode(), bcrypt.gensalt()
+                    sandi_demo[u["email"]].encode(), bcrypt.gensalt()
                 ).decode()
                 await session.merge(
                     User(
@@ -835,9 +842,23 @@ def main() -> None:
             "(Roy 2026-10-09): 2026-10-08T12:00:00+00:00 — REF lain "
             "menduplikasi baris (id stable_uuid bergantung REF)."
         )
+    if args.with_demo_users:
+        # Fail-fast paling awal: bila kredensial demo tidak diizinkan, jangan
+        # menulis data apa pun lebih dulu (temuan D-01).
+        try:
+            for _u in DEMO_USERS:
+                resolve_demo_password(_u["role"])
+        except DemoCredentialError as exc:
+            raise SystemExit(f"[seed] {exc}") from exc
+
     counts = asyncio.run(load_seed(ref))
     if args.with_demo_users:
-        ensure_demo_users()
+        try:
+            ensure_demo_users()
+        except DemoCredentialError as exc:
+            # Pesan untuk operator, bukan traceback: seed berhenti sebelum
+            # menulis apa pun (temuan D-01).
+            raise SystemExit(f"[seed] {exc}") from exc
         print("Demo users siap (3 role, idempoten).")
     if args.with_demo_suppliers:
         from app.seed.suppliers_demo import seed_demo_suppliers

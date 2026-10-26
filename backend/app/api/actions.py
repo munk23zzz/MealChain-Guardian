@@ -23,6 +23,10 @@ from app.api.dependencies import get_db
 from app.core.approval_matrix import approval_requirement, evaluate_approvals
 from app.core.decision_validity import is_decision_valid
 from app.core.po_number import nomor_po
+from app.core.safety_gate import (
+    batch_blokir_eksekusi,
+    penghalang_sumber,
+)
 from app.core.scope import assert_in_scope
 from app.models import (
     AgentTrace,
@@ -273,7 +277,9 @@ async def _verifier_ctx(
     }
 
 
-async def _dispatch_bound_batches(db: AsyncSession, decision: Decision) -> list[dict]:
+async def _dispatch_bound_batches(
+    db: AsyncSession, decision: Decision
+) -> tuple[list[dict], list[dict]]:
     """Eksekusi keputusan pasokan = barang BERANGKAT.
 
     Kenapa ada (24 Okt 2026): `POST /actions/execute` dulu hanya mengubah status
@@ -290,7 +296,7 @@ async def _dispatch_bound_batches(db: AsyncSession, decision: Decision) -> list[
         "supplier_exclusion_restoration",
         "price_anomaly",
     }:
-        return []
+        return [], []
 
     baris = (
         await db.execute(
@@ -307,50 +313,57 @@ async def _dispatch_bound_batches(db: AsyncSession, decision: Decision) -> list[
             except (ValueError, TypeError):
                 continue
     if not id_batch:
-        return []
+        return [], []
 
     batch = (
         (await db.execute(select(Batch).where(Batch.id.in_(id_batch)))).scalars().all()
     )
     sekarang = _now_utc()
     dikirim: list[dict] = []
+    ditahan: list[dict] = []
     for b in batch:
         if b.dispatched_at is not None:
             continue
+        # Dulu `usable_until` yang sudah lewat DITULIS ULANG menjadi
+        # `sekarang + 6 jam` sehingga barang kedaluwarsa bisa diberangkatkan
+        # (temuan A-01/F-06). Sekarang batch yang tidak lolos gerbang
+        # keselamatan tidak diberangkatkan dan tidak diberi tenggat baru.
+        alasan = batch_blokir_eksekusi(
+            safety_status=b.safety_status,
+            quarantine_status=b.quarantine_status,
+            usable_until=b.usable_until,
+            temperature_log=b.temperature_log,
+            sekarang=sekarang,
+        )
+        if alasan is not None:
+            ditahan.append({"batch_id": str(b.id), "alasan": alasan})
+            continue
         b.dispatched_at = sekarang
-        if b.usable_until is None or b.usable_until < sekarang:
-            b.usable_until = sekarang + timedelta(hours=6)
         dikirim.append({"batch_id": str(b.id), "dispatched_at": sekarang.isoformat()})
-    return dikirim
+    return dikirim, ditahan
 
 
 async def _source_batches_still_safe(db: AsyncSession, decision: Decision) -> bool:
-    """O-EVENT-2 (plan §22): revalidasi safety saat eksekusi.
+    """Revalidasi safety saat eksekusi — SATU definisi dengan `can_execute`.
 
-    Batch sumber = batch di lokasi sumber decision dengan komoditas yang
-    sama. Bila SEMUA batch sumber kini FAIL → decision tidak boleh
-    dieksekusi walau approval matrix sudah satisfied (safety hard stop;
-    tanpa FK baru, tanpa migration). Decision tanpa lokasi/komoditas
-    sumber (mis. price_anomaly) tidak direvalidasi → True.
+    Versi pertama perbaikan (25 Okt 2026) menuntut SEMUA batch lokasi+komoditas
+    berstatus `pass`. Akibatnya satu batch `pending` yang tak terkait memblokir
+    eksekusi selamanya (seed kanonik: Jakarta/ayam `['fail','pass']`,
+    Surabaya/telur, Medan/ayam) dan `can_execute` di approval-summary — yang
+    hanya melihat `fail` — tidak lagi sejalan.
+
+    Sekarang aturan diambil dari `penghalang_sumber` dan himpunan batch dari
+    `batch_sumber_transfer`; keduanya dipakai juga oleh `supplier_eligibility`,
+    jadi paritas UI↔API bukan hasil kebetulan. Decision tanpa lokasi/komoditas
+    sumber (mis. price_anomaly) tidak direvalidasi.
     """
     if decision.source_location_id is None or decision.commodity_id is None:
         return True
-    batches = (
-        (
-            await db.execute(
-                select(Batch).where(
-                    Batch.location_id == decision.source_location_id,
-                    Batch.commodity_id == decision.commodity_id,
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-    if not batches:
-        return True
-    # Cukup satu batch aman → eksekusi tetap mungkin; semua FAIL → blokir.
-    return any((b.safety_status or "pending") != "fail" for b in batches)
+
+    from app.services.supplier_eligibility import batch_sumber_transfer
+
+    batches = await batch_sumber_transfer(db, decision)
+    return penghalang_sumber(batches, sekarang=_now_utc()) is None
 
 
 def _now_utc() -> datetime:
@@ -866,7 +879,7 @@ async def execute_action(
     )
     # Eksekusi = barang berangkat: batch terikat diberi `dispatched_at` supaya
     # peta menampilkan truk yang benar-benar jalan setelah disetujui.
-    dikirim = await _dispatch_bound_batches(db, decision)
+    dikirim, ditahan = await _dispatch_bound_batches(db, decision)
     # P1 Merkle ledger: eksekusi = block append-only (bukti PO terbit).
     await append_block(
         db,
@@ -889,6 +902,10 @@ async def execute_action(
         "executed_by": str(user.id),
         "executed_at": _now_utc().isoformat(),
         "dikirim": dikirim,
+        # Batch terikat yang TIDAK diberangkatkan karena gagal gerbang
+        # keselamatan (kedaluwarsa/karantina/status belum pass/bukti suhu
+        # kurang). Ditampilkan supaya UI tidak mengaku semua barang jalan.
+        "ditahan": ditahan,
     }
 
 

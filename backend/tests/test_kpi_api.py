@@ -237,3 +237,84 @@ def test_kpi_read_idempotent(scope_ctx, client):
     b1, b2 = r1.json(), r2.json()
     b1.pop("computed_at"), b2.pop("computed_at")
     assert b1 == b2
+
+
+# ------------------------------------------------- periode dihitung server
+# Sejak langkah periode-server, klien mengirim KUNCI periode dan backend
+# menghitung rentangnya sendiri dalam hari kalender Asia/Jakarta. Tes di bawah
+# mengunci kontrak itu: envelope menyebut kunci/label/zona, awal selalu tengah
+# malam WIB, dan kombinasi yang membingungkan ditolak 422 — bukan ditafsirkan.
+
+
+def _wib():
+    return timezone(timedelta(hours=7))
+
+
+def test_kpi_periode_today_envelope(scope_ctx, client):
+    r = client.get(
+        "/kpi?periode=today",
+        headers={"Authorization": f"Bearer {scope_ctx['head']}"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["period"]["key"] == "today"
+    assert body["period"]["label"] == "Hari ini"
+    assert body["period"]["timezone"] == "Asia/Jakarta"
+    awal = datetime.fromisoformat(body["period"]["start"])
+    akhir = datetime.fromisoformat(body["period"]["end"])
+    assert awal.astimezone(_wib()).strftime("%H:%M:%S") == "00:00:00"
+    assert awal <= akhir
+    assert len(body["metrics"]) == 7
+
+
+def test_kpi_periode_tujuh_hari_mulai_enam_hari_lalu(scope_ctx, client):
+    r = client.get(
+        "/kpi?periode=7d",
+        headers={"Authorization": f"Bearer {scope_ctx['head']}"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    awal = datetime.fromisoformat(body["period"]["start"]).astimezone(_wib())
+    akhir = datetime.fromisoformat(body["period"]["end"]).astimezone(_wib())
+    assert awal.strftime("%H:%M:%S") == "00:00:00"
+    assert (akhir.date() - awal.date()).days == 6
+
+
+def test_kpi_periode_bulan_berjalan(scope_ctx, client):
+    r = client.get(
+        "/kpi?periode=1bulan",
+        headers={"Authorization": f"Bearer {scope_ctx['head']}"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    awal = datetime.fromisoformat(body["period"]["start"]).astimezone(_wib())
+    assert awal.day == 1
+    assert awal.strftime("%H:%M:%S") == "00:00:00"
+    assert body["period"]["label"] == "1 bulan"
+
+
+def test_kpi_periode_tak_dikenal_422(scope_ctx, client):
+    r = client.get(
+        "/kpi?periode=24h",
+        headers={"Authorization": f"Bearer {scope_ctx['monitor']}"},
+    )
+    assert r.status_code == 422
+    assert "periode" in r.text.lower()
+
+
+def test_kpi_periode_dan_rentang_eksplisit_422(scope_ctx, client):
+    """Dua sumber rentang sekaligus = ambigu; ditolak, bukan dipilih diam-diam."""
+    r = client.get(
+        f"/kpi?periode=today&{_qs()}",
+        headers={"Authorization": f"Bearer {scope_ctx['monitor']}"},
+    )
+    assert r.status_code == 422
+
+
+def test_kpi_tanpa_periode_dan_tanpa_rentang_422(scope_ctx, client):
+    r = client.get(
+        "/kpi",
+        headers={"Authorization": f"Bearer {scope_ctx['monitor']}"},
+    )
+    assert r.status_code == 422
+

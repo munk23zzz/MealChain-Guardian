@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import subprocess
 import sys
 from datetime import datetime
@@ -46,7 +47,10 @@ def _semai_dasar(reference_time: str, *, skip_routes: bool) -> None:
     if skip_routes:
         perintah.append("--skip-routes")
     print("+ " + " ".join(perintah[1:]), flush=True)
-    subprocess.run(perintah, check=True)
+    # Seeder kanonik ini memang menyalakan data demo, jadi DEMO_MODE=true
+    # diberikan eksplisit (temuan D-01: password demo tidak boleh dipasang
+    # tanpa pernyataan bahwa ini lingkungan demo).
+    subprocess.run(perintah, check=True, env={**os.environ, "DEMO_MODE": "true"})
 
 
 async def _deret_waktu() -> dict:

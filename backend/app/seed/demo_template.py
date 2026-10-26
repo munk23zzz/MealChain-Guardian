@@ -64,6 +64,68 @@ from app.services import demo_session as sesi
 
 KOTA_TEMPLATE = ("Jakarta", "Bandung", "Surabaya")
 
+#: Stok yang sengaja dibuat MENDEKATI batas layak.
+#:
+#: Kenapa ada (25 Okt 2026): grafik "Kecukupan pasokan" punya lensa Kuantitas
+#: dan Kesegaran. Kesegaran hanya menghitung batch dengan sisa masa layak
+#: > 48 jam. Seluruh batch `pass` di template lama masih >48 jam (ayam 49–76
+#: jam, telur ~400 jam, beras berbulan-bulan), sehingga 39 dari 40 kombinasi
+#: lokasi×komoditas menampilkan angka yang PERSIS sama di kedua lensa — tombol
+#: lensa terasa rusak. Tiap kota demo menyisakan dua batch di jendela ≤48 jam
+#: supaya selisihnya terlihat, dan ceritanya masuk akal: stok lama yang harus
+#: dipakai lebih dulu.
+#:
+#: (lokasi, komoditas, sisa jam)
+STOK_MENDEKATI_BATAS: tuple[tuple[str, str, int], ...] = (
+    ("Jakarta", "wortel", 28),
+    ("Bandung", "ayam", 20),
+    ("Bandung", "wortel", 33),
+    ("Surabaya", "ayam", 16),
+    ("Surabaya", "wortel", 36),
+)
+
+
+def umur_simpan_jam(komoditas: str) -> float:
+    """Umur simpan satu komoditas, jam. Sumbernya setting yang sama dengan
+    `recommendation_service`, supaya `harvested_at` + umur simpan = `usable_until`
+    di kedua tempat."""
+    hari = {
+        "telur": settings.shelf_life_days_telur,
+        "ayam": settings.shelf_life_days_ayam,
+        "wortel": settings.shelf_life_days_wortel,
+        "beras": settings.shelf_life_days_beras,
+    }.get(komoditas)
+    if hari is None:
+        raise ValueError(f"komoditas tanpa umur simpan: {komoditas}")
+    return float(hari) * 24
+
+
+def rencana_stok_mendekati_batas(now: datetime) -> list[dict]:
+    """Hitung seluruh kolom waktu untuk tiap target — fungsi murni.
+
+    Tanggal panen TIDAK dibiarkan di tempatnya. `usable_until` yang dimundurkan
+    tanpa memundurkan `harvested_at` akan bertentangan dengan
+    `recommendation_service.compute_freshness_score` (yang menghitung umur dari
+    tanggal panen + umur simpan), sehingga panel rekomendasi bisa menulis
+    "masih 3 hari" untuk batch yang grafiknya sudah ≤48 jam.
+    """
+    rencana: list[dict] = []
+    for lokasi, komoditas, sisa_jam in STOK_MENDEKATI_BATAS:
+        umur = umur_simpan_jam(komoditas)
+        usable = now + timedelta(hours=sisa_jam)
+        rencana.append(
+            {
+                "lokasi": lokasi,
+                "komoditas": komoditas,
+                "sisa_jam": sisa_jam,
+                "usable_until": usable,
+                "harvested_at": usable - timedelta(hours=umur),
+                "freshness_score": Decimal(str(round(sisa_jam / umur, 2))),
+            }
+        )
+    return rencana
+
+
 
 def _uid(*bagian: str) -> uuid.UUID:
     """Id deterministik supaya template bisa dibangun ulang tanpa menggandakan."""
@@ -230,6 +292,32 @@ async def _semai_karantina(db: AsyncSession, now: datetime) -> dict:
     }
 
 
+def pilih_batch_penerimaan(pending: list, lulus: list) -> list:
+    """Pilih maksimal dua batch: satu `pending` + satu `pass`.
+
+    Alasan: gate penerimaan (F-01) menolak menerima barang dari batch yang
+    belum `pass`. Demo butuh KEDUANYA — satu penerimaan yang bisa disetujui
+    (stok bergerak) dan satu yang ditolak dengan alasan jelas.
+
+    Murni (tanpa DB) supaya kontrak ini bisa diuji tanpa infrastruktur.
+    Fallback menjaga perilaku lama: bila hanya ada satu jenis, ambil dua dari
+    jenis itu; bila kosong, kembalikan daftar kosong.
+    """
+    terpilih: list = []
+    if pending:
+        terpilih.append(pending[0])
+    if lulus:
+        terpilih.append(lulus[0])
+    if len(terpilih) < 2:
+        sisa = [b for b in list(pending) + list(lulus) if all(b.id != x.id for x in terpilih)]
+        terpilih.extend(sisa[: 2 - len(terpilih)])
+    unik: list = []
+    for b in terpilih:
+        if all(b.id != x.id for x in unik):
+            unik.append(b)
+    return unik
+
+
 async def _semai_penerimaan(db: AsyncSession, now: datetime) -> dict:
     """Dua penerimaan 'menunggu' — bahan angka bergerak di tab Keamanan Pangan."""
     jakarta = await _lokasi(db, "Jakarta")
@@ -237,18 +325,27 @@ async def _semai_penerimaan(db: AsyncSession, now: datetime) -> dict:
     if jakarta is None or kepala is None:
         return {"dilewati": "Jakarta / akun kepala tidak ada"}
 
-    siap = list(
+    belum_lulus = list(
         (
             await db.execute(
                 select(Batch)
                 .where(Batch.location_id == jakarta.id, Batch.safety_status == "pending")
                 .order_by(Batch.id)
-                .limit(2)
             )
         ).scalars()
     )
+    lulus = list(
+        (
+            await db.execute(
+                select(Batch)
+                .where(Batch.location_id == jakarta.id, Batch.safety_status == "pass")
+                .order_by(Batch.id)
+            )
+        ).scalars()
+    )
+    siap = pilih_batch_penerimaan(belum_lulus, lulus)
     if not siap:
-        # Tidak ada batch pending: pakai dua batch apa pun milik Jakarta.
+        # Tidak ada batch pending/pass: pakai dua batch apa pun milik Jakarta.
         siap = list(
             (
                 await db.execute(
@@ -279,6 +376,58 @@ async def _semai_penerimaan(db: AsyncSession, now: datetime) -> dict:
     await db.flush()
     return {"dibuat": dibuat}
 
+
+
+async def _semai_stok_mendekati_batas(db: AsyncSession, now: datetime) -> dict:
+    """Sisakan satu batch per target di jendela ≤48 jam (lihat STOK_MENDEKATI_BATAS).
+
+    Batch yang dipilih adalah batch `pass` TERKECIL di lokasi itu: paling sedikit
+    mengubah angka pasokan, dan yang kecil memang yang paling masuk akal sebagai
+    sisa stok lama. Waktu panen ikut dimundurkan supaya
+    `harvested_at + umur simpan = usable_until` tetap benar.
+    """
+    hasil: dict = {}
+    for item in rencana_stok_mendekati_batas(now):
+        kunci = f"{item['lokasi']}/{item['komoditas']}"
+        lokasi = await _lokasi(db, item["lokasi"])
+        if lokasi is None:
+            hasil[kunci] = "lokasi tidak ada"
+            continue
+        komoditas_id = (
+            await db.execute(select(Commodity.id).where(Commodity.name == item["komoditas"]))
+        ).scalar_one_or_none()
+        if komoditas_id is None:
+            hasil[kunci] = "komoditas tidak ada"
+            continue
+        batch_id = (
+            await db.execute(
+                select(Batch.id)
+                .where(
+                    Batch.location_id == lokasi.id,
+                    Batch.commodity_id == komoditas_id,
+                    Batch.safety_status == "pass",
+                    Batch.quarantine_status.in_(("none", "released")),
+                    Batch.usable_until >= now,
+                )
+                .order_by(Batch.quantity_kg.asc(), Batch.id)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if batch_id is None:
+            hasil[kunci] = "tanpa batch layak"
+            continue
+        await db.execute(
+            update(Batch)
+            .where(Batch.id == batch_id)
+            .values(
+                usable_until=item["usable_until"],
+                harvested_at=item["harvested_at"],
+                freshness_score=item["freshness_score"],
+            )
+        )
+        hasil[kunci] = str(batch_id)
+    await db.flush()
+    return hasil
 
 
 async def _rapikan_kiriman_jakarta(db: AsyncSession, now: datetime) -> dict:
@@ -902,6 +1051,59 @@ async def _semai_eksklusi(db: AsyncSession, now: datetime) -> dict:
     return hasil
 
 
+def _ribuan(nilai: float, sen: int = 0) -> str:
+    """Format angka gaya Indonesia: titik ribuan, koma desimal.
+
+    `f"{x:,.2f}".replace(",", ".")` mengubah koma DESIMAL ikut menjadi titik
+    (terukur: "Rp22.080.862.39"), jadi pemisahnya dirakit manual.
+    """
+    teks = f"{nilai:,.{sen}f}" if sen else f"{nilai:,.0f}"
+    bulat, _, desimal = teks.replace(",", "").partition(".")
+    bulat = f"{int(bulat):,}".replace(",", ".")
+    return f"{bulat},{desimal}" if desimal else bulat
+
+
+def _ringkas_jejak(nama: str, putusan: Decision) -> dict[str, object]:
+    """Isi `output_summary` jejak demo — FAKTA keputusan, bukan teks template.
+
+    Audit data 26 Okt 2026: jejak ini dulu berbunyi "Langkah DETECT (template
+    status demo)." sehingga tab Agent Log menampilkan teks template sebagai
+    jejak penalaran, dan `sdc` di trace tidak sama dengan SDC keputusannya.
+    Sekarang tiap langkah meringkas angka keputusan yang benar-benar tersimpan
+    dan menandai asalnya (`sumber`). Kunci `status`/`summary` sama dengan yang
+    dibaca UI (`frontend/lib/agent-swarm.ts`).
+    """
+    kg = (
+        f"{_ribuan(float(putusan.quantity_kg))} kg"
+        if putusan.quantity_kg is not None
+        else "berat tidak diketahui"
+    )
+    if nama.upper() == "DECIDE":
+        sdc = (
+            f"Rp{_ribuan(float(putusan.safe_delivered_cost), sen=2)}"
+            if putusan.safe_delivered_cost is not None
+            else "SDC belum dihitung"
+        )
+        keluaran: dict[str, object] = {
+            "status": "completed",
+            "summary": (
+                f"Putusan {putusan.decision_type} untuk {kg}; {sdc}; "
+                f"status {putusan.status}."
+            ),
+            "sumber": "template demo",
+        }
+        if putusan.safe_delivered_cost is not None:
+            keluaran["sdc"] = float(putusan.safe_delivered_cost)
+        return keluaran
+    if nama.upper() == "DETECT":
+        ringkas = f"Memeriksa {putusan.decision_type} untuk {kg}; status {putusan.status}."
+    elif nama.upper() == "PREDICT":
+        ringkas = f"Memproyeksikan dampak {putusan.decision_type} pada {kg}."
+    else:
+        ringkas = f"Langkah {nama} untuk {putusan.decision_type} ({kg})."
+    return {"status": "completed", "summary": ringkas, "sumber": "template demo"}
+
+
 async def _semai_status_tambahan(db: AsyncSession, now: datetime) -> dict:
     """Dua status yang belum terwakili di template (audit 21 Okt 2026, P4).
 
@@ -951,7 +1153,8 @@ async def _semai_status_tambahan(db: AsyncSession, now: datetime) -> dict:
                     step_name=nama,
                     agent_name=agen,
                     input_summary={"decision_type": putusan.decision_type},
-                    output_summary={"catatan": f"Langkah {nama} (template status demo)."},
+                    output_summary=_ringkas_jejak(nama, putusan),
+                    duration_ms=90 + 30 * urutan,
                     step_at=dasar + timedelta(minutes=2 * urutan),
                 )
             )
@@ -1182,13 +1385,17 @@ async def _semai_bukti_dan_rantai(db: AsyncSession, now: datetime) -> dict:
             blok += 1
 
     # Approval + bukti untuk keputusan operasional yang sudah dieksekusi.
+    # 26 Okt 2026: dulu loop ini hanya menangani `regional_balance`, sehingga
+    # keputusan `supplier_procurement`/`supplier_exclusion` berstatus `executed`
+    # lahir TANPA baris `approvals` — melanggar invarian "executed tanpa
+    # persetujuan = 0" (terukur: 2 baris merah setelah "Siapkan data demo").
     ditambah_approval = 0
     ditambah_bukti = 0
     ditambah_po = 0
     for d in keputusan:
-        if d.status != "executed" or d.decision_type != "regional_balance":
+        if d.status != "executed":
             continue
-        target = d.target_location_id
+        target = d.target_location_id or d.source_location_id
         if target is None:
             continue
         kepala = await _pengguna_lokasi(db, target, "sppg_head")
@@ -1214,10 +1421,24 @@ async def _semai_bukti_dan_rantai(db: AsyncSession, now: datetime) -> dict:
                     )
                 )
                 ditambah_approval += 1
-        for jenis, isi in (
-            ("sap_purchase_order", {"po_number": f"MC-TEMPLATE-{str(d.id)[:8].upper()}"}),
-            ("human_inspection", {"inspeksi": "gudang", "hasil": "sesuai"}),
-        ):
+        # Bukti PO hanya kalau PO-nya memang bisa dibuat: keputusan eksklusi
+        # pemasok tidak punya komoditas/berat, sehingga dulu lahir PO 0 kg
+        # bermaterial "MAT-UMUM" sambil tetap menulis bukti `sap_purchase_order`
+        # (audit data 26 Okt 2026).
+        berpo = (
+            d.supplier_id is not None
+            and d.commodity_id is not None
+            and d.quantity_kg is not None
+            and d.quantity_kg > 0
+        )
+        bukti_jenis: list[tuple[str, dict]] = [
+            ("human_inspection", {"inspeksi": "gudang", "hasil": "sesuai"})
+        ]
+        if berpo:
+            bukti_jenis.insert(
+                0, ("sap_purchase_order", {"po_number": f"MC-TEMPLATE-{str(d.id)[:8].upper()}"})
+            )
+        for jenis, isi in bukti_jenis:
             kunci = _uid("bukti", str(d.id), jenis)
             if await db.get(DecisionEvidence, kunci) is None:
                 db.add(
@@ -1238,7 +1459,7 @@ async def _semai_bukti_dan_rantai(db: AsyncSession, now: datetime) -> dict:
         # meski tabel berisi 16 PO impor). Baris di sini adalah PO yang LAHIR
         # dari keputusan, jadi nomornya memakai `nomor_po` yang sama dengan
         # eksekusi nyata.
-        if d.supplier_id is not None:
+        if berpo:
             nama_komoditas = (
                 await db.execute(
                     select(Commodity.name).where(Commodity.id == d.commodity_id)
@@ -1269,7 +1490,9 @@ async def _semai_bukti_dan_rantai(db: AsyncSession, now: datetime) -> dict:
                         id=kunci_po,
                         po_number=nomor,
                         supplier_id=d.supplier_id,
-                        material_number=f"MAT-{(nama_komoditas or 'UMUM').upper()[:4]}",
+                        # Nama komoditas penuh (sama dengan `actions.py`):
+                        # potongan 4 huruf dulu menghasilkan kode sampah.
+                        material_number=f"MAT-{(nama_komoditas or 'UMUM').upper()}",
                         ordered_quantity=kuantitas,
                         price=harga,
                         decision_id=d.id,
@@ -1287,6 +1510,89 @@ async def _semai_bukti_dan_rantai(db: AsyncSession, now: datetime) -> dict:
         "po": ditambah_po,
     }
 
+
+
+async def _selaraskan_sdc_jejak(db: AsyncSession) -> dict:
+    """`sdc` di jejak agent = SDC final keputusan, untuk SELURUH keputusan.
+
+    Audit data 26 Okt 2026: jejak ditulis dengan angka SDC tulisan tangan
+    (16.206.000 / 14.787.096,28) sementara `decisions.safe_delivered_cost`
+    berasal dari perhitungan bahan yang lain (15.739.132,38 / 22.097.242,39).
+    Dua angka biaya untuk satu keputusan membuat tab Agent Log bertentangan
+    dengan kartu rekomendasi, dan invariannya tidak bisa diuji.
+
+    Idempoten: hanya menulis ulang baris yang memang berbeda.
+    """
+    baris = (
+        await db.execute(
+            select(AgentTrace, Decision)
+            .join(Decision, Decision.id == AgentTrace.decision_id)
+            .where(AgentTrace.output_summary.isnot(None))
+            .where(Decision.safe_delivered_cost.isnot(None))
+        )
+    ).all()
+    diselaraskan = 0
+    for jejak, putusan in baris:
+        keluaran = jejak.output_summary or {}
+        if "sdc" not in keluaran:
+            continue
+        target = float(putusan.safe_delivered_cost)
+        if abs(float(keluaran["sdc"]) - target) <= 1:
+            continue
+        jejak.output_summary = {**keluaran, "sdc": target}
+        diselaraskan += 1
+    await db.flush()
+    return {"sdc_jejak_diselaraskan": diselaraskan}
+
+
+async def _pastikan_penolakan_tercatat(db: AsyncSession, now: datetime) -> dict:
+    """Setiap keputusan `rejected` punya baris `approvals` dengan `approved=false`.
+
+    Audit data 26 Okt 2026: 9 keputusan ditolak di Jakarta (6
+    `supplier_procurement`, 3 `safety_disruption`) tidak punya SATU pun baris
+    approval, sehingga UI menampilkan "Ditolak" tanpa aktor — dan invarian
+    "tidak ada penolakan tanpa manusia yang mencatat" tidak bisa dibuktikan.
+    Penyemai lama menulis status `rejected` langsung tanpa jejak persetujuan.
+
+    Perbaikan: isi baris penolakan yang hilang dengan alasan yang sudah ada di
+    `decisions.rejection_reason`. Idempoten — hanya menyentuh keputusan yang
+    benar-benar belum punya catatan negatif.
+    """
+    tertutup = 0
+    baris = (
+        await db.execute(
+            select(Decision)
+            .where(Decision.status == "rejected")
+            .order_by(Decision.created_at.asc().nulls_last())
+        )
+    ).scalars().all()
+    for d in baris:
+        ada = (
+            await db.execute(
+                select(func.count())
+                .select_from(Approval)
+                .where(Approval.decision_id == d.id, Approval.approved.is_(False))
+            )
+        ).scalar_one()
+        if ada:
+            continue
+        target = d.target_location_id or d.source_location_id
+        pencatat = await _pengguna_lokasi(db, target, "sppg_head") if target else None
+        if pencatat is None:
+            continue
+        db.add(
+            Approval(
+                id=_uid("approval", str(d.id), "penolakan"),
+                decision_id=d.id,
+                approved_by=pencatat.id,
+                approved=False,
+                comment=(d.rejection_reason or "Ditolak saat peninjauan."),
+                approved_at=(d.created_at or now) + timedelta(minutes=6),
+            )
+        )
+        tertutup += 1
+    await db.flush()
+    return {"penolakan_tercatat": tertutup}
 
 
 async def _lengkapi_bukti_kasus(db: AsyncSession, now: datetime) -> dict:
@@ -1476,6 +1782,29 @@ async def pastikan_sesi(db: AsyncSession):
     return await sesi.mulai(db, created_by=kepala.id if kepala else None)
 
 
+async def _semai_deret() -> dict:
+    """Deret waktu 1 Sep – 5 Nov 2026 (pasokan, permintaan, harga, rencana menu).
+
+    Kenapa dipanggil di sini (temuan 26 Okt 2026): `build_into` hanya memanggil
+    `load_seed` yang menulis 7 hari fakta (18–24 Okt). Akibatnya tombol "Siapkan
+    data demo" menghasilkan dataset yang jauh lebih miskin daripada `init-demo`:
+    `supply_records` 40 baris (bukan 5.240), `price_signals` 124 (bukan 6.019),
+    `menu_plans` 70 tanpa rencana hari ini. Grafik riwayat nyaris kosong di
+    panggung dan KPI Meal Continuity tidak punya rencana hari ini untuk dibanding.
+
+    Generator memakai koneksi sendiri dan membaca baris kanonik sebagai jangkar,
+    jadi pemanggil WAJIB sudah commit sebelum memanggilnya (lihat `build_into`).
+    Kegagalan generator tidak boleh membatalkan seluruh template: dilaporkan
+    apa adanya di laporan build supaya statusnya jujur.
+    """
+    from app.seed.timeseries import generate_timeseries
+
+    try:
+        return await generate_timeseries()
+    except Exception as exc:  # noqa: BLE001 — dilaporkan, bukan ditelan
+        return {"gagal": f"{type(exc).__name__}: {exc}"}
+
+
 async def build_into(db: AsyncSession, *, purge: bool = True, freeze: bool = True,
                      bersihkan_sisa: bool = True) -> dict:
     """Bangun template di sesi DB yang sudah ada (dipakai CLI dan endpoint sesi)."""
@@ -1484,6 +1813,10 @@ async def build_into(db: AsyncSession, *, purge: bool = True, freeze: bool = Tru
     if purge:
         laporan["dibersihkan"] = await sesi.kosongkan_kecuali(db, None)
     laporan["inti"] = await _semai_inti(db, now)
+    # Generator deret memakai engine sendiri: baris kanonik hasil `_semai_inti`
+    # harus sudah terlihat oleh koneksi itu sebelum jangkar dibaca.
+    await db.commit()
+    laporan["deret"] = await _semai_deret()
     laporan["kasus"] = await _semai_kasus(db)
     laporan["kasus_jakarta"] = await _perkaya_kasus_jakarta(db, now)
     laporan["karantina"] = await _semai_karantina(db, now)
@@ -1492,7 +1825,14 @@ async def build_into(db: AsyncSession, *, purge: bool = True, freeze: bool = Tru
     laporan["status_tambahan"] = await _semai_status_tambahan(db, now)
     laporan["bukti"] = await _semai_bukti_dan_rantai(db, now)
     laporan["bukti_tambahan"] = await _lengkapi_bukti_kasus(db, now)
+    # Invarian "penolakan selalu punya pencatat" — lihat docstring fungsinya.
+    laporan["penolakan"] = await _pastikan_penolakan_tercatat(db, now)
+    # Invarian "satu keputusan, satu angka biaya" (audit data 26 Okt 2026).
+    laporan["sdc_jejak"] = await _selaraskan_sdc_jejak(db)
     laporan["kiriman_jakarta"] = await _rapikan_kiriman_jakarta(db, now)
+    # Setelah pemangkasan Jakarta: batch terkecil Jakarta baru final di titik ini,
+    # jadi langkah kesegaran tidak memilih batch yang sedetik kemudian dihapus.
+    laporan["stok_mendekati_batas"] = await _semai_stok_mendekati_batas(db, now)
     # KPI 24 jam dimulai dari "belum ada aksi hari ini": jejak aksi (keputusan,
     # bukti, approval, PO, trace) digeser ke riwayat, sedangkan fakta hari ini
     # (menu plan, kiriman, limbah, kutipan harga) tetap. Lihat

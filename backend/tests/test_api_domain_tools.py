@@ -86,7 +86,20 @@ def test_freshness_evaluate_pass_band_persists(client):
                     "INSERT INTO batches (commodity_id, location_id, supplier_id, "
                     "quantity_kg, harvested_at, temperature_log) "
                     "SELECT c.id, l.id, (SELECT id FROM suppliers LIMIT 1), "
-                    "499.99, now() - interval '30 minutes', '[]'::jsonb "
+                    "499.99, now() - interval '30 minutes', "
+                    # Bukti suhu wajib lengkap: sejak F-02 (25 Okt 2026) log
+                    # kosong tidak lagi mendapat skor `pass`. Fixture ini
+                    # menulis rantai pendingin bersih 2 sampel agar tetap
+                    # menguji pita `pass` freshness.
+                    "jsonb_build_array("
+                    "  jsonb_build_object('timestamp',"
+                    "    to_char(now() - interval '30 minutes', "
+                    "'YYYY-MM-DD\"T\"HH24:MI:SS') || '+00:00',"
+                    "    'temperature_c', 4.0),"
+                    "  jsonb_build_object('timestamp',"
+                    "    to_char(now() - interval '20 minutes', "
+                    "'YYYY-MM-DD\"T\"HH24:MI:SS') || '+00:00',"
+                    "    'temperature_c', 4.2)) "
                     "FROM commodities c, locations l "
                     "WHERE c.name = 'telur' AND l.name = 'Bogor' "
                     "RETURNING id"
@@ -154,7 +167,12 @@ def test_freshness_evaluate_fail_band(client):
             conn.execute(text("DELETE FROM batches WHERE id = :id"), {"id": batch_id})
 
 
-def test_freshness_as_of_rejected_when_not_demo(client):
+def test_freshness_as_of_rejected_when_not_demo(client, monkeypatch):
+    """Suite berjalan dengan DEMO_MODE=true (lihat conftest), jadi guard diuji
+    dengan mematikan flag pada objek settings — bukan bergantung pada isi .env."""
+    from app.core.config import settings as setelan
+
+    monkeypatch.setattr(setelan, "demo_mode", False, raising=False)
     batch_id = _batch_id_by_quantity(500)
     resp = client.post(
         "/freshness/evaluate",

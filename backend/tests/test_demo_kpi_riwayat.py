@@ -40,7 +40,9 @@ from tests.dsn import DSN_SYNC
 PENANDA = "uji-kpi-riwayat"
 
 
-def _tanam_aksi(now: datetime, lokasi: str = "Jakarta", geser_detik: int = 0) -> dict:
+def _tanam_aksi(
+    now: datetime, lokasi: str = "Jakarta", geser_detik: int = 0, demo_case: str | None = None
+) -> dict:
     """Tanam satu rantai aksi lengkap di dalam jendela 24 jam milik tes ini."""
     now = now + timedelta(seconds=geser_detik)
     ids = {
@@ -62,9 +64,9 @@ def _tanam_aksi(now: datetime, lokasi: str = "Jakarta", geser_detik: int = 0) ->
                 text(
                     "INSERT INTO decisions (id, decision_type, status, proposed_by, "
                     "expires_at, created_at, iteration, origin, generated_at, "
-                    "source_location_id) VALUES "
+                    "source_location_id, demo_case) VALUES "
                     "(:id, 'regional_balance', 'proposed', :proposed, :expires, :created, "
-                    "0, 'demo', :created, :loc)"
+                    "0, 'demo', :created, :loc, :kasus)"
                 ),
                 {
                     "id": ids["decision"],
@@ -72,6 +74,7 @@ def _tanam_aksi(now: datetime, lokasi: str = "Jakarta", geser_detik: int = 0) ->
                     "expires": now + timedelta(hours=2),
                     "created": now - timedelta(hours=1),
                     "loc": lokasi_id,
+                    "kasus": demo_case,
                 },
             )
             conn.execute(
@@ -227,6 +230,73 @@ def test_aksi_bergeser_keluar_jendela_24_jam_urutan_tetap():
         # Tenggat keputusan TIDAK ikut bergeser.
         assert sesudah["expires_at"] == sebelum["expires_at"]
     finally:
+        _hapus(ids)
+
+
+def test_kartu_menunggu_tindakan_tetap_di_hari_ini():
+    """Kartu `pending_approval` tidak ikut digeser — termasuk trace DETECT-nya.
+
+    Permintaan pemilik 25 Okt 2026: Jakarta harus punya lima rekomendasi yang
+    bisa ditindak hari ini. Sebelum perbaikan, `decisions.created_at` untuk
+    SEMUA status ikut digeser ke kemarin sehingga feed "hari ini" kosong.
+
+    Sejak 26 Okt 2026 trace kartu DEMO yang terbuka juga dipertahankan: tanpa
+    DETECT di jendela hari ini, "Decision Time" tidak akan pernah punya pasangan
+    DETECT→ACT ketika kartu itu dieksekusi, sehingga metrik mati saat demo.
+    Kartu non-demo sengaja TIDAK dipertahankan (lihat tes berikutnya).
+    """
+    now = datetime.now(timezone.utc)
+    ids = _tanam_aksi(now, demo_case="uji-kartu-terbuka")
+    engine = create_engine(DSN_SYNC)
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("UPDATE decisions SET status='pending_approval' WHERE id = :d"),
+                {"d": ids["decision"]},
+            )
+        sebelum = _baca(ids)
+        hasil = _jalankan(now)
+        sesudah = _baca(ids)
+
+        assert hasil["aktif"] is True
+        # Kartu tetap hari ini.
+        assert sesudah["created_at"] == sebelum["created_at"], "kartu ikut digeser"
+        # Trace-nya ikut bertahan supaya Decision Time bisa bergerak nanti.
+        assert sesudah["trace"] == sebelum["trace"], "trace kartu terbuka ikut digeser"
+        # Bukti & approval tetap masuk riwayat: belum ada aksi yang selesai.
+        assert sesudah["evidence"] < now - timedelta(hours=24)
+        assert sesudah["approval"] < now - timedelta(hours=24)
+    finally:
+        engine.dispose()
+        _hapus(ids)
+
+
+def test_kartu_non_demo_tetap_digeser_trace_nya():
+    """Kartu terbuka TANPA `demo_case` tetap digeser trace-nya.
+
+    Alasannya Regional Imbalance: metrik itu menghitung jejak DETECT keputusan
+    non-demo sebagai penyebut. Kalau trace kartu non-demo ditahan di hari ini,
+    angka itu turun tanpa ada resolusi — 66,67% menjadi 0,00% pada percobaan
+    26 Okt 2026. Yang ditahan hanya kartu demo, karena metrik itu
+    mengecualikan `demo_case`.
+    """
+    now = datetime.now(timezone.utc)
+    ids = _tanam_aksi(now)
+    engine = create_engine(DSN_SYNC)
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("UPDATE decisions SET status='pending_approval' WHERE id = :d"),
+                {"d": ids["decision"]},
+            )
+        sebelum = _baca(ids)
+        _jalankan(now)
+        sesudah = _baca(ids)
+
+        assert sesudah["created_at"] == sebelum["created_at"]
+        assert sesudah["trace"] < now - timedelta(hours=24)
+    finally:
+        engine.dispose()
         _hapus(ids)
 
 

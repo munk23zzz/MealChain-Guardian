@@ -16,7 +16,9 @@ reason eksplisit; TANPA fake 0/proxy. Definisi per worksheet §10:
   referensi PIHPS terakhir pada lokasi+komoditas sama sebelum quote
   (O-NUM: absolut di aggregate, tanpa mengubah signed contract core).
 - Decision Time: mean (first DETECT → last ACT) per decision; ACT hanya
-  dihitung bila committed (PO ada); coverage = sample/eligible.
+  dihitung bila committed (PO ada); coverage = sample/eligible. Keputusan
+  `demo_case` IKUT dihitung sejak 26 Okt 2026 (sebelumnya dikeluarkan diam-diam
+  sehingga metrik mati saat demo).
 - Evidence Completeness: % decision dengan ≥2 distinct evidence type
   is_consistent SEBELUM approval-complete cutoff; bukti sesudah cutoff
   tidak dihitung; dua salinan tipe sama bukan dua sumber. Penyebutnya =
@@ -30,7 +32,7 @@ API layer (service menerima location_id=None = global).
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import text
@@ -76,6 +78,34 @@ def _no_data(name, unit, sample_count=0, reason=None):
 async def _rows(db: AsyncSession, stmt: str, params: dict | None = None):
     result = await db.execute(text(stmt), params or {})
     return result.fetchall()
+
+
+#: Jam kirim rencana dalam UTC — 14:00 UTC = 21:00 WIB. Sama dengan aturan
+#: generator (`app/seed/timeseries.py:kiriman_sudah_terjadi`): rencana hari ini
+#: baru "terjadi" setelah jam ini.
+JAM_KIRIM_UTC = 14
+_ZONA_WIB = timezone(timedelta(hours=7))
+
+
+def tanggal_kiriman_terakhir(acuan: datetime) -> date:
+    """Tanggal rencana terakhir yang jendela kirimnya SUDAH lewat pada `acuan`.
+
+    Dipakai sebagai batas atas `plan_date` pada Meal Continuity (26 Okt 2026).
+    Tanpa batas ini, rencana hari ini ikut penyebut sejak pukul 00:00 WIB —
+    pembilangnya nol karena kiriman hari ini belum berjalan — sehingga metrik
+    terbaca `0,00%` selama pagi, padahal datanya belum "gagal" melainkan belum
+    terjadi. Aturan proyek: keadaan belum diketahui ditulis "—", bukan 0.
+
+    Pengecualiannya data, bukan jam: kalau rencana itu SUDAH punya baris
+    `delivery_events`, ia tetap dinilai walau jam kirim belum lewat — kiriman
+    yang tercatat berarti rencananya memang berjalan (lihat pemakaian di
+    `compute_kpis`: `mp.plan_date <= :tanggal_kirim OR de.delivered IS NOT NULL`).
+    """
+    hari_ini = acuan.astimezone(_ZONA_WIB).date()
+    jam_kirim = datetime.combine(hari_ini, time(JAM_KIRIM_UTC), tzinfo=UTC)
+    if acuan >= jam_kirim:
+        return hari_ini
+    return hari_ini - timedelta(days=1)
 
 
 def _plan_date_range(alias: str = "") -> str:
@@ -130,9 +160,18 @@ async def compute_kpis(
         ") de ON de.menu_plan_id = mp.id "
         # plan_date (bukan created_at): window continuity = tanggal rencana,
         # bukan kapan row dibuat (seed idempoten bisa dibuat ulang kapan pun).
+        # Batas `tanggal_kirim`: rencana yang jendela kirimnya belum lewat tidak
+        # dinilai — KECUALI sudah ada kiriman tercatat untuk rencana itu (data
+        # mengalahkan jam: kiriman yang ada berarti rencananya memang berjalan).
         f"WHERE {_plan_date_range()} "
+        "AND (mp.plan_date <= :tanggal_kirim OR de.delivered IS NOT NULL) "
         + ("AND mp.location_id = :loc" if location_id else ""),
-        {"start": start, "end": end, **loc_param},
+        {
+            "start": start,
+            "end": end,
+            "tanggal_kirim": tanggal_kiriman_terakhir(end),
+            **loc_param,
+        },
     )
     planned_total = mc_rows[0][0] if mc_rows else None
     delivered_total = mc_rows[0][1] if mc_rows else None
@@ -140,9 +179,19 @@ async def compute_kpis(
         mc_rate = Decimal(delivered_total) * 100 / Decimal(planned_total)
         plan_days = await _rows(
             db,
-            f"SELECT COUNT(*) FROM menu_plans WHERE {_plan_date_range()} "
-            + (" AND location_id = :loc" if location_id else ""),
-            {"start": start, "end": end, **loc_param},
+            "SELECT COUNT(*) FROM menu_plans mp LEFT JOIN ("
+            "SELECT menu_plan_id, SUM(delivered_portions) AS delivered "
+            "FROM delivery_events GROUP BY menu_plan_id"
+            ") de ON de.menu_plan_id = mp.id "
+            f"WHERE {_plan_date_range('mp.')} "
+            "AND (mp.plan_date <= :tanggal_kirim OR de.delivered IS NOT NULL) "
+            + (" AND mp.location_id = :loc" if location_id else ""),
+            {
+                "start": start,
+                "end": end,
+                "tanggal_kirim": tanggal_kiriman_terakhir(end),
+                **loc_param,
+            },
         )
         mc_metric = _metric(
             "Meal Continuity Rate", "percent", "available",
@@ -157,13 +206,42 @@ async def compute_kpis(
         # menunggu data masuk, yang kedua menandakan rencana tanpa porsi.
         cek_rencana = await _rows(
             db,
-            f"SELECT COUNT(*), COALESCE(SUM(planned_portions), 0) "
-            f"FROM menu_plans WHERE {_plan_date_range()} "
+            "SELECT COUNT(*), COALESCE(SUM(mp.planned_portions), 0) "
+            "FROM menu_plans mp LEFT JOIN ("
+            "SELECT menu_plan_id, SUM(delivered_portions) AS delivered "
+            "FROM delivery_events GROUP BY menu_plan_id"
+            ") de ON de.menu_plan_id = mp.id "
+            f"WHERE {_plan_date_range('mp.')} "
+            "AND (mp.plan_date <= :tanggal_kirim OR de.delivered IS NOT NULL) "
+            + ("AND mp.location_id = :loc" if location_id else ""),
+            {
+                "start": start,
+                "end": end,
+                "tanggal_kirim": tanggal_kiriman_terakhir(end),
+                **loc_param,
+            },
+        )
+        jml_rencana = int(cek_rencana[0][0] or 0) if cek_rencana else 0
+        # Ada rencana di jendela tetapi belum masuk jendela kirim? Itu keadaan
+        # "belum terjadi", bukan "tidak ada data" dan bukan 0% (26 Okt 2026).
+        cek_semua = await _rows(
+            db,
+            f"SELECT COUNT(*) FROM menu_plans WHERE {_plan_date_range()} "
             + ("AND location_id = :loc" if location_id else ""),
             {"start": start, "end": end, **loc_param},
         )
-        jml_rencana = int(cek_rencana[0][0] or 0) if cek_rencana else 0
-        if jml_rencana > 0:
+        jml_semua = int(cek_semua[0][0] or 0) if cek_semua else 0
+        if jml_rencana == 0 and jml_semua > 0:
+            mc_metric = _no_data(
+                "Meal Continuity Rate", "percent",
+                sample_count=jml_semua,
+                reason=(
+                    f"{jml_semua} rencana menu ada, tetapi jendela kirimnya belum "
+                    "tiba (kiriman hari ini baru terjadi setelah 21.00 WIB) — "
+                    "belum ada yang bisa dinilai"
+                ),
+            )
+        elif jml_rencana > 0:
             mc_metric = _no_data(
                 "Meal Continuity Rate", "percent",
                 sample_count=jml_rencana,
@@ -350,7 +428,12 @@ async def compute_kpis(
         "MAX(t.step_at) FILTER (WHERE t.step_name='ACT') AS act_at "
         "FROM decisions d JOIN agent_traces t ON t.decision_id = d.id "
         "WHERE t.step_at >= :start AND t.step_at < :end "
-        "AND d.demo_case IS NULL " + loc_filter_dec + " GROUP BY d.id",
+        # 26 Okt 2026: filter `demo_case IS NULL` DIHAPUS. Dulu keputusan demo
+        # dikeluarkan diam-diam (tidak tercatat di kamus KPI), akibatnya metrik
+        # ini mustahil bergerak saat operator menjalankan kartu demo — padahal
+        # keputusan itu nyata di DB dan PO-nya nyata. Regional Imbalance tetap
+        # mengecualikan `demo_case` (aturan anti-noise yang memang terdokumentasi).
+        + loc_filter_dec + " GROUP BY d.id",
         {"start": start, "end": end, **loc_param},
     )
     durations: list[Decimal] = []

@@ -1,12 +1,14 @@
 """Binding batch/supplier untuk keputusan transfer dan revalidasi terkunci."""
 
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.evidence_consistency import binding_consistency
+from app.core.safety_gate import penghalang_sumber
 from app.models import Batch, Decision, DecisionEvidence, SupplierExclusion
 from app.services.supplier_exclusion_service import lock_supplier
 
@@ -129,9 +131,12 @@ def source_batch_safety_blocked(batches) -> bool:
     Sebelum audit 2026-10-11, approval-summary memakai `all(... == "fail")`
     sehingga dua batch sumber (satu FAIL, satu aman) dilaporkan `blocked=False`.
     """
-    if not batches:
-        return True
-    return any((b.safety_status or "pending") == "fail" for b in batches)
+    # Delegasi ke definisi tunggal di `app.core.safety_gate`: blokir bila tidak
+    # ada batch sumber, ada batch `fail`, dikarantina, atau kedaluwarsa.
+    # `pending`/`needs_verification` TIDAK memblokir (keadaan normal sebelum
+    # pengujian) — guard execute memakai fungsi yang sama, jadi `can_execute`
+    # tidak bisa lagi menjanjikan eksekusi yang akan ditolak 409.
+    return penghalang_sumber(batches, sekarang=datetime.now(UTC)) is not None
 
 
 async def batch_sumber_transfer(db: AsyncSession, decision: Decision) -> list:

@@ -647,6 +647,32 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
             }
             baris.safe_delivered_cost = None
 
+    # Selaraskan `sdc` di jejak DECIDE dengan SDC final keputusan.
+    #
+    # Audit data 26 Okt 2026: jejak ditulis SEBELUM `hitung_biaya_demo` jalan,
+    # jadi nilai `sdc` di trace masih angka tulisan tangan (16.206.000 /
+    # 14.787.096,28) sementara keputusan sudah punya SDC hasil hitung
+    # (15.739.132,38 / 22.097.242,39). Dua angka biaya untuk satu keputusan
+    # membuat tab Agent Log bertentangan dengan kartu rekomendasi.
+    for decision_id in created:
+        baris = await db.get(Decision, decision_id)
+        if baris is None or baris.safe_delivered_cost is None:
+            continue
+        jejak = (
+            await db.execute(
+                select(AgentTrace).where(
+                    AgentTrace.decision_id == decision_id,
+                    AgentTrace.output_summary.isnot(None),
+                )
+            )
+        ).scalars().all()
+        for langkah in jejak:
+            if langkah.output_summary and "sdc" in langkah.output_summary:
+                langkah.output_summary = {
+                    **langkah.output_summary,
+                    "sdc": float(baris.safe_delivered_cost),
+                }
+
     await db.commit()
     return {
         "seeded": True,

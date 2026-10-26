@@ -84,6 +84,14 @@ def _data_state(s_row, d_row) -> str:
     return "sebagian"
 
 
+def _waktu_kebutuhan(row) -> str | None:
+    """`needed_by` baris permintaan — kapan komoditas itu dibutuhkan."""
+    if row is None:
+        return None
+    nilai = getattr(row, "needed_by", None)
+    return nilai.isoformat() if nilai is not None else None
+
+
 def _waktu(row) -> str | None:
     """Stempel waktu baris yang benar-benar dipakai (= asal nilai); None = tak ada."""
     if row is None or row.recorded_at is None:
@@ -162,6 +170,9 @@ async def get_balance(
         "data_state": _data_state(row_supply, row_demand),
         "supply_recorded_at": _waktu(row_supply),
         "demand_recorded_at": _waktu(row_demand),
+        # Kapan kebutuhan itu DIPERLUKAN (datanya bisa untuk beberapa hari ke
+        # depan). Tanpa ini UI menulis "Kebutuhan 1.080 kg" seolah hari ini.
+        "demand_needed_by": _waktu_kebutuhan(row_demand),
         # Batas waktu yang dipakai (default: sekarang) — UI menyebut tanggalnya.
         "as_of": batas.isoformat(),
     }
@@ -305,6 +316,7 @@ async def get_balance_map(
                 "data_state": _data_state(s_row, d_row),
                 "supply_recorded_at": _waktu(s_row),
                 "demand_recorded_at": _waktu(d_row),
+                "demand_needed_by": _waktu_kebutuhan(d_row),
             }
         )
     return {"commodity": com.name, "as_of": batas.isoformat(), "locations": items}

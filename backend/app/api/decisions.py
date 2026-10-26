@@ -6,7 +6,6 @@
 """
 
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
 from typing import Literal
 from uuid import UUID, uuid4
 
@@ -17,6 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import get_current_user
 from app.api.dependencies import get_db
+from app.core.recommendation_numbers import (
+    InvalidRecommendationNumbers,
+    validasi_angka_rekomendasi,
+)
 from app.core.scope import apply_location_scope, assert_in_scope
 from app.core.window import window_start
 from app.models import (
@@ -107,17 +110,27 @@ def _validity(expires_at: datetime) -> dict:
 
 
 def _extract(recommendation: dict):
-    """Ambil field terstruktur dari snapshot rekomendasi."""
-    cand = recommendation.get("candidate", {})
-    qty = cand.get("quantity_kg")
-    sdc = recommendation.get("safe_delivered_cost")
+    """Ambil field terstruktur dari snapshot rekomendasi.
+
+    Angka TIDAK disalin apa adanya: `quantity_kg` dan `safe_delivered_cost`
+    divalidasi di sini (temuan F-09/A-02, 25 Okt 2026) karena nilainya kelak
+    dipakai untuk menerbitkan purchase order. Nilai bukan angka/negatif/
+    mustahil ditolak sebelum menyentuh database.
+    """
+    cand = recommendation.get("candidate") or {}
+    breakdown = recommendation.get("cost_breakdown")
+    qty, sdc = validasi_angka_rekomendasi(
+        cand.get("quantity_kg"),
+        recommendation.get("safe_delivered_cost"),
+        breakdown,
+    )
     return {
         "source_location": cand.get("source_location"),
         "target_location": cand.get("destination_location"),
         "commodity": cand.get("commodity"),
-        "quantity_kg": Decimal(str(qty)) if qty is not None else None,
-        "safe_delivered_cost": (Decimal(str(sdc)) if sdc is not None else None),
-        "cost_breakdown": recommendation.get("cost_breakdown"),
+        "quantity_kg": qty,
+        "safe_delivered_cost": sdc,
+        "cost_breakdown": breakdown,
     }
 
 
@@ -131,7 +144,12 @@ async def create_decision(
         raise HTTPException(status_code=403, detail="role tidak diizinkan")
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(minutes=payload.ttl_minutes)
-    fields = _extract(payload.recommendation)
+    try:
+        fields = _extract(payload.recommendation or {})
+    except InvalidRecommendationNumbers as exc:
+        raise HTTPException(
+            status_code=422, detail=f"angka rekomendasi tidak sah: {exc}"
+        ) from exc
 
     async def _loc_id(name):
         if not name:

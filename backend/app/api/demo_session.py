@@ -207,6 +207,7 @@ async def akhiri_sesi(
 
 @router.post("/demo/template/rebuild", status_code=200)
 async def bangun_ulang_template(
+    _sesi: object = Depends(butuh_sesi_aktif),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("sppg_head")),
 ):

@@ -18,6 +18,21 @@ from fastapi.testclient import TestClient
 from app.agent_tools.registry import TOOL_ROUTES, build_gateway_config
 from app.main import app
 
+
+@pytest.fixture(scope="module", autouse=True)
+def _deret_demo_ada():
+    """Pulihkan deret demo lebih dulu: /balance/recommend membaca baris demo.
+
+    Modul yang berjalan sesudah tes purge (`/demo/timeseries/purge`) menemukan
+    tabel demo kosong, lalu `/balance/analyze` menjawab daftar kosong dan tes
+    tampak seperti bug produk. `pastikan_deret_demo()` hanya mengisi yang hilang.
+    """
+    import asyncio
+
+    from app.seed.timeseries import pastikan_deret_demo
+
+    asyncio.run(pastikan_deret_demo())
+
 GATEWAY_ARTIFACT = (
     Path(__file__).resolve().parents[1]
     / "app"

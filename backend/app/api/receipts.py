@@ -33,10 +33,37 @@ from sqlalchemy.orm import aliased
 from app.api.auth import MUTATING_ROLES, get_current_user, require_roles
 from app.api.demo_session import butuh_sesi_aktif
 from app.api.dependencies import get_db
+from app.core.safety_gate import (
+    BLOKIR_EKSEKUSI_KARANTINA,
+    BLOKIR_EKSEKUSI_KEDALUWARSA,
+    BLOKIR_SAFETY_BUKAN_PASS,
+    BLOKIR_SUHU_TIDAK_LENGKAP,
+    receipt_blokir_alasan,
+)
 from app.core.scope import assert_in_scope
 from app.models import Batch, BatchReceipt, Commodity, Location, SupplyRecord, User
 from app.services import settlement
 from app.services.demo_session import sesi_sekarang
+
+#: Pesan 409 per alasan blokir. Ditulis eksplisit supaya petugas dapur tahu
+#: langkah berikutnya, bukan sekadar "ditolak".
+_PESAN_TOLAK_PENERIMAAN = {
+    BLOKIR_EKSEKUSI_KARANTINA: (
+        "barang masih berstatus karantina — tidak boleh masuk stok; "
+        "tunggu keputusan pelepasan atau penolakan"
+    ),
+    BLOKIR_SAFETY_BUKAN_PASS: (
+        "barang berstatus TIDAK AMAN atau belum terverifikasi — tolak penerimaan"
+        " atau periksa ulang keamanannya"
+    ),
+    BLOKIR_SUHU_TIDAK_LENGKAP: (
+        "bukti suhu barang tidak lengkap — tidak boleh masuk stok; tolak"
+        " penerimaan atau lengkapi pembacaan suhu"
+    ),
+    BLOKIR_EKSEKUSI_KEDALUWARSA: (
+        "barang sudah kedaluwarsa — tidak boleh masuk stok; tolak penerimaan"
+    ),
+}
 
 router = APIRouter()
 
@@ -198,15 +225,19 @@ async def approve_receipt(
                 " barang diperiksa ulang"
             ),
         )
-    if str(batch.safety_status).lower() == "fail":
+    blokir = receipt_blokir_alasan(
+        safety_status=batch.safety_status,
+        quarantine_status=batch.quarantine_status,
+        usable_until=batch.usable_until,
+        temperature_log=batch.temperature_log,
+        sekarang=datetime.now(UTC),
+    )
+    if blokir is not None:
         raise HTTPException(
             status_code=409,
-            detail="barang berstatus TIDAK AMAN — tolak penerimaan atau periksa ulang keamanannya",
-        )
-    if batch.usable_until is not None and batch.usable_until < datetime.now(UTC):
-        raise HTTPException(
-            status_code=409,
-            detail="barang sudah kedaluwarsa — tidak boleh masuk stok; tolak penerimaan",
+            detail=_PESAN_TOLAK_PENERIMAAN.get(
+                blokir, "barang belum terbukti aman — tolak penerimaan"
+            ),
         )
 
     # Sudah ada penerimaan lain yang disetujui untuk batch ini?

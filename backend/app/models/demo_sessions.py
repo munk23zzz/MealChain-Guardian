@@ -10,7 +10,16 @@ konsisten dengan saat sesi dimulai.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -20,11 +29,22 @@ from app.db import Base
 class DemoSession(Base):
     __tablename__ = "demo_sessions"
     __table_args__ = (
+        # Indeks FK (migrasi 033): DB sudah punya indeks ini; tanpa
+        # deklarasi di sini `alembic check` akan mengusulkan drop.
+        Index("ix_demo_sessions_created_by", "created_by"),
         CheckConstraint(
             "status IN ('active','expired','ended')",
             name="demo_sessions_status_check",
         ),
         Index("ix_demo_sessions_status_expires", "status", "expires_at"),
+        # Satu sesi aktif, dijamin DB (migrasi 032). Kunci `asyncio` hanya
+        # melindungi satu proses; dua worker tidak boleh punya dua jendela aktif.
+        Index(
+            "uq_demo_sessions_satu_aktif",
+            "status",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

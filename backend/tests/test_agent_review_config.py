@@ -20,6 +20,9 @@ def test_environment_can_override_flag(monkeypatch) -> None:
     monkeypatch.setenv("MULTI_AGENT_REVIEW", "true")
     monkeypatch.setenv("AGENT_REVIEW_MODE", "predecision")
     monkeypatch.setenv("AGENT_REVIEW_TIMEOUT_SECONDS", "90")
+    # `database_url` wajib (tanpa default berkredensial, F-08). Beri nilai
+    # sekali-pakai supaya tes ini tidak bergantung pada env DB yang kebetulan ada.
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://uji:uji@localhost:1/uji")
 
     settings = Settings(_env_file=None)
 

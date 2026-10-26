@@ -17,6 +17,7 @@ mengarang run_id. Index run_id dipakai untuk memilih putaran terbaru.
 
 Revision ID: 018_agent_trace_worker_fields
 Revises: 017_event_origin
+
 """
 
 from typing import Sequence, Union

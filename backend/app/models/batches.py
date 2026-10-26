@@ -23,6 +23,12 @@ from app.db import Base
 class Batch(Base):
     __tablename__ = "batches"
     __table_args__ = (
+        # Indeks FK (migrasi 033): DB sudah punya indeks ini; tanpa
+        # deklarasi di sini `alembic check` akan mengusulkan drop.
+        Index("ix_batches_commodity_id", "commodity_id"),
+        Index("ix_batches_location_id", "location_id"),
+        Index("ix_batches_supplier_id", "supplier_id"),
+        Index("ix_batches_quarantine_actor_id", "quarantine_actor_id"),
         CheckConstraint(
             "freshness_score IS NULL OR (freshness_score >= 0 AND freshness_score <= 1)",
             name="batches_freshness_range_check",
