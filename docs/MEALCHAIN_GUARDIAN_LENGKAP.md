@@ -9,10 +9,10 @@ perintah pengukurnya dicantumkan supaya siapa pun bisa mengulang.
 
 | Hal | Nilai |
 |---|---|
-| Waktu ukur keadaan data | 26 Oktober 2026, 19.29 WIB (`docs/state-snapshot.json`) — sesudah build kanonik |
+| Waktu ukur keadaan data | 26 Oktober 2026, 20.47 WIB (`docs/state-snapshot.json`) — sesudah build kanonik + perbaikan pemasok/bukti |
 | Waktu ukur KPI | 26 Oktober 2026, 19.30 WIB (`GET /kpi?periode=today\|7d\|1bulan`) |
 | Repo | `E:\hackathon\HackathonAWS\mealchain-guardian` |
-| Branch / HEAD | `feature/db-modes-demo-coverage` / `8741d6c` + 7 commit sesudah `d414957` |
+| Branch / HEAD | `feature/db-modes-demo-coverage` / `1b01961` + 9 commit sesudah `d414957` |
 | Migrasi Alembic | 33 berkas, head `033_indeks_fk_hilang` |
 | Ukuran kode | backend `app/` 31.958 baris · frontend `app+components+lib+tests` 55.926 baris |
 | Berkas uji | 240 berkas backend · 167 berkas frontend (1.818 tes) |
