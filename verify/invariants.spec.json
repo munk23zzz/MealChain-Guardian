@@ -110,7 +110,8 @@
       "url": "http://127.0.0.1:8000/ledger/verify",
       "expect_status": 200,
       "expect_json": {
-        "valid": true
+        "valid": true,
+        "orphan_blocks": 0
       },
       "max_ms": 6000
     },
@@ -295,6 +296,47 @@
         "name": "sdc di jejak DECIDE sama dengan SDC keputusan (±1 rupiah)",
         "sql": "SELECT count(*) FROM agent_traces t JOIN decisions d ON d.id = t.decision_id WHERE (t.output_summary->>'sdc') IS NOT NULL AND d.safe_delivered_cost IS NOT NULL AND abs((t.output_summary->>'sdc')::numeric - d.safe_delivered_cost) > 1",
         "expect": 0
+      },
+      {
+        "name": "SDC != jumlah komponen cost_breakdown",
+        "sql": "SELECT count(*) FROM decisions d WHERE d.cost_breakdown ? 'purchase' AND d.safe_delivered_cost IS NOT NULL AND abs(d.safe_delivered_cost - ((d.cost_breakdown->>'purchase')::numeric + (d.cost_breakdown->>'transport')::numeric + (d.cost_breakdown->>'handling')::numeric + (d.cost_breakdown->>'expected_loss')::numeric + coalesce((d.cost_breakdown->>'freshness_risk')::numeric,0) + coalesce((d.cost_breakdown->>'safety_penalty')::numeric,0))) > 0.01",
+        "expect": 0,
+        "_note": "Audit D-01/BL-01/NUM-01. Breakdown pada kartu 70% dulu disalin utuh sehingga selisih Rp 4,7-6,6 juta."
+      },
+      {
+        "name": "blok ledger generasi aktif menunjuk entitas terhapus (yatim)",
+        "sql": "WITH g AS (SELECT generation FROM ledger_meta WHERE id = 1) SELECT count(*) FROM ledger_blocks lb, g WHERE lb.generation = g.generation AND lb.entity_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM decisions d WHERE d.id = lb.entity_id) AND NOT EXISTS (SELECT 1 FROM batches b WHERE b.id = lb.entity_id) AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = lb.entity_id) AND NOT EXISTS (SELECT 1 FROM locations l WHERE l.id = lb.entity_id)",
+        "expect": 0,
+        "_note": "Audit D-02. Definisi sama dengan GET /ledger/verify (ledger_service.verify_chain)."
+      },
+      {
+        "name": "keputusan ber-origin demo (provenance tidak boleh vakum)",
+        "sql": "SELECT count(*) FROM decisions WHERE origin = 'demo'",
+        "expect_min": 1,
+        "store": "db_decisions_demo",
+        "_note": "Audit D-04. Dulu _bekukan menulis origin='seed' sehingga cek kanonik lulus tanpa satu pun baris demo."
+      },
+      {
+        "name": "keputusan demo_case ber-origin seed (provenance hilang)",
+        "sql": "SELECT count(*) FROM decisions WHERE demo_case IS NOT NULL AND origin = 'seed'",
+        "expect": 0
+      },
+      {
+        "name": "PO ber-decision_id (rantai keputusan->PO tidak vakum)",
+        "sql": "SELECT count(*) FROM sap_mock_purchase_orders WHERE decision_id IS NOT NULL",
+        "expect_min": 1,
+        "_note": "Audit D-05/NUM-01: tanpa minimal satu PO tertaut, cek '>1 PO per keputusan' dan KPI Safe Delivered Cost lulus/mati secara vakum."
+      },
+      {
+        "name": "PO menunjuk keputusan yang tidak ada",
+        "sql": "SELECT count(*) FROM sap_mock_purchase_orders po WHERE po.decision_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM decisions d WHERE d.id = po.decision_id)",
+        "expect": 0
+      },
+      {
+        "name": "PO tanpa decision_id yang bukan baris impor SAP",
+        "sql": "SELECT count(*) FROM sap_mock_purchase_orders WHERE decision_id IS NULL AND (po_number !~ '^4500' OR origin <> 'seed')",
+        "expect": 0,
+        "_note": "Baris impor SAP (4500000xxx, origin='seed') memang tidak lahir dari keputusan; PO lain WAJIB punya decision_id."
       }
     ]
   },

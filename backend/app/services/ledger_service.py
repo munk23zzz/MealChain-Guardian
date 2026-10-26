@@ -48,6 +48,36 @@ async def bump_generation(db: AsyncSession) -> int:
     return int(row[0]) if row else 1
 
 
+async def bump_bila_berblok(db: AsyncSession, entity_ids) -> int | None:
+    """Naikkan generasi bila blok generasi aktif menunjuk `entity_ids`.
+
+    Kenapa perlu (audit integritas database 26 Okt 2026, D-02): `ledger_blocks`
+    tidak punya FK ke `decisions`, jadi menghapus keputusan tidak meninggalkan
+    jejak apa pun. Kalau bloknya berada di generasi AKTIF, `/ledger/verify`
+    melaporkan `orphan_blocks > 0`: jejak audit menunjuk entitas hantu.
+
+    Kontrak: blok TIDAK dihapus (rantai hash harus utuh dan bisa diverifikasi);
+    yang berubah hanya cara cakupan dilaporkan — blok generasi lama menjadi
+    `archived_blocks`. Mengembalikan generasi baru, atau None bila tidak ada
+    blok yang menyentuh entitas tersebut (tidak perlu naik).
+    """
+    ids = [i for i in dict.fromkeys(entity_ids) if i is not None]
+    if not ids:
+        return None
+    jumlah = (
+        await db.execute(
+            text(
+                "SELECT count(*) FROM ledger_blocks "
+                "WHERE generation = :g AND entity_id = ANY(:ids)"
+            ),
+            {"g": await current_generation(db), "ids": ids},
+        )
+    ).scalar_one()
+    if not int(jumlah):
+        return None
+    return await bump_generation(db)
+
+
 def _canonical(payload: dict) -> str:
     def _default(o):
         if isinstance(o, (UUID, Decimal)):

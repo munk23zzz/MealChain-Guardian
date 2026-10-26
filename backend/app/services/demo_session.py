@@ -69,6 +69,41 @@ def sekarang() -> datetime:
     return datetime.now(timezone.utc)
 
 
+#: Sesi sentinel "cetakan" (template beku).
+#:
+#: Kenapa ada (audit integritas database 26 Okt 2026, D-04): template demo dulu
+#: "dibekukan" dengan menulis `origin='seed'`, sehingga provenance baris demo
+#: hilang dan cek kanonik (`origin='demo'`) lulus secara vakum. Penanda beku
+#: sekarang BUKAN perubahan origin, melainkan stempel ke sesi sentinel ini:
+#: ia tidak pernah `active` (jadi tidak muncul di /demo/session, tidak bisa
+#: diperpanjang/diakhiri) dan penyapu sesi tidak menghapus barisnya.
+CETAKAN_ID = uuid.UUID("ce7a0000-0000-4000-8000-000000000001")
+
+
+async def cetakan(db: AsyncSession) -> uuid.UUID:
+    """Pastikan baris sesi sentinel `cetakan` ada; kembalikan id-nya.
+
+    Idempoten: baris dibuat sekali, sesudah itu hanya dibaca.
+    """
+    ada = await db.get(DemoSession, CETAKAN_ID)
+    if ada is None:
+        jangkar = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        db.add(
+            DemoSession(
+                id=CETAKAN_ID,
+                status="expired",
+                started_at=jangkar,
+                expires_at=jangkar,
+                anchor_now=jangkar,
+                ended_at=jangkar,
+                template_version="cetakan",
+            )
+        )
+        await db.flush()
+    return CETAKAN_ID
+
+
+
 def set_sesi(sesi_id: uuid.UUID | None) -> None:
     _current.set(sesi_id)
 
@@ -373,6 +408,10 @@ async def kosongkan_bertanda(db: AsyncSession) -> int:
     dihapus = 0
     for model in sorted(model_bersesi(), key=_urutan_hapus):
         kriteria = model.demo_session_id.isnot(None)
+        # Baris CETAKAN (template beku) sengaja TIDAK ikut dihapus: ia tidak
+        # lahir dari sesi ini, dan provenance-nya (`origin='demo'`) justru harus
+        # tetap ada setelah sesi berakhir (audit D-04).
+        kriteria = kriteria & (model.demo_session_id != CETAKAN_ID)
         # Baris kanonik yang (karena data lama) terlanjur berstempel tidak ikut
         # dihapus: template `origin='seed'` harus selamat dari siklus demo.
         if "origin" in model.__table__.columns:

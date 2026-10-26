@@ -6,9 +6,10 @@ keadaan awal yang selalu sama setiap kali dibangun ulang.
 Beda dengan `POST /demo/session/start`:
 - sesi demo menandai baris `origin='demo'` + `demo_session_id` sehingga baris
   itu dibuang saat sesi berakhir;
-- template membalik tanda itu menjadi `origin='seed'` dan melepas stempel,
-  sehingga "Akhiri sesi" TIDAK menghapusnya (lihat aturan 21 Okt 2026 di
-  `app/services/demo_session.py`).
+- template MEMPERTAHANKAN `origin='demo'` (provenance-nya jujur) dan
+  menstempelnya ke sesi sentinel `cetakan`, sehingga "Akhiri sesi" TIDAK
+  menghapusnya. Sebelum audit 26 Okt 2026 (D-04) fungsi beku menulis
+  `origin='seed'`; itu dihapus karena membuat cek kanonik lulus secara vakum.
 
 Karena itu: template boleh dibangun kapan pun, dan sesi demo menjadi lapisan
 kerja di atasnya — persis pola "cetakan vs adonan" (docs/demo/ide-sesi-demo).
@@ -63,6 +64,74 @@ from app.seed.demo_kpi_riwayat import geser_aksi_ke_riwayat
 from app.services import demo_session as sesi
 
 KOTA_TEMPLATE = ("Jakarta", "Bandung", "Surabaya")
+
+#: Komponen biaya yang WAJIB menjumlah ke `safe_delivered_cost`.
+KOMPONEN_BIAYA: tuple[str, ...] = (
+    "purchase",
+    "transport",
+    "handling",
+    "expected_loss",
+    "freshness_risk",
+    "safety_penalty",
+)
+
+#: Turunan internal breakdown: ikut diskalakan supaya tidak bertentangan dengan
+#: `transport`, tetapi TIDAK masuk penjumlahan komponen.
+TURUNAN_BIAYA: tuple[str, ...] = (
+    "logistics",
+    "transport_linehaul",
+    "transport_supplier_leg",
+)
+
+
+def skalakan_breakdown(
+    breakdown: dict | None, rasio: Decimal, sdc_target: Decimal
+) -> dict | None:
+    """Skalakan `cost_breakdown` dan rapikan selisih pembulatan ke SDC.
+
+    Kenapa perlu (audit integritas database 26 Okt 2026, D-01): kartu kedua tiap
+    kasus memakai kuantitas & SDC 70% dari aslinya, tetapi breakdown disalin apa
+    adanya — sehingga 4 keputusan menampilkan rincian yang berbeda Rp 4,7–6,6
+    juta dari angka yang disetujui. Approver tidak boleh melihat dua angka
+    biaya untuk satu keputusan.
+
+    Kontrak:
+    - setiap komponen biaya × `rasio`, dibulatkan 2 desimal;
+    - sisa pembulatan diserap komponen TERBESAR (`purchase` pada data nyata),
+      jadi Σ komponen == `sdc_target` persis, bukan "hampir";
+    - turunan (`logistics`, linehaul, supplier leg) ikut ×`rasio`;
+    - kunci non-biaya (jarak, basis naratif) tidak disentuh;
+    - breakdown naratif (tanpa komponen biaya) dikembalikan apa adanya;
+    - masukan tak terduga dikembalikan apa adanya — tidak ditebak.
+    """
+    if not isinstance(breakdown, dict):
+        return breakdown
+    ada = [k for k in KOMPONEN_BIAYA if k in breakdown]
+    if not ada:
+        return breakdown
+
+    hasil = dict(breakdown)
+    skala: dict[str, Decimal] = {}
+    for kunci in (*KOMPONEN_BIAYA, *TURUNAN_BIAYA):
+        if kunci not in breakdown:
+            continue
+        try:
+            nilai = Decimal(str(breakdown[kunci]))
+        except (ArithmeticError, TypeError, ValueError):
+            # Bentuk tak terduga: jangan menghasilkan angka palsu.
+            return breakdown
+        skala[kunci] = (nilai * rasio).quantize(Decimal("0.01"))
+
+    target = Decimal(str(sdc_target)).quantize(Decimal("0.01"))
+    sisa = target - sum((skala[k] for k in ada), Decimal("0"))
+    if sisa:
+        terbesar = max(ada, key=lambda k: skala[k])
+        skala[terbesar] += sisa
+
+    for kunci, nilai in skala.items():
+        hasil[kunci] = str(nilai)
+    return hasil
+
 
 #: Stok yang sengaja dibuat MENDEKATI batas layak.
 #:
@@ -787,6 +856,10 @@ async def _perkaya_kasus_jakarta(db: AsyncSession, now: datetime) -> dict:
             continue
         kuantitas = (d.quantity_kg or Decimal("600")) * Decimal("0.7")
         biaya = (d.safe_delivered_cost or Decimal("0")) * Decimal("0.7")
+        # D-01: breakdown WAJIB ikut diskalakan, bukan disalin utuh. Tanpa ini
+        # Σ komponen (dibangun untuk 600/780 kg) berbeda Rp 4,7–6,6 juta dari
+        # SDC 70% yang disetujui approver.
+        rincian = skalakan_breakdown(d.cost_breakdown, Decimal("0.7"), biaya)
         # Kasus anomali harga tetap "ditandai verifikator", bukan menunggu
         # approval: menyalinnya sebagai pending_approval mengubah cerita kasus
         # (agent berhenti sendiri vs manusia yang memutuskan).
@@ -808,7 +881,7 @@ async def _perkaya_kasus_jakarta(db: AsyncSession, now: datetime) -> dict:
             commodity_id=d.commodity_id,
             quantity_kg=kuantitas,
             safe_delivered_cost=biaya,
-            cost_breakdown=d.cost_breakdown,
+            cost_breakdown=rincian,
             expires_at=now + timedelta(hours=8),
             origin="demo",
             generated_at=now,
@@ -1334,6 +1407,122 @@ async def _pengguna_lokasi(db: AsyncSession, lokasi, peran: str) -> User | None:
     return hasil.scalar_one_or_none()
 
 
+#: Kode material SAP → nama komoditas (sumber: `scripts/bangun_seed_realistis.py`).
+MATERIAL_KE_KOMODITAS: dict[str, str] = {
+    "1000": "telur",
+    "1001": "ayam",
+    "1002": "wortel",
+    "1003": "beras",
+}
+
+
+def komoditas_material(material_number: str | None, nama_komoditas: set[str]) -> str | None:
+    """Nama komoditas untuk satu `material_number` PO, atau None bila tak dikenal.
+
+    Dua bentuk kode hidup di dataset ini: kode SAP angka (`1000`..`1003`, baris
+    impor) dan `MAT-<NAMA>` (PO yang lahir dari eksekusi). Kode yang tidak
+    dikenali TIDAK ditebak.
+    """
+    if not material_number:
+        return None
+    kode = material_number.strip()
+    if kode in MATERIAL_KE_KOMODITAS:
+        return MATERIAL_KE_KOMODITAS[kode]
+    if kode.upper().startswith("MAT-"):
+        sisa = kode[4:].upper()
+        for nama in nama_komoditas:
+            if nama.upper()[:4] == sisa:
+                return nama
+    return None
+
+
+def pilih_keputusan_pemicu(
+    kuantitas_po: Decimal, kandidat: list[dict]
+) -> dict | None:
+    """Keputusan pemicu PO: satu-satunya kandidat dengan kuantitas sama.
+
+    Aturan "jangan mengarang relasi" dijaga di sini: bila kandidatnya nol ATAU
+    lebih dari satu, hasilnya None — PO dibiarkan tanpa `decision_id` dan
+    dilaporkan, bukan dipasangkan dengan tebakan.
+    """
+    cocok = [
+        k
+        for k in kandidat
+        if k["quantity_kg"] is not None
+        and abs(Decimal(str(k["quantity_kg"])) - Decimal(str(kuantitas_po)))
+        <= Decimal("0.01")
+    ]
+    return cocok[0] if len(cocok) == 1 else None
+
+
+async def _tautkan_po_ke_keputusan(db: AsyncSession) -> dict:
+    """Isi `decision_id` PO yang pemicunya TERBUKTI ada; sisanya dilaporkan.
+
+    Latar (audit numerik 26 Okt 2026, NUM-01 + integritas database D-05):
+    KPI `Safe Delivered Cost` hanya menghitung PO yang tertaut ke keputusan
+    (`kpi_service.py`), sedangkan builder meninggalkan PO tanpa tautan sehingga
+    rantai keputusan→PO tidak terbukti dan cek ">1 PO per keputusan" lulus
+    secara vakum.
+
+    Yang TIDAK dilakukan di sini: memasangkan PO impor SAP (`4500000xxx`) ke
+    keputusan mana pun yang kebetulan berkomoditas sama. Baris impor memang
+    tidak lahir dari keputusan (lihat `api/sap_orders.py`), jadi pasangan
+    seperti itu akan menjadi relasi karangan. Bukti: pada dataset 26 Okt 2026
+    ke-12 PO impor tidak punya SATU pun kandidat (pemasok+komoditas+kuantitas
+    sama) — angkanya dilaporkan apa adanya di `laporan["po_tautan"]`.
+    """
+    komoditas = {
+        nama for (nama,) in (await db.execute(select(Commodity.name))).all()
+    }
+    po_tanpa = list(
+        (
+            await db.execute(
+                select(SapMockPurchaseOrder).where(
+                    SapMockPurchaseOrder.decision_id.is_(None)
+                )
+            )
+        ).scalars()
+    )
+    ditautkan: list[str] = []
+    tanpa_kandidat: list[str] = []
+    ambigu: list[str] = []
+    for po in po_tanpa:
+        nama = komoditas_material(po.material_number, komoditas)
+        if nama is None or po.supplier_id is None:
+            tanpa_kandidat.append(po.po_number)
+            continue
+        baris = (
+            await db.execute(
+                select(Decision.id, Decision.quantity_kg)
+                .join(Commodity, Commodity.id == Decision.commodity_id)
+                .where(
+                    Commodity.name == nama,
+                    Decision.supplier_id == po.supplier_id,
+                    Decision.status == "executed",
+                )
+            )
+        ).all()
+        kandidat = [{"id": r[0], "quantity_kg": r[1]} for r in baris]
+        if not kandidat:
+            tanpa_kandidat.append(po.po_number)
+            continue
+        pilihan = pilih_keputusan_pemicu(po.ordered_quantity or Decimal("0"), kandidat)
+        if pilihan is None:
+            ambigu.append(po.po_number)
+            continue
+        po.decision_id = pilihan["id"]
+        ditautkan.append(po.po_number)
+    await db.flush()
+    return {
+        "ditautkan": len(ditautkan),
+        "nomor_ditautkan": ditautkan,
+        "tanpa_kandidat": len(tanpa_kandidat),
+        "nomor_tanpa_kandidat": tanpa_kandidat,
+        "ambigu": len(ambigu),
+        "nomor_ambigu": ambigu,
+    }
+
+
 async def _semai_bukti_dan_rantai(db: AsyncSession, now: datetime) -> dict:
     """Lengkapi dua hal yang membuat tab audit & KPI "hidup" sejak awal:
 
@@ -1345,7 +1534,7 @@ async def _semai_bukti_dan_rantai(db: AsyncSession, now: datetime) -> dict:
        bisa bergerak saat demo (setujui satu keputusan baru -> penyebut naik).
     """
     from app.models import Approval, DecisionEvidence
-    from app.services.ledger_service import append_block, bump_generation
+    from app.services.ledger_service import bump_generation
 
     # Residu audit N3 (24 Okt 2026): dulu baris ini mengosongkan tabel ledger,
     # sehingga "Siapkan data demo" menghapus SELURUH jejak audit — termasuk arsip
@@ -1354,35 +1543,10 @@ async def _semai_bukti_dan_rantai(db: AsyncSession, now: datetime) -> dict:
     # dan blok baru ditulis di atas rantai yang sama sehingga `prev_hash` tetap
     # nyambung.
     await bump_generation(db)
+    blok = await _tulis_blok_keputusan(db)
     keputusan = list(
         (await db.execute(select(Decision).order_by(Decision.created_at))).scalars()
     )
-    blok = 0
-    for d in keputusan:
-        await append_block(
-            db, action="decision.created", entity_id=d.id, actor_id=None,
-            payload={"decision_id": str(d.id), "decision_type": d.decision_type,
-                     "status_at_creation": "proposed"},
-        )
-        blok += 1
-        if d.verified_by:
-            await append_block(
-                db, action="verify", entity_id=d.id, actor_id=None,
-                payload={"decision_id": str(d.id), "verdict": d.verifier_note or "unknown"},
-            )
-            blok += 1
-        if d.status == "executed":
-            await append_block(
-                db, action="execute", entity_id=d.id, actor_id=None,
-                payload={"decision_id": str(d.id), "decision_type": d.decision_type},
-            )
-            blok += 1
-        elif d.status == "rejected":
-            await append_block(
-                db, action="reject", entity_id=d.id, actor_id=None,
-                payload={"decision_id": str(d.id), "reason": d.rejection_reason or ""},
-            )
-            blok += 1
 
     # Approval + bukti untuk keputusan operasional yang sudah dieksekusi.
     # 26 Okt 2026: dulu loop ini hanya menangani `regional_balance`, sehingga
@@ -1460,6 +1624,17 @@ async def _semai_bukti_dan_rantai(db: AsyncSession, now: datetime) -> dict:
         # dari keputusan, jadi nomornya memakai `nomor_po` yang sama dengan
         # eksekusi nyata.
         if berpo:
+            # Satu keputusan hanya boleh punya SATU PO. Tanpa cek ini, keputusan
+            # yang PO-nya sudah ada (mis. hasil tautan PO impor di
+            # `_tautkan_po_ke_keputusan`) akan mendapat PO kedua dan melanggar
+            # invarian ">1 PO per keputusan = 0".
+            sudah_ada_po = (
+                await db.execute(
+                    select(func.count())
+                    .select_from(SapMockPurchaseOrder)
+                    .where(SapMockPurchaseOrder.decision_id == d.id)
+                )
+            ).scalar_one()
             nama_komoditas = (
                 await db.execute(
                     select(Commodity.name).where(Commodity.id == d.commodity_id)
@@ -1484,7 +1659,7 @@ async def _semai_bukti_dan_rantai(db: AsyncSession, now: datetime) -> dict:
                     )
                 )
             ).scalar_one_or_none()
-            if sudah is None:
+            if sudah is None and not sudah_ada_po:
                 db.add(
                     SapMockPurchaseOrder(
                         id=kunci_po,
@@ -1510,6 +1685,114 @@ async def _semai_bukti_dan_rantai(db: AsyncSession, now: datetime) -> dict:
         "po": ditambah_po,
     }
 
+
+
+async def _tulis_blok_keputusan(db: AsyncSession) -> int:
+    """Tulis blok ledger untuk keputusan yang belum punya blok di generasi aktif.
+
+    Idempoten per generasi: keputusan yang sudah berblok di generasi aktif
+    dilewati, sehingga fungsi ini aman dipanggil berkali-kali (bangun-ulang
+    memanggilnya dari dua tempat) dan tidak menggandakan jejak audit.
+    """
+    from app.services.ledger_service import append_block, current_generation
+
+    generasi = await current_generation(db)
+    sudah = set(
+        (
+            await db.execute(
+                text(
+                    "SELECT DISTINCT entity_id FROM ledger_blocks "
+                    "WHERE generation = :g AND entity_id IS NOT NULL"
+                ),
+                {"g": generasi},
+            )
+        ).scalars()
+    )
+    keputusan = list(
+        (await db.execute(select(Decision).order_by(Decision.created_at))).scalars()
+    )
+    ditulis = 0
+    for d in keputusan:
+        if d.id in sudah:
+            continue
+        await append_block(
+            db, action="decision.created", entity_id=d.id, actor_id=None,
+            payload={"decision_id": str(d.id), "decision_type": d.decision_type,
+                     "status_at_creation": "proposed"},
+        )
+        ditulis += 1
+        if d.verified_by:
+            await append_block(
+                db, action="verify", entity_id=d.id, actor_id=None,
+                payload={"decision_id": str(d.id), "verdict": d.verifier_note or "unknown"},
+            )
+            ditulis += 1
+        if d.status == "executed":
+            await append_block(
+                db, action="execute", entity_id=d.id, actor_id=None,
+                payload={"decision_id": str(d.id), "decision_type": d.decision_type},
+            )
+            ditulis += 1
+        elif d.status == "rejected":
+            await append_block(
+                db, action="reject", entity_id=d.id, actor_id=None,
+                payload={"decision_id": str(d.id), "reason": d.rejection_reason or ""},
+            )
+            ditulis += 1
+        sudah.add(d.id)
+    return ditulis
+
+
+#: Blok yatim = blok generasi aktif yang `entity_id`-nya sudah tidak ada.
+#: Query yang sama dipakai `GET /ledger/verify` (`ledger_service.verify_chain`),
+#: supaya angka di gate dan angka di API tidak pernah berbeda definisi.
+_YATIM_SQL = """
+SELECT count(*) FROM ledger_blocks lb
+WHERE lb.generation = :g AND lb.entity_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM decisions d WHERE d.id = lb.entity_id)
+  AND NOT EXISTS (SELECT 1 FROM batches b WHERE b.id = lb.entity_id)
+  AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = lb.entity_id)
+  AND NOT EXISTS (SELECT 1 FROM locations l WHERE l.id = lb.entity_id)
+"""
+
+
+async def _rapikan_cakupan_ledger(db: AsyncSession) -> dict:
+    """Tutup celah blok yatim secara struktural di akhir bangun-ulang.
+
+    Kenapa ada (audit integritas database 26 Okt 2026, D-02): bangun-ulang
+    menghapus & membuat ulang keputusan di beberapa langkah. Setiap langkah yang
+    menghapus baris SUDAH berblok meninggalkan blok yatim di generasi aktif —
+    terukur 12 blok pada snapshot audit, dan 22 blok saat direproduksi.
+
+    Perbaikan per-langkah ada (`bump_bila_berblok` di `_seed_demo_cases`), tetapi
+    langkah baru bisa lahir tanpa itu. Fungsi ini jaring terakhir: ukur dulu,
+    naikkan generasi bila perlu (blok lama menjadi arsip — rantai hash utuh,
+    tidak ada blok sah yang dihapus), lalu lengkapi blok untuk keputusan hidup.
+    """
+    from app.services.ledger_service import bump_generation, current_generation
+
+    generasi = await current_generation(db)
+    yatim = int(
+        (await db.execute(text(_YATIM_SQL), {"g": generasi})).scalar_one()
+    )
+    naik = False
+    if yatim:
+        await bump_generation(db)
+        naik = True
+    ditulis = await _tulis_blok_keputusan(db)
+    sesudah = int(
+        (
+            await db.execute(
+                text(_YATIM_SQL), {"g": await current_generation(db)}
+            )
+        ).scalar_one()
+    )
+    return {
+        "yatim_sebelum": yatim,
+        "generasi_dinaikkan": naik,
+        "blok_ditulis": ditulis,
+        "yatim_sesudah": sesudah,
+    }
 
 
 async def _selaraskan_sdc_jejak(db: AsyncSession) -> dict:
@@ -1670,18 +1953,44 @@ async def _lengkapi_bukti_kasus(db: AsyncSession, now: datetime) -> dict:
 
 
 async def _bekukan(db: AsyncSession) -> dict:
-    """Balik semua baris demo menjadi template yang tidak ikut dibuang."""
+    """Tandai baris demo sebagai CETAKAN tanpa mengubah provenance-nya.
+
+    Kenapa berubah (audit integritas database 26 Okt 2026, D-04): dulu fungsi ini
+    menulis `origin='seed'` untuk semua baris berstempel. Akibatnya 26 keputusan
+    `demo_case` kehilangan provenance (0 baris `origin='demo'`), invarian "baris
+    kanonik tidak boleh berstempel" lulus secara VAKUM, dan data turunan demo
+    tidak bisa dibedakan dari data kanonik.
+
+    Sekarang: `origin` TIDAK disentuh. Penanda beku = stempel ke sesi sentinel
+    `cetakan` (lihat `demo_session.cetakan`), yang tidak pernah aktif dan tidak
+    pernah dihapus penyapu sesi. Jadi template tetap selamat dari "Akhiri sesi",
+    dan provenance-nya tetap jujur.
+    """
+    penanda = await sesi.cetakan(db)
     total = 0
     for model in sesi.model_bersesi():
-        nilai = {"demo_session_id": None}
-        if "origin" in model.__table__.columns:
-            nilai["origin"] = "seed"
-        hasil = await db.execute(
-            update(model).values(**nilai).execution_options(synchronize_session=False)
-        )
+        kolom = model.__table__.columns
+        if "origin" in kolom:
+            # Hanya baris DEMO yang ditandai. Baris kanonik `origin='seed'`
+            # dibiarkan tanpa stempel — itu justru yang dijaga invariannya.
+            hasil = await db.execute(
+                update(model)
+                .where(kolom.origin == "demo")
+                .values(demo_session_id=penanda)
+                .execution_options(synchronize_session=False)
+            )
+        else:
+            # Tabel jembatan tanpa kolom origin tidak bisa dibedakan; lepaskan
+            # stempelnya seperti sebelumnya supaya tidak terhapus bersama sesi.
+            hasil = await db.execute(
+                update(model)
+                .values(demo_session_id=None)
+                .execution_options(synchronize_session=False)
+            )
         total += int(hasil.rowcount or 0)
     await db.commit()
-    return {"baris_dibekukan": total}
+    return {"baris_dibekukan": total, "cetakan_session_id": str(penanda)}
+
 
 
 async def _bersihkan_sisa(db: AsyncSession) -> dict:
@@ -1823,6 +2132,9 @@ async def build_into(db: AsyncSession, *, purge: bool = True, freeze: bool = Tru
     laporan["penerimaan"] = await _semai_penerimaan(db, now)
     laporan["eksklusi"] = await _semai_eksklusi(db, now)
     laporan["status_tambahan"] = await _semai_status_tambahan(db, now)
+    # NUM-01/D-05: isi tautan keputusan→PO yang pemicunya terbukti ada. Baris
+    # impor SAP yang tidak punya pemicu dibiarkan NULL dan dilaporkan.
+    laporan["po_tautan"] = await _tautkan_po_ke_keputusan(db)
     laporan["bukti"] = await _semai_bukti_dan_rantai(db, now)
     laporan["bukti_tambahan"] = await _lengkapi_bukti_kasus(db, now)
     # Invarian "penolakan selalu punya pencatat" — lihat docstring fungsinya.
@@ -1843,6 +2155,10 @@ async def build_into(db: AsyncSession, *, purge: bool = True, freeze: bool = Tru
     # dengan satu approval tanpa mengubah rumus KPI. Lihat
     # `app/seed/demo_kasus_bukti.py`.
     laporan["kasus_bukti"] = await semai_kasus_bukti_hari_ini(db, now)
+    # D-02: tidak boleh ada blok ledger generasi aktif yang menunjuk entitas
+    # yang sudah dihapus langkah-langkah di atas. Jaring terakhir, bukan
+    # pengganti perbaikan per-langkah.
+    laporan["cakupan_ledger"] = await _rapikan_cakupan_ledger(db)
     await db.commit()
     if freeze:
         laporan["beku"] = await _bekukan(db)

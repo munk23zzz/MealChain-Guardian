@@ -324,6 +324,7 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
         }
     if force and existing:
         # Hanya baris demo (demo_case NOT NULL) kota ini yang dihapus.
+        ids = [d.id for d in existing]
         await db.execute(
             delete(Decision).where(
                 Decision.demo_case.in_(DEMO_CASES),
@@ -331,6 +332,12 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
             )
         )
         await db.flush()
+        # D-02: blok ledger tidak punya FK ke `decisions`, jadi keputusan yang
+        # sudah berblok harus "diarsipkan" dengan menaikkan generasi. Tanpa ini
+        # /ledger/verify melaporkan blok yatim di generasi aktif (terukur: 12).
+        from app.services.ledger_service import bump_bila_berblok
+
+        await bump_bila_berblok(db, ids)
 
     locations = (await db.execute(select(Location))).scalars().all()
     loc = _loc_map(locations)
