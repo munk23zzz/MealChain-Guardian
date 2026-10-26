@@ -1,5 +1,7 @@
 # Seed kasus demo per kota — 18 Oktober 2026
 
+> **Snapshot 18 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Audit 18 Okt mayor **M4** (seed selalu Jakarta) dan **M12** (`source_location_id = target_location_id` pada riwayat demo).
 
 ## Masalah

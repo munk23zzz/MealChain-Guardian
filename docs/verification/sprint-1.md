@@ -1,5 +1,7 @@
 # Verifikasi Sprint 1 — Business Logic Inti + Data
 
+> **Snapshot tahun 2026 (tanggal tidak tertulis)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 > **ADDENDUM revisi Roy 2026-10-03 (setelah review Sprint 1):**
 > 1. **Desain quote supplier (revisi kedua — FINAL):** source kembali ke dua nilai
 >    generik `'pihps_reference' | 'supplier_quote'`; identitas supplier ada di

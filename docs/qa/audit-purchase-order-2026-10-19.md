@@ -1,5 +1,7 @@
 # Audit Purchase Order (19 Okt 2026)
 
+> **Snapshot 19 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Permintaan pemilik: *"Purchase order (mock lokal) untuk bagian ini tolong di audit secara
 rinci dan ketat dong, bagaimana cara kerja dia dan proses, logika nya bagaimana supaya
 jelas dan kata kata di fe tolong di perbaiki supaya seperti aplikasi bukan demo."*

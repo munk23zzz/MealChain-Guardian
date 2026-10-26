@@ -1,5 +1,7 @@
 # Audit ulang halaman Overview — 22 Oktober 2026 (r2)
 
+> **Snapshot 22 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tujuan: memastikan tidak ada proses yang error atau angka yang tidak sesuai di tab **Overview**,
 setelah perbaikan audit menyeluruh pagi hari ini (`audit-menyeluruh-2026-10-22.md`).
 

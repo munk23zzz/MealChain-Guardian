@@ -1,5 +1,7 @@
 # AgentCore Runtime — artefak siap, deploy tertahan IZIN IAM
 
+> **Snapshot tahun 2026 (tanggal tidak tertulis)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tanggal: 2026-10-16 · Assignee: Hermes · Repo: `E:\hackathon\HackathonAWS\mealchain-guardian`
 
 Catatan nama berkas: `docs/verification/fase-12.md` sudah dipakai pekerjaan peta (sesi lain), jadi

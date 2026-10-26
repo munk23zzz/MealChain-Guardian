@@ -1,5 +1,7 @@
 # `can_execute` mencerminkan pagar eksekusi — 18 Oktober 2026
 
+> **Snapshot 18 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Audit 18 Okt butir **M5** (eksekusi): read model menyatakan `can_execute=True`
 padahal `/actions/execute` pasti menolak. Empat penyebab yang tidak diperiksa
 read model:

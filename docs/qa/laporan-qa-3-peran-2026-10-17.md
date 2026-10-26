@@ -1,5 +1,7 @@
 # Laporan QA 3 Peran — MealChain Guardian
 
+> **Snapshot 17 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tanggal: 17 Oktober 2026 · Lingkungan: `http://localhost:3010` (docker compose: frontend, backend, mock-sap, postgres) · Metode: skill `dogfood` (exploratory QA) + `ui-copy-hygiene` (kebersihan teks UI)
 Akun demo: `sppg.head@demo.local` (SPPG Head), `sppg.nutritionist@demo.local` (Nutritionist), akun BGN Monitor — login lewat tombol demo di halaman masuk.
 

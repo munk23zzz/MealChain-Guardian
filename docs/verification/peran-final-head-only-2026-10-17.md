@@ -1,5 +1,7 @@
 # Peran final: Head-only propose/execute + dua approval + pagar tata kelola
 
+> **Snapshot 17 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 **Tanggal:** 2026-10-17 · **Repo:** `E:\hackathon\HackathonAWS\mealchain-guardian`
 **Dasar keputusan owner:** PLAN.md §13.1, §13.3, dan pilihan "a" untuk jalur admin
 Monitor (dipertahankan + pagar). Ceklis pembanding: `docs/verification/ceklis-role-vs-plan-2026-10-17.md`.

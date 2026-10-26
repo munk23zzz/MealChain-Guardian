@@ -1,5 +1,7 @@
 # Perluasan deret aktual sampai 5 November
 
+> **Snapshot 8 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tanggal: 2026-10-16 (malam) – 2026-10-17.
 
 ## Masalah yang diperbaiki

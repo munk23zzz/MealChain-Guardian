@@ -176,7 +176,7 @@
       {
         "name": "migrasi alembic head",
         "sql": "SELECT version_num FROM alembic_version",
-        "expect": "030_approval_four_eyes_unique"
+        "expect": "033_indeks_fk_hilang"
       },
       {
         "name": "jumlah batch di DB",
@@ -269,6 +269,31 @@
       {
         "name": "horizon pasokan tercatat (max recorded_at <= 31 hari)",
         "sql": "SELECT count(*) FROM supply_records WHERE recorded_at = (SELECT max(recorded_at) FROM supply_records) AND recorded_at > now() + interval '31 days'",
+        "expect": 0
+      },
+      {
+        "name": "PO tanpa berat (ordered_quantity <= 0) — audit data 26 Okt 2026",
+        "sql": "SELECT count(*) FROM sap_mock_purchase_orders WHERE ordered_quantity <= 0",
+        "expect": 0
+      },
+      {
+        "name": "PO bermaterial generik MAT-UMUM",
+        "sql": "SELECT count(*) FROM sap_mock_purchase_orders WHERE upper(material_number) = 'MAT-UMUM'",
+        "expect": 0
+      },
+      {
+        "name": "keputusan ditolak tanpa pencatat (baris approvals approved=false)",
+        "sql": "SELECT count(*) FROM decisions d WHERE d.status = 'rejected' AND NOT EXISTS (SELECT 1 FROM approvals a WHERE a.decision_id = d.id AND a.approved IS FALSE)",
+        "expect": 0
+      },
+      {
+        "name": "jejak agent berisi teks template ('template status demo')",
+        "sql": "SELECT count(*) FROM agent_traces WHERE output_summary::text ILIKE '%template status demo%'",
+        "expect": 0
+      },
+      {
+        "name": "sdc di jejak DECIDE sama dengan SDC keputusan (±1 rupiah)",
+        "sql": "SELECT count(*) FROM agent_traces t JOIN decisions d ON d.id = t.decision_id WHERE (t.output_summary->>'sdc') IS NOT NULL AND d.safe_delivered_cost IS NOT NULL AND abs((t.output_summary->>'sdc')::numeric - d.safe_delivered_cost) > 1",
         "expect": 0
       }
     ]

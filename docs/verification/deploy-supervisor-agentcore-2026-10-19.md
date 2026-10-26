@@ -1,5 +1,7 @@
 # Deploy Supervisor Agent ke AgentCore Runtime — 2026-10-19
 
+> **Snapshot 19 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Status: **berhasil**. Runtime `mealchain_supervisor_agent` versi **18**, status
 `READY`, dan backend memakainya sebagai **primary** di rantai agent.
 

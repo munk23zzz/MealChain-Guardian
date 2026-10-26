@@ -1,5 +1,7 @@
 # Migrasi AWS ke akun 624606539664 — 2026-10-11
 
+> **Snapshot 11 Oktober 2026 (dari waktu berkas)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 ## Masalah yang dipecahkan
 
 Kredensial di `.env` milik akun **679583588036** (user IAM `mealchain`), tetapi **tidak ada

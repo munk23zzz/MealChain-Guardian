@@ -1,5 +1,7 @@
 # W-5 — Purchase order mock SAP terbaca (17 Okt 2026)
 
+> **Snapshot 17 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Status: **selesai, terverifikasi**. Rute: `GET /sap/purchase-orders` dan
 `GET /sap/purchase-orders/summary`; UI: panel "Purchase order (mock SAP)" di tab
 **Decision & Evidence**, nomor PO di drawer tidak berubah dan di jejak agent (ACT).

@@ -1,5 +1,7 @@
 # Penomoran PO seragam — 18 Okt 2026
 
+> **Snapshot 18 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 ## Masalah
 
 `sap_mock_purchase_orders` menyimpan tiga gaya nomor:

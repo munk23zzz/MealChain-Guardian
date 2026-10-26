@@ -1,5 +1,7 @@
 # Ceklis fitur per role vs PLAN.md
 
+> **Snapshot 17 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 **Tanggal pengukuran:** 2026-10-17 (pagi WIB) · **Repo:** `E:\hackathon\HackathonAWS\mealchain-guardian`
 **Acuan:** `PLAN.md` §13 (kebijakan final owner) + §7A (modul & prioritas) + §13.2 (scope).
 §5 PLAN.md adalah **arsip** perilaku lama, bukan target.

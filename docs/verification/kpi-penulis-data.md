@@ -1,5 +1,7 @@
 # Penulis data KPI — kenapa halaman "KPI & Kualitas Agen" tampak kosong
 
+> **Snapshot tahun 2026 (tanggal tidak tertulis)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tanggal: 2026-10-16 (malam). Permintaan pemilik (verbatim):
 
 > "untuk page kpi kenapa informasi seperti tidak di berikan atau berjalan?

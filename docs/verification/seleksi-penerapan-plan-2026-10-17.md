@@ -1,5 +1,7 @@
 # Seleksi ketat PLAN.md → apa yang akan diterapkan ke MealChain Guardian
 
+> **Snapshot 17 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 **Tanggal:** 2026-10-17 (pengukuran 00:52–02:10 WIB)
 **Sumber yang diteliti:** `D:\Downloads\PLAN.md` (757 baris, audit 11 Okt 2026) — dibaca utuh, seluruh 23 item (`PLAN-001`…`PLAN-023`) + addendum §13.1–§13.10
 **Objek verifikasi:** repo aktif `E:\hackathon\HackathonAWS\mealchain-guardian` (branch `feature/sprint2-decision-intelligence`, komit `af2cf6f`)

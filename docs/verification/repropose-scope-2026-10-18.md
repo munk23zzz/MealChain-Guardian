@@ -1,5 +1,7 @@
 # Re-propose dijaga cakupan lokasi — 18 Oktober 2026
 
+> **Snapshot 18 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Audit 18 Okt butir **M3** (izin & cakupan): `POST /actions/repropose` hanya
 memanggil `require_scope` di cabang `ADMIN_TYPES`. Untuk keputusan operasional
 (`regional_balance`, `safety_disruption`, `price_anomaly`) penjaga cakupan tidak

@@ -1,5 +1,7 @@
 # Sprint 3 Verification — Agent Layer (S3-00..S3-16)
 
+> **Snapshot 16 Oktober 2026 (dari waktu berkas)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 > Semua angka di bawah adalah hasil eksekusi aktual (fresh run dari HEAD,
 > 2026-10-06, container mealchain). Tidak ada klaim sukses provider eksternal
 > tanpa evidence live; hop yang tidak tersedia dilaporkan jujur sebagai

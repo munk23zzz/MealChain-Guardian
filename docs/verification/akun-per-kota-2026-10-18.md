@@ -1,5 +1,7 @@
 # Akun approver per kota — 18 Oktober 2026
 
+> **Snapshot 18 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Keputusan produk 3A (pilihan user): demo tetap multi-kota, dengan approver sendiri di setiap kota.
 
 ## Masalah yang ditutup

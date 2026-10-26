@@ -29,7 +29,7 @@ if [[ -n "${DATABASE_URL:-}" ]]; then
 fi
 
 echo "[1/4] snapshot canonical (8 Okt 2026 12.00 UTC)"
-"${COMPOSE[@]}" backend python -m app.seed.seed_data \
+"${COMPOSE[@]}" -e DEMO_MODE=true backend python -m app.seed.seed_data \
   --reference-time 2026-10-08T12:00:00+00:00 --with-demo-users --with-demo-suppliers
 
 if [[ "${1:-}" == "--canonical" ]]; then
@@ -96,7 +96,7 @@ asyncio.run(main())
 # tidak ada lagi sehingga test_actions kehabisan batch "telur @ Cianjur".
 # Seed kanonik diulang di akhir — idempoten, ±10 detik.
 echo "[5/5] pastikan snapshot kanonik utuh (origin='seed')"
-"${COMPOSE[@]}" backend python -m app.seed.seed_data \
+"${COMPOSE[@]}" -e DEMO_MODE=true backend python -m app.seed.seed_data \
   --reference-time 2026-10-08T12:00:00+00:00 --with-demo-users --with-demo-suppliers >/dev/null
 
 echo "selesai. Cek: GET /demo/data-status (tabel terisi, 0 baris tanpa stempel)."

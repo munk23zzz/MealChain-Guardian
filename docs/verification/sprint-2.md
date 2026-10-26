@@ -1,5 +1,7 @@
 # Verifikasi Sprint 2 — Decision Intelligence + Balancing
 
+> **Snapshot tahun 2026 (tanggal tidak tertulis)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tanggal: 2026-10-05/06 · Branch: `feature/sprint2-decision-intelligence` · BASE: `b6d85c8` (plan `03bdf7d`)
 Metode: subagent-driven-development (plan `.hermes/plans/2026-10-05-sprint2-decision-intelligence.md`), TDD ketat RED→GREEN→REFACTOR per task, ledger `.superpowers/sdd/2026-10-05-sprint2-decision-intelligence/progress.md`.
 

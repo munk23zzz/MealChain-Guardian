@@ -1,5 +1,7 @@
 # Tombol "Ajukan untuk persetujuan" — 18 Oktober 2026
 
+> **Snapshot 18 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Fase 0 butir 1 dari audit 18 Okt (BLOCKER A1): keputusan yang lahir `proposed` tidak punya jalan ke `pending_approval`.
 
 ## Masalah

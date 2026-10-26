@@ -1,5 +1,7 @@
 # Fase 9 — pemasok: profil kanonik dari data nyata & penanda "sedang mengirim"
 
+> **Snapshot tahun 2026 (tanggal tidak tertulis)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tanggal: 2026-10-16. Permintaan pemilik (verbatim):
 
 > "untuk db suplier anda cek laagi apakah sudah benar, jika belum perbaiki dan

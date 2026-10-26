@@ -1,5 +1,7 @@
 # Data demo Jakarta lengkap — 19 Okt 2026
 
+> **Snapshot 19 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Permintaan pemilik: *"buat data mock untuk jakarta lengkap jadi semua indikator ada datanya
 tidak 0 ataupun tidak ada data dan perbanyak datanya"*.
 

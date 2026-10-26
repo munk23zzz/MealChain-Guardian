@@ -1,5 +1,7 @@
 # Status `approved` saat kuorum penuh — 18 Oktober 2026
 
+> **Snapshot 18 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Keputusan produk 2A (pilihan user): status `approved` ditulis sebagai keadaan sah, bukan dihapus dari kosakata.
 
 ## Masalah yang ditutup

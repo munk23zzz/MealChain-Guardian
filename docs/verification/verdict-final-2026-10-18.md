@@ -1,5 +1,7 @@
 # Verdict audit tidak bisa ditimpa — 18 Oktober 2026
 
+> **Snapshot 18 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Audit 18 Okt butir **M2**: `/actions/verify` boleh dipanggil berulang selama
 belum ada approval, dan setiap panggilan menimpa `verifier_note`. Tidak ada
 jejak percobaan, tidak ada blok ledger. Akibatnya hasil audit bisa "diulang

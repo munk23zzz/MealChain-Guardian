@@ -1,5 +1,7 @@
 # Fase 10 — garis JALUR KIRIMAN (pemasok → tujuan) mengikuti jalan
 
+> **Snapshot tahun 2026 (tanggal tidak tertulis)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tanggal: 2026-10-16. Permintaan pemilik (verbatim):
 
 > "dimap ada seperti garis mengikuti jalur dari suplier ke tujuan"

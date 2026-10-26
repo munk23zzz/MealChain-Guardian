@@ -1,5 +1,7 @@
 # Audit menyeluruh MealChain Guardian — 22 Oktober 2026
 
+> **Snapshot 22 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tujuan: memastikan semua proses yang dipakai user berjalan, bukan hanya layar yang tampak.
 Metode: tiga lapis — (1) sapu seluruh endpoint dengan tiga peran, (2) jalankan alur tulis
 end-to-end seperti yang dilakukan UI, (3) telusuri semua layar per peran lewat browser sambil

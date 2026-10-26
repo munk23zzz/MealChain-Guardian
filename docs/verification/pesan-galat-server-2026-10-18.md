@@ -1,5 +1,7 @@
 # Pesan galat server sampai ke layar — 18 Okt 2026
 
+> **Snapshot 18 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Dua sisa audit 18 Okt yang dikerjakan berurutan: alasan 409 yang hilang di UI,
 dan kata "ulang" yang salah pada `/actions/propose`.
 

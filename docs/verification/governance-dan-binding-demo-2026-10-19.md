@@ -1,5 +1,7 @@
 # Governance & persetujuan + bukti binding kasus demo — 19 Oktober 2026
 
+> **Snapshot 19 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Dua jalur dikerjakan berurutan atas permintaan pemilik: (A) kasus demo harus
 punya bukti `allocation_binding` sendiri supaya alur dua peran tidak tertahan
 "pemasok tidak dikenal", lalu gerbang backend penuh; (B) UI "Governance &

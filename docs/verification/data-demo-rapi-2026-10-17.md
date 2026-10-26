@@ -1,5 +1,7 @@
 # Merapikan data demo (17 Okt 2026, 21:0x WIB)
 
+> **Snapshot 17 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tujuan: layar demo bersih dari residu run tes — tanpa menyentuh kode, tanpa
 merusak rantai bukti, dan tanpa memalsukan apa pun. Semua angka di bawah diukur
 sebelum/sesudah di DB yang sama (`mealchain`).

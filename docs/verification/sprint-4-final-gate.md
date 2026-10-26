@@ -1,5 +1,7 @@
 # Final Sprint 4 Acceptance Gate — MealChain Guardian
 
+> **Snapshot 9 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tanggal eksekusi gate: **9 Oktober 2026** (+07:00). Branch `feature/sprint2-decision-intelligence`,
 working tree berisi implementasi Sprint 4 (belum di-commit — keputusan commit milik Roy).
 Format laporan mengikuti checklist **Final Sprint 4 Acceptance Gate (plan §17)** — plan

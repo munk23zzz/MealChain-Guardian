@@ -152,7 +152,7 @@
       {
         "name": "migrasi alembic head",
         "sql": "SELECT version_num FROM alembic_version",
-        "expect": "030_approval_four_eyes_unique"
+        "expect": "033_indeks_fk_hilang"
       },
       {
         "name": "suppliers rows",

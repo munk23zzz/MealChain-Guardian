@@ -1,5 +1,7 @@
 # Approve wajib setelah verifikasi — 18 Oktober 2026
 
+> **Snapshot 18 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Fase 0 butir 2 dari audit 18 Okt (BLOCKER A2): persetujuan mendahului verifikasi membuat keputusan mati permanen.
 
 ## Masalah

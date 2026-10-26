@@ -1,5 +1,7 @@
 # Audit angka frontend vs database — 18 Okt 2026
 
+> **Snapshot 18 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Pertanyaan pemilik: "apakah ada angka di frontend yang tidak terhubung ke database
 padahal seharusnya terhubung?" Metode: setiap angka di layar dilacak UI → API → DB,
 lalu bandingkan dengan query langsung ke Postgres `mealchain` pada saat yang sama.

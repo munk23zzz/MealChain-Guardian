@@ -62,6 +62,11 @@ docker compose exec -T backend python -m app.seed.seed_data \
 docker compose exec -T backend python -m app.seed.suppliers_demo   # bisa diulang, idempoten
 ```
 
+Catatan angka: 30 pemasok demo + 14 kanonik = 44 baris itu keadaan **jalur seed kanonik**.
+Template demo (`Siapkan data demo`, `python -m app.seed.demo_template`) menyemai **60 pemasok**
+(35 hygiene, 17 HACCP, 8 tanpa sertifikat). Jangan memakai angka jalur seed untuk memeriksa
+lingkungan demo — pakai `docs/state-snapshot.md`.
+
 Kalau dump gagal karena schema bentrok (volume sudah terisi migration awal), reset dulu:
 
 ```bash

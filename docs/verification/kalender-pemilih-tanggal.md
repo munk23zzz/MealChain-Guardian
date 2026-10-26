@@ -1,5 +1,7 @@
 # Kalender agenda — langkah 3: popup pemilih tanggal (2026-10-17)
 
+> **Snapshot 17 Oktober 2026 (dari waktu berkas)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Permintaan pemilik: *"perbaiki fitur kalender… saya mau kalender yang mana sebuah icon
 kecil yang bisa di klik dan menampilkan pop up untuk memilih tanggal bulan tahun"*
 (didahului riset karena diminta: "sebelum membuatnya di frontend anda research dulu").

@@ -1,5 +1,7 @@
 # Verifikasi Fase 7d — jarak pemasok masuk biaya SDC
 
+> **Snapshot 15 Oktober 2026 (dari waktu berkas)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 **Tanggal:** 15 Oktober 2026 · **Pelaksana:** Hermes · **Ruling:** `docs/ruling-2026-10-15-jarak-pemasok-biaya.md`
 **Repo:** `E:\hackathon\HackathonAWS\mealchain-guardian` (backend :8000, frontend :3010, postgres :15432)
 

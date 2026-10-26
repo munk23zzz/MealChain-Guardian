@@ -1,5 +1,7 @@
 # Temuan review-only & angka per peran — 18 Okt 2026
 
+> **Snapshot 18 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Dua sisa audit 18 Okt yang butuh keputusan produk. Owner memilih **A1** (status
 terminal `review_only`) dan **B1** (hitungan "menunggu tindakan" per peran).
 

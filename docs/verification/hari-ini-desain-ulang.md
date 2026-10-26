@@ -1,5 +1,7 @@
 # Verifikasi — desain ulang halaman "Hari Ini" (2026-10-17)
 
+> **Snapshot 17 Oktober 2026 (dari waktu berkas)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Permintaan pemilik (verbatim):
 
 > berati hapus untuk kelender agenda yang yang bukan pop up namun untuk informasi nya tetap

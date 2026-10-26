@@ -1,5 +1,7 @@
 # Ceklis fitur MealChain Guardian — yang sudah dan belum terimplementasi
 
+> **Snapshot 17 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 **Tanggal pengukuran:** 2026-10-17 00:52 WIB (16 Okt 17:52 UTC)
 **Repo:** `E:\hackathon\HackathonAWS\mealchain-guardian`
 **Branch:** `feature/sprint2-decision-intelligence` · komit terakhir `af2cf6f` (2026-10-17 00:23)

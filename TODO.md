@@ -6,6 +6,10 @@ yang membaca sesi berikutnya.
 
 Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 
+> **Angka keadaan** (jumlah keputusan/batch/pemasok/ledger, nilai KPI) tidak dirawat di berkas ini.
+> Sumbernya `docs/state-snapshot.md`, dihasilkan `scripts/snapshot_state.py` (baca-saja). Baris di
+> bawah yang menyebut angka adalah catatan sesi saat itu, bukan keadaan sekarang.
+
 ---
 
 ## Sprint 0 — Setup
@@ -40,8 +44,8 @@ Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
 
 | ID | Task | Kategori | Status | Assignee | Catatan |
 |---|---|---|---|---|---|
-| S2-01 | Endpoint `POST /cost/safe-delivered` | Backend/API | In Progress | Hermes | Engine SDC + perhitungan per kandidat selesai (Task 6/9, commit 9b1e083, a9bd9ae); endpoint standalone = carry-over plan-binding; Opsi A SDC dikunci 2026-10-06 |
-| S2-02 | Endpoint `POST /balance/analyze`, `/balance/recommend` | Backend/API | In Progress | Hermes | `/balance/recommend` + `/balance/{loc}/{com}` selesai (Task 10, commit 353be20); final correction HEAD 5deb4ef; 296 test backend |
+| S2-01 | Endpoint `POST /cost/safe-delivered` | Backend/API | Done | Hermes | Ditutup 26 Okt 2026: `POST /cost/safe-delivered` ada di `backend/openapi.json` (77 operasi, drift test PASS), dipakai kartu keputusan dan `verify/invariants.spec.json`. Opsi A SDC dikunci 2026-10-06 |
+| S2-02 | Endpoint `POST /balance/analyze`, `/balance/recommend` | Backend/API | Done | Hermes | Ditutup 26 Okt 2026: `POST /balance/analyze` dan `POST /balance/recommend` ada di `backend/openapi.json`; tes `tests/test_tool_contracts.py::test_balance_analyze_full_pipeline_with_summary` (gagal order-dependent, bukan karena endpointnya hilang). `/balance/{loc}/{com}` tetap ada |
 | S2-03 | Endpoint `POST /evidence/fuse` | Backend/API | Done | Hermes | Commit `93ca711` (S3-02); RBAC legacy ditutup 2026-10-08 (Revisi 10) |
 | S2-04 | Auth: JWT login + 3 role (sppg_head, sppg_nutritionist, bgn_monitor) | Authentication | Done | Hermes | Commit `77d3fdc` (S3-01) + akun demo; ditandai selesai Roy 2026-10-08 |
 | S2-05 | RBAC middleware per endpoint | Authentication | Done | Hermes | `require_roles`/`get_current_user` di SEMUA endpoint incl. legacy (Revisi 10, TDD + live probe); ditandai selesai Roy 2026-10-08 |

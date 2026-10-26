@@ -38,12 +38,14 @@ services:
       SAP_PRODUCT_MASTER_MODE: mock
       # Tanpa provider: verifier harus fail-closed (UNAVAILABLE), bukan menebak.
       VERIFIER_MODEL_PRIMARY: ""
+    # Seed data demo butuh DEMO_MODE=true; aplikasinya sendiri tetap berjalan
+    # dengan DEMO_MODE=false agar perilakunya seperti produksi (temuan D-01).
     command:
       - sh
       - -lc
       - >
         alembic upgrade head &&
-        python -m app.seed.seed_data --reference-time 2026-10-08T12:00:00+00:00
+        DEMO_MODE=true python -m app.seed.seed_data --reference-time 2026-10-08T12:00:00+00:00
         --with-demo-users --skip-routes &&
         uvicorn app.main:app --host 0.0.0.0 --port 8000
     ports:

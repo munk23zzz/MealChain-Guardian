@@ -17,7 +17,14 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
 DB=mealchain_gate
-DSN="postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/${DB}"
+# Kata sandi dibaca dari .env (tidak pernah ditulis di berkas ini). Dulu DSN
+# beserta sandi tertulis literal di sini — audit lineage F-01.
+sandi="$(
+  grep -E '^POSTGRES_PASSWORD=' .env 2>/dev/null \
+    | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'"
+)"
+sandi="${sandi:-mealchain_local}"
+DSN="postgresql+asyncpg://mealchain:${sandi}@postgres:5432/${DB}"
 OUT="_qa/gerbang-db-terpisah-$(date +%Y-%m-%d).txt"
 PAKAI_ULANG=0
 [[ "${1:-}" == "--pakai-ulang" ]] && PAKAI_ULANG=1

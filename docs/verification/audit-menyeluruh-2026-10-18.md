@@ -1,5 +1,7 @@
 # Audit Menyeluruh MealChain Guardian — 18 Oktober 2026
 
+> **Snapshot 18 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 **Waktu audit:** 18 Okt 2026, 17:10–17:35 WIB
 **Commit saat audit:** `c2e1ae1` (branch `feature/sprint2-decision-intelligence`)
 **Metode:** tiga audit paralel read-only (siklus hidup keputusan & matriks izin backend; wiring UI↔API; integritas data & KPI), lalu temuan terberat diverifikasi ulang langsung lewat kode dan SQL oleh auditor utama. Tidak ada data yang diubah, tidak ada endpoint mutasi yang dipanggil.

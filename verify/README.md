@@ -63,3 +63,19 @@ Artefak (laporan `.md/.json`, screenshot, log) mendarat di `verify-out*/` dan **
 
 Catatan: angka ini bisa berubah bila data demo berubah (ledger bertambah, user dari pytest).
 Gunakan `compare`/predikat, bukan total mentah.
+
+## Artefak laporan `verify-out*/` — dibuat ulang, tidak disimpan
+
+Folder `verify-out`, `verify-out-coldstart`, `verify-out-decisions`, `verify-out-forensics`,
+`verify-out-invariants`, `verify-out-roles`, dan `verify-out-tabs` adalah **keluaran** gate (report,
+log, dump JSON), bukan sumber. Semuanya di-ignore git (`verify/.gitignore: verify-out*/`) dan sudah
+dihapus dari working tree pada 26 Okt 2026 supaya repo tidak menumpuk 96 berkas (±15 MB) laporan lama.
+
+Membuatnya lagi: jalankan spec yang bersangkutan dengan
+`scripts/verify_stack.py` (skill `fullstack-verification`), mis.
+`python …/verify_stack.py verify/invariants.spec.json`. Path `artifact_dir` tiap spec menentukan
+folder keluarannya, jadi laporan baru akan muncul dengan nama yang sama seperti yang dikutip di
+`docs/audit/AUDIT_10_E2E_TEST_RESULTS.md`.
+
+Arsip satu kali dari kondisi sebelum penghapusan (bila perlu membandingkan angka lama):
+`C:\Users\User\AppData\Local\hermes\cache\scratch\verify-out-backup-20261026.tar.gz`.

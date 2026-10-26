@@ -1,5 +1,7 @@
 # Fase 11 — Supervisor Agent Strands + Event 1 penuh dari UI
 
+> **Snapshot tahun 2026 (tanggal tidak tertulis)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tanggal: 2026-10-16 · Assignee: Hermes · Repo: `E:\hackathon\HackathonAWS\mealchain-guardian`
 Branch: `feature/sprint2-decision-intelligence` (belum ada commit/push)
 

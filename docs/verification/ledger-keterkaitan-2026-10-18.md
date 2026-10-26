@@ -1,5 +1,7 @@
 # Ledger: keterkaitan blok, bukan hanya integritas rantai — 18 Oktober 2026
 
+> **Snapshot 18 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Fase 0 butir 4 dari audit 18 Okt (BLOCKER A4): `/ledger/verify` menjawab `{"valid": true}` padahal seluruh blok menunjuk entitas yang sudah tidak ada.
 
 ## Masalah

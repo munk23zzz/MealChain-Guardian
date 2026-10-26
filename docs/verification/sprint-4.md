@@ -1,5 +1,7 @@
 # Sprint 4 Verification — Event 2 & 3, KPI, Rulings, Polish (S4-01..S4-06)
 
+> **Snapshot 10 Oktober 2026 (dari waktu berkas)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 > **ADDENDUM 2026-10-09 (state terbaru, supersede angka di bawah bila
 > berbeda):** pasca-final-gate + overhaul visual, angka kini: backend
 > **551 passed EXIT=0** (full, 390s, pasca-polish — laporan

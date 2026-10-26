@@ -1,5 +1,7 @@
 # Audit integritas data — cara memastikan data demo "terstruktur", bukan cuma terlihat rapi
 
+> **Snapshot 17 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tanggal: 17 Okt 2026 · Skrip: `backend/scripts/audit_data_integrity.py` (read-only)
 Hasil sekarang: **VERDICT: BERSIH** (exit 0) · cadangan DB sebelum perapian:
 `C:\Users\User\AppData\Local\hermes\cache\scratch\db-demo-20261017-2130.sql` (5,7 MB, data-only)

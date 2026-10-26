@@ -1,5 +1,7 @@
 # Verifikasi batas SAP — adopsi Nabil B1–B3
 
+> **Snapshot tahun 2026 (tanggal tidak tertulis)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tanggal verifikasi: 2026-10-10
 
 ## Keputusan boundary

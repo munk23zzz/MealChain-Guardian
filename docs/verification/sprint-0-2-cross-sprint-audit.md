@@ -1,5 +1,7 @@
 # Audit Kontrak Lintas Sprint 0–2
 
+> **Snapshot tahun 2026 (tanggal tidak tertulis)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tanggal audit: 2026-10-06 (WIB)
 Branch: `feature/sprint2-decision-intelligence`
 HEAD audit: `5deb4ef`

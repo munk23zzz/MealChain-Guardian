@@ -1,5 +1,7 @@
 # Kalender agenda harian — langkah 1: endpoint `GET /agenda` (2026-10-16)
 
+> **Snapshot 17 Oktober 2026 (dari waktu berkas)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 ## Kenapa halaman "Hari Ini"
 
 Enam kandidat diperiksa dengan data nyata, bukan selera:

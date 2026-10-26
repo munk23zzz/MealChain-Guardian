@@ -1,5 +1,7 @@
 # Verifikasi Fase 6 — cakupan peran, pemasok di peta, rentang data demo
 
+> **Snapshot tahun 2026 (tanggal tidak tertulis)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tanggal: 2026-10-15
 Rencana: `.hermes/plans/2026-10-14_scope-pemasok-peta-rentang.md` (Fase 6)
 Lingkungan: Docker Compose lokal — `mealchain-postgres` (:15432), `mealchain-backend` (:8000),

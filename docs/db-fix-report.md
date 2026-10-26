@@ -5,6 +5,11 @@ Branch: `feature/db-modes-demo-coverage`
 Ruang lingkup: `E:\hackathon\HackathonAWS\mealchain-guardian` (backend FastAPI + Postgres + Alembic,
 frontend Next.js, `sap-joule/` jembatan A2A).
 
+> **Snapshot, bukan keadaan sekarang.** Angka di dokumen ini (105 kiriman, 61 pemasok, 20 PO,
+> 85 kiriman bergeometri) adalah hasil pengukuran 22 Oktober 2026 dan sengaja dibiarkan sebagai bukti
+> perbaikan saat itu. Keadaan terbaru ada di `docs/state-snapshot.md` (diukur 26 Okt 2026:
+> 12 rute Jakarta, 60 pemasok, 16 PO).
+
 ---
 
 ## 0. Temuan utama susulan (22 Okt 2026, sesi lanjutan)

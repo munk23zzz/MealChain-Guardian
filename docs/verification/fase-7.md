@@ -1,5 +1,7 @@
 # Verifikasi Fase 7 — pemasok mock yang benar-benar terjangkau SPPG Jakarta
 
+> **Snapshot tahun 2026 (tanggal tidak tertulis)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tanggal: 2026-10-15
 Rencana: `.hermes/plans/2026-10-14_scope-pemasok-peta-rentang.md` (Fase 7: 7a data, 7b aturan
 tampilan, 7c bukti)

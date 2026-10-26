@@ -1,5 +1,7 @@
 # Verdict verifier: dicatat hanya bila ADA hasil audit — 18 Oktober 2026
 
+> **Snapshot 18 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Audit 18 Okt butir **M1**: `/actions/verify` selalu menulis `verified_by` —
 termasuk saat provider menjawab `UNAVAILABLE`. `verified_by` lalu dipakai
 sebagai pagar approve (A2), jadi "terverifikasi" bisa berarti "belum pernah

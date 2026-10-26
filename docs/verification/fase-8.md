@@ -1,5 +1,7 @@
 # Verifikasi F8 — Tab gabungan "KPI & Kualitas Agen" (+ strip Target KPI dihapus)
 
+> **Snapshot tahun 2026 (tanggal tidak tertulis)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tanggal: 2026-10-15 · Lingkup: frontend saja (backend tidak disentuh) · Status: **selesai & terverifikasi**
 
 Dasar: permintaan pemilik 2026-10-15 — *"pada halaman KPI hapus bagian Target KPI. setelah itu …

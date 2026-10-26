@@ -1,5 +1,7 @@
 # Pin peta Overview menempel di koordinat saat zoom in/out
 
+> **Snapshot 18 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Tanggal: 2026-10-18 · Frontend · Commit: `fix(peta): pin menempel di koordinat saat zoom`
 
 ## 1. Gejala yang dilaporkan

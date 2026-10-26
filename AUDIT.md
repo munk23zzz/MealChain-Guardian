@@ -1,5 +1,7 @@
 # AUDIT.md — MealChain Guardian (checkout `E:\hackathon\HackathonAWS\mealchain-guardian`), independent pre-deployment audit
 
+> **Snapshot 25 Oktober 2026 (dari waktu berkas)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 > Fase 1 (read-only). Kerangka: `E:\hackathon\audit-template\AUDIT_TEMPLATE.md`.
 > Dokumen ini snapshot titik-waktu; perbaikan TIDAK dikerjakan di sini.
 

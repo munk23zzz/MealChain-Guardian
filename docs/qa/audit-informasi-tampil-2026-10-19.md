@@ -1,5 +1,7 @@
 # Audit informasi yang tampil — 19 Okt 2026
 
+> **Snapshot 19 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Permintaan pemilik: *"cek untuk semua informasi yang tampil apakah sudah benar karena di saya
 beberapa error, pastikan semuanya aman"*.
 

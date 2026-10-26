@@ -1,5 +1,7 @@
 # Chrome gelap di kartu peta (hapus latar putih) — 19 Okt 2026
 
+> **Snapshot 19 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 ## Permintaan
 
 > "untuk design nya gua kurang suka, saya mau backgraund putih di hapus, lalu anda

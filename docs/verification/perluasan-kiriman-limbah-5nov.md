@@ -1,5 +1,7 @@
 # Perluasan kiriman & limbah sampai 5 Nov (2026-10-17)
 
+> **Snapshot 25 Oktober 2026 (dari waktu berkas)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Lanjutan dari `perluasan-deret-aktual-5nov.md`. Deret pasokan/harga sudah
 mencapai 4 Nov, tetapi jendela KPI pendek masih membaca nol karena **tabel
 peristiwa tidak ikut diperpanjang**:

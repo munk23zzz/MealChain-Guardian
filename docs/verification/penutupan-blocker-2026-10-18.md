@@ -1,5 +1,7 @@
 # Penutupan blocker audit 18 Oktober 2026
 
+> **Snapshot 18 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Laporan audit lengkap: `docs/verification/audit-menyeluruh-2026-10-18.md`. Dokumen ini mencatat status tiap blocker setelah perbaikan malam 18 Okt, dengan bukti yang bisa dijalankan ulang.
 
 | # | Blocker | Status | Bukti |
