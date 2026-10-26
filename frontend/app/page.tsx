@@ -144,6 +144,7 @@ import FoodSafetyBoard from "../components/FoodSafetyBoard";
 import SurplusBoard from "../components/SurplusBoard";
 import SupplierBoard from "../components/SupplierBoard";
 import { runOf, type QualityRun } from "../lib/agent-quality";
+import { AKUN_DEMO_CADANGAN, kelompokkanAkun, muatAkunDemo, type AkunDemo } from "../lib/demo-accounts";
 import { defaultEvidenceId } from "../lib/evidence";
 import { decisionGroups, statusWord, typeWord } from "../lib/decision-picker";
 
@@ -234,6 +235,19 @@ export default function Home() {
   }, []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // Akun demo untuk tombol login (26 Okt 2026). Sandi TIDAK ditanam di bundel:
+  // diambil dari `GET /auth/demo-accounts` yang hanya mengirimnya saat DEMO_MODE
+  // aktif. Kalau endpoint tidak tersedia, daftar cadangan tetap mengisi email.
+  const [akunDemo, setAkunDemo] = useState<AkunDemo[]>(AKUN_DEMO_CADANGAN);
+  useEffect(() => {
+    let batal = false;
+    muatAkunDemo().then((akun) => {
+      if (!batal) setAkunDemo(akun);
+    });
+    return () => {
+      batal = true;
+    };
+  }, []);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   // PRD 2.4 (arah Roy 2026-10-09): navigasi = 5 tab sesuai 7 screen PRD
@@ -755,23 +769,9 @@ export default function Home() {
   }
 
   if (!token) {
-    // 26 Okt 2026 (SEC-02): kata sandi demo TIDAK lagi ditulis di bundel klien.
-    // Sebelumnya ketujuh akun demo membawa literal kata sandi di berkas ini,
-    // sehingga siapa pun yang membuka bundle bisa membacanya. Tombol hanya
-    // mengisi email; kata sandi diketik operator (ada di `.env`, tidak di repo).
-    const demoAccounts = [
-      { label: "SPPG Head", email: "sppg.head@demo.local" },
-      { label: "Nutritionist", email: "sppg.nutritionist@demo.local" },
-      { label: "BGN Monitor", email: "bgn.monitor@demo.local" },
-    ];
-    // Keputusan produk 3A (18 Okt): Bandung & Surabaya punya approver sendiri,
-    // jadi alur approval bisa didemokan di kota yang bukan Jakarta.
-    const demoKota = [
-      { label: "Kepala Bandung", email: "sppg.head.bandung@demo.local" },
-      { label: "Gizi Bandung", email: "sppg.nutritionist.bandung@demo.local" },
-      { label: "Kepala Surabaya", email: "sppg.head.surabaya@demo.local" },
-      { label: "Gizi Surabaya", email: "sppg.nutritionist.surabaya@demo.local" },
-    ];
+    // 26 Okt 2026: satu klik peran mengisi email DAN sandi. Sandi tidak ditanam di
+    // bundel — datang dari `GET /auth/demo-accounts` (hanya saat DEMO_MODE aktif).
+    const { utama: demoAccounts, kota: demoKota } = kelompokkanAkun(akunDemo);
     return (
       <main className="login-shell">
         {/* Panel brand: dunia subject — rantai dingin SPPG, angka dari data demo asli */}
@@ -830,7 +830,7 @@ export default function Home() {
                       className="demo-link"
                       onClick={() => {
                         setEmail(acc.email);
-                        setPassword("");
+                        setPassword(acc.password ?? "");
                         setLoginError(null);
                       }}
                     >
@@ -841,10 +841,6 @@ export default function Home() {
               </p>
               {/* Approver Kota lain — supaya alur dua approval bisa dicoba di
                   Bandung/Surabaya, bukan hanya di Jakarta. */}
-              <p className="demo-hint demo-hint-terbatas">
-                Kata sandi tidak dikirim ke browser — operator memasukkannya dari
-                berkas lingkungan saat sesi demo.
-              </p>
               <p className="demo-hint demo-hint-kota">Kota lain:</p>
               <p className="demo-links">
                 {demoKota.map((acc, i) => (
@@ -855,7 +851,7 @@ export default function Home() {
                       className="demo-link"
                       onClick={() => {
                         setEmail(acc.email);
-                        setPassword("");
+                        setPassword(acc.password ?? "");
                         setLoginError(null);
                       }}
                     >

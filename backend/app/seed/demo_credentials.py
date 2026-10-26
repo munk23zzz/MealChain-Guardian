@@ -35,6 +35,67 @@ DEMO_PASSWORDS_JURI: dict[str, str] = {
 
 _NILAI_AKTIF = {"1", "true", "yes", "on"}
 
+#: Akun yang ditawarkan tombol demo di layar login. Satu sumber untuk frontend: label,
+#: email, peran, dan pengelompokan ("utama" vs "kota") supaya tidak ada daftar ganda di
+#: `frontend/app/page.tsx`. Sandi TIDAK ada di sini — diambil lewat `resolve_demo_password`
+#: hanya ketika `DEMO_MODE` aktif.
+AKUN_DEMO_BROWSER: tuple[dict[str, str], ...] = (
+    {"label": "SPPG Head", "email": "sppg.head@demo.local", "role": "sppg_head", "grup": "utama"},
+    {
+        "label": "Nutritionist",
+        "email": "sppg.nutritionist@demo.local",
+        "role": "sppg_nutritionist",
+        "grup": "utama",
+    },
+    {
+        "label": "BGN Monitor",
+        "email": "bgn.monitor@demo.local",
+        "role": "bgn_monitor",
+        "grup": "utama",
+    },
+    {
+        "label": "Kepala Bandung",
+        "email": "sppg.head.bandung@demo.local",
+        "role": "sppg_head",
+        "grup": "kota",
+    },
+    {
+        "label": "Gizi Bandung",
+        "email": "sppg.nutritionist.bandung@demo.local",
+        "role": "sppg_nutritionist",
+        "grup": "kota",
+    },
+    {
+        "label": "Kepala Surabaya",
+        "email": "sppg.head.surabaya@demo.local",
+        "role": "sppg_head",
+        "grup": "kota",
+    },
+    {
+        "label": "Gizi Surabaya",
+        "email": "sppg.nutritionist.surabaya@demo.local",
+        "role": "sppg_nutritionist",
+        "grup": "kota",
+    },
+)
+
+
+def akun_demo_untuk_browser(env: Mapping[str, str] | None = None) -> list[dict[str, str]]:
+    """Daftar akun demo LENGKAP dengan sandi — hanya saat `DEMO_MODE` aktif.
+
+    Dipakai `GET /auth/demo-accounts` supaya satu klik peran langsung siap masuk.
+    Memanggil fungsi ini di mode non-demo akan melempar `DemoCredentialError`,
+    bukan diam-diam mengirim kredensial.
+    """
+    if not demo_mode_aktif(env):
+        raise DemoCredentialError(
+            "akun demo bertanya-pundi hanya tersedia saat DEMO_MODE aktif"
+        )
+    hasil: list[dict[str, str]] = []
+    for akun in AKUN_DEMO_BROWSER:
+        hasil.append({**akun, "password": resolve_demo_password(akun["role"], env)})
+    return hasil
+
 
 class DemoCredentialError(RuntimeError):
     """Seed menolak memasang kredensial demo tanpa otorisasi konfigurasi."""

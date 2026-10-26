@@ -3708,6 +3708,23 @@
           }
         }
       }
+    },
+    "/auth/demo-accounts": {
+      "get": {
+        "summary": "Demo Accounts",
+        "description": "Akun demo siap-pakai untuk layar login — HANYA saat `DEMO_MODE` aktif.\n\nTombol peran di UI mengisi email DAN kata sandi, jadi demo cukup satu klik.\nSandi tidak pernah ditanam di bundle frontend: ia dikirim endpoint ini hanya\nketika instalasi menyatakan dirinya mode demo. Di mode non-demo jawabannya\n`enabled:false` tanpa daftar akun, sehingga tidak ada kredensial yang bocor.",
+        "operationId": "demo_accounts_auth_demo_accounts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

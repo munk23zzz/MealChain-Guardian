@@ -140,6 +140,24 @@ def _kunci_laju(request: Request, email: str) -> str:
     return f"login:{ip}:{email}"
 
 
+@router.get("/auth/demo-accounts")
+async def demo_accounts():
+    """Akun demo siap-pakai untuk layar login — HANYA saat `DEMO_MODE` aktif.
+
+    Tombol peran di UI mengisi email DAN kata sandi, jadi demo cukup satu klik.
+    Sandi tidak pernah ditanam di bundle frontend: ia dikirim endpoint ini hanya
+    ketika instalasi menyatakan dirinya mode demo. Di mode non-demo jawabannya
+    `enabled:false` tanpa daftar akun, sehingga tidak ada kredensial yang bocor.
+    """
+    from app.seed.demo_credentials import DemoCredentialError, akun_demo_untuk_browser
+
+    try:
+        akun = akun_demo_untuk_browser()
+    except DemoCredentialError:
+        return {"enabled": False, "accounts": []}
+    return {"enabled": True, "accounts": akun}
+
+
 @router.post("/auth/login")
 async def login(
     payload: LoginRequest,
