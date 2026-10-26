@@ -11,6 +11,7 @@ import {
   hoursLabel,
   hoursLeft,
   incomingBatchId,
+  incomingKgForCommodity,
   incomingShipments,
   ownLocationRows,
   receiptRows,
@@ -24,10 +25,12 @@ import {
   receiptStatusLabel,
   receivingSentence,
   receivingState,
+  safetyDecisionSummaryLine,
   safetyDecisions,
   safetyLabel,
   safetyRows,
   safetySummary,
+  safetyStatusPartition,
   safetyTone,
   sortByDeadline,
   usableLabel,
@@ -305,8 +308,19 @@ describe("safetyDecisions — riwayat keputusan KEAMANAN untuk lokasi ini", () =
   it("membedakan yang masih berlaku dari yang sudah kedaluwarsa", () => {
     const ringkas = safetyDecisions(DECISIONS);
     expect(ringkas.active).toBe(1);
-    expect(ringkas.expired).toBe(2);
+    // Audit 26 Okt 2026: baris yang DITOLAK tidak dihitung lagi sebagai
+    // "kedaluwarsa" — dulu 1 keputusan muncul di dua kolom sekaligus.
+    expect(ringkas.expired).toBe(1);
     expect(ringkas.rejected).toBe(1);
+    expect(ringkas.expired + ringkas.rejected + ringkas.active).toBe(ringkas.total);
+  });
+  it("kg dipisah per keadaan supaya angka di layar bisa dijumlahkan", () => {
+    const ringkas = safetyDecisions(DECISIONS);
+    expect(ringkas.activeKg).not.toBeNull();
+    expect(ringkas.rejectedKg).not.toBeNull();
+    expect((ringkas.activeKg ?? 0) + (ringkas.rejectedKg ?? 0)).toBeLessThanOrEqual(
+      ringkas.totalKg ?? 0
+    );
   });
   it("bisa diajukan ulang HANYA kalau ditolak — kontrak /actions/repropose", () => {
     // Backend (backend/app/api/actions.py:541) menolak 409 kalau status bukan
@@ -759,5 +773,134 @@ describe("batch yang ditawarkan = yang masih perlu diperiksa/dicatat", () => {
     expect(receiptNeedLabel("ditolak")).toContain("dinilai ulang");
     expect(receiptNeedLabel("menunggu")).toContain("menunggu persetujuan");
     expect(receiptNeedLabel("disetujui")).toContain("sudah disetujui");
+  });
+});
+
+describe("incomingKgForCommodity — hanya komoditas yang sama yang dihitung", () => {
+  const shipment = (commodity: string | null, kg: number | null) =>
+    ({ id: commodity ?? "x", commodity, kg, supplierName: null }) as never;
+
+  it("menjumlahkan hanya kiriman komoditas yang diminta", () => {
+    const rows = [
+      shipment("telur", 900),
+      shipment("telur", 180),
+      shipment("beras", 4000),
+      shipment("wortel", 450),
+      shipment("ayam", 300),
+    ];
+    expect(incomingKgForCommodity(rows, "telur")).toBe(1080);
+    expect(incomingKgForCommodity(rows, "Beras")).toBe(4000);
+  });
+
+  it("komoditas tanpa kiriman → null, bukan angka karangan", () => {
+    expect(incomingKgForCommodity([shipment("beras", 4000)], "telur")).toBe(null);
+  });
+
+  it("komoditas kosong / kg tidak diketahui → null", () => {
+    expect(incomingKgForCommodity([shipment("telur", 900)], null)).toBe(null);
+    expect(incomingKgForCommodity([shipment("telur", null)], "telur")).toBe(null);
+  });
+});
+
+describe("coverageSentence — menyebut komoditas kiriman", () => {
+  it("kalimat menamai komoditas agar tidak terbaca lintas komoditas", () => {
+    const teks = coverageSentence({
+      demandKg: 1080,
+      supplyKg: 300,
+      shortageKg: 780,
+      incomingKg: 1080,
+      commodity: "telur",
+    });
+    expect(teks).toContain("kiriman telur 1.080 kg");
+    expect(teks).toContain("menutup");
+  });
+  it("tanpa komoditas tetap memakai kalimat lama", () => {
+    const teks = coverageSentence({ demandKg: 1080, supplyKg: 300, shortageKg: 780, incomingKg: 500 });
+    expect(teks).toContain("kiriman 500 kg belum menutup");
+  });
+});
+
+describe("safetyStatusPartition — tile status uji harus menjumlah ke total", () => {
+  const ringkas = (over: Record<string, number>) =>
+    ({
+      total: 15,
+      safe: 9,
+      failed: 1,
+      needsVerification: 2,
+      unchecked: 3,
+      ...over,
+    }) as never;
+
+  it("empat kategori menjumlah ke total, tanpa sisa", () => {
+    const { tiles, leftover } = safetyStatusPartition(ringkas({}));
+    expect(tiles.map((t) => t.label)).toEqual([
+      "Aman",
+      "Gagal uji",
+      "Perlu verifikasi",
+      "Belum diuji",
+    ]);
+    expect(tiles.reduce((t, x) => t + x.value, 0)).toBe(15);
+    expect(leftover).toBe(0);
+  });
+
+  it("batch ditahan yang ujinya lolos muncul sebagai sisa, bukan hilang", () => {
+    // 15 batch, 1 di antaranya `pass` tapi karantina → tidak masuk "Aman".
+    const { leftover } = safetyStatusPartition(ringkas({ safe: 8 }));
+    expect(leftover).toBe(1);
+    expect(8 + 1 + 2 + 3 + leftover).toBe(15);
+  });
+});
+
+describe("safetyDecisionSummaryLine — tiap keputusan dihitung sekali", () => {
+  const ringkas = (over: Record<string, unknown> = {}) =>
+    ({
+      total: 5,
+      allTotal: 8,
+      totalKg: 2946,
+      activeKg: 2346,
+      rejectedKg: 600,
+      active: 4,
+      expired: 0,
+      pendingApproval: 0,
+      rejected: 1,
+      reproposable: 1,
+      rows: [],
+      ...over,
+    }) as never;
+
+  it("menyebut kg per keadaan dan tidak menghitung baris dua kali", () => {
+    const teks = safetyDecisionSummaryLine(ringkas());
+    expect(teks).toContain("5 keputusan keamanan");
+    expect(teks).toContain("4 masih berlaku (2.346 kg)");
+    expect(teks).toContain("1 ditolak (bisa diajukan ulang) (600 kg)");
+    expect(teks).toContain("0 kedaluwarsa tanpa penolakan");
+    expect(teks).not.toContain("sudah lewat");
+    expect(teks).toContain("total 2.946 kg");
+    expect(teks).toContain("Dari 8 keputusan");
+  });
+
+  it("angka yang tidak diketahui tidak diganti nol", () => {
+    const teks = safetyDecisionSummaryLine(ringkas({ activeKg: null, rejectedKg: null, totalKg: null }));
+    expect(teks).toContain("4 masih berlaku ·");
+    expect(teks).not.toContain("(0 kg)");
+    expect(teks).not.toContain("total");
+  });
+});
+
+describe("coverageSentence — tanggal kebutuhan", () => {
+  it("menyebut kapan kebutuhan itu diperlukan", () => {
+    const teks = coverageSentence({
+      demandKg: 1080,
+      supplyKg: 300,
+      shortageKg: 780,
+      incomingKg: 1080,
+      commodity: "telur",
+      neededBy: "2026-10-29T00:00:00+07:00",
+    });
+    expect(teks).toContain("Kebutuhan 1.080 kg (perlu 29 Okt 2026)");
+  });
+  it("tanpa tanggal, kalimatnya tidak mengarang tanggal", () => {
+    const teks = coverageSentence({ demandKg: 1080, supplyKg: 300, shortageKg: 780, incomingKg: null });
+    expect(teks).not.toContain("perlu");
   });
 });

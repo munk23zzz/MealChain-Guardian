@@ -120,9 +120,26 @@ export default function AgentTraceViewer({
                     Model: {s.output_summary.provider}
                   </div>
                 )}
-              <pre className="trace-output">
-                {JSON.stringify(s.output_summary ?? {})}
-              </pre>
+              {/* Audit data 26 Okt 2026: jejak kini membawa `summary` yang
+                  sudah berbentuk kalimat ("Putusan … untuk 780 kg; Rp…; status …"),
+                  jadi yang dibaca lebih dulu kalimatnya. JSON mentah tetap
+                  tersedia di balik "Data mentah" supaya tidak ada yang hilang. */}
+              {typeof s.output_summary?.summary === "string" &&
+              s.output_summary.summary.trim() ? (
+                <>
+                  <p className="trace-summary">{s.output_summary.summary}</p>
+                  <details className="trace-raw">
+                    <summary>Data mentah</summary>
+                    <pre className="trace-output">
+                      {JSON.stringify(s.output_summary ?? {})}
+                    </pre>
+                  </details>
+                </>
+              ) : (
+                <pre className="trace-output">
+                  {JSON.stringify(s.output_summary ?? {})}
+                </pre>
+              )}
             </li>
           );
         })}

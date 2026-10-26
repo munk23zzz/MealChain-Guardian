@@ -347,7 +347,12 @@ export default function TodayDashboard({
         {/* 3. Batch yang sudah/akan kedaluwarsa */}
         <article className="card today-card today-batches" id="today-batches" tabIndex={-1}>
           <div className="today-card-head">
-            <h2>Batch mendekati kedaluwarsa</h2>
+            <h2 title="Seluruh jaringan, bukan hanya lokasi Anda">Batch mendekati kedaluwarsa</h2>
+            {/* Cakupan ditulis eksplisit: sumber angka ini `GET /batches` yang
+                SENGAJA lintas lokasi, jadi SPPG Jakarta juga melihat batch
+                Surabaya/Bandung di sini (audit 26 Okt 2026). Tanpa label
+                "seluruh jaringan" angka 7 terbaca sebagai milik Jakarta,
+                padahal batch Jakarta hanya 2. */}
             <span className="today-count">
               {batches ? batchState.expired.length + batchState.dueSoon.length : "—"}
             </span>
@@ -367,8 +372,9 @@ export default function TodayDashboard({
             <>
               <p className="today-card-note">
                 {batchState.expired.length + batchState.dueSoon.length === 0
-                  ? "Tidak ada batch kedaluwarsa atau mendekati kedaluwarsa (<48 jam)."
+                  ? "Tidak ada batch kedaluwarsa atau mendekati kedaluwarsa (<48 jam) di seluruh jaringan."
                   : [
+                      "Seluruh jaringan",
                       batchState.expired.length
                         ? `Kedaluwarsa ${batchState.expired.length} batch (${formatKg(
                             batchState.expiredKg

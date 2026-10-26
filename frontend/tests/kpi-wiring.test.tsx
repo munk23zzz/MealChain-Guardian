@@ -46,8 +46,11 @@ describe("wiring KPI di app/page.tsx (S4-03)", () => {
     expect(boardSrc).toMatch(/onWindowChange=\{onWindowChange\}/);
   });
 
-  it("hook memakai daftar jendela bersama (bukan angka 24 jam yang dipaku)", () => {
-    expect(hookSrc).toContain("kpiWindowRange");
+  it("hook mengirim kunci periode ke API (rentang milik server)", () => {
+    expect(hookSrc).toMatch(/fetchKpis\(windowKey/);
+    expect(hookSrc).toContain("KPI_DEFAULT_WINDOW");
+    expect(hookSrc).not.toContain("kpiWindowRange");
+    expect(hookSrc).not.toMatch(/new Date\(/);
     expect(hookSrc).toMatch(/kpiLive\(scope, windowKey/);
     expect(hookSrc).not.toContain("KPI_WINDOW_MS");
   });

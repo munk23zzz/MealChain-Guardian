@@ -185,28 +185,45 @@ describe("pemilih periode KPI", () => {
     const html = renderToStaticMarkup(<KPIDashboard kpi={ENVELOPE_AVAILABLE} />);
     expect(html).toContain("kpi-period");
     expect(html).toContain('role="group"');
-    for (const label of ["24 jam", "7 hari", "1 bulan"]) {
+    for (const label of ["Hari ini", "7 hari", "1 bulan"]) {
       expect(html).toContain(label);
     }
   });
 
-  it("menandai pilihan aktif dengan aria-pressed; default 24 jam", () => {
+  it("menandai pilihan aktif dengan aria-pressed; default hari ini", () => {
     const html = renderToStaticMarkup(
       <KPIDashboard kpi={ENVELOPE_AVAILABLE} />
     );
-    expect(html).toMatch(/data-window="24h"[^>]*aria-pressed="true"/);
-    expect(html).toMatch(/data-window="30d"[^>]*aria-pressed="false"/);
+    expect(html).toMatch(/data-window="today"[^>]*aria-pressed="true"/);
+    expect(html).toMatch(/data-window="1bulan"[^>]*aria-pressed="false"/);
+  });
+
+  it("pil periode menamai jendela yang dipilih, bukan nama bulan rentangnya", () => {
+    // Audit 26 Okt 2026: dulu selalu "Periode Oktober 2026" — juga saat
+    // jendelanya "Hari ini" — sehingga angka harian terbaca bulanan.
+    const hariIni = renderToStaticMarkup(<KPIDashboard kpi={ENVELOPE_AVAILABLE} />);
+    expect(hariIni).toContain("Hari ini ·");
+    const sebulan = renderToStaticMarkup(
+      <KPIDashboard kpi={ENVELOPE_AVAILABLE} windowKey="1bulan" />
+    );
+    expect(sebulan).toContain("1 bulan ·");
+  });
+
+  it("cakupan (coverage) dicetak sebagai persen, bukan rasio mentah", () => {
+    const html = renderToStaticMarkup(<KPIDashboard kpi={ENVELOPE_AVAILABLE} />);
+    expect(html).toContain("cakupan 100%");
+    expect(html).not.toContain("coverage 1");
   });
 
   it("mengikuti windowKey yang diberikan parent (bukan menyimpan sendiri)", () => {
     const html = renderToStaticMarkup(
       <KPIDashboard
         kpi={ENVELOPE_AVAILABLE}
-        windowKey="30d"
+        windowKey="1bulan"
         onWindowChange={() => {}}
       />
     );
-    expect(html).toMatch(/data-window="30d"[^>]*aria-pressed="true"/);
+    expect(html).toMatch(/data-window="1bulan"[^>]*aria-pressed="true"/);
     expect(html).toMatch(/data-window="7d"[^>]*aria-pressed="false"/);
   });
 });

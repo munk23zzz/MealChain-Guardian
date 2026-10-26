@@ -304,12 +304,16 @@ export function summaryTiles(input: SummaryInput): SummaryTile[] {
         note:
           expired || soon
             ? [
+                // Sumber angka ini `/batches` (lintas lokasi, lihat catatan di
+                // backend): tanpa kata "jaringan" strip ini terbaca sebagai
+                // angka Jakarta semata (audit 26 Okt 2026).
+                "seluruh jaringan",
                 expired ? `kedaluwarsa ${expired} batch (${formatKg(batch.expiredKg)})` : null,
                 soon ? `segera ${soon} batch (${formatKg(batch.dueSoonKg)})` : null,
               ]
                 .filter(Boolean)
                 .join(" · ")
-            : "tidak ada batch kedaluwarsa atau <48 jam",
+            : "tidak ada batch kedaluwarsa atau <48 jam di jaringan",
       }
     : {
         key: "batches",

@@ -6,8 +6,9 @@
  * 5 detik di dalam page.tsx.
  *
  * Kontrak yang dipertahankan: keempat panggilan bersifat OPSIONAL bagi feed.
- * Kegagalan salah satunya diserap (`catch(() => null)`) supaya panel tetap
- * terbuka dengan yang berhasil; tidak ada nilai karangan pengganti.
+ * Kegagalan salah satunya TIDAK menutup panel, tetapi juga TIDAK disembunyikan:
+ * bagian yang gagal dicatat di `errors` dan ditampilkan di halaman. Tidak ada
+ * nilai karangan pengganti.
  */
 import { useQuery } from "@tanstack/react-query";
 
@@ -22,6 +23,15 @@ export type DecisionDetail = {
   chain: any[];
   approvalSummary: any;
   supplierContext: SupplierContext | null;
+  /**
+   * Bagian yang GAGAL dibaca (label bahasa Indonesia).
+   *
+   * Audit data 26 Okt 2026: dulu keempat panggilan menelan galat
+   * tanpa jejak apa pun, sehingga panel kosong tidak bisa dibedakan dari
+   * "memang tidak ada data" — persis yang dilarang lampiran audit ("jangan
+   * menutupi kegagalan"). Sekarang kegagalan dikumpulkan dan bisa ditampilkan.
+   */
+  errors: string[];
 };
 
 const KOSONG: DecisionDetail = {
@@ -29,6 +39,7 @@ const KOSONG: DecisionDetail = {
   chain: [],
   approvalSummary: null,
   supplierContext: null,
+  errors: [],
 };
 
 export function useDecisionDetail(
@@ -40,17 +51,30 @@ export function useDecisionDetail(
     queryKey: queryKeys.decisionDetail(decisionId ?? "none", scope),
     queryFn: async (): Promise<DecisionDetail> => {
       const id = decisionId as string;
-      const [traces, chain, summary, supplier] = await Promise.all([
-        fetchDecisionTraces(id, token as string).catch(() => null),
-        fetchDecisionChain(id, token as string).catch(() => null),
-        fetchApprovalSummary(id, token as string).catch(() => null),
-        fetchSupplierContext(id, token as string).catch(() => null),
+      // `allSettled` (bukan penelanan galat): panel tetap terbuka dengan
+      // bagian yang berhasil, tetapi bagian yang gagal DICATAT dan dilaporkan.
+      const [traces, chain, summary, supplier] = await Promise.allSettled([
+        fetchDecisionTraces(id, token as string),
+        fetchDecisionChain(id, token as string),
+        fetchApprovalSummary(id, token as string),
+        fetchSupplierContext(id, token as string),
       ]);
+      const gagal: string[] = [];
+      const nilai = <T,>(hasil: PromiseSettledResult<T>, label: string): T | null => {
+        if (hasil.status === "fulfilled") return hasil.value;
+        gagal.push(label);
+        return null;
+      };
+      const jejak = nilai(traces, "jejak agen");
+      const rantai = nilai(chain, "rantai audit");
+      const ringkasan = nilai(summary, "ringkasan persetujuan");
+      const konteks = nilai(supplier, "konteks pemasok");
       return {
-        traces: traces?.steps ?? [],
-        chain: chain?.chain ?? [],
-        approvalSummary: summary ?? null,
-        supplierContext: supplier ?? null,
+        traces: jejak?.steps ?? [],
+        chain: rantai?.chain ?? [],
+        approvalSummary: ringkasan ?? null,
+        supplierContext: konteks ?? null,
+        errors: gagal,
       };
     },
     enabled: Boolean(token) && Boolean(decisionId),

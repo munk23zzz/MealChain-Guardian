@@ -212,10 +212,13 @@ export function agendaRows(hari: AgendaDay): AgendaRow[] {
       hint: menu ? `${angka(menu.rows)} lokasi merencanakan` : undefined,
     },
     {
-      label: "Kiriman tiba",
+      // "Kiriman tiba" ambigu (audit data 26 Okt 2026): di Overview istilah yang
+      // sama dipakai untuk kiriman BAHAN pemasok (supplier-routes), sedangkan di
+      // sini yang dihitung adalah PORSI MAKAN yang sudah diterima (delivery_events).
+      label: "Pengiriman makan tiba",
       value: kiriman ? `${angka(kiriman.delivered_portions)} porsi` : null,
       available: Boolean(kiriman),
-      hint: kiriman ? `${angka(kiriman.rows)} kiriman tercatat` : undefined,
+      hint: kiriman ? `${angka(kiriman.rows)} catatan porsi makan` : undefined,
     },
     {
       label: "Limbah dibuang",
@@ -286,7 +289,7 @@ export type AgendaGroup = { title: string; rows: AgendaRow[] };
 const AGENDA_GROUPS: { title: string; labels: string[] }[] = [
   {
     title: "Rencana & pasokan",
-    labels: ["Rencana menu", "Kiriman tiba", "Pasokan tercatat", "Harga tercatat"],
+    labels: ["Rencana menu", "Pengiriman makan tiba", "Pasokan tercatat", "Harga tercatat"],
   },
   { title: "Limbah & kedaluwarsa", labels: ["Limbah dibuang", "Batch kedaluwarsa"] },
   { title: "Keputusan agen", labels: ["Keputusan agen"] },

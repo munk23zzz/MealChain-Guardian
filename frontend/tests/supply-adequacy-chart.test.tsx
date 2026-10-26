@@ -178,6 +178,29 @@ describe("SupplyAdequacyChart", () => {
     expect(html).toContain("0 kg / 308 kg");
   });
 
+  it("lensa Kesegaran menurunkan porsi yang tidak segar, bukan menggambar batang yang sama", () => {
+    const rows = buildAdequacyRows({
+      commodities: ["ayam"],
+      byCommodity: MAP,
+      batches: [batchesFor("ayam", 80, 1), batchesFor("ayam", 170, 4)],
+      location: "Jakarta",
+      now: NOW,
+    });
+    const kuantitas = render("sppg_head", rows);
+    const segar = render("sppg_nutritionist", rows);
+
+    // Lensa kuantitas: kedua keranjang dianggap pasokan — tidak ada penanda apa pun.
+    expect(kuantitas).not.toContain("sa-fill-segar");
+    expect(kuantitas).not.toContain("garis miring");
+
+    // Lensa kesegaran: batang harus berubah bentuk (porsi ≤48 jam diredupkan),
+    // bukan cuma angka di kolom cakupan. Segmen tetap ada supaya lebarnya jujur.
+    expect(segar).toContain("sa-fill-segar");
+    expect(segar).toContain("sa-seg-near");
+    expect(segar).toContain("garis miring");
+
+  });
+
   it("tanpa baris sama sekali → tidak merender kartu kosong", () => {
     expect(render("sppg_head", [])).toBe("");
   });

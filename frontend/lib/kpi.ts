@@ -21,38 +21,23 @@ export const KPI_TABS: readonly string[] = ["today", "kpi-kualitas"];
    sekitar 8 Okt (snapshot kanonik), sedangkan "hari ini" 16 Okt — jadi tiga
    kartu menjawab "belum ada data" walau datanya ADA di database, hanya di luar
    24 jam. Daftar jendela ditulis di sini (bukan angka ajaib di hook) supaya
-   label di layar, jamnya, dan rentang yang dikirim ke API tidak bisa menyimpang.
+   label di layar tidak bisa menyimpang dari kunci yang dikirim ke API. RENTANG
+   tidak dihitung di sini: backend menghitungnya dalam hari kalender Asia/Jakarta
+   (`GET /kpi?periode=today|7d|1bulan`), sehingga "Hari ini" di layar berarti
+   hari kalender yang sama untuk semua kartu.
    TIDAK ada ambang/target yang dikarang: jendela hanya menentukan rentang.
    --------------------------------------------------------------------------- */
 
-export type KpiWindowKey = "24h" | "7d" | "30d";
+export type KpiWindowKey = "today" | "7d" | "1bulan";
 
-export const KPI_WINDOWS: readonly { key: KpiWindowKey; label: string; hours: number }[] = [
-  { key: "24h", label: "24 jam", hours: 24 },
-  { key: "7d", label: "7 hari", hours: 24 * 7 },
-  { key: "30d", label: "1 bulan", hours: 24 * 30 },
+export const KPI_WINDOWS: readonly { key: KpiWindowKey; label: string }[] = [
+  { key: "today", label: "Hari ini" },
+  { key: "7d", label: "7 hari" },
+  { key: "1bulan", label: "1 bulan" },
 ];
 
-/** Rentang ISO untuk satu jendela. Kunci tak dikenal → 24 jam (perilaku lama). */
-export function kpiWindowRange(
-  key: KpiWindowKey | string | null | undefined,
-  now: Date = new Date()
-): { start: string; end: string } {
-  const found = KPI_WINDOWS.find((w) => w.key === key) ?? KPI_WINDOWS[0];
-  if (found.key === "30d") {
-    // "1 bulan" = bulan berjalan menurut WIB, bukan 30 hari bergulir.
-    // Alasannya tampilan: label periode menulis bulan ("Oktober 2026"), jadi
-    // jendelanya harus satu bulan — bukan 20 Sep–20 Okt yang terbaca dua bulan.
-    const WIB = 7 * 60 * 60 * 1000;
-    const wib = new Date(now.getTime() + WIB);
-    const awal = Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), 1) - WIB;
-    return { start: new Date(awal).toISOString(), end: now.toISOString() };
-  }
-  return {
-    start: new Date(now.getTime() - found.hours * 60 * 60 * 1000).toISOString(),
-    end: now.toISOString(),
-  };
-}
+/** Kunci bawaan saat halaman dibuka: hari kalender berjalan (WIB). */
+export const KPI_DEFAULT_WINDOW: KpiWindowKey = "today";
 
 /** True bila tab ini benar-benar menampilkan angka KPI. */
 export function shouldLoadKpi(tab: string | null | undefined): boolean {
@@ -242,4 +227,61 @@ export function periodeBulan(
     return `${awal.bulan} – ${akhir.bulan} ${akhir.tahun}`;
   }
   return `${awal.bulan} ${awal.tahun} – ${akhir.bulan} ${akhir.tahun}`;
+}
+
+/**
+ * Label pil periode di kepala kartu KPI — mengikuti JENDELA yang diminta,
+ * bukan nama bulan dari rentangnya (audit 26 Okt 2026).
+ *
+ * Sebelumnya pil selalu memakai `periodeBulan(start, end)`. Untuk jendela
+ * "Hari ini" (26 Okt 00.00 → sekarang WIB) hasilnya "Periode Oktober 2026":
+ * angka harian terbaca sebagai angka sebulan. Sekarang:
+ *   today  → "Hari ini · 26 Okt 2026"
+ *   7d     → "7 hari · 20–26 Okt 2026"
+ *   1bulan → "1 bulan · Oktober 2026"
+ */
+export function periodePil(
+  windowKey: KpiWindowKey | string | null | undefined,
+  mulaiIso?: string | null,
+  selesaiIso?: string | null
+): string {
+  const label = KPI_WINDOWS.find((w) => w.key === windowKey)?.label ?? "Periode";
+  if (windowKey === "1bulan") {
+    return `${label} · ${periodeBulan(mulaiIso, selesaiIso)}`;
+  }
+  const hari = (iso?: string | null): Date | null => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+  const tanggal = (d: Date) =>
+    d.toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "Asia/Jakarta",
+    });
+  const angkaHari = (d: Date) =>
+    d.toLocaleDateString("id-ID", { day: "numeric", timeZone: "Asia/Jakarta" });
+  const awal = hari(mulaiIso);
+  const akhir = hari(selesaiIso);
+  if (!awal) return label;
+  if (windowKey === "today" || !akhir) return `${label} · ${tanggal(awal)}`;
+  return `${label} · ${angkaHari(awal)}–${tanggal(akhir)}`;
+}
+
+/**
+ * Cakupan (coverage) dari payload KPI → persen.
+ *
+ * Payload mengirim RASIO ("1.00", "0.50"), tetapi kartu mencetaknya apa adanya
+ * sehingga terbaca "coverage 1" — pembaca menyimpulkan 1%, padahal 100%
+ * (audit 26 Okt 2026). Nilai > 1 dianggap sudah persen supaya baris baru yang
+ * mengirim "100" tidak berubah arti.
+ */
+export function fmtCoverage(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  const pct = n <= 1 ? n * 100 : n;
+  return `${pct.toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`;
 }

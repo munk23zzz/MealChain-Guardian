@@ -5,10 +5,10 @@
  * `useEffect` di halaman.
  *
  * Jendela waktu (dulu DIPAKU 24 jam di sini) kini datang dari pemilih periode:
- * `KPI_WINDOWS` + `kpiWindowRange` di lib/kpi.ts. Rentangnya dihitung SAAT
- * fetch, bukan disimpan di kunci query sebagai tanggal — kalau tanggalnya masuk
- * kunci, setiap detik kuncinya berubah dan query tak pernah tenang. Yang masuk
- * kunci adalah KUNCI JENDELA-nya ("24h" / "7d" / "30d"), sehingga berpindah
+ * `KPI_WINDOWS` di lib/kpi.ts, dan yang dikirim ke API hanya KUNCI periode
+ * ("today" / "7d" / "1bulan"). Rentangnya dihitung SERVER dalam hari kalender
+ * Asia/Jakarta, jadi tidak ada aritmetika tanggal di klien yang bisa meleset
+ * 7 jam. Yang masuk kunci query adalah kunci periode, sehingga berpindah
  * jendela memakai cache yang benar dan pilihannya bukan sekadar hiasan.
  *
  * Tidak lagi "potret sekali ambil": sejak 23 Okt 2026 kebijakan muatnya datang
@@ -26,21 +26,23 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { fetchKpis } from "../api";
-import { kpiQueryPolicy, kpiWindowRange, type KpiWindowKey } from "../kpi";
+import { KPI_DEFAULT_WINDOW, kpiQueryPolicy, type KpiWindowKey } from "../kpi";
 import { errorMessage, queryKeys } from "../query";
 
 export function useKpi(
   token: string | null,
   scope: string,
   tab: string,
-  windowKey: KpiWindowKey = "24h"
+  windowKey: KpiWindowKey = KPI_DEFAULT_WINDOW
 ) {
   const kebijakan = kpiQueryPolicy(tab);
   const query = useQuery({
     queryKey: queryKeys.kpiLive(scope, windowKey),
     queryFn: () => {
-      const { start, end } = kpiWindowRange(windowKey);
-      return fetchKpis(start, end, token as string);
+      // Hanya KUNCI periode yang dikirim: backend yang menghitung rentangnya
+      // dalam hari kalender Asia/Jakarta. Menghitung tanggal di klien membuat
+      // "Hari ini" bergeser 7 jam dan berbeda antar tab.
+      return fetchKpis(windowKey, token as string);
     },
     enabled: Boolean(token) && kebijakan.enabled,
     staleTime: kebijakan.staleTime,

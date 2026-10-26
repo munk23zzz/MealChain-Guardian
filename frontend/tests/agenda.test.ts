@@ -88,7 +88,9 @@ describe("kalender agenda — baris ringkasan hari", () => {
   it("bagian tanpa catatan bernilai null — BUKAN angka nol yang berpura-pura", () => {
     const byLabel = Object.fromEntries(agendaRows(hari).map((r) => [r.label, r.value]));
     expect(byLabel["Rencana menu"]).toBe("1.200 porsi");
-    expect(byLabel["Kiriman tiba"]).toBeNull();
+    // Label sengaja disebut "Pengiriman makan" (audit data 26 Okt 2026): di
+    // Overview istilah "kiriman tiba" dipakai untuk kiriman BAHAN pemasok.
+    expect(byLabel["Pengiriman makan tiba"]).toBeNull();
     expect(byLabel["Limbah dibuang"]).toBeNull();
     expect(byLabel["Pasokan tercatat"]).toBeNull();
     expect(byLabel["Harga tercatat"]).toBeNull();
@@ -114,7 +116,7 @@ describe("kalender agenda — baris ringkasan hari", () => {
       activity: 7,
     };
     const byLabel = Object.fromEntries(agendaRows(penuh).map((r) => [r.label, r.value]));
-    expect(byLabel["Kiriman tiba"]).toBe("1.200 porsi");
+    expect(byLabel["Pengiriman makan tiba"]).toBe("1.200 porsi");
     expect(byLabel["Limbah dibuang"]).toBe("4 kg");
     expect(byLabel["Keputusan agen"]).toBe("12 (12 menunggu persetujuan)");
   });

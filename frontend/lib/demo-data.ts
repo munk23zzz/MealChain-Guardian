@@ -270,6 +270,7 @@ export function rebuildWarning(): string {
   return (
     "Baris operasional (batch, keputusan, pesanan, bukti, ledger) diganti dari template, " +
     "jadi angka kembali ke keadaan awal. Jendela sesi, akun demo, lokasi, dan pemasok tidak " +
-    "disentuh. Proses ini butuh ±70 detik karena mengambil ulang rute jalan."
+    "disentuh. Proses ini terukur 41 detik di mesin demo (mengambil ulang rute jalan); "
+    + "sediakan waktu sampai sekitar 1 menit."
   );
 }

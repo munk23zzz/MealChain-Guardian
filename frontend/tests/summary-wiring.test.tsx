@@ -33,3 +33,22 @@ describe("page wiring approval-summary (S4-04)", () => {
     expect(src).not.toMatch(/summary=\{selected\}/);
   });
 });
+
+describe("kegagalan detail keputusan tidak lagi ditelan", () => {
+  const baca = () => readFileSync(join(process.cwd(), "lib", "hooks", "useDecisionDetail.ts"), "utf-8");
+
+  it("memakai allSettled dan melaporkan bagian yang gagal", () => {
+    const isi = baca();
+    expect(isi).toContain("Promise.allSettled");
+    expect(isi).toContain("errors: string[]");
+    expect(isi).toContain('gagal.push(label)');
+    // `catch(() => null)` lama menyembunyikan galat; tidak boleh kembali.
+    expect(isi).not.toContain("catch(() => null)");
+  });
+
+  it("halaman menampilkan peringatan saat sebagian bukti gagal", () => {
+    const page = readFileSync(join(process.cwd(), "app", "page.tsx"), "utf-8");
+    expect(page).toContain("detail.errors.length > 0");
+    expect(page).toContain("Sebagian bukti gagal dibaca");
+  });
+});

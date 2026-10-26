@@ -235,7 +235,8 @@ export function DemoRebuild({
     <div className="dc-rebuild" data-keadaan={sibuk ? "jalan" : konfirmasi ? "konfirmasi" : "diam"}>
       <p className="dc-rebuild-sub">
         Mengembalikan angka ke keadaan awal tanpa menutup sesi: batch, keputusan, pesanan,
-        bukti, dan ledger dibangun ulang dari template. Butuh ±70 detik.
+        bukti, dan ledger dibangun ulang dari template. Terukur 41 detik pada mesin demo
+        ini; sediakan waktu sampai sekitar 1 menit di laptop yang lebih lambat.
       </p>
       {sibuk ? (
         <p className="dc-rebuild-line" role="status" aria-live="polite">
@@ -707,8 +708,13 @@ export default function DemoControlPanel({
           <LoadingState label="Memuat bukti agent" />
         ) : !adaBukti ? (
           <p className="dc-empty">
-            Belum ada jejak agent di database. Tekan <strong>Jalankan agent</strong> —
-            sesudah putaran selesai, langkah yang benar-benar tertulis muncul di sini.
+            {/* Audit data 26 Okt 2026: kalimat lama ("belum ada jejak agent di
+                database") terlalu luas — database tetap menyimpan jejak dari
+                putaran sebelumnya; yang kosong hanyalah putaran TERAKHIR. */}
+            Belum ada putaran agent yang terekam pada mesin ini. Tekan{" "}
+            <strong>Jalankan agent</strong> — sesudah putaran selesai, langkah yang
+            benar-benar tertulis muncul di sini. Jejak dari keputusan lama tetap bisa
+            dibaca di tab Agent Log.
           </p>
         ) : (
           <DemoProof

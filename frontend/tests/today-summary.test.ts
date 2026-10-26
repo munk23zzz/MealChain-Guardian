@@ -133,6 +133,10 @@ describe("strip ringkasan — nada dari data, bukan dari harapan", () => {
     const hanyaSoon = tiles({ batches: [BATCHES[1]] });
     expect(hanyaSoon[1].tone).toBe("warn");
     expect(hanyaSoon[1].note).toContain("segera");
+    // Sumber tile ini `/batches` yang lintas lokasi → catatan wajib menyebut
+    // "jaringan" supaya tidak terbaca sebagai angka lokasi sendiri.
+    expect(hanyaSoon[1].note).toContain("jaringan");
+    expect(tiles()[1].note).toContain("jaringan");
     const kosong = tiles({ batches: [] });
     expect(kosong[1].value).toBe("0");
     expect(kosong[1].tone).toBe("ok");

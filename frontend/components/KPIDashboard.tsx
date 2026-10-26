@@ -15,9 +15,10 @@ import PageHeader from "./PageHeader";
 import {
   bulletOf,
   directionLabel,
+  fmtCoverage,
   KPI_WINDOWS,
   metricLabel,
-  periodeBulan,
+  periodePil,
   type KpiWindowKey,
 } from "../lib/kpi";
 import { roleLabel } from "../lib/settings";
@@ -122,7 +123,7 @@ export default function KPIDashboard({
   loading = false,
   error = null,
   onRetry,
-  windowKey = "24h",
+  windowKey = "today",
   onWindowChange,
 }: {
   kpi: any | null;
@@ -187,7 +188,7 @@ export default function KPIDashboard({
         meta={
           <span className="page-header-pills" data-testid="kpi-scope">
             <span className="commodity-pill">
-              Periode {periodeBulan(kpi.period?.start, kpi.period?.end)}
+              {periodePil(windowKey, kpi.period?.start, kpi.period?.end)}
             </span>
             <span className="commodity-pill" title={kpi.scope?.location_id ?? undefined}>
               Cakupan: {kpi.scope?.role ? roleLabel(kpi.scope.role) : "—"}
@@ -283,7 +284,7 @@ export default function KPIDashboard({
               <p className="kpi-meta">
                 sampel {m.sample_count ?? 0}
                 {m.coverage !== null && m.coverage !== undefined
-                  ? ` · coverage ${Number(m.coverage).toLocaleString("id-ID")}`
+                  ? ` · cakupan ${fmtCoverage(m.coverage)}`
                   : ""}
               </p>
             </article>

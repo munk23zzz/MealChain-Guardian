@@ -72,7 +72,9 @@ export type SupplierPinTone = "excluded" | "far" | "low" | "ok" | "unknown";
 /**
  * Ringkasan kiriman yang SEDANG BERJALAN untuk satu pemasok (dari server).
  *
- * `count > 0` berarti pemasok itu punya batch kiriman yang masih layak hari ini.
+ * `count > 0` berarti pemasok itu punya batch yang masih layak dikirim hari ini —
+ * BUKAN berarti kirimannya sedang di jalan (label UI: "Stok layak", bukan
+ * "sedang mengirim"; audit data 26 Okt 2026).
  * `safetyFailCount` dipisah supaya kiriman yang gagal uji tidak bisa hilang di
  * balik kata "sedang mengirim".
  */
@@ -139,7 +141,7 @@ export function supplierShipping(raw: unknown): SupplierShipping | null {
 /**
  * Kalimat status kiriman untuk tabel/legenda.
  *
- * Contoh: "Sedang mengirim · 3 kiriman · 1.400 kg · s/d 2 Nov 2026".
+ * Contoh: "Stok layak · 3 kiriman · 1.400 kg · s/d 2 Nov 2026".
  * Pemasok yang tidak sedang mengirim → "—" (pemanggil yang memilih kata lain,
  * mis. "Aktif", supaya tidak ada dua tempat yang mengklaim hal berbeda).
  */
@@ -151,7 +153,7 @@ export function shippingLabel(shipping: SupplierShipping | null): string {
     shipping.until ? `s/d ${formatDate(shipping.until)}` : null,
     shipping.safetyFailCount > 0 ? `${shipping.safetyFailCount} gagal uji` : null,
   ].filter((part): part is string => Boolean(part));
-  return `Sedang mengirim · ${parts.join(" · ")}`;
+  return `Stok layak · ${parts.join(" · ")}`;
 }
 
 /**
@@ -166,7 +168,9 @@ export function shippingLabel(shipping: SupplierShipping | null): string {
  */
 export function shippingTagLabel(shipping: SupplierShipping | null): string {
   if (!shipping || shipping.count <= 0) return "—";
-  return `Mengirim ${shipping.count} kiriman`;
+  // "Mengirim" terlalu kuat: definisinya batch layak hari ini, bukan barang
+  // yang sedang di jalan (audit data 26 Okt 2026).
+  return `Stok layak · ${shipping.count} kiriman`;
 }
 
 /**
@@ -438,7 +442,7 @@ export function supplierPopupLines(
     const gagal =
       row.shipping.safetyFailCount > 0 ? ` · ${row.shipping.safetyFailCount} gagal uji` : "";
     lines.push(
-      `Sedang mengirim: ${row.shipping.count} kiriman · ${berat}${sampai}${gagal}`
+      `Stok layak dikirim: ${row.shipping.count} kiriman · ${berat}${sampai}${gagal}`
     );
   }
   if (row.excludedAtHub && row.excludedScopes.length) {
@@ -563,5 +567,5 @@ export const SUPPLIER_PIN_LEGEND: readonly {
   { tone: "low", label: "Keandalan rendah" },
   { tone: "excluded", label: "Dikecualikan" },
   { tone: "far", label: "Di luar jangkauan" },
-  { tone: "shipping", label: "Sedang mengirim" },
+  { tone: "shipping", label: "Stok layak" },
 ] as const;

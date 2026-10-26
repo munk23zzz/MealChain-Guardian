@@ -191,7 +191,11 @@ export default function TopBar({
           >
             <BellIcon size={18} />
             {pending > 0 && (
-              <span className="top-bar-bell-count" aria-hidden="true">
+              <span
+                className="top-bar-bell-count"
+                aria-hidden="true"
+                title={`${pending} keputusan menunggu tindakan`}
+              >
                 {pending > 9 ? "9+" : pending}
               </span>
             )}

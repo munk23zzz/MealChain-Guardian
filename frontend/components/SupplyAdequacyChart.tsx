@@ -80,6 +80,12 @@ export default function SupplyAdequacyChart({
   const urut = useMemo(() => sortAdequacyRows(rows, lens), [rows, lens]);
   const ringkas = adequacySummary(urut, lens);
   const labelLens = lens === "freshness" ? "segar" : "cakupan";
+  // Lensa kesegaran tidak boleh tampil sama dengan lensa kuantitas. Angka saja
+  // tidak cukup: kalau semua batch masih >48 jam, kedua angka identik dan
+  // pembaca menyimpulkan "tidak ada bedanya". Karena itu porsi yang layak tapi
+  // tidak segar diredupkan di lensa ini, sehingga panjang batang yang pekat
+  // selalu sama dengan angka "segar".
+  const segarSaja = lens === "freshness";
   const labelRingkas =
     lens === "freshness"
       ? "komoditas dengan stok segar di bawah kebutuhan"
@@ -208,6 +214,11 @@ export default function SupplyAdequacyChart({
           <span className="sa-legend-demand">
             <i aria-hidden="true" /> Kebutuhan
           </span>
+          {segarSaja && (
+            <span className="sa-legend-note">
+              garis miring = layak, tidak dihitung segar
+            </span>
+          )}
         </div>
       </div>
 
@@ -266,7 +277,9 @@ export default function SupplyAdequacyChart({
                 className={`sa-track${row.dataState !== "terukur" ? " sa-track-neutral" : ""}`}
                 aria-hidden="true"
               >
-                <span className="sa-track-fill">
+                <span
+                  className={`sa-track-fill${segarSaja ? " sa-fill-segar" : ""}`}
+                >
                   {row.buckets.freshKg > 0 && (
                     <span
                       className="sa-seg sa-seg-fresh"

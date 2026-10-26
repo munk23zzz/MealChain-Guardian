@@ -8,14 +8,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  KPI_DEFAULT_WINDOW,
   KPI_TABS,
   KPI_WINDOWS,
   kpiQueryPolicy,
-  kpiWindowRange,
+  fmtCoverage,
   metricLabel,
   periodeBulan,
+  periodePil,
   shouldLoadKpi,
 } from "../lib/kpi";
+import * as kpiMod from "../lib/kpi";
 import { KPI_POLL_MS, QUERY_POLL_MS } from "../lib/query";
 
 describe("shouldLoadKpi", () => {
@@ -83,27 +86,21 @@ describe("kebijakan muat KPI (polling demo)", () => {
 });
 
 describe("jendela KPI (pemilih periode)", () => {
-  it("tiga jendela dengan label Indonesia yang cocok dengan jamnya", () => {
-    expect(KPI_WINDOWS.map((w) => w.key)).toEqual(["24h", "7d", "30d"]);
-    expect(KPI_WINDOWS.map((w) => w.label)).toEqual(["24 jam", "7 hari", "1 bulan"]);
-    expect(KPI_WINDOWS.map((w) => w.hours)).toEqual([24, 168, 720]);
+  it("tiga periode dengan kunci dan label yang cocok dengan namanya", () => {
+    expect(KPI_WINDOWS.map((w) => w.key)).toEqual(["today", "7d", "1bulan"]);
+    expect(KPI_WINDOWS.map((w) => w.label)).toEqual([
+      "Hari ini",
+      "7 hari",
+      "1 bulan",
+    ]);
+    expect(KPI_DEFAULT_WINDOW).toBe("today");
   });
 
-  it("rentang dihitung dari jam jendela; ujungnya waktu sekarang", () => {
-    const now = new Date("2026-10-16T16:00:00.000Z");
-    // "1 bulan" = bulan berjalan WIB: 16 Okt 16.00 UTC = 17 Okt 00.00 WIB,
-    // jadi awalnya 1 Okt 00.00 WIB = 30 Sep 17.00 UTC.
-    expect(kpiWindowRange("30d", now)).toEqual({
-      start: "2026-09-30T17:00:00.000Z",
-      end: "2026-10-16T16:00:00.000Z",
-    });
-    expect(kpiWindowRange("24h", now).start).toBe("2026-10-15T16:00:00.000Z");
-  });
-
-  it("kunci tak dikenal jatuh ke 24 jam, bukan rentang kosong", () => {
-    const now = new Date("2026-10-16T16:00:00.000Z");
-    expect(kpiWindowRange("ngawur", now).start).toBe("2026-10-15T16:00:00.000Z");
-    expect(kpiWindowRange(undefined, now).start).toBe("2026-10-15T16:00:00.000Z");
+  it("klien tidak lagi menghitung rentang tanggal", () => {
+    // Batas hari (termasuk pergeseran 7 jam WIB) milik server: GET /kpi?periode=.
+    // Kalau `kpiWindowRange` kembali, dua klien bisa mengirim jendela berbeda
+    // untuk tombol "Hari ini" yang sama.
+    expect(kpiMod).not.toHaveProperty("kpiWindowRange");
   });
 });
 
@@ -149,5 +146,50 @@ describe("metricLabel — nama metrik untuk layar", () => {
   it("nama yang belum dikenal dikembalikan apa adanya, bukan dikarang", () => {
     expect(metricLabel("New Metric From Server")).toBe("New Metric From Server");
     expect(metricLabel(null)).toBe("—");
+  });
+});
+
+describe("periodePil — label pil mengikuti jendela, bukan nama bulan", () => {
+  // Audit 26 Okt 2026: dengan jendela "Hari ini" pil dulu menulis
+  // "Periode Oktober 2026" (dari rentang 26 Okt 00.00 WIB), sehingga angka
+  // harian terbaca sebagai angka sebulan.
+  const MULAI = "2026-10-25T17:00:00Z"; // 26 Okt 00.00 WIB
+  const AKHIR = "2026-10-26T01:10:02Z"; // 26 Okt 08.10 WIB
+
+  it("hari ini menyebut 'Hari ini' + tanggal, bukan nama bulan", () => {
+    const teks = periodePil("today", MULAI, AKHIR);
+    expect(teks).toBe("Hari ini · 26 Okt 2026");
+    expect(teks).not.toContain("Oktober 2026");
+  });
+
+  it("tujuh hari menulis rentang tanggal", () => {
+    expect(periodePil("7d", "2026-10-19T17:00:00Z", AKHIR)).toBe(
+      "7 hari · 20–26 Okt 2026"
+    );
+  });
+
+  it("satu bulan tetap memakai nama bulan", () => {
+    expect(periodePil("1bulan", "2026-09-30T17:00:00Z", AKHIR)).toBe(
+      "1 bulan · Oktober 2026"
+    );
+  });
+
+  it("tanpa tanggal tetap menyebut jendelanya, tidak mengarang", () => {
+    expect(periodePil("today", null, null)).toBe("Hari ini");
+    expect(periodePil(null, null, null)).toBe("Periode");
+  });
+});
+
+describe("fmtCoverage — rasio payload ditulis sebagai persen", () => {
+  it("1.00 berarti 100%, bukan 1", () => {
+    expect(fmtCoverage("1.00")).toBe("100%");
+  });
+  it("0.50 berarti 50%", () => {
+    expect(fmtCoverage("0.50")).toBe("50%");
+  });
+  it("nilai kosong tetap '—'", () => {
+    expect(fmtCoverage(null)).toBe("—");
+    expect(fmtCoverage(undefined)).toBe("—");
+    expect(fmtCoverage("bukan-angka")).toBe("—");
   });
 });

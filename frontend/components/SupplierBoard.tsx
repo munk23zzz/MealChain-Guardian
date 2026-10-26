@@ -28,7 +28,9 @@ import {
   directoryReachLabel,
   directoryReachSummary,
   directoryReachTagLabel,
+  exclusionCounts,
   exclusionRows,
+  exclusionStatusLabel,
   filterDirectoryByReach,
   supplierDirectory,
   supplierMetaLine,
@@ -194,7 +196,7 @@ export default function SupplierBoard({
               // Keputusan pemilik 2026-10-16: kiriman berjalan = batch masih
               // layak hari ini. Angkanya dari `shipping` server, bukan hitungan UI.
               {
-                label: "Sedang mengirim barang",
+                label: "Pemasok dengan stok layak",
                 value: `${metrics.shipping} dari ${metrics.suppliers}`,
                 tone: metrics.shipping ? ("ok" as const) : ("plain" as const),
               },
@@ -221,8 +223,13 @@ export default function SupplierBoard({
                 : []),
               {
                 label: "Pemasok dieksklusi",
-                value: String(register.length),
-                tone: register.length ? "danger" : "plain",
+                // Audit 26 Okt 2026: `register.length` mencampur entri `active`
+                // dan `proposed`, sehingga "2" terbaca dua pemasok sudah
+                // dikecualikan. Sekarang dipisah sesuai statusnya.
+                value: `${exclusionCounts(register).active} aktif · ${
+                  exclusionCounts(register).proposed
+                } menunggu`,
+                tone: exclusionCounts(register).active ? "danger" : "plain",
               },
             ]}
           />
@@ -518,6 +525,7 @@ export default function SupplierBoard({
                   <tr>
                     <th scope="col">Pemasok</th>
                     <th scope="col">Alasan</th>
+                    <th scope="col">Status</th>
                     <th scope="col">Waktu</th>
                     <th scope="col">Keputusan</th>
                   </tr>
@@ -527,6 +535,7 @@ export default function SupplierBoard({
                     <tr key={row.id}>
                       <td>{row.supplier}</td>
                       <td>{row.reason}</td>
+                      <td>{exclusionStatusLabel(row.status)}</td>
                       <td>{row.at}</td>
                       <td>
                         <code>{row.decisionId.slice(0, 8)}</code>

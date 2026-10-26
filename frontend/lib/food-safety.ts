@@ -8,6 +8,7 @@
 // Aturan tampilan: nilai tak diketahui ditulis "—".
 
 import { formatDate, formatDateTime } from "./datetime";
+import { formatKg } from "./overview-format";
 import { roadKmLabel, supplierRoutes } from "./supplier-routes";
 
 const DASH = "—";
@@ -234,6 +235,29 @@ export function safetySummaryOfRows(rows: SafetyRow[]): SafetySummary {
   };
 }
 
+/**
+ * Partisi status uji untuk tile ringkasan.
+ *
+ * Audit data 26 Okt 2026: lima tile lama bercampur dimensi (status uji +
+ * karantina + kedaluwarsa) sehingga bila dijumlah hasilnya 14 dari 15 batch dan
+ * pembaca mengira ada batch hilang. Fungsi ini menjaga janji "jumlah tile =
+ * total batch": sisa yang tidak masuk empat kategori (mis. batch `pass` yang
+ * ditahan) tampil sebagai `leftover`, bukan disembunyikan.
+ */
+export function safetyStatusPartition(summary: SafetySummary): {
+  tiles: { key: string; label: string; value: number }[];
+  leftover: number;
+} {
+  const tiles = [
+    { key: "aman", label: "Aman", value: summary.safe },
+    { key: "gagal", label: "Gagal uji", value: summary.failed },
+    { key: "verifikasi", label: "Perlu verifikasi", value: summary.needsVerification },
+    { key: "belum", label: "Belum diuji", value: summary.unchecked },
+  ];
+  const terjumlah = tiles.reduce((total, tile) => total + tile.value, 0);
+  return { tiles, leftover: Math.max(0, summary.total - terjumlah) };
+}
+
 function text(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   const raw = String(value).trim();
@@ -359,7 +383,34 @@ export type CoverageInput = {
   supplyKg: number | null;
   shortageKg: number | null;
   incomingKg: number | null;
+  /** Komoditas yang dihitung — dipakai MENAMAI kiriman supaya tidak ambigu. */
+  commodity?: string | null;
+  /** Tanggal kebutuhan (`needed_by`) — supaya "Kebutuhan" tidak terbaca hari ini. */
+  neededBy?: string | null;
 };
+
+/**
+ * Jumlah kg kiriman yang menuju lokasi untuk SATU komoditas saja.
+ *
+ * Audit 26 Okt 2026: sebelumnya kalimat "kiriman 4.750 kg menutup kekurangan
+ * (+3.970 kg)" menjumlahkan beras + wortel + ayam + telur, lalu membandingkannya
+ * dengan kekurangan TELUR 780 kg. Kiriman komoditas lain tidak menutup
+ * kekurangan ini, jadi yang dihitung harus komoditas yang sama.
+ */
+export function incomingKgForCommodity(
+  shipments: IncomingShipment[],
+  commodity: string | null | undefined
+): number | null {
+  const cari = text(commodity)?.toLowerCase();
+  if (!cari) return null;
+  let total: number | null = null;
+  for (const ship of shipments) {
+    if ((text(ship.commodity) ?? "").toLowerCase() !== cari) continue;
+    if (ship.kg === null) continue;
+    total = (total ?? 0) + ship.kg;
+  }
+  return total;
+}
 
 /**
  * Satu kalimat keputusan untuk kepala SPPG: kebutuhan vs yang ada vs yang
@@ -373,17 +424,24 @@ export function coverageSentence(input: CoverageInput): string | null {
 
   if (shortageKg <= 0) return "Tidak ada kekurangan pada data saat ini.";
 
+  // Audit data 26 Okt 2026: `needed_by` di data bisa 3 hari ke depan, jadi
+  // tanggalnya disebut — tanpa itu pembaca mengira angka ini kebutuhan hari ini.
+  const perlu = text(input.neededBy);
   const kepala =
-    `Kebutuhan ${ribuan(demandKg)} kg · tersedia ${ribuan(supplyKg)} kg ` +
-    `→ kurang ${ribuan(shortageKg)} kg`;
+    `Kebutuhan ${ribuan(demandKg)} kg${perlu ? ` (perlu ${formatDate(perlu)})` : ""} · ` +
+    `tersedia ${ribuan(supplyKg)} kg → kurang ${ribuan(shortageKg)} kg`;
 
   const kiriman =
     incomingKg !== null && Number.isFinite(incomingKg) && incomingKg > 0 ? incomingKg : null;
-  if (kiriman === null) return `${kepala}; belum ada kiriman masuk yang menuju lokasi ini.`;
-  if (kiriman >= shortageKg) {
-    return `${kepala}; kiriman ${ribuan(kiriman)} kg menutup kekurangan (+${ribuan(kiriman - shortageKg)} kg).`;
+  const nama = text(input.commodity);
+  const sebut = nama ? `kiriman ${nama}` : "kiriman";
+  if (kiriman === null) {
+    return `${kepala}; belum ada kiriman ${nama ?? "masuk"} yang menuju lokasi ini.`;
   }
-  return `${kepala}; kiriman ${ribuan(kiriman)} kg belum menutup (sisa kurang ${ribuan(shortageKg - kiriman)} kg).`;
+  if (kiriman >= shortageKg) {
+    return `${kepala}; ${sebut} ${ribuan(kiriman)} kg menutup kekurangan (+${ribuan(kiriman - shortageKg)} kg).`;
+  }
+  return `${kepala}; ${sebut} ${ribuan(kiriman)} kg belum menutup (sisa kurang ${ribuan(shortageKg - kiriman)} kg).`;
 }
 
 /**
@@ -417,6 +475,8 @@ export type BalanceSlice = {
   supplyKg: number | null;
   shortageKg: number | null;
   surplusKg: number | null;
+  /** Kapan kebutuhan itu diperlukan (`demand_records.needed_by`), bila ada. */
+  demandNeededBy: string | null;
   isAggregate: boolean;
 };
 
@@ -451,6 +511,7 @@ export function balanceForLocation(raw: unknown, own: string | null | undefined)
       supplyKg: tanpaSisi ? null : angka(found["supply_kg"]),
       shortageKg: tanpaSisi ? null : angka(found["shortage_kg"]),
       surplusKg: tanpaSisi ? null : angka(found["surplus_kg"]),
+      demandNeededBy: text(found["demand_needed_by"]),
       isAggregate: false,
     };
   }
@@ -469,6 +530,9 @@ export function balanceForLocation(raw: unknown, own: string | null | undefined)
     supplyKg: jumlah(terukur, "supply_kg"),
     shortageKg: jumlah(terukur, "shortage_kg"),
     surplusKg: jumlah(terukur, "surplus_kg"),
+    // Agregat lintas lokasi: tanggal kebutuhan berbeda-beda, jadi jangan
+    // menampilkan satu tanggal yang mengklaim mewakili semuanya.
+    demandNeededBy: null,
     isAggregate: true,
   };
 }
@@ -505,7 +569,12 @@ export type SafetyDecisionSummary = {
   total: number;
   allTotal: number;
   totalKg: number | null;
+  /** kg keputusan yang masih berlaku (jendela waktu belum lewat). */
+  activeKg: number | null;
+  /** kg keputusan yang ditolak manusia. */
+  rejectedKg: number | null;
   active: number;
+  /** Kedaluwarsa TANPA penolakan — tidak ada baris yang dihitung dua kali. */
   expired: number;
   pendingApproval: number;
   rejected: number;
@@ -562,17 +631,55 @@ export function safetyDecisions(items: unknown): SafetyDecisionSummary {
     null
   );
 
+  // Audit data 26 Okt 2026: `expired` dulu = SEMUA baris `!valid`, sehingga satu
+  // keputusan yang ditolak muncul dua kali di kalimat ringkasan ("1 ditolak" DAN
+  // "1 sudah lewat jendela") dan kg-nya tidak bisa dijumlahkan. Sekarang
+  // kedaluwarsa hanya menghitung yang TIDAK ditolak, dan kg dipisah per keadaan.
+  const kgDari = (subset: SafetyDecisionRow[]) =>
+    subset.reduce<number | null>(
+      (total, row) => (row.kg === null ? total : (total ?? 0) + row.kg),
+      null
+    );
+  const berlaku = rows.filter((row) => row.valid);
+  const ditolak = rows.filter((row) => row.status === "rejected");
+  const kedaluwarsa = rows.filter((row) => !row.valid && row.status !== "rejected");
+
   return {
     total: rows.length,
     allTotal: list.length,
     totalKg: kg,
-    active: rows.filter((row) => row.valid).length,
-    expired: rows.filter((row) => !row.valid).length,
+    activeKg: kgDari(berlaku),
+    rejectedKg: kgDari(ditolak),
+    active: berlaku.length,
+    expired: kedaluwarsa.length,
     pendingApproval: rows.filter((row) => row.status === "pending_approval").length,
-    rejected: rows.filter((row) => row.status === "rejected").length,
+    rejected: ditolak.length,
     reproposable: rows.filter((row) => row.canRepropose).length,
     rows: rows.sort((a, b) => Number(b.canRepropose) - Number(a.canRepropose)),
   };
+}
+
+/**
+ * Satu kalimat ringkasan keputusan keamanan untuk lokasi ini.
+ *
+ * Audit data 26 Okt 2026: dulu `expired` menghitung SEMUA baris tidak-berlaku,
+ * jadi keputusan yang ditolak muncul dua kali ("1 ditolak" DAN "1 sudah lewat
+ * jendela") dan pembaca mengira ada dua keputusan. Sekarang tiap keadaan
+ * dihitung sekali dan kg-nya disebut, sehingga angka di layar bisa dijumlahkan.
+ */
+export function safetyDecisionSummaryLine(s: SafetyDecisionSummary): string {
+  const bagian: string[] = [
+    `${s.total} keputusan keamanan`,
+    `${s.active} masih berlaku${s.activeKg === null ? "" : ` (${formatKg(s.activeKg)})`}`,
+  ];
+  let ditolak = `${s.rejected} ditolak`;
+  if (s.reproposable) ditolak += " (bisa diajukan ulang)";
+  if (s.rejectedKg !== null) ditolak += ` (${formatKg(s.rejectedKg)})`;
+  bagian.push(ditolak);
+  bagian.push(`${s.expired} kedaluwarsa tanpa penolakan`);
+  if (s.pendingApproval) bagian.push(`${s.pendingApproval} menunggu persetujuan`);
+  const total = s.totalKg === null ? "" : ` · total ${formatKg(s.totalKg)}`;
+  return `${bagian.join(" · ")}${total}. Dari ${s.allTotal} keputusan yang menyasar lokasi ini.`;
 }
 
 // ── Penerimaan barang (kartu "Penerimaan barang") ───────────────────────────

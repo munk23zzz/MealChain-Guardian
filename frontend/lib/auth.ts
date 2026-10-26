@@ -16,8 +16,12 @@ export function decodeRole(token: string | null): string | null {
 }
 
 export function formatIDR(value: string | number | null | undefined): string {
-  if (value === null || value === undefined) return "-";
+  // "—" (bukan "-") untuk nilai yang tidak diketahui: aturan repo
+  // (lib/today.ts) melarang nilai kosong ditulis seperti angka/hyphen biasa.
+  // Terukur 26 Okt 2026: kartu "Pemulihan status pemasok" mencetak "SDC -"
+  // karena keputusan itu memang tidak punya biaya.
+  if (value === null || value === undefined) return "—";
   const num = Number(value);
-  if (Number.isNaN(num)) return "-";
+  if (Number.isNaN(num)) return "—";
   return `Rp${num.toLocaleString("id-ID", { maximumFractionDigits: 0 })}`;
 }

@@ -983,7 +983,7 @@ describe("SupplyMap — rincian lapisan & perjalanan kiriman", () => {
     expect(host.querySelector(".map-layer-tags")?.textContent).toContain("tidak ada kiriman berjalan");
   });
 
-  it("butir 'Sedang mengirim' di legenda hanya bila ada pin yang memakainya", () => {
+  it("butir 'Stok layak' di legenda hanya bila ada pin yang memakainya", () => {
     // Legenda tidak boleh menyebut warna yang tidak tergambar di kanvas.
     const semuaTiba = {
       routes: [
@@ -999,10 +999,10 @@ describe("SupplyMap — rincian lapisan & perjalanan kiriman", () => {
       ],
     };
     mountEl(<SupplyMap locations={LOCATIONS} supplierRoutes={semuaTiba} />);
-    expect(host.querySelector(".map-legend-compact")?.textContent).not.toContain("Sedang mengirim");
+    expect(host.querySelector(".map-legend-compact")?.textContent).not.toContain("Stok layak");
 
     mountEl(<SupplyMap locations={LOCATIONS} supplierRoutes={ROUTES} />);
-    expect(host.querySelector(".map-legend-compact")?.textContent).toContain("Sedang mengirim");
+    expect(host.querySelector(".map-legend-compact")?.textContent).toContain("Stok layak");
   });
 
   it("garis kiriman yang SUDAH TIBA pun bisa diklik: popup + sorotan", () => {

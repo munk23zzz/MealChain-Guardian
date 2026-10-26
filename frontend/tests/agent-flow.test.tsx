@@ -125,6 +125,14 @@ describe("formatIDR", () => {
   it("menampilkan rupiah gaya Indonesia", () => {
     expect(formatIDR("16206000.00")).toBe("Rp16.206.000");
   });
+
+  it("nilai kosong ditulis '—', bukan '-' (aturan repo)", () => {
+    expect(formatIDR(null)).toBe("—");
+    expect(formatIDR(undefined)).toBe("—");
+    expect(formatIDR("bukan-angka")).toBe("—");
+    // nol yang NYATA tetap Rp0 — nol bukan "tidak diketahui".
+    expect(formatIDR(0)).toBe("Rp0");
+  });
 });
 
 describe("StatusBadge (status tidak boleh ambigu)", () => {

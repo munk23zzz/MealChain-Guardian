@@ -123,7 +123,7 @@ export function supplierPopupView(
       }
     : row.shipping
       ? {
-          text: `Sedang mengirim ${row.shipping.count} kiriman · ${formatKg(
+          text: `Stok layak dikirim: ${row.shipping.count} kiriman · ${formatKg(
             row.shipping.totalKg
           )}${row.shipping.commodities.length ? ` ${row.shipping.commodities.join(", ")}` : ""}`,
           tone: "accent",
@@ -133,7 +133,7 @@ export function supplierPopupView(
     kind: "supplier",
     kicker: `Pemasok · hub ${row.hub}`,
     title: row.name,
-    chip: row.excludedAtHub ? "Dikecualikan" : row.shipping ? "Sedang mengirim" : "Aktif",
+    chip: row.excludedAtHub ? "Dikecualikan" : row.shipping ? "Stok layak" : "Aktif",
     tone: row.excludedAtHub ? "danger" : "accent",
     hero: { label: "Keandalan pengiriman", value: reliabilitas },
     metrics: [

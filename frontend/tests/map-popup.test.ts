@@ -105,7 +105,7 @@ describe("popup pemasok", () => {
     expect(view.metrics.map((m) => m.value)).toContain("Higienis");
     expect(view.metrics.find((m) => m.label === "Jarak")?.value).toBe("42,4 km");
     expect(view.aria).toContain("dalam jangkauan");
-    expect(view.callout?.text).toContain("Sedang mengirim 1 kiriman");
+    expect(view.callout?.text).toContain("Stok layak dikirim: 1 kiriman");
     expect(view.meter?.pct).toBe(85);
   });
 

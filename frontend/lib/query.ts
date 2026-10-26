@@ -62,7 +62,7 @@ export const queryKeys = {
   me: (scope: string) => ["me", scope] as const,
   balanceMap: (scope: string, commodity: string) =>
     ["balance-map", scope, commodity] as const,
-  kpiLive: (scope: string, windowKey: string = "24h") =>
+  kpiLive: (scope: string, windowKey: string = "today") =>
     ["kpi-live", scope, windowKey] as const,
   // Limbah + mitra pengolahan (18 Okt 2026): satu angka per panel Surplus &
   // Limbah. Kunci memuat scope karena SPPG hanya melihat lokasinya.

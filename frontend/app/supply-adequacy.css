@@ -445,6 +445,29 @@
   );
 }
 
+/* Lensa Kesegaran: porsi yang masih layak tetapi ≤48 jam tidak dihitung sebagai
+   pasokan segar. Lebar segmennya tetap (supaya jumlahnya jujur), tetapi isinya
+   dibuat berongga dan pucat — jadi batang yang pekat berhenti tepat di angka
+   "segar", dan kedua lensa tidak lagi terlihat identik. */
+.sa-fill-segar .sa-seg-near {
+  background-color: transparent;
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--status-warning) 0 3px,
+    transparent 3px 8px
+  );
+  opacity: 0.65;
+}
+
+.sa-fill-segar .sa-seg-unsafe,
+.sa-fill-segar .sa-seg-unverified {
+  opacity: 0.35;
+}
+
+.sa-fill-segar .sa-seg-fresh {
+  box-shadow: inset -2px 0 0 var(--surface);
+}
+
 .sa-demand {
   position: absolute;
   top: -5px;

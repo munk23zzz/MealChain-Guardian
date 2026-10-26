@@ -299,11 +299,11 @@ describe("SupplierBoard — kerapian tabel & bentuk pil (Fase 12c)", () => {
   it("status kiriman jadi pil SATU baris; kalimat penuhnya pindah ke title", () => {
     const html = render({ suppliers: SHIP });
 
-    expect(html).toContain(">Mengirim 3 kiriman<");
-    expect(html).toContain('title="Sedang mengirim · 3 kiriman · 1.400 kg · s/d 2 Nov 2026"');
+    expect(html).toContain(">Stok layak · 3 kiriman<");
+    expect(html).toContain('title="Stok layak · 3 kiriman · 1.400 kg · s/d 2 Nov 2026"');
     // Kalimat panjang TIDAK lagi jadi isi pil — itulah yang membuat bentuknya
     // membungkus 3 baris dan jadi yang paling besar di barisnya.
-    expect(html).not.toContain(">Sedang mengirim · 3 kiriman · 1.400 kg · s/d 2 Nov 2026<");
+    expect(html).not.toContain(">Stok layak · 3 kiriman · 1.400 kg · s/d 2 Nov 2026<");
   });
 
   it("kiriman gagal uji dapat pil bahaya sendiri, bukan ditempel di pil hijau", () => {
@@ -330,7 +330,7 @@ describe("SupplierBoard — kerapian tabel & bentuk pil (Fase 12c)", () => {
     expect(tanpaTitle).toContain("600 kg · s/d 26 Okt 2026");
     expect(html).toContain("shipping-meta");
     // Kalimat panjangnya tetap TIDAK kembali jadi isi pil (itu yang dulu membungkus 3 baris).
-    expect(html).not.toContain(">Sedang mengirim · 3 kiriman · 1.400 kg · s/d 2 Nov 2026<");
+    expect(html).not.toContain(">Stok layak · 3 kiriman · 1.400 kg · s/d 2 Nov 2026<");
   });
 
   it("kartu ringkasan selebar halaman (kelas supplier-summary)", () => {

@@ -589,8 +589,8 @@ export default function Home() {
   //
   // Pemilih periode (2026-10-16): jendela dimiliki HALAMAN, bukan komponen —
   // hook butuh nilainya untuk memuat rentang yang benar, dan komponen butuh
-  // nilai yang sama untuk menandai pilihan aktif. Default tetap 24 jam.
-  const [kpiWindow, setKpiWindow] = useState<KpiWindowKey>("24h");
+  // nilai yang sama untuk menandai pilihan aktif. Default: hari kalender berjalan.
+  const [kpiWindow, setKpiWindow] = useState<KpiWindowKey>("today");
   const kpiQuery = useKpi(token, identityScope, tab, kpiWindow);
   // Limbah + mitra pengolahan (18 Okt 2026): panel Surplus & Limbah dulu menulis
   // "—" karena tidak ada sumbernya. Sekarang dari server, dimuat hanya di tab itu.
@@ -1840,6 +1840,15 @@ export default function Home() {
             Recommendations. Semua angka dari API; yang tidak ada ditulis "—". */}
         {tab === "evidence" && (
           <>
+          {/* Audit data 26 Okt 2026: kegagalan sebagian dulu ditelan
+              `catch(() => null)` sehingga panel kosong tak bisa dibedakan dari
+              "memang tidak ada data". Sekarang bagian yang gagal disebut. */}
+          {detail.errors.length > 0 ? (
+            <p className="board-alert" role="status">
+              Sebagian bukti gagal dibaca: {detail.errors.join(", ")}. Panel di bawah hanya
+              menampilkan bagian yang berhasil dimuat.
+            </p>
+          ) : null}
           <DecisionEvidence
             decisions={decisions}
             selected={selected}

@@ -26,7 +26,8 @@ describe("DemoRebuild — aksi destruktif yang jujur", () => {
   it("menyebut biaya waktu sebenarnya dan efeknya", () => {
     const html = render();
     expect(html).toContain("Bangun ulang data");
-    expect(html).toContain("±70 detik");
+    expect(html).toContain("Terukur 41 detik");
+    expect(html).toContain("sekitar 1 menit");
     expect(html).toContain("tanpa menutup sesi");
   });
 
@@ -71,6 +72,7 @@ describe("rebuildWarning — menyebut yang hilang dan yang tidak", () => {
     const teks = rebuildWarning();
     expect(teks).toContain("diganti dari template");
     expect(teks).toContain("tidak");
-    expect(teks).toContain("±70 detik");
+    expect(teks).toContain("terukur 41 detik");
+    expect(teks).toContain("sekitar 1 menit");
   });
 });

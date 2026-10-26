@@ -11,6 +11,7 @@
 //   `certificationLabel` di lib/supplier-pins.ts supaya tidak ada dua kamus.
 // - Urutan = risiko dulu: dikecualikan → skor terendah → terbaik → tanpa skor.
 
+import { formatClockWib, formatDate } from "./datetime";
 import {
   LOW_RELIABILITY,
   certificationLabel,
@@ -294,13 +295,52 @@ export function exclusionRows(items: unknown): ExclusionRow[] {
       text((record.supplier as { name?: unknown } | undefined)?.name) ??
       text(record.supplier) ??
       DASH;
+    // Waktu ditulis dalam WIB dan tanpa mikrodetik (audit 26 Okt 2026): dulu
+    // string ISO mentah dari `created_at` tampil apa adanya
+    // ("2026-10-25T20:43:30.217503+00:00") — satu-satunya tempat di UI yang
+    // memakai UTC mentah, sementara kolom waktu lain memakai "26 Okt 03.43".
+    const waktu = text(record.excluded_at) ?? text(record.created_at) ?? null;
     return {
       id: text(record.id) ?? DASH,
       supplier,
       reason: text(record.reason) ?? DASH,
-      at: text(record.excluded_at) ?? text(record.created_at) ?? DASH,
-      decisionId: text(record.decision_id) ?? DASH,
+      at: waktu ? `${formatDate(waktu)} ${formatClockWib(waktu)}` : DASH,
+      // Endpoint mengirim `source_decision_id`; `decision_id` hanya ada di
+      // fixture tes lama, jadi dibaca sebagai cadangan.
+      decisionId:
+        text(record.source_decision_id) ?? text(record.decision_id) ?? DASH,
       status: text(record.status) ?? "excluded",
     };
   });
+}
+
+/** Label status satu entri register eksklusi (audit 26 Okt 2026).
+ *
+ * Sebelumnya tabel tidak punya kolom status, sehingga "Pemasok dieksklusi: 2"
+ * terbaca seolah dua pemasok sedang dikecualikan — padahal satu `active` dan
+ * satu masih `proposed` (menunggu keputusan manusia).
+ */
+export function exclusionStatusLabel(status: string | null | undefined): string {
+  switch ((status ?? "").toLowerCase()) {
+    case "active":
+      return "Aktif";
+    case "proposed":
+      return "Menunggu keputusan";
+    case "rejected":
+      return "Usulan ditolak";
+    case "revoked":
+      return "Dicabut";
+    default:
+      return "—";
+  }
+}
+
+/** Hitung entri register per status — dipakai ringkasan "aktif · menunggu". */
+export function exclusionCounts(items: unknown): { active: number; proposed: number; total: number } {
+  const rows = exclusionRows(items);
+  return {
+    active: rows.filter((row) => row.status.toLowerCase() === "active").length,
+    proposed: rows.filter((row) => row.status.toLowerCase() === "proposed").length,
+    total: rows.length,
+  };
 }

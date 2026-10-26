@@ -592,7 +592,7 @@ export async function endDemoSession(token: string) {
 }
 
 /**
- * `POST /demo/template/rebuild` — bangun ulang SELURUH data demo (±70 detik).
+ * `POST /demo/template/rebuild` — bangun ulang SELURUH data demo (terukur 41 detik).
  *
  * Beda dari `startDemoSession`: jendela waktu sesi tidak disentuh, dan panggilan
  * ini memang menghapus baris operasional lalu menyemai ulang template. Dipakai
@@ -747,12 +747,11 @@ export async function fetchWasteSummary(token: string, days = 30) {
 }
 
 export async function fetchKpis(
-  start: string,
-  end: string,
+  periode: string,
   token: string,
   locationId?: string
 ) {
-  const params = new URLSearchParams({ start, end });
+  const params = new URLSearchParams({ periode });
   if (locationId) params.set("location_id", locationId);
   return request(`/kpi?${params.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },

@@ -9,9 +9,7 @@
  * dipakai di layar rekomendasi; teks bantuan menyebut 24 jam supaya tidak
  * ambigu dengan "hari kalender".
  */
-import type { KpiWindowKey } from "./kpi";
-
-export type FeedWindowKey = KpiWindowKey;
+export type FeedWindowKey = "24h" | "7d" | "30d";
 
 export const FEED_WINDOW_DEFAULT: FeedWindowKey = "24h";
 

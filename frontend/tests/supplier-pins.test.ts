@@ -280,7 +280,7 @@ describe("ringkasan layer & gerbang zoom", () => {
       "Keandalan rendah",
       "Dikecualikan",
       "Di luar jangkauan",
-      "Sedang mengirim",
+      "Stok layak",
     ]);
   });
 });
@@ -533,7 +533,7 @@ describe("pemasok yang sedang mengirim", () => {
     const row = supplierPinRows({ items: [ITEM] })[0];
 
     expect(shippingLabel(row.shipping)).toBe(
-      "Sedang mengirim · 3 kiriman · 1.400 kg · s/d 2 Nov 2026"
+      "Stok layak · 3 kiriman · 1.400 kg · s/d 2 Nov 2026"
     );
     expect(shippingLabel(null)).toBe("—");
   });
@@ -556,7 +556,8 @@ describe("pemasok yang sedang mengirim", () => {
     // Sel Status hanya butuh "sedang mengirim berapa" — berat & batas layak
     // membuat pil membungkus 2–3 baris (terukur 186×63 px) sehingga bentuknya
     // jadi yang paling besar di baris tabel.
-    expect(shippingTagLabel(row.shipping)).toBe("Mengirim 3 kiriman");
+    // Label menyebut definisinya (batch layak), bukan klaim "sedang di jalan".
+    expect(shippingTagLabel(row.shipping)).toBe("Stok layak · 3 kiriman");
     expect(shippingTagLabel(null)).toBe("—");
     expect(
       shippingTagLabel({ count: 0, totalKg: 0, until: null, commodities: [], safetyFailCount: 0 })
@@ -564,7 +565,7 @@ describe("pemasok yang sedang mengirim", () => {
     // Kalimat penuhnya TIDAK dihapus — ia dipakai sebagai `title` pil, jadi tidak
     // ada fakta (berat / batas layak / gagal uji) yang hilang dari layar.
     expect(shippingLabel(row.shipping)).toBe(
-      "Sedang mengirim · 3 kiriman · 1.400 kg · s/d 2 Nov 2026"
+      "Stok layak · 3 kiriman · 1.400 kg · s/d 2 Nov 2026"
     );
   });
 
@@ -583,7 +584,7 @@ describe("pemasok yang sedang mengirim", () => {
       "sedang mengirim 3 kiriman"
     );
     expect(supplierPopupLines(row, SUPPLIER_REACH_KM).lines).toContain(
-      "Sedang mengirim: 3 kiriman · 1.400 kg telur · s/d 2 Nov 2026"
+      "Stok layak dikirim: 3 kiriman · 1.400 kg telur · s/d 2 Nov 2026"
     );
   });
 

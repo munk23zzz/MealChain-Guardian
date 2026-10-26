@@ -30,6 +30,7 @@ import {
   coverageSentence,
   expiryState,
   incomingBatchId,
+  incomingKgForCommodity,
   incomingShipments,
   ownLocationRows,
   receiptRows,
@@ -40,8 +41,10 @@ import {
   receiptSavedSentence,
   receivingSentence,
   receivingState,
+  safetyDecisionSummaryLine,
   safetyDecisions,
   safetyRows,
+  safetyStatusPartition,
   safetySummaryOfRows,
   quarantineTone,
   sortByDeadline,
@@ -217,6 +220,11 @@ export default function FoodSafetyBoard({
   const halamanData = paginate(tersaring, halaman, 8);
   const summary = safetySummaryOfRows(tampil);
   const summaryJaringan = safetySummaryOfRows(rows);
+  // Sisa partisi status uji: batch yang ditahan padahal ujinya lolos tidak masuk
+  // "Aman" (tidak boleh dialokasikan) dan juga bukan gagal/perlu-verifikasi.
+  // Tanpa tile ini, empat angka tidak menjumlah ke total dan terlihat seperti
+  // data hilang.
+  const sisaStatus = safetyStatusPartition(summary).leftover;
 
   const shipments = incomingShipments(routes, clock);
   const kirimanKe = ownLocation
@@ -232,18 +240,19 @@ export default function FoodSafetyBoard({
     ? (row: SupplierRoute) =>
         row.destinationName.trim().toLowerCase() === ownLocation.trim().toLowerCase()
     : undefined;
-  const masukKg = kirimanKe.reduce<number | null>(
-    (total, ship) => (ship.kg === null ? total : (total ?? 0) + ship.kg),
-    null
-  );
-
   const slice = balanceForLocation(balance, ownLocation);
+  // Hanya kiriman KOMODITAS YANG SAMA yang boleh menutup kekurangan komoditas
+  // itu (audit 26 Okt 2026: dulu beras + wortel + ayam ikut dijumlahkan untuk
+  // menutup kekurangan telur).
+  const masukKg = incomingKgForCommodity(kirimanKe, slice?.commodity ?? null);
   const kalimat = slice
     ? coverageSentence({
         demandKg: slice.demandKg,
         supplyKg: slice.supplyKg,
         shortageKg: slice.shortageKg,
         incomingKg: masukKg,
+        commodity: slice.commodity,
+        neededBy: slice.demandNeededBy,
       })
     : null;
 
@@ -676,6 +685,31 @@ export default function FoodSafetyBoard({
               <span className="stat-tile-value">{String(summary.needsVerification)}</span>
               <span className="stat-tile-label">Perlu verifikasi</span>
             </div>
+            <div className={`stat-tile${summary.unchecked ? " stat-tile-warn" : ""}`}>
+              <span className="stat-tile-value">{String(summary.unchecked)}</span>
+              <span className="stat-tile-label">Belum diuji</span>
+            </div>
+          </div>
+          {/* Audit data 26 Okt 2026: empat tile di atas menjumlah ke `summary.total`
+              (partisi status uji). "Ditahan" dan "Kedaluwarsa" BUKAN bagian partisi
+              itu — satu batch bisa sekaligus gagal uji, ditahan, dan kedaluwarsa.
+              Karena itu keduanya dipisah ke kelompok penanda, bukan ditumpuk di
+              baris yang sama, supaya angka di layar bisa dijumlahkan tanpa salah. */}
+          {sisaStatus > 0 ? (
+            <div className="stat-tiles">
+              <div className="stat-tile stat-tile-warn">
+                <span className="stat-tile-value">{String(sisaStatus)}</span>
+                <span className="stat-tile-label">Status lain</span>
+                <span className="stat-tile-note">ditahan walau uji lolos</span>
+              </div>
+            </div>
+          ) : null}
+          <p className="stat-tiles-legend">
+            Angka status uji di atas menjumlah ke <strong>{summary.total} batch</strong> yang
+            diperiksa. Penanda di bawah menandai kondisi tambahan dan bisa terjadi bersamaan dengan
+            status uji.
+          </p>
+          <div className="stat-tiles stat-tiles-markers">
             <div className={`stat-tile${summary.quarantined ? " stat-tile-danger" : ""}`}>
               <span className="stat-tile-value">{String(summary.quarantined)}</span>
               <span className="stat-tile-label">Ditahan (karantina)</span>
@@ -1444,14 +1478,7 @@ export default function FoodSafetyBoard({
             </p>
           ) : (
             <>
-              <p className="evidence-note">
-                {keamanan.total} keputusan keamanan · {keamanan.active} masih berlaku ·{" "}
-                {keamanan.reproposable} ditolak (bisa diajukan ulang) · {keamanan.expired} sudah lewat
-                jendela berlaku
-                {keamanan.pendingApproval ? ` · ${keamanan.pendingApproval} menunggu persetujuan` : ""}
-                {keamanan.totalKg === null ? "" : ` · total ${formatKg(keamanan.totalKg)}`}. Dari{" "}
-                {keamanan.allTotal} keputusan yang menyasar lokasi ini.
-              </p>
+              <p className="evidence-note">{safetyDecisionSummaryLine(keamanan)}</p>
               {keamanan.active === 0 ? (
                 <p className="board-alert">
                   Tidak ada keputusan keamanan yang menunggu tanda tangan Anda saat ini. Yang sudah lewat

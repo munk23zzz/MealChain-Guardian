@@ -94,7 +94,11 @@ const HEADER_KEAMANAN = [
   { key: "Content-Security-Policy", value: CSP },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
-  { key: "Referrer-Policy", value: "no-referrer" },
+  // Sengaja BUKAN `no-referrer`: tile.openstreetmap.org menolak (membalas gambar
+  // "Access blocked", HTTP 200 + header `x-blocked`) setiap request tanpa Referer.
+  // `strict-origin-when-cross-origin` tetap tidak membocorkan path/query ke situs
+  // lain — hanya origin — dan itu nilai yang diterima kebijakan tile OSM.
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "geolocation=(), microphone=(), camera=()" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
 ];

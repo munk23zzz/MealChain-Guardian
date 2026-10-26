@@ -207,6 +207,27 @@ describe("exclusionRows", () => {
     });
   });
 
+  it("bentuk PRODUKSI: source_decision_id + created_at ISO → nama, WIB, id keputusan", () => {
+    // Audit 26 Okt 2026: endpoint mengirim `source_decision_id` dan `created_at`,
+    // sedangkan fixture lama memakai `decision_id`/`excluded_at`. Akibatnya kolom
+    // Keputusan selalu "—" dan kolom Waktu menampilkan ISO UTC mentah.
+    const rows = exclusionRows([
+      {
+        id: "e2",
+        supplier_id: "s1",
+        supplier_name: "UD Cibinong Telur Berkah",
+        status: "active",
+        reason: "dua kiriman di atas ambang suhu",
+        source_decision_id: "d2c7131c-bf7b-5428-bcb5-899b31e0fe86",
+        created_at: "2026-10-25T20:43:30.217503+00:00",
+      },
+    ]);
+    expect(rows[0].supplier).toBe("UD Cibinong Telur Berkah");
+    expect(rows[0].decisionId).toBe("d2c7131c-bf7b-5428-bcb5-899b31e0fe86");
+    // 20.43 UTC = 03.43 WIB keesokan harinya, tanpa mikrodetik.
+    expect(rows[0].at).toBe("26 Okt 2026 03.43");
+  });
+
   it("daftar kosong → tidak ada baris (halaman menjelaskan keadaannya)", () => {
     expect(exclusionRows({ items: [], count: 0 })).toEqual([]);
     expect(exclusionRows(null)).toEqual([]);

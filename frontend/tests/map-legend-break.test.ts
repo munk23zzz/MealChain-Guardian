@@ -8,7 +8,7 @@ import { compactLegendItems, legendBreakIndexes } from "../lib/map-legend-compac
  * Kenapa aturan ini hidup di lib murni: legenda memakai satu baris `flex-wrap`,
  * jadi di mana ia patah ditentukan lebar layar — bukan makna. Akibatnya kelompok
  * pemasok (5 butir) bisa terbelah: "Pemasok · Keandalan rendah · Dikecualikan"
- * menempel di ujung baris 1, sementara "Di luar jangkauan · Sedang mengirim"
+ * menempel di ujung baris 1, sementara "Di luar jangkauan · Stok layak"
  * menggantung sendirian di baris 2. Pemilik meminta kelompok pemasok UTUH di
  * baris 2, sebaris dengan tiga butir pemasok lainnya.
  *
@@ -25,7 +25,7 @@ const PEMASOK = [
   { tone: "low", label: "Keandalan rendah" },
   { tone: "excluded", label: "Dikecualikan" },
   { tone: "far", label: "Di luar jangkauan" },
-  { tone: "shipping", label: "Sedang mengirim" },
+  { tone: "shipping", label: "Stok layak" },
 ];
 
 describe("legendBreakIndexes — di mana baris legenda dipenggal", () => {
@@ -67,7 +67,7 @@ describe("legendBreakIndexes — di mana baris legenda dipenggal", () => {
       "Keandalan rendah",
       "Dikecualikan",
       "Di luar jangkauan",
-      "Sedang mengirim",
+      "Stok layak",
     ]);
   });
 
