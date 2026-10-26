@@ -7,7 +7,7 @@ untuk temuan yang masih terbuka.
 | ID | Temuan | Status 26 Okt 2026 | Bukti / alasan |
 |---|---|---|---|
 | SEC-01 | Kredensial `.env` pernah terekspos (repo sudah publik sejak klon demo) | **TERBUKA — tindakan pemilik** | Rotasi kata sandi Postgres, `DEMO_PASSWORD*`, dan kunci agen hanya bisa dilakukan di mesin/akun pemilik. `.env` tidak pernah di-track (`git check-ignore .env` → cocok), tetapi nilainya harus dianggap bocor. |
-| SEC-02 | Kata sandi akun demo ditulis di bundel klien | **DITUTUP (kode), lalu disesuaikan (26 Okt 2026)** | `frontend/app/page.tsx` tidak memuat literal kata sandi. Tombol akun demo kini mengisi email **dan** sandi dari `GET /auth/demo-accounts`, yang hanya mengeluarkan daftar saat `DEMO_MODE` benar; mode non-demo → `{"enabled": false, "accounts": []}` dan tombol hanya mengisi email. Sumber sandi tetap sisi server (`backend/app/seed/demo_credentials.py` / `DEMO_PASSWORD_<ROLE>`). Verifikasi: `grep -c "Demo#SPPG2026" frontend/app/page.tsx` → 0; `pytest tests/test_demo_accounts_browser.py` → 3 lulus. |
+| SEC-02 | Kata sandi akun demo ditulis di bundel klien / endpoint demo terbuka | **DITUTUP (kode), diperketat 26 Okt 2026** | `frontend/app/page.tsx` tidak memuat literal kata sandi: daftar tombol demo kini statis tanpa sandi (`frontend/lib/demo-accounts.ts`) dan halaman login publik TIDAK memanggil API. `GET /auth/demo-accounts` tetap ada untuk operator/skrip demo, tetapi menuntut Bearer token ber-peran admin (`bgn_monitor` — skema tidak punya peran `admin`, lihat `backend/app/core/admin_rules.py`): tanpa token → 401, token non-admin → 403, admin + `DEMO_MODE=false` → `{"enabled": false, "accounts": []}`. Sumber sandi tetap sisi server (`backend/app/seed/demo_credentials.py` / `DEMO_PASSWORD_<ROLE>`). Verifikasi: `grep -c "<DEMO_PASSWORD>" frontend/app/page.tsx frontend/lib/*.ts` → 0; `pytest tests/test_demo_accounts_browser.py` → 5 lulus. |
 | SEC-04 | CVE dependensi frontend: `next` (critical), `maplibre-gl` (critical), `postcss` (high), `eslint-config-next`/`glob` (high), `vitest`/`esbuild` (moderate, dev) | **TERBUKA — butuh migrasi mayor** | `npm audit fix` tanpa `--force` tidak mengubah apa pun (15 temuan tetap: 4 critical, 5 high, 6 moderate). Perbaikan menuntut Next 14 → 16 dan maplibre-gl 4 → 6, keduanya breaking. |
 | AUD-TEST-02 | Perintah `pytest` di DB kerja mem-purge baris demo | **DIMITIGASI** | `AGENTS.md` melarangnya; tes berat dijalankan pada DB klon (`mealchain_gate`, `mealchain_idem2`, `mealchain_suite`). |
 
@@ -35,5 +35,6 @@ yang sudah terverifikasi.
   berkas atau URL yang dipantulkan ke map.
 - Jalur yang dieksploitasi CVE Next (Server Actions DoS, origin check dev server)
   tidak dipakai pada demo produksi (`next start`, tanpa Server Actions).
-- Kata sandi demo tidak ada di bundel (SEC-02): tombol login mengambilnya dari
-  `GET /auth/demo-accounts`, yang hanya menjawab saat `DEMO_MODE` benar.
+- Kata sandi demo tidak ada di bundel (SEC-02): tombol login hanya mengisi email.
+  Sandi demo berlaku hanya saat `DEMO_MODE=true` dan hanya dikeluarkan
+  `GET /auth/demo-accounts` kepada pemanggil ber-token admin (`bgn_monitor`).

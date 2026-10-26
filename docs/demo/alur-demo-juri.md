@@ -56,10 +56,10 @@ lisan.
 ### Babak 0 — Pembuka (Overview, 1,5 menit)
 
 1. Login **SPPG Head** (`sppg.head@demo.local`). **Klik tombol demo "SPPG Head"** —
-   email dan kata sandi terisi otomatis (26 Okt 2026). Sandi tidak ditanam di bundel
-   klien: ia dikirim `GET /auth/demo-accounts`, yang hanya mengeluarkan daftar saat
-   `DEMO_MODE` aktif. Bila mode demo mati, tombol hanya mengisi email dan operator
-   mengetik sandi dari `DEMO_PASSWORD_<ROLE>`. Jangan menulis kata sandi di slide.
+   email terisi otomatis; kata sandi diketik operator dari `DEMO_PASSWORD_<ROLE>`
+   (26 Okt 2026: tombol tidak lagi mengisi sandi — halaman login publik tidak
+   memanggil `GET /auth/demo-accounts`, yang kini hanya menjawab pemanggil
+   ber-token admin/`bgn_monitor`). Jangan menulis kata sandi di slide.
 2. Overview memuat otomatis. Biarkan 5 detik agar `Live Sync (5s)` selesai.
 3. Tunjuk, jangan klik:
    - **Kartu selisih pasokan**: `−780 kg` (kurang 72% dari kebutuhan), `0 lokasi

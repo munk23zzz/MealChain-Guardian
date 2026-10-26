@@ -10,7 +10,7 @@ Hanya ada **satu** Kepala SPPG dan **satu** Ahli Gizi, keduanya Jakarta. Karena 
 
 ## Perubahan
 
-1. **Seed akun** (`backend/app/seed/seed_data.py`): `DEMO_USERS` bertambah empat akun — Kepala & Ahli Gizi Bandung, Kepala & Ahli Gizi Surabaya. Password mengikuti pasangan Jakarta (`Demo#SPPG2026`, `Demo#Nut2026`). `ensure_demo_users()` tetap idempoten (UUID stabil dari email).
+1. **Seed akun** (`backend/app/seed/seed_data.py`): `DEMO_USERS` bertambah empat akun — Kepala & Ahli Gizi Bandung, Kepala & Ahli Gizi Surabaya. Password mengikuti pasangan Jakarta (lihat `DEMO_PASSWORD_<ROLE>`; nilai bawaan ada di `backend/app/seed/demo_credentials.py` dan hanya aktif saat `DEMO_MODE=true`). `ensure_demo_users()` tetap idempoten (UUID stabil dari email).
 2. **Seed riwayat** (`backend/app/seed/demo_activity.py`): approver dipilih per `(location_id, role)` dari kota target, bukan lagi `order_by(email).first()`. Kota tanpa pasangan approver **dilewati** (tidak menyemai riwayat yang mustahil) dan namanya dilaporkan di `dilewati_kota`. Baris approval lama **direparasi** saat seed dijalankan ulang (`approved_by` ditimpa ke approver kota yang benar).
 3. **Login** (`frontend/app/page.tsx`): tambah baris "Kota lain:" dengan empat tombol isi-cepat (Kepala/Gizi Bandung & Surabaya). Email tetap tidak dipajang; `demo.local` tidak muncul di HTML.
 4. **Tes**: `backend/tests/test_akun_multi_kota.py` (5 tes baru) memaku akun per kota, kecocokan password↔hash, approval riwayat sesuai target, dan feed Kepala Bandung hanya berisi keputusan Bandung. `test_demo_users.py` disesuaikan dari "tepat tiga akun" menjadi "tiga role × tiga kota + monitor".

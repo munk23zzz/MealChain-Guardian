@@ -276,12 +276,13 @@ Aturan tambahan: satu penolakan menggugurkan kuorum; approval dari lokasi lain
 tidak dihitung saat eksekusi; kuorum penuh hanya berarti `approved` — PO dan
 keberangkatan lahir di `execute`.
 
-Kata sandi akun demo **tidak** ada di bundel klien (SEC-02). Sejak 26 Okt 2026 tombol
-akun demo mengisi email **dan** kata sandi sekaligus: nilainya datang dari
-`GET /auth/demo-accounts`, endpoint yang hanya mengeluarkan daftar ketika `DEMO_MODE`
-aktif. Di mode non-demo endpoint menjawab `enabled:false` tanpa akun, dan tombol hanya
-mengisi email. Sumber sandi tetap satu: `backend/app/seed/demo_credentials.py`
-(atau `DEMO_PASSWORD_<ROLE>`), bukan JavaScript yang bisa dibaca siapa pun.
+Kata sandi akun demo **tidak** ada di bundel klien (SEC-02). Sejak 26 Okt 2026
+tombol akun demo hanya mengisi email; kata sandi diketik operator dari
+`DEMO_PASSWORD_<ROLE>`. `GET /auth/demo-accounts` masih ada untuk skrip/operator
+demo, tetapi menuntut Bearer token ber-peran admin (`bgn_monitor`) — tanpa token
+401, token non-admin 403 — dan hanya mengeluarkan daftar saat `DEMO_MODE` aktif.
+Sumber sandi tetap satu: `backend/app/seed/demo_credentials.py` (atau
+`DEMO_PASSWORD_<ROLE>`), bukan JavaScript yang bisa dibaca siapa pun.
 
 ---
 
@@ -365,7 +366,7 @@ UI menampilkan kalimat ringkas + lipatan "Data mentah".
 
 | Domain | Endpoint utama |
 |---|---|
-| Auth | `POST /auth/login`, `GET /auth/me`, `GET /auth/demo-accounts` (hanya mengeluarkan daftar saat `DEMO_MODE` aktif) |
+| Auth | `POST /auth/login`, `GET /auth/me`, `GET /auth/demo-accounts` (admin `bgn_monitor`; hanya mengeluarkan daftar saat `DEMO_MODE` aktif) |
 | Keputusan | `GET/POST /decisions`, `GET /decisions/{id}` (+`/chain`, `/traces`, `/approval-summary`, `/dossier`, `/compliance`) |
 | Aksi | `POST /actions/propose`, `/verify`, `/approve`, `/execute`, `/repropose` |
 | Pasokan & saldo | `GET /supply/{loc}/{kom}`, `GET /balance/map`, `GET /balance/{loc}/{kom}`, `POST /balance/analyze`, `POST /balance/recommend` |
@@ -545,7 +546,7 @@ KPI dan agenda kosong tanpa error.
 | CORS | Dikonfigurasi dari `CORS_ORIGINS`; default hanya origin UI |
 | Ledger | Hash-chain di Postgres; `GET /ledger/verify` → `valid=true`, 2.034 blok (generasi 247), 74/74 blok entitas tertaut, 0 yatim, 1.960 blok arsip |
 | Rahasia (SEC-01) | `.env` tidak dilacak git, tetapi nilainya harus dianggap bocor → **rotasi wajib** sebelum publik |
-| Kredensial demo (SEC-02) | **Ditutup di kode 26 Okt 2026**: tidak ada kata sandi di bundel klien. Tombol login mengisi email + sandi dari `GET /auth/demo-accounts` (hanya aktif saat `DEMO_MODE`); mode non-demo → `enabled:false` |
+| Kredensial demo (SEC-02) | **Ditutup di kode, diperketat 26 Okt 2026**: tidak ada kata sandi di bundel klien. Tombol login hanya mengisi email; `GET /auth/demo-accounts` menuntut token admin (`bgn_monitor`) dan hanya mengeluarkan daftar saat `DEMO_MODE`; mode non-demo → `enabled:false` |
 | Dependensi (SEC-04) | `next@14.2.14` dan `maplibre-gl@4.7.1` critical, `postcss` high; `npm audit fix` tanpa `--force` tidak menyelesaikan apa pun. Perbaikan menuntut Next 16 + maplibre 6 → rencana di `docs/audit/SECURITY.md` |
 
 Mitigasi yang sudah dilakukan: dokumen operasional diberi header snapshot,
