@@ -1,5 +1,7 @@
 # Audit 375 px + peran BGN Monitor & Nutritionist — 22 Okt 2026
 
+> **Snapshot 22 Oktober 2026** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
 Lanjutan `00-ringkasan-2026-10-22.md` (yang mencakup peran SPPG Head di 1280 px).
 Metode sama: sweep computed style di DOM hidup. Untuk 375 px aplikasi dimuat di iframe
 same-origin 375×812 (media query ikut lebar iframe); tiap tab diukur setelah data siap,

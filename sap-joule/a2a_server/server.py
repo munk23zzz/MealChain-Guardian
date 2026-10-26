@@ -41,6 +41,7 @@ import asyncio
 import json
 import os
 import re
+from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
@@ -150,21 +151,6 @@ _KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     # Karantina punya kolom sendiri (`quarantine_status`), bukan status pasokan.
     (SKILL_QUARANTINE, ("karantina", "quarantine", "dikarantina")),
-    # Domain yang backend-nya BELUM punya endpoint baca. Dijawab jujur sebagai
-    # "belum tersedia" — sebelumnya pertanyaan ini dijawab data pasokan, yang
-    # tampak benar padahal menjawab hal lain (audit 21 Okt 2026).
-    (
-        SKILL_GAP,
-        (
-            "pengiriman",
-            "delivery",
-            "surat jalan",
-            "stok material",
-            "material stock",
-            "stok sap",
-            "inventaris sap",
-        ),
-    ),
     (
         SKILL_QUEUE,
         ("approval", "approve", "persetujuan", "setuju", "usulan", "keputusan", "antrean", "queue"),
@@ -190,6 +176,23 @@ _KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     # Harga sebelum direktori: "harga dari pemasok" adalah pertanyaan harga.
     (SKILL_PRICE, ("harga", "price", "kuotasi", "quote", "tarif")),
+    # Domain yang backend-nya BELUM punya endpoint baca. Dijawab jujur sebagai
+    # "belum tersedia" — sebelumnya pertanyaan ini dijawab data pasokan, yang
+    # tampak benar padahal menjawab hal lain (audit 21 Okt 2026).
+    # Ditaruh SESUDAH risiko pemasok: "pemasok berisiko karena jarak pengiriman"
+    # memuat `pengiriman` dan dulu dicuri blok ini (audit 26 Okt 2026).
+    (
+        SKILL_GAP,
+        (
+            "pengiriman",
+            "delivery",
+            "surat jalan",
+            "stok material",
+            "material stock",
+            "stok sap",
+            "inventaris sap",
+        ),
+    ),
     (
         SKILL_DEMAND,
         ("kebutuhan", "demand", "prakiraan", "forecast", "proyeksi", "ramalan", "perlu dipenuhi"),
@@ -207,6 +210,12 @@ _KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "kesehatan sistem",
             "kesiapan sistem",
             "semua data",
+            "terakhir diperbarui",
+            "diperbarui",
+            "sumber data",
+            "sumbernya",
+            "kesegaran data",
+            "data terbaru",
             "health",
         ),
     ),
@@ -227,9 +236,42 @@ _HELP_WORDS: tuple[str, ...] = (
     "siapa kamu",
     "kamu siapa",
     "apa yang bisa",
+    "apa saja yang bisa",
     "bantuan",
     "help",
 )
+
+#: Frasa yang tetap dijawab daftar kemampuan walau ada kata domain — pengguna memang
+#: bertanya soal kemampuan Joule, bukan soal datanya.
+_HELP_TEGAS: tuple[str, ...] = (
+    "bisa bantu apa",
+    "bisa membantu apa",
+    "bisa melakukan apa",
+    "siapa kamu",
+    "kamu siapa",
+    "kemampuan anda",
+    "kemampuanmu",
+    "fitur apa",
+    "menu bantuan",
+)
+
+#: Kata/frasa yang menandakan pesan benar-benar menanyakan DATA. Sapaan di depan pesan
+#: tidak boleh membatalkan pertanyaan data: "Halo, kondisi pasokan beras?" tetap pasokan.
+_KATA_DOMAIN: tuple[str, ...] = tuple(
+    sorted({kata for _, kata_kunci in _KEYWORDS for kata in kata_kunci})
+) + (
+    "pasokan",
+    "stok",
+    "persediaan",
+    "komoditas",
+    "sppg",
+    "batch",
+    "dapur",
+)
+
+
+def _ada_kata_domain(teks_kecil: str) -> bool:
+    return any(kata in teks_kecil for kata in _KATA_DOMAIN)
 
 #: Pertanyaan tentang batch yang harus dibuang/kedaluwarsa. Backend tidak punya endpoint
 #: "pembuangan", jadi yang disajikan kandidat tinjauan (keamanan GAGAL / dikarantina) dan
@@ -352,6 +394,10 @@ def resolve_skill(user_input: str) -> tuple[str, Mapping[str, Any]]:
             diminta = str(data.get("skill") or "").strip()
             return (diminta if diminta in SKILLS else SKILL_SUPPLY), data
     teks = pesan.lower()
+    # "keseimbangan pasokan dan kebutuhan" = tampilan saldo (pasokan vs kebutuhan),
+    # bukan prakiraan. Kata `kebutuhan` saja milik SKILL_DEMAND, jadi diperiksa lebih dulu.
+    if "keseimbangan" in teks or "saldo pasokan" in teks:
+        return SKILL_SUPPLY, {}
     if any(keyword in teks for keyword in dict(_KEYWORDS)[SKILL_KPI]):
         return SKILL_KPI, {}
     # PO sebelum antrean: "PO mana yang sudah disetujui?" memuat `setuju` milik antrean.
@@ -409,9 +455,22 @@ def _disebut(teks_kecil: str, nama: str) -> bool:
 
 
 def _permintaan_bantuan(teks: str) -> bool:
-    """Sapaan / permintaan bantuan: dijawab daftar kemampuan, bukan tabel data."""
+    """Sapaan / permintaan bantuan: dijawab daftar kemampuan, bukan tabel data.
+
+    Dua tingkat (26 Okt 2026): frasa yang jelas menanyakan KEMAMPUAN selalu dijawab daftar
+    kemampuan; sapaan/kata samar (`halo`, `bantuan`, `help`) hanya menang bila pesan tidak
+    memuat kata domain — supaya "Halo, kondisi pasokan beras?" tidak berubah jadi menu.
+    """
     kecil = (teks or "").lower()
-    return any(kata in kecil for kata in _HELP_WORDS)
+    if not re.search(r"[a-z0-9]", kecil):
+        # Pesan kosong / emoji saja tidak punya maksud: daftar kemampuan lebih jujur
+        # daripada menebak tabel pasokan 40 baris (audit 26 Okt 2026).
+        return True
+    if any(frasa in kecil for frasa in _HELP_TEGAS):
+        return True
+    if not any(kata in kecil for kata in _HELP_WORDS):
+        return False
+    return not _ada_kata_domain(kecil)
 
 
 def _permintaan_buang(teks: str) -> bool:
@@ -540,7 +599,7 @@ def render_skill(
     """
     # Sapaan / "bisa bantu apa?" tidak boleh dijawab tabel 40 baris: itu terasa seperti
     # jawaban asal-asalan. Dijawab daftar kemampuan, tanpa memanggil backend sama sekali.
-    if skill == SKILL_SUPPLY and _permintaan_bantuan(teks or ""):
+    if skill == SKILL_SUPPLY and teks is not None and _permintaan_bantuan(teks):
         return teks_bantuan()
 
     note = _data_source_note(client)
@@ -786,10 +845,21 @@ def render_skill(
         except MealchainRejected:
             titik = {}
         if titik:
+            dicatat = report.wib(titik.get("recorded_at"))
+            masa_depan = ""
+            try:
+                waktu = datetime.fromisoformat(str(titik.get("recorded_at")).replace("Z", "+00:00"))
+                if waktu > datetime.now(timezone.utc):
+                    masa_depan = (
+                        " — tanggal ini melewati hari ini, jadi baris ini catatan terjadwal "
+                        "dalam data, bukan pencatatan yang sudah terjadi"
+                    )
+            except (TypeError, ValueError):
+                masa_depan = ""
             laporan += (
                 f"\n\nCatatan pasokan terakhir yang dilaporkan SAP untuk {satu['location']} / "
                 f"{satu['commodity']}: {report.kg(titik.get('quantity_kg'))}, dicatat "
-                f"{report.wib(titik.get('recorded_at'))} (sumber "
+                f"{dicatat}{masa_depan} (sumber "
                 f"{report._label(report.PRICE_SOURCE_LABEL, titik.get('source') or report.MISSING)}). "
                 "Angka ini catatan pengiriman pemasok, "
                 "bukan stok batch yang bisa dipakai."

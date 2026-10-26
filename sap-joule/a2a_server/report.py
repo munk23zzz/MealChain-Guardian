@@ -322,8 +322,16 @@ def supply_report(
             + (f": {ringkas}" if ringkas else "")
             + (f" · {lain} status lain" if lain else "")
             + "):\n\n"
+            + (
+                # Peringatan sebelum tabel: batch gagal keamanan tidak boleh dipakai,
+                # label tanggal jangan sampai terbaca sebagai izin (audit 26 Okt 2026).
+                f"Perhatian: {hitung['fail']} batch berstatus gagal keamanan — tidak boleh dipakai; "
+                "lihat daftar kandidat pembuangan.\n\n"
+                if hitung.get("fail")
+                else ""
+            )
             + _table(
-                ["SPPG", "Komoditas", "Jumlah", "Keamanan", "Skor kesegaran", "Boleh dipakai sampai"],
+                ["SPPG", "Komoditas", "Jumlah", "Keamanan", "Skor kesegaran", "Batas simpan"],
                 [
                     [
                         _text(row.get("location")),
@@ -343,6 +351,14 @@ def supply_report(
     catatan: list[str | None] = [note]
     if batch_rows:
         catatan.append("Skor kesegaran berskala 0–1 dari sistem MealChain: makin tinggi, makin segar.")
+    if batch_rows and balance:
+        # Dua tabel ini beda sumber; tanpa kalimat ini angka 900 kg vs 2.000 kg terbaca
+        # seperti kontradiksi (jawaban nyata 26 Okt 2026).
+        catatan.append(
+            "Angka pasokan pada tabel keseimbangan dan jumlah kg pada tabel batch berasal dari "
+            "sumber berbeda di MealChain (catatan pasokan vs inventaris batch), jadi keduanya "
+            "tidak harus sama."
+        )
     catatan.extend(sisa)
     return "\n\n".join(bagian) + "\n\n" + _footnote(catatan)
 
@@ -1208,6 +1224,13 @@ def decision_evidence_report(
         )
 
     tampil, sisa = _cap(data, limit)
+    # Ringkasan status di judul: pembaca tahu isinya apa sebelum menggulir (audit 26 Okt 2026).
+    hitung: dict[str, int] = {}
+    for kasus in data:
+        status = ((kasus.get("compliance") or {}).get("decision") or {}).get("status")
+        label = _label(DECISION_STATUS_LABEL, status)
+        hitung[label] = hitung.get(label, 0) + 1
+    ringkas = " · ".join(f"{jumlah} {label}" for label, jumlah in hitung.items())
     blok: list[str] = []
     for case in tampil:
         compliance = case.get("compliance") or {}
@@ -1262,26 +1285,32 @@ def decision_evidence_report(
                 )
             )
         if traces:
-            blok.append(
-                "Jejak agen:\n\n"
-                + _table(
-                    ["Langkah", "Tool", "Ringkasan keluaran", "Waktu"],
-                    [
-                        [
-                            _text(step.get("step_name")),
-                            _text(step.get("tool_called")),
-                            _text((step.get("output_summary") or {}).get("learning_note"))
-                            if isinstance(step.get("output_summary"), Mapping)
-                            else _text(step.get("output_summary")),
-                            wib(step.get("step_at")),
-                        ]
-                        for step in traces
-                    ],
+            baris = [
+                [
+                    _text(step.get("step_name")),
+                    _text(step.get("tool_called")),
+                    _text((step.get("output_summary") or {}).get("learning_note"))
+                    if isinstance(step.get("output_summary"), Mapping)
+                    else _text(step.get("output_summary")),
+                    wib(step.get("step_at")),
+                ]
+                for step in traces
+            ]
+            # Kolom ringkasan yang kosong untuk SEMUA baris tidak menambah informasi;
+            # dihapus supaya tabel jejak tetap terbaca di chat (audit 26 Okt 2026).
+            if all(sel in ("", MISSING, None) for sel in (r[2] for r in baris)):
+                blok.append(
+                    "Jejak agen:\n\n"
+                    + _table(["Langkah", "Tool", "Waktu"], [[r[0], r[1], r[3]] for r in baris])
                 )
-            )
+            else:
+                blok.append(
+                    "Jejak agen:\n\n"
+                    + _table(["Langkah", "Tool", "Ringkasan keluaran", "Waktu"], baris)
+                )
 
     return (
-        f"Bukti & jejak keputusan MealChain Guardian ({len(data)} keputusan):\n\n"
+        f"Bukti & jejak keputusan MealChain Guardian ({len(data)} keputusan: {ringkas}):\n\n"
         + "\n\n".join(blok)
         + "\n\n"
         + _footnote(

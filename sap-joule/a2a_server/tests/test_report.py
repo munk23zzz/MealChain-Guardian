@@ -107,6 +107,40 @@ def test_supply_report_kesegaran_kosong_jadi_strip_bukan_angka_karangan():
     assert report.MISSING in teks
 
 
+def test_inventaris_batch_gagal_memakai_kolom_netral_dan_peringatan():
+    """Jawaban nyata 26 Okt 2026: batch `gagal` tetap berlabel "Boleh dipakai sampai"."""
+    batches = [
+        _batch("SPPG Jakarta", "beras", 800.0, safety="fail", score=0.42,
+               until="2026-10-26T01:57:15+00:00"),
+        _batch("SPPG Jakarta", "beras", 360.0, safety="pass", score=0.92,
+               until="2027-04-07T23:21:15+00:00"),
+    ]
+
+    teks = report.supply_report(batches, None)
+
+    assert "Batas simpan" in teks
+    assert "Boleh dipakai sampai" not in teks
+    assert "tidak boleh dipakai" in teks.lower()
+    assert "800 kg" in teks
+
+
+def test_inventaris_batch_menjelaskan_beda_angka_pasokan_dan_stok():
+    """900 kg pasokan vs 2.000 kg stok batch terlihat seperti kontradiksi kalau tanpa penjelasan."""
+    batches = [_batch("SPPG Jakarta", "beras", 900.0, safety="pass", score=0.9)]
+    balance = {
+        "beras": {
+            "locations": [
+                {"location": "Jakarta", "supply_kg": 900.0, "demand_kg": 3010.0,
+                 "gap_kg": -2110.0, "status": "shortage"}
+            ]
+        }
+    }
+
+    teks = report.supply_report(batches, balance)
+
+    assert "tidak harus sama" in teks.lower()
+
+
 def test_supply_report_tanpa_data_menjelaskan_bukan_menampilkan_tabel_kosong():
     teks = report.supply_report([], {})
 
@@ -564,6 +598,44 @@ def test_bukti_keputusan_menampilkan_tanda_tangan_dan_jejak():
     assert "LEARN" in teks and "rejection_loop.repropose" in teks
     assert "harga terlalu tinggi" in teks
     assert "95b57211c6ef5b6139a32703…" in teks  # dipotong, bukan hilang
+
+
+def test_bukti_keputusan_judul_memuat_ringkasan_status():
+    """Judul harus menjawab "ada apa saja?" tanpa membaca seluruh blok."""
+    teks = report.decision_evidence_report(
+        [
+            {"id": "aaaaaaaa-0000-0000-0000-000000000001",
+             "compliance": {"decision": {"decision_type": "regional_balance", "status": "pending_approval"}}},
+            {"id": "bbbbbbbb-0000-0000-0000-000000000002",
+             "compliance": {"decision": {"decision_type": "supplier_procurement", "status": "executed"}}},
+        ]
+    )
+
+    judul = teks.splitlines()[0]
+    assert "2 keputusan" in judul
+    assert "1 menunggu persetujuan" in judul
+    assert "1 dieksekusi" in judul
+
+
+def test_bukti_keputusan_tanpa_ringkasan_tidak_menampilkan_kolom_kosong():
+    """Kolom "Ringkasan keluaran" berisi "—" semua = kolom kosong yang mengganggu bacaan."""
+    teks = report.decision_evidence_report(
+        [
+            {
+                "id": "cec7e30d-3eb5-4c29-82ee-c5fee581add1",
+                "compliance": {"decision": {"decision_type": "regional_balance", "status": "proposed"}},
+                "traces": {
+                    "steps": [
+                        {"step_name": "DETECT", "tool_called": "demand.snapshot", "output_summary": None,
+                         "step_at": "2026-10-19T20:33:04+00:00"}
+                    ]
+                },
+            }
+        ]
+    )
+
+    assert "Ringkasan keluaran" not in teks
+    assert "| Langkah | Tool | Waktu |" in teks
 
 
 def test_status_sistem_tidak_menaikkan_status_komponen():

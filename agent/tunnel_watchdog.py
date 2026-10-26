@@ -89,10 +89,17 @@ def panaskan_runtime(coba: int = 8, jeda: float = 8.0) -> bool:
     yang sama dengan aplikasi (bukan /health), jadi bila lulus berarti agent
     benar-benar bisa memanggil backend lewat URL baru.
     """
+    # DSN TIDAK ditulis di sini: skrip disuntikkan ke dalam kontainer backend yang
+    # sudah punya DATABASE_URL. Dulu DSN beserta kata sandinya tertulis literal di
+    # berkas ini (audit lineage F-01), sehingga rahasia ikut ke setiap salinan repo.
     skrip = (
-        "from app.services.agent_review_client import review_decision;"
+        "import os;"
+        "url=(os.environ.get('DATABASE_URL') or '').strip();"
+        "assert url, 'DATABASE_URL tidak diset di container - tidak bisa memanaskan runtime';"
+        "url=url.replace('+asyncpg','+psycopg');"
         "from sqlalchemy import create_engine, text;"
-        "e=create_engine('postgresql+psycopg://mealchain:mealchain_local@postgres:5432/mealchain');"
+        "from app.services.agent_review_client import review_decision;"
+        "e=create_engine(url);"
         "d=e.connect().execute(text('select id from decisions order by created_at desc limit 1')).scalar_one();"
         "r=review_decision(str(d));print('HASIL', r.status, r.error)"
     )

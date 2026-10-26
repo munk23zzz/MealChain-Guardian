@@ -185,6 +185,21 @@ def test_pertanyaan_spesifik_menjelaskan_angka_sap_bukan_stok():
     assert "bukan stok batch yang bisa dipakai" in teks
 
 
+def test_catatan_sap_bertanggal_masa_depan_diberi_keterangan():
+    """Jawaban nyata 26 Okt 2026 menulis "dicatat 4 Nov 2026" tanpa penjelasan tanggal masa depan."""
+    class FakeDepan(FakeClient):
+        def supply_point(self, location_id: str, commodity: str) -> dict:
+            return {
+                "quantity_kg": 902.85,
+                "recorded_at": "2026-11-04T12:00:00+00:00",
+                "source": "sap_sim",
+            }
+
+    teks, _ = _jalan("Berapa stok telur di SPPG Jakarta?", FakeDepan())
+
+    assert "melewati hari ini" in teks
+
+
 def test_pertanyaan_umum_tetap_menampilkan_ringkasan_semua_pasangan():
     teks, _ = _jalan("bagaimana kondisi pasokan?")
 
@@ -201,6 +216,76 @@ def test_sapaan_dijawab_daftar_kemampuan_tanpa_tabel():
     assert "Contoh yang bisa Anda tanyakan" in teks
     assert "| SPPG |" not in teks
     assert "batches" not in fake.dipanggil  # tidak menyentuh backend untuk sapaan
+
+
+def test_sapaan_di_depan_pertanyaan_data_tetap_menjawab_data():
+    """Ditemukan 26 Okt 2026: "Halo, ... kondisi pasokan beras ..." dijawab menu bantuan.
+
+    Kata `halo` saja tidak boleh membatalkan pertanyaan data yang jelas; pengguna asli
+    membuka percakapan dengan sapaan lalu langsung bertanya.
+    """
+    pesan = (
+        "Halo, saya Kepala SPPG Jakarta. Tolong jelaskan kondisi pasokan beras "
+        "di lokasi saya hari ini."
+    )
+
+    skill, _ = server.resolve_skill(pesan)
+
+    assert skill == server.SKILL_SUPPLY
+    teks, _ = _jalan(pesan)
+    assert "Contoh yang bisa Anda tanyakan" not in teks
+
+
+def test_permintaan_kemampuan_dengan_kalimat_lain_tetap_daftar_kemampuan():
+    """Kebalikannya: "apa saja yang bisa Anda lakukan" dulu dijawab tabel pasokan."""
+    teks, _ = _jalan(
+        "Tolong jelaskan apa saja yang bisa Anda lakukan untuk membantu pekerjaan saya."
+    )
+
+    assert "Contoh yang bisa Anda tanyakan" in teks
+    assert "Keseimbangan pasokan" not in teks
+
+
+def test_sapaan_singkat_tanpa_kata_domain_tetap_daftar_kemampuan():
+    for pesan in ("halo", "selamat pagi", "hai, apa kabar?"):
+        teks, _ = _jalan(pesan)
+        assert "Contoh yang bisa Anda tanyakan" in teks, pesan
+
+
+# --- routing yang salah domain pada audit 26 Okt 2026 -------------------------------------
+
+
+def test_keseimbangan_pasokan_dan_kebutuhan_masuk_pasokan_bukan_prakiraan():
+    """"keseimbangan pasokan DAN kebutuhan" adalah tampilan saldo, bukan prakiraan."""
+    skill, _ = server.resolve_skill(
+        "Bagaimana keseimbangan pasokan dan kebutuhan telur di Bandung minggu ini?"
+    )
+
+    assert skill == server.SKILL_SUPPLY
+
+
+def test_risiko_pemasok_dengan_kata_pengiriman_tetap_risiko_pemasok():
+    """Kata `pengiriman` milik skill "belum tersedia" mencuri pertanyaan risiko pemasok."""
+    skill, _ = server.resolve_skill(
+        "Pemasok mana yang berisiko karena jarak pengiriman terlalu jauh?"
+    )
+
+    assert skill == server.SKILL_SUPPLIER_RISK
+
+
+def test_pertanyaan_kesegaran_data_masuk_status_sistem():
+    skill, _ = server.resolve_skill(
+        "Kapan terakhir data diperbarui dan dari mana sumbernya?"
+    )
+
+    assert skill == server.SKILL_SYSTEM
+
+
+def test_pesan_kosong_dijawab_daftar_kemampuan_bukan_tabel():
+    """Pesan kosong/emoji saja tidak punya maksud apa pun — jangan tebak tabel 40 baris."""
+    for pesan in ("", "   ", "\n", "🙏"):
+        teks, _ = _jalan(pesan)
+        assert "Contoh yang bisa Anda tanyakan" in teks, repr(pesan)
 
 
 def test_batch_harus_dibuang_dijawab_kandidat_bukan_tabel_pasokan():
