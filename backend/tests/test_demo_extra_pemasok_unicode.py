@@ -1,15 +1,17 @@
-"""Pemasok Unicode tidak boleh menambah baris ke direktori demo.
+"""Builder tidak boleh mengubah nama/alamat pemasok demo.
 
-Residu audit 24 Okt 2026: `build_demo_extra` dulu MEMBUAT pemasok baru bernama
-"Koperasi Tani Makmur — Cianjur (Unit SPPG)" untuk menguji rendering em dash.
-Akibatnya direktori demo berubah 60 -> 61 setiap "Siapkan data demo", sedangkan
-runbook dan laporan menyebut 60. Tabel `suppliers` tidak punya kolom `origin`
-dan tidak ikut dibersihkan purge, jadi baris ke-61 itu menetap selamanya dan
-angkanya tidak bisa pulih dengan reset apa pun.
+Riwayat: `pastikan_pemasok_unicode` dulu MENGGANTI NAMA satu pemasok terpilih
+agar UI punya contoh em dash. Efeknya dua:
 
-Kontrak baru: nama Unicode dipasang pada pemasok yang SUDAH ada (deterministik:
-yang sudah bernama itu, jika tidak ada maka id terkecil). Jumlah baris tidak
-berubah, dan menjalankannya dua kali memilih baris yang sama.
+1. Direktori demo tidak lagi sama dengan `data/seed/suppliers_demo.json`
+   (nama asli hilang, dan seed berikutnya menambah baris baru), sehingga
+   hitungan 60 pemasok bergeser menjadi 61 dan tidak pulih lewat reset.
+2. Nama pengganti mewarisi koordinat pemasok lain, jadi dua pin peta
+   bertumpuk di titik yang sama.
+
+Kontrak sekarang: helper hanya MEMBACA. Ia mengembalikan id pemasok yang
+kebetulan sudah memuat em dash (bila berkas demo menyediakannya) dan tidak
+pernah menulis kolom apa pun.
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.models import Supplier
-from app.seed.demo_extra import PEMASOK_UNICODE, pastikan_pemasok_unicode
+from app.seed.demo_extra import pastikan_pemasok_unicode
 from tests.dsn import DSN_ASYNC
 
 
@@ -37,52 +39,28 @@ def _jalankan(fn):
     return asyncio.run(_main())
 
 
-def test_pemasok_unicode_tidak_menambah_baris_dan_idempoten():
+def test_pemasok_unicode_tidak_mengubah_apa_pun():
     async def _t(db):
         asal = list((await db.execute(select(Supplier))).scalars())
         assert asal, "butuh direktori pemasok di DB"
 
-        # Snapshot SEBELUM helper mengubah objek ORM di memori.
-        asli = {s.id: (s.name, s.address, s.contact_name) for s in asal}
+        sebelum = {str(s.id): (s.name, s.address, s.contact_name) for s in asal}
         jumlah_awal = len(asal)
 
-        try:
-            pertama = await pastikan_pemasok_unicode(db, asal)
-            await db.commit()
+        pertama = await pastikan_pemasok_unicode(db, asal)
+        kedua = await pastikan_pemasok_unicode(db, asal)
+        await db.commit()
 
-            total = int(
-                (await db.execute(text("SELECT count(*) FROM suppliers"))).scalar()
+        total = int((await db.execute(text("SELECT count(*) FROM suppliers"))).scalar())
+        assert total == jumlah_awal, "builder tidak boleh menambah/menghapus baris"
+
+        sesudah = {
+            str(r[0]): (r[1], r[2], r[3])
+            for r in await db.execute(
+                text("SELECT id, name, address, contact_name FROM suppliers")
             )
-            assert total == jumlah_awal, "jumlah pemasok tidak boleh bertambah"
-
-            unicode_rows = int(
-                (
-                    await db.execute(
-                        text("SELECT count(*) FROM suppliers WHERE name = :n"),
-                        {"n": PEMASOK_UNICODE},
-                    )
-                ).scalar()
-            )
-            assert unicode_rows == 1, "tepat satu baris memakai nama Unicode"
-
-            kedua = await pastikan_pemasok_unicode(db, asal)
-            await db.commit()
-            assert pertama == kedua, "pilihan pemasok harus deterministik"
-
-            total_lagi = int(
-                (await db.execute(text("SELECT count(*) FROM suppliers"))).scalar()
-            )
-            assert total_lagi == jumlah_awal
-        finally:
-            # Pulihkan nilai asli baris yang mungkin tersentuh helper.
-            for sid, (nama, alamat, kontak) in asli.items():
-                await db.execute(
-                    text(
-                        "UPDATE suppliers SET name=:n, address=:a, contact_name=:c "
-                        "WHERE id=:i"
-                    ),
-                    {"n": nama, "a": alamat, "c": kontak, "i": sid},
-                )
-            await db.commit()
+        }
+        assert sesudah == sebelum, "nama/alamat/kontak tidak boleh diubah builder"
+        assert pertama == kedua, "hasil harus deterministik"
 
     _jalankan(_t)

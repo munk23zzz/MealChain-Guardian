@@ -14,7 +14,7 @@ perintah pengukurnya dicantumkan supaya siapa pun bisa mengulang.
 | Repo | `E:\hackathon\HackathonAWS\mealchain-guardian` |
 | Branch / HEAD | `feature/db-modes-demo-coverage` / `8741d6c` + 7 commit sesudah `d414957` |
 | Migrasi Alembic | 33 berkas, head `033_indeks_fk_hilang` |
-| Ukuran kode | backend `app/` 31.958 baris · frontend `app+components+lib+tests` 55.944 baris |
+| Ukuran kode | backend `app/` 31.958 baris · frontend `app+components+lib+tests` 55.926 baris |
 | Berkas uji | 240 berkas backend · 167 berkas frontend (1.818 tes) |
 | API | 32 modul router · 75 path · 77 operasi (`backend/openapi.json`) |
 | Tabel | 22 tabel domain + `alembic_version` + `ledger_meta` |
@@ -76,11 +76,11 @@ Tiga nilai yang dijual, dan di mana ia terlihat di aplikasi:
 |---|---|
 | Batch | **125** (wortel 32 · beras 32 · telur 31 · ayam 30); `pass` 102 · `needs_verification` 15 · `fail` 3 (740 kg) · `pending` 5 · karantina 2 (1 dilepas, 1 gagal) · kedaluwarsa <48 jam 8 |
 | Keputusan | **48** — 17 `pending_approval` · 10 `rejected` · 9 `executed` · 5 `verifier_flagged` · 3 `approved` · 2 `proposed` · 2 `review_only` (22 terbuka) |
-| Approval / bukti / jejak | **28 / 57 / 118** |
-| Pemasok / lokasi / komoditas | **61 / 10 / 4** (HACCP 17 · hygiene 36 · tanpa sertifikat 8) |
+| Approval / bukti / jejak | **28 / 61 / 118** |
+| Pemasok / lokasi / komoditas | **60 / 10 / 4** (HACCP 17 · hygiene 35 · tanpa sertifikat 8) |
 | Rencana menu | 660 |
 | Deret | pasokan 5.240 · harga 6.015 · permintaan 1.360 · pengiriman 180 · pembuangan 83 |
-| Blok ledger | **1.598** (valid, 1.526 arsip, 72 blok entitas tertaut, 0 yatim; **+72 setiap build**) |
+| Blok ledger | **1.742** (valid, 1.670 arsip, 72 blok entitas tertaut, 0 yatim; **+72 setiap build**) |
 | Rute jalan | 54 baris cache; 15 kiriman Jakarta (7 di jalan · 6 tiba · 1 belum berangkat · 1 tanpa geometri) |
 | PO mock SAP | **20** (15 `confirmed` · 3 `submitted` · 2 `draft`) |
 | Penerimaan | **7** (5 `menunggu` · 1 `disetujui` · 1 `ditolak`) |
@@ -207,12 +207,12 @@ PostgreSQL — system of fact untuk keputusan, bukti, ledger
 
 | Kelompok | Tabel | Peran |
 |---|---|---|
-| Master | `locations` (10), `commodities` (4), `suppliers` (61), `users` (8) | Acuan yang tidak dihapus saat reset demo |
+| Master | `locations` (10), `commodities` (4), `suppliers` (60), `users` (8) | Acuan yang tidak dihapus saat reset demo |
 | Pasokan | `supply_records` (5.240), `price_signals` (6.015), `demand_records` (1.360) | Fakta harian per lokasi+komoditas |
 | Operasi | `menu_plans` (660), `delivery_events` (180), `batches` (125), `disposal_events` (83), `road_routes` (54) | Rencana, pengiriman, batch fisik, limbah, geometri rute |
-| Keputusan | `decisions` (48), `approvals` (28), `decision_evidence` (57), `agent_traces` (118) | Inti nilai: usul, persetujuan, bukti, jejak |
+| Keputusan | `decisions` (48), `approvals` (28), `decision_evidence` (61), `agent_traces` (118) | Inti nilai: usul, persetujuan, bukti, jejak |
 | Keamanan & pemasok | `supplier_exclusions` (6), `batch_receipts` (7) | Eksklusi/usulan pemasok, penerimaan barang |
-| Audit | `ledger_blocks` (1.598), `ledger_meta` | Hash-chain append-only |
+| Audit | `ledger_blocks` (1.742), `ledger_meta` | Hash-chain append-only |
 | SAP tiruan | `sap_mock_purchase_orders` (20), `sap_mock_material_stock` (40) | Cermin dokumen SAP |
 | Demo | `demo_sessions` (6, 1 aktif) | Sesi 120 menit, penjaga tulisan |
 
@@ -247,7 +247,7 @@ Semarang, Surabaya, Yogyakarta.
 | Status keamanan batch | Kolom `safety_status` di `batches`; tidak pernah di-override agent |
 | Kutipan harga | `price_signals` punya `supplier_id`; beberapa pemasok pada jam sama itu wajar, bukan duplikasi |
 | Bukti keputusan | `decision_evidence` menyimpan tipe bukti + `is_consistent`; kelengkapan dihitung terhadap approval pertama |
-| Supplier tambahan | Builder membuat 1 pemasok di luar `data/seed/suppliers_demo.json` ("Koperasi Tani Makmur — Cianjur (Unit SPPG)") → DB 61 vs JSON 60; ini penyebab kegagalan beberapa tes (§14.1) |
+| Supplier tambahan | Sudah tidak ada. Builder dulu *mengganti nama* satu pemasok untuk contoh em dash, sehingga direktori DB ≠ berkas dan dua pin peta bertumpuk. Sejak 26 Okt 2026 builder hanya membaca; baris residu dihapus → **60 baris, 60 koordinat unik** |
 
 ---
 
@@ -485,7 +485,7 @@ dulu, baru membuka sesi — urutan ini wajib, karena sesi yang habis di tengah
 pembangunan membuat penyapu menghapus baris demo yang baru ditulis.
 
 **Keluaran builder adalah baseline yang benar:** 48 keputusan, 125 batch, 28
-approval, 61 pemasok, 1.598 blok. Angka 36/120/1.382 yang sempat dipakai
+approval, 60 pemasok, 1.742 blok. Angka 36/120/1.382 yang sempat dipakai
 dokumen lama berasal dari DB yang sudah dipurge suite tes — bukan keluaran
 builder.
 
@@ -533,7 +533,7 @@ KPI dan agenda kosong tanpa error.
 | Auth | Bearer JWT (`api/auth.py`), default 30 menit, nilai `.env` dijepit ke rentang aman; peran & lokasi ikut di klaim |
 | Otorisasi | Peran + cakupan lokasi; approver dibatasi `APPROVER_ROLES` |
 | CORS | Dikonfigurasi dari `CORS_ORIGINS`; default hanya origin UI |
-| Ledger | Hash-chain di Postgres; `GET /ledger/verify` → `valid=true`, 1.598 blok, 72/72 blok entitas tertaut, 0 yatim |
+| Ledger | Hash-chain di Postgres; `GET /ledger/verify` → `valid=true`, 1.742 blok, 72/72 blok entitas tertaut, 0 yatim |
 | Rahasia (SEC-01) | `.env` tidak dilacak git, tetapi nilainya harus dianggap bocor → **rotasi wajib** sebelum publik |
 | Kredensial demo (SEC-02) | **Ditutup di kode 26 Okt 2026**: tidak ada kata sandi di bundel klien; tombol login hanya mengisi email |
 | Dependensi (SEC-04) | `next@14.2.14` dan `maplibre-gl@4.7.1` critical, `postcss` high; `npm audit fix` tanpa `--force` tidak menyelesaikan apa pun. Perbaikan menuntut Next 16 + maplibre 6 → rencana di `docs/audit/SECURITY.md` |
@@ -551,27 +551,44 @@ dihapus dari bundel.
 |---|---|---|
 | Frontend unit/komponen | **1.818 lulus / 167 berkas**; `tsc --noEmit` exit 0; ESLint bersih | `npx vitest run` |
 | Backend (target + integrasi) | 32 lulus (subset target) · **3 lulus** tes integrasi build (167 dtk) | DB klon `mealchain_idem2` |
-| **Backend suite penuh** | **1.536 lulus, 27 gagal, 28 skip** (557 dtk) | `pytest -q` pada DB klon `mealchain_suite` |
+| **Backend suite penuh** | **1.549 lulus, 14 gagal, 28 skip** (543 dtk) | `pytest -q` pada DB klon `mealchain_suite` |
 | Invarian data | **52 PASS / 0 FAIL / 1 SKIP** | `python …/verify_stack.py verify/invariants.spec.json` |
 | OpenAPI | `openapi.json` cocok dengan kode (drift test) | bagian suite backend |
 | Lint backend | `ruff check app tests` bersih | — |
 | UI hidup (Playwright) | 10 tab, 0 console error, semua endpoint 200 | `scratch/harvest_ui.py` |
+| Angka dokumen ini | **24/24 klaim cocok** dengan DB/snapshot | penyapu ad-hoc (§17) |
 
-### 14.1 Tiga keluarga kegagalan suite backend (bukan 27 bug produk)
+### 14.1 Empat belas kegagalan suite — dua kelas, bukan 14 bug produk
 
-1. **Konstanta jumlah lama.** Tes menuliskan 60 pemasok / 120 batch / 36
-   keputusan, sedangkan builder kanonik menghasilkan 61 / 125 / 48. Contoh
-   nyata: `test_suppliers_data.py::test_every_supplier_has_map_coordinates`
-   gagal `61 != 60` karena builder menambah pemasok "Koperasi Tani Makmur —
-   Cianjur (Unit SPPG)" yang belum ada di `data/seed/suppliers_demo.json`.
-2. **Prasyarat keadaan.** `test_suppliers_api.py::test_expired_batch_is_not_counted`
-   mensyaratkan ada lot lewat tenggat; pada snapshot ini tidak ada.
-3. **Order-dependent** di `test_tool_contracts.py` (sudah dikenal sebelum
-   perubahan hari ini; lulus saat dijalankan sendiri).
+Diuji satu per satu pada DB klon bersih (satu berkas per clone):
 
-Keputusan yang diambil: **tidak** melonggarkan tes dan **tidak** mengubah angka
-produk demi meluluskan suite. Pekerjaan menyelaraskan konstanta/seed menjadi
-butir terbuka §16.
+**Kelas A — gagal juga saat berdiri sendiri (6 tes).**
+- `test_demo_timeseries_api.py` (4): prasyarat deret demo belum terbangun di
+  klon (`deret demo belum dibangun`, `assert 0 > 0`), satu lagi
+  `AttributeError: 'NoneType' … startswith`, dan pembulatan
+  `1393.93 == 1400.0`.
+- `test_demo_session_mulai_atomik.py::test_build_gagal_tidak_meninggalkan_sesi_aktif`
+  (1): `decisions berubah padahal build gagal` — build yang gagal belum
+  sepenuhnya rollback.
+- `test_demo_harian.py::test_harga_harian_demo_tersedia_untuk_hari_ini` (1):
+  satu kutipan harga demo tidak punya acuan PIHPS lebih dulu, sehingga metrik
+  deviasi harga bisa kosong untuk baris itu.
+
+**Kelas B — lulus sendiri, gagal di suite (8 tes).**
+- `test_demo_seed_per_kota.py` (4) dan `test_akun_multi_kota.py` (2): lulus saat
+  berkasnya dijalankan sendiri, gagal bila didahului berkas yang menyemai ulang
+  atau mem-purge demo — kontaminasi satu database bersama.
+- `test_tool_contracts.py` (2): order-dependent, lulus di jalur sendiri.
+
+Perbaikannya isolasi (transaksi per tes atau schema per worker) dan penutupan
+tiga cacat Kelas A — bukan mengubah angka produk.
+
+**Yang sudah diperbaiki pada putaran ini.** (a) keluarga "konstanta jumlah
+lama" (6 tes pemasok) hilang: builder tidak lagi mengganti nama pemasok demo,
+residu 1 baris dihapus, direktori kembali **60 baris dengan 60 koordinat unik**
+(dulu 61 baris, dua pin bertumpuk); (b) setiap keputusan skrip `extra:*` kini
+punya `decision_evidence` (dulu 4 kartu tanpa bukti) — `test_bukti_dan_draf_demo`
+hijau. Suite: **27 → 14 gagal**, lulus 1.536 → **1.549**.
 
 Yang **belum** diverifikasi dan tidak boleh diklaim: uji beban, `axe-core`,
 `pip-audit`/`bandit`, build produksi `next build` pada mesin bersih, verifikasi
@@ -605,7 +622,7 @@ WebSocket). Skema keputusan, state machine, dan KPI tidak perlu diubah.
 | 1 | Fase 2–6 rencana MG: 7 butir kontrak bisnis | Fase tidak boleh mulai | Menunggu keputusan pemilik |
 | 2 | Regional Imbalance mengecualikan `demo_case` | Metrik tidak bergerak saat kartu demo dieksekusi | Menunggu keputusan |
 | 3 | SDC memakai keberadaan PO, bukan status `executed` | PO yang dibatalkan tetap terhitung | Menunggu keputusan |
-| 4 | Suite backend 27 gagal (3 keluarga di §14.1) | Gate penuh belum bisa disebut hijau | Perlu penyelarasan seed + konstanta tes |
+| 4 | Suite backend 14 gagal (§14.1: 6 Kelas A, 8 Kelas B) | Gate penuh belum bisa disebut hijau | Perlu isolasi DB per tes + perbaikan prasyarat |
 | 5 | Baris bertanda waktu masa depan (720 + 858) | Label "tercatat hari ini" melebihkan | Perbaiki penyemai / watermark `recorded_at <= now()` |
 | 6 | Deret berhenti 5 Nov 2026 | Setelah itu KPI/agenda kosong tanpa error | Perlu jendela relatif |
 | 7 | Migrasi 034–038 dipesan rencana | Pekerjaan baru (live/scheduled) mulai 039 | Catatan |

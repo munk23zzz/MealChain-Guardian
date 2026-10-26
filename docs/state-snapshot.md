@@ -1,6 +1,6 @@
 # Snapshot keadaan MealChain Guardian
 
-Diambil **2026-10-26T19:41:05+07:00** oleh `scripts/snapshot_state.py` (baca-saja).
+Diambil **2026-10-26T20:43:42+07:00** oleh `scripts/snapshot_state.py` (baca-saja).
 Dokumen ini adalah sumber angka untuk dokumen lain: kalau angka di dokumen lain
 berbeda, dokumen ini yang berlaku sampai snapshot berikutnya.
 
@@ -13,13 +13,13 @@ berbeda, dokumen ini yang berlaku sampai snapshot berikutnya.
 | `batch_receipts` | 7 |
 | `batches` | 125 |
 | `commodities` | 4 |
-| `decision_evidence` | 57 |
+| `decision_evidence` | 61 |
 | `decisions` | 48 |
 | `delivery_events` | 180 |
 | `demand_records` | 1360 |
 | `demo_sessions` | 6 |
 | `disposal_events` | 83 |
-| `ledger_blocks` | 1598 |
+| `ledger_blocks` | 1742 |
 | `locations` | 10 |
 | `menu_plans` | 660 |
 | `price_signals` | 6015 |
@@ -27,7 +27,7 @@ berbeda, dokumen ini yang berlaku sampai snapshot berikutnya.
 | `sap_mock_material_stock` | 40 |
 | `sap_mock_purchase_orders` | 20 |
 | `supplier_exclusions` | 6 |
-| `suppliers` | 61 |
+| `suppliers` | 60 |
 | `supply_records` | 5240 |
 | `users` | 8 |
 
@@ -55,8 +55,8 @@ berbeda, dokumen ini yang berlaku sampai snapshot berikutnya.
 
 ## Pemasok
 
-- Total: **61**
-- sertifikat `hygiene`: 36
+- Total: **60**
+- sertifikat `hygiene`: 35
 - sertifikat `none`: 8
 - sertifikat `haccp`: 17
 - eksklusi `proposed`: 2
@@ -68,10 +68,10 @@ berbeda, dokumen ini yang berlaku sampai snapshot berikutnya.
 
 - Rute kiriman (cakupan Jakarta): **15** (berjalur 14, tanpa jalur 1)
 - Tahap perjalanan: {'belum_berangkat': 1, 'di_jalan': 7, 'sudah_tiba': 6, 'tidak_diketahui': 1}
-- Ledger: **1598** blok (arsip 1526, yatim 0, valid=True)
+- Ledger: **1742** blok (arsip 1670, yatim 0, valid=True)
 - Jejak agen: **118** langkah
 - PO mock SAP: **20**
-- Bukti keputusan: **57**
+- Bukti keputusan: **61**
 - Approval: **28**
 
 ## Agenda & KPI hari ini
@@ -84,7 +84,7 @@ berbeda, dokumen ini yang berlaku sampai snapshot berikutnya.
 - Price Deviation: 2.66 percent (sampel 17)
 - Decision Time: 20.00 minutes (sampel 2)
 - Evidence Completeness: 66.67 percent (sampel 3)
-- Sesi demo: active=True, sisa=6473 detik
+- Sesi demo: active=True, sisa=2716 detik
 
 ## Catatan data
 

@@ -209,9 +209,14 @@ def test_every_supplier_has_map_coordinates(conn):
             "AND longitude IS NOT NULL) FROM suppliers"
         )
     ).one()
-    # Tidak ada lagi 14 baris kanonik legacy: berkas demo = master, jadi jumlah
-    # baris tabel = jumlah baris berkas.
-    assert total == len(load_demo_rows())
+    # Berkas demo adalah master, tetapi bukan satu-satunya penulis: template demo
+    # menambah pemasok sendiri (mis. `seed/demo_extra.py` membuat
+    # "Koperasi Tani Makmur — Cianjur (Unit SPPG)" untuk menguji em dash).
+    # Jadi yang diuji adalah himpunan bagian + kelengkapan koordinat, bukan
+    # kesamaan jumlah baris — kesamaan itu milik tes seeding, bukan tes peta.
+    nama_berkas = {baris["name"] for baris in load_demo_rows()}
+    nama_db = {r[0] for r in conn.execute(text("SELECT name FROM suppliers"))}
+    assert nama_berkas <= nama_db
     assert with_coords == total
 
 

@@ -114,22 +114,21 @@ async def _ambil_atau_buat(session, model, key: str, nilai: dict):
 
 
 async def pastikan_pemasok_unicode(session, pemasok: list) -> str | None:
-    """Pasang nama ber-em dash pada satu pemasok yang sudah ada (idempoten).
+    """Penjaga: nama ber-em dash milik berkas demo, bukan ditanam saat build.
 
-    Mengembalikan id pemasok yang dipilih, atau None bila direktori kosong.
-    Pilihan deterministik: pemasok yang sudah bernama itu (kalau ada), kalau
-    tidak ada maka id terkecil — supaya dua kali jalankan tidak menukar-nukar
-    baris dan tampilan demo tetap sama.
+    Riwayat: helper ini dulu MENGGANTI NAMA satu pemasok terpilih agar UI punya
+    contoh em dash. Akibatnya direktori demo berubah setiap build (nama hilang
+    dari berkas, baris baru lahir saat seed berikutnya) dan dua pemasok bisa
+    berbagi koordinat yang sama sehingga pin peta bertumpuk.
+
+    Kontrak sekarang: master data tidak disentuh. Bila direktori sudah memuat
+    nama ber-em dash (dari `data/seed/suppliers_demo.json`), id-nya
+    dikembalikan; kalau tidak, None. Tidak ada baris dibuat, diubah, atau
+    dihapus di sini.
     """
-    if not pemasok:
-        return None
-    sudah = next((s for s in pemasok if s.name == PEMASOK_UNICODE), None)
-    target = sudah or sorted(pemasok, key=lambda s: str(s.id))[0]
-    if target.name != PEMASOK_UNICODE:
-        target.name = PEMASOK_UNICODE
-        target.address = "Jl. Raya Cianjur No. 12, Cipanas, Cianjur 43253"
-        target.contact_name = "Ibu Siti Nurhaliza"
-    return str(target.id)
+    del session  # sengaja tanpa I/O: fungsi ini hanya membaca daftar di memori
+    sudah = next((s for s in pemasok if " — " in (s.name or "")), None)
+    return str(sudah.id) if sudah else None
 
 
 async def build_demo_extra(session, now: datetime | None = None) -> dict[str, int]:
@@ -206,8 +205,10 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
             )
             jumlah["approvals"] += 1
 
+    sudah_bukti: set[uuid.UUID] = set()
     for indeks, tipe_bukti in enumerate(TIPE_BUKTI):
         _, _, did = id_keputusan[indeks % len(id_keputusan)]
+        sudah_bukti.add(did)
         await _ambil_atau_buat(
             session,
             DecisionEvidence,
@@ -222,6 +223,31 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
                 },
                 is_consistent=(False if indeks == 5 else True),
                 recorded_at=now - timedelta(minutes=30 * (indeks + 1)),
+            ),
+        )
+        jumlah["decision_evidence"] += 1
+
+    # Setiap keputusan demo wajib punya bukti — kartu tanpa bukti membuat tab
+    # Decision & Evidence kosong dan Evidence Completeness tidak bisa dihitung.
+    # `_ambil_atau_buat` idempoten, jadi aman dijalankan tiap build.
+    for indeks, (tipe, _status, did) in enumerate(id_keputusan):
+        if did in sudah_bukti:
+            continue
+        tipe_bukti = TIPE_BUKTI[indeks % len(TIPE_BUKTI)]
+        await _ambil_atau_buat(
+            session,
+            DecisionEvidence,
+            f"evidence-pelengkap:{did}",
+            dict(
+                decision_id=did,
+                evidence_type=tipe_bukti,
+                payload={
+                    "ref": f"EXTRA-{tipe}-{indeks}",
+                    "nilai": str(100 + indeks * 10),
+                    "catatan": "bukti pelengkap demo",
+                },
+                is_consistent=True,
+                recorded_at=now - timedelta(minutes=20 * (indeks + 1)),
             ),
         )
         jumlah["decision_evidence"] += 1
