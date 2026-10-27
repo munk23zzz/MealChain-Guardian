@@ -3271,3 +3271,77 @@ bukti untuk varian kasus skrip yang ditolak/di-flag (28 baris 24 jam),
 tumpukan 58 keputusan `proposed` yang membuat lonceng berbunyi
 "47 lewat tenggat", dua rute cache lintas pulau (Medan→Jakarta/Surabaya) yang
 tidak terpakai, dan `GET /kpi` yang membalas 422 tanpa parameter.
+
+## 36. Veto guardian menjadi STATUS, bukan hanya flag (27 Okt 2026)
+
+**Gejala.** Kartu bukti Demo Control menampilkan `Verifikasi: Terbatas`,
+`Durasi: 0 md`, `Peringatan: 1`. Jejak `agent_traces` terakhir untuk
+`agent_name='verifier'`:
+
+```json
+{"facts":{"reasons":["safety_veto_aktif: ada temuan blocking, tetapi status run dilaporkan completed"],
+          "verdict":"flag","status_run":"completed","safety_veto":true},"status":"degraded"}
+```
+
+**Akar masalah (dua defek, bukan satu).**
+
+1. **P1 — supervisor menghitung status tanpa veto.** `run.status`
+   (`agent/validation.py:run_status`) hanya melihat kelengkapan worker, error,
+   degraded/skipped, dan kontradiksi. `safety_veto` dihitung terpisah di
+   `agent/orchestrator.py`. Akibatnya putaran dengan guardian `blocking=True`
+   — status worker `ok`, jadi tidak ada degraded — ditulis `completed`.
+   Verifier benar menandaknya (`agent/verify.py` cek "veto tapi completed"),
+   dan tanda itu yang membuat kartu jatuh ke "Terbatas". Temuan ini sudah
+   tercatat sebagai **C-09** di `INDEPENDENT_PROJECT_REVIEW.md`; perbaikannya
+   di PENGHITUNG status, bukan dengan melemahkan verifier.
+2. **P3 — durasi 0 ms.** `StubWorker._latency_ms` memakai `int()`, sehingga
+   jalur cepat (model verifier tidak dikonfigurasi, fakta gagal terbaca) yang
+   selesai di bawah satu milidetik terpotong menjadi **0**. UI menulis
+   "0 md", yang terbaca sebagai "tidak ada pekerjaan berjalan".
+
+**Keputusan.**
+
+- `RunStatus.VETOED = "vetoed"` di `agent/contracts.py`; `run_status()`
+  mengembalikan `VETOED` bila `safety_veto(findings)` benar — sebelum cabang
+  `partial`/`completed`, sesudah `failed`. Veto adalah fakta yang paling
+  menentukan boleh-tidaknya eksekusi, jadi error worker lain tidak
+  menghapusnya.
+- `verify.py` tidak dilonggarkan: ceknya berubah menjadi "veto aktif tetapi
+  status BUKAN `vetoed`", sehingga penulis status lain (runtime lama/agen
+  lain) tetap ditandai.
+- `_latency_ms` = `max(1, round(...))`: hasil pengukuran tidak pernah 0;
+  "tidak diukur" tetap `None`. Semua worker memakai jalur yang sama.
+- Rantai konsumen ikut diperbarui supaya `vetoed` tidak jatuh ke `failed`:
+  `agent_review_client.ALLOWED_STATUS` + `.completed` (9 baris trace tetap
+  disimpan — itu bukti veto, bukan kegagalan runtime), label UI
+  `agent-swarm.STATUS_LABELS` (`vetoed: "Diblokir"`), `demo-agent.agentReviewLine`
+  ("selesai dengan veto guardian"), dan `OpsConsole.labelReview7Agen`.
+- Heuristik `narasi_tidak_menyebut_penurunan` mengenal kata
+  `memblokir/diblokir/veto`. Narasi veto justru paling keras — menuduhnya
+  menghaluskan penurunan adalah salah tuduh yang muncul di setiap putaran
+  ber-veto dengan worker degraded (terukur pada putaran nyata 27 Okt).
+
+**Terukur (satu putaran agent nyata, `run_review` lewat `agent/api_client`
+terhadap stack demo, decision `d517f61a…`).**
+
+| Nilai | Sebelum | Sesudah |
+|---|---|---|
+| `run.status` / baris SUPERVISE | `completed` | `vetoed` |
+| `duration_ms` baris VERIFY | `0` (jejak 03:54) | `29` ms |
+| alasan verifier "status run dilaporkan completed" | ada | tidak ada |
+| `run.verification` | `flag` (1 alasan) | `pass` (0 alasan) |
+| baris tersimpan `persist_agent_review` | 9 | 9 (status `vetoed` diterima) |
+
+**Tes.** `backend/tests/test_agent_run_status_veto.py` (8 tes: status veto,
+trace SUPERVISE, verifier tanpa tuduhan palsu, guard tetap ada, latency ≥ 1 ms,
+baris VERIFY > 0, narasi veto tidak ditandai, klien review menerima `vetoed`)
++ 2 tes frontend (label `Diblokir`, kalimat review). Gerbang: backend suite
+**1666 lulus / 0 gagal / 28 dilewati**; `ruff check .` (backend) bersih;
+`tsc --noEmit` 0; vitest **1823 lulus**; `invariants.spec.json`
+**PASS 60 / FAIL 0 / SKIP 1**.
+
+**Sisa risiko.** Runtime AgentCore yang sedang melayani demo memakai image
+lama — sampai dideploy ulang, jejak yang ditulis runtime itu masih
+`completed` + `duration_ms 0` (perbaikan ini ada di repo, bukan di deployment).
+Kartu verifier juga masih bisa menampilkan "Terbatas" dengan alasan jujur bila
+model verifier tidak dikonfigurasi di runtime (`audit_verdict: unavailable`).

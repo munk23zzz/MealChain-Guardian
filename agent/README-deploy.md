@@ -78,7 +78,10 @@ endpoint komputasi murni yang di-allowlist (`POST /price/deviation`,
   `GET /ledger/verify`; tidak memanggil `/evidence/fuse`.
 
 `agent/validation.py` mendeteksi worker hilang/ganda, kontradiksi fakta, dan
-menentukan `completed|partial|failed`. Sepuluh golden case ada di
+menentukan `completed|partial|vetoed|failed`. `vetoed` = ada guardian
+(Safety/Freshness/Evidence) yang `blocking=True`: putaran berjalan lengkap tetapi
+keputusannya tidak boleh dieksekusi, jadi statusnya TIDAK PERNAH `completed`
+(temuan C-09 `INDEPENDENT_PROJECT_REVIEW.md`). Sepuluh golden case ada di
 `backend/tests/test_agent_golden_cases.py`.
 
 ## Orkestrasi P4 — tujuh worker + trace delapan baris
