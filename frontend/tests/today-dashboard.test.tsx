@@ -463,11 +463,12 @@ describe("susunan halaman setelah desain ulang (2026-10-17)", () => {
     expect(html.indexOf("today-summary")).toBeLessThan(html.indexOf('id="today-action"'));
   });
 
-  it("daftar pengecualian lebih dulu, agenda harian menyusul", () => {
-    // Referensi (shieldthemes.com, Jul 2025): daftar pengecualian adalah bagian
-    // yang paling sering dipakai, jadi ia tidak boleh tenggelam di bawah.
+  it("agenda harian lebih dulu, daftar pengecualian menyusul", () => {
+    // Permintaan pemilik 28 Okt 2026: agenda hari ini dipindah ke ATAS
+    // "Menunggu tindakan" — hari terpilih adalah konteks yang membingkai
+    // daftar tindakan, bukan pelengkap di bawahnya.
     const html = render(denganAgenda);
-    expect(html.indexOf('id="today-action"')).toBeLessThan(html.indexOf('id="today-agenda"'));
+    expect(html.indexOf('id="today-agenda"')).toBeLessThan(html.indexOf('id="today-action"'));
   });
 
   it("empat kartu rincian duduk dalam satu bento dua kolom di bawah", () => {

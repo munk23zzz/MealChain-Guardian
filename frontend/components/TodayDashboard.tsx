@@ -249,12 +249,36 @@ export default function TodayDashboard({
 
       {/* Kalender lama (grid bulan besar) DIHAPUS dari posisi ini — pemilik:
           "hapus untuk kalender agenda yang yang bukan pop up namun untuk
-          informasinya tetap di pakai". Kartu "Agenda harian" (info hari
-          terpilih + ikon pemilih tanggal) kini berdiri setelah daftar
-          pengecualian, sesuai hierarki: status → pengecualian → agenda → rincian. */}
+          informasinya tetap di pakai". Urutan kartu (permintaan pemilik
+          28 Okt 2026): agenda harian → menunggu tindakan → rincian. Agenda
+          diletakkan lebih dulu karena hari terpilih adalah konteks yang
+          membingkai daftar tindakan di bawahnya. */}
 
       <div className="today-grid">
-        {/* 1. Keputusan yang menunggu tindakan manusia */}
+        {/* 1. Agenda harian (permintaan pemilik 28 Okt 2026: agenda naik ke
+            atas "Menunggu tindakan"). Desain ulang 2026-10-17 tetap: grid
+            bulan besar dibuang, info hari terpilih dipertahankan — itulah yang
+            dicari pengguna tiap hari. Pindah hari lewat ‹ › ; tanggal jauh
+            lewat popup pemilih tanggal. Muncul hanya bila halaman mengirim
+            state kalender, supaya komponen ini tetap bisa dirender tes lama
+            tanpa state kalender. */}
+        {agendaDate && agendaMonth && agendaPicker ? (
+          <TodayAgendaCalendar
+            agenda={agenda}
+            loading={agendaLoading}
+            error={agendaError}
+            selected={agendaDate}
+            today={agendaToday}
+            prevDisabled={hariKiriMati}
+            nextDisabled={hariKananMati}
+            onSelect={onAgendaSelect}
+            onShiftDay={onAgendaShiftDay}
+            onRetry={onAgendaRetry}
+            picker={agendaPicker}
+          />
+        ) : null}
+
+        {/* 2. Keputusan yang menunggu tindakan manusia */}
         <article className="card today-card today-pending" id="today-action" tabIndex={-1}>
           <div className="today-card-head">
             <h2>Menunggu tindakan</h2>
@@ -321,27 +345,6 @@ export default function TodayDashboard({
             </ul>
           )}
         </article>
-
-        {/* 2. Agenda harian (desain ulang 2026-10-17): grid bulan besar dibuang,
-            info hari terpilih tetap — itulah yang dicari pengguna tiap hari.
-            Pindah hari lewat ‹ › ; tanggal jauh lewat popup pemilih tanggal.
-            Muncul hanya bila halaman mengirim state kalender, supaya komponen
-            ini tetap bisa dirender tes lama tanpa state kalender. */}
-        {agendaDate && agendaMonth && agendaPicker ? (
-          <TodayAgendaCalendar
-            agenda={agenda}
-            loading={agendaLoading}
-            error={agendaError}
-            selected={agendaDate}
-            today={agendaToday}
-            prevDisabled={hariKiriMati}
-            nextDisabled={hariKananMati}
-            onSelect={onAgendaSelect}
-            onShiftDay={onAgendaShiftDay}
-            onRetry={onAgendaRetry}
-            picker={agendaPicker}
-          />
-        ) : null}
 
         <div className="today-detail-grid">
         {/* 3. Batch yang sudah/akan kedaluwarsa */}
