@@ -1,0 +1,75 @@
+{
+  "region": "us-west-2",
+  "waktu_utc": "2026-10-27T18:29:31.849396+00:00",
+  "gateway": {
+    "resource_exists": {
+      "status": "VERIFIED",
+      "detail": "1 gateway terlihat di us-west-2",
+      "gateways": [
+        {
+          "id": "…chain-gateway-eofbeyei8p",
+          "name": "mealchain-gateway",
+          "status": "READY",
+          "url_terisi": false
+        }
+      ]
+    },
+    "target_ready": {
+      "status": "VERIFIED",
+      "detail": "1 target terlihat",
+      "targets": [
+        {
+          "gateway": "…chain-gateway-eofbeyei8p",
+          "target": "OKYYXKMWVW",
+          "name": "mealchain-tools",
+          "status": "READY",
+          "jenis": null
+        }
+      ]
+    },
+    "tool_invoked": {
+      "status": "VERIFIED",
+      "detail": "tool mealchain-tools___supply_get dijawab Gateway lewat klien aplikasi",
+      "data": {
+        "quantity_kg": 902.85,
+        "recorded_at": "2026-11-04T12:00:00+00:00",
+        "source": "mock_sap"
+      }
+    },
+    "app_uses_gateway": {
+      "status": "VERIFIED",
+      "detail": "backend memanggil tool lewat AGENTCORE_GATEWAY_URL dan membaca hasilnya"
+    }
+  },
+  "memory": {
+    "resource_exists": {
+      "status": "VERIFIED",
+      "detail": "GetMemory berhasil",
+      "id": "…ain_memory_01-soAIdH8viw",
+      "name": "mealchain_memory_01",
+      "resource_status": "ACTIVE"
+    },
+    "read_allowed": {
+      "status": "VERIFIED",
+      "detail": "ListEvents diizinkan"
+    },
+    "write_allowed": {
+      "status": "UNVERIFIED",
+      "detail": "CreateEvent TIDAK dipanggil oleh probe (butuh izin tulis); bukti tulis-baca: tests/test_agent_memory_live.py (RUN_LIVE_AGENTCORE=1)"
+    },
+    "catatan": "aksi IAM yang dibutuhkan ada di infra/aws/iam-mealchain-fase11.json"
+  },
+  "ringkas_gateway": {
+    "per_bukti": {
+      "resource_exists": "VERIFIED",
+      "target_ready": "VERIFIED",
+      "tool_invoked": "VERIFIED",
+      "app_uses_gateway": "VERIFIED"
+    },
+    "hitung": {
+      "VERIFIED": 4
+    },
+    "belum_terbukti": [],
+    "integrasi_aktif": true
+  }
+}

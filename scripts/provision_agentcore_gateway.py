@@ -75,13 +75,45 @@ def klien(nama: str):
 
 
 def preflight() -> list[str]:
+    """Simulasi izin dengan ARN yang cocok dengan pola policy (wildcard diizinkan).
+
+    Mensimulasikan semuanya dengan Resource "*" menyesatkan: policy kita membatasi
+    ke `gateway/*` dan satu ARN memory, sehingga hasilnya implicitDeny padahal izin
+    sebenarnya ada.
+    """
     iam = klien("iam")
+    akun = klien("sts").get_caller_identity()["Account"]
+    region = os.environ.get("AWS_REGION", REGION_DEFAULT)
+    memori = (os.environ.get("AGENTCORE_MEMORY_ID") or "").strip()
+    arn_gateway = f"arn:aws:bedrock-agentcore:{region}:{akun}:gateway/*"
+    arn_memori = f"arn:aws:bedrock-agentcore:{region}:{akun}:memory/{memori or '*'}"
+
+    kelompok = {
+        "*": [
+            "bedrock-agentcore:ListGateways",
+            "bedrock-agentcore:CreateGateway",
+        ],
+        arn_gateway: [
+            "bedrock-agentcore:ListGatewayTargets",
+            "bedrock-agentcore:CreateGatewayTarget",
+            "bedrock-agentcore:InvokeGateway",
+        ],
+        arn_memori: [
+            "bedrock-agentcore:CreateEvent",
+            "bedrock-agentcore:DeleteEvent",
+            "bedrock-agentcore:ListEvents",
+        ],
+    }
     arn = klien("sts").get_caller_identity()["Arn"]
-    r = iam.simulate_principal_policy(PolicySourceArn=arn, ActionNames=AKSI_PERLU, ResourceArns=["*"])
-    kurang = [e["EvalActionName"] for e in r["EvaluationResults"] if e["EvalDecision"] != "allowed"]
     print(f"identitas: {arn}")
-    for e in r["EvaluationResults"]:
-        print(f"  {e['EvalDecision']:<14}{e['EvalActionName']}")
+    kurang: list[str] = []
+    for arn_sumber, aksi in kelompok.items():
+        r = iam.simulate_principal_policy(PolicySourceArn=arn, ActionNames=aksi, ResourceArns=[arn_sumber])
+        for e in r["EvaluationResults"]:
+            tanda = "" if e["EvalDecision"] == "allowed" else "  <-- kurang"
+            print(f"  {e['EvalDecision']:<14}{e['EvalActionName']}{tanda}")
+            if e["EvalDecision"] != "allowed":
+                kurang.append(e["EvalActionName"])
     return kurang
 
 
@@ -92,6 +124,22 @@ def skema_openapi() -> str:
         or os.environ.get("MEALCHAIN_API_URL")
         or "http://127.0.0.1:8000"
     ).rstrip("/")
+    if "127.0.0.1" in base or "localhost" in base:
+        raise RuntimeError(
+            "base URL backend tidak bisa dipakai Gateway: "
+            f"{base} hanya hidup di mesin ini. Isi BACKEND_PUBLIC_BASE_URL/MEALCHAIN_API_URL "
+            "dengan URL yang bisa dijangkau AWS (tunnel publik)."
+        )
+    try:
+        with urllib.request.urlopen(f"{base}/health", timeout=15) as r:
+            if r.status != 200:
+                raise RuntimeError(f"health backend {base} mengembalikan {r.status}")
+    except Exception as exc:
+        raise RuntimeError(
+            f"base URL backend {base} tidak dapat dijangkau: {type(exc).__name__}: {exc}. "
+            "Perbarui tunnel lalu jalankan ulang; jangan biarkan target menunjuk host mati."
+        ) from exc
+    print(f"backend: {base} (health OK)")
     paths: dict[str, dict] = {}
     for tool in cfg["tools"]:
         path = tool["path"]
@@ -150,31 +198,50 @@ def pastikan_gateway(ctrl) -> tuple[str, str]:
 
 
 def pastikan_target(ctrl, gid: str) -> str:
+    """Buat target, atau perbarui skema target yang sudah ada (mis. base URL berganti)."""
+    skema = {"mcp": {"openApiSchema": {"inlinePayload": skema_openapi()}}}
+    tid = None
     for t in ctrl.list_gateway_targets(gatewayIdentifier=gid).get("items", []):
         if t.get("name") == TARGET_NAME:
-            print(f"target : sudah ada {t.get('targetId')} status={t.get('status')}")
-            return t.get("status", "")
-    r = ctrl.create_gateway_target(
-        gatewayIdentifier=gid,
-        name=TARGET_NAME,
-        description="10 tool deterministik MealChain (OpenAPI inline)",
-        targetConfiguration={"mcp": {"openApiSchema": {"inlinePayload": skema_openapi()}}},
-    )
-    tid = r.get("targetId")
-    print(f"target : dibuat {tid}")
+            tid = t.get("targetId")
+            print(f"target : sudah ada {tid} — memperbarui skema")
+            break
+    if tid is None:
+        r = ctrl.create_gateway_target(
+            gatewayIdentifier=gid,
+            name=TARGET_NAME,
+            description="10 tool deterministik MealChain (OpenAPI inline)",
+            targetConfiguration=skema,
+        )
+        tid = r.get("targetId")
+        print(f"target : dibuat {tid}")
+    else:
+        ctrl.update_gateway_target(
+            gatewayIdentifier=gid,
+            targetId=tid,
+            name=TARGET_NAME,
+            description="10 tool deterministik MealChain (OpenAPI inline)",
+            targetConfiguration=skema,
+        )
+        print(f"target : skema diperbarui ({tid})")
     status = ""
     for _ in range(60):
         for t in ctrl.list_gateway_targets(gatewayIdentifier=gid).get("items", []):
             if t.get("targetId") == tid:
                 status = t.get("status", "")
-                if status in ("READY", "FAILED", "CREATE_FAILED"):
+                if status in ("READY", "FAILED", "CREATE_FAILED", "UPDATE_FAILED"):
                     return status
         time.sleep(5)
     return status
 
 
-def panggil_mcp(url: str, tool: str, argumen: dict) -> dict:
-    """MCP minimal: initialize → tools/call. Tanpa dependensi tambahan."""
+def panggil_mcp(url: str, kandidat: str = "supply") -> dict:
+    """MCP minimal: initialize → tools/list → tools/call pada tool yang benar-benar ada.
+
+    Nama tool di Gateway berawalan target (`mealchain-tools___supply_get`), jadi
+    pemanggilan tidak boleh menebak: pilih dari tools/list lalu bangun argumen dari
+    inputSchema milik tool itu.
+    """
     hasil: dict = {}
 
     def rpc(payload: dict, sesi: str | None = None) -> tuple[dict, str | None]:
@@ -202,11 +269,33 @@ def panggil_mcp(url: str, tool: str, argumen: dict) -> dict:
                                  "clientInfo": {"name": "mealchain-provisioner", "version": "1.0"}}})
     hasil["initialize"] = bool(init.get("result"))
     daftar, sesi = rpc({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}, sesi)
-    tools = [t.get("name") for t in daftar.get("result", {}).get("tools", [])]
-    hasil["tools"] = tools
+    tools = daftar.get("result", {}).get("tools", [])
+    hasil["tools"] = [t.get("name") for t in tools]
+    pilih = next((t for t in tools if kandidat in (t.get("name") or "")), tools[0] if tools else None)
+    if pilih is None:
+        hasil["ok"] = False
+        hasil["call"] = "tidak ada tool di gateway"
+        return hasil
+
+    skema = (pilih.get("inputSchema") or {}).get("properties") or {}
+    argumen = {}
+    for nama, isi in skema.items():
+        jenis = (isi or {}).get("type")
+        if nama.lower() in ("location", "lokasi"):
+            argumen[nama] = "Jakarta"
+        elif nama.lower() in ("commodity", "komoditas"):
+            argumen[nama] = "beras"
+        elif jenis in ("integer", "number"):
+            argumen[nama] = 1
+        else:
+            argumen[nama] = {"location": "Jakarta", "commodity": "beras"} if nama == "body" else "demo"
     panggil, _ = rpc({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
-                      "params": {"name": tool, "arguments": argumen}}, sesi)
+                      "params": {"name": pilih["name"], "arguments": argumen}}, sesi)
+    hasil["tool"] = pilih["name"]
+    hasil["argumen"] = argumen
     hasil["call"] = panggil.get("result") or panggil.get("error")
+    isi = panggil.get("result") or {}
+    hasil["ok"] = bool(isi) and not isi.get("isError")
     return hasil
 
 
@@ -240,9 +329,15 @@ def main() -> int:
         url = ctrl.get_gateway(gatewayIdentifier=gid).get("gatewayUrl", "")
     print(f"url    : {url}")
 
-    hasil = panggil_mcp(url, "supply_get", {"location": "Jakarta", "commodity": "beras"})
-    print("mcp    : tools =", len(hasil.get("tools") or []))
-    print("mcp    : hasil call =", json.dumps(hasil.get("call"))[:220])
+    hasil = panggil_mcp(url, "supply")
+    print("mcp    : tools =", len(hasil.get("tools") or []), "| dipanggil:", hasil.get("tool"))
+    print("mcp    : argumen =", json.dumps(hasil.get("argumen") or {}))
+    print("mcp    : hasil call =", json.dumps(hasil.get("call"))[:300])
+
+    if not hasil.get("ok"):
+        print("\nSTATUS: GAGAL — target READY tetapi tool tidak menjawab dengan data; "
+              "tool_invoked TIDAK boleh diklaim VERIFIED")
+        return 4
 
     catat_env(url)
     print("\nSTATUS: DONE — resource_exists=VERIFIED target_ready=READY tool_invoked=VERIFIED app_uses_gateway=CONFIGURED")

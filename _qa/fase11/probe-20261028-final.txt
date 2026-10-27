@@ -1,0 +1,11 @@
+
+RINGKASAN (4 bukti terpisah):
+  resource_exists    VERIFIED         1 gateway terlihat di us-west-2
+  target_ready       VERIFIED         1 target terlihat
+  tool_invoked       VERIFIED         tool mealchain-tools___supply_get dijawab Gateway lewat klien aplikasi
+  app_uses_gateway   VERIFIED         backend memanggil tool lewat AGENTCORE_GATEWAY_URL dan membaca hasilnya
+MEMORY:
+  resource_exists    VERIFIED         GetMemory berhasil
+  read_allowed       VERIFIED         ListEvents diizinkan
+  write_allowed      UNVERIFIED       CreateEvent TIDAK dipanggil oleh probe (butuh izin tulis); bukti tulis-baca: tests/test_agent_memory_live.py (RUN_LIVE_AGENTCORE=1)
+  integrasi_aktif      True             belum: -

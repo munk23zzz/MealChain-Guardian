@@ -34,7 +34,11 @@ pytestmark = pytest.mark.skipif(
 
 
 def _memory_id() -> str:
-    memory_id = (os.environ.get("AGENTCORE_MEMORY_ID") or "").strip()
+    # conftest menghapus AGENTCORE_MEMORY_ID supaya unit test deterministik;
+    # untuk tes live, variabel *_LIVE dipakai sebagai sumber eksplisit.
+    memory_id = (
+        os.environ.get("AGENTCORE_MEMORY_ID_LIVE") or os.environ.get("AGENTCORE_MEMORY_ID") or ""
+    ).strip()
     if not memory_id:
         pytest.skip("AGENTCORE_MEMORY_ID kosong")
     return memory_id

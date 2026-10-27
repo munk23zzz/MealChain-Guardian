@@ -1,0 +1,11 @@
+
+RINGKASAN (4 bukti terpisah):
+  resource_exists    VERIFIED         1 gateway terlihat di us-west-2
+  target_ready       VERIFIED         1 target terlihat
+  tool_invoked       UNVERIFIED       skrip ini sengaja tidak memanggil tool; bukti invokasi harus berasal dari pemanggilan nyata yang hasilnya dibaca aplikasi
+  app_uses_gateway   UNVERIFIED       AGENTCORE_GATEWAY_URL terisi; pemakaian nyata belum dibuktikan (butuh satu tool dipanggil lewat aplikasi dan hasilnya dibaca)
+MEMORY:
+  resource_exists    VERIFIED         GetMemory berhasil
+  read_allowed       VERIFIED         ListEvents diizinkan
+  write_allowed      UNVERIFIED       CreateEvent TIDAK dipanggil oleh probe (butuh izin tulis); bukti tulis-baca: tests/test_agent_memory_live.py (RUN_LIVE_AGENTCORE=1)
+  integrasi_aktif      False            belum: tool_invoked, app_uses_gateway

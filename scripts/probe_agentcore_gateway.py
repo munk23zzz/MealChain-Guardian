@@ -228,11 +228,46 @@ def probe_memory(region: str) -> dict:
     }
 
 
+def _bukti_pemanggilan() -> dict:
+    """Bukti 3 & 4: panggil satu tool lewat klien aplikasi dan baca hasilnya.
+
+    Hanya jalan bila diminta (`--panggil`), karena ini bukan lagi baca-saja.
+    Status diambil dari klien aplikasi (`app.services.agentcore_gateway`) supaya
+    yang dibuktikan memang jalur aplikasi, bukan skrip probe.
+    """
+    import asyncio
+
+    from app.services.agentcore_gateway import panggil_tool
+
+    hasil = asyncio.run(panggil_tool("supply_get", {"location": "Jakarta", "commodity": "beras"}))
+    if hasil.get("status") == "VERIFIED":
+        return {
+            "tool_invoked": {
+                "status": STATUS_OK,
+                "detail": f"tool {hasil.get('tool')} dijawab Gateway lewat klien aplikasi",
+                "data": hasil.get("data"),
+            },
+            "app_uses_gateway": {
+                "status": STATUS_OK,
+                "detail": "backend memanggil tool lewat AGENTCORE_GATEWAY_URL dan membaca hasilnya",
+            },
+        }
+    return {
+        "tool_invoked": {"status": STATUS_UNVERIFIED, "detail": hasil.get("alasan")},
+        "app_uses_gateway": {"status": STATUS_UNVERIFIED, "detail": hasil.get("alasan")},
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     _muat_env()
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--region", default=os.environ.get("AWS_REGION", "us-west-2"))
     p.add_argument("--ringkas", action="store_true", help="hanya cetak baris status")
+    p.add_argument(
+        "--panggil",
+        action="store_true",
+        help="panggil satu tool lewat klien aplikasi (mengubah status tool_invoked/app_uses_gateway)",
+    )
     args = p.parse_args(argv)
 
     laporan = {
@@ -243,6 +278,8 @@ def main(argv: list[str] | None = None) -> int:
         "gateway": probe_gateway(args.region),
         "memory": probe_memory(args.region),
     }
+    if args.panggil:
+        laporan["gateway"].update(_bukti_pemanggilan())
     laporan["ringkas_gateway"] = ringkas(laporan["gateway"])
 
     if not args.ringkas:

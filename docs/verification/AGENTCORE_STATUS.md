@@ -152,3 +152,23 @@ Artefak baru supaya penutupan hanya butuh satu perintah setelah izin ada:
 
 Status butir 4 tetap **UNVERIFIED**; yang berubah: penyebabnya kini tertulis
 aksi-per-aksi dan jalur penutupnya sudah siap jalan.
+
+## 7. Hasil akhir butir 4 — 28 Okt 2026 (integrasi aktif)
+
+| Bukti | Status | Sumber |
+|---|---|---|
+| resource_exists | VERIFIED | `scripts/probe_agentcore_gateway.py --panggil` → 1 gateway READY |
+| target_ready | VERIFIED | target `mealchain-tools` READY, 10 tool |
+| tool_invoked | VERIFIED | `supply_get` → `quantity_kg=902.85` dibaca aplikasi |
+| app_uses_gateway | VERIFIED | `app/services/agentcore_gateway.py` + tes live |
+
+`integrasi_aktif=true`. Izin yang ditambahkan: role `MealChainAgentCoreGatewayRole`,
+managed policy `MealChainFase11AgentCore`, managed policy `MealChainPassRoleAgentCore`
+(lihat `MG/phase-11-ledger-agentcore.md`).
+
+Catatan arsitektur: target Gateway tidak boleh meneruskan header `authorization`
+(dibatasi AWS), sedangkan backend menuntut Bearer. Karena itu jalur Gateway →
+`infra/gateway-shim/shim.py` → backend; shim hanya menambahkan token, tanpa logika.
+
+Memory tulis-baca tetap **UNVERIFIED**: `CreateEvent` masih AccessDenied meski
+simulasi ARN memory lulus.
