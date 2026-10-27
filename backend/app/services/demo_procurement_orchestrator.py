@@ -92,6 +92,7 @@ async def _run_supplier_procurement(
     target_location: str,
     verifier_bedrock,
     ttl_minutes: int,
+    demo_session_id: uuid.UUID | None = None,
 ) -> dict:
     engine = create_engine(settings.database_url)
     maker = create_session_maker(engine)
@@ -215,6 +216,9 @@ async def _run_supplier_procurement(
             safe_delivered_cost=Decimal(str(chosen["safe_delivered_cost"])),
             cost_breakdown=chosen["cost_breakdown"],
             expires_at=expires_at,
+            # Fase 2 MG: pemilik baris disebut pemanggil, bukan ditebak dari
+            # "sesi aktif" oleh penjaga `before_flush`.
+            demo_session_id=demo_session_id,
         )
         session.add(decision)
         await session.flush()
@@ -404,13 +408,18 @@ def run_supplier_procurement(
     *,
     verifier_bedrock=None,
     ttl_minutes: int = DEFAULT_TTL_MINUTES,
+    demo_session_id: uuid.UUID | None = None,
 ) -> dict:
-    """Jalankan pengadaan pemasok penuh; sync wrapper di atas sesi async."""
+    """Jalankan pengadaan pemasok penuh; sync wrapper di atas sesi async.
+
+    `demo_session_id` (Fase 2 MG) = sesi PEMILIK keputusan yang lahir di sini.
+    """
     return asyncio.run(
         _run_supplier_procurement(
             commodity=commodity,
             target_location=target_location,
             verifier_bedrock=verifier_bedrock,
             ttl_minutes=ttl_minutes,
+            demo_session_id=demo_session_id,
         )
     )

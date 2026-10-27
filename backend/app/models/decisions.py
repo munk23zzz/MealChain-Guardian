@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     Boolean,
@@ -19,9 +19,12 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
+
+if TYPE_CHECKING:
+    from app.models.demo_sessions import DemoSession
 
 
 class Decision(Base):
@@ -124,6 +127,15 @@ class Decision(Base):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    #: Sesi demo pemilik baris (Fase 2 MG). `raise_on_sql` disengaja: resolver
+    #: waktu (`services.decision_time.decision_now`) membaca relasi ini, dan
+    #: lazy-load di dalam loop list ratusan baris adalah N+1 yang tidak
+    #: terlihat. Read path yang butuh anchor memilih `selectinload` sendiri.
+    demo_session: Mapped[Optional["DemoSession"]] = relationship(
+        "DemoSession",
+        lazy="raise_on_sql",
+        viewonly=True,
     )
 
 

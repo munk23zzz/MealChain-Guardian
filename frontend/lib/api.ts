@@ -488,15 +488,24 @@ export async function fetchApprovalSummary(
  });
 }
 
-export async function seedDemo(token: string, force = false) {
+export async function seedDemo(
+  token: string,
+  force = false,
+  opsi: { mode?: "replay" | "realtime"; demoSession?: string } = {}
+) {
+  const payload: Record<string, unknown> = { force };
+  // Fase 2 MG: mode dikirim EKSPLISIT. Backend menolak 422 nilai asing, jadi
+  // klien tidak boleh mengarang mode — hanya dua nilai ini yang sah.
+  if (opsi.mode) payload.mode = opsi.mode;
+  if (opsi.demoSession) payload.demo_session = opsi.demoSession;
   return request("/demo/seed", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ force }),
- });
+    body: JSON.stringify(payload),
+  });
 }
 
 // --- Data & rentang waktu (Fase 5) — panel Demo Control ---
@@ -563,17 +572,58 @@ export async function refreshDemoToToday(token: string) {
 // Kontrak: `remaining_seconds` dihitung SERVER; UI hanya menguranginya dengan
 // waktu yang berjalan di layar, lalu menyelaraskan lagi tiap 20 detik.
 
-/** `GET /demo/session` — status + hitungan mundur (aman dipanggil berulang). */
-export async function fetchDemoSession(token: string) {
+/**
+ * `GET /demo/session` — status + hitungan mundur (aman dipanggil berulang).
+ *
+ * Fase 2 MG: payload sesi sekarang membawa `mode` (`replay`/`realtime`),
+ * `evaluation_anchor`, dan `dataset_version`. UI menampilkan mode APA ADANYA
+ * dari sesi — bukan menyimpulkannya dari data terbaru, karena dua sesi bisa
+ * hidup berdampingan dan masing-masing punya jangkarnya sendiri.
+ */
+export type DemoSessionMode = "replay" | "realtime";
+
+export type DemoSessionInfo = {
+  active: boolean;
+  enforced: boolean;
+  session_id: string | null;
+  status: string;
+  mode: DemoSessionMode | null;
+  evaluation_anchor: string | null;
+  dataset_version: string | null;
+  expires_at: string | null;
+  anchor_now: string | null;
+  server_now: string;
+  remaining_seconds: number;
+};
+
+export async function fetchDemoSession(token: string): Promise<DemoSessionInfo> {
   return request("/demo/session", { headers: authHeaders(token) });
 }
 
+/** Label mode untuk panel: `replay` = dataset kanon beku, `realtime` = sesi baru. */
+export function labelModeSesi(mode: string | null | undefined): string {
+  if (mode === "replay") return "Replay (jangkar kanon 8 Okt 2026)";
+  if (mode === "realtime") return "Realtime (jangkar waktu sesi)";
+  return "Mode belum ditentukan";
+}
+
 /** `POST /demo/session/start` — buat sesi, semai data, aktifkan jendela waktu. */
-export async function startDemoSession(token: string, menit?: number) {
+export async function startDemoSession(
+  token: string,
+  menit?: number,
+  opsi: { mode?: "replay" | "realtime"; replace?: boolean } = {}
+) {
+  const payload: Record<string, unknown> = {};
+  if (menit) payload.menit = menit;
+  // Fase 2 MG: tombol "Siapkan data demo" memulai sesi dalam mode REPLAY
+  // (jangkar kanon 8 Okt). Mode dikirim eksplisit supaya sesi tidak ditentukan
+  // diam-diam oleh keadaan server.
+  if (opsi.mode) payload.mode = opsi.mode;
+  if (opsi.replace) payload.replace = true;
   return request("/demo/session/start", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders(token) },
-    body: JSON.stringify(menit ? { menit } : {}),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -943,11 +993,19 @@ export async function updateAdminLocation(
  */
 export async function runDemoAgent(
   token: string,
-  { commodity, ttlMinutes }: { commodity?: string; ttlMinutes?: number } = {}
+  {
+    commodity,
+    ttlMinutes,
+    demoSession,
+  }: { commodity?: string; ttlMinutes?: number; demoSession?: string } = {}
 ) {
   const payload: Record<string, unknown> = {};
   if (commodity) payload.commodity = commodity;
   if (ttlMinutes) payload.ttl_minutes = ttlMinutes;
+  // Fase 2 MG: analisis yang dijalankan atas SESI tertentu harus menyebut sesi
+  // itu. Tanpa ini server menstempel keputusan dari "sesi aktif", sehingga dua
+  // sesi yang hidup berdampingan bisa saling menimpa kepemilikan baris.
+  if (demoSession) payload.demo_session = demoSession;
   return request("/demo/agent/run", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders(token) },

@@ -97,6 +97,14 @@ async def cetakan(db: AsyncSession) -> uuid.UUID:
                 anchor_now=jangkar,
                 ended_at=jangkar,
                 template_version="cetakan",
+                # Sesi sentinel tidak pernah dievaluasi; mode `replay` + jangkar
+                # kanon menjaga kontrak kolom (bukan jangkar Jan 2026 yang akan
+                # membuat template beku tampak "lebih tua" dari dataset kanon).
+                mode="replay",
+                evaluation_anchor=datetime(
+                    2026, 10, 8, 12, 0, tzinfo=timezone.utc
+                ),
+                dataset_version="cetakan",
             )
         )
         await db.flush()
@@ -151,7 +159,13 @@ def _batas_akhir(started_at: datetime) -> datetime:
 
 
 def status_payload(sesi: DemoSession | None, saat: datetime | None = None) -> dict[str, Any]:
-    """Bentuk balasan stabil untuk UI (hitungan mundur dihitung SERVER)."""
+    """Bentuk balasan stabil untuk UI (hitungan mundur dihitung SERVER).
+
+    Sejak Fase 2 MG payload membawa `mode`, `evaluation_anchor`, dan
+    `dataset_version`: klien tidak boleh menebak mode dari "sesi terbaru", dan
+    `GET /demo/session` memakai bentuk yang SAMA dengan blok `session` pada
+    respons seed (`demo_ownership.blok_sesi`).
+    """
     saat = saat or sekarang()
     if sesi is None:
         return {
@@ -159,17 +173,31 @@ def status_payload(sesi: DemoSession | None, saat: datetime | None = None) -> di
             "enforced": bool(settings.demo_session_enforce),
             "session_id": None,
             "status": "kosong",
+            "mode": None,
+            "evaluation_anchor": None,
+            "dataset_version": None,
             "expires_at": None,
             "anchor_now": None,
             "server_now": saat.isoformat(),
             "remaining_seconds": 0,
         }
     sisa = int((sesi.expires_at - saat).total_seconds())
+    from app.services import decision_time
+
     return {
         "active": sesi.status == "active" and sisa > 0,
         "enforced": bool(settings.demo_session_enforce),
         "session_id": str(sesi.id),
         "status": sesi.status,
+        # Mode/anchor adalah sifat SESI (bukan data sesi terbaru).
+        "mode": sesi.mode,
+        "evaluation_anchor": sesi.evaluation_anchor.isoformat(),
+        "dataset_version": (
+            sesi.dataset_version
+            or decision_time.dataset_version_untuk(
+                sesi.mode, sesi.evaluation_anchor
+            )
+        ),
         "expires_at": sesi.expires_at.isoformat(),
         "anchor_now": sesi.anchor_now.isoformat(),
         "server_now": saat.isoformat(),
@@ -261,12 +289,21 @@ async def mulai(
     created_by: uuid.UUID | None = None,
     template_version: str | None = None,
     kosongkan: bool = True,
+    mode: str = "replay",
+    anchor: datetime | None = None,
 ) -> DemoSession:
     """Mulai sesi baru. Sesi lama (kalau ada) diakhiri lebih dulu — satu sesi aktif.
 
     `kosongkan=False` dipakai oleh `mulai_dengan_template`: template dibangun lebih
     dulu, jadi pengosongan di sini akan menghapus hasil build itu sendiri.
+
+    `mode`/`anchor` (Fase 2 MG) menentukan jangkar EVALUASI sesi: `replay`
+    memakai jangkar kanon historis (reproducible), `realtime` memakai waktu sesi
+    dibuka. `dataset_version` diturunkan dari keduanya, bukan dikarang klien.
     """
+    from app.services import decision_time
+
+    mode_final = decision_time.mode_sah(mode)
     lama = await _sesi_aktif_terakhir(db)
     if lama is not None:
         await akhiri(db, lama)
@@ -276,6 +313,7 @@ async def mulai(
         await kosongkan_kecuali(db, None)
     saat = sekarang()
     durasi = _menit_valid(menit, settings.demo_session_minutes)
+    jangkar = anchor or decision_time.anchor_untuk(mode_final, saat=saat)
     sesi = DemoSession(
         status="active",
         started_at=saat,
@@ -283,6 +321,9 @@ async def mulai(
         anchor_now=saat,
         template_version=template_version,
         created_by=created_by,
+        mode=mode_final,
+        evaluation_anchor=jangkar,
+        dataset_version=decision_time.dataset_version_untuk(mode_final, jangkar),
     )
     db.add(sesi)
     await db.commit()
@@ -296,6 +337,8 @@ async def mulai_dengan_template(
     *,
     menit: int | None = None,
     created_by: uuid.UUID | None = None,
+    mode: str = "replay",
+    anchor: datetime | None = None,
 ) -> tuple[DemoSession, dict[str, Any]]:
     """Bangun template demo DULU, buka sesi BELAKANGAN.
 

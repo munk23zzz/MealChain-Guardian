@@ -16,13 +16,104 @@ export type StatusSesiDemo = {
   enforced: boolean;
   session_id: string | null;
   status: string;
+  /**
+   * Fase 2 MG: mode dan jangkar adalah sifat SESI. `null` = baris lama/pra-Fase 2
+   * (panel menampilkan "mode belum ditentukan", bukan menebak `replay`).
+   */
+  mode?: "replay" | "realtime" | null;
+  evaluation_anchor?: string | null;
+  dataset_version?: string | null;
   expires_at: string | null;
   anchor_now: string | null;
   server_now: string;
   remaining_seconds: number;
 };
 
+/** Mode sesi untuk ditampilkan; tidak pernah menebak dari data terbaru. */
+export function modeSesi(
+  sesi: StatusSesiDemo | null
+): "replay" | "realtime" | null {
+  const mode = sesi?.mode;
+  return mode === "replay" || mode === "realtime" ? mode : null;
+}
+
+/**
+ * Jangkar evaluasi yang ditampilkan: `8 Okt 2026 12:00 UTC`.
+ *
+ * Jangkar dikirim RFC3339 UTC; kalau tidak bisa diurai, kembalikan `null` supaya
+ * panel menampilkan "—" alih-alih tanggal palsu.
+ */
+export function jangkarSesi(sesi: StatusSesiDemo | null): string | null {
+  const iso = sesi?.evaluation_anchor;
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const bulan = [
+    "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+    "Jul", "Agu", "Sep", "Okt", "Nov", "Des",
+  ][d.getUTCMonth()];
+  const jam = String(d.getUTCHours()).padStart(2, "0");
+  const menit = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${d.getUTCDate()} ${bulan} ${d.getUTCFullYear()} ${jam}:${menit} UTC`;
+}
+
 export type KeadaanSesi = "mati" | "kosong" | "berjalan" | "habis";
+
+/** Ringkasan satu sesi untuk panel — dihitung di sini supaya panel tidak
+ *  memformat sendiri (dua tempat = dua tanggal yang bisa berbeda). */
+export type RingkasanSesi = {
+  /** `replay`/`realtime`, atau `null` untuk sesi pra-Fase 2. */
+  mode: "replay" | "realtime" | null;
+  /** Jangkar evaluasi terformat, mis. `8 Okt 2026 12:00 UTC`. */
+  anchor: string | null;
+  datasetVersion: string | null;
+  /** true hanya bila ada sesi demo aktif: suhu dataset demo SIMULASI. */
+  simulasi: boolean;
+  /** Satu kalimat siap tampil; `null` bila tidak ada sesi aktif. */
+  baris: string | null;
+};
+
+/**
+ * Ringkasan sesi aktif tanpa menebak apa pun: mode dan jangkar dibaca apa
+ * adanya dari sesi, `simulasi` hanya menyala untuk sesi demo yang hidup.
+ *
+ * Yang TIDAK dilakukan: menyimpulkan mode dari "data terbaru" (dua sesi bisa
+ * hidup berdampingan) atau mengarang jangkar saat kolomnya kosong.
+ */
+export function ringkasSesi(sesi: StatusSesiDemo | null): RingkasanSesi {
+  const aktif = Boolean(sesi?.active);
+  const mode = modeSesi(sesi);
+  const anchor = jangkarSesi(sesi);
+  if (!aktif) {
+    return {
+      mode,
+      anchor,
+      datasetVersion: null,
+      simulasi: false,
+      baris: null,
+    };
+  }
+  const bagian = [
+    `Dataset ${labelSesi(mode)}`,
+    anchor ? `jangkar ${anchor}` : "jangkar tidak tercatat",
+  ];
+  if (sesi?.dataset_version) bagian.push(`versi ${sesi.dataset_version}`);
+  bagian.push("suhu simulasi");
+  return {
+    mode,
+    anchor,
+    datasetVersion: sesi?.dataset_version ?? null,
+    simulasi: true,
+    baris: bagian.join(" · "),
+  };
+}
+
+/** Label pendek mode untuk kalimat ringkasan. */
+export function labelSesi(mode: "replay" | "realtime" | null): string {
+  if (mode === "replay") return "replay";
+  if (mode === "realtime") return "real-time";
+  return "tanpa mode";
+}
 
 /** Sisa detik saat ini: nilai server dikurangi waktu yang berjalan di layar. */
 export function sisaDetik(

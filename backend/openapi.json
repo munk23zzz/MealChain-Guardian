@@ -2071,7 +2071,7 @@
     "/demo/seed": {
       "post": {
         "summary": "Seed Demo",
-        "description": "Muat 4 kasus skrip UNTUK KOTA PEMANGGIL. Idempoten per kota; `force=true`\nhanya menghapus ulang baris demo kota itu.",
+        "description": "Muat 4 kasus skrip UNTUK KOTA PEMANGGIL. Idempoten per sesi+kota.\n\nKepemilikan (Fase 2 MG): semua baris yang lahir dari permintaan ini membawa\n`demo_session_id` sesi PEMILIK — sesi yang diminta klien, atau sesi aktif\nbila klien tidak menyebutnya. `force=true` menghapus hanya baris milik sesi\nitu, jadi menyemai sesi kedua tidak menghapus (dan reset sesi pertama tidak\nmemusnahkan) data sesi lain. Respons memuat blok `session` dengan bentuk\nyang SAMA dengan `GET /demo/session`.",
         "operationId": "seed_demo_demo_seed_post",
         "requestBody": {
           "content": {
@@ -3839,6 +3839,18 @@
             "minimum": 1.0,
             "title": "Ttl Minutes",
             "default": 30
+          },
+          "demo_session": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Demo Session"
           }
         },
         "type": "object",
@@ -3991,6 +4003,18 @@
             "minimum": 1.0,
             "title": "Ttl Minutes",
             "default": 30
+          },
+          "demo_session": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Demo Session"
           }
         },
         "type": "object",
@@ -4317,6 +4341,28 @@
             ],
             "title": "Menit",
             "description": "Durasi sesi dalam menit; kosong = nilai bawaan server."
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "replay",
+                  "realtime"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode",
+            "description": "Mode dataset: `replay` (jangkar kanon) atau `realtime` (waktu sesi)."
+          },
+          "replace": {
+            "type": "boolean",
+            "title": "Replace",
+            "description": "Tutup sesi berjalan dan buka sesi baru dengan mode yang diminta.",
+            "default": false
           }
         },
         "type": "object",
@@ -4656,10 +4702,38 @@
             "type": "boolean",
             "title": "Force",
             "default": false
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "replay",
+                  "realtime"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "demo_session": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Demo Session"
           }
         },
         "type": "object",
-        "title": "SeedRequest"
+        "title": "SeedRequest",
+        "description": "Permintaan muat kasus demo.\n\n`mode` (Fase 2 MG) adalah CARA KERJA sesi: `replay` memakai jangkar kanon\nhistoris, `realtime` memakai waktu sesi dibuka. Default `replay` menjaga\nkompatibilitas UI lama (yang belum mengirim mode). `Literal` dipakai supaya\nnilai asing ditolak 422 oleh kontrak request — bukan diabaikan diam-diam\nlalu jatuh ke mode bawaan.\n\n`demo_session` menunjuk sesi PEMILIK baris yang akan ditulis. Tanpa itu,\nsesi aktif dipakai (jalur lama). Sesi yang tidak ada dijawab 404; mode yang\nbertentangan dengan mode sesi dijawab 422."
       },
       "TimeseriesRequest": {
         "properties": {

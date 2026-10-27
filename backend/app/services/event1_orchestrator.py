@@ -95,6 +95,7 @@ async def _run_event1(
     verifier_bedrock,
     safety_status_override: str | None,
     ttl_minutes: int,
+    demo_session_id: uuid.UUID | None = None,
 ) -> dict:
     engine = create_engine(settings.database_url)
     maker = create_session_maker(engine)
@@ -230,6 +231,10 @@ async def _run_event1(
                 if chosen["candidate"].get("supplier_id")
                 else None
             ),
+            # Fase 2 MG: kepemilikan baris eksplisit. Tanpa ini keputusan hasil
+            # analisis hanya "milik sesi yang kebetulan aktif" — dan begitu sesi
+            # lain dibuka, baris ini tidak bisa lagi dibedakan pemiliknya.
+            demo_session_id=demo_session_id,
         )
         session.add(decision)
         await session.flush()
@@ -412,8 +417,14 @@ def run_event1(
     verifier_bedrock=None,
     safety_status_override: str | None = None,
     ttl_minutes: int = DEFAULT_TTL_MINUTES,
+    demo_session_id: uuid.UUID | None = None,
 ) -> dict:
-    """Jalankan Event 1 penuh; sync wrapper di atas sesi async."""
+    """Jalankan Event 1 penuh; sync wrapper di atas sesi async.
+
+    `demo_session_id` (Fase 2 MG) = sesi PEMILIK keputusan yang lahir di sini.
+    Diteruskan apa adanya: pemanggil yang menentukan sesi, bukan penjaga
+    `before_flush` yang menebaknya dari sesi aktif.
+    """
     return asyncio.run(
         _run_event1(
             commodity=commodity,
@@ -421,5 +432,6 @@ def run_event1(
             verifier_bedrock=verifier_bedrock,
             safety_status_override=safety_status_override,
             ttl_minutes=ttl_minutes,
+            demo_session_id=demo_session_id,
         )
     )

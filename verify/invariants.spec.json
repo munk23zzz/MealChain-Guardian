@@ -177,7 +177,8 @@
       {
         "name": "migrasi alembic head",
         "sql": "SELECT version_num FROM alembic_version",
-        "expect": "039_agent_trace_parent_run_id"
+        "expect": "042_ledger_append_only",
+        "_note": "Dipin ke head repo. 040 (sesi/mode Fase 2), 041 (profil komoditas Fase 3), dan 042 (ledger append-only Fase 11) masuk sesudah 039; pin lama 039 sudah basi dan membuat gerbang FAIL pada DB yang benar."
       },
       {
         "name": "kolom agent_traces.parent_run_id ada (migrasi 039)",

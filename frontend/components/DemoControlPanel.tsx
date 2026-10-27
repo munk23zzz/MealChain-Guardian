@@ -27,6 +27,7 @@ import {
   fetchDemoAgentLastRun,
   fetchDemoDataStatus,
   fetchDemoSession,
+  labelModeSesi,
   rebuildDemoTemplate,
   refreshDemoToToday,
   runDemoAgent,
@@ -34,9 +35,12 @@ import {
 } from "../lib/api";
 import {
   formatSisa,
+  jangkarSesi,
   keadaanSesi,
+  modeSesi,
   pesanSesi,
   peringatanWaktu,
+  ringkasSesi,
   sisaDetik,
   type StatusSesiDemo,
 } from "../lib/demo-session";
@@ -420,7 +424,10 @@ export default function DemoControlPanel({
       // data, dan menyalakan jendela waktu. Tanpa mode sesi, perilakunya tetap
       // seperti dulu (POST /demo/refresh) supaya pengembangan tidak berubah.
       if (sesi?.enforced) {
-        const r = await startDemoSession(token);
+        // Fase 2 MG: tombol ini memulai sesi REPLAY — jangkar kanon 8 Okt yang
+        // bisa direproduksi. Mode dikirim eksplisit; tombol realtime datang
+        // bersama dua tombol Demo Control (Fase 10).
+        const r = await startDemoSession(token, undefined, { mode: "replay" });
         setSesi(r as StatusSesiDemo);
         setTickSesi(0);
         if (r?.created) {
@@ -502,7 +509,11 @@ export default function DemoControlPanel({
     setBusy("agent");
     setPesan(null);
     try {
-      await runDemoAgent(token, komoditas ? { commodity: komoditas } : {});
+      await runDemoAgent(token, {
+        commodity: komoditas || undefined,
+        // Fase 2 MG: analisis dijalankan ATAS SESI yang sedang dipilih panel.
+        demoSession: sesi?.session_id ?? undefined,
+      });
       // Sumber kebenaran blok bukti adalah DB, bukan respons tombol di atas.
       await muatBukti();
       await muatStatus();
@@ -515,6 +526,9 @@ export default function DemoControlPanel({
   }
 
   const adaBukti = Boolean(bukti?.found && bukti?.decision_id);
+  // Satu ringkasan untuk seluruh blok sesi: mode, jangkar, versi dataset, dan
+  // label simulasi dihitung di `lib/demo-session.ts` (satu sumber format).
+  const ringkasan = ringkasSesi(sesi);
 
   return (
     <section className="demo-control-section" aria-label="Demo Control">
@@ -543,6 +557,32 @@ export default function DemoControlPanel({
               <p className="dc-session-count" role="timer" aria-live="off">
                 {formatSisa(sisaSekarang)}
               </p>
+            )}
+            {/* Fase 2 MG: mode + jangkar ditampilkan APA ADANYA dari sesi.
+                Tanpa ini operator tidak bisa membedakan "data kanon 8 Okt"
+                dari "sesi yang baru dibuka hari ini" — dua dataset berbeda
+                yang angkanya tidak boleh dibandingkan diam-diam. */}
+            {sesi.active && (
+              <div className="dc-session-dataset">
+                <p className="dc-session-mode" data-testid="demo-session-mode">
+                  Mode: <strong>{labelModeSesi(ringkasan.mode)}</strong>
+                  {ringkasan.anchor ? <> · Jangkar: {ringkasan.anchor}</> : null}
+                  {ringkasan.datasetVersion ? (
+                    <>
+                      {" "}
+                      · Dataset: <code>{ringkasan.datasetVersion}</code>
+                    </>
+                  ) : null}
+                </p>
+                {ringkasan.baris && (
+                  <p className="dc-session-summary">{ringkasan.baris}</p>
+                )}
+                {/* Label jujur: angka suhu pada dataset demo dibangun ulang
+                    oleh penyemai, bukan bacaan sensor. */}
+                <p className="dc-session-sim">
+                  Dataset demo memakai suhu simulasi, bukan sensor aktif.
+                </p>
+              </div>
             )}
             {sesi.active && peringatanWaktu(sisaSekarang) && (
               <p className="dc-session-warn">{peringatanWaktu(sisaSekarang)}</p>

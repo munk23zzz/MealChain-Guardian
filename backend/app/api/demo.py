@@ -27,6 +27,7 @@ freshness 0,90). Tidak ada auto-approve — loop manusia tetap wajib.
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
@@ -93,7 +94,22 @@ DEMO_CASES = (
 
 
 class SeedRequest(BaseModel):
+    """Permintaan muat kasus demo.
+
+    `mode` (Fase 2 MG) adalah CARA KERJA sesi: `replay` memakai jangkar kanon
+    historis, `realtime` memakai waktu sesi dibuka. Default `replay` menjaga
+    kompatibilitas UI lama (yang belum mengirim mode). `Literal` dipakai supaya
+    nilai asing ditolak 422 oleh kontrak request — bukan diabaikan diam-diam
+    lalu jatuh ke mode bawaan.
+
+    `demo_session` menunjuk sesi PEMILIK baris yang akan ditulis. Tanpa itu,
+    sesi aktif dipakai (jalur lama). Sesi yang tidak ada dijawab 404; mode yang
+    bertentangan dengan mode sesi dijawab 422.
+    """
+
     force: bool = False
+    mode: Literal["replay", "realtime"] | None = None
+    demo_session: uuid.UUID | None = None
 
 
 class Event1Request(BaseModel):
@@ -107,10 +123,33 @@ class Event1Request(BaseModel):
     commodity: str
     target_location: str
     ttl_minutes: int = Field(default=30, ge=1, le=1440)
+    #: Fase 2 MG: sesi PEMILIK keputusan yang lahir dari analisis ini. Tanpa
+    #: kolom ini klien tidak punya cara menyebut sesi, dan keputusan hasil
+    #: analisis hanya dimiliki "sesi yang kebetulan aktif".
+    demo_session: uuid.UUID | None = None
 
 
 def _loc_map(locations) -> dict:
     return {loc.name: loc.id for loc in locations}
+
+
+async def _sesi_pemilik_analisis(db: AsyncSession, demo_session: uuid.UUID | None):
+    """Sesi pemilik untuk analisis yang diminta klien (Fase 2 MG).
+
+    `None` = klien tidak menyebut sesi (jalur lama: penjaga `before_flush` yang
+    menstempel dari sesi aktif). Sesi yang diminta tetapi tidak ada dijawab 404 —
+    bukan diam-diam memakai sesi lain.
+    """
+    if demo_session is None:
+        return None
+    from app.services import demo_ownership
+
+    try:
+        return await demo_ownership.sesi_pemilik(db, demo_session=demo_session)
+    except demo_ownership.SesiTidakDitemukanError:
+        raise HTTPException(
+            status_code=404, detail=f"sesi demo {demo_session} tidak ditemukan"
+        ) from None
 
 
 async def _target_lokasi(db: AsyncSession, user: User) -> Location:
@@ -329,6 +368,7 @@ def _decision(
     verifier_note=None,
     verified_by=None,
     supplier_id=None,
+    demo_session_id=None,
 ) -> Decision:
     return Decision(
         # rejection-loop-kuota = siklus penolakan pada PENGADAAN dari pemasok,
@@ -363,10 +403,21 @@ def _decision(
         safe_delivered_cost=sdc,
         cost_breakdown=None,
         expires_at=datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes),
+        # Fase 2 MG: kepemilikan baris ditentukan PEMANGGIL (sesi pemilik),
+        # bukan `before_flush` dari "sesi aktif". Tanpa ini baris yang lahir di
+        # seeder (mis. `rejected`) tetap milik sesi yang kebetulan aktif, lalu
+        # menyemai sesi kedua menstempel ulang baris sesi pertama.
+        demo_session_id=demo_session_id,
     )
 
 
-async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> dict:
+async def _seed_demo_cases(
+    db: AsyncSession,
+    force: bool,
+    target: Location,
+    *,
+    demo_session_id: uuid.UUID | None = None,
+) -> dict:
     """Badan `POST /demo/seed` — dipakai juga oleh `/demo/refresh`.
 
     Dipisah sebagai fungsi supaya "Segarkan ke hari ini" bisa menjalankan
@@ -378,14 +429,25 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
     yang bisa ia setujui; sebelumnya ia menerima empat kartu Jakarta yang
     approve-nya pasti 403 (scope). Idempotensi juga per kota: `force=true`
     hanya menghapus baris demo kota pemanggil.
+
+    `demo_session_id` (Fase 2 MG) = PEMILIK baris yang ditulis. Dua akibatnya:
+
+    - semua keputusan yang lahir di sini (termasuk yang langsung `rejected`)
+      membawa sesi itu, bukan sesi yang kebetulan aktif;
+    - `force=true` hanya menghapus ulang baris MILIK SESI ITU. Tanpa batas ini,
+      menyemai sesi kedua menghapus kasus sesi pertama (dua sesi saling
+      menimpa), dan reset sesi pertama menghapus data sesi kedua.
+      Tanpa `demo_session_id` (jalur lama/seeder template) perilaku lama
+      dipertahankan: hapus ulang per kota.
     """
+    filter_hapus = [
+        Decision.demo_case.in_(DEMO_CASES),
+        Decision.target_location_id == target.id,
+    ]
+    if demo_session_id is not None:
+        filter_hapus.append(Decision.demo_session_id == demo_session_id)
     existing = (
-        await db.execute(
-            select(Decision).where(
-                Decision.demo_case.in_(DEMO_CASES),
-                Decision.target_location_id == target.id,
-            )
-        )
+        await db.execute(select(Decision).where(*filter_hapus))
     ).scalars().all()
     if existing and not force:
         return {
@@ -395,14 +457,9 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
             "message": "Kasus demo sudah ada — pakai force=true untuk reset.",
         }
     if force and existing:
-        # Hanya baris demo (demo_case NOT NULL) kota ini yang dihapus.
+        # Hanya baris demo MILIK SESI INI (dan kota ini) yang dihapus.
         ids = [d.id for d in existing]
-        await db.execute(
-            delete(Decision).where(
-                Decision.demo_case.in_(DEMO_CASES),
-                Decision.target_location_id == target.id,
-            )
-        )
+        await db.execute(delete(Decision).where(*filter_hapus))
         await db.flush()
         # D-02: blok ledger tidak punya FK ke `decisions`, jadi keputusan yang
         # sudah berblok harus "diarsipkan" dengan menaikkan generasi. Tanpa ini
@@ -510,8 +567,12 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
     sekarang = datetime.now(timezone.utc)
     sup_telur_kasus = await _pemasok_kasus(telur, target)
 
+    def _dec(*args, **kwargs) -> Decision:
+        """`_decision` + sesi PEMILIK: satu tempat, tidak ada yang terlewat."""
+        return _decision(*args, demo_session_id=demo_session_id, **kwargs)
+
     # ---- Kasus 1: rejection-loop-kuota (v1 ditolak → v2 ditolak → v3 fresh)
-    v1 = _decision(
+    v1 = _dec(
         "rejection-loop-kuota", 1, "rejected",
         _sumber(("Cianjur", "Bogor", "Surabaya")), target.id, telur, "600", "16206000.00",
         supplier_id=sup_telur_kasus,
@@ -555,7 +616,7 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
             ),
          "learning_note": "Iterasi berikut: skema bertahap 300 kg + 300 kg."})
 
-    v2 = _decision(
+    v2 = _dec(
         "rejection-loop-kuota", 2, "rejected",
         _sumber(("Cianjur", "Bogor", "Surabaya")), target.id, telur, "600", "16206000.00",
         supplier_id=sup_telur_kasus,
@@ -591,7 +652,7 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
         {"parent_rejection_reason": "Harga per kg naik 12% dari referensi — negosiasi ulang dulu.",
          "learning_note": "Iterasi berikut: skema bertahap 2×300 kg dengan harga terkunci."})
 
-    v3 = _decision(
+    v3 = _dec(
         "rejection-loop-kuota", 3, "pending_approval",
         _sumber(("Cianjur", "Bogor", "Surabaya")), target.id, telur, "600", "16206000.00",
         supplier_id=sup_telur_kasus,
@@ -614,7 +675,7 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
         {"sdc": 16206000, "learning_applied": ["kuota", "harga"]})
 
     # ---- Kasus 2: shortage-darurat (TTL pendek — drama safety window)
-    s1 = _decision(
+    s1 = _dec(
         "shortage-darurat", 1, "pending_approval",
         _sumber(("Bogor", "Cianjur", "Surabaya")), target.id, telur, "780", "14787096.28",
         ttl_minutes=120,  # drama tetap di trace (safety window 30 mnt);
@@ -637,7 +698,7 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
         {"sdc": 14787096.28, "urgency": "safety_window"})
 
     # ---- Kasus 3: supplier-janggal (verifier FLAGGED — anti-fraud)
-    j1 = _decision(
+    j1 = _dec(
         "supplier-janggal", 1, "verifier_flagged",
         _sumber(("Cianjur", "Bogor", "Surabaya")), target.id, telur, "600", "9200000.00",
         ttl_minutes=480,  # demo-day guard (Roy)
@@ -674,7 +735,7 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
          "reason": "Harga supplier janggal — 40% di bawah referensi; minta dokumen pendukung."})
 
     # ---- Kasus 4: gangguan-logistik (v1 ditolak → v2 rute alternatif)
-    g1 = _decision(
+    g1 = _dec(
         "gangguan-logistik", 1, "rejected",
         _sumber(("Bogor", "Cianjur", "Surabaya")), target.id, telur, "600", "16206000.00",
         ttl_minutes=-45,
@@ -714,7 +775,7 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
             ),
          "learning_note": "Iterasi berikut: sumber alternatif Cianjur."})
 
-    g2 = _decision(
+    g2 = _dec(
         "gangguan-logistik", 2, "pending_approval",
         _sumber(("Cianjur", "Bogor", "Surabaya")), target.id, telur, "600", "16206000.00",
         supplier_id=sup_telur_kasus,
@@ -790,9 +851,43 @@ async def seed_demo(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
 ) -> dict:
-    """Muat 4 kasus skrip UNTUK KOTA PEMANGGIL. Idempoten per kota; `force=true`
-    hanya menghapus ulang baris demo kota itu."""
-    return await _seed_demo_cases(db, payload.force, await _target_lokasi(db, user))
+    """Muat 4 kasus skrip UNTUK KOTA PEMANGGIL. Idempoten per sesi+kota.
+
+    Kepemilikan (Fase 2 MG): semua baris yang lahir dari permintaan ini membawa
+    `demo_session_id` sesi PEMILIK — sesi yang diminta klien, atau sesi aktif
+    bila klien tidak menyebutnya. `force=true` menghapus hanya baris milik sesi
+    itu, jadi menyemai sesi kedua tidak menghapus (dan reset sesi pertama tidak
+    memusnahkan) data sesi lain. Respons memuat blok `session` dengan bentuk
+    yang SAMA dengan `GET /demo/session`.
+    """
+    from app.services import demo_ownership
+
+    try:
+        pemilik = await demo_ownership.sesi_pemilik(
+            db, demo_session=payload.demo_session, mode=payload.mode
+        )
+    except demo_ownership.SesiTidakDitemukanError:
+        raise HTTPException(
+            status_code=404,
+            detail=f"sesi demo {payload.demo_session} tidak ditemukan",
+        ) from None
+    except demo_ownership.ModeBertentanganError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+    if pemilik is not None:
+        await demo_ownership.pastikan_identitas(pemilik)
+
+    target = await _target_lokasi(db, user)
+    hasil = await _seed_demo_cases(
+        db,
+        payload.force,
+        target,
+        demo_session_id=pemilik.id if pemilik is not None else None,
+    )
+    await db.commit()
+    if pemilik is not None:
+        await db.refresh(pemilik)
+    return {**hasil, "session": demo_ownership.blok_sesi(pemilik)}
 
 
 # --------------------------------------------------------------------------
@@ -1097,15 +1192,20 @@ async def run_demo_event1(
         )
     assert_in_scope(user, location.id, what="lokasi tujuan")
 
+    pemilik = await _sesi_pemilik_analisis(db, payload.demo_session)
+
+    def _jalankan_event1() -> dict:
+        opsi: dict = {"ttl_minutes": payload.ttl_minutes}
+        # Fase 2 MG: sesi pemilik diteruskan hanya bila diminta, supaya jalur
+        # lama (tanpa sesi) tetap memakai tanda tangan yang sama.
+        if pemilik is not None:
+            opsi["demo_session_id"] = pemilik.id
+        return run_event1(payload.commodity, payload.target_location, **opsi)
+
     try:
         # `run_event1` sinkron (membuka sesi + loop-nya sendiri) → dijalankan di
         # worker thread supaya tidak menabrak event loop request.
-        outcome = await run_in_threadpool(
-            run_event1,
-            payload.commodity,
-            payload.target_location,
-            ttl_minutes=payload.ttl_minutes,
-        )
+        outcome = await run_in_threadpool(_jalankan_event1)
     except ValueError as exc:
         # Termasuk "tidak ada kandidat eligible untuk Event 1": keadaan data,
         # bukan kerusakan server.
@@ -1309,6 +1409,8 @@ class AgentRunRequest(BaseModel):
 
     commodity: str = DEFAULT_AGENT_COMMODITY
     ttl_minutes: int = Field(default=30, ge=1, le=1440)
+    #: Fase 2 MG: sesi pemilik keputusan (lihat `Event1Request.demo_session`).
+    demo_session: uuid.UUID | None = None
 
 
 async def _lokasi_akun(db: AsyncSession, user: User) -> Location:
@@ -1343,21 +1445,31 @@ async def run_demo_agent(
     """
     isi = payload or AgentRunRequest()
     lokasi = await _lokasi_akun(db, user)
+    pemilik = await _sesi_pemilik_analisis(db, isi.demo_session)
+
+    def _jalankan_pengadaan() -> dict:
+        opsi: dict = {"ttl_minutes": isi.ttl_minutes}
+        # Fase 2 MG: keputusan putaran ini milik sesi yang diminta klien.
+        if pemilik is not None:
+            opsi["demo_session_id"] = pemilik.id
+        return run_supplier_procurement(isi.commodity, lokasi.name, **opsi)
+
     try:
         # Sejak 2026-10-19 panel ini menilai PEMASOK yang memasok SPPG akun
         # sendiri (bukan surplus SPPG lain): lihat supplier_procurement.py.
-        outcome = await run_in_threadpool(
-            run_supplier_procurement,
-            isi.commodity,
-            lokasi.name,
-            ttl_minutes=isi.ttl_minutes,
-        )
+        outcome = await run_in_threadpool(_jalankan_pengadaan)
     except ValueError as exc:
         # Tidak ada kandidat eligible = keadaan data, bukan kerusakan server.
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     outcome["commodity"] = isi.commodity
     outcome["target_location"] = lokasi.name
+    #: Fase 10 MG: sesi pemilik putaran ini dikembalikan APA ADANYA supaya UI
+    #: (dan Joule) bisa menyebut mode serta jangkar dataset yang dipakai —
+    #: bukan menebak dari "sesi terbaru". `None` = putaran tanpa sesi eksplisit.
+    from app.services.demo_ownership import blok_sesi
+
+    outcome["demo_session"] = blok_sesi(pemilik)
     outcome["agent_review"] = await _jalankan_agent_review(db, outcome, user=user)
     return outcome
 
