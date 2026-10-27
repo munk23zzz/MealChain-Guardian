@@ -4,6 +4,12 @@
 import { metodeMenulis, segarkanSetelahTulis } from "./refresh";
 import { balancePath } from "./balance-url";
 
+// Basis URL backend. `??`, BUKAN `||`: nilai kosong ("") adalah konfigurasi
+// yang SENGAJA dipakai `docker-compose.override.yml` untuk mode proxy —
+// request menjadi path relatif (`/decisions`) dan `next.config.js` meneruskannya
+// ke kontainer `backend`. Dengan `||`, "" dianggap "tidak diset" dan UI memanggil
+// http://localhost:8000 langsung dari origin localhost:3010 → diblokir CORS
+// (terukur 27 Okt 2026: login demo tidak mengisi sandi, semua panel "memuat…").
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 /** Galat HTTP backend yang membawa status. Pemanggil bisa membedakan 401 (sesi
@@ -220,6 +226,41 @@ export async function verifyAction(decisionId: string, token: string) {
     },
     body: JSON.stringify({ decision_id: decisionId }),
  });
+}
+
+// GET /decisions/{id}/packet — SATU read model keputusan (Fase 6 butir 4).
+// Klien TIDAK merakit ulang evaluasi batch: status, alasan, biaya, dan tenggat
+// datang dari server yang memakai evaluator yang sama dengan gerbang dispatch.
+export async function fetchDecisionPacket(decisionId: string, token: string) {
+  return request(`/decisions/${decisionId}/packet`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// POST /decisions/{id}/review — penerimaan manusia atas bukti batch (Fase 6
+// butir 3 & 5). Body HANYA memuat bukti + alasan; identitas reviewer dan waktu
+// dicatat server (klien tidak boleh mengirimkannya).
+export type ReviewPayload = {
+  batch_id: string;
+  reason: string;
+  evidence_refs: string[];
+  temperature_samples: { timestamp: string; temperature_c: number }[];
+};
+
+export async function reviewDecision(
+  decisionId: string,
+  payload: ReviewPayload,
+  token: string
+) {
+  return request(`/decisions/${decisionId}/review`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function reproposeAction(decisionId: string, token: string) {
@@ -668,20 +709,26 @@ export async function runEvent1(
   commodity: string,
   targetLocation: string,
   token: string,
-  ttlMinutes = 30
+  ttlMinutes = 30,
+  demoSessionId?: string | null
 ) {
+  const payload: Record<string, unknown> = {
+    commodity,
+    target_location: targetLocation,
+    ttl_minutes: ttlMinutes,
+  };
+  // Fase 10 MG: putaran penuh yang dijalankan operator atas sesi demo harus
+  // menempelkan keputusannya ke sesi ITU, bukan ke sesi aktif yang mungkin
+  // sudah diganti operator lain di tab lain.
+  if (demoSessionId) payload.demo_session = demoSessionId;
   return request("/demo/event1", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      commodity,
-      target_location: targetLocation,
-      ttl_minutes: ttlMinutes,
-    }),
- });
+    body: JSON.stringify(payload),
+  });
 }
 
 // --- Ops Console (interaksi sebelum hasil — arah Roy 2026-10-07) ---
@@ -698,7 +745,16 @@ export async function fetchBalance(
  });
 }
 
-export async function runAnalysis(token: string, commodity?: string) {
+export async function runAnalysis(
+  token: string,
+  commodity?: string,
+  demoSessionId?: string | null
+) {
+  const payload: Record<string, unknown> = { commodity: commodity ?? null };
+  // Fase 10 MG: analisis yang dijalankan atas satu sesi demo harus MENYEBUT
+  // sesi itu. Tanpa ini balasannya tidak bisa dibedakan dari analisis
+  // operasional, dan UI menampilkan campuran dua dataset.
+  if (demoSessionId) payload.demo_session = demoSessionId;
   return request("/balance/analyze", {
     method: "POST",
     headers: {
@@ -707,8 +763,8 @@ export async function runAnalysis(token: string, commodity?: string) {
     },
     // Ruling S4-05 p10: kirim komoditas panel agar pipeline difilter
     // (proposal mengikuti komoditas yang dianalisis, bukan rank-1 global).
-    body: JSON.stringify({ commodity: commodity ?? null }),
- });
+    body: JSON.stringify(payload),
+  });
 }
 
 // POST /decisions — snapshot rekomendasi dipersist (status "proposed").
@@ -1031,4 +1087,23 @@ export async function fetchDemoAgentCommodities(token: string) {
 /** `GET /demo/agent/last-run` — bukti putaran agent terakhir, dibaca dari DB. */
 export async function fetchDemoAgentLastRun(token: string) {
   return request("/demo/agent/last-run", { headers: authHeaders(token) });
+}
+
+/**
+ * `GET /procurement/summary` — PO terbit, keputusan dieksekusi (jejak ACT), dan
+ * batch yang berangkat pada satu periode. Dipakai tile Overview; periode
+ * dikirim sebagai KUNCI (`today|7d|1bulan`) karena backend yang menghitung
+ * rentangnya dalam hari kalender Asia/Jakarta — menghitung tanggal di klien
+ * membuat "hari ini" bergeser 7 jam dan berbeda antar layar.
+ */
+export async function fetchProcurementSummary(
+  periode: string,
+  token: string,
+  locationId?: string
+) {
+  const params = new URLSearchParams({ periode });
+  if (locationId) params.set("location_id", locationId);
+  return request(`/procurement/summary?${params.toString()}`, {
+    headers: authHeaders(token),
+  });
 }

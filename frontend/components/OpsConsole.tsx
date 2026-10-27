@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import StatusBadge from "./StatusBadge";
 import { kodeWilayah } from "../lib/wilayah";
 import Event2Panel from "./Event2Panel";
+import HeldCandidates from "./HeldCandidates";
 import { formatIDR } from "../lib/auth";
 import {
   fetchBalance,
@@ -338,7 +339,8 @@ export default function OpsConsole({
           <p className="ops-summary">
             Agent menemukan <strong>{sum.candidates_total} kandidat</strong> —{" "}
             {sum.eligible} layak, {sum.flagged_price} kandidat harga janggal
-            (butuh penelaahan manusia).
+            (butuh penelaahan manusia)
+            {sum.held_total ? `, ${sum.held_total} ditahan gate bukti/keamanan` : ""}.
           </p>
           <div className="ops-candidates">
             {recs.map((r: any) => {
@@ -379,6 +381,9 @@ export default function OpsConsole({
               );
             })}
           </div>
+          {/* Fase 6: kandidat yang tertahan gate TETAP terlihat, dengan alasan
+              dan langkah berikutnya — bukan hilang dari layar. */}
+          <HeldCandidates held={analysis?.held} />
         </>
       )}
 

@@ -31,9 +31,40 @@ const BLOCKER_ID: Record<string, string> = {
     "persetujuan belum lengkap — masih ada kelompok peran yang belum menyetujui",
   "safety revalidation gagal": "pemeriksaan ulang keamanan gagal",
   "batch sumber FAIL": "batch sumber gagal pemeriksaan keamanan",
+  // 409 /actions/execute dari `supplier_eligibility.resolve_binding`. Dulu
+  // kalimat ini muncul MENTAH di popup aksi ("binding batch/supplier berubah")
+  // tanpa menyebut batch mana atau apa yang harus dilakukan penyetuju.
+  "binding batch/supplier berubah":
+    "batch/pemasok yang terikat tidak lagi cocok dengan keputusan — ajukan keputusan baru",
+  "binding ambigu; ajukan keputusan baru":
+    "bukti alokasi ganda (lebih dari satu binding) — keputusan perlu diajukan ulang",
+  "binding tidak valid": "bukti alokasi tidak dapat dibaca — ajukan keputusan baru",
+  "supplier excluded pada SPPG penerima": "pemasok sedang dikecualikan untuk SPPG penerima",
+  "commodity decision tidak valid": "komoditas keputusan tidak valid",
+  "quantity decision tidak valid": "kuantitas keputusan tidak valid",
+  "unit price decision tidak valid": "harga satuan keputusan tidak valid",
+  "supplier untuk lokasi target tidak ditemukan": "pemasok untuk lokasi tujuan tidak ditemukan",
+  "decision tinjauan (review-only) — tidak untuk dieksekusi":
+    "ini temuan tinjauan, bukan perintah eksekusi",
+  "tidak ada verdict hasil audit": "belum ada hasil audit verifier",
   // 409 /supplier-eligibility mengirim kode ini di awal kalimat; di kartu
   // "Lanjutkan" (Decision & Evidence) kode mentah tidak boleh tampil.
   supplier_unknown: "pemasok tidak dikenal",
+  // Fase 6: kode alasan gerbang hierarki (`core/batch_eligibility`). Sebelum
+  // ini kode mentah seperti `temperature_evidence_incomplete` bisa muncul di
+  // UI kandidat tertahan.
+  temperature_evidence_incomplete: "bukti suhu belum lengkap",
+  evidence_missing: "bukti yang disyaratkan tidak tercatat",
+  safety_fail: "batch gagal uji keamanan pangan",
+  safety_pending: "batch belum diuji keamanannya",
+  safety_needs_verification: "batch menunggu verifikasi",
+  safety_status_unknown: "status keamanan batch tidak diketahui",
+  freshness_fail: "kesegaran batch di bawah syarat",
+  batch_expired: "masa layak batch sudah lewat",
+  expiry_unknown: "masa layak batch tidak tercatat",
+  expired_before_arrival: "batch kedaluwarsa sebelum tiba",
+  delivery_window_exceeded: "waktu tiba melewati tenggat kebutuhan",
+  quarantined: "batch masih dikarantina",
 };
 
 // Urutan penting: frasa terpanjang dulu supaya tidak terpotong oleh yang pendek.

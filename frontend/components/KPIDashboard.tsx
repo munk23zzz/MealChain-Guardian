@@ -324,6 +324,17 @@ export default function KPIDashboard({
             model, bukan catatan kejadian.
           </p>
         ) : null}
+        {/* Batas domain (Fase 6 butir 6): yang diukur adalah BAHAN untuk rencana
+            dan catatan pengiriman — bukan porsi yang sudah dimasak/disajikan.
+            Sistem ini tidak mencatat fakta memasak/distribusi per porsi, jadi
+            klaim "makanan tersaji" tidak boleh lahir dari angka di bawah. */}
+        <p className="kpi-group-note" data-testid="kpi-domain-note">
+          Angka di sini dihitung dari <strong>bahan untuk rencana</strong> dan
+          catatan pengiriman yang tercatat — bukan porsi yang sudah dimasak atau
+          disajikan. Metrik yang fakta memasak/distribusinya tidak ada
+          ditampilkan <em>no_data</em>, dan proyeksi bahan diberi label{" "}
+          <em>estimasi</em>.
+        </p>
       {/* Grid kartu metrik tiga kolom (pola halaman KPI acuan).
           Fase 4: tiap kartu = angka besar + bullet bar (hanya untuk metrik
           yang memang punya skala, lihat lib/kpi.ts) + arah perbaikan. */}

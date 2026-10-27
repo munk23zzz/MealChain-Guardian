@@ -62,6 +62,9 @@ import { downloadDossier } from "../lib/export";
 import FactList from "./FactList";
 import DecisionEconomics from "./DecisionEconomics";
 import GovernanceStatus from "./GovernanceStatus";
+import HumanReviewPanel from "./HumanReviewPanel";
+import BatchEvaluationTable from "./BatchEvaluationTable";
+import { fetchDecisionPacket } from "../lib/api";
 import { governanceView } from "../lib/governance";
 import { useEffect, useState } from "react";
 
@@ -195,6 +198,31 @@ export default function DecisionEvidence({
   // lipatan, sedang terbaca, atau sudah dilewati — jadi tidak ada dua pengamat
   // yang menjawab pertanyaan yang sama.
   const [zonaPosisi, setZonaPosisi] = useState<ZonaPosisi>("terlihat");
+
+  // Fase 6 butir 4: SATU paket keputusan untuk layar ini — evaluasi batch,
+  // biaya, bukti, dan review dibaca dari bentuk server, bukan dirakit ulang di
+  // klien. Gagal mengambil paket TIDAK dikarang: tabel cukup tidak tampil.
+  const [paket, setPaket] = useState<any>(null);
+  useEffect(() => {
+    const id = selected?.decision_id;
+    if (!id || !token) {
+      setPaket(null);
+      return;
+    }
+    let batal = false;
+    (async () => {
+      try {
+        const data = await fetchDecisionPacket(id, token);
+        if (!batal) setPaket(data);
+      } catch {
+        if (!batal) setPaket(null);
+      }
+    })();
+    return () => {
+      batal = true;
+    };
+  }, [selected?.decision_id, token]);
+
   useEffect(() => {
     if (!selected?.decision_id) return;
     let raf = 0;
@@ -525,7 +553,11 @@ export default function DecisionEvidence({
                 statusnya, bukan menggantung di bawah daftar fakta. */}
             <div className="evidence-decide-head">
               <h2>Governance &amp; persetujuan</h2>
+              {/* `key` per keputusan: pesan sukses ("Approval tercatat",
+                  "PO MC-… dibuat") adalah state komponen; tanpa key ia
+                  menempel ke keputusan BERIKUTNYA saat penyetuju berpindah. */}
               <DecisionActions
+                key={selected.decision_id}
                 decisionId={selected.decision_id}
                 role={role}
                 status={selected.status}
@@ -533,7 +565,19 @@ export default function DecisionEvidence({
                 summary={summary}
               />
             </div>
-            <GovernanceStatus view={governanceView(summary)} />
+            {/* Ringkasan belum tiba ≠ "Menunggu persetujuan". Dulu
+                `governanceView(null)` menghasilkan chip Menunggu padahal lencana
+                keputusan di atas sudah "disetujui" — layar menyatakan dua hal
+                berbeda tentang satu keputusan. Sekarang keadaan memuat disebut
+                apa adanya. */}
+            {adaRingkasan ? (
+              <GovernanceStatus view={governanceView(summary)} />
+            ) : (
+              <p className="evidence-note" role="status" data-testid="governance-pending">
+                Ringkasan persetujuan sedang dimuat — status keputusan di atas tetap
+                berasal dari data keputusan, bukan dari panel ini.
+              </p>
+            )}
             {/* "Alasan tertahan" & "Peran penyetuju" pindah ke GovernanceStatus
                 (satu fakta satu tempat); sisanya tetap dari approvalFacts. */}
             <FactList
@@ -582,6 +626,19 @@ export default function DecisionEvidence({
               <FactList rows={decisionFacts({ ...selected, summary }, clock)} collapseEmpty />
             </article>
             </div>
+            {/* Fase 6 butir 3 & 5: review manusia atas bukti batch. Panel ini
+                membaca paket keputusan server (bukan merakit ulang evaluasi) dan
+                hanya menambah BUKTI — status dihitung ulang server. */}
+            <article className="card">
+              <h2>Evaluasi batch</h2>
+              <BatchEvaluationTable evaluations={paket?.batch_evaluations} />
+            </article>
+            <HumanReviewPanel
+              decisionId={selected?.decision_id ?? null}
+              token={token}
+              role={role}
+              packet={paket}
+            />
           </section>
 
           {/* Form pengecualian pemasok (governance) tampil lebar penuh setelah bukti. */}
@@ -613,7 +670,11 @@ export default function DecisionEvidence({
 
             {/* Bukti tersimpan: daftar evidence + rantai Merkle + tanda tangan
                 ECDSA + tombol ekspor JSON/CSV. */}
-            <IntegrityPanel token={token ?? ""} decisionId={selected.decision_id} />
+            <IntegrityPanel
+              key={selected.decision_id}
+              token={token ?? ""}
+              decisionId={selected.decision_id}
+            />
           </section>
         </>
       )}

@@ -106,6 +106,49 @@ def _detect_payload(recommendations: list[dict], commodity: str,
     }
 
 
+async def _jam_evaluasi(session, demo_session_id) -> datetime | None:
+    """Jam evaluasi Event 1: sesi yang MEMINTA, atau sesi yang sedang aktif.
+
+    Dataset demo adalah dataset replay berjangkar kanon (2026-10-08 12:00).
+    Menilainya dengan jam dinding membuat bukti suhu yang sah terbaca basi dan
+    seluruh kandidat tertahan gate Fase 6 — di dalam aplikasi itu tidak terjadi
+    karena selalu ada sesi aktif, tetapi Event 1 yang dipanggil tanpa sesi harus
+    memakai jangkar yang sama dengan sesi aktif, bukan jam dinding.
+    Tanpa sesi sama sekali: `None` = jam dinding (perilaku lama, jujur).
+    """
+    try:
+        if demo_session_id is not None:
+            baris = (
+                await session.execute(
+                    select(DemoSession).where(DemoSession.id == demo_session_id)
+                )
+            ).scalar_one_or_none()
+            anchor = getattr(baris, "evaluation_anchor", None)
+            if anchor is not None:
+                return anchor
+        aktif = (
+            await session.execute(
+                select(DemoSession)
+                .where(DemoSession.status == "active")
+                .order_by(DemoSession.started_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        anchor = getattr(aktif, "evaluation_anchor", None)
+        if anchor is not None:
+            return anchor
+        # Tanpa sesi aktif: JAM DINDING (`None`), persis perilaku sebelum
+        # fungsi ini ada. Jangkar kanon TIDAK boleh dipakai sebagai cadangan:
+        # deret batch demo disemai relatif "sekarang" (panen -5..-34 jam),
+        # sehingga evaluasi pada 2026-10-08 12:00 tidak melihat satu batch pun
+        # (`Batch.harvested_at <= as_of` kosong) dan Event 1 mati dengan
+        # "tidak ada kandidat eligible" — terukur pada 9 tes
+        # `tests/test_event1_supervisor_flow.py` (27 Okt 2026).
+        return None
+    except Exception:  # noqa: BLE001 - jam evaluasi tidak boleh menggagalkan alur
+        return None
+
+
 async def _run_event1(
     *,
     commodity: str,
@@ -125,14 +168,7 @@ async def _run_event1(
         # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
         # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
         # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
-        as_of = None
-        if demo_session_id is not None:
-            baris = (
-                await session.execute(
-                    select(DemoSession).where(DemoSession.id == demo_session_id)
-                )
-            ).scalar_one_or_none()
-            as_of = getattr(baris, "evaluation_anchor", None)
+        as_of = await _jam_evaluasi(session, demo_session_id)
 
         # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
         # dengan POST /balance/recommend).

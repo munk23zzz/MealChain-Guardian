@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.auth import get_current_user
 from app.api.dependencies import get_db
@@ -35,6 +36,8 @@ from app.models import (
 )
 from app.services.approval_summary import build_approval_summary
 from app.services.audit_facts import build_audit_facts
+from app.services.decision_packet import build_decision_packet
+from app.services.decision_time import decision_now
 
 router = APIRouter()
 
@@ -510,11 +513,30 @@ async def get_approval_summary(
         db,
         row,
         viewer_id=user.id,
-        # Fase 9 MG poin 4: peran & lokasi pembaca dipakai server untuk
-        # `can_receive`/`can_quarantine`; klien tidak menghitungnya.
         viewer_role=user.role,
         viewer_location_id=user.location_id,
     )
+
+
+@router.get("/decisions/{decision_id}/packet")
+async def get_decision_packet(
+    decision_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Fase 6 butir 4: SATU paket bukti keputusan untuk semua tampilan.
+
+    Biaya, approval, trace, dan Joule membaca bentuk ini — bukan merakit ulang
+    evaluasi batch di klien. Cakupan baca sama dengan keputusan lain
+    (SPPG = lokasi tujuan; bgn_monitor read-only nasional).
+    """
+    row = (
+        await db.execute(select(Decision).where(Decision.id == decision_id))
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="decision tidak ditemukan")
+    await _assert_decision_readable(db, user, row)
+    return await build_decision_packet(db, row)
 
 
 @router.get("/decisions/{decision_id}/audit-facts")
@@ -549,7 +571,15 @@ async def get_decision(
     user: User = Depends(get_current_user),
 ):
     row = (
-        await db.execute(select(Decision).where(Decision.id == decision_id))
+        await db.execute(
+            select(Decision)
+            .where(Decision.id == decision_id)
+            # Fase 2 MG: RELASI sesi dimuat di sini, sekali, untuk satu baris.
+            # `Decision.demo_session` memakai `lazy="raise_on_sql"`; tanpa
+            # selectinload, `decision_now()` jatuh ke jam dinding dan jam
+            # evaluasi replay hilang dari halaman bukti.
+            .options(selectinload(Decision.demo_session))
+        )
     ).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="decision tidak ditemukan")
@@ -639,4 +669,12 @@ async def get_decision(
         "iteration": row.iteration or 1,
         "supersedes_id": str(row.supersedes_id) if row.supersedes_id else None,
         "demo_case": row.demo_case,
+        # Fase 2 MG: jam evaluasi yang dipakai keputusan ini + sesi pemiliknya.
+        # Dibaca dari relasi yang sudah dimuat (bukan lazy-load): replay selalu
+        # menjawab jangkar kanon, realtime menjawab jangkar sesi itu.
+        "demo_session_id": str(row.demo_session_id) if row.demo_session_id else None,
+        "session_mode": (
+            row.demo_session.mode if row.demo_session is not None else None
+        ),
+        "evaluation_anchor": decision_now(row).isoformat(),
     }

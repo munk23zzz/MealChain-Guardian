@@ -1,0 +1,578 @@
+{
+  "name": "mealchain-decision-evidence-write-flow (propose -> verify -> approve x2 -> execute, termasuk pengadaan source NULL)",
+  "artifact_dir": "verify-out-evidence-write",
+  "log_fail_patterns": [
+    "Traceback (most recent call last)",
+    "CRITICAL"
+  ],
+  "services": [
+    {
+      "name": "mutations stack",
+      "cwd": "..",
+      "start": "bash -lc \"export MUT_BACKEND_PORT=18001; docker compose -p mcg-mut -f verify/docker-compose.mutations.yml up -d --wait backend\"",
+      "oneshot": true,
+      "timeout": 480,
+      "port": 18001,
+      "port_timeout": 300,
+      "health": "http://127.0.0.1:18001/health",
+      "health_timeout": 120,
+      "health_retries": 12,
+      "logs_command": "docker logs mcg-mut-backend-1 --tail 300"
+    }
+  ],
+  "logins": {
+    "head_jkt": {
+      "as": "SPPG Jakarta head (pengusul + approver 1 + eksekutor)",
+      "url": "http://127.0.0.1:18001/auth/login",
+      "json": {
+        "email": "sppg.head@demo.local",
+        "password": "Demo#SPPG2026"
+      }
+    },
+    "nut_jkt": {
+      "as": "SPPG Jakarta nutritionist (approver 2)",
+      "url": "http://127.0.0.1:18001/auth/login",
+      "json": {
+        "email": "sppg.nutritionist@demo.local",
+        "password": "Demo#Nut2026"
+      }
+    }
+  },
+  "http": [
+    {
+      "name": "A1. POST /decisions (regional_balance) -> 201 proposed",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/decisions",
+      "as": "head_jkt",
+      "json": {
+        "decision_type": "regional_balance",
+        "recommendation": {
+          "candidate": {
+            "source_location": "Cianjur",
+            "destination_location": "Jakarta",
+            "commodity": "telur",
+            "quantity_kg": "600"
+          },
+          "safe_delivered_cost": "16206000",
+          "cost_breakdown": {
+            "purchase": "15720000"
+          }
+        }
+      },
+      "expect_status": 201,
+      "expect_keys": ["decision_id", "status", "valid"],
+      "expect_json": {
+        "status": "proposed",
+        "valid": true
+      },
+      "extract": "decision_id",
+      "store": "did",
+      "max_ms": 30000
+    },
+    {
+      "name": "A2. GET /decisions/{id} -> proposed, asal Cianjur tujuan Jakarta",
+      "method": "GET",
+      "url": "http://127.0.0.1:18001/decisions/{var:did}",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "status": "proposed",
+        "decision_type": "regional_balance",
+        "source_location": "Cianjur",
+        "target_location": "Jakarta"
+      },
+      "max_ms": 5000
+    },
+    {
+      "name": "A3. POST /actions/propose -> pending_approval, wajib 2 approval",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/propose",
+      "as": "head_jkt",
+      "json": {
+        "decision_id": "{var:did}",
+        "material_number": "MAT-TELUR"
+      },
+      "expect_status": 201,
+      "expect_json": {
+        "status": "pending_approval",
+        "verified": false,
+        "approval_requirement.min_approvals": 2
+      },
+      "extract": "approval_requirement.min_approvals",
+      "store": "min_approvals",
+      "max_ms": 10000
+    },
+    {
+      "name": "A4. POST /actions/verify tanpa provider -> UNAVAILABLE, recorded:false",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/verify",
+      "as": "head_jkt",
+      "json": {
+        "decision_id": "{var:did}"
+      },
+      "expect_status": 200,
+      "expect_json": {
+        "verdict": "UNAVAILABLE",
+        "recorded": false,
+        "verifier_note": "unavailable"
+      },
+      "max_ms": 20000
+    },
+    {
+      "name": "A5. POST /actions/execute sebelum verdict -> 409 belum terverifikasi",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/execute",
+      "as": "head_jkt",
+      "json": {
+        "decision_id": "{var:did}"
+      },
+      "expect_status": [409],
+      "expect_body_contains": "belum terverifikasi"
+    },
+    {
+      "name": "A6. POST /actions/approve sebelum verdict -> 409 belum diverifikasi",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/approve",
+      "as": "head_jkt",
+      "json": {
+        "decision_id": "{var:did}",
+        "approved": true
+      },
+      "expect_status": [409],
+      "expect_body_contains": "belum diverifikasi"
+    },
+    {
+      "name": "A7. POST /actions/approve #1 SPPG head Jakarta -> 200",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/approve",
+      "as": "head_jkt",
+      "json": {
+        "decision_id": "{var:did}",
+        "approved": true
+      },
+      "expect_status": 200,
+      "expect_json": {
+        "decision_status": "pending_approval"
+      },
+      "max_ms": 10000
+    },
+    {
+      "name": "A8. POST /actions/execute dengan 1 dari 2 approval -> 409",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/execute",
+      "as": "head_jkt",
+      "json": {
+        "decision_id": "{var:did}"
+      },
+      "expect_status": [409],
+      "expect_body_contains": "approval belum memenuhi requirement"
+    },
+    {
+      "name": "A9. POST /actions/approve #2 nutritionist Jakarta -> 200 approved",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/approve",
+      "as": "nut_jkt",
+      "json": {
+        "decision_id": "{var:did}",
+        "approved": true
+      },
+      "expect_status": 200,
+      "expect_json": {
+        "decision_status": "approved",
+        "approval_state.satisfied": true
+      },
+      "max_ms": 10000
+    },
+    {
+      "name": "A10. POST /actions/execute -> 200, PO mock MOCK terbit",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/execute",
+      "as": "head_jkt",
+      "json": {
+        "decision_id": "{var:did}"
+      },
+      "expect_status": 200,
+      "expect_keys": ["po_number", "data_source", "status"],
+      "expect_json": {
+        "data_source": "MOCK",
+        "status": "executed"
+      },
+      "extract": "po_number",
+      "store": "api_po",
+      "max_ms": 60000
+    },
+    {
+      "name": "A11. POST /actions/execute ulang -> 409 sudah dieksekusi",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/execute",
+      "as": "head_jkt",
+      "json": {
+        "decision_id": "{var:did}"
+      },
+      "expect_status": [409],
+      "expect_body_contains": "sudah dieksekusi"
+    },
+    {
+      "name": "A12. GET /decisions/{id}/chain -> audit chain terbaca",
+      "method": "GET",
+      "url": "http://127.0.0.1:18001/decisions/{var:did}/chain",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": ["anchor_id", "chain"],
+      "extract_len": "chain",
+      "store": "chain_len",
+      "max_ms": 10000
+    },
+
+    {
+      "name": "B1. POST /decisions (supplier_procurement, TANPA source_location) -> 201",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/decisions",
+      "as": "head_jkt",
+      "json": {
+        "decision_type": "supplier_procurement",
+        "recommendation": {
+          "candidate": {
+            "destination_location": "Jakarta",
+            "commodity": "telur",
+            "quantity_kg": "120"
+          },
+          "safe_delivered_cost": "3600000",
+          "cost_breakdown": {
+            "purchase": "3600000"
+          }
+        }
+      },
+      "expect_status": 201,
+      "expect_keys": ["decision_id", "status"],
+      "expect_json": {
+        "status": "proposed",
+        "valid": true
+      },
+      "extract": "decision_id",
+      "store": "did_b",
+      "max_ms": 30000
+    },
+    {
+      "name": "B2. GET /decisions/{id} -> supplier_procurement, source_location_id NULL, tujuan Jakarta",
+      "method": "GET",
+      "url": "http://127.0.0.1:18001/decisions/{var:did_b}",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "decision_type": "supplier_procurement",
+        "source_location_id": null,
+        "target_location": "Jakarta",
+        "commodity": "telur",
+        "status": "proposed"
+      },
+      "max_ms": 5000
+    },
+    {
+      "name": "B3. POST /actions/propose pengadaan -> pending_approval, 2 role",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/propose",
+      "as": "head_jkt",
+      "json": {
+        "decision_id": "{var:did_b}"
+      },
+      "expect_status": 201,
+      "expect_json": {
+        "status": "pending_approval",
+        "approval_requirement.min_approvals": 2
+      },
+      "max_ms": 10000
+    },
+    {
+      "name": "B4. POST /actions/verify pengadaan tanpa provider -> UNAVAILABLE, recorded:false",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/verify",
+      "as": "head_jkt",
+      "json": {
+        "decision_id": "{var:did_b}"
+      },
+      "expect_status": 200,
+      "expect_json": {
+        "verdict": "UNAVAILABLE",
+        "recorded": false
+      },
+      "max_ms": 20000
+    },
+    {
+      "name": "B5. POST /actions/approve #1 head Jakarta -> 200",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/approve",
+      "as": "head_jkt",
+      "json": {
+        "decision_id": "{var:did_b}",
+        "approved": true
+      },
+      "expect_status": 200,
+      "max_ms": 10000
+    },
+    {
+      "name": "B6. POST /actions/approve #2 nutritionist Jakarta -> 200 approved",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/approve",
+      "as": "nut_jkt",
+      "json": {
+        "decision_id": "{var:did_b}",
+        "approved": true
+      },
+      "expect_status": 200,
+      "expect_json": {
+        "decision_status": "approved"
+      },
+      "max_ms": 10000
+    },
+    {
+      "name": "B7. GET approval-summary pengadaan sehat -> can_execute TRUE (paritas read model)",
+      "method": "GET",
+      "url": "http://127.0.0.1:18001/decisions/{var:did_b}/approval-summary",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "can_execute": true,
+        "decision_type": "supplier_procurement",
+        "safety.blocked": false
+      },
+      "expect_body_absent": "binding batch/supplier berubah",
+      "extract": "can_execute",
+      "store": "can_execute_ok",
+      "max_ms": 10000
+    },
+    {
+      "name": "B8. GET approval-summary setelah batch pemasok dibuat FAIL -> can_execute FALSE + alasan safety",
+      "method": "GET",
+      "url": "http://127.0.0.1:18001/decisions/{var:did_b}/approval-summary",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "can_execute": false,
+        "safety.blocked": true
+      },
+      "expect_body_contains": "safety revalidation gagal",
+      "max_ms": 10000
+    },
+    {
+      "name": "B9. GET approval-summary setelah batch dipulihkan -> can_execute TRUE lagi",
+      "method": "GET",
+      "url": "http://127.0.0.1:18001/decisions/{var:did_b}/approval-summary",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "can_execute": true
+      },
+      "max_ms": 10000
+    },
+    {
+      "name": "B10. POST /actions/execute pengadaan (source NULL) -> 200 (dulu SELALU 409 'binding batch/supplier berubah')",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/execute",
+      "as": "head_jkt",
+      "json": {
+        "decision_id": "{var:did_b}"
+      },
+      "expect_status": 200,
+      "expect_keys": ["po_number", "data_source", "status"],
+      "expect_json": {
+        "data_source": "MOCK",
+        "status": "executed"
+      },
+      "expect_body_absent": "binding batch/supplier berubah",
+      "extract": "po_number",
+      "store": "api_po_proc",
+      "max_ms": 60000
+    },
+    {
+      "name": "B11. POST /actions/execute pengadaan ulang -> 409 sudah dieksekusi",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/execute",
+      "as": "head_jkt",
+      "json": {
+        "decision_id": "{var:did_b}"
+      },
+      "expect_status": [409],
+      "expect_body_contains": "sudah dieksekusi"
+    },
+
+    {
+      "name": "C1. execute pengadaan dengan binding batch di LOKASI LAIN -> 409",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/execute",
+      "as": "head_jkt",
+      "json": {
+        "decision_id": "11000000-0000-4000-8000-0000000000c1"
+      },
+      "expect_status": [409],
+      "expect_body_contains": "binding batch/supplier berubah"
+    },
+    {
+      "name": "C2. execute pengadaan dengan supplier binding BUKAN pemilik batch -> 409",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/execute",
+      "as": "head_jkt",
+      "json": {
+        "decision_id": "22000000-0000-4000-8000-0000000000c2"
+      },
+      "expect_status": [409],
+      "expect_body_contains": "binding batch/supplier berubah"
+    },
+    {
+      "name": "C3. execute keputusan NON-pengadaan dengan source_location_id NULL -> 409 (fail-closed)",
+      "method": "POST",
+      "url": "http://127.0.0.1:18001/actions/execute",
+      "as": "head_jkt",
+      "json": {
+        "decision_id": "33000000-0000-4000-8000-0000000000c3"
+      },
+      "expect_status": [409],
+      "expect_body_contains": "binding batch/supplier berubah"
+    }
+  ],
+  "sql_steps": [
+    {
+      "name": "A: ikat allocation_binding ke batch Cianjur/telur (meniru fixture tes repo)",
+      "after": "A3. POST /actions/propose -> pending_approval, wajib 2 approval",
+      "sql": "INSERT INTO decision_evidence (decision_id, evidence_type, payload) SELECT '{var:did}', 'human_inspection', jsonb_build_object('allocation_binding', true, 'supplier_id', b.supplier_id::text, 'batch_ids', jsonb_build_array(b.id::text)) FROM batches b JOIN commodities c ON c.id = b.commodity_id JOIN locations l ON l.id = b.location_id WHERE c.name = 'telur' AND l.name = 'Cianjur' AND b.origin = 'seed' ORDER BY b.id LIMIT 1"
+    },
+    {
+      "name": "A: catat verdict verifier (verified_by + consistent) — meniru fixture resmi, produksi butuh provider",
+      "after": "A6. POST /actions/approve sebelum verdict -> 409 belum diverifikasi",
+      "sql": "UPDATE decisions SET verified_by = 'gate-verifier-fixture', verifier_note = 'consistent' WHERE id = '{var:did}'"
+    },
+    {
+      "name": "B: supplier_id keputusan pengadaan = pemilik batch pemasok di SPPG tujuan (meniru orchestrator produksi)",
+      "after": "B1. POST /decisions (supplier_procurement, TANPA source_location) -> 201",
+      "sql": "UPDATE decisions d SET supplier_id = (SELECT b.supplier_id FROM batches b JOIN suppliers s ON s.id = b.supplier_id JOIN commodities c ON c.id = b.commodity_id JOIN locations l ON l.id = b.location_id WHERE l.name = 'Jakarta' AND c.name = 'telur' AND b.location_id = s.location_id AND b.safety_status = 'pass' AND b.usable_until > now() ORDER BY b.id LIMIT 1) WHERE d.id = '{var:did_b}'"
+    },
+    {
+      "name": "B: bukti pengadaan allocation_binding+procurement+batch_ids (persis payload persist_supplier_binding)",
+      "after": "B1. POST /decisions (supplier_procurement, TANPA source_location) -> 201",
+      "sql": "INSERT INTO decision_evidence (decision_id, evidence_type, payload, is_consistent) SELECT '{var:did_b}', 'human_inspection', jsonb_build_object('allocation_binding', true, 'procurement', true, 'supplier_id', d.supplier_id::text, 'target_location_id', d.target_location_id::text, 'batch_ids', jsonb_build_array(b.id::text)), true FROM decisions d, LATERAL (SELECT bb.id FROM batches bb JOIN suppliers s ON s.id = bb.supplier_id JOIN commodities c ON c.id = bb.commodity_id JOIN locations l ON l.id = bb.location_id WHERE l.name = 'Jakarta' AND c.name = 'telur' AND bb.location_id = s.location_id AND bb.supplier_id = d.supplier_id AND bb.safety_status = 'pass' AND bb.usable_until > now() ORDER BY bb.id LIMIT 1) b WHERE d.id = '{var:did_b}'"
+    },
+    {
+      "name": "B: catat verdict verifier pengadaan (setara fixture tes resmi)",
+      "after": "B4. POST /actions/verify pengadaan tanpa provider -> UNAVAILABLE, recorded:false",
+      "sql": "UPDATE decisions SET verified_by = 'gate-verifier-fixture', verifier_note = 'consistent' WHERE id = '{var:did_b}'"
+    },
+    {
+      "name": "B/D: batch pemasok terikat dibuat FAIL (menguji gerbang safety read model vs endpoint)",
+      "after": "B7. GET approval-summary pengadaan sehat -> can_execute TRUE (paritas read model)",
+      "sql": "UPDATE batches SET safety_status = 'fail' WHERE id = (SELECT (payload->'batch_ids'->>0)::uuid FROM decision_evidence WHERE decision_id = '{var:did_b}' AND payload->>'allocation_binding' = 'true')"
+    },
+    {
+      "name": "B/D: batch dipulihkan ke pass sebelum eksekusi",
+      "after": "B8. GET approval-summary setelah batch pemasok dibuat FAIL -> can_execute FALSE + alasan safety",
+      "sql": "UPDATE batches SET safety_status = 'pass' WHERE id = (SELECT (payload->'batch_ids'->>0)::uuid FROM decision_evidence WHERE decision_id = '{var:did_b}' AND payload->>'allocation_binding' = 'true')"
+    },
+    {
+      "name": "C1: siapkan pengadaan dengan binding batch milik pemasok di LOKASI LAIN (Cianjur)",
+      "after": "B11. POST /actions/execute pengadaan ulang -> 409 sudah dieksekusi",
+      "sql": "INSERT INTO decisions (id, decision_type, status, proposed_by, source_location_id, target_location_id, commodity_id, supplier_id, quantity_kg, safe_delivered_cost, expires_at, cost_breakdown, iteration, verified_by, verifier_note) SELECT '11000000-0000-4000-8000-0000000000c1', 'supplier_procurement', 'pending_approval', 'supervisor_agent', NULL, jl.id, b.commodity_id, b.supplier_id, 120, 3600000, now() + interval '45 minutes', jsonb_build_object('purchase', '3600000'), 1, 'gate-verifier-fixture', 'consistent' FROM batches b JOIN commodities c ON c.id = b.commodity_id JOIN locations l ON l.id = b.location_id, (SELECT id FROM locations WHERE name = 'Jakarta') jl WHERE l.name = 'Cianjur' AND c.name = 'telur' AND b.safety_status = 'pass' ORDER BY b.id LIMIT 1; INSERT INTO decision_evidence (decision_id, evidence_type, payload, is_consistent) SELECT '11000000-0000-4000-8000-0000000000c1', 'human_inspection', jsonb_build_object('allocation_binding', true, 'procurement', true, 'supplier_id', d.supplier_id::text, 'target_location_id', d.target_location_id::text, 'batch_ids', jsonb_build_array(b.id::text)), true FROM decisions d, LATERAL (SELECT bb.id FROM batches bb JOIN commodities c ON c.id = bb.commodity_id JOIN locations l ON l.id = bb.location_id WHERE l.name = 'Cianjur' AND c.name = 'telur' AND bb.safety_status = 'pass' ORDER BY bb.id LIMIT 1) b WHERE d.id = '11000000-0000-4000-8000-0000000000c1'; INSERT INTO approvals (decision_id, approved_by, approved, comment) SELECT '11000000-0000-4000-8000-0000000000c1', u.id, true, 'gate fixture' FROM users u WHERE u.email IN ('sppg.head@demo.local', 'sppg.nutritionist@demo.local')"
+    },
+    {
+      "name": "C2: siapkan pengadaan dengan supplier binding BUKAN pemilik batch",
+      "after": "B11. POST /actions/execute pengadaan ulang -> 409 sudah dieksekusi",
+      "sql": "INSERT INTO decisions (id, decision_type, status, proposed_by, source_location_id, target_location_id, commodity_id, supplier_id, quantity_kg, safe_delivered_cost, expires_at, cost_breakdown, iteration, verified_by, verifier_note) SELECT '22000000-0000-4000-8000-0000000000c2', 'supplier_procurement', 'pending_approval', 'supervisor_agent', NULL, jl.id, b.commodity_id, (SELECT s2.id FROM suppliers s2 JOIN batches b2 ON b2.supplier_id = s2.id JOIN commodities c2 ON c2.id = b2.commodity_id JOIN locations l2 ON l2.id = b2.location_id WHERE l2.name = 'Cianjur' AND c2.name = 'telur' ORDER BY b2.id LIMIT 1), 120, 3600000, now() + interval '45 minutes', jsonb_build_object('purchase', '3600000'), 1, 'gate-verifier-fixture', 'consistent' FROM batches b JOIN commodities c ON c.id = b.commodity_id JOIN locations l ON l.id = b.location_id, (SELECT id FROM locations WHERE name = 'Jakarta') jl WHERE l.name = 'Jakarta' AND c.name = 'telur' AND b.safety_status = 'pass' AND b.usable_until > now() ORDER BY b.id LIMIT 1; INSERT INTO decision_evidence (decision_id, evidence_type, payload, is_consistent) SELECT '22000000-0000-4000-8000-0000000000c2', 'human_inspection', jsonb_build_object('allocation_binding', true, 'procurement', true, 'supplier_id', d.supplier_id::text, 'target_location_id', d.target_location_id::text, 'batch_ids', jsonb_build_array(b.id::text)), true FROM decisions d, LATERAL (SELECT bb.id FROM batches bb JOIN commodities c ON c.id = bb.commodity_id JOIN locations l ON l.id = bb.location_id WHERE l.name = 'Jakarta' AND c.name = 'telur' AND bb.safety_status = 'pass' AND bb.usable_until > now() ORDER BY bb.id LIMIT 1) b WHERE d.id = '22000000-0000-4000-8000-0000000000c2'; INSERT INTO approvals (decision_id, approved_by, approved, comment) SELECT '22000000-0000-4000-8000-0000000000c2', u.id, true, 'gate fixture' FROM users u WHERE u.email IN ('sppg.head@demo.local', 'sppg.nutritionist@demo.local')"
+    },
+    {
+      "name": "C3: siapkan NON-pengadaan (regional_balance) dengan source_location_id NULL + binding batch Jakarta",
+      "after": "B11. POST /actions/execute pengadaan ulang -> 409 sudah dieksekusi",
+      "sql": "INSERT INTO decisions (id, decision_type, status, proposed_by, source_location_id, target_location_id, commodity_id, supplier_id, quantity_kg, safe_delivered_cost, expires_at, cost_breakdown, iteration, verified_by, verifier_note) SELECT '33000000-0000-4000-8000-0000000000c3', 'regional_balance', 'pending_approval', 'supervisor_agent', NULL, jl.id, b.commodity_id, b.supplier_id, 120, 3600000, now() + interval '45 minutes', jsonb_build_object('purchase', '3600000'), 1, 'gate-verifier-fixture', 'consistent' FROM batches b JOIN commodities c ON c.id = b.commodity_id JOIN locations l ON l.id = b.location_id, (SELECT id FROM locations WHERE name = 'Jakarta') jl WHERE l.name = 'Jakarta' AND c.name = 'telur' AND b.safety_status = 'pass' AND b.usable_until > now() ORDER BY b.id LIMIT 1; INSERT INTO decision_evidence (decision_id, evidence_type, payload, is_consistent) SELECT '33000000-0000-4000-8000-0000000000c3', 'human_inspection', jsonb_build_object('allocation_binding', true, 'supplier_id', d.supplier_id::text, 'batch_ids', jsonb_build_array(b.id::text)), true FROM decisions d, LATERAL (SELECT bb.id FROM batches bb JOIN commodities c ON c.id = bb.commodity_id JOIN locations l ON l.id = bb.location_id WHERE l.name = 'Jakarta' AND c.name = 'telur' AND bb.safety_status = 'pass' AND bb.usable_until > now() ORDER BY bb.id LIMIT 1) b WHERE d.id = '33000000-0000-4000-8000-0000000000c3'; INSERT INTO approvals (decision_id, approved_by, approved, comment) SELECT '33000000-0000-4000-8000-0000000000c3', u.id, true, 'gate fixture' FROM users u WHERE u.email IN ('sppg.head@demo.local', 'sppg.nutritionist@demo.local')"
+    }
+  ],
+  "db": {
+    "kind": "command",
+    "target": "postgres 18001/mcg-mut/mealchain (container mcg-mut-postgres-1)",
+    "run": "docker exec mcg-mut-postgres-1 psql -U mealchain -d mealchain -At -F \"|\" -c \"{sql}\"",
+    "checks": [
+      {
+        "name": "A: decisions.status = executed",
+        "sql": "SELECT status FROM decisions WHERE id = '{var:did}'",
+        "expect": "executed"
+      },
+      {
+        "name": "A: approvals tercatat = 2 (head + nutritionist)",
+        "sql": "SELECT count(*) FROM approvals WHERE decision_id = '{var:did}'",
+        "expect": 2,
+        "store": "db_approvals_a"
+      },
+      {
+        "name": "A: PO mock tepat 1 baris, status submitted",
+        "sql": "SELECT count(*) FROM sap_mock_purchase_orders WHERE decision_id = '{var:did}' AND status = 'submitted'",
+        "expect": 1
+      },
+      {
+        "name": "A: nomor PO dari baris DB",
+        "sql": "SELECT po_number FROM sap_mock_purchase_orders WHERE decision_id = '{var:did}'",
+        "store": "db_po_a",
+        "expect_rows": 1
+      },
+      {
+        "name": "B: decisions.status = executed (pengadaan)",
+        "sql": "SELECT status FROM decisions WHERE id = '{var:did_b}'",
+        "expect": "executed"
+      },
+      {
+        "name": "B: source_location_id tetap NULL setelah eksekusi (sisi asal pengadaan)",
+        "sql": "SELECT CASE WHEN source_location_id IS NULL THEN 'null' ELSE 'terisi' END FROM decisions WHERE id = '{var:did_b}'",
+        "expect": "null"
+      },
+      {
+        "name": "B: decisions.supplier_id == pemilik batch terikat",
+        "sql": "SELECT CASE WHEN d.supplier_id = b.supplier_id THEN 'sama' ELSE 'beda' END FROM decisions d JOIN batches b ON b.id = (SELECT (e.payload->'batch_ids'->>0)::uuid FROM decision_evidence e WHERE e.decision_id = d.id AND e.payload->>'allocation_binding' = 'true') WHERE d.id = '{var:did_b}'",
+        "expect": "sama"
+      },
+      {
+        "name": "B: bukti pengadaan tercatat (procurement=true)",
+        "sql": "SELECT payload->>'procurement' FROM decision_evidence WHERE decision_id = '{var:did_b}' AND payload->>'allocation_binding' = 'true'",
+        "expect": "true",
+        "expect_rows": 1
+      },
+      {
+        "name": "B: batch uji dipulihkan ke pass setelah pengujian safety",
+        "sql": "SELECT safety_status FROM batches WHERE id = (SELECT (payload->'batch_ids'->>0)::uuid FROM decision_evidence WHERE decision_id = '{var:did_b}' AND payload->>'allocation_binding' = 'true')",
+        "expect": "pass"
+      },
+      {
+        "name": "B: PO mock pengadaan tepat 1 baris submitted",
+        "sql": "SELECT count(*) FROM sap_mock_purchase_orders WHERE decision_id = '{var:did_b}' AND status = 'submitted'",
+        "expect": 1
+      },
+      {
+        "name": "B: nomor PO pengadaan dari baris DB",
+        "sql": "SELECT po_number FROM sap_mock_purchase_orders WHERE decision_id = '{var:did_b}'",
+        "store": "db_po_proc",
+        "expect_rows": 1
+      },
+      {
+        "name": "C: 3 keputusan negatif tetap pending_approval & tanpa PO",
+        "sql": "SELECT count(*) FROM decisions d WHERE d.id IN ('11000000-0000-4000-8000-0000000000c1', '22000000-0000-4000-8000-0000000000c2', '33000000-0000-4000-8000-0000000000c3') AND d.status = 'pending_approval' AND NOT EXISTS (SELECT 1 FROM sap_mock_purchase_orders p WHERE p.decision_id = d.id)",
+        "expect": 3
+      },
+      {
+        "name": "hanya 2 PO lahir dari 5 keputusan gate ini (A+B); ketiga negatif tanpa PO",
+        "sql": "SELECT count(*) FROM sap_mock_purchase_orders WHERE decision_id IN ('{var:did}', '{var:did_b}', '11000000-0000-4000-8000-0000000000c1', '22000000-0000-4000-8000-0000000000c2', '33000000-0000-4000-8000-0000000000c3')",
+        "expect": 2
+      }
+    ]
+  },
+  "compare": [
+    {
+      "name": "A: nomor PO respons API == baris DB",
+      "left": "api_po",
+      "right": "db_po_a"
+    },
+    {
+      "name": "B: nomor PO pengadaan respons API == baris DB",
+      "left": "api_po_proc",
+      "right": "db_po_proc"
+    },
+    {
+      "name": "A: jumlah approval DB == min_approvals yang diwajibkan API",
+      "left": "min_approvals",
+      "right": "db_approvals_a"
+    }
+  ]
+}
