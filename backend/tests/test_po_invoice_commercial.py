@@ -629,3 +629,101 @@ def test_pdf_legacy_ditandai_belum_termigrasi():
     assert "legacy_unmigrated" in teks
     # Dan alasannya jelas bagi pembaca dokumen.
     assert "belum dimigrasi" in teks.lower() or "format biaya lama" in teks.lower()
+
+
+# ── Butir 1: pembulatan per kg dan selisih rupiah yang harus dijelaskan ─────
+
+
+def _baris_po(**over: object) -> dict:
+    """Satu baris SELECT PO sebagai mapping — bentuk yang dibaca `_baris`."""
+    dasar: dict[str, object] = {
+        "po_number": "MC-UJI-BULAT",
+        "status": "submitted",
+        "created_at": datetime(2026, 10, 27, 9, 0, tzinfo=UTC),
+        "decision_id": uuid.uuid4(),
+        "decision_status": "executed",
+        "location_id": uuid.uuid4(),
+        "location_name": "Jakarta",
+        "supplier_id": uuid.uuid4(),
+        "supplier_name": "CV Contoh",
+        "material_number": "MAT-TELU",
+        "commodity_name": "Telur",
+        "ordered_quantity": 3.0,
+        "price": 3.67,
+        "decision_quantity": 3.0,
+        "cost_breakdown": {
+            "purchase": "10.00",
+            "transport": "1.00",
+            "handling": "0.00",
+            "expected_loss": "1.00",
+            "freshness_risk": "0.00",
+            "safety_penalty": "0.00",
+        },
+    }
+    dasar.update(over)
+    return dasar
+
+
+def test_invoice_total_memakai_total_invoice_bukan_harga_kali_kuantitas():
+    """Butir 1: selisih `kuantitas × harga satuan` dijelaskan, bukan disembunyikan.
+
+    Invoice 11,00 untuk 3 kg → harga satuan 3,67/kg (HALF_UP). Tagihan baris
+    `3 × 3,67 = 11,01` berbeda SATU SEN. Yang dinamai `invoice_total` harus
+    total invoice (11,00); `total_value` tetap fakta tabel SAP (11,01).
+    """
+    from app.api.sap_orders import _baris
+
+    baris = _baris(_baris_po())
+
+    assert baris["invoice_unit_price"] == pytest.approx(3.67)
+    assert baris["invoice_total"] == pytest.approx(11.00)
+    # Selisihnya pembulatan per kg: harga 2 desimal × kg.
+    assert baris["price_per_kg"] * baris["ordered_quantity_kg"] == pytest.approx(11.01)
+    assert baris["total_value"] == pytest.approx(11.01)
+
+
+def test_invoice_total_sama_dengan_harga_kali_kuantitas_bila_tidak_ada_selisih():
+    """Kontrol positif: 200 kg × 29.421 = 5.884.200 — dua arti bertemu."""
+    from app.api.sap_orders import _baris
+
+    baris = _baris(
+        _baris_po(
+            ordered_quantity=200.0,
+            decision_quantity=200.0,
+            price=29421.00,
+            cost_breakdown={
+                "purchase": "5700000.00",
+                "transport": "34200.00",
+                "handling": "150000.00",
+                "expected_loss": "100000.00",
+                "freshness_risk": "0.00",
+                "safety_penalty": "0.00",
+            },
+        )
+    )
+
+    assert baris["invoice_total"] == pytest.approx(5884200.00)
+    assert baris["invoice_unit_price"] * baris["ordered_quantity_kg"] == pytest.approx(
+        5884200.00
+    )
+
+
+def test_invoice_total_baris_legacy_memakai_harga_tersimpan():
+    """Rincian tidak lengkap → tidak ada invoice yang bisa diturunkan.
+
+    Satu-satunya angka jujur adalah yang benar-benar tertagih di tabel:
+    `harga tersimpan × kuantitas`. Barisnya tetap ditandai legacy.
+    """
+    from app.api.sap_orders import _baris
+
+    baris = _baris(
+        _baris_po(
+            ordered_quantity=600.0,
+            decision_quantity=600.0,
+            price=26200.00,
+            cost_breakdown={"purchase": "15720000.00"},
+        )
+    )
+
+    assert baris["cost_legacy"] == "legacy_unmigrated"
+    assert baris["invoice_total"] == pytest.approx(15720000.00)

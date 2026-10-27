@@ -138,6 +138,30 @@ COST_LEGACY_LABEL = {
 }
 
 
+def invoice_total_of(row) -> float:
+    """Total invoice satu baris PO; `price × qty` bila invoice tidak dapat diturunkan.
+
+    `price` di tabel sudah dibulatkan per kg (2 desimal, HALF_UP), jadi
+    `qty × price` bisa berbeda dari total invoice sebesar paling banyak
+    setengah sen per kg — mis. invoice 11,00 untuk 3 kg menghasilkan harga
+    satuan 3,67 dan tagihan baris 11,01. Field `invoice_total` mencantumkan
+    total invoice yang dapat diturunkan dari rincian biaya, sedangkan
+    `total_value` tetap fakta tabel SAP (`price × qty`); keduanya dikirim
+    supaya selisih pembulatan itu terbaca, bukan tersembunyi di satu angka.
+
+    Baris legacy tanpa rincian lengkap tidak punya invoice yang dapat
+    diturunkan, jadi yang dipakai adalah angka yang benar-benar tertagih di
+    tabel (`price × qty`) — dan barisnya tetap ditandai `legacy_unmigrated`.
+    """
+    qty = row["ordered_quantity"]
+    breakdown = _breakdown(row)
+    if breakdown:
+        biaya = commercial_cost(qty, breakdown)
+        if biaya is not None:
+            return float(biaya.invoice_total)
+    return round(float(row["price"]) * float(qty), 2)
+
+
 def _baris(row) -> dict:
     """Satu PO → bentuk kabel. Nilai dibaca apa adanya dari kolom."""
     qty = float(row["ordered_quantity"])
@@ -162,7 +186,11 @@ def _baris(row) -> dict:
         # artinya sekarang dinamai eksplisit supaya klien tidak menebak.
         "price_per_kg": harga,
         "invoice_unit_price": harga,
-        "invoice_total": round(harga * qty, 2),
+        # `invoice_total` = total invoice (bahan + transportasi + penanganan)
+        # yang bisa diturunkan dari rincian. `total_value` tetap fakta tabel
+        # SAP (`price × qty`); selisih keduanya adalah pembulatan per kg dan
+        # sengaja dikirim sebagai dua angka, bukan disamarkan jadi satu.
+        "invoice_total": invoice_total_of(row),
         "cost_legacy": cost_legacy,
         "cost_legacy_label": COST_LEGACY_LABEL[cost_legacy],
         # SDC analitis keputusan (pembanding internal, BUKAN tagihan). `None`
