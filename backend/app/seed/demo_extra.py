@@ -23,7 +23,7 @@ from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.models import (
     AgentTrace,
@@ -59,6 +59,15 @@ KOMBINASI_KEPUTUSAN: tuple[tuple[str, str], ...] = (
     ("supplier_procurement", "executed"),
     ("supplier_procurement", "pending_approval"),
 )
+
+_STATUS_BUTUH_PERSETUJUAN = ("approved", "executed", "rejected")
+"""Status yang secara aturan wajib punya baris `approvals` (Rules.md §1.2).
+
+Approver-nya harus Kepala SPPG di lokasi TARGET keputusan; approver dari kota
+lain ditolak `403` oleh API, jadi menyemainya bukan cuma data kotor — ia
+mengajarkan alur yang tidak mungkin terjadi.
+"""
+BUTUH_PERSETUJUAN = frozenset(_STATUS_BUTUH_PERSETUJUAN)
 
 TIPE_BUKTI = (
     "sap_purchase_order",
@@ -144,15 +153,46 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
             "jalankan init-demo dari database bermigrasi"
         )
 
-    kepala = next((u for u in pengguna if u.role == "sppg_head"), pengguna[0])
+    kepala_semua = [u for u in pengguna if u.role == "sppg_head"]
+    kepala = kepala_semua[0] if kepala_semua else pengguna[0]
     gizzi = next((u for u in pengguna if u.role == "sppg_nutritionist"), pengguna[-1])
     jumlah: Counter[str] = Counter()
 
-    # ---------------------------------------------------------------- keputusan
+    # Approver WAJIB berasal dari lokasi TARGET keputusan (aturan scope A5:
+    # `403` bila approver bukan kepala di lokasi target). Dulu blok approval di
+    # modul ini selalu memakai `kepala` pertama (Jakarta) untuk keputusan yang
+    # menargetkan kota lain, sehingga lahir 6 approval lintas kota yang tidak
+    # bisa dilakukan siapa pun di sistem — data contoh yang melanggar aturannya
+    # sendiri (terukur 27 Okt 2026 oleh `test_akun_multi_kota`).
+    kepala_lokasi = {
+        u.location_id: u for u in kepala_semua if u.location_id is not None
+    }
+    lokasi_ber_kepala = [lok for lok in sppg if lok.id in kepala_lokasi]
+    if not lokasi_ber_kepala:
+        raise RuntimeError(
+            "build_demo_extra butuh minimal satu Kepala SPPG ber-lokasi; "
+            "tanpa itu approval ber-scope tidak bisa disemai"
+        )
+
+    def _sumber_lain(target):
+        """Lokasi sumber yang bukan target (keputusan tidak memindah ke diri sendiri)."""
+        return next((lok for lok in sppg if lok.id != target.id), target)
+
+    # ----------------------------------------------------------------- keputusan
     id_keputusan: list[tuple[str, str, uuid.UUID]] = []
+    target_keputusan: dict[uuid.UUID, uuid.UUID] = {}
     for indeks, (tipe, status) in enumerate(KOMBINASI_KEPUTUSAN):
         lok = sppg[indeks % len(sppg)]
         kom = komoditas[indeks % len(komoditas)]
+        # Hanya status yang butuh approval yang dikunci ke kota ber-Kepala SPPG;
+        # status lain tetap menyebar ke seluruh kota supaya cakupan lokasi tidak
+        # menyempit.
+        if status in BUTUH_PERSETUJUAN:
+            target = lokasi_ber_kepala[indeks % len(lokasi_ber_kepala)]
+            if target.id == lok.id:
+                lok = _sumber_lain(target)
+        else:
+            target = sppg[(indeks + 1) % len(sppg)]
         nilai = dict(
             decision_type=tipe,
             status=status,
@@ -167,7 +207,7 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
             iteration=1 + (indeks % 3),
             demo_case=f"extra:{tipe}",
             source_location_id=lok.id,
-            target_location_id=sppg[(indeks + 1) % len(sppg)].id,
+            target_location_id=target.id,
             supplier_id=pemasok[indeks % len(pemasok)].id,
             commodity_id=kom.id,
             quantity_kg=Decimal("150.50") + Decimal(indeks * 25),
@@ -182,18 +222,24 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
             session, Decision, f"decision:{tipe}:{status}", nilai
         )
         id_keputusan.append((tipe, status, did))
+        target_keputusan[did] = target.id
         jumlah["decisions"] += 1
 
     # ------------------------------------------------- approval + bukti + trace
     for tipe, status, did in id_keputusan:
-        if status in {"approved", "executed", "rejected"}:
+        if status in BUTUH_PERSETUJUAN:
+            approver = kepala_lokasi.get(target_keputusan[did])
+            if approver is None:  # dijaga di atas; jangan menyemai approval liar
+                raise RuntimeError(
+                    f"tidak ada Kepala SPPG di lokasi target keputusan {did}"
+                )
             await _ambil_atau_buat(
                 session,
                 Approval,
                 f"approval:{did}",
                 dict(
                     decision_id=did,
-                    approved_by=kepala.id,
+                    approved_by=approver.id,
                     approved=status != "rejected",
                     comment=(
                         "Disetujui untuk pengadaan besok."
@@ -353,42 +399,45 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
         [k for k in id_keputusan if k[1] == "executed"]
     ):
         kom = komoditas[urut % len(komoditas)]
+        # PO pertama sekaligus fixture "angka ekstrem" (uji format rupiah &
+        # kuantitas di UI). Dulu fixture itu baris KEDUA dengan
+        # `decision_id=None`, sehingga gate invarian menolaknya: PO internal
+        # tanpa tautan = rantai pengadaan yang hilang, dan PO seperti itu tidak
+        # pernah lahir dari alur mana pun. Angka ekstremnya sekarang menumpang
+        # pada PO yang pemicunya nyata — jumlah PO tidak bertambah dan tidak ada
+        # relasi karangan (`decision_id=did` di baris yang sama).
+        ekstrem = urut == 0
         await _ambil_atau_buat(
             session,
             SapMockPurchaseOrder,
             f"po:{did}",
             dict(
-                po_number=f"MC-EXTRA{urut:03d}",
+                po_number="MC-EXTREME01" if ekstrem else f"MC-EXTRA{urut:03d}",
                 supplier_id=pemasok[urut % len(pemasok)].id,
                 material_number=f"MAT-{kom.name.upper()}",
-                ordered_quantity=Decimal("250.00") + Decimal(urut * 150),
-                price=Decimal("13500.00"),
+                ordered_quantity=(
+                    Decimal("99999.50") if ekstrem
+                    else Decimal("250.00") + Decimal(urut * 150)
+                ),
+                price=Decimal("999999.99") if ekstrem else Decimal("13500.00"),
                 decision_id=did,
-                status=status_po[urut % len(status_po)],
+                status="draft" if ekstrem else status_po[urut % len(status_po)],
                 origin="demo",
                 created_at=now - timedelta(hours=urut + 1),
             ),
         )
         jumlah["sap_mock_purchase_orders"] += 1
 
-    # PO dengan angka ekstrem (uji format rupiah/kuantitas di UI).
-    await _ambil_atau_buat(
-        session,
-        SapMockPurchaseOrder,
-        "po:ekstrem",
-        dict(
-            po_number="MC-EXTREME01",
-            supplier_id=pemasok[0].id,
-            material_number=f"MAT-{komoditas[0].name.upper()}",
-            ordered_quantity=Decimal("99999.50"),
-            price=Decimal("999999.99"),
-            decision_id=None,
-            status="draft",
-            origin="demo",
-            created_at=now,
-        ),
+    # Baris lama (sebelum 27 Okt 2026) menyimpan PO ekstrem tanpa `decision_id`
+    # pada id `po:ekstrem`. Fixture-nya sudah pindah ke PO ber-keputusan di atas,
+    # jadi sisa itu dibuang supaya build ulang tidak mewarisi baris yatim —
+    # dibatasi ke id & bentuk lamanya, bukan menyapu tabel.
+    await session.execute(
+        delete(SapMockPurchaseOrder).where(
+            SapMockPurchaseOrder.id == stable_uuid("extra", "po:ekstrem"),
+            SapMockPurchaseOrder.decision_id.is_(None),
+        )
     )
-    jumlah["sap_mock_purchase_orders"] += 1
 
     # ------------------------------------------------------- batch + penerimaan
     lok = sppg[0]
@@ -601,7 +650,10 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
     # "minggu lalu" dan panel riwayat tidak punya baris. Dua keputusan ditambah
     # ke masa lalu; keduanya sudah dieksekusi sehingga aman dilihat sebagai audit.
     for urut, (umur, status) in enumerate(((12, "executed"), (21, "approved"))):
-        lok = sppg[urut % len(sppg)]
+        # Target dikunci ke kota ber-Kepala SPPG: kedua status ini butuh
+        # approval, dan approver-nya harus kepala di lokasi target.
+        target = lokasi_ber_kepala[urut % len(lokasi_ber_kepala)]
+        lok = _sumber_lain(target)
         kom = komoditas[urut % len(komoditas)]
         did, _ = await _ambil_atau_buat(
             session,
@@ -616,7 +668,7 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
                 iteration=1,
                 demo_case="extra:histori",
                 source_location_id=lok.id,
-                target_location_id=sppg[(urut + 2) % len(sppg)].id,
+                target_location_id=target.id,
                 supplier_id=pemasok[urut % len(pemasok)].id,
                 commodity_id=kom.id,
                 quantity_kg=Decimal("310.00"),
@@ -635,7 +687,7 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
             f"approval:histori:{umur}",
             dict(
                 decision_id=did,
-                approved_by=kepala.id,
+                approved_by=kepala_lokasi[target.id].id,
                 approved=status == "executed",
                 approved_at=now - timedelta(days=umur, hours=2),
                 comment=(
