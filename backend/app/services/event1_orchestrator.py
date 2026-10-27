@@ -100,6 +100,7 @@ async def _run_event1(
     engine = create_engine(settings.database_url)
     maker = create_session_maker(engine)
     traces: list[_TraceStep] = []
+    memori: dict | None = None
 
     async with maker() as session:
         # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama

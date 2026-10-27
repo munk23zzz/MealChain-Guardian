@@ -155,6 +155,10 @@ def panggung():
 
     kepala = buat_akun("sppg_head", tgt)
     gizi = buat_akun("sppg_nutritionist", tgt)
+    # Monitor nasional dibuat SENDIRI: akun demo `bgn.monitor@demo.local` dipakai
+    # tes lain yang merotasi password-nya, dan tes ini tidak boleh bergantung
+    # pada keadaan akun bersama (terukur: gagal hanya di suite penuh).
+    monitor = buat_akun("bgn_monitor", None)
     pencatat = _db_one(
         "SELECT id FROM users WHERE email = :e", {"e": kepala}
     )
@@ -175,6 +179,7 @@ def panggung():
         "receipt_id": catatan,
         "kepala": kepala,
         "gizi": gizi,
+        "monitor": monitor,
     }
     yield data
 
@@ -185,6 +190,7 @@ def panggung():
     _db_exec("DELETE FROM batches WHERE id = :b", {"b": batch})
     _db_exec("DELETE FROM suppliers WHERE id = :s", {"s": sup})
     _db_exec("DELETE FROM users WHERE location_id = :l", {"l": tgt})
+    _db_exec("DELETE FROM users WHERE email = :e", {"e": monitor})
     _db_exec("DELETE FROM locations WHERE id = :l", {"l": tgt})
 
 
@@ -323,10 +329,7 @@ def test_ahli_gizi_boleh_karantina_tidak_boleh_terima(client, panggung):
 
 
 def test_bgn_monitor_tidak_mendapat_kedua_tombol(client, panggung):
-    email = _db_one("SELECT email FROM users WHERE role='bgn_monitor' LIMIT 1")
-    assert email, "butuh akun bgn_monitor demo untuk tes ini"
-    headers = _login(client, str(email), "Demo#BGN2026")
-    body = _ringkasan(client, panggung, headers)
+    body = _ringkasan(client, panggung, _login(client, panggung["monitor"]))
     assert body["can_receive"] is False
     assert body["can_quarantine"] is False
     assert "role_not_head" in body["receipt_gate"]["receive_reasons"]
