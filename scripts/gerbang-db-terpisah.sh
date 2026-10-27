@@ -16,7 +16,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
-DB=mealchain_gate
+DB="${DB:-mealchain_gate}"   # bisa diganti: DB=mealchain_gate_b bash scripts/gerbang-db-terpisah.sh
 # Kata sandi dibaca dari .env (tidak pernah ditulis di berkas ini). Dulu DSN
 # beserta sandi tertulis literal di sini — audit lineage F-01.
 sandi="$(
@@ -25,7 +25,7 @@ sandi="$(
 )"
 sandi="${sandi:-mealchain_local}"
 DSN="postgresql+asyncpg://mealchain:${sandi}@postgres:5432/${DB}"
-OUT="_qa/gerbang-db-terpisah-$(date +%Y-%m-%d).txt"
+OUT="_qa/gerbang-db-terpisah-${DB}-$(date +%Y-%m-%d).txt"   # nama DB ikut di nama log: dua run paralel tidak saling menimpa
 PAKAI_ULANG=0
 [[ "${1:-}" == "--pakai-ulang" ]] && PAKAI_ULANG=1
 
