@@ -389,6 +389,74 @@ jadi ia tidak boleh memakai model yang sama dengan yang dinarasinya. Tanpa kunci
 modelnya sendiri, lapisan ini tidak aktif. Semua ini **tidak** mengubah angka
 keselamatan: safety, freshness, gerbang dispatch, dan SDC tetap dihitung kode.
 
+Pengecualian yang harus disebut apa adanya: **jalur review lokal**
+(`AGENT_REVIEW_MODE=local`) memilih model verifier lewat rantai eksplisit
+`VERIFIER_AGENT_MODEL` → `VERIFIER_MODEL_PRIMARY` → `SUPERVISOR_MODEL_PRIMARY`
+(`backend/app/services/agent_review_local.py`, `MODEL_ENV_KEYS`). Jadi di stack
+demo yang hanya mengisi `SUPERVISOR_MODEL_PRIMARY`, verifier memakai model yang
+sama dengan supervisor — itu keputusan owner dan **tidak** menghapus
+independensi yang benar-benar dijaga kode: system prompt verifier sendiri,
+fakta sendiri dari `/decisions/{id}/audit-facts`, dan `jaga_verdict` yang
+menahan klaim model. Untuk jejak audit yang paling jelas, isi
+`VERIFIER_AGENT_MODEL` secara eksplisit.
+
+#### 8b.1 Durasi jejak = kerja nyata worker (27 Okt 2026)
+
+`agent_traces.duration_ms` sebuah worker mengukur **seluruh kerja worker**
+(pemeriksa deterministik + waktu menunggu model). Sebelum koreksi ini durasi
+hanya mengukur bagian deterministik, sehingga worker yang **sudah** memanggil
+model 5–7 detik tetap tercatat 14–163 ms dan terbaca "masih deterministik".
+Pembagian waktunya tetap bisa diaudit dari fakta tiap temuan — tidak ada angka
+karangan, keduanya hasil pengukuran kode:
+
+| Lokasi | Isi |
+|---|---|
+| `facts.reasoning.status` | `applied` / `rejected` / `guarded` / `invalid` / `unavailable` / `off` |
+| `facts.reasoning.provider` | jalur model NYATA: `provider_chain` \| `bedrock_converse` \| `strands` \| `injected` |
+| `facts.reasoning.latency` | waktu model saja (mis. `"5654 ms"`) |
+| `facts.reasoning.deterministic_latency` | waktu pemeriksa deterministik (mis. `"28 ms"`) |
+| `duration_ms` (kolom jejak) | total = deterministik + model |
+
+Terukur pada stack demo (`AGENT_REVIEW_MODE=local`, `WORKER_AGENT_MODE=advisory`,
+`WORKER_AGENT_MODEL=sap-ai-core:llm`), satu putaran per komoditas:
+
+| agent | sebelum (ms) | telur | beras | ayam |
+|---|---|---|---|---|
+| supply | 29 | 5654 | 5447 | 5295 |
+| demand | 29 | 6472 | 6498 | 7123 |
+| freshness | 15 | 6753 | 5417 | 6311 |
+| safety | 44 | 6412 | 5903 | 5395 |
+| price | 65 | 5468 | 5290 | 5611 |
+| logistics | 33 | 6051 | 4648 | 6094 |
+| evidence | 163 | 6782 | 6858 | 7938 |
+| supervisor | 21.328 | 19.948 | 18.813 | 20.358 |
+| verifier | 14.134 | 14.102 | 19.240 | 14.290 |
+
+Ketujuh worker `status=applied`, `provider=provider_chain`, `citations` 3–8 per
+baris; verifier `consistent` (`audit_verdict` deterministik dan `model_verdict`
+sepakat — verdict definitif, bukan `unavailable`).
+
+Guard anti-karang angka membandingkan **nilai**, bukan token teks: `1.080,0`
+(gaya Indonesia) sama dengan fakta `1080.00`, sedangkan `1081` tetap ditolak.
+Tanpa ini, model yang menulis ulang fakta dengan format Indonesia dibuang
+sebagai "mengarang angka" (terukur 27 Okt 2026 di worker `supply`).
+
+Konsekuensi yang harus disebut saat demo: **angka reproducible, teks dan
+latensi tidak.** kg, SDC, skor, dan verdict lahir dari fungsi deterministik
+sehingga identik antar-run; ringkasan model, rationale, dan durasi bergantung
+provider/jaringan.
+
+Tanpa model (env kosong atau semua jalur gagal), ketujuh worker **tidak**
+menaikkan status temuannya menjadi `degraded`: pemeriksa deterministik sudah
+lengkap, jadi temuannya tetap `ok`/`degraded` seperti sebelumnya. Yang
+fail-closed adalah **angkanya** — tidak satu pun angka diisi model, lapisan
+narasi ditandai `facts.reasoning.status=unavailable` beserta warning
+`model_tidak_tersedia` / `model_gagal`, dan verifier tetap menurunkan verdict
+`unavailable` (bukan `consistent`) sehingga syarat approval memberat. Memaksa
+`status=degraded` di sini akan mengubah `run_status` dan gerbang approval
+karena narasi yang tidak ada, bukan karena bukti yang kurang — jadi tidak
+dilakukan.
+
 ---
 
 ## 9. API
