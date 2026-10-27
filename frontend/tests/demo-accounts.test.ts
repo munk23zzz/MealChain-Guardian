@@ -1,21 +1,23 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   AKUN_DEMO_CADANGAN,
   kelompokkanAkun,
+  muatAkunDemo,
 } from "../lib/demo-accounts";
 
 const akar = join(__dirname, "..");
 
-// Kontrak 26 Okt 2026: `GET /auth/demo-accounts` menuntut Bearer token
-// ber-peran admin (`bgn_monitor`; skema tidak punya peran `admin`). Halaman
-// login bersifat publik, jadi ia TIDAK boleh memanggil endpoint itu — kalau
-// dipanggil, jawabannya 401 dan pengunjung melihat pesan error sebelum masuk.
-// Daftar akun cukup datang dari konstanta tanpa sandi.
-const POLA_PANGGILAN = /request\(\s*["'`]\/auth\/demo-accounts/;
+// Kontrak 27 Okt 2026: halaman login publik TIDAK boleh memanggil
+// `GET /auth/demo-accounts` (endpoint itu menuntut Bearer token `bgn_monitor`
+// dan akan menjawab 401 bagi pengunjung). Sandi diambil dari pintu khusus
+// `GET /auth/demo-login`, yang hanya terbuka bila DEMO_MODE + DEMO_LOGIN_AUTOFILL
+// aktif. Kata sandi tetap tidak boleh ditanam di bundel klien.
+const POLA_ENDPOINT_ADMIN = /request\(\s*["'`]\/auth\/demo-accounts/;
+const POLA_ENDPOINT_LOGIN = /request\(\s*["'`]\/auth\/demo-login/;
 
 function baca(relatif: string): string {
   return readFileSync(join(akar, relatif), "utf8");
@@ -32,12 +34,56 @@ describe("akun demo di layar login", () => {
     }
   });
 
-  it("halaman login publik tidak memanggil endpoint akun demo", () => {
+  it("halaman login publik tidak memanggil endpoint admin, tetapi memakai pintu demo-login", () => {
     for (const berkas of ["lib/demo-accounts.ts", "app/page.tsx"]) {
       expect(baca(berkas), `${berkas} masih memanggil /auth/demo-accounts`).not.toMatch(
-        POLA_PANGGILAN,
+        POLA_ENDPOINT_ADMIN,
       );
     }
+    expect(baca("lib/demo-accounts.ts")).toMatch(POLA_ENDPOINT_LOGIN);
+  });
+
+  it("mengisi sandi hanya bila server mengizinkannya (enabled:true)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(
+        JSON.stringify({
+          enabled: true,
+          accounts: [
+            { label: "SPPG Head", email: "sppg.head@demo.local", role: "sppg_head", grup: "utama", password: "sandi-demo" },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      )),
+    );
+
+    const akun = await muatAkunDemo();
+
+    expect(akun).toHaveLength(1);
+    expect(akun[0].password).toBe("sandi-demo");
+    vi.unstubAllGlobals();
+  });
+
+  it("tidak mengarang sandi saat server mematikan autofill atau gagal", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ enabled: false, accounts: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })),
+    );
+
+    const akun = await muatAkunDemo();
+
+    expect(akun).toEqual(AKUN_DEMO_CADANGAN);
+    expect(akun.every((a) => a.password === undefined)).toBe(true);
+
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("jaringan mati");
+    }));
+    const akunGagal = await muatAkunDemo();
+    expect(akunGagal.every((a) => a.password === undefined)).toBe(true);
+    vi.unstubAllGlobals();
   });
 
   it("menyediakan akun untuk tiap peran yang dipakai demo", () => {

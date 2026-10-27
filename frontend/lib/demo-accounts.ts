@@ -1,17 +1,22 @@
 // Akun demo untuk layar login.
 //
-// Kenapa TIDAK lewat API lagi (26 Okt 2026): `GET /auth/demo-accounts` kini
-// menuntut Bearer token ber-peran admin (`bgn_monitor` — satu-satunya peran
-// admin di skema; lihat `backend/app/core/admin_rules.py`). Halaman login
-// bersifat publik dan tidak punya token, jadi memanggil endpoint itu dari sini
-// hanya menghasilkan 401 lalu pesan error. Daftar di bawah cukup untuk mengisi
-// email; kata sandi diketik operator dan TIDAK pernah ditanam di bundel klien.
+// Sejarah singkat (supaya tidak bolak-balik lagi):
+// 1. Awalnya kata sandi ditanam di bundel klien → ditutup (SEC-02).
+// 2. Lalu diambil dari `GET /auth/demo-accounts` → endpoint itu kini menuntut
+//    Bearer token `bgn_monitor`, sedangkan halaman login publik tidak punya token.
+// 3. Sekarang (27 Okt 2026): pintu khusus `GET /auth/demo-login`, TANPA token,
+//    tetapi hanya terbuka bila `DEMO_MODE` DAN `DEMO_LOGIN_AUTOFILL` aktif.
+//    Di instalasi nyata keduanya mati → `{enabled:false}`, tombol hanya mengisi
+//    email. Kata sandi tetap tidak pernah ditanam di bundel.
+
+import { request } from "./api";
 
 export type AkunDemo = {
   label: string;
   email: string;
   role: string;
   grup?: "utama" | "kota";
+  password?: string;
 };
 
 /** Daftar akun demo tanpa sandi — satu-satunya sumber tombol di layar login. */
@@ -33,4 +38,20 @@ export function kelompokkanAkun(akun: AkunDemo[]): { utama: AkunDemo[]; kota: Ak
     (satu.grup === "kota" ? kota : utama).push(satu);
   }
   return { utama, kota };
+}
+
+/**
+ * Ambil daftar akun demo (lengkap dengan sandi bila server mengizinkan).
+ * Tidak pernah melempar: autofill mati atau backend tak terjangkau → daftar
+ * cadangan tanpa sandi, supaya layar login tetap bisa dipakai (email saja).
+ */
+export async function muatAkunDemo(): Promise<AkunDemo[]> {
+  try {
+    const data = await request("/auth/demo-login", { method: "GET" });
+    const akun = Array.isArray(data?.accounts) ? (data.accounts as AkunDemo[]) : [];
+    if (data?.enabled === true && akun.length > 0) return akun;
+  } catch {
+    // Token tidak ada / autofill mati / backend belum siap: pakai cadangan.
+  }
+  return AKUN_DEMO_CADANGAN;
 }

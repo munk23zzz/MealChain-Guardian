@@ -1,4 +1,7 @@
-// Data panel review 8 agen — kartu tidak mengarang nilai yang tidak ada.
+// Data panel review sembilan agen — kartu tidak mengarang nilai yang tidak ada.
+//
+// Sembilan = tujuh worker + supervisor + verifier. Supervisor adalah kelas
+// pertama: kartunya dibangun dari `run.supervisor`, bukan dari baris worker.
 import { describe, expect, it } from "vitest";
 
 import {
@@ -54,6 +57,21 @@ function runRows() {
         contradiction_count: 0,
       },
     }),
+    {
+      run_id: RUN,
+      step_name: "VERIFY",
+      agent_name: "verifier",
+      duration_ms: 1600,
+      confidence: 0.9,
+      citations: [{ source: "/audit", claim: "audit" }],
+      output_summary: {
+        status: "ok",
+        summary: "Audit sepakat.",
+        warning_count: 0,
+        warnings: [],
+        facts: { verdict: "consistent" },
+      },
+    },
   ];
 }
 
@@ -78,11 +96,11 @@ describe("latestSwarmRun — pilih putaran terbaru", () => {
   });
 });
 
-describe("swarmCards — tepat delapan kartu, nilai null jadi —", () => {
-  it("delapan kartu berurutan dan label manusia", () => {
+describe("swarmCards — tepat sembilan kartu: worker → supervisor → verifier", () => {
+  it("sembilan kartu berurutan dan label manusia", () => {
     const run = latestSwarmRun(runRows());
     const cards = swarmCards(run!);
-    expect(cards).toHaveLength(8);
+    expect(cards).toHaveLength(9);
     expect(cards.map((card) => card.key)).toEqual([
       "supply",
       "demand",
@@ -91,26 +109,82 @@ describe("swarmCards — tepat delapan kartu, nilai null jadi —", () => {
       "price",
       "logistics",
       "evidence",
+      "supervisor",
       "verifier",
     ]);
-    expect(cards[7].label).toBe("Verifikasi");
-    expect(cards[7].stage).toBe("VERIFY");
+    // Urutan pipeline: worker → SUPERVISE → audit.
+    expect(cards[7].label).toBe("Supervisor");
+    expect(cards[7].stage).toBe("SUPERVISE");
+    expect(cards[8].label).toBe("Verifikasi");
+    expect(cards[8].stage).toBe("VERIFY");
     expect(cards[0].label).toBe("Pasokan");
     expect(cards[0].statusLabel).toBe("Selesai");
     expect(cards[0].duration).toBe("1,5 dtk");
     expect(cards[0].confidence).toBe("87%");
     expect(cards[0].citations).toBe("1 sitasi");
     expect(cards[0].warningCount).toBe(0);
+    // Verifier tetap kartu kelas satu dengan datanya sendiri.
+    expect(cards[8].row).not.toBeNull();
+    expect(cards[8].statusLabel).toBe("Selesai");
+    expect(cards[8].duration).toBe("1,6 dtk");
+    expect(cards[8].citations).toBe("1 sitasi");
   });
 
-  it("kartu yang tidak tercatat tetap delapan, tanpa angka palsu", () => {
-    const run = latestSwarmRun(runRows().slice(0, 3));
+  it("kartu supervisor diambil dari run.supervisor, bukan dari baris worker", () => {
+    // Baris supervisor sengaja TIDAK ada di `rows`: kartu hanya bisa terisi
+    // kalau ia benar-benar membaca `run.supervisor`.
+    const run = {
+      runId: RUN,
+      rows: [row("supply"), row("demand")],
+      supervisor: {
+        run_id: RUN,
+        step_name: "SUPERVISE",
+        agent_name: "supervisor",
+        duration_ms: 2500,
+        citations: [],
+        output_summary: {
+          status: "narrated",
+          narrative: "Narasi dari supervisor.",
+          summary: "Ringkas dari supervisor.",
+          safety_veto: false,
+          contradiction_count: 0,
+        },
+      },
+    };
+    const cards = swarmCards(run);
+    const sup = cards[7];
+    expect(sup.row).not.toBeNull();
+    // `narrated` adalah status narasi supervisor, bukan enum mentah di layar.
+    expect(sup.status).toBe("ok");
+    expect(sup.statusLabel).toBe("Narasi selesai");
+    expect(sup.summary).toBe("Narasi dari supervisor.");
+    expect(sup.duration).toBe("2,5 dtk");
+    // Supervisor tidak punya confidence → "—", bukan 0. Sitasi array kosong
+    // tetap dihitung apa adanya (0 sitasi), bukan disembunyikan.
+    expect(sup.confidence).toBe("—");
+    expect(sup.citations).toBe("0 sitasi");
+  });
+
+  it("supervisor belum tercatat: kartu tetap ada, nilai tetap —/Belum tercatat", () => {
+    const run = latestSwarmRun([row("supply"), row("demand")]);
     const cards = swarmCards(run!);
-    expect(cards).toHaveLength(8);
-    expect(cards[7].row).toBeNull();
-    expect(cards[7].statusLabel).toBe("Belum tercatat");
-    expect(cards[7].confidence).toBe("—");
-    expect(cards[7].citations).toBe("—");
+    expect(cards).toHaveLength(9);
+    const sup = cards[7];
+    expect(sup.row).toBeNull();
+    expect(sup.statusLabel).toBe("Belum tercatat");
+    expect(sup.duration).toBe("—");
+    expect(sup.summary).toBe("—");
+    expect(sup.warningCount).toBeNull();
+  });
+
+  it("kartu yang tidak tercatat tetap sembilan, tanpa angka palsu", () => {
+    const run = latestSwarmRun([row("supply")]);
+    const cards = swarmCards(run!);
+    expect(cards).toHaveLength(9);
+    expect(cards[8].row).toBeNull();
+    expect(cards[8].statusLabel).toBe("Belum tercatat");
+    expect(cards[8].confidence).toBe("—");
+    expect(cards[8].citations).toBe("—");
   });
 
   it("supervisor: status/narrative/veto/kontradiksi apa adanya", () => {
@@ -120,6 +194,49 @@ describe("swarmCards — tepat delapan kartu, nilai null jadi —", () => {
     expect(summary.narrative).toBe("Review selesai.");
     expect(summary.veto).toBe("Tidak");
     expect(summary.contradictions).toBe("0");
+  });
+
+  it("narasi supervisor tidak tersedia tetap dilaporkan apa adanya", () => {
+    const run = {
+      runId: RUN,
+      rows: [],
+      supervisor: {
+        run_id: RUN,
+        step_name: "SUPERVISE",
+        output_summary: { status: "unavailable" },
+      },
+    };
+    const card = swarmCards(run)[7];
+    expect(card.status).toBe("degraded");
+    expect(card.statusLabel).toBe("Narasi tidak tersedia");
+    expect(card.summary).toBe("—");
+  });
+
+  it("verifier yang menulis run terpisah tetap terbaca sebagai auditan keputusan ini", () => {
+    // Data nyata: `agent.verifier` menulis barisnya di run_id audit SENDIRI
+    // (verify.py punya run sendiri), sedangkan worker menulis di run pipeline.
+    // Tanpa toleransi ini kartu verifier selalu "Belum tercatat" padahal audit
+    // benar-benar terjadi untuk keputusan yang sama.
+    const AUDIT_RUN = "9f9f9f9f-9999-4999-8999-999999999999";
+    const run = latestSwarmRun([
+      row("supply"),
+      row("demand"),
+      {
+        run_id: AUDIT_RUN,
+        step_name: "VERIFY",
+        agent_name: "verifier",
+        duration_ms: 9000,
+        citations: [{ source: "/audit", claim: "audit" }],
+        output_summary: { status: "ok", summary: "Audit sepakat." },
+      },
+    ]);
+    const cards = swarmCards(run!);
+    expect(cards[8].row).not.toBeNull();
+    expect(cards[8].statusLabel).toBe("Selesai");
+    expect(cards[8].summary).toBe("Audit sepakat.");
+    expect(cards[8].duration).toBe("9,0 dtk");
+    // Baris worker tetap dari run yang dipilih, bukan dicampur.
+    expect(cards[0].row?.run_id).toBe(RUN);
   });
 });
 

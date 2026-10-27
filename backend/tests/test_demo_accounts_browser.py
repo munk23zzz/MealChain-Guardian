@@ -100,3 +100,47 @@ def test_admin_tanpa_demo_mode_env_tetap_tidak_membocorkan_sandi(
     assert r.status_code == 200, r.text
     assert r.json()["accounts"] == []
     assert "Demo#" not in r.text
+
+
+# --- Jalur layar login (27 Okt 2026) -------------------------------------------------
+# Halaman login publik tidak punya token, jadi ia butuh pintu sendiri. Pintu itu
+# `GET /auth/demo-login`, dan hanya terbuka bila DUA kunci aktif: `DEMO_MODE` dan
+# `DEMO_LOGIN_AUTOFILL`. Satu kunci saja tidak cukup.
+
+
+def test_login_tanpa_flag_autofill_tidak_mengirim_sandi(client, monkeypatch):
+    monkeypatch.setenv("DEMO_MODE", "true")
+    monkeypatch.delenv("DEMO_LOGIN_AUTOFILL", raising=False)
+
+    r = client.get("/auth/demo-login")
+
+    assert r.status_code == 200, r.text
+    assert r.json() == {"enabled": False, "accounts": []}
+    assert "Demo#" not in r.text
+
+
+def test_login_flag_aktif_dan_demo_mode_mengirim_sandi_tanpa_token(client, monkeypatch):
+    monkeypatch.setenv("DEMO_MODE", "true")
+    monkeypatch.setenv("DEMO_LOGIN_AUTOFILL", "true")
+
+    r = client.get("/auth/demo-login")
+
+    assert r.status_code == 200, r.text  # tanpa Bearer token
+    data = r.json()
+    assert data["enabled"] is True
+    akun = data["accounts"]
+    assert len(akun) >= 7
+    for baris in akun:
+        assert baris["password"] == resolve_demo_password(baris["role"])
+
+
+def test_login_flag_aktif_tanpa_demo_mode_tetap_tertutup(client, monkeypatch):
+    """Flag autofill tidak boleh membuka kunci sendiri saat DEMO_MODE mati."""
+    monkeypatch.setenv("DEMO_MODE", "false")
+    monkeypatch.setenv("DEMO_LOGIN_AUTOFILL", "true")
+
+    r = client.get("/auth/demo-login")
+
+    assert r.status_code == 200, r.text
+    assert r.json() == {"enabled": False, "accounts": []}
+    assert "Demo#" not in r.text

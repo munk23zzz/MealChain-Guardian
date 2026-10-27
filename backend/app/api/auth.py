@@ -151,6 +151,36 @@ def _kunci_laju(request: Request, email: str) -> str:
     return f"login:{ip}:{email}"
 
 
+@router.get("/auth/demo-login")
+async def demo_login_accounts():
+    """Akun demo untuk layar login — TANPA token, tapi dua kunci harus aktif.
+
+    Halaman login bersifat publik dan belum punya sesi, jadi `GET
+    /auth/demo-accounts` (ber-token `bgn_monitor`) tidak bisa dipakainya. Pintu
+    ini dibuat khusus untuk itu, dan hanya terbuka bila `DEMO_MODE` aktif **dan**
+    `DEMO_LOGIN_AUTOFILL` aktif (lihat `demo_login_autofill_aktif()`). Default
+    keduanya mati, sehingga instalasi nyata menjawab `{enabled:false, accounts:[]}`
+    dan kata sandi tidak pernah keluar dari server.
+
+    Konsekuensi yang harus disadari: selama dua kunci itu aktif, siapa pun yang
+    bisa menjangkau backend demo dapat membaca sandi akun demo. Karena itu
+    `DEMO_MODE` wajib `false` di luar sesi demo (Rules.md §1.4).
+    """
+    from app.seed.demo_credentials import (
+        DemoCredentialError,
+        akun_demo_untuk_browser,
+        demo_login_autofill_aktif,
+    )
+
+    if not demo_login_autofill_aktif():
+        return {"enabled": False, "accounts": []}
+    try:
+        akun = akun_demo_untuk_browser()
+    except DemoCredentialError:
+        return {"enabled": False, "accounts": []}
+    return {"enabled": True, "accounts": akun}
+
+
 @router.get("/auth/demo-accounts")
 async def demo_accounts(
     _admin: User = Depends(require_roles("bgn_monitor")),

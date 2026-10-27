@@ -245,7 +245,14 @@ def cek_safety_sumber(
         f"worst_status={_aktual(worst)} fail={len(failed)} penghalang={_aktual(penghalang)}"
     )
     if worst is None:
-        return _cek("safety_batch_sumber", "semua batch sumber aman", aktual, False)
+        # Fakta tidak dapat dinilai. Narasi yang MENGAKU aman = klaim palsu;
+        # narasi yang jujur menyebut ketidakpastian tidak boleh dihukum.
+        return _cek(
+            "safety_batch_sumber",
+            "semua batch sumber aman",
+            aktual,
+            klaim.jujur_tentang_penurunan(),
+        )
     lulus = worst != "fail" and not penghalang
     return _cek(
         "safety_batch_sumber",
@@ -274,12 +281,20 @@ def cek_kesegaran(
         f"ambang_pass={_aktual(ambang.get('pass'))}"
     )
     if status is None:
-        return _cek("kesegaran_certified", "kesegaran PASS", aktual, False)
+        return _cek(
+            "kesegaran_certified",
+            "kesegaran PASS",
+            aktual,
+            klaim.jujur_tentang_penurunan(),
+        )
+    # Cek ini mengaudit KLAIM "kesegaran PASS". Narasi yang menyebut status
+    # non-pass secara jujur (mis. `needs_verification`) tidak mengklaim PASS,
+    # jadi tidak boleh ditandai — yang ditandai adalah klaim yang melampaui fakta.
     return _cek(
         "kesegaran_certified",
         "kesegaran memenuhi ambang certified (PASS >= 0,85)",
         aktual,
-        status == "pass",
+        status == "pass" or klaim.jujur_tentang_penurunan(),
     )
 
 
@@ -417,6 +432,80 @@ def periksa_klaim(
     ]
 
 
+#: Token umum yang tidak menunjuk field/nilai fakta tertentu. Dipakai guard
+#: `flagged`: cek model harus menyebut sesuatu yang bisa dicocokkan ke fakta.
+KATA_UMUM = frozenset(
+    {
+        "status",
+        "count",
+        "ids",
+        "types",
+        "name",
+        "data",
+        "true",
+        "false",
+        "none",
+        "null",
+        "klaim",
+        "aktual",
+        "tidak",
+        "semua",
+    }
+)
+
+
+def token_fakta(fakta: Any) -> set[str]:
+    """Nama field + nilai (string/angka) yang benar-benar ada di fakta."""
+    tokens: set[str] = set()
+
+    def walk(value: Any) -> None:
+        if isinstance(value, dict):
+            for kunci, isi in value.items():
+                teks = str(kunci).strip().lower()
+                if len(teks) >= 4 and teks not in KATA_UMUM:
+                    tokens.add(teks)
+                walk(isi)
+        elif isinstance(value, (list, tuple)):
+            for isi in value:
+                walk(isi)
+        elif isinstance(value, bool) or value is None:
+            return
+        else:
+            teks = str(value).strip().lower()
+            if len(teks) >= 4 and teks not in KATA_UMUM:
+                tokens.add(teks)
+
+    walk(fakta or {})
+    return tokens
+
+
+def flagged_punya_bukti(
+    checks: Sequence[VerifierCheck], fakta: Any
+) -> tuple[bool, list[str]]:
+    """`FLAGGED` model hanya sah bila satu cek gagal menunjuk fakta NYATA.
+
+    Prosa `catatan` ("empat klaim kritis gagal …") bukan bukti: ia tidak bisa
+    dicocokkan ke fakta. Yang dihitung sebagai bukti hanya cek model dengan
+    `lulus=false` yang menyebut nama field atau nilai yang ada di fakta.
+    """
+    gagal = [cek for cek in checks if not cek.lulus]
+    if not gagal:
+        return False, ["tidak ada cek model yang gagal"]
+    tokens = token_fakta(fakta)
+    if not tokens:
+        return False, ["fakta tidak memuat nilai yang bisa dicocokkan"]
+    for cek in gagal:
+        bagian = (
+            getattr(cek, "nama", ""),
+            getattr(cek, "klaim", ""),
+            getattr(cek, "aktual", ""),
+        )
+        teks = " ".join(str(item).lower() for item in bagian)
+        if any(token in teks for token in tokens):
+            return True, []
+    return False, ["tidak ada cek gagal yang menunjuk field/nilai fakta"]
+
+
 def jaga_verdict(
     model_verdict: str | None,
     *,
@@ -424,6 +513,8 @@ def jaga_verdict(
     citations: Sequence[Any],
     fakta_tersedia: bool,
     gate_verdict: str | None = None,
+    model_checks: Sequence[VerifierCheck] = (),
+    fakta: Any = None,
 ) -> tuple[str, list[str]]:
     """Guard pasca-LLM: verdict hanya boleh turun, dan `consistent` butuh bukti.
 
@@ -436,7 +527,9 @@ def jaga_verdict(
     - `consistent` + ada cek gagal → `flagged`;
     - `consistent` + tanpa sitasi → `flagged`;
     - `consistent` + gerbang `flag` → `flagged`;
-    - `flagged`/`unavailable` dari model TIDAK pernah dinaikkan.
+    - `flagged`/`unavailable` dari model TIDAK pernah dinaikkan;
+    - `flagged` model TANPA cek yang menunjuk ketidaksesuaian nyata → `unavailable`
+      (prosa saja bukan veto; `unavailable` juga bukan `consistent`).
     """
     alasan: list[str] = []
     verdict = (model_verdict or "").strip().lower()
@@ -459,6 +552,14 @@ def jaga_verdict(
         alasan.append("fakta audit tidak terbaca; verdict unavailable (fail-closed)")
         return "unavailable", alasan
     if verdict != "consistent":
+        if verdict == "flagged" and not gagal:
+            didukung, catatan = flagged_punya_bukti(model_checks, fakta)
+            if not didukung:
+                alasan.append(
+                    "guard: FLAGGED model tanpa cek yang menunjuk ketidaksesuaian "
+                    f"nyata ({'; '.join(catatan)}) → unavailable"
+                )
+                return "unavailable", alasan
         return verdict, alasan
 
     if gagal:
@@ -490,7 +591,9 @@ __all__ = [
     "cek_ledger",
     "cek_safety_sumber",
     "cek_sdc_rincian",
+    "flagged_punya_bukti",
     "jaga_verdict",
     "klaim_dari_run",
     "periksa_klaim",
+    "token_fakta",
 ]

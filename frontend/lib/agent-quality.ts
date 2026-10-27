@@ -1,12 +1,18 @@
 // Halaman "Kualitas Agen" — meniru halaman /quality di aplikasi acuan
 // (E:\hackathon\HackathonBil\MealchainGuardian) yang memakai MOCK_AGENT_RUNS.
 // Di repo ini angkanya dari data NYATA:
-//   GET /decisions/{id}/traces            → langkah agen (step_name, tool_called, step_at)
+//   GET /decisions/{id}/traces            → langkah agen (step_name, agent_name, tool_called, step_at)
 //   GET /decisions/{id}/approval-summary  → putusan verifikator (verdict)
 //   GET /decisions                        → status + iterasi (dipakai manusia)
 //
 // Kualitas diukur, bukan diklaim: kalau verifikator tidak pernah bicara, itu
 // ditulis "tidak tersedia", bukan dihitung sebagai sepakat.
+//
+// Supervisor dan verifier adalah agen kelas satu: agenQuality() menghitung
+// berapa run yang benar-benar memuat barisnya (worker dari `agent_name`,
+// supervisor dari tahap SUPERVISE) dan merinci putusan verifier.
+
+import { SWARM_AGENTS } from "./agent-swarm";
 
 const DASH = "—";
 
@@ -20,6 +26,8 @@ export type QualityDecision = {
 export type QualityStep = {
   step_name?: string | null;
   tool_called?: string | null;
+  /** Nama agen penulis baris (`supply`..`verifier`); langkah pipeline: null. */
+  agent_name?: string | null;
   output_summary?: unknown;
   step_at?: string | null;
 };
@@ -40,6 +48,10 @@ export type QualityRun = {
   verdictLabel: string;
   fallbackSteps: number;
   humanChanged: boolean;
+  /** Kunci agen yang PUNYA baris jejak pada run ini (termasuk supervisor). */
+  agents: string[];
+  /** Kunci agen yang barisnya membawa keluaran (output_summary berisi). */
+  deliveredAgents: string[];
 };
 
 export const VERDICT_LABEL: Record<QualityVerdict, string> = {
@@ -83,6 +95,32 @@ function isFallbackStep(step: QualityStep): boolean {
   }
 }
 
+const AGENT_KEY_SET = new Set<string>(SWARM_AGENTS.map((agent) => agent.key));
+
+/**
+ * Kunci agen pemilik satu baris jejak.
+ *
+ * Worker & verifier menulis `agent_name`; supervisor TIDAK (barisnya hanya
+ * bertahap SUPERVISE / beralat `supervisor.*`). Langkah pipeline biasa
+ * (`DETECT` dari supply.get) tidak dihitung sebagai keluaran agen — kalau
+ * dihitung, kolom "tercatat" jadi karangan.
+ */
+function agentKeyOf(step: QualityStep): string | null {
+  const nama = String(step?.agent_name ?? "").trim().toLowerCase();
+  if (nama && AGENT_KEY_SET.has(nama)) return nama;
+  const tahap = String(step?.step_name ?? "").trim().toUpperCase();
+  const alat = String(step?.tool_called ?? "").trim().toLowerCase();
+  if (tahap === "SUPERVISE" || alat.startsWith("supervisor.")) return "supervisor";
+  return null;
+}
+
+/** Baris yang membawa keluaran nyata — bukan baris kosong berstatus saja. */
+function hasOutput(step: QualityStep): boolean {
+  const keluaran = step?.output_summary;
+  if (!keluaran || typeof keluaran !== "object") return false;
+  return Object.keys(keluaran as Record<string, unknown>).length > 0;
+}
+
 /** Satu "run" = satu keputusan yang punya jejak agen. */
 export function runOf(
   decision: QualityDecision | null | undefined,
@@ -99,6 +137,14 @@ export function runOf(
   );
   const verdict = verdictOf(summary);
   const iteration = Number(decision?.iteration);
+  const agents: string[] = [];
+  const deliveredAgents: string[] = [];
+  for (const step of steps ?? []) {
+    const key = agentKeyOf(step);
+    if (!key) continue;
+    if (!agents.includes(key)) agents.push(key);
+    if (hasOutput(step) && !deliveredAgents.includes(key)) deliveredAgents.push(key);
+  }
   return {
     id: typeof decision?.decision_id === "string" ? decision.decision_id : "",
     shortId: shortId(decision?.decision_id),
@@ -114,6 +160,8 @@ export function runOf(
     fallbackSteps: (steps ?? []).filter(isFallbackStep).length,
     // "Diubah manusia" = keputusan ini sudah pernah ditolak lalu diusulkan ulang.
     humanChanged: Number.isFinite(iteration) && iteration > 1,
+    agents,
+    deliveredAgents,
   };
 }
 
@@ -179,4 +227,63 @@ export function percentLabel(value: number | null): string {
 export function averageLabel(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return DASH;
   return value.toFixed(1);
+}
+
+// --- kualitas per agen -----------------------------------------------------
+
+export type AgentVerdicts = { agree: number; disagree: number; unavailable: number };
+
+export type AgentQualityRow = {
+  key: string;
+  label: string;
+  role: "worker" | "supervisor" | "verifier";
+  /** Jumlah run yang dinilai (sampel yang sama untuk semua baris). */
+  runs: number;
+  /** Run yang jejaknya memuat baris agen ini. */
+  recorded: number;
+  /** Run yang barisnya membawa keluaran nyata. */
+  delivered: number;
+  /** Run tanpa baris agen ini (runs - recorded). */
+  missing: number;
+  /** Rincian putusan verifier; null untuk agen lain. */
+  verdicts: AgentVerdicts | null;
+  verdictNote: string;
+};
+
+/**
+ * Kualitas per agen dari jejak NYATA — sembilan baris, urutan pipeline.
+ *
+ * Tidak ada persen karangan: `catatan` hanya berisi hitungan run. Rincian
+ * putusan verifier diambil dari approval-summary (`run.verdict`), bukan dari
+ * jejak, karena verdict memang tidak ditulis di `agent_traces`.
+ * Tanpa run sama sekali → daftar kosong (halaman menulis "belum ada run"),
+ * bukan sembilan baris berisi 0.
+ */
+export function agentQuality(runs: QualityRun[]): AgentQualityRow[] {
+  const list = Array.isArray(runs) ? runs : [];
+  if (list.length === 0) return [];
+  const verdicts: AgentVerdicts = { agree: 0, disagree: 0, unavailable: 0 };
+  for (const run of list) {
+    verdicts[run.verdict] += 1;
+  }
+  return SWARM_AGENTS.map((agent) => {
+    const recorded = list.filter((run) => (run.agents ?? []).includes(agent.key)).length;
+    const delivered = list.filter((run) =>
+      (run.deliveredAgents ?? []).includes(agent.key)
+    ).length;
+    const isVerifier = agent.key === "verifier";
+    return {
+      key: agent.key,
+      label: agent.label,
+      role: agent.key === "supervisor" ? "supervisor" : isVerifier ? "verifier" : "worker",
+      runs: list.length,
+      recorded,
+      delivered,
+      missing: list.length - recorded,
+      verdicts: isVerifier ? verdicts : null,
+      verdictNote: isVerifier
+        ? `${VERDICT_LABEL.agree} ${verdicts.agree} · ${VERDICT_LABEL.disagree} ${verdicts.disagree} · ${VERDICT_LABEL.unavailable} ${verdicts.unavailable}`
+        : DASH,
+    };
+  });
 }

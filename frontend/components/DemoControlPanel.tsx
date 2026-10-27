@@ -116,11 +116,12 @@ export function DemoProof({
 
       {kartu.length > 0 && (
         <>
-          <div className="dc-agents" role="list" aria-label="Tujuh agen review">
+          <div className="dc-agents" role="list" aria-label="Sembilan agen review">
             {kartu.map((agen) => (
               <article
                 className="dc-agent"
                 data-state={agen.state}
+                data-agent={agen.key}
                 role="listitem"
                 key={agen.key}
               >
@@ -130,24 +131,30 @@ export function DemoProof({
                 </div>
                 <span className="dc-agent-status">{agen.statusLabel}</span>
                 <dl className="dc-agent-meta">
-                  <div>
-                    <dt>Durasi</dt>
-                    <dd>{agen.duration}</dd>
-                  </div>
-                  <div>
-                    <dt>Peringatan</dt>
-                    <dd>{agen.warnings}</dd>
-                  </div>
+                  {/* Baris fakta datang dari lib/demo-agent: worker memakai
+                      Durasi/Peringatan, supervisor memakai Provider — supaya
+                      kartu supervisor tidak memalsukan durasi yang tidak ada. */}
+                  {agen.meta.map((f) => (
+                    <div key={f.label}>
+                      <dt>{f.label}</dt>
+                      <dd>{f.value}</dd>
+                    </div>
+                  ))}
                 </dl>
+                {agen.note && (
+                  <p className="dc-agent-note" title={agen.note}>
+                    {agen.note}
+                  </p>
+                )}
               </article>
             ))}
           </div>
           <p className="dc-line dc-line--muted">
             {running
-              ? "Putaran baru sedang berjalan — kedelapan kartu menyala sampai review menutup putaran."
+              ? "Putaran baru sedang berjalan — kesembilan kartu menyala sampai review menutup putaran."
               : run.agents_run_id
                 ? "Status dibaca dari baris review yang tersimpan, bukan dari langkah pipeline."
-                : "Review 8 agen belum pernah tercatat untuk keputusan ini."}
+                : "Review sembilan agen belum pernah tercatat untuk keputusan ini."}
           </p>
         </>
       )}

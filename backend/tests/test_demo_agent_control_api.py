@@ -13,6 +13,7 @@ dipanggil dan tidak ada baris DB uji yang ditulis.
 
 from __future__ import annotations
 
+import json
 import uuid
 
 import pytest
@@ -319,7 +320,124 @@ def test_last_run_hanya_putaran_pipeline(client, pemakai):
     # payload sengaja tidak membuka kolom penyemai ke UI.
 
 
-def test_last_run_memilih_putaran_pipeline_penuh(client, pemakai):
+def test_last_run_memetakan_review_walau_tiap_baris_punya_run_id_sendiri(
+    client, pemakai
+) -> None:
+    """Regresi 27 Okt 2026: kartu agen "missing" padahal baris review tersimpan.
+
+    Bentuk yang direproduksi = runtime yang menjalankan tiap agen sebagai
+    invokasi sendiri: setiap baris worker membawa `run_id` BERBEDA, sedangkan
+    baris ringkasan SUPERVISE membawa `run_id` putaran. Versi lama memetakan
+    hanya baris yang `run_id`-nya sama dengan run putaran itu, sehingga kedelapan
+    kartu tampak "belum tercatat".
+
+    Yang diuji: bila `agent_traces` untuk putaran itu ADA, kartu agen wajib
+    menampilkan statusnya — bukan "missing" — dan status review dibaca dari
+    baris `agent.review*` yang tersimpan.
+    """
+    kunci = uuid.uuid5(uuid.NAMESPACE_URL, "mealchain:uji-last-run-review-run-ids")
+    putaran = uuid.uuid5(uuid.NAMESPACE_URL, "mealchain:uji-putaran-review")
+    langkah = ("DETECT", "VERIFY", "TRACE", "PREDICT", "OPTIMIZE", "DECIDE", "SUPERVISE")
+    agen = (
+        "supply",
+        "demand",
+        "freshness",
+        "safety",
+        "price",
+        "logistics",
+        "evidence",
+        "verifier",
+    )
+    engine = create_engine(DSN_SYNC)
+
+    def _bersihkan(conn) -> None:
+        conn.execute(
+            text("DELETE FROM decisions WHERE id = CAST(:id AS uuid)"), {"id": str(kunci)}
+        )
+
+    try:
+        with engine.begin() as conn:
+            _bersihkan(conn)
+            conn.execute(
+                text(
+                    "INSERT INTO decisions (id, decision_type, status, proposed_by, "
+                    "expires_at, created_at, origin) VALUES (CAST(:id AS uuid), "
+                    "'supplier_procurement', 'proposed', 'supervisor_agent', "
+                    "now() + interval '1 hour', now(), 'demo')"
+                ),
+                {"id": str(kunci)},
+            )
+            for nama in langkah:
+                conn.execute(
+                    text(
+                        "INSERT INTO agent_traces (decision_id, step_name, tool_called, step_at) "
+                        "VALUES (CAST(:id AS uuid), :step, :tool, now())"
+                    ),
+                    {"id": str(kunci), "step": nama, "tool": f"uji.{nama.lower()}"},
+                )
+            # Baris review: tiap agen punya run_id sendiri (invokasi terpisah).
+            for nama in agen:
+                status = "degraded" if nama == "verifier" else "ok"
+                conn.execute(
+                    text(
+                        "INSERT INTO agent_traces (decision_id, step_name, agent_name, "
+                        "tool_called, run_id, output_summary, step_at) VALUES ("
+                        "CAST(:id AS uuid), :step, :agen, :tool, CAST(:run AS uuid), "
+                        "CAST(:out AS jsonb), now())"
+                    ),
+                    {
+                        "id": str(kunci),
+                        "step": "VERIFY" if nama == "verifier" else "DETECT",
+                        "agen": nama,
+                        "tool": f"agent.{nama}",
+                        "run": str(uuid.uuid5(uuid.NAMESPACE_URL, f"mealchain:run:{nama}")),
+                        "out": json.dumps({"status": status, "summary": f"{nama} uji"}),
+                    },
+                )
+            # Ringkasan SUPERVISE membawa run putaran (bukan run tiap agen).
+            conn.execute(
+                text(
+                    "INSERT INTO agent_traces (decision_id, step_name, agent_name, "
+                    "tool_called, run_id, output_summary, step_at) VALUES ("
+                    "CAST(:id AS uuid), 'SUPERVISE', 'supervisor', "
+                    "'agent.review_summary', CAST(:run AS uuid), CAST(:out AS jsonb), now())"
+                ),
+                {
+                    "id": str(kunci),
+                    "run": str(putaran),
+                    "out": json.dumps(
+                        {"status": "completed", "narrative": "status run: completed"}
+                    ),
+                },
+            )
+
+        kepala = pemakai("sppg_head", "Jakarta")
+        resp = client.get("/demo/agent/last-run", headers=_login(client, kepala))
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["found"] is True
+        assert body["decision_id"] == str(kunci)
+        assert body["agents_run_id"] == str(putaran)
+        status_per_agen = {a["key"]: a["status"] for a in body["agents"]}
+        assert status_per_agen == {
+            "supply": "ok",
+            "demand": "ok",
+            "freshness": "ok",
+            "safety": "ok",
+            "price": "ok",
+            "logistics": "ok",
+            "evidence": "ok",
+            "verifier": "degraded",
+        }, status_per_agen
+        assert "missing" not in status_per_agen.values()
+        assert body["agent_review"]["status"] == "completed"
+    finally:
+        with engine.begin() as conn:
+            _bersihkan(conn)
+        engine.dispose()
+
+
+def test_last_run_memilih_putaran_pipeline_penuh(client, pemakai) -> None:
     """Kasus POSITIF: putaran pipeline lengkap benar-benar terpilih.
 
     Tanpa tes ini, filter "jejak pipeline lengkap" bisa lolos hanya karena

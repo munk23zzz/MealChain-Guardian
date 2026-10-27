@@ -6,6 +6,13 @@ Independensi yang wajib dipenuhi verifier (AUD-9A-03) ada pada dua hal:
 sama dengan supervisor — itu keputusan owner — tetapi prompt supervisor TIDAK
 boleh dipakai di sini, dan verifier tidak menerima narasi sebagai data.
 
+Resolusi model memakai pintu yang SAMA dengan sembilan agent lain
+(`agent/workers/reasoner.py`): rantai provider backend → boto3
+`bedrock-runtime.converse` → `strands` → `None` (27 Okt 2026). Sebelumnya hanya
+`strands` yang bisa dipakai, dan SDK itu tidak terpasang di image backend —
+akibatnya verifier selalu `unavailable` walau backend punya kredensial. System
+prompt yang ditempel tetap prompt VERIFIER, tidak pernah prompt supervisor.
+
 Tanpa model (kredensial/runtime tidak ada), verifier tetap berjalan:
 cek deterministik tetap dijalankan, `flagged` tetap bisa terbit, dan `consistent`
 tidak pernah dikarang — hasilnya `unavailable` (fail-closed).
@@ -19,48 +26,20 @@ Konfigurasi:
 
 from __future__ import annotations
 
-import os
 from collections.abc import Callable
 from functools import lru_cache
+
+ModelCallable = Callable[[str], str]
 
 ENV_MODEL_ID = "VERIFIER_AGENT_MODEL"
 ENV_MODEL_CADANGAN = "SUPERVISOR_MODEL_PRIMARY"
 ENV_REGION = "AWS_REGION"
-
-ModelCallable = Callable[[str], str]
+AGENT_VERIFIER = "verifier"
 
 
 @lru_cache(maxsize=1)
 def model_dari_env() -> ModelCallable | None:
     """Bangun callable model dari environment; `None` bila tidak memungkinkan."""
-    model_id = (os.environ.get(ENV_MODEL_ID) or os.environ.get(ENV_MODEL_CADANGAN) or "").strip()
-    if not model_id:
-        return None
-    try:  # pragma: no cover - bergantung runtime AgentCore/Bedrock
-        import strands
-    except Exception:  # noqa: BLE001 - tanpa SDK, audit tetap deterministik
-        return None
+    from .workers.reasoner import reasoner_dari_env
 
-    model_kwargs: dict[str, object] = {"model_id": model_id}
-    region = (os.environ.get(ENV_REGION) or "").strip()
-    if region:
-        model_kwargs["region_name"] = region
-    try:  # pragma: no cover
-        agent = strands.Agent(
-            model=strands.models.BedrockModel(**model_kwargs),
-            tools=[],
-            system_prompt=_system_prompt_verifier(),
-        )
-    except Exception:  # noqa: BLE001 - kredensial tidak ada ≠ audit gagal
-        return None
-
-    def _panggil(prompt: str) -> str:  # pragma: no cover
-        return str(agent(prompt))
-
-    return _panggil
-
-
-def _system_prompt_verifier() -> str:
-    from .workers.verifier import load_system_prompt
-
-    return load_system_prompt()
+    return reasoner_dari_env(agent=AGENT_VERIFIER)

@@ -298,7 +298,9 @@ def test_endpoint_demo_memakai_jalur_lokal_saat_mode_local(
             commodity=commodity
         ),
     )
-    monkeypatch.setattr("app.api.demo.review_decision_local", _fake_local)
+    monkeypatch.setattr(
+        "app.services.agent_review_local.review_decision_local", _fake_local
+    )
     monkeypatch.setattr("app.api.demo.review_decision", _agentcore_tak_boleh)
     monkeypatch.setattr("app.api.demo.settings.multi_agent_review", True)
     monkeypatch.setattr("app.api.demo.settings.agent_review_mode", "local")
@@ -341,7 +343,9 @@ def test_endpoint_demo_tetap_agentcore_untuk_mode_lama(
         ),
     )
     monkeypatch.setattr("app.api.demo.review_decision", _fake_agentcore)
-    monkeypatch.setattr("app.api.demo.review_decision_local", _lokal_tak_boleh)
+    monkeypatch.setattr(
+        "app.services.agent_review_local.review_decision_local", _lokal_tak_boleh
+    )
     monkeypatch.setattr("app.api.demo.settings.multi_agent_review", True)
     monkeypatch.setattr("app.api.demo.settings.agent_review_mode", "advisory")
     monkeypatch.setattr("app.api.demo.settings.agent_review_timeout_seconds", 75)

@@ -35,7 +35,7 @@ KARANTINA_BLOKIR = ("quarantined", "failed")
 class SafetyWorker(ReadOnlyWorker):
     name = AgentName.SAFETY
 
-    def run(self, context: WorkerContext) -> AgentFinding:
+    def _run_deterministik(self, context: WorkerContext) -> AgentFinding:
         started = monotonic()
         try:
             location, commodity = self._target(context)

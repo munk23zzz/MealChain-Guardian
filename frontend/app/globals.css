@@ -4233,7 +4233,9 @@ a:focus-visible {
 }
 .swarm-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Sembilan kartu (tujuh worker + supervisor + verifier): tiga kolom memberi
+     3x3 yang rapi; empat kolom menyisakan satu kartu sendirian di baris akhir. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 .swarm-card,
@@ -11832,8 +11834,9 @@ p, li, dd { text-wrap: pretty; }
   font-size: var(--fs-2);
   font-weight: 500;
 }
-/* Tujuh agen review di Demo Control. Tiap kartu selalu hadir; keadaan dibaca
-   dari latar + tepi + kata di chip, bukan warna saja. */
+/* Sembilan agen review di Demo Control (tujuh worker + supervisor + verifier).
+   Tiap kartu selalu hadir; keadaan dibaca dari latar + tepi + kata di chip,
+   bukan warna saja. */
 .dc-agents {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
@@ -11900,6 +11903,21 @@ p, li, dd { text-wrap: pretty; }
   font-variant-numeric: tabular-nums;
   color: var(--ink);
   white-space: nowrap;
+}
+/* Ringkasan narasi supervisor + kesimpulan audit verifier. Dibatasi tiga baris
+   supaya satu narasi panjang tidak menjulangkan baris grid (kartu sebelahnya
+   ikut gepeng); teks utuh tetap ada di DOM dan di lipatan "Hasil supervisor". */
+.dc-agent-note {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  margin: 0;
+  font-size: var(--fs-1);
+  line-height: 1.45;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
 }
 .dc-agent[data-state="ok"] {
   background: var(--ok-bg);

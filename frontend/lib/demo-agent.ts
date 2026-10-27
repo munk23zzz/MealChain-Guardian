@@ -9,6 +9,10 @@
  *   "tidak tercatat") — bukan disembunyikan atau diganti tanda hubung.
  */
 
+// Urutan & label agen dipakai bersama panel Agent Log: satu sumber kebenaran
+// supaya "sembilan agen" tidak berbeda susunannya di dua layar.
+import { SWARM_AGENTS } from "./agent-swarm";
+
 export type AgentStep = {
   step_name: string;
   tool_called?: string | null;
@@ -191,31 +195,31 @@ export function supervisorLine(sup: AgentSupervisor | null | undefined): string 
   return `Narasi supervisor berstatus ${sup.status}${provider}${fallback}.`;
 }
 
-/** Kalimat review 7-worker — jujur soal runtime yang tidak terjangkau. */
+/** Kalimat review sembilan agen — jujur soal runtime yang tidak terjangkau. */
 export function agentReviewLine(review: AgentReview | null | undefined): string {
   const status = review?.status;
   if (!status || status === "missing") {
-    return "Review 8 agen tidak tercatat pada putaran ini.";
+    return "Review sembilan agen tidak tercatat pada putaran ini.";
   }
   if (status === "completed" || status === "partial") {
     const run = review?.run_id ? ` · run ${review.run_id.slice(0, 8)}` : "";
-    return `Review 8 agen selesai (${status})${run}.`;
+    return `Review sembilan agen selesai (${status})${run}.`;
   }
   if (status === "vetoed") {
     // Guardian memblokir: review tetap berjalan lengkap, hasilnya tidak boleh
     // dieksekusi. Jangan dilaporkan sebagai "selesai" biasa.
     const run = review?.run_id ? ` · run ${review.run_id.slice(0, 8)}` : "";
-    return `Review 8 agen selesai dengan veto guardian (vetoed)${run}.`;
+    return `Review sembilan agen selesai dengan veto guardian (vetoed)${run}.`;
   }
   if (status === "unavailable") {
     // Detail teknis (alamat runtime) sengaja TIDAK ditampilkan di layar;
     // panel ini membuktikan pipeline utama, bukan kesehatan infrastruktur.
-    return "Review 8 agen tidak terjangkau (unavailable) — pipeline utama di atas tetap selesai.";
+    return "Review sembilan agen tidak terjangkau (unavailable) — pipeline utama di atas tetap selesai.";
   }
   if (status === "disabled") {
-    return "Review 8 agen dimatikan di konfigurasi (disabled).";
+    return "Review sembilan agen dimatikan di konfigurasi (disabled).";
   }
-  return `Review 8 agen berstatus ${status} — pipeline utama di atas tetap selesai.`;
+  return `Review sembilan agen berstatus ${status} — pipeline utama di atas tetap selesai.`;
 }
 
 /** Kalimat progres saat agent bekerja; detik berasal dari jam klien. */
@@ -249,6 +253,10 @@ export type DemoAgentCard = {
   statusLabel: string;
   duration: string;
   warnings: string;
+  /** Baris fakta kartu. Worker: Durasi + Peringatan. Supervisor: Provider + Peringatan. */
+  meta: Fact[];
+  /** Ringkasan narasi supervisor; kartu worker/verifier tidak punya (null). */
+  note: string | null;
 };
 
 const AGEN_STATE: Record<string, DemoAgentCard["state"]> = {
@@ -271,19 +279,114 @@ const AGEN_LABEL: Record<DemoAgentCard["state"], string> = {
   idle: "Tidak dijalankan",
 };
 
+/**
+ * Keadaan narasi supervisor. `narrated`/`unavailable` bukan status worker, jadi
+ * labelnya pun sendiri — tanpa peta ini narasi yang berhasil tampil "Terbatas".
+ */
+const SUPERVISOR_STATE: Record<string, DemoAgentCard["state"]> = {
+  narrated: "ok",
+  unavailable: "limited",
+  failed: "failed",
+  error: "failed",
+};
+
+const SUPERVISOR_LABEL: Record<string, string> = {
+  narrated: "Narasi selesai",
+  unavailable: "Narasi tidak tersedia",
+};
+
+const SUPERVISOR_KEY = "supervisor";
+
 function durasiAgen(ms: number | null | undefined): string {
   if (typeof ms !== "number" || !Number.isFinite(ms) || ms < 0) return "—";
   if (ms < 1000) return `${Math.round(ms)} md`;
   return `${(ms / 1000).toFixed(1).replace(".", ",")} dtk`;
 }
 
+function teksAtau(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function faktaWorker(duration: string, warnings: string): Fact[] {
+  return [
+    { label: "Durasi", value: duration },
+    { label: "Peringatan", value: warnings },
+  ];
+}
+
+/** Kartu untuk agen yang tidak dikirim payload: tetap ada, tanpa angka. */
+function kartuKosong(agent: { key: string; label: string }): DemoAgentCard {
+  return {
+    key: agent.key,
+    label: agent.label,
+    state: "idle",
+    statusLabel: "Belum tercatat",
+    duration: "—",
+    warnings: "—",
+    meta: faktaWorker("—", "—"),
+    note: null,
+  };
+}
+
 /**
- * Kartu tujuh agen untuk panel "Bukti agent" di Demo Control.
+ * Kartu supervisor — sumbernya `run.supervisor` (status narasi, provider,
+ * ringkasan), bukan baris worker. Nilai yang tidak ada tetap "—"/"Belum
+ * tercatat"; tidak ada 0 atau "0 peringatan" karangan.
+ */
+function kartuSupervisor(
+  sup: AgentSupervisor | null | undefined,
+  sedangJalan: boolean
+): DemoAgentCard {
+  const label = SWARM_AGENTS.find((agent) => agent.key === SUPERVISOR_KEY)?.label ?? "Supervisor";
+  const provider = teksAtau(sup?.provider) ?? "—";
+  if (sedangJalan) {
+    // Putaran baru: narasi lama sudah basi, jangan ditampilkan.
+    return {
+      key: SUPERVISOR_KEY,
+      label,
+      state: "running",
+      statusLabel: "Berjalan",
+      duration: "—",
+      warnings: "—",
+      meta: [
+        { label: "Provider", value: provider },
+        { label: "Peringatan", value: "—" },
+      ],
+      note: null,
+    };
+  }
+  const status = teksAtau(sup?.status)?.toLowerCase() ?? null;
+  const dikenal = status ? SUPERVISOR_STATE[status] ?? null : null;
+  const state: DemoAgentCard["state"] = dikenal ?? "idle";
+  return {
+    key: SUPERVISOR_KEY,
+    label,
+    state,
+    statusLabel:
+      (status ? SUPERVISOR_LABEL[status] : null) ??
+      (dikenal ? AGEN_LABEL[dikenal] : "Belum tercatat"),
+    // Payload supervisor tidak membawa durasi/peringatan: "—", bukan 0.
+    duration: "—",
+    warnings: "—",
+    meta: [
+      { label: "Provider", value: provider },
+      { label: "Peringatan", value: "—" },
+    ],
+    note: teksAtau(sup?.summary),
+  };
+}
+
+/**
+ * Kartu sembilan agen untuk panel "Bukti agent" di Demo Control — urutan
+ * pipeline: tujuh worker → supervisor → verifier.
  *
- * Selalu tujuh kartu. Status hanya dari data yang benar-benar ada:
+ * Selalu sembilan kartu bila putaran punya baris review. Status hanya dari data
+ * yang benar-benar ada:
  * - baris review tersimpan → status aslinya (Selesai/Terbatas/Gagal);
  * - belum ada baris, tetapi putaran sedang berjalan → "Berjalan";
- * - belum ada baris dan tidak ada putaran → "Tidak dijalankan".
+ * - belum ada baris dan tidak ada putaran → "Tidak dijalankan"/"Belum tercatat".
  * Angka kosong tetap "—", bukan 0.
  */
 export function demoAgentCards(
@@ -291,20 +394,34 @@ export function demoAgentCards(
   sedangJalan = false
 ): DemoAgentCard[] {
   const daftar = Array.isArray(run?.agents) ? run!.agents! : [];
-  // Putaran baru sedang berjalan: baris review ditulis sekaligus di akhir,
-  // jadi selama itu ketujuh kartu jujur berstatus "Berjalan" — bukan hasil
-  // putaran sebelumnya yang sudah basi.
-  if (sedangJalan && daftar.length > 0) {
-    return daftar.map((agen) => ({
-      key: agen.key,
-      label: agen.label,
-      state: "running" as const,
-      statusLabel: "Berjalan",
-      duration: "—",
-      warnings: "—",
-    }));
+  // Tanpa satu pun baris review, blok bukti tidak mengarang kartu: pemanggil
+  // menampilkan kalimat "review belum tercatat" alih-alih sembilan kartu kosong.
+  if (daftar.length === 0) return [];
+  const byKey = new Map<string, DemoAgent>();
+  for (const agen of daftar) {
+    if (agen?.key) byKey.set(agen.key, agen);
   }
-  return daftar.map((agen) => {
+  return SWARM_AGENTS.map((agent) => {
+    if (agent.key === SUPERVISOR_KEY) {
+      return kartuSupervisor(run?.supervisor, sedangJalan);
+    }
+    const agen = byKey.get(agent.key);
+    if (!agen) return kartuKosong(agent);
+    // Putaran baru sedang berjalan: baris review ditulis sekaligus di akhir,
+    // jadi selama itu semua kartu jujur berstatus "Berjalan" — bukan hasil
+    // putaran sebelumnya yang sudah basi.
+    if (sedangJalan) {
+      return {
+        key: agen.key,
+        label: agen.label,
+        state: "running" as const,
+        statusLabel: "Berjalan",
+        duration: "—",
+        warnings: "—",
+        meta: faktaWorker("—", "—"),
+        note: null,
+      };
+    }
     const verdict = (agen.verdict || "").toLowerCase();
     // Verdict `flagged` = audit SELESAI dan menandai masalah → label definitif
     // "Ditinjau". Tanpa ini kartu verifier memakai `degraded` → "Terbatas",
@@ -314,16 +431,20 @@ export function demoAgentCards(
         ? "flagged"
         : AGEN_STATE[(agen.status || "").toLowerCase()] ?? "idle";
     const dikenal = state !== "idle";
+    const duration = dikenal ? durasiAgen(agen.duration_ms) : "—";
+    const warnings =
+      dikenal && typeof agen.warnings === "number" ? `${agen.warnings} peringatan` : "—";
     return {
       key: agen.key,
       label: agen.label,
       state,
       statusLabel: AGEN_LABEL[state],
-      duration: dikenal ? durasiAgen(agen.duration_ms) : "—",
-      warnings:
-        dikenal && typeof agen.warnings === "number"
-          ? `${agen.warnings} peringatan`
-          : "—",
+      duration,
+      warnings,
+      meta: faktaWorker(duration, warnings),
+      // Kartu verifier memuat kesimpulan auditnya; kartu worker tidak, karena
+      // narasi panjangnya sudah ada di detail Agent Log.
+      note: agen.key === "verifier" ? teksAtau(agen.summary) : null,
     };
   });
 }

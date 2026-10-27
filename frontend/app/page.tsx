@@ -144,7 +144,12 @@ import FoodSafetyBoard from "../components/FoodSafetyBoard";
 import SurplusBoard from "../components/SurplusBoard";
 import SupplierBoard from "../components/SupplierBoard";
 import { runOf, type QualityRun } from "../lib/agent-quality";
-import { AKUN_DEMO_CADANGAN, kelompokkanAkun, type AkunDemo } from "../lib/demo-accounts";
+import {
+  AKUN_DEMO_CADANGAN,
+  kelompokkanAkun,
+  muatAkunDemo,
+  type AkunDemo,
+} from "../lib/demo-accounts";
 import { defaultEvidenceId } from "../lib/evidence";
 import { decisionGroups, statusWord, typeWord } from "../lib/decision-picker";
 
@@ -235,11 +240,20 @@ export default function Home() {
   }, []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  // Akun demo untuk tombol login (26 Okt 2026). Daftar statis tanpa sandi:
-  // `GET /auth/demo-accounts` kini menuntut token admin, sedangkan halaman ini
-  // publik — memanggilnya dari sini hanya menghasilkan 401. Sandi diketik
-  // operator; tombol demo mengisi email saja.
-  const akunDemo: AkunDemo[] = AKUN_DEMO_CADANGAN;
+  // Akun demo untuk tombol login (27 Okt 2026). Sandi tidak ditanam di bundel:
+  // ia datang dari `GET /auth/demo-login`, yang hanya menjawab bila server
+  // menyalakan DEMO_MODE + DEMO_LOGIN_AUTOFILL. Kalau tidak, daftar cadangan
+  // tetap mengisi email dan operator mengetik sandi.
+  const [akunDemo, setAkunDemo] = useState<AkunDemo[]>(AKUN_DEMO_CADANGAN);
+  useEffect(() => {
+    let batal = false;
+    muatAkunDemo().then((akun) => {
+      if (!batal) setAkunDemo(akun);
+    });
+    return () => {
+      batal = true;
+    };
+  }, []);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   // PRD 2.4 (arah Roy 2026-10-09): navigasi = 5 tab sesuai 7 screen PRD
@@ -761,9 +775,10 @@ export default function Home() {
   }
 
   if (!token) {
-    // 26 Okt 2026: satu klik peran mengisi email saja. Sandi tidak pernah
-    // datang dari klien maupun bundel — `GET /auth/demo-accounts` sekarang
-    // menuntut token admin, jadi halaman publik tidak memanggilnya.
+    // 27 Okt 2026: satu klik peran mengisi email DAN sandi (bila server
+    // menyalakan DEMO_MODE + DEMO_LOGIN_AUTOFILL). Sandi tidak pernah ditanam
+    // di bundel; `GET /auth/demo-accounts` tetap ber-token admin dan tidak
+    // dipanggil halaman publik ini.
     const { utama: demoAccounts, kota: demoKota } = kelompokkanAkun(akunDemo);
     return (
       <main className="login-shell">
@@ -823,9 +838,9 @@ export default function Home() {
                       className="demo-link"
                       onClick={() => {
                         setEmail(acc.email);
-                        // Tombol demo TIDAK mengisi sandi: tidak ada sandi di
-                        // klien. Isi manual dari berkas lingkungan operator.
-                        setPassword("");
+                        // Sandi terisi bila server menyalakan autofill demo;
+                        // kalau tidak, `acc.password` undefined → kolom kosong.
+                        setPassword(acc.password ?? "");
                         setLoginError(null);
                       }}
                     >
@@ -846,7 +861,7 @@ export default function Home() {
                       className="demo-link"
                       onClick={() => {
                         setEmail(acc.email);
-                        setPassword("");
+                        setPassword(acc.password ?? "");
                         setLoginError(null);
                       }}
                     >

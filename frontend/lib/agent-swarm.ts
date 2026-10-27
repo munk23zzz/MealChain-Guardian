@@ -1,10 +1,11 @@
 /**
- * Data panel review 8 agen untuk Agent Log (P5).
+ * Data panel review sembilan agen untuk Agent Log (P5).
  *
  * Trace worker disimpan sebagai baris `agent_traces` dengan `run_id`,
  * `agent_name`, `confidence`, dan `citations`. Modul ini murni: memilih satu
- * putaran TERBARU dan membentuk delapan kartu. Nilai yang tidak ada tetap "—",
- * bukan 0 atau enum mentah.
+ * putaran TERBARU dan membentuk sembilan kartu — tujuh worker, supervisor
+ * (dari `run.supervisor`, bukan dari baris worker), lalu verifier. Nilai yang
+ * tidak ada tetap "—", bukan 0 atau enum mentah.
  */
 
 import { stepDurationLabel } from "./agent-trace";
@@ -17,6 +18,7 @@ export type SwarmAgentKey =
   | "price"
   | "logistics"
   | "evidence"
+  | "supervisor"
   | "verifier";
 
 export const SWARM_AGENTS: ReadonlyArray<{
@@ -31,12 +33,15 @@ export const SWARM_AGENTS: ReadonlyArray<{
   { key: "price", label: "Harga", stage: "OPTIMIZE" },
   { key: "logistics", label: "Logistik", stage: "OPTIMIZE" },
   { key: "evidence", label: "Bukti", stage: "TRACE" },
-  // Agent ke-8: auditor. Dijalankan setelah narasi supervisor, tampil sebagai
+  // Agen ke-8: supervisor. Merangkum temuan worker menjadi satu narasi; ia
+  // kartu sendiri karena datanya datang dari `run.supervisor`, bukan worker.
+  { key: "supervisor", label: "Supervisor", stage: "SUPERVISE" },
+  // Agen ke-9: auditor. Dijalankan setelah narasi supervisor, tampil sebagai
   // kartu sendiri supaya juri melihat siapa yang mengaudit siapa.
   { key: "verifier", label: "Verifikasi", stage: "VERIFY" },
 ];
 
-const WORKER_KEYS = new Set<string>(SWARM_AGENTS.map((agent) => agent.key));
+const AGENT_KEYS = new Set<string>(SWARM_AGENTS.map((agent) => agent.key));
 const SUPERVISOR = "supervisor";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -51,9 +56,28 @@ const STATUS_LABELS: Record<string, string> = {
   vetoed: "Diblokir",
 };
 
+/**
+ * Status narasi supervisor: `narrated`/`unavailable` bukan status worker, jadi
+ * ia punya label sendiri. Tanpa peta ini kartu supervisor menampilkan
+ * "Tidak dikenal" untuk putaran yang justru berhasil.
+ */
+const SUPERVISOR_LABELS: Record<string, string> = {
+  narrated: "Narasi selesai",
+  unavailable: "Narasi tidak tersedia",
+};
+
+/** `data-state` kartu supervisor: hanya dua keadaan narasi yang definitif. */
+const SUPERVISOR_STATES: Record<string, string> = {
+  narrated: "ok",
+  unavailable: "degraded",
+};
+
+
 export type SwarmRun = {
   runId: string;
   rows: any[];
+  /** Semua baris agen di jejak keputusan ini (lintas run_id), urutan asli. */
+  allRows?: any[];
   supervisor: any | null;
 };
 
@@ -93,12 +117,18 @@ function dateValue(value: unknown): number | null {
 
 function isKnownRow(row: any): boolean {
   const agent = agentOf(row);
-  return Boolean(runOf(row) && agent && (WORKER_KEYS.has(agent) || agent === SUPERVISOR));
+  return Boolean(runOf(row) && agent && (AGENT_KEYS.has(agent) || agent === SUPERVISOR));
 }
 
 /**
  * Pilih putaran review terbaru. Urutan memakai timestamp `step_at`; jika
  * timestamp tidak terbaca, urutan kemunculan dipakai apa adanya.
+ *
+ * Satu keputusan bisa punya LEBIH DARI SATU run_id: `agent.verifier` menulis
+ * auditnya di run sendiri (verify.py), terpisah dari run pipeline yang menulis
+ * ketujuh worker. Karena itu run utama dipilih dari grup dengan baris TERBANYAK
+ * (tie → yang terbaru) — kalau hanya "yang terbaru" yang dipakai, grup audit
+ * yang cuma berisi satu baris bisa menutupi seluruh review.
  */
 export function latestSwarmRun(steps: any[] | null | undefined): SwarmRun | null {
   if (!Array.isArray(steps) || steps.length === 0) return null;
@@ -106,9 +136,11 @@ export function latestSwarmRun(steps: any[] | null | undefined): SwarmRun | null
     string,
     { rows: any[]; latestAt: number | null; lastIndex: number }
   >();
+  const allRows: any[] = [];
 
   steps.forEach((row, index) => {
     if (!isKnownRow(row)) return;
+    allRows.push(row);
     const runId = runOf(row) as string;
     const group = groups.get(runId) ?? {
       rows: [],
@@ -126,6 +158,9 @@ export function latestSwarmRun(steps: any[] | null | undefined): SwarmRun | null
 
   if (groups.size === 0) return null;
   const [runId, chosen] = Array.from(groups.entries()).sort((a, b) => {
+    if (a[1].rows.length !== b[1].rows.length) {
+      return b[1].rows.length - a[1].rows.length;
+    }
     const atA = a[1].latestAt ?? -1;
     const atB = b[1].latestAt ?? -1;
     if (atA !== atB) return atB - atA;
@@ -134,6 +169,7 @@ export function latestSwarmRun(steps: any[] | null | undefined): SwarmRun | null
   return {
     runId,
     rows: chosen.rows,
+    allRows,
     supervisor:
       chosen.rows.find(
         (row) => agentOf(row) === SUPERVISOR || row?.step_name === "SUPERVISE"
@@ -189,14 +225,64 @@ export function shortRunId(runId: string | null | undefined): string {
   return value ? value.slice(0, 8) : "—";
 }
 
+/**
+ * Kartu supervisor. Datanya dari `run.supervisor` (baris SUPERVISE pada run
+ * yang sama), BUKAN dari baris worker: narrative/status narasi tidak pernah
+ * hidup di baris worker, jadi mengambilnya dari `rows` akan selalu kosong.
+ */
+function supervisorCard(run: SwarmRun): SwarmCard {
+  const row = run.supervisor ?? null;
+  const agent = SWARM_AGENTS[SWARM_AGENTS.findIndex((a) => a.key === SUPERVISOR)];
+  const rawStatus = text(row?.output_summary?.status)?.toLowerCase() ?? null;
+  // Narasi yang belum tercatat bukan "Tidak dikenal": kartunya tetap ada dengan
+  // keadaan jujur "Belum tercatat" supaya jumlah kartu tidak berubah-ubah.
+  const state = !row
+    ? "not_recorded"
+    : rawStatus
+      ? (SUPERVISOR_STATES[rawStatus] ?? statusKey(rawStatus))
+      : "not_recorded";
+  const label = !row
+    ? "Belum tercatat"
+    : rawStatus
+      ? (SUPERVISOR_LABELS[rawStatus] ?? statusLabel(rawStatus))
+      : "Belum tercatat";
+  return {
+    ...agent,
+    row,
+    status: state,
+    statusLabel: label,
+    duration: stepDurationLabel(row) ?? "—",
+    confidence: confidenceLabel(row?.confidence),
+    citations: citationsLabel(row?.citations),
+    warningCount: warningCountOf(row),
+    summary:
+      text(row?.output_summary?.narrative) ??
+      text(row?.output_summary?.summary) ??
+      "—",
+  };
+}
+
 export function swarmCards(run: SwarmRun): SwarmCard[] {
   const byAgent = new Map<string, any>();
   for (const row of run.rows) {
     const agent = agentOf(row);
-    if (agent && WORKER_KEYS.has(agent)) byAgent.set(agent, row);
+    if (agent && AGENT_KEYS.has(agent) && agent !== SUPERVISOR) {
+      byAgent.set(agent, row);
+    }
   }
+  // Verifier menulis auditnya di run_id SENDIRI (verify.py), jadi barisnya
+  // sering tidak ada di run pipeline yang dipilih. Ambil yang terbaru dari
+  // jejak keputusan yang sama — auditnya nyata, hanya beda run_id. Worker
+  // TIDAK memakai cadangan ini: baris worker yang hilang berarti worker itu
+  // memang tidak melapor di putaran ini.
+  const verifierFallback = (run.allRows ?? [])
+    .filter((row) => agentOf(row) === "verifier")
+    .pop();
   return SWARM_AGENTS.map((agent) => {
-    const row = byAgent.get(agent.key) ?? null;
+    if (agent.key === SUPERVISOR) return supervisorCard(run);
+    const row =
+      byAgent.get(agent.key) ??
+      (agent.key === "verifier" ? verifierFallback ?? null : null);
     const rawStatus = row?.output_summary?.status;
     return {
       ...agent,

@@ -132,6 +132,20 @@ def demo_mode_aktif(env: Mapping[str, str] | None = None) -> bool:
     return (sumber.get("DEMO_MODE") or "").strip().lower() in _NILAI_AKTIF
 
 
+def demo_login_autofill_aktif(env: Mapping[str, str] | None = None) -> bool:
+    """Kunci kedua untuk `GET /auth/demo-login` (layar login, tanpa token).
+
+    Kenapa perlu dua kunci: endpoint itu tidak ber-token — satu-satunya pemakainya
+    adalah halaman login yang belum punya sesi. Supaya instalasi nyata tidak pernah
+    membuka kredensial, autofill harus dinyalakan eksplisit lewat
+    `DEMO_LOGIN_AUTOFILL=true` DAN `DEMO_MODE=true`. Default keduanya mati.
+    """
+    sumber: Mapping[str, str] = os.environ if env is None else env
+    if not demo_mode_aktif(sumber):
+        return False
+    return (sumber.get("DEMO_LOGIN_AUTOFILL") or "").strip().lower() in _NILAI_AKTIF
+
+
 def _kunci_env(role: str) -> str:
     return f"DEMO_PASSWORD_{role.upper()}"
 

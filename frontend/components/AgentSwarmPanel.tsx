@@ -1,6 +1,10 @@
-// Panel review 8 agen di tab Agent Log (P5): tujuh analitik + verifier.
-// Satu run = tujuh kartu worker + kartu verifier + ringkasan SUPERVISE. Kartu tanpa baris trace
-// ditulis "Belum tercatat" — bukan diisi angka/enum karangan.
+// Panel review sembilan agen di tab Agent Log (P5): tujuh analitik + supervisor + verifier.
+// Satu run = sembilan kartu (urutan pipeline: worker → SUPERVISE → audit). Kartu tanpa
+// baris trace ditulis "Belum tercatat" — bukan diisi angka/enum karangan.
+//
+// Supervisor kini kartu kelas satu (datanya dari `run.supervisor`); blok di bawah grid
+// hanya memuat veto & kontradiksi yang tidak muat di kartu, supaya narasinya tidak
+// tercetak dua kali.
 
 import {
   latestSwarmRun,
@@ -22,8 +26,8 @@ export default function AgentSwarmPanel({
     return (
       <p className="empty-state">
         {decisionId
-          ? "Belum ada review 8 agen untuk keputusan ini."
-          : "Pilih keputusan dulu untuk melihat review 8 agen."}
+          ? "Belum ada review sembilan agen untuk keputusan ini."
+          : "Pilih keputusan dulu untuk melihat review sembilan agen."}
       </p>
     );
   }
@@ -42,7 +46,7 @@ export default function AgentSwarmPanel({
     <section className="swarm-panel" aria-labelledby="swarm-title">
       <div className="swarm-head">
         <div>
-          <p className="swarm-kicker">Review 8 agen · advisory</p>
+          <p className="swarm-kicker">Review sembilan agen · advisory</p>
           <h2 id="swarm-title">Pemeriksaan lintas domain</h2>
         </div>
         <div className="swarm-meta">
@@ -53,8 +57,9 @@ export default function AgentSwarmPanel({
         </div>
       </div>
       <p className="swarm-note">
-        Worker hanya membaca data dan memeriksa keputusan deterministik. Panel ini
-        bukan approval dan tidak mengeksekusi apa pun.
+        Tujuh worker membaca data dan memeriksa keputusan deterministik; supervisor
+        merangkum temuannya, verifier mengaudit hasilnya. Panel ini bukan approval dan
+        tidak mengeksekusi apa pun.
       </p>
 
       <div className="swarm-grid">
@@ -114,13 +119,13 @@ export default function AgentSwarmPanel({
         ))}
       </div>
 
+      {/* Veto & kontradiksi dari baris SUPERVISE. Narasi tidak diulang di sini:
+          ia sudah ada di detail kartu Supervisor. */}
       <div className="swarm-supervisor">
         <div className="swarm-card-head">
-          <span className="swarm-dot" aria-hidden="true" />
-          <h3>Ringkasan supervisor</h3>
+          <h3>Catatan supervisor</h3>
           <span className="swarm-status">{summary.status}</span>
         </div>
-        <p className="swarm-summary-text">{summary.narrative}</p>
         <dl className="swarm-facts swarm-facts-wide">
           <div>
             <dt>Safety veto</dt>

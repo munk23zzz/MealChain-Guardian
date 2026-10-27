@@ -260,7 +260,7 @@ describe("label angka & uang", () => {
   });
 });
 
-describe("kartu tujuh agen di Demo Control", () => {
+describe("kartu sembilan agen di Demo Control", () => {
   const agen = [
     { key: "supply", label: "Pasokan", status: "ok", duration_ms: 1250, warnings: 0 },
     { key: "demand", label: "Permintaan", status: "degraded", duration_ms: 400, warnings: 2 },
@@ -269,12 +269,55 @@ describe("kartu tujuh agen di Demo Control", () => {
     { key: "price", label: "Harga", status: "ok", duration_ms: 90 },
     { key: "logistics", label: "Logistik", status: "ok", duration_ms: 800 },
     { key: "evidence", label: "Bukti", status: "ok", duration_ms: 300 },
+    {
+      key: "verifier",
+      label: "Verifikasi",
+      status: "ok",
+      verdict: "consistent",
+      duration_ms: 12264,
+      warnings: 0,
+    },
   ];
+  const SUPERVISOR = {
+    status: "narrated",
+    provider: "primary:agentcore",
+    fallback_used: false,
+    summary: "Jakarta kekurangan 2.110 kg beras; keputusan menunggu approval.",
+  };
+
+  function fakta(kartu: { meta: Array<{ label: string; value: string }> }, label: string) {
+    return kartu.meta.find((f) => f.label === label)?.value;
+  }
+
+  it("sembilan kartu berurutan: tujuh worker, supervisor, verifier", () => {
+    const kartu = demoAgentCards({
+      found: true,
+      agents_run_id: "r1",
+      agents: agen,
+      supervisor: SUPERVISOR,
+    } as any);
+    expect(kartu).toHaveLength(9);
+    expect(kartu.map((k) => k.key)).toEqual([
+      "supply",
+      "demand",
+      "freshness",
+      "safety",
+      "price",
+      "logistics",
+      "evidence",
+      "supervisor",
+      "verifier",
+    ]);
+  });
 
   it("memetakan status tersimpan ke keadaan dan label manusia", () => {
-    const kartu = demoAgentCards({ found: true, agents_run_id: "r1", agents: agen } as any);
-    expect(kartu).toHaveLength(7);
-    expect(kartu.map((k) => k.state)).toEqual([
+    const kartu = demoAgentCards({
+      found: true,
+      agents_run_id: "r1",
+      agents: agen,
+      supervisor: SUPERVISOR,
+    } as any);
+    expect(kartu.slice(0, 7).map((k) => k.state)).toEqual([
       "ok",
       "limited",
       "failed",
@@ -295,14 +338,64 @@ describe("kartu tujuh agen di Demo Control", () => {
     expect(kartu[1].warnings).toBe("2 peringatan");
   });
 
-  it("putaran sedang berjalan → semua Berjalan, tanpa angka lama", () => {
-    const kartu = demoAgentCards({ found: true, agents_run_id: "r1", agents: agen } as any, true);
+  it("kartu supervisor memakai run.supervisor: status, provider, ringkasan narasi", () => {
+    const kartu = demoAgentCards({
+      found: true,
+      agents_run_id: "r1",
+      agents: agen,
+      supervisor: SUPERVISOR,
+    } as any);
+    const sup = kartu[7];
+    expect(sup.label).toBe("Supervisor");
+    expect(sup.state).toBe("ok");
+    expect(sup.statusLabel).toBe("Narasi selesai");
+    expect(fakta(sup, "Provider")).toBe("primary:agentcore");
+    expect(sup.note).toContain("2.110 kg");
+    // Supervisor tidak punya durasi/peringatan di payload → "—", bukan 0.
+    expect(sup.duration).toBe("—");
+    expect(fakta(sup, "Peringatan")).toBe("—");
+  });
+
+  it("narasi supervisor yang tidak tersedia dikatakan apa adanya", () => {
+    const kartu = demoAgentCards({
+      found: true,
+      agents_run_id: "r1",
+      agents: agen,
+      supervisor: { status: "unavailable", provider: null, summary: null },
+    } as any);
+    expect(kartu[7].state).toBe("limited");
+    expect(kartu[7].statusLabel).toBe("Narasi tidak tersedia");
+    expect(fakta(kartu[7], "Provider")).toBe("—");
+    expect(kartu[7].note).toBeNull();
+  });
+
+  it("supervisor belum tercatat tetap kartu, tanpa angka karangan", () => {
+    const kartu = demoAgentCards({
+      found: true,
+      agents_run_id: "r1",
+      agents: agen,
+      supervisor: undefined,
+    } as any);
+    expect(kartu).toHaveLength(9);
+    expect(kartu[7].state).toBe("idle");
+    expect(kartu[7].statusLabel).toBe("Belum tercatat");
+    expect(fakta(kartu[7], "Provider")).toBe("—");
+    expect(kartu[7].duration).toBe("—");
+  });
+
+  it("putaran sedang berjalan → sembilan kartu Berjalan, tanpa angka lama", () => {
+    const kartu = demoAgentCards(
+      { found: true, agents_run_id: "r1", agents: agen, supervisor: SUPERVISOR } as any,
+      true
+    );
+    expect(kartu).toHaveLength(9);
     expect(kartu.every((k) => k.state === "running")).toBe(true);
     expect(kartu.every((k) => k.duration === "—")).toBe(true);
     expect(kartu[0].statusLabel).toBe("Berjalan");
+    expect(kartu[7].statusLabel).toBe("Berjalan");
   });
 
-  it("tanpa daftar agen tidak mengarang tujuh kartu", () => {
+  it("tanpa daftar agen tidak mengarang sembilan kartu", () => {
     expect(demoAgentCards({ found: false } as any)).toEqual([]);
     expect(demoAgentCards(null)).toEqual([]);
   });
@@ -325,12 +418,26 @@ describe("kartu tujuh agen di Demo Control", () => {
           warnings: 3,
         },
       ],
+      supervisor: SUPERVISOR,
     } as any);
 
-    expect(kartu[7].state).toBe("flagged");
-    expect(kartu[7].statusLabel).toBe("Ditinjau");
-    expect(kartu[7].duration).toBe("16,0 dtk");
-    expect(kartu[7].warnings).toBe("3 peringatan");
+    expect(kartu[8].state).toBe("flagged");
+    expect(kartu[8].statusLabel).toBe("Ditinjau");
+    expect(kartu[8].duration).toBe("16,0 dtk");
+    expect(kartu[8].warnings).toBe("3 peringatan");
+  });
+
+  it("verifier yang tidak terkirim tetap kartu 'Belum tercatat'", () => {
+    const kartu = demoAgentCards({
+      found: true,
+      agents_run_id: "r1",
+      agents: agen.slice(0, 7),
+      supervisor: SUPERVISOR,
+    } as any);
+    expect(kartu[8].key).toBe("verifier");
+    expect(kartu[8].state).toBe("idle");
+    expect(kartu[8].statusLabel).toBe("Belum tercatat");
+    expect(kartu[8].duration).toBe("—");
   });
 
   it("verdict terisi tetapi bukan flagged tetap memakai status baris", () => {
@@ -349,7 +456,7 @@ describe("kartu tujuh agen di Demo Control", () => {
     } as any);
 
     // `unavailable` = audit belum bisa menyimpulkan → tetap jujur "Terbatas".
-    expect(kartu[0].state).toBe("limited");
-    expect(kartu[0].statusLabel).toBe("Terbatas");
+    expect(kartu[8].state).toBe("limited");
+    expect(kartu[8].statusLabel).toBe("Terbatas");
   });
 });

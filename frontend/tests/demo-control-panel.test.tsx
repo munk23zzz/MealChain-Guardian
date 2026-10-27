@@ -52,6 +52,15 @@ const RUN: AgentRun = {
     { key: "price", label: "Harga", status: "error", duration_ms: 300, warnings: 0 },
     { key: "logistics", label: "Logistik", status: "ok", duration_ms: 700, warnings: 0 },
     { key: "evidence", label: "Bukti", status: "missing" },
+    {
+      key: "verifier",
+      label: "Verifikasi",
+      status: "ok",
+      verdict: "consistent",
+      duration_ms: 12264,
+      warnings: 0,
+      summary: "Audit sepakat: 8 cek lulus.",
+    },
   ],
 };
 
@@ -118,21 +127,33 @@ describe("DemoControlPanel — tiga blok, tanpa event", () => {
 });
 
 describe("DemoProof — bukti dari payload, bukan karangan", () => {
-  it("selalu tujuh kartu agen, keadaan dari status tersimpan", () => {
+  it("sembilan kartu agen: tujuh worker, supervisor, verifier", () => {
     const html = renderToStaticMarkup(<DemoProof run={RUN} />);
-    expect(html.match(/class="dc-agent"/g)).toHaveLength(7);
+    expect(html.match(/class="dc-agent"/g)).toHaveLength(9);
+    expect(html).toContain('aria-label="Sembilan agen review"');
     expect(html).toContain('data-state="ok"');
     expect(html).toContain('data-state="limited"');
     expect(html).toContain('data-state="failed"');
     expect(html).toContain('data-state="idle"');
     expect(html).toContain("Tidak dijalankan");
     expect(html).toContain("2 peringatan");
+    // Supervisor & verifier adalah kartu, bukan kalimat di luar grid.
+    expect(html).toContain(">Supervisor</h3>");
+    expect(html).toContain("Narasi selesai");
+    expect(html).toContain("fallback_1:sap_ai_core");
+    expect(html).toContain(">Verifikasi</h3>");
+    expect(html).toContain("Audit sepakat: 8 cek lulus.");
+    // Teks jumlah ikut sembilan.
+    expect(html).not.toContain("Tujuh agen");
+    expect(html).not.toContain("kedelapan");
+    expect(html).not.toContain("Review 8 agen");
   });
 
-  it("putaran sedang berjalan → ketujuh kartu Berjalan, bukan hasil lama", () => {
+  it("putaran sedang berjalan → kesembilan kartu Berjalan, bukan hasil lama", () => {
     const html = renderToStaticMarkup(<DemoProof run={RUN} running />);
-    expect(html.match(/class="dc-agent" data-state="running"/g)).toHaveLength(7);
+    expect(html.match(/class="dc-agent" data-state="running"/g)).toHaveLength(9);
     expect(html).toContain("Putaran baru sedang berjalan");
+    expect(html).toContain("kesembilan kartu");
     expect(html).not.toContain("Selesai");
   });
 

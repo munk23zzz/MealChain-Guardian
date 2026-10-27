@@ -13,7 +13,7 @@ from .base import ReadOnlyWorker, WorkerContext, as_number
 class SupplyWorker(ReadOnlyWorker):
     name = AgentName.SUPPLY
 
-    def run(self, context: WorkerContext) -> AgentFinding:
+    def _run_deterministik(self, context: WorkerContext) -> AgentFinding:
         started = monotonic()
         try:
             location, commodity = self._target(context)

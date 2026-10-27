@@ -1434,7 +1434,7 @@
         }
       }
     },
-  "/decisions/{decision_id}/audit-facts": {
+    "/decisions/{decision_id}/audit-facts": {
       "get": {
         "summary": "Get Audit Facts",
         "description": "Fakta audit deterministik untuk Verifier Agent (AUD-9A-03).\n\nVerifier agent (agent ke-8) tidak boleh menerima narasi supervisor sebagai\nsumber data. Endpoint ini adalah alat bacanya sendiri: SDC vs rincian,\nbatch sumber + gerbang kesegaran, bukti keputusan, exclusion yang berlaku,\ndan blok ledger — semuanya dihitung fungsi domain yang sudah ada.\n\nRead-only: tidak ada mutation, tanpa panggilan model. Semua angka lahir\ndari kode; klien (termasuk agent) tidak memasok angka apa pun.",
@@ -1603,6 +1603,23 @@
             "HTTPBearer": []
           }
         ]
+      }
+    },
+    "/auth/demo-login": {
+      "get": {
+        "summary": "Demo Login Accounts",
+        "description": "Akun demo untuk layar login — TANPA token, tapi dua kunci harus aktif.\n\nHalaman login bersifat publik dan belum punya sesi, jadi `GET\n/auth/demo-accounts` (ber-token `bgn_monitor`) tidak bisa dipakainya. Pintu\nini dibuat khusus untuk itu, dan hanya terbuka bila `DEMO_MODE` aktif **dan**\n`DEMO_LOGIN_AUTOFILL` aktif (lihat `demo_login_autofill_aktif()`). Default\nkeduanya mati, sehingga instalasi nyata menjawab `{enabled:false, accounts:[]}`\ndan kata sandi tidak pernah keluar dari server.\n\nKonsekuensi yang harus disadari: selama dua kunci itu aktif, siapa pun yang\nbisa menjangkau backend demo dapat membaca sandi akun demo. Karena itu\n`DEMO_MODE` wajib `false` di luar sesi demo (Rules.md §1.4).",
+        "operationId": "demo_login_accounts_auth_demo_login_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
       }
     },
     "/auth/demo-accounts": {

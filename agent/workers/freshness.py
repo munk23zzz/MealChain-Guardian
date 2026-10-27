@@ -44,7 +44,7 @@ def _usable_until(value: object) -> datetime | None:
 class FreshnessWorker(ReadOnlyWorker):
     name = AgentName.FRESHNESS
 
-    def run(self, context: WorkerContext) -> AgentFinding:
+    def _run_deterministik(self, context: WorkerContext) -> AgentFinding:
         started = monotonic()
         try:
             location, commodity = self._target(context)

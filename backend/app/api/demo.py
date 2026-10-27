@@ -59,11 +59,8 @@ from app.seed.timeseries import (
     purge_demo_rows,
     validate_range,
 )
+from app.services import agent_review_local
 from app.services.agent_review_client import AgentReviewResult, review_decision
-from app.services.agent_review_local import (
-    review_decision_local,
-    transport as agent_review_transport,
-)
 from app.services.demo_cost import hitung_biaya_demo
 from app.services.demo_procurement_orchestrator import (
     run_supplier_procurement,
@@ -1047,7 +1044,7 @@ async def _jalankan_agent_review(
     if not isinstance(decision_id, str) or not decision_id.strip():
         return {"status": "failed", "run_id": None}
 
-    jalur = agent_review_transport(settings.agent_review_mode)
+    jalur = agent_review_local.transport(settings.agent_review_mode)
     if jalur == "local":
         # Review lokal membaca API dengan identitas PEMANGGIL (bukan token
         # layanan berumur panjang): cakupan peran tetap ditegakkan endpoint.
@@ -1071,7 +1068,7 @@ async def _jalankan_agent_review(
                     min(max(settings.agent_review_timeout_seconds, 30), 120)
                 )
                 result = await run_in_threadpool(
-                    review_decision_local,
+                    agent_review_local.review_decision_local,
                     decision_id,
                     token=token,
                     mode=settings.agent_review_mode,
@@ -1282,6 +1279,91 @@ def _urut_langkah(trace: AgentTrace) -> tuple[int, str]:
     return (posisi, str(trace.id))
 
 
+def _baru(kandidat: AgentTrace, sekarang: AgentTrace | None) -> bool:
+    """Baris mana yang dipakai bila satu agen punya beberapa baris."""
+    if sekarang is None:
+        return True
+    lama = getattr(sekarang, "step_at", None)
+    baru = getattr(kandidat, "step_at", None)
+    if baru is None:
+        return lama is None
+    return lama is None or baru >= lama
+
+
+def _peta_agen(
+    langkah: list[AgentTrace], root: str | None
+) -> dict[str, AgentTrace]:
+    """`agent_name → baris trace` milik satu run (`root=None` = semua baris)."""
+    peta: dict[str, AgentTrace] = {}
+    for t in langkah:
+        nama = (t.agent_name or "").strip().lower()
+        if not nama:
+            continue
+        induk = str(t.parent_run_id or "")
+        # Verifier adalah RUN ANAK (AUD-9A-03): barisnya boleh punya run_id
+        # sendiri asalkan `parent_run_id` menunjuk run yang dipetakan.
+        if root is not None and str(t.run_id or "") != root and induk != root:
+            continue
+        if _baru(t, peta.get(nama)):
+            peta[nama] = t
+    return peta
+
+
+def _baris_review(
+    langkah: list[AgentTrace],
+) -> tuple[dict[str, AgentTrace], str | None]:
+    """Peta baris review putaran ini + run id putaran yang tercatat.
+
+    Satu putaran idealnya satu `run_id`, tetapi runtime yang menjalankan tiap
+    agen sebagai invokasi sendiri menulis `run_id` BERBEDA per baris; hanya baris
+    ringkasan SUPERVISE yang membawa id putaran. Versi lama memetakan hanya baris
+    dengan `run_id == id putaran`, sehingga seluruh kartu agen tampak "missing"
+    padahal barisnya tersimpan (regresi 27 Okt 2026).
+
+    Aturan sekarang: coba id putaran dulu, lalu SEMUA id yang muncul, lalu
+    seluruh baris keputusan ini — dan pilih peta dengan agen TERBANYAK. Dengan
+    begitu run anak (verifier) atau run per-agen tidak lagi memotong pemetaan.
+    """
+    run_review = next(
+        (
+            t.run_id
+            for t in langkah
+            if t.step_name == "SUPERVISE" and t.agent_name == "supervisor" and t.run_id
+        ),
+        None,
+    )
+    if run_review is None:
+        # Runtime lama: ringkasan SUPERVISE tanpa agent_name, run id di payload.
+        run_review = next(
+            (
+                (t.output_summary or {}).get("run_id")
+                for t in langkah
+                if t.step_name == "SUPERVISE" and t.run_id
+            ),
+            None,
+        )
+    if run_review is None:
+        ids = [
+            t.run_id
+            for t in langkah
+            if t.agent_name and t.run_id and not t.parent_run_id
+        ]
+        run_review = max(set(ids), key=ids.count) if ids else None
+
+    terbaik = _peta_agen(langkah, str(run_review)) if run_review is not None else {}
+    for root in dict.fromkeys(
+        str(t.run_id) for t in langkah if t.agent_name and t.run_id
+    ):
+        calon = _peta_agen(langkah, root)
+        if len(calon) > len(terbaik):
+            terbaik = calon
+    if len(terbaik) < len(SWARM_AGENTS):
+        semua = _peta_agen(langkah, None)
+        if len(semua) > len(terbaik):
+            terbaik = semua
+    return terbaik, (str(run_review) if run_review is not None else None)
+
+
 @router.get("/demo/agent/commodities")
 async def list_agent_commodities(
     db: AsyncSession = Depends(get_db),
@@ -1397,51 +1479,7 @@ async def get_last_agent_run(
     # Tujuh worker review (advisory). Kartu di panel Demo Control selalu
     # menampilkan ketujuhnya; status per agen dibaca dari baris trace putaran
     # review yang benar-benar tersimpan (bukan ditebak dari langkah pipeline).
-    # Run id review bisa datang dari baris worker (kolom run_id) atau dari
-    # ringkasan SUPERVISE. Dua-duanya sah; jangan hanya bergantung pada satu
-    # nama alat supaya status tidak tampak "belum tercatat" padahal ada.
-    # Run induk = run baris ringkasan supervisor (pola yang sama dengan
-    # `persist_agent_review`). Versi lama mengambil "baris pertama yang punya
-    # agent_name" — sejak runtime menulis 9 baris, baris VERIFIER (run ANAK)
-    # bisa terpilih lebih dulu, dan seluruh kartu worker lalu tampak "belum
-    # tercatat" padahal barisnya ada.
-    run_review = next(
-        (
-            t.run_id
-            for t in langkah
-            if t.step_name == "SUPERVISE" and t.agent_name == "supervisor" and t.run_id
-        ),
-        None,
-    )
-    if run_review is None:
-        ids = [t.run_id for t in langkah if t.agent_name and t.run_id]
-        run_review = max(set(ids), key=ids.count) if ids else None
-    if run_review is None:
-        run_review = next(
-            (
-                (t.output_summary or {}).get("run_id")
-                for t in langkah
-                if t.step_name == "SUPERVISE" and t.run_id
-            ),
-            None,
-        )
-    baris_agen: dict[str, AgentTrace] = {}
-    for t in langkah:
-        nama_agen = (t.agent_name or "").strip().lower()
-        if not nama_agen:
-            continue
-        # Baris milik putaran ini: run induk itu sendiri ATAU run anak yang
-        # menunjuk induk lewat `parent_run_id` — verifier adalah RUN ANAK
-        # (AUD-9A-03), jadi memfilter `run_id == run induk` saja membuat
-        # kartunya selalu "missing" walau barisnya tersimpan.
-        induk = str(t.parent_run_id or "")
-        milik_run = (
-            run_review is None
-            or str(t.run_id or "") == str(run_review)
-            or (induk and induk == str(run_review))
-        )
-        if milik_run:
-            baris_agen[nama_agen] = t
+    baris_agen, run_review = _baris_review(langkah)
     agen = []
     for kunci, label in SWARM_AGENTS:
         baris = baris_agen.get(kunci)
@@ -1483,6 +1521,18 @@ async def get_last_agent_run(
         ),
         None,
     )
+    if review is None:
+        # Runtime yang menulis ringkasan review sebagai baris supervisor tanpa
+        # `tool_called` khusus: statusnya tetap fakta DB, bukan "missing".
+        review = next(
+            (
+                t
+                for t in langkah
+                if t.step_name == "SUPERVISE"
+                and (t.agent_name or "").strip().lower() == "supervisor"
+            ),
+            None,
+        )
     keluaran_narasi = dict(narasi.output_summary or {}) if narasi is not None else {}
     keluaran_review = dict(review.output_summary or {}) if review is not None else {}
 
@@ -1585,6 +1635,9 @@ async def get_last_agent_run(
         "agent_review": {
             "status": keluaran_review.get("status", "missing"),
             "error": keluaran_review.get("error"),
-            "run_id": keluaran_review.get("run_id"),
+            # Ringkasan review bisa tidak membawa `run_id` di payload; kolom
+            # `run_id` barisnya tetap fakta yang sama.
+            "run_id": keluaran_review.get("run_id")
+            or (getattr(review, "run_id", None) if review is not None else None),
         },
     }

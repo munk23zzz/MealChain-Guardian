@@ -17,7 +17,7 @@ from .base import ReadOnlyWorker, WorkerContext, as_number
 class PriceWorker(ReadOnlyWorker):
     name = AgentName.PRICE
 
-    def run(self, context: WorkerContext) -> AgentFinding:
+    def _run_deterministik(self, context: WorkerContext) -> AgentFinding:
         started = monotonic()
         try:
             location, commodity = self._target(context)

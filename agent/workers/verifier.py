@@ -69,6 +69,31 @@ def _ringkas_fakta(fakta: FaktaVerifier) -> dict[str, Any]:
     }
 
 
+def _ringkas_fakta_run(run: AgentRun) -> dict[str, Any]:
+    """Fakta PUTARAN yang diaudit: status run, veto, dan fakta tiap worker.
+
+    Tanpa blok ini, klaim narasi tentang putaran ("status run: vetoed",
+    "safety_veto=true") tidak punya pembanding di fakta — model lalu
+    membandingkannya dengan `audit_facts.status` (status KEPUTUSAN di DB) dan
+    menyebutnya bertentangan. Dua objek berbeda, satu nama: `status`.
+    """
+    return {
+        "status_run": run.status.value,
+        "safety_veto": run.safety_veto,
+        "gerbang_deterministik": run.verification.verdict if run.verification else None,
+        "kontradiksi": len(run.contradictions),
+        "temuan": [
+            {
+                "agent": finding.agent.value,
+                "status": finding.status.value,
+                "blocking": finding.blocking,
+                "fakta": finding.facts,
+            }
+            for finding in run.findings
+        ],
+    }
+
+
 def _ringkas_klaim(klaim: KlaimSupervisor) -> dict[str, Any]:
     return {
         "decision_id": klaim.decision_id,
@@ -124,23 +149,42 @@ class VerifierWorker(StubWorker):
         klaim: KlaimSupervisor,
         fakta: FaktaVerifier | None,
         checks: list,
+        run: AgentRun | None = None,
     ) -> str:
         """Prompt audit: system prompt verifier + klaim + fakta + cek kode."""
         bagian = [
             load_system_prompt(),
             "### KLAIM_YANG_DIAUDIT",
             json.dumps(_ringkas_klaim(klaim), ensure_ascii=False, indent=2),
-            "### FAKTA",
-            json.dumps(
-                _ringkas_fakta(fakta) if fakta is not None else None,
-                ensure_ascii=False,
-                indent=2,
-            ),
-            "### CEK_DETERMINISTIK",
-            json.dumps(
-                [cek.model_dump() for cek in checks], ensure_ascii=False, indent=2
-            ),
         ]
+        if run is not None:
+            bagian.extend(
+                [
+                    "### FAKTA_RUN",
+                    (
+                        "Fakta PUTARAN yang diaudit: `status_run` + `safety_veto` + "
+                        "fakta tiap worker. Klaim narasi tentang status/veto WAJIB "
+                        "dibandingkan dengan blok ini. `audit_facts.status` adalah "
+                        "status KEPUTUSAN di database (proposed/pending/…), objek "
+                        "yang BERBEDA dari `status_run`."
+                    ),
+                    json.dumps(_ringkas_fakta_run(run), ensure_ascii=False, indent=2),
+                ]
+            )
+        bagian.extend(
+            [
+                "### FAKTA",
+                json.dumps(
+                    _ringkas_fakta(fakta) if fakta is not None else None,
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                "### CEK_DETERMINISTIK",
+                json.dumps(
+                    [cek.model_dump() for cek in checks], ensure_ascii=False, indent=2
+                ),
+            ]
+        )
         return "\n\n".join(bagian)
 
     def _panggil_model(self, prompt: str) -> tuple[VerifierOutput | None, str | None]:
@@ -228,7 +272,7 @@ class VerifierWorker(StubWorker):
         )
 
         output, alasan_model = self._panggil_model(
-            self._prompt(klaim, fakta_terbaca, checks)
+            self._prompt(klaim, fakta_terbaca, checks, run=run)
         )
 
         # Sitasi model hanya diterima bila id-nya benar-benar ada di fakta.
@@ -267,6 +311,10 @@ class VerifierWorker(StubWorker):
             citations=sitasi_ids,
             fakta_tersedia=bool(data_fakta),
             gate_verdict=hasil.verdict,
+            # Cek model + fakta dipakai guard untuk menahan `flagged` yang hanya
+            # berupa prosa tanpa satu pun ketidaksesuaian yang bisa dicocokkan.
+            model_checks=list(output.checks) if output is not None else [],
+            fakta=data_fakta,
         )
 
         gagal = [cek.nama for cek in checks if not cek.lulus]

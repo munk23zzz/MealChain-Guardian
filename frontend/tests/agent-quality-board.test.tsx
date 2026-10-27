@@ -9,6 +9,10 @@ const TRACE = {
   steps: [
     { step_name: "PREDICT", tool_called: "forecast.daily", output_summary: { method: "provider_forecast" }, step_at: "2026-10-11T05:16:46Z" },
     { step_name: "DECIDE", tool_called: "supply_balance.propose", output_summary: { sdc: 1 }, step_at: "2026-10-11T05:16:48Z" },
+    // Baris agen nyata (agent_name) + narasi supervisor: sumber tabel per agen.
+    { step_name: "DETECT", tool_called: "agent.supply", agent_name: "supply", output_summary: { facts: {} }, step_at: "2026-10-11T05:16:47Z" },
+    { step_name: "VERIFY", tool_called: "agent.verifier", agent_name: "verifier", output_summary: { facts: {} }, step_at: "2026-10-11T05:16:48Z" },
+    { step_name: "SUPERVISE", tool_called: "supervisor.narration", output_summary: { status: "narrated" }, step_at: "2026-10-11T05:16:48Z" },
   ],
 };
 
@@ -111,5 +115,24 @@ describe("AgentQualityBoard", () => {
     // satu desimal lebih jujur dan tetap berjumlah 100,0%.
     expect(html).toContain("1 · 33.3%");
     expect(html).toContain("2 · 66.7%");
+  });
+
+  it("tabel per agen memuat supervisor & verifier sebagai baris kelas satu", () => {
+    const html = render();
+    expect(html).toContain("Kualitas per agen");
+    // Sembilan baris: tujuh worker + supervisor + verifier.
+    expect(html.match(/data-agent="/g)).toHaveLength(9);
+    expect(html).toContain('data-agent="supervisor"');
+    expect(html).toContain('data-agent="verifier"');
+    // Putusan verifier dirinci dari approval-summary, bukan dikarang.
+    expect(html).toContain("Setuju 1 · Tidak setuju 1 · Tidak tersedia 0");
+    // Worker yang tidak pernah muncul ditulis 0 dari 2 run — jujur, bukan "—".
+    expect(html).toContain("0/2");
+  });
+
+  it("tanpa run, tabel per agen tidak mengarang sembilan baris", () => {
+    const html = render({ runs: [] });
+    expect(html).not.toContain("data-agent=");
+    expect(html).toContain("Belum ada run agen yang tercatat");
   });
 });

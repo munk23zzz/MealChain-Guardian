@@ -29,7 +29,7 @@ dipakai layar demo.
 """
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, select
 
@@ -273,6 +273,234 @@ async def test_menyemai_ulang_menyembuhkan_binding_yang_menunjuk_batch_hilang() 
         )
     finally:
         await engine.dispose()
+
+
+async def _batch_terikat(decision_id: uuid.UUID) -> list[uuid.UUID]:
+    """Id batch yang disebut `allocation_binding` milik satu keputusan."""
+    engine = create_engine(settings.database_url)
+    maker = create_session_maker(engine)
+    try:
+        async with maker() as sesi:
+            bukti = list(
+                (
+                    await sesi.execute(
+                        select(DecisionEvidence).where(
+                            DecisionEvidence.decision_id == decision_id
+                        )
+                    )
+                ).scalars()
+            )
+            return [
+                uuid.UUID(b)
+                for e in bukti
+                if (e.payload or {}).get("allocation_binding") is True
+                for b in e.payload["batch_ids"]
+            ]
+    finally:
+        await engine.dispose()
+
+
+async def _ringkasan(decision_id: uuid.UUID) -> dict:
+    engine = create_engine(settings.database_url)
+    maker = create_session_maker(engine)
+    try:
+        async with maker() as sesi:
+            d = await sesi.get(Decision, decision_id)
+            assert d is not None, f"keputusan {decision_id} hilang dari DB"
+            return await build_approval_summary(sesi, d)
+    finally:
+        await engine.dispose()
+
+
+async def _kedaluwarsakan(batch_ids: list[uuid.UUID]) -> dict:
+    """Paksa batch sumber lewat masa layaknya; kembalikan nilai aslinya."""
+    asli: dict = {}
+    engine = create_engine(settings.database_url)
+    maker = create_session_maker(engine)
+    try:
+        async with maker() as sesi:
+            for bid in batch_ids:
+                b = await sesi.get(Batch, bid)
+                assert b is not None, f"batch {bid} tidak ada"
+                asli[bid] = b.usable_until
+                b.usable_until = datetime.now(UTC) - timedelta(hours=1)
+            await sesi.commit()
+        return asli
+    finally:
+        await engine.dispose()
+
+
+async def _pulihkan(batch_ids: list[uuid.UUID], asli: dict) -> None:
+    engine = create_engine(settings.database_url)
+    maker = create_session_maker(engine)
+    try:
+        async with maker() as sesi:
+            for bid, nilai in asli.items():
+                b = await sesi.get(Batch, bid)
+                if b is not None:
+                    b.usable_until = nilai
+            await sesi.commit()
+    finally:
+        await engine.dispose()
+
+
+async def _semai_ulang() -> None:
+    engine = create_engine(settings.database_url)
+    maker = create_session_maker(engine)
+    try:
+        async with maker() as sesi:
+            await seed_demo_completed_decisions(sesi, datetime.now(UTC))
+            await sesi.commit()
+    finally:
+        await engine.dispose()
+
+
+async def _hitung_anak(decision_id: uuid.UUID) -> dict:
+    """Jumlah baris yang menemani satu keputusan demo (untuk uji idempotensi)."""
+    engine = create_engine(settings.database_url)
+    maker = create_session_maker(engine)
+    try:
+        async with maker() as sesi:
+            bukti = (
+                await sesi.execute(
+                    select(DecisionEvidence).where(
+                        DecisionEvidence.decision_id == decision_id
+                    )
+                )
+            ).scalars()
+            approval = (
+                await sesi.execute(
+                    select(Approval).where(Approval.decision_id == decision_id)
+                )
+            ).scalars()
+            d = await sesi.get(Decision, decision_id)
+            assert d is not None, f"keputusan {decision_id} hilang dari DB"
+            batch = (
+                await sesi.execute(
+                    select(Batch).where(
+                        Batch.location_id == d.source_location_id,
+                        Batch.commodity_id == d.commodity_id,
+                    )
+                )
+            ).scalars()
+            return {
+                "bukti": len(list(bukti)),
+                "approval": len(list(approval)),
+                "batch": len(list(batch)),
+            }
+    finally:
+        await engine.dispose()
+
+
+async def test_menyemai_ulang_menyembuhkan_sumber_yang_sudah_kedaluwarsa() -> None:
+    """Akar gate (27 Okt 2026): batch sumber ADA, `pass`, tetapi sudah kedaluwarsa.
+
+    Penyemai lama hanya menyaring `safety_status == "pass"`, tanpa melihat
+    `usable_until`. Akibatnya keputusan `executed` bisa menunjuk batch yang masa
+    layaknya sudah lewat (batch kanonik 8 Okt yang tergeser ke "hari ini", atau
+    batch demo yang tinggal beberapa menit lagi layak) — `penghalang_sumber`
+    lalu memblokirnya dan ringkasan memuat "safety revalidation gagal" pada
+    riwayat yang katanya sudah selesai.
+
+    Menyemai ulang wajib MEMINDAHKAN binding ke batch yang masih layak; gate
+    tidak boleh dilonggarkan (lihat tes "tetap_diblokir" di bawah).
+    """
+    _, keputusan, _ = await _jalankan()
+    assert keputusan, "penyemai tidak membuat keputusan selesai"
+    target = keputusan[0]
+    terikat = await _batch_terikat(target.id)
+    assert terikat, f"keputusan {target.id} tidak punya allocation_binding"
+
+    asli = await _kedaluwarsakan(terikat)
+    try:
+        sebelum = await _ringkasan(target.id)
+        assert sebelum["blocking_reasons"] != [], (
+            "prasyarat tes tidak terpenuhi: batch kedaluwarsa seharusnya terbaca "
+            "memblokir"
+        )
+
+        await _semai_ulang()
+
+        sesudah = await _ringkasan(target.id)
+        assert not [
+            r for r in sesudah["blocking_reasons"] if "safety revalidation gagal" in r
+        ], (
+            "penyemai ulang membiarkan keputusan selesai bersandar pada batch "
+            f"kedaluwarsa: {sesudah['blocking_reasons']}"
+        )
+        assert sesudah["blocking_reasons"] == ["decision sudah dieksekusi"], (
+            f"penghalang sisa setelah penyemaian ulang: {sesudah['blocking_reasons']}"
+        )
+        # Penyembuhan boleh lewat dua jalan: binding dipindah ke batch lain, atau
+        # batch sumber milik penyemai ini disegarkan. Yang WAJIB benar adalah
+        # hasilnya: batch yang terikat sekarang benar-benar lolos gerbang
+        # keselamatan (bukan cuma "tidak dilaporkan").
+        baru = await _batch_terikat(target.id)
+        assert baru, f"keputusan {target.id} kehilangan allocation_binding"
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        try:
+            async with maker() as sesi:
+                for bid in baru:
+                    b = await sesi.get(Batch, bid)
+                    assert b is not None, f"binding menunjuk batch hilang {bid}"
+                    assert b.safety_status == "pass", (
+                        f"batch sumber {bid} berstatus {b.safety_status} setelah semai ulang"
+                    )
+                    assert b.usable_until is not None and b.usable_until > datetime.now(
+                        UTC
+                    ), f"batch sumber {bid} masih kedaluwarsa setelah semai ulang"
+        finally:
+            await engine.dispose()
+    finally:
+        await _pulihkan(terikat, asli)
+
+
+async def test_penyemai_ulang_idempoten_tidak_menggandakan_baris_anak() -> None:
+    """Menyegarkan demo dua kali tidak boleh menambah baris apa pun."""
+    _, keputusan, _ = await _jalankan()
+    assert keputusan, "penyemai tidak membuat keputusan selesai"
+    target = keputusan[0]
+
+    pertama = await _hitung_anak(target.id)
+    terikat_pertama = await _batch_terikat(target.id)
+    await _semai_ulang()
+    kedua = await _hitung_anak(target.id)
+    terikat_kedua = await _batch_terikat(target.id)
+
+    assert kedua == pertama, (
+        f"penyemaian ulang menggandakan baris anak: {pertama} → {kedua}"
+    )
+    assert terikat_kedua == terikat_pertama, (
+        f"binding berpindah tanpa sebab: {terikat_pertama} → {terikat_kedua}"
+    )
+
+
+async def test_sumber_hilang_tanpa_semai_ulang_tetap_diblokir() -> None:
+    """Perbaikan penyemai TIDAK boleh melonggarkan gate.
+
+    Batch sumber kedaluwarsa/terhapus harus tetap terbaca memblokir selama
+    penyemai belum dijalankan: bukti yang tidak ada bukan berarti aman.
+    """
+    _, keputusan, _ = await _jalankan()
+    assert keputusan, "penyemai tidak membuat keputusan selesai"
+    target = keputusan[0]
+    terikat = await _batch_terikat(target.id)
+    assert terikat, f"keputusan {target.id} tidak punya allocation_binding"
+
+    asli = await _kedaluwarsakan(terikat)
+    try:
+        r = await _ringkasan(target.id)
+        assert r["safety"]["blocked"] is True, (
+            "gate dilonggarkan: batch sumber kedaluwarsa tidak lagi memblokir"
+        )
+        assert [
+            alasan
+            for alasan in r["blocking_reasons"]
+            if "safety revalidation gagal" in alasan
+        ], f"alasan safety hilang dari ringkasan: {r['blocking_reasons']}"
+    finally:
+        await _pulihkan(terikat, asli)
 
 
 async def test_ringkasan_hanya_menyisakan_alasan_yang_nyata() -> None:

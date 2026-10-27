@@ -36,6 +36,11 @@ class WorkerContext:
     #: `batch_ids` binding keputusan (himpunan yang sama dengan
     #: `batch_sumber_transfer` di backend). Kosong = tidak ada binding.
     source_batch_ids: tuple[str, ...] = ()
+    #: Seam injeksi untuk tes + pemanggil yang sudah punya model sendiri
+    #: (27 Okt 2026): callable `(prompt) -> str`. `None` = pakai env.
+    reasoner: Any = None
+    #: Override mode lapisan penalaran (`off`/`advisory`); `None` = baca env.
+    reasoner_mode: str | None = None
 
 
 class StubWorker:
@@ -183,7 +188,38 @@ class StubWorker:
 
 
 class ReadOnlyWorker(StubWorker):
-    """Marker base untuk worker P2+; hanya membaca API."""
+    """Marker base untuk worker P2+; hanya membaca API.
+
+    Sejak 27 Okt 2026 kelas ini juga menjadi titik masuk **lapisan penalaran
+    model**: `run()` menjalankan pemeriksaan deterministik lebih dulu
+    (`_run_deterministik`), lalu — hanya bila `WORKER_AGENT_MODE=advisory` —
+    memperkaya ringkasannya lewat `terapkan_penalaran()`. Status, `blocking`,
+    dan sitasi tetap milik pemeriksa deterministik.
+    """
+
+    def _run_deterministik(self, context: WorkerContext) -> AgentFinding:
+        return super().run(context)
+
+    def run(self, context: WorkerContext) -> AgentFinding:
+        from .reasoner import (
+            MODE_ADVISORY,
+            PromptWorker,
+            mode_dari_env,
+            reasoner_dari_env,
+            terapkan_penalaran,
+        )
+
+        finding = self._run_deterministik(context)
+        mode = context.reasoner_mode or mode_dari_env()
+        if mode != MODE_ADVISORY:
+            return finding
+        model = context.reasoner if context.reasoner is not None else reasoner_dari_env()
+        prompt = PromptWorker.bangun_prompt(
+            self.name, facts=finding.facts, summary=finding.summary
+        )
+        return terapkan_penalaran(
+            finding, prompt=prompt, mode=mode, model=model, role=self.spec.role
+        )
 
 
 def as_number(value: object, *, allow_numeric_string: bool = False) -> int | float | None:

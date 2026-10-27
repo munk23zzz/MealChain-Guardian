@@ -293,12 +293,46 @@ def test_consistent_tanpa_sitasi_diturunkan_ke_flagged() -> None:
 
 
 def test_guard_tidak_bisa_menaikkan_flagged_dari_model() -> None:
-    """Model memilih flagged walau cek lulus → tetap flagged (tidak dinaikkan)."""
+    """Model memilih flagged tanpa cek pendukung → TIDAK pernah jadi `consistent`.
+
+    Sejak 27 Okt 2026 arah "tidak boleh menaikkan" diuji lebih ketat: `flagged`
+    yang hanya prosa (semua model-check `lulus: true`) jatuh ke `unavailable` —
+    bukan `consistent`, dan juga bukan veto. `flagged` yang menunjuk field fakta
+    tetap `flagged`.
+    """
     finding = VerifierWorker(model=_model("flagged")).audit(
         _run("Review selesai; keputusan menunggu approval manusia."), fakta=_fakta()
     )
 
     assert finding.facts["model_verdict"] == "flagged"
+    assert finding.facts["audit_verdict"] == "unavailable"
+    assert finding.facts["audit_verdict"] != "consistent"
+
+
+def test_flagged_model_dengan_cek_gagal_nyata_tetap_flagged() -> None:
+    from agent.verifier_contracts import VerifierCheck
+
+    cek_gagal = VerifierCheck(
+        nama="kesegaran_certified",
+        klaim="narasi menyebut kesegaran pass",
+        aktual="FAKTA.batch_sumber.freshness_status=needs_verification",
+        lulus=False,
+    )
+
+    def model_pendukung(prompt: str) -> str:  # noqa: ARG001
+        return json.dumps(
+            {
+                "verdict": "flagged",
+                "checks": [cek_gagal.model_dump()],
+                "citations": [{"decision_id": DECISION_ID}],
+                "catatan": "narasi mengklaim kesegaran pass",
+            }
+        )
+
+    finding = VerifierWorker(model=model_pendukung).audit(
+        _run("Kesegaran sudah pass."), fakta=_fakta()
+    )
+
     assert finding.facts["audit_verdict"] == "flagged"
 
 

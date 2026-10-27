@@ -49,6 +49,14 @@ services:
       # sendiri tetap diimpor dari /app (cwd), jadi urutannya tidak mengubah apa pun.
       PYTHONPATH: /app:/
       DEMO_MODE: ${DEMO_MODE:-false}
+      # Kunci kedua autofill layar login (27 Okt 2026). Default mati: endpoint
+      # `/auth/demo-login` hanya mengirim sandi demo bila DEMO_MODE DAN flag ini
+      # sama-sama aktif. Nyalakan hanya di mesin demo, jangan di instalasi nyata.
+      DEMO_LOGIN_AUTOFILL: ${DEMO_LOGIN_AUTOFILL:-false}
+      # Tujuh worker Agent (27 Okt 2026): `off` = murni deterministik,
+      # `advisory` = model memperkaya ringkasan tanpa boleh mengubah status/blokir.
+      WORKER_AGENT_MODE: ${WORKER_AGENT_MODE:-off}
+      WORKER_AGENT_MODEL: ${WORKER_AGENT_MODEL:-}
       DEBUG: ${DEBUG:-false}
       # P4: review 7 worker agent — default MATI agar perilaku lama tidak berubah.
       MULTI_AGENT_REVIEW: ${MULTI_AGENT_REVIEW:-false}

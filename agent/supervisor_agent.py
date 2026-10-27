@@ -29,15 +29,23 @@ Tool memanggil API backend (bukan menghitung ulang). Kredensial dibaca dari
 Catatan penting soal `strands`: atribut dipakai lewat modul (`strands.Agent`,
 `strands.models.BedrockModel`, `strands.tool`) supaya bisa di-mock dengan
 `patch("strands.Agent")` / `patch("strands.models.BedrockModel")`.
+
+Impor `strands` SEPENUHNYA LAZY (27 Okt 2026). Sebelumnya modul ini mengimpor
+`strands` di tingkat atas, sehingga di image backend (yang tidak punya SDK itu)
+modul supervisor sama sekali tidak bisa diimpor — supervisor mati bukan karena
+tidak ada model, tetapi karena satu-satunya pintu butuh SDK. Kini narasi
+supervisor memakai pintu resolusi yang sama dengan sembilan agent lain
+(`agent/workers/reasoner.py`): rantai provider backend → boto3
+`bedrock-runtime.converse` → `strands`. `build_agent`/`build_tools` (jalur
+AgentCore penuh) tetap memerlukan `strands` dan gagal dengan `missing_config`
+yang jujur bila SDK tidak ada.
 """
 
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
-
-import strands
-import strands.models
 
 try:  # dipakai sebagai paket `agent.supervisor_agent` (runtime image)
     from .tools import (
@@ -54,6 +62,8 @@ except ImportError:  # dijalankan sebagai skrip tunggal oleh tes lama
         get_supply_demand,
     )
 
+AGENT_SUPERVISOR = "supervisor"
+
 PROMPT_RELATIVE_PATH = Path("prompts") / "supervisor_system_prompt.md"
 HELLO_WORLD_PROMPT = "Balas tepat: MEALCHAIN_STRANDS_OK"
 HELLO_WORLD_EXPECTED = "MEALCHAIN_STRANDS_OK"
@@ -68,6 +78,17 @@ TOOL_FUNCTIONS = (
     get_evidence_digest,
 )
 
+ModelCallable = Callable[[str], str]
+
+
+def _impor_strands():
+    """Modul `strands` atau `None` — jalur narasi tidak boleh bergantung padanya."""
+    try:
+        import strands  # noqa: PLC0415 - dependensi opsional (runtime AgentCore)
+    except Exception:  # noqa: BLE001 - image backend memang tidak punya SDK ini
+        return None
+    return strands
+
 
 def load_system_prompt() -> str:
     """System prompt supervisor dari berkas di paket ini."""
@@ -78,11 +99,23 @@ def load_system_prompt() -> str:
 
 def build_tools() -> list:
     """Empat tool baca, dibungkus decorator Strands (schema dari docstring)."""
+    strands = _impor_strands()
+    if strands is None:
+        raise RuntimeError(
+            "missing_config: SDK strands tidak terpasang — tool supervisor "
+            "hanya tersedia di image runtime AgentCore"
+        )
     return [strands.tool(fn) for fn in TOOL_FUNCTIONS]
 
 
 def build_agent(model_id: str):
     """Bangun agent Strands dengan 4 tool baca ke API MealChain."""
+    strands = _impor_strands()
+    if strands is None:
+        raise RuntimeError(
+            "missing_config: SDK strands tidak terpasang — agent penuh tidak "
+            "dapat dibangun; pakai `narasi()` untuk jalur tanpa SDK"
+        )
     model_kwargs: dict[str, object] = {"model_id": model_id}
     region = (os.environ.get(ENV_REGION) or "").strip()
     if region:
@@ -93,6 +126,38 @@ def build_agent(model_id: str):
         tools=build_tools(),
         system_prompt=load_system_prompt(),
     )
+
+
+def model_supervisor_dari_env() -> ModelCallable | None:
+    """Model narasi supervisor lewat pintu resolusi bersama (9 agent).
+
+    Prompt system yang ditempel adalah prompt SUPERVISOR, bukan prompt
+    verifier; independensi itu milik `agent/workers/reasoner.prompt_sistem`.
+    Impor resolver sengaja lazy: impor tingkat atas `workers.reasoner`
+    memakai impor relatif, dan modul ini masih dipakai sebagai skrip tunggal
+    oleh tes S0-06 lama.
+    """
+    try:
+        from .workers.reasoner import reasoner_dan_jalur_dari_env
+    except ImportError:
+        from workers.reasoner import reasoner_dan_jalur_dari_env  # type: ignore[no-redef]
+    return reasoner_dan_jalur_dari_env(agent=AGENT_SUPERVISOR)[1]
+
+
+def narasi(prompt: str, *, model: ModelCallable | None = None) -> str:
+    """Satu panggilan narasi supervisor — tanpa `strands`, tanpa tool.
+
+    Kontrak keluaran TIDAK berubah: hanya teks narasi. Angka/status tetap milik
+    kode deterministik, dan model yang tidak tersedia gagal jujur
+    (`missing_config`), bukan mengarang ringkasan.
+    """
+    panggil = model if model is not None else model_supervisor_dari_env()
+    if panggil is None:
+        raise RuntimeError(
+            f"missing_config: model supervisor tidak tersedia ({ENV_MODEL_ID} "
+            "kosong atau tidak ada provider yang bisa dipanggil)"
+        )
+    return str(panggil(prompt))
 
 
 def run_hello_world() -> str:

@@ -15,9 +15,11 @@ import type { ReactNode } from "react";
 import PageHeader from "./PageHeader";
 import {
   VERDICT_LABEL,
+  agentQuality,
   averageLabel,
   percentLabel,
   qualityMetrics,
+  type AgentQualityRow,
   type QualityRun,
   type QualityVerdict,
 } from "../lib/agent-quality";
@@ -50,6 +52,21 @@ const VERDICT_TONE: Record<QualityVerdict, "ok" | "danger" | "muted"> = {
   agree: "ok",
   disagree: "danger",
   unavailable: "muted",
+};
+
+/** Peran agen: worker (tujuh analitik), supervisor, verifier (audit). */
+const ROLE_LABEL: Record<AgentQualityRow["role"], string> = {
+  worker: "Worker",
+  supervisor: "Supervisor",
+  verifier: "Verifier",
+};
+
+const ROLE_TONE: Record<AgentQualityRow["role"], "muted" | "ok"> = {
+  worker: "muted",
+  // Supervisor & verifier diberi nada sama dengan agen lain yang berjalan —
+  // keduanya kelas satu, bukan lampiran.
+  supervisor: "ok",
+  verifier: "ok",
 };
 
 /** Lebar batang hanya untuk angka 0–100; null → 0 (tanpa klaim). */
@@ -189,6 +206,7 @@ export default function AgentQualityBoard({
   onOpenDecision?: (decisionId: string) => void;
 }) {
   const metrics = qualityMetrics(runs);
+  const perAgent = agentQuality(runs);
   const waiting = loading && !runs.length;
   const value = (text: string) => (waiting ? "…" : text);
   const maxSteps = runs.reduce((max, run) => Math.max(max, run.steps ?? 0), 0);
@@ -356,6 +374,75 @@ export default function AgentQualityBoard({
             </li>
           ))}
         </ul>
+      </article>
+
+      {/* Kualitas per agen: supervisor & verifier ikut dihitung dari jejak nyata.
+          Angka di sini adalah HITUNGAN run, bukan skor turunan. */}
+      <article className="card quality-agents">
+        <div className="card-header">
+          <h3>Kualitas per agen</h3>
+          {perAgent.length ? (
+            <span className="board-badge board-badge-muted">{perAgent.length} agen</span>
+          ) : null}
+        </div>
+        <p className="evidence-note">
+          Berapa run yang benar-benar memuat baris tiap agen — tujuh worker, supervisor, lalu
+          verifier — dari {metrics.runs || evaluatedCount} keputusan yang dinilai. Putusan verifier
+          dihitung dari ringkasan approval tiap run, jadi bisa mencakup run yang baris auditnya tidak
+          tersimpan.
+        </p>
+        {waiting ? (
+          <LoadingState label="Memuat jejak agen…" />
+        ) : perAgent.length === 0 ? (
+          <p className="evidence-note">
+            Belum ada run agen yang tercatat untuk keputusan dalam cakupan ini.
+          </p>
+        ) : (
+          <>
+            <div className="board-table-wrap">
+              <table className="location-table quality-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Agen</th>
+                    <th scope="col">Peran</th>
+                    <th scope="col" className="num">
+                      Tercatat
+                    </th>
+                    <th scope="col" className="num">
+                      Ada keluaran
+                    </th>
+                    <th scope="col" className="num">
+                      Tidak tercatat
+                    </th>
+                    <th scope="col">Putusan verifier</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {perAgent.map((row) => (
+                    <tr key={row.key} data-agent={row.key} data-role={row.role}>
+                      <td>{row.label}</td>
+                      <td>
+                        <span
+                          className={`board-badge board-badge-${ROLE_TONE[row.role]}`}
+                          data-role={row.role}
+                        >
+                          {ROLE_LABEL[row.role]}
+                        </span>
+                      </td>
+                      <td className="num">
+                        {row.recorded}/{row.runs}
+                      </td>
+                      <td className="num">{row.delivered}</td>
+                      <td className="num">{row.missing}</td>
+                      <td>{row.verdicts ? row.verdictNote : DASH}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ScrollHint />
+          </>
+        )}
       </article>
 
       <article className="card">

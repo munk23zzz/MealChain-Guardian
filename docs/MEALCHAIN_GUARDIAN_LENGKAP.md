@@ -114,7 +114,7 @@ Konfigurasi yang menentukan perilaku demo (`.env`, tidak ikut di-commit):
 | `DEMO_SESSION_ENFORCE` | `true` | Tanpa sesi demo aktif, semua POST/PUT/PATCH/DELETE → 409 |
 | `DEMO_SESSION_MINUTES` | `120` | Umur sesi bawaan |
 | `DEMO_SESSION_MAX_MINUTES` | `120` | Plafon absolut START maupun EXTEND |
-| `DEMO_MODE` | `True` | Mengaktifkan akun demo satu-klik (`GET /auth/demo-accounts`). **Bukan** gerbang router demo — penjaga tulis tetap sesi demo (lihat §16) |
+| `DEMO_MODE` | `True` | Mengaktifkan akun demo satu-klik lewat `GET /auth/demo-login` (bersama `DEMO_LOGIN_AUTOFILL`). **Bukan** gerbang router demo — penjaga tulis tetap sesi demo (lihat §16) |
 | `sap_provider` | `mock` | Adapter SAP aktif = tiruan |
 
 `docker-compose.yml` mendefinisikan empat service itu; tidak ada worker,
@@ -276,11 +276,13 @@ Aturan tambahan: satu penolakan menggugurkan kuorum; approval dari lokasi lain
 tidak dihitung saat eksekusi; kuorum penuh hanya berarti `approved` — PO dan
 keberangkatan lahir di `execute`.
 
-Kata sandi akun demo **tidak** ada di bundel klien (SEC-02). Sejak 26 Okt 2026
-tombol akun demo hanya mengisi email; kata sandi diketik operator dari
-`DEMO_PASSWORD_<ROLE>`. `GET /auth/demo-accounts` masih ada untuk skrip/operator
-demo, tetapi menuntut Bearer token ber-peran admin (`bgn_monitor`) — tanpa token
-401, token non-admin 403 — dan hanya mengeluarkan daftar saat `DEMO_MODE` aktif.
+Kata sandi akun demo **tidak** ada di bundel klien (SEC-02). Sejak 27 Okt 2026
+tombol akun demo mengisi email **dan** sandi: nilainya diambil dari
+`GET /auth/demo-login`, pintu tanpa token yang hanya terbuka bila `DEMO_MODE`
+**dan** `DEMO_LOGIN_AUTOFILL` aktif. Di instalasi nyata kedua flag mati, jawabannya
+`{enabled:false}`, dan tombol hanya mengisi email (operator mengetik sandi dari
+`DEMO_PASSWORD_<ROLE>`). `GET /auth/demo-accounts` tetap ber-token admin
+(`bgn_monitor`) untuk skrip/operator — tanpa token 401, token non-admin 403.
 Sumber sandi tetap satu: `backend/app/seed/demo_credentials.py` (atau
 `DEMO_PASSWORD_<ROLE>`), bukan JavaScript yang bisa dibaca siapa pun.
 
@@ -358,6 +360,35 @@ atribusi model per langkah dari tabel itu.
 Jejak agen menyimpan **fakta keputusan** (kg, SDC, durasi), bukan teks template.
 UI menampilkan kalimat ringkas + lipatan "Data mentah".
 
+### 8b. Tujuh worker sebagai agent (27 Okt 2026)
+
+Ketujuh worker (`supply`, `demand`, `freshness`, `safety`, `price`, `logistics`,
+`evidence`) mendapat lapisan penalaran model lewat `agent/workers/reasoner.py`.
+Saklarnya `WORKER_AGENT_MODE`:
+
+| Nilai | Perilaku |
+|---|---|
+| `off` (default) | Pemeriksa deterministik murni; model tidak pernah dipanggil |
+| `advisory` | Model membaca **fakta yang sama** dan boleh memperkaya ringkasan |
+
+Batas yang ditegakkan kode, bukan prompt: status (`ok`/`degraded`/`error`) dan
+`blocking` tetap milik pemeriksa deterministik; model tidak bisa melonggarkan
+blokir atau menaikkan status (`status=guarded`). Ringkasan model yang memuat
+angka di luar fakta ditolak utuh (`status=rejected`) — anti-karang. Model gagal,
+timeout, atau JSON rusak → temuan deterministik dipertahankan
+(`status=unavailable`/`invalid`), tidak pernah menjadi error 500. Hasil penalaran
+direkam di `facts.reasoning` (status, role, provider, rationale, latency sebagai
+teks bersatuan — metadata, bukan angka yang bisa disitasi) sehingga bisa
+diperiksa di UI dan Joule.
+
+Prompt tiap agent ada di `agent/prompts/workers/<agent>.md`. Model dipilih
+**per agent, tanpa pinjam-meminjam**: tujuh worker memakai `WORKER_AGENT_MODEL`,
+supervisor `SUPERVISOR_MODEL_PRIMARY`, dan verifier hanya aktif bila
+`VERIFIER_AGENT_MODEL` diset eksplisit — verifier adalah pemeriksa independen,
+jadi ia tidak boleh memakai model yang sama dengan yang dinarasinya. Tanpa kunci
+modelnya sendiri, lapisan ini tidak aktif. Semua ini **tidak** mengubah angka
+keselamatan: safety, freshness, gerbang dispatch, dan SDC tetap dihitung kode.
+
 ---
 
 ## 9. API
@@ -366,7 +397,7 @@ UI menampilkan kalimat ringkas + lipatan "Data mentah".
 
 | Domain | Endpoint utama |
 |---|---|
-| Auth | `POST /auth/login`, `GET /auth/me`, `GET /auth/demo-accounts` (admin `bgn_monitor`; hanya mengeluarkan daftar saat `DEMO_MODE` aktif) |
+| Auth | `POST /auth/login`, `GET /auth/me`, `GET /auth/demo-login` (tanpa token; hanya saat `DEMO_MODE` + `DEMO_LOGIN_AUTOFILL`), `GET /auth/demo-accounts` (admin `bgn_monitor`) |
 | Keputusan | `GET/POST /decisions`, `GET /decisions/{id}` (+`/chain`, `/traces`, `/approval-summary`, `/dossier`, `/compliance`) |
 | Aksi | `POST /actions/propose`, `/verify`, `/approve`, `/execute`, `/repropose` |
 | Pasokan & saldo | `GET /supply/{loc}/{kom}`, `GET /balance/map`, `GET /balance/{loc}/{kom}`, `POST /balance/analyze`, `POST /balance/recommend` |
@@ -631,7 +662,7 @@ pada putaran ini.
 | "Terhubung SAP" | Tidak. Adapter aktif `mock`; `aws_mcp`/`odata` adalah stub yang menolak jalan |
 | "Agen berjalan sendiri" | Tidak. DETECT hanya saat endpoint/tombol dipanggil |
 | "Data eksternal" | Tidak. Semua berasal dari penyemai; PIHPS hanya nama sumber pada baris referensi |
-| "Multi-agent otonom" | Belum. Yang ada satu alur tahapan deterministik; kontrak worker read-only masih kontrak |
+| "Multi-agent otonom" | Belum. Tujuh worker kini punya lapisan penalaran model (`WORKER_AGENT_MODE=advisory`, §8b), tetapi semuanya **read-only dan advisory**: tidak ada worker yang boleh approve/execute, dan status/blokir tetap milik pemeriksa deterministik |
 | "Forecast" | `demand/forecast` memakai deret empiris, bukan model terlatih |
 | "Bukti diterima regulator" | Belum. Ledger hash-chain + bukti internal, tanpa sertifikasi pihak ketiga |
 

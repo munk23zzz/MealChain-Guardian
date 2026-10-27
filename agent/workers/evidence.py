@@ -13,7 +13,7 @@ from .base import ReadOnlyWorker, WorkerContext, as_number
 class EvidenceWorker(ReadOnlyWorker):
     name = AgentName.EVIDENCE
 
-    def run(self, context: WorkerContext) -> AgentFinding:
+    def _run_deterministik(self, context: WorkerContext) -> AgentFinding:
         started = monotonic()
         try:
             api = self._api(context)

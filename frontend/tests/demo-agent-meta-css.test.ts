@@ -31,4 +31,20 @@ describe("meta kartu agen", () => {
   it("nilai durasi/peringatan tidak dipotong di tengah", () => {
     expect(blok(".dc-agent-meta dd")).toContain("white-space: nowrap");
   });
+
+  // Sembilan kartu: supervisor membawa ringkasan narasi. Tanpa batas baris,
+  // satu narasi panjang membuat baris grid-nya menjulang dan kartu lain ikut
+  // gepeng — jadi ringkasannya dipotong visual, teks utuh tetap di DOM.
+  it("ringkasan narasi supervisor dibatasi beberapa baris di dalam kartu", () => {
+    const isi = blok(".dc-agent-note");
+    expect(isi).toMatch(/-webkit-line-clamp:\s*\d+/);
+    expect(isi).toContain("-webkit-box-orient: vertical");
+    expect(isi).toContain("overflow: hidden");
+  });
+
+  it("grid sembilan kartu tetap membungkus, bukan memaksa satu baris", () => {
+    const isi = blok(".dc-agents");
+    expect(isi).toContain("grid");
+    expect(isi).toMatch(/grid-template-columns:\s*repeat\(auto-fit, minmax\(\d+px, 1fr\)\)/);
+  });
 });

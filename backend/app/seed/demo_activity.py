@@ -38,6 +38,14 @@ DEMO_TAG = "demo-aktivitas"
 #: Umur simpan per komoditas (hari) — dipakai menghitung `usable_until`.
 SHELF_LIFE_HARI = {"telur": 28, "ayam": 5, "beras": 180, "wortel": 21}
 
+#: Sisa masa layak MINIMUM agar sebuah batch boleh dipakai ulang sebagai sumber
+#: keputusan `executed` (audit 27 Okt 2026). Tanpa ambang ini penyemai bisa
+#: mengikat riwayat "selesai" ke batch yang tinggal beberapa menit lagi layak —
+#: sesaat kemudian `penghalang_sumber` membacanya sebagai kedaluwarsa dan
+#: ringkasan keputusan menampilkan "safety revalidation gagal" pada keputusan
+#: yang statusnya sudah `executed`. Enam jam = horizon satu sesi demo.
+SISA_LAYAK_SUMBER = timedelta(hours=6)
+
 #: Empat keadaan rotasi: 0 = di jalan, 1 = sudah tiba, 2 = belum berangkat,
 #: 3 = di jalan (variasi jam) — supaya tiap lokasi punya campuran.
 ROTASI = (
@@ -374,6 +382,50 @@ def demo_decision_id(lokasi: str, komoditas: str) -> uuid.UUID:
     return uuid.uuid5(uuid.NAMESPACE_URL, f"mcg:{DEMO_TAG}:keputusan:{lokasi}:{komoditas}")
 
 
+def demo_source_batch_id(lokasi: str, komoditas: str) -> uuid.UUID:
+    """Id deterministik batch SUMBER milik penyemai keputusan selesai.
+
+    Namespace-nya SENGAJA terpisah dari `demo_batch_id` (batch kiriman demo):
+    keduanya menempati pasangan (lokasi, komoditas) yang sama, dan penyemai ini
+    tidak boleh menimpa status/masa layak kiriman yang dipamerkan papan kiriman.
+    """
+    return uuid.uuid5(
+        uuid.NAMESPACE_URL, f"mcg:{DEMO_TAG}:sumber:{lokasi}:{komoditas}"
+    )
+
+
+def _nilai_batch_sumber(
+    batch_id: uuid.UUID,
+    now: datetime,
+    location_id: uuid.UUID,
+    commodity_id: uuid.UUID,
+    supplier_id: uuid.UUID,
+    nama_komoditas: str,
+) -> dict:
+    """Kolom batch sumber yang LAYAK: `pass`, berlog suhu, dan masih segar.
+
+    Nilainya dihitung dari `now` (bukan dari waktu tulis pertama), sehingga
+    menyemai ulang MENYEGARKAN masa layaknya — batch sumber yang menua tidak
+    boleh membuat riwayat `executed` terbaca "safety revalidation gagal".
+    """
+    panen = now - timedelta(hours=26)
+    return {
+        "commodity_id": commodity_id,
+        "location_id": location_id,
+        "supplier_id": supplier_id,
+        "quantity_kg": Decimal(800),
+        "harvested_at": panen,
+        "dispatched_at": panen + timedelta(hours=6),
+        "usable_until": panen + timedelta(days=SHELF_LIFE_HARI.get(nama_komoditas, 7)),
+        "safety_status": "pass",
+        "certification_status": "haccp",
+        "freshness_score": Decimal("0.92"),
+        "origin": "demo",
+        "generated_at": now,
+        "temperature_log": _log_suhu(batch_id, panen, "pass"),
+    }
+
+
 async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict:
     """Lengkapi KPI "hari ini": keputusan selesai + limbah. Idempoten."""
     lokasi = {
@@ -516,52 +568,59 @@ async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict
         # `revalidate_transfer` melaporkan "tidak ada batch sumber" dan
         # `resolve_binding` tidak bisa memastikan pemasok — dua penghalang yang
         # tidak masuk akal pada keputusan yang statusnya sudah `executed`.
-        # Batch yang SUDAH ada dipakai lebih dulu (jangan menambah kiriman yang
-        # tidak perlu); batch baru hanya dibuat untuk pasangan yang kosong, dan
-        # id-nya memakai `demo_batch_id` yang sama dengan penyemai kiriman demo.
-        batch_sumber = (
+        #
+        # Batch yang SUDAH ada dipakai lebih dulu, tetapi hanya bila ia BENAR
+        # layak menjadi sumber riwayat "selesai" (audit 27 Okt 2026):
+        #   - `safety_status == "pass"` (riwayat selesai tidak boleh bersandar
+        #     pada bahan yang belum/tidak lulus audit);
+        #   - milik PEMASOK keputusan ini (versi lama menimpa `supplier_id`
+        #     batch milik penyemai lain — memindahkan pemilik kiriman orang);
+        #   - `usable_until` masih di DEPAN dengan sisa minimal `SISA_LAYAK_SUMBER`.
+        #     Versi lama tidak melihat masa layak sama sekali, sehingga binding
+        #     bisa menunjuk batch kanonik 8 Okt yang sudah kedaluwarsa atau batch
+        #     yang tinggal hitungan menit; `penghalang_sumber` membacanya sebagai
+        #     blokir dan ringkasan menampilkan "safety revalidation gagal" pada
+        #     keputusan yang katanya sudah dieksekusi.
+        # `usable_until` NULL = masa layak tidak diketahui → tidak dipakai ulang
+        # (fail-closed); penyemai membuat batch sumber sendiri di bawah.
+        batch_sumber: Batch | None = (
             await db.execute(
                 select(Batch)
                 .where(
                     Batch.location_id == loc.id,
                     Batch.commodity_id == komoditas[nama_komoditas],
-                    # Keputusan "selesai" tidak boleh bersandar pada batch yang
-                    # belum lolos mutu. Tanpa filter ini seeder mengambil batch
-                    # pertama (bisa `needs_verification`) sehingga riwayat demo
-                    # memuat eksekusi di atas bahan yang belum lulus audit.
+                    Batch.supplier_id == sup.id,
                     Batch.safety_status == "pass",
+                    Batch.usable_until > now + SISA_LAYAK_SUMBER,
                 )
-                .order_by(Batch.id)
+                # Yang paling lama layak dipakai lebih dulu: pilihannya stabil
+                # antar penyemaian, dan sisa umur simpannya paling panjang.
+                .order_by(Batch.usable_until.desc(), Batch.id)
             )
         ).scalars().first()
         if batch_sumber is None:
-            panen = mulai - timedelta(hours=26)
-            batch_sumber = Batch(
-                id=demo_batch_id(nama_kota, sup.name, nama_komoditas),
-                commodity_id=komoditas[nama_komoditas],
-                location_id=loc.id,
-                supplier_id=sup.id,
-                quantity_kg=Decimal(800),
-                harvested_at=panen,
-                dispatched_at=panen + timedelta(hours=6),
-                usable_until=panen
-                + timedelta(days=SHELF_LIFE_HARI.get(nama_komoditas, 7)),
-                safety_status="pass",
-                certification_status="haccp",
-                freshness_score=Decimal("0.92"),
-                origin="demo",
-                generated_at=now,
-                temperature_log=_log_suhu(
-                    demo_batch_id(nama_kota, sup.name, nama_komoditas), panen, "pass"
-                ),
+            # Batch sumber milik penyemai ini SENDIRI (id deterministik di
+            # namespace `sumber`, bukan `demo_batch_id` milik penyemai kiriman).
+            # Dibuat ATAU disegarkan: masa layak, jam panen/berangkat, dan log
+            # suhunya dihitung ulang dari `now`, sehingga menyemai ulang
+            # benar-benar menyembuhkan batch yang hilang/kedaluwarsa dan tidak
+            # menabrak primary key saat menyemai kedua kali.
+            kunci_sumber = demo_source_batch_id(nama_kota, nama_komoditas)
+            nilai_sumber = _nilai_batch_sumber(
+                kunci_sumber,
+                now,
+                loc.id,
+                komoditas[nama_komoditas],
+                sup.id,
+                nama_komoditas,
             )
-            db.add(batch_sumber)
-        elif batch_sumber.supplier_id != sup.id:
-            # Batch lama bisa berasal dari pemasok lain. Keputusan, batch, dan
-            # biaya harus menunjuk pemasok yang SAMA; menambah batch baru untuk
-            # pasangan yang sudah punya stok akan menggandakan persediaan dan
-            # id deterministiknya bentrok saat disemai ulang.
-            batch_sumber.supplier_id = sup.id
+            batch_sumber = await db.get(Batch, kunci_sumber)
+            if batch_sumber is None:
+                batch_sumber = Batch(id=kunci_sumber, **nilai_sumber)
+                db.add(batch_sumber)
+            else:
+                for k, v in nilai_sumber.items():
+                    setattr(batch_sumber, k, v)
 
         # Biaya dihitung dari baris yang baru saja dipastikan ada
         # pemasok, harga, rute, kesegaran, status keamanan) — bukan angka
