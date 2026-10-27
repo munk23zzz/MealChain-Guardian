@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import get_current_user
 from app.api.dependencies import get_db
+from app.core.commercial_cost import commercial_cost_payload
 from app.core.recommendation_numbers import (
     InvalidRecommendationNumbers,
     validasi_angka_rekomendasi,
@@ -587,6 +588,13 @@ async def get_decision(
             float(row.safe_delivered_cost) if row.safe_delivered_cost is not None else None
         ),
         "cost_breakdown": row.cost_breakdown,
+        # Biaya komersial: invoice (bahan+transport+handling) dan SDC analitis
+        # dipisah di satu tempat. `null` = keputusan administratif tanpa biaya
+        # transfer; UI wajib menulis "tidak berlaku", bukan Rp 0.
+        "commercial_cost": commercial_cost_payload(
+            row.quantity_kg,
+            row.cost_breakdown if isinstance(row.cost_breakdown, dict) else None,
+        ),
         "expires_at": row.expires_at.isoformat(),
         "created_at": row.created_at.isoformat(),
         "valid": validity["valid"],
