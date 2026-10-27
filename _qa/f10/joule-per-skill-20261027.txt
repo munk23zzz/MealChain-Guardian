@@ -1,26 +1,26 @@
-supply_situation | HTTP 200 | 3449 char | provenance=TIDAK
-  Keseimbangan pasokan per SPPG (40 pasangan SPPG–komoditas: 31 kurang · 9 lebih)  | SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | Status | |---|---|---|---|---|---| | Bandung | ayam | 250 kg | 308 kg | kurang 58 kg | KURANG | | Bandung 
-kpi_snapshot | HTTP 200 | 1054 char | provenance=ya
-  Indikator kinerja MealChain Guardian (7 indikator):  | Indikator | Nilai | |---|---| | Keberlanjutan menu | — (tidak ada menu plan fakta operasional pada periode ini) | | Kehilangan pangan yang bisa dicegah | — (tidak ada disposal event pad
-approval_queue | HTTP 200 | 1539 char | provenance=TIDAK
-  Antrean usulan keputusan MealChain Guardian (33 usulan terbuka, 12 teratas ditampilkan):  | ID | Jenis | Asal → tujuan | Komoditas | Jumlah | Status | |---|---|---|---|---|---| | 0f08cbbd | pengadaan pemasok | Cianjur → Jakarta | telur | 60
-receipts_queue | HTTP 200 | 440 char | provenance=TIDAK
-  Ada 1 penerimaan barang yang menunggu keputusan:  | Komoditas | Jumlah | Lokasi | Keamanan | Dicatat oleh | Diperiksa | Waktu | |---|---|---|---|---|---|---| | wortel | 420 kg | Jakarta | lolos | SPPG Head Demo | 3/3 | 27 Okt 2026 23.15 WIB
+supply_situation | HTTP 200 | 3471 char | provenance=TIDAK
+  Keseimbangan pasokan per SPPG (40 pasangan SPPG–komoditas: 32 kurang · 8 lebih)  | SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | Status | |---|---|---|---|---|---| | Bandung | ayam | 250 kg | 308 kg | kurang 58 kg | KURANG | | Bandung 
+kpi_snapshot | HTTP 200 | 962 char | provenance=TIDAK
+  Indikator kinerja MealChain Guardian (7 indikator):  | Indikator | Nilai | |---|---| | Keberlanjutan menu | 99,97% | | Kehilangan pangan yang bisa dicegah | 0,46% | | Penyelesaian ketimpangan wilayah | 16,67% | | Biaya pengiriman aman | — (
+approval_queue | HTTP 200 | 1567 char | provenance=TIDAK
+  Antrean usulan keputusan MealChain Guardian (32 usulan terbuka, 12 teratas ditampilkan):  | ID | Jenis | Asal → tujuan | Komoditas | Jumlah | Status | |---|---|---|---|---|---| | 0f08cbbd | pengadaan pemasok | Cianjur → Jakarta | telur | 60
+receipts_queue | HTTP 200 | 537 char | provenance=TIDAK
+  Ada 2 penerimaan barang yang menunggu keputusan:  | Komoditas | Jumlah | Lokasi | Keamanan | Dicatat oleh | Diperiksa | Waktu | |---|---|---|---|---|---|---| | wortel | 420 kg | Jakarta | lolos | SPPG Head Demo | 3/3 | 27 Okt 2026 23.27 WIB
 quarantine_status | HTTP 200 | 324 char | provenance=TIDAK
-  Ada 1 batch berstatus karantina:  | Batch | Komoditas | Jumlah | Lokasi | Keamanan | |---|---|---|---|---| | 467caaad | beras | 540 kg | Jakarta | perlu verifikasi |  _Sebut 8 karakter pertama ID batch untuk melihat penerimaannya._ _Angka a
+  Ada 1 batch berstatus karantina:  | Batch | Komoditas | Jumlah | Lokasi | Keamanan | |---|---|---|---|---| | af8fecf5 | beras | 600 kg | Jakarta | perlu verifikasi |  _Sebut 8 karakter pertama ID batch untuk melihat penerimaannya._ _Angka a
 purchase_order | HTTP 200 | 1133 char | provenance=TIDAK
-  Purchase order MealChain Guardian (13 PO terbaca):  | Nomor PO | Status | Lokasi tujuan | Bahan | Jumlah | Total | Keputusan | |---|---|---|---|---|---|---| | MC-BEF077A8A935 | terkirim | Jakarta | telur | 780 kg | Rp21.949.387 | dieksekusi
-supplier_directory | HTTP 200 | 2518 char | provenance=TIDAK
-  Direktori pemasok (60 pemasok, dikelompokkan per SPPG):  | Pemasok | SPPG | Komoditas | Keandalan | Kapasitas/minggu | Kiriman aktif | |---|---|---|---|---|---| | CV Ambarawa Telur Utama | Semarang | telur | 0,86 | 2.200 kg | 2 batch · 350 
+  Purchase order MealChain Guardian (17 PO terbaca):  | Nomor PO | Status | Lokasi tujuan | Bahan | Jumlah | Total | Keputusan | |---|---|---|---|---|---|---| | MC-8167887C3B7A | terkirim | Jakarta | wortel | 420 kg | Rp7.930.112 | dieksekusi
+supplier_directory | HTTP 200 | 2530 char | provenance=TIDAK
+  Direktori pemasok (60 pemasok, dikelompokkan per SPPG):  | Pemasok | SPPG | Komoditas | Keandalan | Kapasitas/minggu | Kiriman aktif | |---|---|---|---|---|---| | CV Ambarawa Telur Utama | Semarang | telur | 0,86 | 2.200 kg | 3 batch · 1.35
 price_intelligence | HTTP 200 | 2110 char | provenance=TIDAK
-  Harga acuan per SPPG dan komoditas (8 pasangan terbaca):  | SPPG | Komoditas | Harga per kg | Sumber | Dicatat | |---|---|---|---|---| | Bandung | beras | Rp12.610 | acuan PIHPS | 4 Nov 2026 19.00 WIB | | Bogor | beras | Rp13.174 | acuan PI
-demand_forecast | HTTP 200 | 1365 char | provenance=TIDAK
-  Kebutuhan dan prakiraan per SPPG (8 pasangan terbaca):  | SPPG | Komoditas | Kebutuhan | Diperlukan sampai | Prakiraan | Metode prakiraan | Keyakinan (0–1) | |---|---|---|---|---|---|---| | Bandung | wortel | 396,2 kg | 7 Nov 2026 07.00 WIB
-food_loss | HTTP 200 | 613 char | provenance=TIDAK
-  Kehilangan pangan dan pengalihannya (MealChain Guardian)  - **Limbah tercatat:** 436,1 kg · 60 kejadian - **Dialihkan ke mitra:** 0 kg · 0 kejadian - **Tercatat tanpa mitra:** 436,1 kg · 60 kejadian - **Periode:** 28 Sep 2026 00.00 WIB – 28
-supplier_risk | HTTP 200 | 2029 char | provenance=TIDAK
+  Harga acuan per SPPG dan komoditas (8 pasangan terbaca):  | SPPG | Komoditas | Harga per kg | Sumber | Dicatat | |---|---|---|---|---| | Bandung | beras | Rp12.759 | acuan PIHPS | 4 Nov 2026 19.00 WIB | | Bogor | beras | Rp12.521 | acuan PI
+demand_forecast | HTTP 200 | 1367 char | provenance=TIDAK
+  Kebutuhan dan prakiraan per SPPG (8 pasangan terbaca):  | SPPG | Komoditas | Kebutuhan | Diperlukan sampai | Prakiraan | Metode prakiraan | Keyakinan (0–1) | |---|---|---|---|---|---|---| | Bandung | wortel | 384,9 kg | 7 Nov 2026 07.00 WIB
+food_loss | HTTP 200 | 724 char | provenance=TIDAK
+  Kehilangan pangan dan pengalihannya (MealChain Guardian)  - **Limbah tercatat:** 456,6 kg · 62 kejadian - **Dialihkan ke mitra:** 12,5 kg · 1 kejadian - **Tercatat tanpa mitra:** 444,1 kg · 61 kejadian - **Periode:** 28 Sep 2026 00.37 WIB –
+supplier_risk | HTTP 200 | 2107 char | provenance=TIDAK
   Eksklusi pemasok di hub (2 baris):  | Pemasok | SPPG | Status | Alasan | Aktif sejak | Dicabut | |---|---|---|---|---|---| | CV Ambarawa Telur Utama | Jakarta | aktif | Dua kiriman telur berturut-turut datang di atas ambang suhu; sertifikas
-decision_evidence | HTTP 200 | 3491 char | provenance=TIDAK
-  Bukti & jejak keputusan MealChain Guardian (3 keputusan: 1 usulan · 1 menunggu persetujuan · 1 dieksekusi):  **Keputusan 157deb07**  - **Jenis:** supplier_procurement - **Status:** usulan - **Diusulkan oleh:** supervisor_agent - **Tanda tan
-system_status | HTTP 200 | 1783 char | provenance=TIDAK
-  Komponen integrasi (7 komponen, diperiksa 28 Okt 2026 00.00 WIB):  | Komponen | Status | Bukti | |---|---|---| | AgentCore Runtime (Strands supervisor) | terkonfigurasi | env AGENTCORE_RUNTIME_ARN terisi | | SAP AI Core (SAP-RPT-1.6) | kont
+decision_evidence | HTTP 200 | 3226 char | provenance=TIDAK
+  Bukti & jejak keputusan MealChain Guardian (3 keputusan: 1 disetujui · 2 menunggu persetujuan):  **Keputusan bf6fccbd**  - **Jenis:** supplier_procurement - **Status:** disetujui - **Diusulkan oleh:** supervisor_agent - **Tanda tangan:** be
+system_status | HTTP 200 | 1785 char | provenance=TIDAK
+  Komponen integrasi (7 komponen, diperiksa 28 Okt 2026 00.37 WIB):  | Komponen | Status | Bukti | |---|---|---| | AgentCore Runtime (Strands supervisor) | terkonfigurasi | env AGENTCORE_RUNTIME_ARN terisi | | SAP AI Core (SAP-RPT-1.6) | kont
