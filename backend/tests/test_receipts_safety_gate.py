@@ -30,6 +30,12 @@ def _batch_status(statuses: tuple[str, ...]) -> str | None:
                     "SELECT b.id FROM batches b JOIN locations l ON l.id = b.location_id "
                     "WHERE l.name = 'Jakarta' "
                     "AND b.safety_status = ANY(:st) "
+                    # Fase 4 MG: batch yang dikarantina TIDAK boleh dipakai
+                    # sebagai contoh "belum pass" — pencatatan penerimaannya
+                    # memang ditolak 409 karena karantina, bukan karena status
+                    # keamanan. Tanpa saringan ini, tes hijau/merah tergantung
+                    # batch mana yang kebetulan paling baru di DB.
+                    "AND b.quarantine_status NOT IN ('quarantined', 'failed') "
                     "AND (b.usable_until IS NULL OR b.usable_until > now()) "
                     "AND NOT EXISTS (SELECT 1 FROM batch_receipts r "
                     "  WHERE r.batch_id = b.id AND r.status IN ('menunggu','disetujui')) "

@@ -125,7 +125,7 @@ def _monitor_user(client: TestClient) -> dict:
     return _login(client, "bgn.monitor@demo.local", "Demo#BGN2026")
 
 
-def _mk_batch(location_id: str, fail: bool) -> dict:
+def _mk_batch(location_id: str, fail: bool, safety: str = "pending") -> dict:
     """Batch uji di lokasi uji; log suhu relatif now (anti time-bomb)."""
     suffix = uuid.uuid4().hex[:8]
     t0 = NOW - timedelta(hours=3)
@@ -158,14 +158,24 @@ def _mk_batch(location_id: str, fail: bool) -> dict:
     batch_id = _db_exec_returning(
         "INSERT INTO batches (commodity_id, location_id, supplier_id, "
         "quantity_kg, harvested_at, temperature_log, freshness_score, "
-        "safety_status) "
-        "SELECT c.id, :lid, :s, 488.88, :h, CAST(:tl AS jsonb), 0.90, 'pending' "
+        "safety_status, usable_until) "
+        "SELECT c.id, :lid, :s, 488.88, :h, CAST(:tl AS jsonb), 0.90, :safety, "
+        ":uu "
         "FROM commodities c WHERE c.name='telur' RETURNING id",
         {
             "lid": location_id,
             "s": str(sup_id),
             "h": (NOW - timedelta(days=2)).isoformat(),
             "tl": __import__("json").dumps(log),
+            # Fase 4 MG: `usable_until` kosong berarti masa layak TIDAK dapat
+            # dibuktikan, dan evaluator menolaknya (`expiry_unknown`). Fixture
+            # ini menguji "batch aman → boleh dieksekusi", jadi masa layaknya
+            # wajib nyata (telur masa layak 28 hari; 10 hari aman di tengah).
+            "uu": NOW + timedelta(days=10),
+            # Status keamanan parametrik: Fase 4 membuat `pending` TIDAK lagi
+            # boleh dieksekusi, jadi tes yang menguji "batch aman" harus
+            # benar-benar membuat batch `pass` (bukan meminjam default lama).
+            "safety": safety,
         },
     )
     return {
@@ -398,7 +408,11 @@ def test_approval_summary_canonical_fields(client):
 @pytest.mark.parametrize("binding", ["explicit", "missing"])
 def test_approval_summary_or_complete_then_execute_parity(client, binding):
     """Only a bound transfer promises a supplier and can execute."""
-    batch = _mk_batch(_bogor_id(), fail=False) if binding == "explicit" else None
+    batch = (
+        _mk_batch(_bogor_id(), fail=False, safety="pass")
+        if binding == "explicit"
+        else None
+    )
     # Kasus "missing" menuntut lokasi+komoditas yang TIDAK punya satu pun batch,
     # supaya pemasok tidak bisa disimpulkan. Dulu dipaku ke `ayam` + Jakarta;
     # seed bertambah, jadi pasangannya DICARI saat tes berjalan.
@@ -582,7 +596,7 @@ def test_approval_summary_safety_revalidation_block(client):
         "VALUES (:n, 'Test', -6.9, 107.6) RETURNING id",
         {"n": f"SUM-src-{suffix}"},
     ))
-    b = _mk_batch(loc_id, fail=False)
+    b = _mk_batch(loc_id, fail=False, safety="pass")
     did = _mk_decision(loc_id, _jakarta_id())
     try:
         _db_exec(
