@@ -511,8 +511,10 @@ export default function DemoControlPanel({
     try {
       await runDemoAgent(token, {
         commodity: komoditas || undefined,
-        // Fase 2 MG: analisis dijalankan ATAS SESI yang sedang dipilih panel.
+        // Fase 2 MG: analisis dijalankan ATAS SESI yang sedang dipilih panel,
+        // dan modenya ikut dikirim supaya server bisa menolak bila berbeda.
         demoSession: sesi?.session_id ?? undefined,
+        mode: modeSesi(sesi) ?? undefined,
       });
       // Sumber kebenaran blok bukti adalah DB, bukan respons tombol di atas.
       await muatBukti();

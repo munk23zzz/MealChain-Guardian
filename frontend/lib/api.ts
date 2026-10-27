@@ -997,7 +997,13 @@ export async function runDemoAgent(
     commodity,
     ttlMinutes,
     demoSession,
-  }: { commodity?: string; ttlMinutes?: number; demoSession?: string } = {}
+    mode,
+  }: {
+    commodity?: string;
+    ttlMinutes?: number;
+    demoSession?: string;
+    mode?: DemoSessionMode;
+  } = {}
 ) {
   const payload: Record<string, unknown> = {};
   if (commodity) payload.commodity = commodity;
@@ -1006,6 +1012,10 @@ export async function runDemoAgent(
   // itu. Tanpa ini server menstempel keputusan dari "sesi aktif", sehingga dua
   // sesi yang hidup berdampingan bisa saling menimpa kepemilikan baris.
   if (demoSession) payload.demo_session = demoSession;
+  // Fase 2 MG butir 8: mode dikirim bersama sesi. Server membandingkannya
+  // dengan mode sesi pemilik dan menolak 422 bila bertentangan — lebih baik
+  // analisis berhenti daripada menulis baris ke sesi bermode lain.
+  if (mode) payload.mode = mode;
   return request("/demo/agent/run", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders(token) },

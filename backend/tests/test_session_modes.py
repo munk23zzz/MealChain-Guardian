@@ -667,7 +667,10 @@ def test_run_event1_menurunkan_sesi_pemilik_ke_keputusan(tanpa_sesi_aktif, monke
     sid = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
     from app.services import event1_orchestrator as orch
 
-    async def _rekomendasi_terkendali(_fetch):
+    async def _rekomendasi_terkendali(_fetch, **_kw):
+        # `**_kw` disengaja: orkestrator menambah parameter pada mesin
+        # rekomendasi dari fase lain (mis. `as_of`). Tes ini menguji PROPAGASI
+        # sesi, jadi ia harus tahan terhadap parameter tambahan itu.
         return {
             "recommendations": [
                 {
@@ -822,3 +825,161 @@ def test_penulis_po_memakai_sesi_dari_keputusan():
         "PO hasil eksekusi tidak menyimpan sesi induk; kepemilikan baris hilang "
         "begitu keputusan dihapus (FK ON DELETE SET NULL)"
     )
+
+
+# ------------------------------------- 8. mode pada analisis + penerimaan
+
+
+def _payload_pengadaan(commodity: str) -> dict:
+    """Balasan minimal `run_supplier_procurement` untuk uji seam endpoint."""
+    return {
+        "decision_id": "00000000-0000-0000-0000-0000000000f4",
+        "detect": {"commodity": commodity},
+        "verifier": {"verdict": "PASS"},
+        "forecast": {"forecast_qty_kg": None},
+        "supervisor": {"status": "fallback", "summary": "uji", "attempts": []},
+        "mode": "supplier_procurement",
+        "suppliers": {"candidates": [], "ranked": [], "chosen": None},
+        "decision_snapshot": {"status": "proposed", "approved": False},
+        "trace_steps": ["DETECT", "VERIFY", "TRACE", "PREDICT", "OPTIMIZE",
+                        "DECIDE", "SUPERVISE"],
+    }
+
+
+def test_agent_run_mode_cocok_diterima(tanpa_sesi_aktif, monkeypatch):
+    """`POST /demo/agent/run` menerima `mode` yang cocok dengan sesi pemiliknya.
+
+    Mode disebut eksplisit supaya analisis tidak diam-diam berjalan di mode
+    sesi lain: klien yang mengira sedang realtime tidak boleh menulis ke sesi
+    replay (dan sebaliknya).
+    """
+    sid = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
+    monkeypatch.setattr(
+        "app.api.demo.run_supplier_procurement",
+        lambda commodity, target_location, **_kw: _payload_pengadaan(commodity),
+    )
+    try:
+        with TestClient(app) as client:
+            head = _login(client)
+            resp = client.post(
+                "/demo/agent/run",
+                json={"demo_session": str(sid), "mode": "replay"},
+                headers=head,
+            )
+        assert resp.status_code == 201, resp.text
+    finally:
+        _hapus_sesi(sid)
+
+
+def test_agent_run_mode_bertentangan_ditolak_422(tanpa_sesi_aktif, monkeypatch):
+    """Mode permintaan yang bertentangan dengan sesi dijawab 422, bukan diabaikan."""
+
+    def _fake(*_a, **_kw):  # pragma: no cover - tidak boleh terpanggil
+        raise AssertionError("analisis dijalankan padahal mode-nya bertentangan")
+
+    monkeypatch.setattr("app.api.demo.run_supplier_procurement", _fake)
+    sid = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
+    try:
+        with TestClient(app) as client:
+            head = _login(client)
+            resp = client.post(
+                "/demo/agent/run",
+                json={"demo_session": str(sid), "mode": "realtime"},
+                headers=head,
+            )
+        assert resp.status_code == 422, resp.text
+    finally:
+        _hapus_sesi(sid)
+
+
+def test_penerimaan_mewarisi_sesi_batch_bukan_sesi_aktif(tanpa_sesi_aktif, monkeypatch):
+    """`POST /receipts` menuliskan sesi BATCH-nya, bukan sesi yang sedang aktif.
+
+    Inilah pembeda yang diminta rencana: penjaga `before_flush` menstempel dari
+    sesi AKTIF, sehingga penerimaan atas barang sesi pertama ikut tercatat milik
+    sesi kedua begitu operator membuka sesi baru.
+    """
+    batch_id = _batch_untuk_penerimaan()
+    sesi_batch = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
+    sesi_aktif = _buat_sesi(mode="realtime", anchor=datetime.now(UTC), status="active")
+    _set_sesi_batch(batch_id, sesi_batch)
+    # Kelayakan batch diuji di berkas Fase 4; di sini yang diuji kepemilikan.
+    monkeypatch.setattr(
+        "app.api.receipts.evaluasi_batch",
+        lambda _batch: type("_E", (), {"status": "usable", "blocking_reasons": ()})(),
+    )
+    try:
+        with TestClient(app) as client:
+            head = _login(client)
+            resp = client.post(
+                "/receipts",
+                json={"batch_id": str(batch_id), "checked": {"kualitas": True}},
+                headers=head,
+            )
+        assert resp.status_code == 201, resp.text
+        receipt_id = resp.json()["id"]
+        assert _sesi_penerimaan(receipt_id) == sesi_batch, (
+            "penerimaan tidak mewarisi sesi batch induk — kemungkinan distempel "
+            "dari sesi aktif"
+        )
+        assert _sesi_penerimaan(receipt_id) != sesi_aktif
+    finally:
+        _hapus_penerimaan_uji(batch_id)
+        _set_sesi_batch(batch_id, None)
+        _hapus_sesi(sesi_batch, sesi_aktif)
+
+
+def _batch_untuk_penerimaan() -> uuid.UUID:
+    """Batch di lokasi akun uji yang bisa dipakai mencatat penerimaan."""
+    engine = _db()
+    try:
+        with engine.connect() as conn:
+            return conn.execute(
+                text(
+                    "SELECT b.id FROM batches b JOIN users u ON u.location_id = b.location_id "
+                    "WHERE u.email = :e AND u.location_id IS NOT NULL "
+                    "ORDER BY b.created_at DESC LIMIT 1"
+                ),
+                {"e": EMAIL},
+            ).scalar_one()
+    finally:
+        engine.dispose()
+
+
+def _set_sesi_batch(batch_id: uuid.UUID, sid: uuid.UUID | None) -> None:
+    engine = _db()
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("UPDATE batches SET demo_session_id = :s WHERE id = :b"),
+                {"s": sid, "b": batch_id},
+            )
+    finally:
+        engine.dispose()
+
+
+def _sesi_penerimaan(receipt_id: str) -> uuid.UUID | None:
+    engine = _db()
+    try:
+        with engine.connect() as conn:
+            return conn.execute(
+                text(
+                    "SELECT demo_session_id FROM batch_receipts "
+                    "WHERE id = CAST(:i AS uuid)"
+                ),
+                {"i": receipt_id},
+            ).scalar_one()
+    finally:
+        engine.dispose()
+
+
+def _hapus_penerimaan_uji(batch_id: uuid.UUID) -> None:
+    engine = _db()
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM batch_receipts WHERE batch_id = :b"),
+                {"b": batch_id},
+            )
+    finally:
+        engine.dispose()

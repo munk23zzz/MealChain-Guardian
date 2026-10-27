@@ -184,6 +184,11 @@ async def create_receipt(
         other_note=catatan or None,
         recorded_by=user.id,
         status="menunggu",
+        # Fase 2 MG: penerimaan milik SESI BATCH-nya, bukan sesi yang kebetulan
+        # aktif. Tanpa ini, penerimaan atas barang sesi pertama tercatat milik
+        # sesi kedua begitu operator membuka sesi baru, dan reset sesi pertama
+        # tidak lagi bisa menemukan catatannya sendiri.
+        demo_session_id=batch.demo_session_id,
     )
     db.add(receipt)
     await db.commit()

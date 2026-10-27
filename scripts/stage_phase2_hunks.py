@@ -34,11 +34,14 @@ BERKAS_CAMPURAN: dict[str, list[str]] = {
     # spesifik: `demoSession;` (dengan titik koma) membedakannya dari
     # `demoSessionId` milik jalur `/demo/event1` & `/balance/analyze`.
     "frontend/lib/api.ts": [
-        "payload.mode = opsi.mode",
-        "payload.demo_session = demoSession;",
-        "labelModeSesi",
-        "DemoSessionInfo",
+        # Fase 2 butir 8: `mode` ikut dikirim pada analisis (hunk param + hunk body).
+        "mode?: DemoSessionMode;",
+        "payload.mode = mode",
     ],
+    # Fase 2 butir 6: penerimaan menuliskan sesi batch induknya.
+    "backend/app/api/receipts.py": ["demo_session_id=batch.demo_session_id"],
+    # Fase 2 butir 8: panel mengirim mode sesi yang sedang dipilih.
+    "frontend/components/DemoControlPanel.tsx": ["mode: modeSesi(sesi) ?? undefined"],
 }
 
 #: (berkas, [penanda]) — hunk DIBUANG bila memuat salah satu penanda; sisanya

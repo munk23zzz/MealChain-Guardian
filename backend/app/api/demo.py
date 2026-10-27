@@ -133,23 +133,35 @@ def _loc_map(locations) -> dict:
     return {loc.name: loc.id for loc in locations}
 
 
-async def _sesi_pemilik_analisis(db: AsyncSession, demo_session: uuid.UUID | None):
+async def _sesi_pemilik_analisis(
+    db: AsyncSession,
+    demo_session: uuid.UUID | None,
+    mode: str | None = None,
+):
     """Sesi pemilik untuk analisis yang diminta klien (Fase 2 MG).
 
     `None` = klien tidak menyebut sesi (jalur lama: penjaga `before_flush` yang
     menstempel dari sesi aktif). Sesi yang diminta tetapi tidak ada dijawab 404 —
     bukan diam-diam memakai sesi lain.
+
+    `mode` (Fase 2 MG butir 8): klien boleh menyebut mode yang diyakini sedang
+    berjalan. Kalau bertentangan dengan mode sesi pemilik, permintaan ditolak 422
+    — lebih baik analisis berhenti daripada menulis baris ke sesi bermode lain.
     """
-    if demo_session is None:
+    if demo_session is None and mode is None:
         return None
     from app.services import demo_ownership
 
     try:
-        return await demo_ownership.sesi_pemilik(db, demo_session=demo_session)
+        return await demo_ownership.sesi_pemilik(
+            db, demo_session=demo_session, mode=mode
+        )
     except demo_ownership.SesiTidakDitemukanError:
         raise HTTPException(
             status_code=404, detail=f"sesi demo {demo_session} tidak ditemukan"
         ) from None
+    except demo_ownership.ModeBertentanganError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
 
 
 async def _target_lokasi(db: AsyncSession, user: User) -> Location:
@@ -1411,6 +1423,9 @@ class AgentRunRequest(BaseModel):
     ttl_minutes: int = Field(default=30, ge=1, le=1440)
     #: Fase 2 MG: sesi pemilik keputusan (lihat `Event1Request.demo_session`).
     demo_session: uuid.UUID | None = None
+    #: Fase 2 MG butir 8: mode yang diyakini klien sedang berjalan. Divalidasi
+    #: terhadap mode sesi pemilik; bertentangan = 422, bukan diam-diam dipakai.
+    mode: Literal["replay", "realtime"] | None = None
 
 
 async def _lokasi_akun(db: AsyncSession, user: User) -> Location:
@@ -1445,7 +1460,7 @@ async def run_demo_agent(
     """
     isi = payload or AgentRunRequest()
     lokasi = await _lokasi_akun(db, user)
-    pemilik = await _sesi_pemilik_analisis(db, isi.demo_session)
+    pemilik = await _sesi_pemilik_analisis(db, isi.demo_session, mode=isi.mode)
 
     def _jalankan_pengadaan() -> dict:
         opsi: dict = {"ttl_minutes": isi.ttl_minutes}

@@ -98,6 +98,15 @@ describe("runDemoAgent meneruskan sesi", () => {
     const badan = badanFungsi("runDemoAgent");
     expect(badan).not.toMatch(/payload\.demo_session\s*=\s*null/);
   });
+
+  it("menyertakan mode di body", () => {
+    // Fase 2 MG butir 8: analisis membawa modenya sendiri. Tanpa ini server
+    // hanya tahu sesi, dan klien yang mengira realtime bisa menulis ke sesi
+    // replay tanpa ada yang menolak.
+    const badan = badanFungsi("runDemoAgent");
+    expect(badan).toContain("payload.mode = mode");
+    expect(badan).toMatch(/mode\?: DemoSessionMode/);
+  });
 });
 
 describe("startDemoSession meneruskan mode", () => {
