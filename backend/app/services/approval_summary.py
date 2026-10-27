@@ -34,6 +34,7 @@ from app.models import (
 # dalam badan fungsi, dan salinan seperti itu bisa menyimpang dari yang dipakai
 # penjaga endpoint (app/api/actions.py memakai konstanta yang sama).
 from app.services import supplier_exclusion_service as exclusions
+from app.services.receipt_gate import gerbang_penerimaan
 
 
 def _verdict_of(decision: Decision) -> str:
@@ -166,7 +167,11 @@ async def _safety_view(db: AsyncSession, decision: Decision) -> dict:
 
 
 async def build_approval_summary(
-    db: AsyncSession, decision: Decision, viewer_id: uuid.UUID | None = None
+    db: AsyncSession,
+    decision: Decision,
+    viewer_id: uuid.UUID | None = None,
+    viewer_role: str | None = None,
+    viewer_location_id: uuid.UUID | None = None,
 ) -> dict:
     """Susun read model kanonik dari DB — tanpa call provider, tanpa write.
 
@@ -174,6 +179,11 @@ async def build_approval_summary(
     MEMBACA sudah punya baris approval. UI memakainya supaya tidak menawarkan
     "Setuju" kepada orang yang approval-nya sudah tercatat — klik seperti itu
     selalu berakhir 409 "approval sudah tercatat" (laporan owner 17 Okt).
+
+    `viewer_role`/`viewer_location_id` (opsional, Fase 9 MG poin 4) dipakai
+    untuk `can_receive`/`can_quarantine`. Tanpa keduanya flag bernilai `None`
+    ("tidak dapat dinilai"), bukan `False` — pemanggil tanpa pembaca tidak
+    boleh mengklaim tombol tidak boleh dipakai.
     """
 
     # Konteks lokasi/komoditas (nama manusiawi untuk UI).
@@ -387,6 +397,13 @@ async def build_approval_summary(
     if decision.status == "executed":
         can_execute = False
 
+    # Gerbang penerimaan/karantina (Fase 9 MG poin 4). Batch acuan = batch di
+    # lokasi TUJUAN; syaratnya cerminan pagar `POST /receipts/{id}/approve` dan
+    # `POST /batches/{id}/quarantine`, bukan aturan baru di modul ini.
+    gerbang = await gerbang_penerimaan(
+        db, decision, viewer_role, viewer_location_id
+    )
+
     return {
         "decision_id": str(decision.id),
         "decision_type": decision.decision_type,
@@ -442,6 +459,11 @@ async def build_approval_summary(
         "can_reject": can_reject,
         "can_execute": can_execute,
         "blocking_reasons": blocking,
+        # Fase 9 MG poin 4: gerbang penerimaan & karantina (batch lokasi TUJUAN).
+        # `None` = tidak dapat dinilai tanpa peran pembaca, bukan "dilarang".
+        "can_receive": gerbang["can_receive"],
+        "can_quarantine": gerbang["can_quarantine"],
+        "receipt_gate": gerbang,
         # Disiplin approver untuk UI (read-only, bukan logika).
         "approver_roles": sorted(APPROVER_ROLES),
     }

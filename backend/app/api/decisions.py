@@ -505,7 +505,15 @@ async def get_approval_summary(
     if row is None:
         raise HTTPException(status_code=404, detail="decision tidak ditemukan")
     await _assert_decision_readable(db, user, row)
-    return await build_approval_summary(db, row, viewer_id=user.id)
+    return await build_approval_summary(
+        db,
+        row,
+        viewer_id=user.id,
+        # Fase 9 MG poin 4: peran & lokasi pembaca dipakai server untuk
+        # `can_receive`/`can_quarantine`; klien tidak menghitungnya.
+        viewer_role=user.role,
+        viewer_location_id=user.location_id,
+    )
 
 
 @router.get("/decisions/{decision_id}/audit-facts")
