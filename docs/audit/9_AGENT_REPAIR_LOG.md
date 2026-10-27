@@ -9,9 +9,9 @@ di dalam container lalu nama DB diganti — DB demo `mealchain` hanya dibaca (SE
 
 | Aturan | Konsekuensi di log ini |
 |---|---|
-| Maksimum 3 patch, hanya P0/P1 yang aman | 2 patch dilakukan, 1 kandidat **ditolak karena tidak terbukti** |
-| Tanpa melonggarkan assertion | 2 assertion lama **diperketat** (CONSISTENT → FLAGGED), tidak ada tes yang di-skip |
-| Tanpa mengubah ambang/KPI | `PASS_THRESHOLD 0,85` dan `VERIFY_THRESHOLD 0,60` **tidak diubah** — justru mulai dipakai |
+| Maksimum 3 patch, hanya P0/P1 yang aman | 3 patch dilakukan (FIX-1, FIX-2, FIX-3/AUD-9B-29), 1 kandidat **ditolak karena tidak terbukti** |
+| Tanpa melonggarkan assertion | 2 assertion lama **diperketat** (CONSISTENT → FLAGGED) + 4 assertion guardian diperketat/disesuaikan ke aturan sumber (AUD-9B-29), tidak ada tes yang di-skip |
+| Tanpa mengubah ambang/KPI | `PASS_THRESHOLD 0,85` dan `VERIFY_THRESHOLD 0,60` **tidak diubah** pada ketiga patch — justru mulai dipakai |
 | Tidak ada perubahan `.env`, tidak ada paket baru, tidak ada push | Dipatuhi |
 
 ## 1. Ringkasan hasil
@@ -20,6 +20,7 @@ di dalam container lalu nama DB diganti — DB demo `mealchain` hanya dibaca (SE
 |---|---|---|---|---|
 | FIX-1 | AUD-9A-03 / AUD-9A-05 — verifier LLM mengembalikan `CONSISTENT` untuk `freshness_score` yang menurut `core/freshness.py` = `needs_verification` | P1 | **DIPERBAIKI** — guard deterministik memakai gerbang certified | `backend/tests/test_verifier_freshness_guard.py` (14 kasus) |
 | FIX-2 | AUD-9A-05 — worker Freshness tidak memakai gerbang certified 0,85/0,60; 0,82 dilaporkan `ok` tanpa status | P1 | **DIPERBAIKI sebagian** — klasifikasi certified kini fakta + warning; `blocking`/veto sengaja tidak diubah (butuh keputusan owner) | `backend/tests/test_agent_freshness_gate.py` (5 kasus) |
+| FIX-3 | **AUD-9B-29** — Safety & Freshness menilai batch lokasi **tujuan**, bukan sumber; exclusion dihitung tanpa cakupan | **P0** | **DIPERBAIKI** — guardian memakai himpunan batch sumber (binding/lokasi sumber), exclusion ber-cakupan pemasok+lokasi, sumber tak teridentifikasi → fail-closed; revalidasi `execute` memakai aturan yang sama | `backend/tests/test_agent_guardian_scope.py` (13 kasus) + `backend/tests/test_execute_source_scope.py` (3 kasus) |
 | — | Prioritas (iii) — retry/duplikat menghasilkan keputusan/PO ganda | P1 (dugaan) | **TIDAK TERBUKTI → tidak dipatch** | bukti di §4 |
 | — | AUD-9A-04, AUD-9A-06/9B-07, AUD-9B-16, AUD-9B-01/02, independensi model verifier | P1–P2 | **Tidak dipatch** (alasan di §5) | — |
 
@@ -260,3 +261,133 @@ di-skip: tes itu benar, datanya yang salah.
 
 Rincian perintah, jumlah skip beserta alasannya, dan seluruh skenario E2E ada di
 `9_AGENT_TEST_RESULTS.md`.
+
+## 8. FIX-3 — AUD-9B-29 (P0): guardian menilai batch SUMBER + exclusion ber-cakupan
+
+Ditambahkan 27 Oktober 2026 sesudah laporan audit 9 agent. Berbasis `0a0eeee`, DB uji
+klon `mealchain_a9b29` (`pg_dump` dari `mealchain`, `DROP DATABASE` sesudah selesai).
+**DB demo `mealchain` hanya dibaca (SELECT).**
+
+### Reproduksi (sebelum patch)
+
+```python
+# in-process, worker produksi, klon, konteks Bandung/telur (sumber Cianjur)
+SafetyWorker().run(WorkerContext(location="Bandung", commodity="telur",
+                                 source_location="Cianjur", api=api))
+→ ok  blocking=True
+  facts: {location: "Bandung", batch_count: 3, failed_count: 0, pass_count: 3,
+          active_exclusion_count: 1,
+          active_exclusion_ids: ["55bb6ed8-948a-594c-b243-0cae49d304fe"]}
+```
+Dua cacat sekaligus pada keluaran yang sama:
+
+1. **Batch yang dinilai batch Jakarta**, bukan Cianjur. `batch_count: 3` = tiga batch
+   Jakarta/telur (semua `pass`); batch Cianjur/telur yang benar-benar dikirim tidak
+   pernah dibaca. Variasi yang diuji di skrip E2E: batch sumber `safety_status='fail'`
+   → worker tetap melaporkan `failed_count: 0`.
+2. **Exclusion tanpa cakupan**: `55bb6ed8` adalah exclusion **CV Ambarawa Telur Utama**
+   (supplier `d8ff21f2…`) untuk **SPPG Jakarta**; keputusan Bandung tidak ada
+   kaitannya, tetapi exclusion itu tetap memveto (`blocking=True`).
+
+### Root cause
+
+- `agent/workers/safety.py:47-53` dan `agent/workers/freshness.py:74-80` (versi lama)
+  menyaring `/batches` dengan `context.location` — dan `context.location` diisi
+  `target_location` oleh `context_from_approval`. Lokasi **sumber** sudah ada di
+  `context.source_location` tetapi hanya dipakai worker Logistics.
+- `agent/workers/safety.py:79-85` (versi lama) mengambil **semua** baris
+  `/supplier-exclusions` berstatus `active` tanpa membandingkan `supplier_id`/
+  `scope_location_id` — padahal kedua kolom itu ada di skema dan di respons API.
+- `approval-summary` tidak membeberkan identitas yang dibutuhkan untuk mencakupkan
+  exclusion (`target_location_id`, `supplier.id`) maupun himpunan batch sumber
+  (`batch_sumber_transfer`), sehingga worker tidak punya pilihan selain menebak.
+- `backend/app/api/actions.py::_source_batches_still_safe` mengembalikan `True` bila
+  keputusan tidak punya lokasi/komoditas sumber — jalur "tidak dapat dibuktikan =
+  boleh". (Jalur `execute` tetap tertutup oleh `revalidate_transfer`, tetapi guard-nya
+  sendiri fail-open.)
+
+### Patch (minimal, 9 berkas kode)
+
+| Berkas | Perubahan |
+|---|---|
+| `agent/workers/sumber.py` (baru) | `pilih_batch_sumber()` — urutan: `source_batch_ids` binding → lokasi **sumber** + komoditas; tidak pernah lokasi tujuan; `exclusion_berlaku()`/`pisahkan_exclusion()` — cocokkan `supplier_id` + `scope_location_id`, baris tanpa kolom cakupan tetap berlaku (konservatif) dan dilaporkan |
+| `agent/workers/base.py` | `WorkerContext` + `target_location_id`, `source_location_id`, `supplier_id`, `source_batch_ids` |
+| `agent/workers/safety.py` | menilai batch sumber; `quarantined_count`/`quarantined_batch_ids` memblokir; `active_exclusion_ids` = yang berlaku, `ignored_exclusion_ids` = yang cakupannya lain; sumber tak teridentifikasi → `degraded` + `blocking=True`; exclusion tak terbaca → memblokir |
+| `agent/workers/freshness.py` | himpunan batch sumber; sumber tak teridentifikasi / kosong → `blocking=True`; ambang 0,85/0,60 **tidak berubah** |
+| `agent/orchestrator.py` | `context_from_approval` mengisi identitas sumber dari `approval-summary` (`target_location_id`, `source_location_id`, `supplier.id`, `safety.batch_ids`) |
+| `backend/app/services/approval_summary.py` | + `source_location_id`, `target_location_id`, `safety.batch_ids` (additif); cek exclusion memakai helper bersama |
+| `backend/app/services/supplier_exclusion_service.py` | `exclusion_aktif_untuk(db, supplier_id, target_location_id)` — SATU definisi cakupan untuk execute & `can_execute` |
+| `backend/app/services/supplier_eligibility.py` | `revalidate_transfer` memakai helper cakupan di atas + pesan blokir menyebut kode sebenarnya (dikarantina ≠ FAIL) |
+| `backend/app/api/actions.py` | `_source_batches_still_safe` fail-closed bila identitas sumber tidak lengkap |
+
+Batas skema yang dilaporkan apa adanya: `supplier_exclusions` **tidak punya kolom
+komoditas**, jadi exclusion hanya bisa di-scope pada (pemasok, SPPG penerima). Untuk
+data demo ini cukup — satu pemasok hanya memasok satu komoditas — tetapi exclusion
+"pemasok X untuk komoditas Y" tidak dapat dinyatakan. Tidak ada kolom baru, tidak ada
+migrasi.
+
+### Regression test (TDD: RED dulu, 13 kasus)
+
+`backend/tests/test_agent_guardian_scope.py` — sebelum patch **13 failed**, sesudah
+**13 passed**:
+
+| Skenario | Kasus |
+|---|---|
+| (a) batch sumber dinilai | `test_safety_menilai_batch_sumber_bukan_lokasi_tujuan`, `test_freshness_menilai_batch_sumber_bukan_lokasi_tujuan`, `test_batch_terikat_menentukan_himpunan_sumber` |
+| (b) karantina/hilang | `test_safety_batch_sumber_dikarantina_memblokir`, `test_safety_batch_terikat_hilang_fail_closed` |
+| (c) exclusion cakupan lain | `test_exclusion_lokasi_lain_tidak_memveto`, `test_exclusion_pemasok_lain_lokasi_sama_tidak_memveto` |
+| (d) exclusion cocok | `test_exclusion_cakupan_cocok_tetap_memveto`, `test_exclusion_tanpa_kolom_cakupan_tidak_lolos_diam_diam` |
+| (e) sumber tak teridentifikasi | `test_safety_tanpa_identitas_sumber_fail_closed`, `test_freshness_tanpa_identitas_sumber_fail_closed`, `test_konteks_tidak_memakai_lokasi_tujuan_sebagai_sumber` |
+| konteks | `test_context_dari_approval_summary_membawa_identitas_sumber` |
+
+Jalur tulis: `backend/tests/test_execute_source_scope.py` (3 kasus) — exclusion lokasi
+lain tidak memblokir `can_execute`, exclusion lokasi target memblokir, dan
+`approval-summary` membeberkan identitas batch sumber yang dipakai agen.
+`backend/tests/test_execute_safety_wiring.py` diperketat: sumber tak teridentifikasi
+kini **harus** memblokir.
+
+Assertion lama yang disesuaikan (bukan dilonggarkan):
+
+| Tes | Dulu | Sekarang | Alasan |
+|---|---|---|---|
+| `test_freshness_daftar_kosong_adalah_nol_nyata` | `blocking is False` | `blocking is True` | nol batch sumber = tidak ada bukti; dulu "kosong" berarti "penyaringan lokasi tujuan tidak menemukan apa pun" |
+| `test_safety_menandai_fail_dan_exclusion_aktif` | sitasi tanpa `quarantined_count` | + `quarantined_count: 0` | fakta karantina kini dihitung & disitasi |
+| `_context()` 3 berkas tes | tanpa `source_location` | `source_location=location` | konteks uji menyatakan sumber secara eksplisit; angka yang diuji tidak berubah |
+| `test_golden_04/05` | `_context(api)` | `_context(api, source_location="Jakarta")` | idem |
+
+### Hasil retest
+
+| Perintah | Exit | Hasil |
+|---|---|---|
+| `cd backend && .venv/Scripts/ruff.exe check .` | 0 | `All checks passed!` |
+| `pytest -q tests/test_agent_guardian_scope.py` (sebelum patch) | 1 | **13 failed** (RED) |
+| tes yang sama sesudah patch | 0 | **13 passed** |
+| `pytest` penuh di klon `mealchain_a9b29` (`-q -rs`) | 1 | **1 failed, 1628 passed, 25 skipped**, 552,44 s — satu-satunya kegagalan tetap `test_bukti_dan_draf_demo.py` (data `3e2e3cc7`/`bukti-hari-ini`, AUD-9B-16), bukan kode |
+| E2E HTTP + review agen di klon (`/tmp/a9b29_e2e.py`, 10 assertion) | 0 | **10/10 PASS** (rincian di `9_AGENT_TEST_RESULTS.md` §E) |
+
+Ringkas E2E (klon `mealchain_a9b29`, batch sumber Cianjur/telur `7ed8ff62…`):
+
+```
+A. batch sumber safety_status='fail'   → execute 409  "safety revalidation gagal: batch sumber kini FAIL (temperature excursion)"
+B. batch sumber kembali 'pass'         → execute 200  po=MC-… (kontrol: 409 di A berasal dari gate)
+C. batch sumber quarantine='quarantined' → execute 409 "… batch sumber dikarantina/gagal"
+D. keputusan tanpa identitas sumber    → execute 409  (fail-closed)
+E. review Jakarta/telur sumber Cianjur → safety source=Cianjur, batch_count=1 (binding), blocking=False,
+                                          ignored_exclusion_ids=['55bb6ed8…']  ← veto palsu hilang
+F. batch sumber FAIL + review          → safety blocking=True, failed_batch_ids=['7ed8ff62…'], safety_veto=True
+G. exclusion Jakarta (pemasok sama) + review Bandung → blocking=False, exclusion diabaikan
+H. exclusion Bandung (pemasok sama) + review Bandung → blocking=True, active_exclusion_ids=[…]
+```
+
+### Sisa risiko khusus AUD-9B-29
+
+- Identitas batch sumber bergantung pada `approval-summary`. Bila endpoint itu gagal,
+  worker Safety/Freshness menjadi `degraded` **dan memblokir** (fail-closed) — jujur,
+  tetapi berarti review bisa berhenti karena gangguan baca, bukan karena barangnya
+  benar-benar tidak aman. Alternatif "lolos diam-diam" sengaja tidak dipilih.
+- Cakupan exclusion tidak bisa memuat komoditas (tidak ada kolomnya). Exclusion yang
+  pemasoknya memasok dua komoditas akan memveto keduanya.
+- Data demo tetap memuat 0,82 (`AUD-9B-01/02`), jadi `freshness_status` masih
+  `needs_verification` pada banyak batch; `blocking` hanya naik bila batch sumber
+  benar-benar lewat `usable_until` atau kosong. Ambang tidak diubah.
+

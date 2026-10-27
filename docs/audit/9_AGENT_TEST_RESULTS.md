@@ -34,6 +34,7 @@ Diulang sesudah patch: `All checks passed!` — exit **0**.
 | Baseline | klon pristine **tanpa** patch | 1 | **1 failed, 1587 passed, 25 skipped** | 563,45 s |
 | Patch v1 | klon pristine, 2 patch kode | 1 | 7 failed, 1606 passed, 25 skipped | 560,26 s |
 | **Final** | klon pristine, patch + assertion diperketat | 1 | **1 failed, 1612 passed, 25 skipped** | **549,07 s** |
+| **AUD-9B-29** | klon `mealchain_a9b29`, patch guardian + 16 tes baru | 1 | **1 failed, 1628 passed, 25 skipped** | **552,44 s** |
 
 **Satu-satunya kegagalan (final) — data, bukan kode:**
 ```
@@ -158,7 +159,7 @@ dengan benar di skrip 2 dan hasilnya 409.
 | 19 | `GET /kpi?location=Jakarta&periode=today` | 200 | Regional Imbalance Resolution 50,00% (n=6); SDC hari ini 16.934.625,76 |
 | 20 | `GET /kpi?…&periode=7d` | 200 | Meal Continuity 99,70%; Food Loss 0,08%; SDC 17.142.848,27; Price Deviation 4,05% |
 | 21 | **NEG** evidence dihapus lalu execute | **409** | "supplier_unknown: keputusan lama perlu binding batch eksplisit" — bukti hilang memutus binding → eksekusi tertolak |
-| 22 | **NEG** batch sumber `safety_status='fail'` | **200 (seharusnya 409)** | **FAIL** — harness E2E mencatat `execute D4: 200 expect=409`; konsisten dengan AUD-9B-29 (gate membaca batch lokasi tujuan, bukan sumber) |
+| 22 | **NEG** batch sumber `safety_status='fail'` | **409** (dulu 200 → **FAIL**) | **DIPERBAIKI (AUD-9B-29)** — diulang pada klon `mealchain_a9b29` lewat `POST /actions/execute` nyata: `409 "safety revalidation gagal: batch sumber kini FAIL (temperature excursion)"`. Kontrol sesudah batch dikembalikan `pass` → `200` + PO terbit, jadi 409 memang berasal dari gerbang. Rincian §E. |
 | 23 | **NEG** batch sumber `usable_until` lewat | **409** | revalidasi keselamatan/kesegaran saat eksekusi |
 | 24 | **NEG** 4× execute bersamaan | **1×200 + 3×409**, 1 baris PO | `_load_decision` `SELECT … FOR UPDATE` + nomor PO deterministik |
 | 25 | **NEG** `POST /price/deviation` `supplier_price=-5` / `0` | **500 / 500** (harusnya 4xx) | **AUD-9B-31** (sudah tercatat di audit data & math) — `ValueError` core tidak ditangkap endpoint |
@@ -240,3 +241,44 @@ kandidat (0,965). Lihat risiko R-01 di `9_AGENT_FINAL_READINESS.md`.
 | E2E browser (Playwright, matriks tab per peran) | **NOT TESTED** | Jalur tulis lewat UI butuh "Siapkan data demo" → menulis ke **DB demo** (dilarang); matriks tab lazimnya dijalankan pada stack isolasi tersendiri yang tidak disiapkan pada sesi ini. |
 | Duplikat/retry oleh **dua proses backend berbeda** | **NOT TESTED** | Diuji 4 request paralel dalam satu proses (hasil: 1 PO). Row lock `FOR UPDATE` berlaku lintas proses, tetapi tidak dibuktikan dengan dua proses. |
 | `POST /freshness/evaluate` (perhitungan ulang skor resmi) | **NOT TESTED** | Endpoint menulis (`batch.freshness_score`, `usable_until`) → butuh keputusan produk + DB klon khusus; dipakai hanya lewat unit test core. |
+
+## E. Retest AUD-9B-29 (P0) — 27 Oktober 2026
+
+Perbaikan: guardian Safety/Freshness menilai **batch sumber** (binding `batch_ids` /
+lokasi sumber), exclusion hanya memveto bila `supplier_id` + `scope_location_id` cocok,
+sumber tak teridentifikasi → fail-closed. Patch dan regression test dirinci di
+`9_AGENT_REPAIR_LOG.md` §8.
+
+Harness: klon baru `mealchain_a9b29` (`pg_dump` dari `mealchain` → `createdb`), backend
+terpisah `mg-a9b29` (image `mealchain-guardian-backend`, `127.0.0.1:18002`,
+`DATABASE_URL` → klon, `DEMO_SESSION_ENFORCE=false`, `MEALCHAIN_API_URL` menunjuk
+dirinya sendiri). Keputusan uji dibuat lewat SQL pada klon (bukan DB demo) dan
+dibersihkan di blok `finally`; skrip: `a9b29_e2e.py` (10 assertion).
+
+| # | Skenario | Hasil | Bukti |
+|---|---|---|---|
+| A | batch sumber `safety_status='fail'` → `POST /actions/execute` | **409** | `safety revalidation gagal: batch sumber kini FAIL (temperature excursion)` |
+| B | batch sumber dikembalikan `pass` → execute (kontrol) | **200** | `status=executed`, `po_number=MC-…` — 409 di A berasal dari gerbang, bukan kegagalan lain |
+| C | batch sumber `quarantine_status='quarantined'` → execute | **409** | `… batch sumber dikarantina/gagal` (pesan kini menyebut sebab sebenarnya, bukan "FAIL") |
+| D | keputusan tanpa identitas sumber (`source_location_id` NULL) → execute | **409** | `supplier_unknown: keputusan lama perlu binding batch eksplisit` + guard `_source_batches_still_safe` fail-closed |
+| E | review agen Jakarta/telur, sumber Cianjur (binding `7ed8ff62…`) | **tanpa veto palsu** | `safety.facts`: `source_location=Cianjur`, `batch_count=1` (batch terikat, bukan 3 batch Jakarta), `blocking=False`, `active_exclusion_count=0`, `ignored_exclusion_ids=['55bb6ed8…']`; `freshness` skor 0,90 `pass`; run `completed`, `safety_veto=false` |
+| F | review agen saat batch sumber FAIL | **veto benar** | `blocking=True`, `failed_batch_ids=['7ed8ff62…']`, `safety_veto=true` (batch tujuan Jakarta tidak dipakai) |
+| G | exclusion `active` pemasok **sama** tapi lokasi Jakarta, review target Bandung (token `bgn_monitor`, cakupan nasional) | **tidak memveto** | `blocking=False`, `active_exclusion_count=0`, exclusion masuk `ignored_exclusion_ids` |
+| H | exclusion `active` pemasok sama, lokasi **target** Bandung | **memveto** | `blocking=True`, `active_exclusion_ids=[…]` |
+
+Ringkasan: **10/10 PASS**, exit **0**.
+
+Pemeriksaan lain dijalankan ulang pada basis yang sama:
+
+```
+cd backend && .venv/Scripts/ruff.exe check .          → All checks passed!   exit 0
+cd frontend && npx tsc --noEmit                       → exit 0 (tanpa keluaran)
+cd frontend && npx vitest run                         → 167 berkas / 1822 tes lulus, exit 0
+python …/verify_stack.py verify/invariants.spec.json  → VERDICT: PASS (59 / FAIL 0 / SKIP 1), exit 0
+```
+
+Catatan kejujuran: pada run E2E pertama, assertion E1 milik **harness** saya salah
+(mengira himpunan sumber = semua batch Cianjur/telur, padahal keputusan punya binding
+ke satu batch). Assertion diperbaiki ke `batch_count == 1` + id batch terikat; angka
+produknya tidak diubah.
+

@@ -18,16 +18,18 @@ menolak setiap jalur yang belum memenuhi syarat** pada DB klon:
 - approval kurang satu → 409; akun sama dua kali → 409; execute duplikat → 409; 4× execute
   bersamaan → tepat 1 PO; batch sumber FAIL/kedaluwarsa → 409; bukti dihapus → 409;
   verifier tanpa provider → `UNAVAILABLE` + keputusan tidak bisa dieksekusi.
-- ruff 0, tsc 0, vitest 1822/1822, gate invarian PASS 59/FAIL 0, pytest 1612 lulus dari 1613
-  (1 kegagalan = data demo, bukan kode).
+- ruff 0, tsc 0, vitest 1822/1822, gate invarian PASS 59/FAIL 0, pytest 1628 lulus dari 1629
+  (1 kegagalan = data demo, bukan kode) sesudah FIX-3/AUD-9B-29.
 
-Tetapi **kualitas keputusan** agent masih jauh di bawah klaim "9 agent otonom": dua temuan P0
-(AUD-9B-29, AUD-9B-30) dan sekelompok P1 (data kesegaran/usable_until, angka safety dua basis,
-auditor yang bisa hilang, kontradiksi antar-agent tidak diperiksa, kelengkapan bukti) tetap
-terbuka. Karena itu verdict-nya berbeda per lingkungan.
+Tetapi **kualitas keputusan** agent masih jauh di bawah klaim "9 agent otonom": satu temuan P0
+(AUD-9B-30) dan sekelompok P1 (data kesegaran/usable_until, angka safety dua basis, auditor
+yang bisa hilang, kontradiksi antar-agent tidak diperiksa, kelengkapan bukti) tetap terbuka.
+Karena itu verdict-nya berbeda per lingkungan.
 
-Dua cacat P1 diperbaiki (guard verifier + gerbang certified di worker Freshness, 19 tes regresi
-baru); satu dugaan cacat P1 (retry/duplikat → PO ganda) **tidak terbukti** dan tidak dipatch.
+Tiga cacat diperbaiki: guard verifier + gerbang certified di worker Freshness (P1, 19 tes
+regresi baru) dan **AUD-9B-29 (P0)** — guardian Safety/Freshness kini menilai batch **sumber**
+dan exclusion ber-cakupan pemasok+lokasi, dengan 16 tes regresi baru (repair log §8). Satu
+dugaan cacat P1 (retry/duplikat → PO ganda) **tidak terbukti** dan tidak dipatch.
 
 ## 2. Temuan terbuka per severity
 
@@ -37,7 +39,7 @@ Status: **DIPERBAIKI** / **SEBAGIAN** / **TERBUKA** / **BLOCKED** / **KEPUTUSAN 
 
 | ID | Temuan | Status | Catatan |
 |---|---|---|---|
-| AUD-9B-29 | Safety & Freshness memeriksa batch di **lokasi tujuan**, bukan sumber; exclusion dihitung tanpa cakupan pemasok/lokasi | **TERBUKA** | Diukur ulang pada E2E: review Jakarta/telur memakai batch Jakarta (0,82) untuk transfer dari Cianjur; `safety_veto=True` karena 1 exclusion global. FIX-2 mewarisi cakupan ini (lihat repair log §3). |
+| AUD-9B-29 | Safety & Freshness memeriksa batch di **lokasi tujuan**, bukan sumber; exclusion dihitung tanpa cakupan pemasok/lokasi | **DIPERBAIKI** | Guardian memakai himpunan batch sumber (`source_batch_ids` binding / lokasi sumber) dan exclusion hanya memveto bila `supplier_id` + `scope_location_id` cocok; sumber tak teridentifikasi → fail-closed (`degraded` + `blocking`). E2E klon: `execute` batch sumber FAIL → **409**, batch sumber `pass` → 200; review Jakarta/telur tidak lagi `safety_veto` karena exclusion Jakarta pemasok lain. 16 tes regresi. **Batas:** `supplier_exclusions` tidak punya kolom komoditas (repair log §8). |
 | AUD-9B-30 | Review 9 agent tidak pernah tersimpan di DB demo (0 baris `SUPERVISE`, 0 baris ber-`run_id`) | **TERBUKA (jalur AgentCore) / SEBAGIAN** | Jalur persist terbukti bekerja (9 baris, satu `run_id`, klon). Yang gagal adalah jalur runtime AgentCore di demo (`agent_review.status="unavailable"`), yaitu AUD-9A-07 + tidak adanya kredensial. |
 
 ### P1
@@ -89,7 +91,7 @@ AUD-9A-01/02/04/06/07/08/09/10/11/12/13/14/15/17/18, AUD-9B-07/08/09/10/11/12/13
 |---|---|---|---|
 | R-01 | **Setiap `POST /actions/verify` manual kini berakhir `FLAGGED`** karena batch demo membawa 0,82 (AUD-9B-01) | Panel verifikasi menampilkan "flagged" pada jalur manual; jalur emas Event 1 tetap `CONSISTENT` (skor kandidat 0,965) | Perbaiki data kesegaran demo (AUD-9B-01/02) **atau** putuskan bahwa `needs_verification` bukan alasan menurunkan verdict; lihat repair log §5b |
 | R-02 | Jalur review 8 agent di demo bergantung pada AgentCore + tunnel | `agent_review` bisa `unavailable`/`timeout` saat panggung; Agent Log kosong | Uji H-1 dengan tunnel hidup; siapkan narasi "review lokal" (jalur in-process terbukti bekerja) |
-| R-03 | `safety_veto=True` pada hampir semua review (exclusion global, AUD-9A-04/9B-29) | Narasi "JANGAN EKSEKUSI" muncul untuk pengiriman yang read model sebut aman | Scope exclusion per keputusan (AUD-9A-04) sebelum demo penuh |
+| R-03 | **Sudah tidak berlaku** (AUD-9B-29 diperbaiki): `safety_veto=True` pada hampir semua review karena exclusion global | Sebelumnya narasi "JANGAN EKSEKUSI" muncul untuk pengiriman yang read model sebut aman; kini veto hanya muncul bila batch sumber benar-benar FAIL/dikarantina/kedaluwarsa atau exclusion berlokasi+pemasok cocok | Tidak ada aksi; jaga agar exclusion yang dibuat di demo memakai pemasok & SPPG yang benar (kolom komoditas tidak ada) |
 | R-04 | 1 tes invarian gagal karena data demo (AUD-9B-16) | Gate CI merah; sulit membedakan regresi kode vs data | Jalankan ulang penyemai kasus `bukti-hari-ini` (membuat tes lulus tanpa melonggarkan assertion) |
 | R-05 | Kualitas angka keputusan (SDC, kesegaran, safety) menyimpang dari mesin | Juri yang menjumlahkan sendiri menemukan selisih (AUD-9B-03/04/17/18) | Perbaiki data demo + satukan basis angka; jangan mengutip SDC demo tanpa catatan |
 
@@ -108,10 +110,10 @@ Alasan:
 
 ### STAGING_READY — **BELUM**
 
-Alasan: staging berarti dipakai orang di luar operator demo (data kerja nyata). Empat hal
-menghalangi dan tidak bisa ditutup dengan konfigurasi: (1) AUD-9B-29 (safety/kesegaran memeriksa
-lokasi yang salah — **gerbang keamanan yang salah sasaran**), (2) AUD-9B-24/26 (auditor bisa
-hilang & gerbang kualitas tidak memeriksa angka), (3) AUD-9B-16 (bukti tidak wajib), (4)
+Alasan: staging berarti dipakai orang di luar operator demo (data kerja nyata). AUD-9B-29
+(safety/kesegaran salah sasaran) **sudah ditutup** 27 Oktober 2026, tetapi tiga hal lain masih
+menghalangi dan tidak bisa ditutup dengan konfigurasi: (1) AUD-9B-24/26 (auditor bisa hilang &
+gerbang kualitas tidak memeriksa angka), (2) AUD-9B-16 (bukti tidak wajib), (3)
 AUD-9B-01/02/03/04 (angka SDC/kesegaran tidak dapat direproduksi). Semua P0 dan empat P1 di atas
 harus tertutup dulu, plus keputusan tertulis AUD-9A-19.
 
@@ -126,8 +128,11 @@ kredensial, dan observabilitas agent belum diuji di luar demo.
 
 ## 5. Yang harus dikerjakan sebelum verdict berikutnya naik
 
-1. **AUD-9B-29 (P0)**: ubah himpunan batch Safety/Freshness ke lokasi **sumber**; scope exclusion
-   per keputusan (`GET /supplier-exclusions/context/{decision_id}`). Ini juga menghapus R-03.
+1. ~~**AUD-9B-29 (P0)**: ubah himpunan batch Safety/Freshness ke lokasi **sumber**; scope
+   exclusion per keputusan.~~ **SELESAI 27 Okt 2026** (repair log §8) — guard memakai himpunan
+   batch sumber + helper cakupan exclusion bersama; `execute` ikut memakai aturan yang sama dan
+   fail-closed bila sumber tak teridentifikasi. Sisa batas: `supplier_exclusions` tidak punya
+   kolom komoditas (butuh migrasi bila kelak diperlukan).
 2. **AUD-9B-01/02 (P1, data)**: hitung ulang `freshness_score`/`usable_until` dengan
    `compute_freshness_score`; buang literal 0,82. Setelah itu R-01 hilang sendiri dan
    `blocking` untuk `needs_verification` bisa dinaikkan (repair log §5b).
