@@ -42,12 +42,15 @@ def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, expl
         DSN_SYNC
     )
 
-    class FrozenClock(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return AS_OF + timedelta(days=1) if explicit_as_of else AS_OF
+    # Pipeline kini mengambil jam dari `evaluation_clock()` (refactor jam sesi
+    # lain), bukan `datetime.now()`. Membekukan `rs.datetime` tidak lagi
+    # berpengaruh; yang dibekukan adalah jam evaluasinya.
+    beku = AS_OF + timedelta(days=1) if explicit_as_of else AS_OF
 
-    monkeypatch.setattr(rs, "datetime", FrozenClock)
+    def _jam(as_of=None):
+        return as_of if as_of is not None else beku
+
+    monkeypatch.setattr(rs, "evaluation_clock", _jam)
     try:
         with engine.connect() as connection, connection.begin() as transaction:
             with Session(bind=connection) as session:

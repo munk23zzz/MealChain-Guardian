@@ -450,41 +450,90 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
             }
 
             for item in rows["supply"]:
+                loc_id = loc_by_name[item["location"]].id
+                com_id = com_by_name[item["commodity"]].id
+                # Idempotensi KUNCI NATURAL: `merge` hanya mencari lewat primary
+                # key, sehingga baris demo dengan (lokasi, komoditas, waktu,
+                # sumber) sama tetapi id berbeda memicu unique violation saat
+                # snapshot kanonik dijalankan ulang di atas template demo.
+                id_lama = (
+                    await session.execute(
+                        select(SupplyRecord.id).where(
+                            SupplyRecord.location_id == loc_id,
+                            SupplyRecord.commodity_id == com_id,
+                            SupplyRecord.recorded_at == item["recorded_at"],
+                            SupplyRecord.source == item["source"],
+                        )
+                    )
+                ).scalar_one_or_none()
                 await session.merge(
                     SupplyRecord(
-                        id=item["id"],
-                        location_id=loc_by_name[item["location"]].id,
-                        commodity_id=com_by_name[item["commodity"]].id,
+                        id=id_lama or item["id"],
+                        location_id=loc_id,
+                        commodity_id=com_id,
                         quantity_kg=item["quantity_kg"],
                         recorded_at=item["recorded_at"],
                         source=item["source"],
+                        origin="seed",
+                        demo_session_id=None,
                     )
                 )
             for item in rows["demand"]:
+                loc_id = loc_by_name[item["location"]].id
+                com_id = com_by_name[item["commodity"]].id
+                id_lama = (
+                    await session.execute(
+                        select(DemandRecord.id).where(
+                            DemandRecord.location_id == loc_id,
+                            DemandRecord.commodity_id == com_id,
+                            DemandRecord.recorded_at == item["recorded_at"],
+                        )
+                    )
+                ).scalar_one_or_none()
                 await session.merge(
                     DemandRecord(
-                        id=item["id"],
-                        location_id=loc_by_name[item["location"]].id,
-                        commodity_id=com_by_name[item["commodity"]].id,
+                        id=id_lama or item["id"],
+                        location_id=loc_id,
+                        commodity_id=com_id,
                         quantity_kg=item["quantity_kg"],
                         needed_by=item["needed_by"],
                         recorded_at=item["recorded_at"],
+                        origin="seed",
+                        demo_session_id=None,
                     )
                 )
             for item in rows["price_signals"]:
+                loc_id = loc_by_name[item["location"]].id
+                com_id = com_by_name[item["commodity"]].id
+                sup_id = (
+                    sup_by_name[item["supplier"]].id if item.get("supplier") else None
+                )
+                # Idempotensi KUNCI NATURAL (sama seperti supply/demand): merge
+                # hanya mengenal primary key, sedangkan indeks unik harga adalah
+                # parsial per `source`. Tanpa pencarian ini, snapshot kanonik
+                # yang dijalankan ulang menabrak baris demo di stempel yang sama.
+                filter_harga = [
+                    PriceSignal.location_id == loc_id,
+                    PriceSignal.commodity_id == com_id,
+                    PriceSignal.recorded_at == item["recorded_at"],
+                    PriceSignal.source == item["source"],
+                ]
+                if item["source"] == "supplier_quote":
+                    filter_harga.append(PriceSignal.supplier_id == sup_id)
+                id_lama = (
+                    await session.execute(select(PriceSignal.id).where(*filter_harga))
+                ).scalar_one_or_none()
                 await session.merge(
                     PriceSignal(
-                        id=item["id"],
-                        location_id=loc_by_name[item["location"]].id,
-                        commodity_id=com_by_name[item["commodity"]].id,
-                        supplier_id=(
-                            sup_by_name[item["supplier"]].id
-                            if item.get("supplier")
-                            else None
-                        ),
+                        id=id_lama or item["id"],
+                        location_id=loc_id,
+                        commodity_id=com_id,
+                        supplier_id=sup_id,
                         price_per_kg=item["price_per_kg"],
                         recorded_at=item["recorded_at"],
                         source=item["source"],
+                        origin="seed",
+                        demo_session_id=None,
                     )
                 )
             for item in rows["batches"]:

@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from decimal import Decimal
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import MUTATING_ROLES, get_current_user, require_roles
 from app.api.dependencies import get_db
+from app.core.config import settings
 from app.core.scope import apply_location_scope, assert_in_scope
 from app.models import (
     Commodity,
@@ -179,13 +181,46 @@ async def get_balance(
 
 
 class _AsyncFetcher:
-    """Adapter async session → fetch_facts() awaitable untuk pipeline."""
+    """Adapter async session → fetch_facts() awaitable untuk pipeline.
 
-    def __init__(self, db):
+    `as_of` dibawa dari pemanggil: saat ada sesi demo AKTIF, jam evaluasinya
+    adalah jangkar sesi (dataset replay berjangkar kanon). Tanpa itu, bukti suhu
+    yang sah terbaca basi terhadap jam dinding sehingga gerbang Fase 6 menahan
+    seluruh kandidat.
+    """
+
+    def __init__(self, db, as_of=None):
         self._db = db
+        self._as_of = as_of
 
     async def __call__(self):
-        return await rs.fetch_operational_facts(self._db, None)
+        return await rs.fetch_operational_facts(self._db, self._as_of)
+
+
+async def _jam_sesi_aktif(db) -> datetime | None:
+    """Jangkar sesi demo yang sedang aktif, atau `None` (jam dinding)."""
+    from app.models import DemoSession
+
+    try:
+        baris = (
+            await db.execute(
+                select(DemoSession)
+                .where(DemoSession.status == "active")
+                .order_by(DemoSession.started_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+    except Exception:  # noqa: BLE001 - jam evaluasi tidak boleh menggagalkan analisis
+        return None
+    anchor = getattr(baris, "evaluation_anchor", None)
+    if anchor is not None:
+        return anchor
+    # Tanpa sesi aktif di mode demo: dataset replay berjangkar kanon.
+    if bool(settings.demo_mode):
+        from app.services.decision_time import REPLAY_ANCHOR
+
+        return REPLAY_ANCHOR
+    return None
 
 
 @router.post("/balance/recommend")
@@ -193,9 +228,10 @@ async def post_recommend(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles(*MUTATING_ROLES)),
 ):
-    fetcher = _AsyncFetcher(db)
+    as_of = await _jam_sesi_aktif(db)
+    fetcher = _AsyncFetcher(db, as_of)
     try:
-        out = await rs.build_recommendations(fetcher)
+        out = await rs.build_recommendations(fetcher, as_of=as_of)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return out
@@ -212,6 +248,10 @@ class AnalyzeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     commodity: str | None = None
+    #: Fase 10 MG: sesi demo yang sedang dipilih operator. Analisis ini
+    #: read-only (tidak menulis baris), tetapi balasannya harus menyebut sesi
+    #: mana yang dimaksud supaya UI/Joule tidak memakai "sesi terbaru".
+    demo_session: uuid.UUID | None = None
 
 
 @router.get("/balance/map")
@@ -336,9 +376,26 @@ async def post_analyze(
     panel; tanpa body → global (perilaku lama, kompatibilitas).
     """
     commodity = (payload.commodity if payload else None) or None
-    fetcher = _AsyncFetcher(db)
+    #: Fase 10 MG: sesi yang diminta operator divalidasi; sesi asing 404 —
+    #: lebih baik menolak daripada mengembalikan analisis yang diberi label
+    #: sesi lain.
+    pemilik = None
+    if payload is not None and payload.demo_session is not None:
+        from app.services import demo_ownership
+
+        try:
+            pemilik = await demo_ownership.sesi_pemilik(
+                db, demo_session=payload.demo_session
+            )
+        except demo_ownership.SesiTidakDitemukanError:
+            raise HTTPException(
+                status_code=404,
+                detail=f"sesi demo {payload.demo_session} tidak ditemukan",
+            ) from None
+    as_of = await _jam_sesi_aktif(db)
+    fetcher = _AsyncFetcher(db, as_of)
     try:
-        out = await rs.build_recommendations(fetcher, commodity=commodity)
+        out = await rs.build_recommendations(fetcher, as_of=as_of, commodity=commodity)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     recs = out["recommendations"]
@@ -346,10 +403,20 @@ async def post_analyze(
         "candidates_total": len(recs),
         "eligible": sum(1 for r in recs if r.get("eligible")),
         "review_required": sum(1 for r in recs if r.get("review_required")),
+        # Fase 6: kandidat yang TERTAHAN gerbang hierarki (bukti/keamanan/
+        # tenggat). Dihitung di sini supaya UI bisa menyebutnya tanpa merakit
+        # ulang evaluasi batch di klien.
+        "held_total": len(out.get("held") or []),
         "flagged_price": sum(
             1 for r in recs if (r.get("price_anomaly") or {}).get("flagged")
         ),
     }
     if commodity:
         out["filtered_by"] = {"commodity": commodity}
+    #: Fase 10 MG: sesi yang dipakai analisis ini, atau `null` bila operator
+    #: tidak menyebut sesi (jalur lama). Joule/UI membaca field ini, bukan
+    #: menebak dari sesi terbaru.
+    from app.services.demo_ownership import blok_sesi
+
+    out["demo_session"] = blok_sesi(pemilik)
     return out

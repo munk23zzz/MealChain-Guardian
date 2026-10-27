@@ -47,7 +47,9 @@ from app.models import (
     Commodity,
     Decision,
     DecisionEvidence,
+    DemandRecord,
     Location,
+    PriceSignal,
     Supplier,
     User,
 )
@@ -355,7 +357,15 @@ async def _add_trace(
     tool: str,
     input_summary: dict,
     output_summary: dict,
+    acuan: datetime | None = None,
 ):
+    """Satu baris jejak agent.
+
+    `acuan` (Fase 7 MG) adalah waktu EVALUASI sesi: jejak kasus demo harus
+    berada pada offset dari jangkar, bukan dari jam dinding. Tanpa itu, replay
+    yang dibangun dua kali menghasilkan timestamp berbeda dan Agent Log
+    menampilkan "beberapa menit lalu" untuk kejadian 8 Oktober.
+    """
     db.add(
         AgentTrace(
             decision_id=decision_id,
@@ -363,7 +373,7 @@ async def _add_trace(
             tool_called=tool,
             input_summary=input_summary,
             output_summary=output_summary,
-            step_at=datetime.now(timezone.utc) - timedelta(minutes=minutes_ago),
+            step_at=(acuan or datetime.now(timezone.utc)) - timedelta(minutes=minutes_ago),
         )
     )
 
@@ -384,8 +394,10 @@ def _decision(
     verified_by=None,
     supplier_id=None,
     demo_session_id=None,
+    decision_id=None,
+    generated_at=None,
 ) -> Decision:
-    return Decision(
+    baris = Decision(
         # rejection-loop-kuota = siklus penolakan pada PENGADAAN dari pemasok,
         # bukan pemindahan stok antar-SPPG. Versi lama memberinya tipe
         # `regional_balance`, sehingga kartunya berlabel "Penyeimbangan pasokan
@@ -406,7 +418,11 @@ def _decision(
         supersedes_id=supersedes,
         demo_case=case,
         origin="demo",
-        generated_at=datetime.now(timezone.utc),
+        # Fase 7 MG: waktu KEJADIAN simulasi datang dari pemanggil (offset dari
+        # `evaluation_anchor`), bukan `now()`. Tanpa itu dua pembuatan replay
+        # menghasilkan `generated_at` berbeda dan replay tidak dapat diulang.
+        # `expires_at` di bawah tetap jam DINDING: itu jendela aksi operator.
+        generated_at=generated_at or datetime.now(timezone.utc),
         source_location_id=src,
         target_location_id=tgt,
         supplier_id=supplier_id,
@@ -424,6 +440,12 @@ def _decision(
         # menyemai sesi kedua menstempel ulang baris sesi pertama.
         demo_session_id=demo_session_id,
     )
+    # Fase 7 MG: ID deterministik dari identitas kasus (replay stabil, realtime
+    # unik per jangkar). Diberikan setelah konstruksi karena `id` punya
+    # `server_default`; mengirim `id=None` akan menulis NULL, bukan default.
+    if decision_id is not None:
+        baris.id = decision_id
+    return baris
 
 
 async def _seed_demo_cases(
@@ -432,6 +454,9 @@ async def _seed_demo_cases(
     target: Location,
     *,
     demo_session_id: uuid.UUID | None = None,
+    mode: str | None = None,
+    anchor: datetime | None = None,
+    dataset_version: str | None = None,
 ) -> dict:
     """Badan `POST /demo/seed` — dipakai juga oleh `/demo/refresh`.
 
@@ -454,9 +479,41 @@ async def _seed_demo_cases(
       menimpa), dan reset sesi pertama menghapus data sesi kedua.
       Tanpa `demo_session_id` (jalur lama/seeder template) perilaku lama
       dipertahankan: hapus ulang per kota.
+
+    `mode`/`anchor`/`dataset_version` (Fase 7 MG) menentukan IDENTITAS dan
+    WAKTU KEJADIAN baris kasus lewat `services.scenario_generator`:
+
+    - replay: ID stabil dari versi kanon -> dua pembuatan identik, rerun tidak
+      menggandakan baris;
+    - realtime: ID memuat `evaluation_anchor` -> dua sesi tidak bertabrakan;
+    - `generated_at` keputusan dan `step_at` jejak dihitung sebagai offset dari
+      jangkar, sehingga replay selalu memperlihatkan waktu yang sama. `anchor`
+      `None` (jalur lama: `/demo/refresh`, template) mempertahankan perilaku
+      jam dinding.
     """
+    from app.services import decision_time
+    from app.services import scenario_generator as scenario
+    from app.services.scenario_specs import kasus_komoditas
+
+    mode_final = decision_time.mode_sah(mode or "replay")
+    acuan = anchor
+    dataset_versi = dataset_version or decision_time.dataset_version_untuk(
+        mode_final, acuan or datetime.now(timezone.utc)
+    )
+    #: IDENTITAS baris kasus komoditas (dipakai juga saat menghapus ulang).
+    kasus_komoditas_keys = tuple(spec.key for spec in kasus_komoditas())
+
+    def _identitas(spec) -> str:
+        return scenario.identitas_kasus(
+            spec,
+            mode=mode_final,
+            anchor=acuan or datetime.now(timezone.utc),
+            dataset_version=dataset_versi,
+            target=target.name,
+        )
+
     filter_hapus = [
-        Decision.demo_case.in_(DEMO_CASES),
+        Decision.demo_case.in_(DEMO_CASES + kasus_komoditas_keys),
         Decision.target_location_id == target.id,
     ]
     if demo_session_id is not None:
@@ -482,6 +539,34 @@ async def _seed_demo_cases(
         from app.services.ledger_service import bump_bila_berblok
 
         await bump_bila_berblok(db, ids)
+        # Fase 7 MG: baris DATA kasus komoditas (batch, kebutuhan, harga) tidak
+        # ikut terhapus lewat keputusan — batch tidak punya FK ke keputusan.
+        # Yang dihapus HANYA id yang dihasilkan generator untuk kota+sesi ini
+        # (id deterministik), bukan "semua baris demo di kota ini": baris demo
+        # pemilik lain tidak boleh ikut hilang saat satu sesi direset.
+        id_batch_kasus: list[uuid.UUID] = []
+        id_kebutuhan_kasus: list[uuid.UUID] = []
+        id_harga_kasus: list[uuid.UUID] = []
+        for spec in kasus_komoditas():
+            identitas = _identitas(spec)
+            id_batch_kasus.extend(
+                scenario.id_batch(identitas, batch) for batch in spec.batches
+            )
+            if spec.demand_needed_by_offset_min is not None:
+                id_kebutuhan_kasus.append(scenario.id_demand(identitas))
+            if spec.price_per_kg is not None:
+                id_harga_kasus.append(scenario.id_harga(identitas))
+        if id_batch_kasus:
+            await db.execute(delete(Batch).where(Batch.id.in_(id_batch_kasus)))
+        if id_kebutuhan_kasus:
+            await db.execute(
+                delete(DemandRecord).where(DemandRecord.id.in_(id_kebutuhan_kasus))
+            )
+        if id_harga_kasus:
+            await db.execute(
+                delete(PriceSignal).where(PriceSignal.id.in_(id_harga_kasus))
+            )
+        await db.flush()
 
     locations = (await db.execute(select(Location))).scalars().all()
     loc = _loc_map(locations)
@@ -582,9 +667,43 @@ async def _seed_demo_cases(
     sekarang = datetime.now(timezone.utc)
     sup_telur_kasus = await _pemasok_kasus(telur, target)
 
+    def _spec(kunci: str):
+        from app.services.scenario_specs import spec_untuk
+
+        return spec_untuk(kunci)
+
+    async def _jejak(*args, **kwargs) -> None:
+        """`_add_trace` dengan acuan waktu EVALUASI sesi (Fase 7 MG).
+
+        Semua jejak kasus demo ditulis sebagai offset dari jangkar, bukan dari
+        jam dinding: replay yang dibangun ulang harus memperlihatkan waktu yang
+        sama, dan jejak 8 Oktober tidak boleh terbaca "beberapa menit lalu".
+        """
+        kwargs.setdefault("acuan", acuan)
+        await _add_trace(db, *args, **kwargs)
+
     def _dec(*args, **kwargs) -> Decision:
-        """`_decision` + sesi PEMILIK: satu tempat, tidak ada yang terlewat."""
-        return _decision(*args, demo_session_id=demo_session_id, **kwargs)
+        """`_decision` + sesi PEMILIK + ID/waktu deterministik (Fase 7 MG).
+
+        Satu tempat untuk tiga hal yang tidak boleh terlewat di satu pun dari
+        tujuh keputusan kasus: pemilik baris (sesi), ID deterministik dari
+        identitas kasus, dan `generated_at` sebagai offset jangkar.
+        """
+        kunci, iterasi = args[0], args[1]
+        spec = _spec(kunci)
+        identitas = _identitas(spec)
+        kwargs.setdefault("demo_session_id", demo_session_id)
+        kwargs.setdefault(
+            "decision_id", scenario.id_decision(identitas, iteration=iterasi)
+        )
+        if acuan is not None:
+            kwargs.setdefault(
+                "generated_at",
+                scenario.event_at(
+                    acuan, spec.decision_offset_min, label=f"keputusan {kunci}"
+                ),
+            )
+        return _decision(*args, **kwargs)
 
     # ---- Kasus 1: rejection-loop-kuota (v1 ditolak → v2 ditolak → v3 fresh)
     v1 = _dec(
@@ -617,13 +736,13 @@ async def _seed_demo_cases(
         },
         sekarang,
     )
-    await _add_trace(db, v1.id, "DETECT", 95, "demand.snapshot",
+    await _jejak( v1.id, "DETECT", 95, "demand.snapshot",
         {"location": target.name, "window": "7d"},
         {"shortage_kg": 600, "signal": "permintaan naik"})
-    await _add_trace(db, v1.id, "DECIDE", 92, "supply_balance.propose",
+    await _jejak( v1.id, "DECIDE", 92, "supply_balance.propose",
         {"source": "Cianjur", "target": target.name, "qty": 600},
         {"sdc": 16206000, "scenario": "regional_balance"})
-    await _add_trace(db, v1.id, "LEARN", 60, "rejection_loop.repropose",
+    await _jejak( v1.id, "LEARN", 60, "rejection_loop.repropose",
         {"parent_iteration": 1},
         {
             "parent_rejection_reason": (
@@ -662,7 +781,7 @@ async def _seed_demo_cases(
         },
         sekarang,
     )
-    await _add_trace(db, v2.id, "LEARN", 30, "rejection_loop.repropose",
+    await _jejak( v2.id, "LEARN", 30, "rejection_loop.repropose",
         {"parent_iteration": 2},
         {"parent_rejection_reason": "Harga per kg naik 12% dari referensi — negosiasi ulang dulu.",
          "learning_note": "Iterasi berikut: skema bertahap 2×300 kg dengan harga terkunci."})
@@ -682,10 +801,10 @@ async def _seed_demo_cases(
     # Bukti binding: tanpa ini v3 tertahan "pemasok tidak dikenal" pada dataset
     # yang punya >1 pemasok untuk pasangan (lokasi asal, komoditas).
     await _ikat_sumber(db, v3, sekarang)
-    await _add_trace(db, v3.id, "PREDICT", 25, "forecast.daily",
+    await _jejak( v3.id, "PREDICT", 25, "forecast.daily",
         {"model": "chain-11-slot", "horizon_days": 7},
         {"method": "provider_forecast", "note": "skema bertahap 2×300 kg"})
-    await _add_trace(db, v3.id, "DECIDE", 24, "supply_balance.propose",
+    await _jejak( v3.id, "DECIDE", 24, "supply_balance.propose",
         {"source": "Cianjur", "target": target.name, "qty": 600, "scheme": "2x300"},
         {"sdc": 16206000, "learning_applied": ["kuota", "harga"]})
 
@@ -702,13 +821,13 @@ async def _seed_demo_cases(
     await db.flush()
     created.append(s1.id)
     await _ikat_sumber(db, s1, sekarang)
-    await _add_trace(db, s1.id, "DETECT", 20, "demand.snapshot",
+    await _jejak( s1.id, "DETECT", 20, "demand.snapshot",
         {"location": target.name, "shortage": 780},
         {"severity": "CRITICAL", "safety_window_minutes": 30})
-    await _add_trace(db, s1.id, "PREDICT", 19, "forecast.daily",
+    await _jejak( s1.id, "PREDICT", 19, "forecast.daily",
         {"horizon_days": 1},
         {"method": "provider_forecast", "coverage": 0.94})
-    await _add_trace(db, s1.id, "DECIDE", 18, "supply_balance.propose",
+    await _jejak( s1.id, "DECIDE", 18, "supply_balance.propose",
         {"source": "Bogor", "target": target.name, "qty": 780},
         {"sdc": 14787096.28, "urgency": "safety_window"})
 
@@ -741,10 +860,10 @@ async def _seed_demo_cases(
     # janggal, dan pemasok itu tidak selalu pemilik batch terbesar di lokasi
     # asal. Mengikat batch terbesar = menampilkan pemasok yang bukan subjek
     # tuduhan (tebakan), jadi lebih jujur membiarkan `resolve_binding` menolak.
-    await _add_trace(db, j1.id, "DETECT", 40, "price.signal",
+    await _jejak( j1.id, "DETECT", 40, "price.signal",
         {"commodity": "telur", "source": "Cianjur"},
         {"anomaly": "harga 40% di bawah referensi pihps"})
-    await _add_trace(db, j1.id, "VERIFY", 38, "evidence.crosscheck",
+    await _jejak( j1.id, "VERIFY", 38, "evidence.crosscheck",
         {"ref_source": "pihps_reference", "supplier_quote_ratio": 0.60},
         {"verdict": "FLAGGED",
          "reason": "Harga supplier janggal — 40% di bawah referensi; minta dokumen pendukung."})
@@ -779,10 +898,10 @@ async def _seed_demo_cases(
         },
         sekarang,
     )
-    await _add_trace(db, g1.id, "DETECT", 70, "logistics.status",
+    await _jejak( g1.id, "DETECT", 70, "logistics.status",
         {"route": f"{_nama_sumber(('Bogor', 'Cianjur', 'Surabaya'))}→{target.name}"},
         {"disruption": "banjir", "eta_delay_hours": 6})
-    await _add_trace(db, g1.id, "LEARN", 45, "rejection_loop.repropose",
+    await _jejak( g1.id, "LEARN", 45, "rejection_loop.repropose",
         {"parent_iteration": 1},
         {
             "parent_rejection_reason": (
@@ -803,19 +922,245 @@ async def _seed_demo_cases(
     await db.flush()
     created.append(g2.id)
     await _ikat_sumber(db, g2, sekarang)
-    await _add_trace(db, g2.id, "OPTIMIZE", 40, "logistics.reroute",
+    await _jejak( g2.id, "OPTIMIZE", 40, "logistics.reroute",
         {"candidates": ["Cianjur", "Sukabumi"]},
         {"selected_source": "Cianjur", "eta_ok": True})
-    await _add_trace(db, g2.id, "DECIDE", 39, "supply_balance.propose",
+    await _jejak( g2.id, "DECIDE", 39, "supply_balance.propose",
         {"source": "Cianjur", "target": target.name, "qty": 600},
         {"sdc": 16206000, "reroute_from": "Bogor"})
+
+    # ---- Kasus komoditas (Fase 7 butir 5 & 6) --------------------------------
+    # Tiga kasus yang menguji KOMODITAS, bukan cerita: wortel rantai dingin dengan
+    # bukti sah (`usable`), wortel dengan bukti tidak cukup (`on_hold` — sengaja
+    # untuk didemokan), dan beras ambient. Semua baris lahir dari
+    # `services.scenario_generator`: ID deterministik, waktu dari jangkar, dan
+    # angka (skor kesegaran, masa layak) dihitung dari profil komoditas.
+    #
+    # Kasus yang tidak bisa dibangun dengan jujur DILEWATI beserta alasannya —
+    # bukan dibangun dengan angka karangan. Alasannya dikembalikan ke pemanggil
+    # supaya panel bisa menampilkannya.
+    info_komoditas: list[dict] = []
+    acuan_evaluasi = acuan or sekarang
+    for spec in kasus_komoditas():
+        ringkas_kasus = {"case": spec.key, "outcome": spec.intended_outcome}
+        cid = await _commodity_id(db, spec.commodity)
+        if cid is None:
+            info_komoditas.append(
+                {**ringkas_kasus, "skipped": f"komoditas {spec.commodity} tidak ada"}
+            )
+            continue
+        from app.core import policy_store
+
+        policy, asal_policy = await policy_store.profil_untuk_komoditas(db, cid)
+        if spec.commodity == "beras" and policy.cold_chain_required:
+            # Kasus ambient hanya sah bila profil komoditasnya memang ambient.
+            # Kalau kebijakan berubah menjadi rantai dingin, kasus ini TIDAK
+            # boleh tetap berjalan dengan bukti suhu ruang.
+            info_komoditas.append(
+                {**ringkas_kasus, "skipped": "profil komoditas bukan ambient"}
+            )
+            continue
+        sumber = _sumber(spec.source_candidates)
+        if sumber == target.id:
+            info_komoditas.append({**ringkas_kasus, "skipped": "tidak ada kota sumber lain"})
+            continue
+        supplier_id = await _pemasok_kasus(cid, target)
+        if supplier_id is None:
+            info_komoditas.append({**ringkas_kasus, "skipped": "komoditas belum punya pemasok"})
+            continue
+
+        identitas = _identitas(spec)
+        rencana_batch = [
+            scenario.rencana_batch(
+                spec, batch, anchor=acuan_evaluasi, mode=mode_final, policy=policy
+            )
+            for batch in spec.batches
+        ]
+        # Waktu tempuh dari estimator produk (`core.logistics`), bukan angka
+        # karangan: konsistensi "tiba sebelum tenggat" harus memakai model yang
+        # sama dengan yang dipakai pipeline pengadaan.
+        from app.core.logistics import estimate_logistics
+
+        try:
+            logistik = estimate_logistics(
+                _nama_sumber(spec.source_candidates), target.name, spec.quantity_kg
+            )
+            travel_minutes = int(round(float(logistik["estimated_time_min"])))
+        except ValueError:
+            info_komoditas.append({**ringkas_kasus, "skipped": "estimasi logistik gagal"})
+            continue
+        masalah = scenario.pemeriksaan_konsistensi(
+            spec, rencana_batch, anchor=acuan_evaluasi, travel_minutes=travel_minutes
+        )
+        if masalah:
+            info_komoditas.append(
+                {**ringkas_kasus, "skipped": f"tidak konsisten: {list(masalah)}"}
+            )
+            continue
+
+        for batch, baris in zip(spec.batches, rencana_batch):
+            db.add(
+                Batch(
+                    id=scenario.id_batch(identitas, batch),
+                    commodity_id=cid,
+                    location_id=target.id,
+                    supplier_id=supplier_id,
+                    quantity_kg=baris["quantity_kg"],
+                    demo_session_id=demo_session_id,
+                    harvested_at=baris["harvested_at"],
+                    temperature_log=baris["temperature_log"],
+                    certification_status=baris["certification_status"],
+                    freshness_score=baris["freshness_score"],
+                    safety_status=baris["safety_status"],
+                    usable_until=baris["usable_until"],
+                    dispatched_at=baris["dispatched_at"],
+                    origin="demo",
+                    generated_at=acuan_evaluasi,
+                )
+            )
+        demand = scenario.rencana_demand(spec, anchor=acuan_evaluasi, mode=mode_final)
+        if demand is not None:
+            # Idempotensi KUNCI NATURAL: deret waktu demo sudah bisa memiliki
+            # (lokasi, komoditas, waktu) yang sama dengan id berbeda. Menambah
+            # baris baru akan menabrak uq_demand_records_loc_com_time.
+            ada = (
+                await db.execute(
+                    select(DemandRecord.id).where(
+                        DemandRecord.location_id == target.id,
+                        DemandRecord.commodity_id == cid,
+                        DemandRecord.recorded_at == demand["recorded_at"],
+                    )
+                )
+            ).scalar_one_or_none()
+            if ada is not None:
+                baris = await db.get(DemandRecord, ada)
+                baris.quantity_kg = demand["quantity_kg"]
+                baris.needed_by = demand["needed_by"]
+                baris.origin = "demo"
+                baris.demo_session_id = demo_session_id
+                baris.generated_at = acuan_evaluasi
+            else:
+                db.add(
+                    DemandRecord(
+                        id=scenario.id_demand(identitas),
+                        location_id=target.id,
+                        commodity_id=cid,
+                        quantity_kg=demand["quantity_kg"],
+                        needed_by=demand["needed_by"],
+                        recorded_at=demand["recorded_at"],
+                        origin="demo",
+                        demo_session_id=demo_session_id,
+                        generated_at=acuan_evaluasi,
+                    )
+                )
+        harga = scenario.rencana_harga(spec, anchor=acuan_evaluasi, mode=mode_final)
+        if harga is not None:
+            filter_harga = [
+                PriceSignal.location_id == target.id,
+                PriceSignal.commodity_id == cid,
+                PriceSignal.recorded_at == harga["recorded_at"],
+                PriceSignal.source == harga["source"],
+            ]
+            if harga["source"] == "supplier_quote":
+                filter_harga.append(PriceSignal.supplier_id.is_(None))
+            ada_harga = (
+                await db.execute(select(PriceSignal.id).where(*filter_harga))
+            ).scalar_one_or_none()
+            if ada_harga is not None:
+                baris_harga = await db.get(PriceSignal, ada_harga)
+                baris_harga.price_per_kg = harga["price_per_kg"]
+                baris_harga.origin = "demo"
+                baris_harga.demo_session_id = demo_session_id
+            else:
+                db.add(
+                    PriceSignal(
+                        id=scenario.id_harga(identitas),
+                        location_id=target.id,
+                        commodity_id=cid,
+                        supplier_id=None,
+                        price_per_kg=harga["price_per_kg"],
+                        recorded_at=harga["recorded_at"],
+                        source=harga["source"],
+                        origin="demo",
+                        demo_session_id=demo_session_id,
+                    )
+                )
+        await db.flush()
+
+        keputusan = _dec(
+            spec.key,
+            1,
+            spec.decision_status,
+            sumber,
+            target.id,
+            cid,
+            f"{spec.quantity_kg:.0f}",
+            "0.00",
+            480,  # demo-day guard: kartu kasus komoditas tidak mati saat demo
+            supplier_id=supplier_id,
+            verified_by="verifier_agent",
+            verifier_note="consistent",
+        )
+        db.add(keputusan)
+        await db.flush()
+        created.append(keputusan.id)
+        # Binding memakai waktu EVALUASI: batch replay memang berjangkar, dan
+        # menilai "masih layak" dengan jam dinding akan menolak data replay
+        # hanya karena dibangun beberapa hari lalu.
+        await _ikat_sumber(db, keputusan, acuan_evaluasi)
+        await _jejak(
+            keputusan.id,
+            "DETECT",
+            70,
+            f"{spec.commodity}.supply_gap",
+            {"commodity": spec.commodity, "target": target.name},
+            {
+                "quantity_kg": spec.quantity_kg,
+                "case": spec.key,
+                "temperature_source": rencana_batch[0]["temperature_source"],
+            },
+        )
+        await _jejak(
+            keputusan.id,
+            "VERIFY",
+            65,
+            "evidence.temperature",
+            {
+                "policy_version": policy.policy_version,
+                "policy_kind": policy.policy_kind,
+                "min_samples": policy.min_temperature_samples,
+            },
+            {
+                "safety_status": spec.batches[0].safety_status,
+                "evidence_state": (
+                    "sufficient" if spec.intended_outcome == "usable" else "insufficient"
+                ),
+                "policy_source": asal_policy,
+            },
+        )
+        info_komoditas.append(
+            {
+                **ringkas_kasus,
+                "case": spec.key,
+                "batch_ids": [
+                    str(scenario.id_batch(identitas, batch)) for batch in spec.batches
+                ],
+                "decision_id": str(keputusan.id),
+                "policy_version": policy.policy_version,
+                "policy_kind": policy.policy_kind,
+                "temperature_source": rencana_batch[0]["temperature_source"],
+                "safety_status": spec.batches[0].safety_status,
+            }
+        )
 
     # ---- Biaya: dihitung dari data, bukan angka tulisan tangan --------------
     for decision_id in created:
         baris = await db.get(Decision, decision_id)
         if baris is None:
             continue
-        terisi = await hitung_biaya_demo(db, baris, sekarang)
+        # Waktu evaluasi (bukan jam dinding) supaya masa layak batch dinilai
+        # dalam kerangka waktu dataset, sama seperti bukti dan jejaknya.
+        terisi = await hitung_biaya_demo(db, baris, acuan_evaluasi)
         if not terisi:
             # Bahan hitung tidak ada: jangan tinggalkan rincian karangan.
             baris.cost_breakdown = {
@@ -856,6 +1201,18 @@ async def _seed_demo_cases(
         "decisions": len(created),
         "target": target.name,
         "message": f"4 kasus demo {target.name} siap — v3 kuota & v2 logistik siap approve.",
+        # Fase 7 MG: apa yang dibangun, dalam mode apa, dan pada waktu acuan mana.
+        # Panel memakai ini untuk menampilkan mode/jangkar/jumlah kasus; Joule
+        # memakainya untuk menyebut waktu acuan tanpa menebak.
+        "mode": mode_final,
+        "evaluation_anchor": acuan_evaluasi.astimezone(timezone.utc).isoformat(),
+        "dataset_version": dataset_versi,
+        "scenario_version": scenario.SCENARIO_VERSION,
+        "temperature_source": scenario.MODE_SIMULASI[mode_final],
+        "commodity_cases": info_komoditas,
+        "cases_total": len(DEMO_CASES) + sum(
+            1 for info in info_komoditas if not info.get("skipped")
+        ),
     }
 
 
@@ -898,6 +1255,12 @@ async def seed_demo(
         payload.force,
         target,
         demo_session_id=pemilik.id if pemilik is not None else None,
+        # Fase 7 MG: mode/jangkar/versi dataset diteruskan dari sesi PEMILIK.
+        # Tanpa ini kasus selalu dibangun pada jam dinding walau operator memilih
+        # replay, sehingga jangkar sesi hanya label di layar.
+        mode=pemilik.mode if pemilik is not None else payload.mode,
+        anchor=pemilik.evaluation_anchor if pemilik is not None else None,
+        dataset_version=pemilik.dataset_version if pemilik is not None else None,
     )
     await db.commit()
     if pemilik is not None:
