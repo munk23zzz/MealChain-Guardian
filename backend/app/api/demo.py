@@ -1428,7 +1428,19 @@ async def get_last_agent_run(
     baris_agen: dict[str, AgentTrace] = {}
     for t in langkah:
         nama_agen = (t.agent_name or "").strip().lower()
-        if nama_agen and (run_review is None or t.run_id == run_review):
+        if not nama_agen:
+            continue
+        # Baris milik putaran ini: run induk itu sendiri ATAU run anak yang
+        # menunjuk induk lewat `parent_run_id` — verifier adalah RUN ANAK
+        # (AUD-9A-03), jadi memfilter `run_id == run induk` saja membuat
+        # kartunya selalu "missing" walau barisnya tersimpan.
+        induk = str(t.parent_run_id or "")
+        milik_run = (
+            run_review is None
+            or str(t.run_id or "") == str(run_review)
+            or (induk and induk == str(run_review))
+        )
+        if milik_run:
             baris_agen[nama_agen] = t
     agen = []
     for kunci, label in SWARM_AGENTS:
@@ -1440,6 +1452,10 @@ async def get_last_agent_run(
                 "key": kunci,
                 "label": label,
                 "status": (keluaran.get("status") or ("ok" if baris else "missing")),
+                # Verdict audit (khusus kartu verifier): `consistent|flagged|unavailable`.
+                # Kartu UI memakai ini untuk label DEFINITIF (Ditinjau/Diblokir),
+                # bukan "Terbatas" yang juga dipakai keadaan "model tidak ada".
+                "verdict": keluaran.get("audit_verdict"),
                 "duration_ms": baris.duration_ms if baris is not None else None,
                 "warnings": (
                     len([p for p in peringatan if isinstance(p, str)])

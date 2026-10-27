@@ -306,4 +306,50 @@ describe("kartu tujuh agen di Demo Control", () => {
     expect(demoAgentCards({ found: false } as any)).toEqual([]);
     expect(demoAgentCards(null)).toEqual([]);
   });
+
+  it("verdict flagged → label definitif 'Ditinjau', bukan 'Terbatas'", () => {
+    // Audit yang SELESAI dan menandai masalah adalah hasil definitif. Tanpa
+    // verdict, baris verifier berstatus `degraded` dan labelnya "Terbatas" —
+    // sama dengan keadaan "model tidak dikonfigurasi" yang belum mengaudit.
+    const kartu = demoAgentCards({
+      found: true,
+      agents_run_id: "r1",
+      agents: [
+        ...agen.slice(0, 7),
+        {
+          key: "verifier",
+          label: "Verifikasi",
+          status: "degraded",
+          verdict: "flagged",
+          duration_ms: 16001,
+          warnings: 3,
+        },
+      ],
+    } as any);
+
+    expect(kartu[7].state).toBe("flagged");
+    expect(kartu[7].statusLabel).toBe("Ditinjau");
+    expect(kartu[7].duration).toBe("16,0 dtk");
+    expect(kartu[7].warnings).toBe("3 peringatan");
+  });
+
+  it("verdict terisi tetapi bukan flagged tetap memakai status baris", () => {
+    const kartu = demoAgentCards({
+      found: true,
+      agents_run_id: "r1",
+      agents: [
+        {
+          key: "verifier",
+          label: "Verifikasi",
+          status: "degraded",
+          verdict: "unavailable",
+          duration_ms: 12,
+        },
+      ],
+    } as any);
+
+    // `unavailable` = audit belum bisa menyimpulkan → tetap jujur "Terbatas".
+    expect(kartu[0].state).toBe("limited");
+    expect(kartu[0].statusLabel).toBe("Terbatas");
+  });
 });

@@ -235,6 +235,8 @@ export type DemoAgent = {
   key: string;
   label: string;
   status: string;
+  /** Verdict audit (kartu verifier): consistent | flagged | unavailable. */
+  verdict?: string | null;
   duration_ms?: number | null;
   warnings?: number | null;
   summary?: string | null;
@@ -243,7 +245,7 @@ export type DemoAgent = {
 export type DemoAgentCard = {
   key: string;
   label: string;
-  state: "ok" | "running" | "limited" | "failed" | "idle";
+  state: "ok" | "running" | "limited" | "flagged" | "failed" | "idle";
   statusLabel: string;
   duration: string;
   warnings: string;
@@ -262,6 +264,9 @@ const AGEN_LABEL: Record<DemoAgentCard["state"], string> = {
   ok: "Selesai",
   running: "Berjalan",
   limited: "Terbatas",
+  // Audit SELESAI dan menandai masalah: itu hasil definitif, bukan "terbatas".
+  // Label ini hanya dipakai bila verdict audit benar-benar `flagged`.
+  flagged: "Ditinjau",
   failed: "Gagal",
   idle: "Tidak dijalankan",
 };
@@ -300,7 +305,14 @@ export function demoAgentCards(
     }));
   }
   return daftar.map((agen) => {
-    const state = AGEN_STATE[(agen.status || "").toLowerCase()] ?? "idle";
+    const verdict = (agen.verdict || "").toLowerCase();
+    // Verdict `flagged` = audit SELESAI dan menandai masalah → label definitif
+    // "Ditinjau". Tanpa ini kartu verifier memakai `degraded` → "Terbatas",
+    // sama dengan keadaan "model tidak dikonfigurasi" yang belum mengaudit apa pun.
+    const state: DemoAgentCard["state"] =
+      verdict === "flagged"
+        ? "flagged"
+        : AGEN_STATE[(agen.status || "").toLowerCase()] ?? "idle";
     const dikenal = state !== "idle";
     return {
       key: agen.key,

@@ -11938,6 +11938,14 @@ p, li, dd { text-wrap: pretty; }
   border-color: var(--warn-border);
 }
 .dc-agent[data-state="limited"] .dc-agent-dot { background: var(--warn-ink); }
+/* Verdict audit `flagged`: audit SELESAI dan menandai masalah (Ditinjau).
+   Warna sama dengan "terbatas" karena keduanya butuh mata manusia, tetapi
+   `data-state` berbeda supaya keadaan ini bisa diuji dan dibaca mesin. */
+.dc-agent[data-state="flagged"] {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+.dc-agent[data-state="flagged"] .dc-agent-dot { background: var(--warn-ink); }
 .dc-agent[data-state="failed"] {
   background: var(--danger-bg);
   border-color: var(--danger-border);
