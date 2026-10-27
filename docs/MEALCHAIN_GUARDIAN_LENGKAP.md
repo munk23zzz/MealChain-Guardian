@@ -485,20 +485,35 @@ Dua keputusan pemilik yang masih terbuka: Regional Imbalance mengecualikan baris
 
 | Lapis | Stempel | Umur | Dibuang saat sesi berakhir? |
 |---|---|---|---|
-| Template (cetakan) | `origin='seed'`, `demo_session_id=NULL` | permanen | tidak |
-| Sesi (adonan) | `origin='demo'` + `demo_session_id` | ≤120 menit | ya |
+| Data kanonik (snapshot `load_seed`) | `origin='seed'`, `demo_session_id=NULL` | permanen | tidak |
+| Template (cetakan) | `origin='demo'` + `demo_session_id=<sesi sentinel cetakan>` | permanen | tidak |
+| Sesi (adonan) | `origin='demo'` + `demo_session_id=<sesi aktif>` | ≤120 menit | ya |
+
+Tiga lapis, bukan dua: sejak audit D-04 (26 Okt 2026) penanda beku **bukan** penulisan
+ulang `origin`, melainkan stempel ke sesi sentinel `cetakan` (`demo_session.CETAKAN_ID`,
+`status='expired'`, `template_version='cetakan'`) yang tidak pernah aktif dan tidak pernah
+dihapus pembersih sesi. Konsekuensinya: baris TEMPLATE tetap ber-`origin='demo'` (provenance
+jujur) dan yang wajib `demo_session_id IS NULL` adalah baris **kanonik** `origin='seed'` —
+invarian itu dijaga gate (`verify/invariants.spec.json`) dan dijaga penjaga ORM
+`demo_session.boleh_distempel()`: baris baru hanya distempel bila `origin`-nya benar-benar
+`'demo'`. Tanpa aturan itu, "Siapkan data demo" yang berjalan saat sesi aktif menstempel
+snapshot kanonik yang ditulis `load_seed` (terukur 27 Okt 2026: 78 batch + 7 keputusan +
+40 fakta pasokan).
 
 Tampilan default kosong. Menekan **Siapkan data demo** membangun template lebih
 dulu, baru membuka sesi — urutan ini wajib, karena sesi yang habis di tengah
 pembangunan membuat penyapu menghapus baris demo yang baru ditulis.
 
-**Baseline yang boleh dikutip adalah snapshot:** 36 keputusan, 120 batch, 21
-approval, 51 bukti, 85 jejak, 60 pemasok, 2.034 blok ledger (26 Okt 2026 22.34
-WIB). Angka 48/125/28/61/118 yang dipakai dokumen sebelumnya tidak lagi cocok
-dengan DB: 30 dari 36 keputusan adalah baris `origin='demo'` milik sesi demo yang
-sedang hidup, dan baris demo dibuang saat sesinya berakhir. Karena itu jumlah
-demo bergerak mengikuti sesi — hanya snapshot terakhir yang sah dikutip, bukan
-angka dari ingatan sesi.
+**Baseline yang boleh dikutip adalah snapshot:** 48 keputusan, 125 batch, 28
+approval, 61 bukti, 118 jejak, 60 pemasok, 19 PO (12 impor SAP + 7 dari
+keputusan), 2.244 blok ledger (27 Okt 2026 10.35 WIB, sesudah bangun ulang lewat
+`services/demo_template_reset.bangun_ulang`). Angka ini **tergantung jalur
+bangun**, jadi sebutkan jalurnya: `mulai_dengan_template` (template saja)
+menghasilkan 36/120/21/51 karena tidak menjalankan pelengkap cakupan
+(`seed/demo_extra.py`), sedangkan `bangun_ulang` (tombol refresh di Demo Control)
+menambahkan deret waktu + aktivitas + pelengkap sehingga menjadi 48/125/28/61.
+Karena itu jumlah demo bergerak mengikuti sesi — hanya snapshot terakhir yang sah
+dikutip, bukan angka dari ingatan sesi.
 
 ### 12.2 Angka yang bergerak dan yang tidak
 
@@ -507,7 +522,7 @@ angka dari ingatan sesi.
 | Approve | `approvals`, status keputusan, kuorum di UI |
 | Execute | batch berangkat, PO bertambah, SDC, blok ledger, Decision Time/SDC |
 | Penerimaan | `batch_receipts`, stok SAP tiruan |
-| Bangun ulang | isi kembali ke jumlah awal (36/120/21/51), **tetapi** ledger +74 blok (arsip generasi) dan jam kejadian di-anchor ulang |
+| Bangun ulang | isi kembali ke jumlah awal (48/125/28/61), **tetapi** ledger +74 blok (arsip generasi) dan jam kejadian di-anchor ulang |
 | Waktu berjalan | "x menit lalu", posisi truk (interpolasi), sisa masa layak, jendela KPI melebar |
 
 ### 12.3 Dua jangkar waktu yang belum seragam

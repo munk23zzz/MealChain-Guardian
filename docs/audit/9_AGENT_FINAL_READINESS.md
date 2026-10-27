@@ -18,8 +18,9 @@ menolak setiap jalur yang belum memenuhi syarat** pada DB klon:
 - approval kurang satu → 409; akun sama dua kali → 409; execute duplikat → 409; 4× execute
   bersamaan → tepat 1 PO; batch sumber FAIL/kedaluwarsa → 409; bukti dihapus → 409;
   verifier tanpa provider → `UNAVAILABLE` + keputusan tidak bisa dieksekusi.
-- ruff 0, tsc 0, vitest 1822/1822, gate invarian PASS 59/FAIL 0, pytest 1628 lulus dari 1629
-  (1 kegagalan = data demo, bukan kode) sesudah FIX-3/AUD-9B-29.
+- ruff 0, tsc 0, vitest 1822/1822, gate invarian PASS 60/FAIL 0, pytest 1659 lulus /
+  0 gagal / 28 dilewati (1.687 terkumpul) pada klon DB demo yang bangun ulangnya
+  dilewatkan jalur produk (27 Okt 2026).
 
 Tetapi **kualitas keputusan** agent masih jauh di bawah klaim "9 agent otonom": satu temuan P0
 (AUD-9B-30) dan sekelompok P1 (data kesegaran/usable_until, angka safety dua basis, auditor
@@ -102,9 +103,11 @@ AUD-9A-01/02/04/06/07/08/09/10/11/12/13/14/15/17/18, AUD-9B-07/08/09/10/11/12/13
 Alasan:
 - alur yang didemokan (surplus Cianjur → kebutuhan Jakarta → approval 4 mata → PO → ledger →
   KPI) berjalan **end-to-end pada DB klon**, dengan penolakan yang benar pada setiap jalur
-  negatif (7 skenario), dan gate invarian demo PASS 59/0.
-- tidak ada tes regresi yang gagal karena kode; satu kegagalan = data demo yang bisa dipulihkan
-  dengan menjalankan ulang penyemai.
+  negatif (7 skenario), dan gate invarian demo PASS 60/0.
+- tidak ada tes regresi yang gagal: 1.659 lulus / 0 gagal pada klon DB demo (27 Okt 2026).
+  Delapan kegagalan sebelumnya semuanya berakar data/tes, bukan produk, dan sudah ditutup:
+  stempel sesi pada baris kanonik, approval lintas kota di `demo_extra`, PO internal tanpa
+  `decision_id`, serta dua tes yang memaku keadaan DB (lihat `9_AGENT_TEST_RESULTS.md` §8).
 - syarat: (a) putuskan R-01 (data kesegaran **atau** semantik verdict) supaya panel verifikasi
   tidak mengejutkan juri; (b) uji jalur AgentCore + tunnel H-1; (c) segarkan kasus bukti demo.
 

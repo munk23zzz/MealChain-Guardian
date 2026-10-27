@@ -282,3 +282,46 @@ Catatan kejujuran: pada run E2E pertama, assertion E1 milik **harness** saya sal
 ke satu batch). Assertion diperbaiki ke `batch_count == 1` + id batch terikat; angka
 produknya tidak diubah.
 
+## 8. Siklus 27 Okt 2026 — empat invarian gate + suite deterministik
+
+Masalah: gate `verify/invariants.spec.json` **FAIL (PASS 56 / FAIL 4 / SKIP 1)** di DB
+demo, dan suite backend tidak deterministik (`8 failed, 1647 passed, 28 skipped` pada
+klon bersih dari DB demo).
+
+| # | Invarian / tes | Sebelum | Sesudah | Akar |
+|---|---|---|---|---|
+| 1 | baris kanonik batch berstempel sesi | 78 | **0** | penjaga `before_flush` menstempel setiap objek ORM baru; `load_seed` menulis snapshot kanonik lewat `merge()` saat "Siapkan data demo" berjalan di sesi aktif |
+| 2 | baris kanonik keputusan berstempel sesi | 7 | **0** | idem |
+| 3 | baris kanonik pasokan berstempel sesi | 40 | **0** | idem |
+| 4 | PO tanpa `decision_id` yang bukan impor SAP | 1 | **0** | `seed/demo_extra.py` membuat `MC-EXTREME01` (99999,50 kg / Rp 999.999,99) sebagai baris display **tanpa** keputusan pemicu |
+| 5 | `test_akun_multi_kota` (2 tes) | 2 gagal | **0** | `demo_extra` menyetujui keputusan bertarget kota lain dengan Kepala SPPG Jakarta (approver lintas kota; API sendiri menolak 403) |
+| 6 | `test_demo_seed_per_kota` (4 tes) | 4 gagal | **0** | tes menghitung semua baris ber-`demo_case` di kota itu, termasuk namespace `extra:*` milik `demo_extra` |
+| 7 | `test_build_gagal_tidak_meninggalkan_sesi_aktif` | gagal | **0** | tes menghitung total mentah, padahal `mulai_dengan_template` lebih dulu menutup sesi lama (yang menghapus barisnya sendiri) |
+| 8 | `test_bekukan_mempertahankan_origin_demo` | gagal | **0** | gejala dari #1–#3 |
+
+Perbaikan akar (bukan pelonggaran): `demo_session.boleh_distempel()` — baris baru hanya
+distempel bila `origin == 'demo'` (tabel jembatan tanpa `origin` tetap distempel);
+`_bekukan()` melepas stempel pada baris non-demo (level query, tanpa menulis ulang
+`origin`); `demo_extra` menyemai approval dengan Kepala SPPG **lokasi target** dan
+menautkan fixture angka ekstrem ke PO yang pemicunya nyata (baris lama `po:ekstrem`
+dibuang); dua tes memilih baris berdasarkan maksudnya (namespace `DEMO_CASES`, baris
+tanpa stempel sesi). Tes regresi baru: `tests/test_demo_session_stempel_kanonik.py`
+(4 tes — penjaga flush, tabel jembatan, pelepasan stempel).
+
+Angka akhir (semua diukur ulang, bukan disalin):
+
+```
+DB demo dibangun ulang lewat services/demo_template_reset.bangun_ulang (backup
+  pg_dump | gzip lebih dulu)                                  → exit 0, pelengkap 12 keputusan/7 approval
+verify_stack.py verify/invariants.spec.json                   → VERDICT: PASS (PASS 60 / FAIL 0 / SKIP 1), exit 0
+pytest (klon mealchain_fix05 = pg_dump DB demo sesudah bangun ulang,
+  DEMO_SESSION_ENFORCE=false)                                 → 1659 passed, 28 skipped, 0 failed, 543,72 s, exit 0
+ruff check .                                                  → All checks passed!, exit 0
+tsc --noEmit (kontainer frontend)                              → exit 0
+vitest run (kontainer frontend)                                → 167 berkas / 1822 tes, exit 0
+```
+
+Basis angka: 1.687 tes terkumpul = 1.659 lulus + 28 dilewati (1.683 tes sebelum 4 tes
+regresi baru ditambahkan). Suite **tidak** dijalankan di DB demo; DB klon dibuang
+sesudahnya.
+
