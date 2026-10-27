@@ -749,13 +749,24 @@ export async function fetchWasteSummary(token: string, days = 30) {
 export async function fetchKpis(
   periode: string,
   token: string,
-  locationId?: string
+  locationId?: string,
+  provenance?: { includeDemo?: boolean; demoSessionId?: string }
 ) {
   const params = new URLSearchParams({ periode });
   if (locationId) params.set("location_id", locationId);
+  // Cakupan data (Fase 8): `include_demo=false` (bawaan server) = fakta kerja
+  // saja. Simulasi WAJIB menyebut sesi eksplisit — server menolak 422 bila
+  // `include_demo=true` tanpa `demo_session_id`, supaya tidak ada tebakan
+  // "sesi terbaru" yang mencampur data sesi lain.
+  if (provenance?.includeDemo) {
+    params.set("include_demo", "true");
+    if (provenance.demoSessionId) {
+      params.set("demo_session_id", provenance.demoSessionId);
+    }
+  }
   return request(`/kpi?${params.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
- });
+  });
 }
 
 // GET /batches — inventaris batch (lokasi, komoditas, kg, kesegaran, batas

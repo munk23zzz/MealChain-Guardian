@@ -21,6 +21,18 @@ import {
   periodePil,
   type KpiWindowKey,
 } from "../lib/kpi";
+import {
+  baselineText,
+  baselineOf,
+  estimateLine,
+  estimateOf,
+  factLine,
+  KPI_SCOPES,
+  provenanceLines,
+  SCOPE_EXPLANATION,
+  scopeLabel,
+  type KpiScope,
+} from "../lib/kpi-provenance";
 import { roleLabel } from "../lib/settings";
 
 const UNIT_FMT: Record<string, (v: string) => string> = {
@@ -65,6 +77,63 @@ export const STATE_LABEL: Record<string, string> = {
   no_data: "belum ada data",
   unavailable: "tidak tersedia",
 };
+
+/**
+ * Pil cakupan data: operasional vs simulasi (Fase 8).
+ *
+ * Kenapa ada: sejak kartu KPI memisahkan fakta demo dari fakta kerja, pembaca
+ * harus tahu angka mana yang sedang ia lihat. Komponen ini hanya MEMILIH
+ * cakupan; ia tidak menghitung apa pun dan tidak menebak mode dari angka.
+ *
+ * `aria-describedby` + teks penjelas dipakai supaya perbedaannya tidak hanya
+ * tersirat dari warna pil (pembaca layar tidak melihat warna).
+ */
+export function KpiScopeToggle({
+  scope,
+  onScopeChange,
+  disabled = false,
+  disabledReason = null,
+}: {
+  scope: KpiScope;
+  onScopeChange?: (scope: KpiScope) => void;
+  /** Simulasi butuh sesi demo aktif; tanpa sesi, pilihannya dimatikan. */
+  disabled?: boolean;
+  disabledReason?: string | null;
+}) {
+  const aktif = KPI_SCOPES.find((s) => s.key === scope) ?? KPI_SCOPES[0];
+  return (
+    <div
+      className="kpi-scope-toggle"
+      role="group"
+      aria-label="Cakupan data KPI"
+      data-testid="kpi-scope-toggle"
+      data-scope={scope}
+      aria-describedby="kpi-scope-explanation"
+    >
+      <span className="kpi-period-label">Cakupan data:</span>
+      {KPI_SCOPES.map((s) => {
+        const dipilih = s.key === scope;
+        return (
+          <button
+            key={s.key}
+            type="button"
+            className={`commodity-pill kpi-scope-pill${dipilih ? " is-active" : ""}`}
+            data-scope-option={s.key}
+            aria-pressed={dipilih}
+            disabled={disabled && s.key === "demo"}
+            onClick={() => onScopeChange?.(s.key)}
+          >
+            {s.label}
+          </button>
+        );
+      })}
+      <span id="kpi-scope-explanation" className="kpi-scope-hint">
+        {disabled && disabledReason ? `${disabledReason} ` : ""}
+        {aktif.hint} {SCOPE_EXPLANATION}
+      </span>
+    </div>
+  );
+}
 
 function trendClass(trend: string | null): string | null {
   if (trend === "up") return "trend-up";
@@ -125,6 +194,9 @@ export default function KPIDashboard({
   onRetry,
   windowKey = "today",
   onWindowChange,
+  scope = "operational",
+  onScopeChange,
+  scopeDisabledReason = null,
 }: {
   kpi: any | null;
   loading?: boolean;
@@ -134,6 +206,11 @@ export default function KPIDashboard({
    *  state sendiri, supaya angka di layar dan label periode tidak bisa berbeda. */
   windowKey?: KpiWindowKey;
   onWindowChange?: (key: KpiWindowKey) => void;
+  /** Cakupan data yang diminta halaman: fakta kerja atau satu sesi demo. */
+  scope?: KpiScope;
+  onScopeChange?: (scope: KpiScope) => void;
+  /** Diisi halaman bila tidak ada sesi demo aktif (simulasi tidak bisa dipilih). */
+  scopeDisabledReason?: string | null;
 }) {
   if (loading) {
     return (
@@ -193,6 +270,9 @@ export default function KPIDashboard({
             <span className="commodity-pill" title={kpi.scope?.location_id ?? undefined}>
               Cakupan: {kpi.scope?.role ? roleLabel(kpi.scope.role) : "—"}
             </span>
+            <span className="commodity-pill" data-testid="kpi-data-mode">
+              {scopeLabel(kpi.data_mode)}
+            </span>
           </span>
         }
       />
@@ -220,6 +300,29 @@ export default function KPIDashboard({
           );
         })}
       </div>
+      {/* Cakupan data (Fase 8): operasional vs simulasi. Angka kedua cakupan
+          TIDAK boleh tercampur — backend menyaring baris sesi demo di SQL. */}
+      <KpiScopeToggle
+        scope={scope}
+        onScopeChange={onScopeChange}
+        disabled={Boolean(scopeDisabledReason)}
+        disabledReason={scopeDisabledReason}
+      />
+      {/* Grup terpisah: angka simulasi tidak boleh terbaca sebagai hasil
+          operasional, jadi judulnya menyebut mode data yang dikirim backend. */}
+      <section
+        className="kpi-group"
+        data-mode={String(kpi.data_mode ?? "")}
+        aria-label={scopeLabel(kpi.data_mode)}
+      >
+        <h2 className="kpi-group-title">{scopeLabel(kpi.data_mode)}</h2>
+        {String(kpi.data_mode) === "demo" ? (
+          <p className="kpi-group-note" data-testid="kpi-demo-note">
+            Angka di grup ini berasal dari sesi demo — simulasi, bukan hasil
+            lapangan. Kartu bertanda <strong>estimasi</strong> adalah proyeksi
+            model, bukan catatan kejadian.
+          </p>
+        ) : null}
       {/* Grid kartu metrik tiga kolom (pola halaman KPI acuan).
           Fase 4: tiap kartu = angka besar + bullet bar (hanya untuk metrik
           yang memang punya skala, lihat lib/kpi.ts) + arah perbaikan. */}
@@ -229,6 +332,10 @@ export default function KPIDashboard({
           const trend = trendClass(m.trend);
           const bullet = bulletOf(m);
           const arah = bullet ? directionLabel(bullet.direction) : null;
+          const prov = provenanceLines(m);
+          const est = estimateOf(m);
+          const estText = estimateLine(m);
+          const factText = factLine(m);
           return (
             <article key={m.name} className={`kpi-card card kpi-${m.state}`}>
               <div className="kpi-card-top">
@@ -287,10 +394,43 @@ export default function KPIDashboard({
                   ? ` · cakupan ${fmtCoverage(m.coverage)}`
                   : ""}
               </p>
+              {/* Provenance (Fase 8): tingkat bukti selalu terlihat; sumber,
+                  periode, metode, dan baseline ada satu klik di bawahnya. */}
+              {prov.length ? (
+                <div className="kpi-prov" data-testid="kpi-provenance">
+                  <p className="kpi-prov-evidence">
+                    Bukti:{" "}
+                    <strong>
+                      {prov.find((l) => l.key === "evidence")?.value ?? "—"}
+                    </strong>
+                  </p>
+                  <details className="kpi-prov-detail">
+                    <summary>Asal data, periode, dan metode</summary>
+                    <dl>
+                      {prov.map((l) => (
+                        <div key={l.key} className="kpi-prov-row">
+                          <dt>{l.label}</dt>
+                          <dd>{l.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </details>
+                </div>
+              ) : null}
+              {estText ? (
+                <p className="kpi-estimate" data-testid="kpi-estimate">
+                  {estText}
+                  {est?.definition ? (
+                    <span className="kpi-estimate-note"> — {est.definition}</span>
+                  ) : null}
+                </p>
+              ) : null}
+              {factText ? <p className="kpi-fact">{factText}</p> : null}
             </article>
           );
         })}
       </div>
+      </section>
     </section>
   );
 }

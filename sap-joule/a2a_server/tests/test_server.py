@@ -118,7 +118,15 @@ class FakeClient:
             ],
         }
 
-    def kpi(self, days: int = 7) -> dict:
+    def kpi(
+        self,
+        days: int = 7,
+        *,
+        scope: str = "operational",
+        demo_session_id: str | None = None,
+    ) -> dict:
+        # Fase 8: `render_skill` meneruskan cakupan/sesi; fake ini harus menerima
+        # kontrak yang sama, bukan hanya `days`.
         self.dipanggil.append("kpi")
         self._cek()
         return {

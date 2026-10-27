@@ -27,24 +27,35 @@ import { useQuery } from "@tanstack/react-query";
 
 import { fetchKpis } from "../api";
 import { KPI_DEFAULT_WINDOW, kpiQueryPolicy, type KpiWindowKey } from "../kpi";
+import type { KpiScope } from "../kpi-provenance";
 import { errorMessage, queryKeys } from "../query";
 
 export function useKpi(
   token: string | null,
   scope: string,
   tab: string,
-  windowKey: KpiWindowKey = KPI_DEFAULT_WINDOW
+  windowKey: KpiWindowKey = KPI_DEFAULT_WINDOW,
+  kpiScope: KpiScope = "operational",
+  demoSessionId: string | null = null
 ) {
   const kebijakan = kpiQueryPolicy(tab);
+  // Simulasi hanya bisa diminta dengan sesi eksplisit: server menolak 422 bila
+  // `include_demo=true` tanpa `demo_session_id`, dan tidak ada jalur "sesi
+  // terbaru" yang boleh menebak. Tanpa sesi aktif, permintaan tidak ditembak.
+  const simulasi = kpiScope === "demo";
+  const adaSesi = Boolean(demoSessionId);
   const query = useQuery({
-    queryKey: queryKeys.kpiLive(scope, windowKey),
+    queryKey: queryKeys.kpiLive(scope, windowKey, simulasi ? "demo" : "operational"),
     queryFn: () => {
       // Hanya KUNCI periode yang dikirim: backend yang menghitung rentangnya
       // dalam hari kalender Asia/Jakarta. Menghitung tanggal di klien membuat
       // "Hari ini" bergeser 7 jam dan berbeda antar tab.
-      return fetchKpis(windowKey, token as string);
+      return fetchKpis(windowKey, token as string, undefined, {
+        includeDemo: simulasi,
+        demoSessionId: demoSessionId ?? undefined,
+      });
     },
-    enabled: Boolean(token) && kebijakan.enabled,
+    enabled: Boolean(token) && kebijakan.enabled && (!simulasi || adaSesi),
     staleTime: kebijakan.staleTime,
     refetchInterval: kebijakan.refetchInterval,
     // Ditulis eksplisit: jangan menembak backend saat tab browser tidak

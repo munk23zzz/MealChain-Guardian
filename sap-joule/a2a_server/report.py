@@ -540,8 +540,61 @@ def _decision_type(nilai: Any) -> str:
     return kunci.replace("_", " ").strip() or MISSING
 
 
+MODE_SOURCE_SENTENCE = {
+    "operational": "Sumber: catatan operasional MealChain Guardian.",
+    "demo": "Sumber: catatan satu sesi demo — angka simulasi, bukan hasil lapangan.",
+}
+
+
+def _periode_kpi(envelope: Mapping[str, Any]) -> str | None:
+    """`Periode: 24 Okt 2026 – 27 Okt 2026 (Asia/Jakarta)` dari amplop `/kpi`.
+
+    Tanggal saja (bukan jam): KPI dihitung atas hari kalender, dan menampilkan jam
+    akan membuatnya terbaca seperti jendela 24 jam bergulir.
+    """
+    blok = envelope.get("period")
+    if not isinstance(blok, Mapping):
+        return None
+    label = str(blok.get("label") or "").strip()
+    zona = str(blok.get("timezone") or "Asia/Jakarta").strip()
+
+    def _tanggal(nilai: Any) -> str:
+        teks = str(nilai or "").strip()
+        if not teks:
+            return MISSING
+        try:
+            saat = _dt.datetime.fromisoformat(teks.replace("Z", "+00:00"))
+        except ValueError:
+            return teks
+        if saat.tzinfo is not None:
+            saat = saat.astimezone(WIB)
+        return f"{saat.day} {BULAN[saat.month - 1]} {saat.year}"
+
+    mulai, selesai = _tanggal(blok.get("start")), _tanggal(blok.get("end"))
+    rentang = f"{mulai} – {selesai}"
+    if label:
+        return f"Periode: {label} ({rentang}, {zona})."
+    return f"Periode: {rentang} ({zona})."
+
+
+def _estimasi_teks(metric: Mapping[str, Any]) -> str | None:
+    """Anotasi proyeksi untuk satu metrik — selalu berawalan `estimasi`."""
+    est = metric.get("estimate")
+    if not isinstance(est, Mapping):
+        return None
+    state = str(est.get("state") or "").strip().lower()
+    if state != "available" or est.get("value") is None:
+        return None
+    return f"estimasi {format_metric(est.get('value'), est.get('unit'))}"
+
+
 def kpi_report(envelope: Mapping[str, Any] | None, *, note: str | None = None) -> str:
-    """Daftar KPI dari `/kpi`. Metrik yang tidak bisa dihitung ditampilkan `—` + alasannya."""
+    """Daftar KPI dari `/kpi`. Metrik yang tidak bisa dihitung ditampilkan `—` + alasannya.
+
+    Fase 8: laporan menyebut periode, asal angka (operasional vs sesi demo), dan
+    menandai metrik yang membawa estimasi. Tanpa itu pembaca tidak bisa tahu apakah
+    persen yang ia lihat adalah catatan lapangan atau proyeksi model.
+    """
     metrics = list((envelope or {}).get("metrics") or ())
     if not metrics:
         return (
@@ -551,25 +604,39 @@ def kpi_report(envelope: Mapping[str, Any] | None, *, note: str | None = None) -
 
     rows: list[list[str]] = []
     belum = 0
+    ada_estimasi = False
     for metric in metrics:
         name = _label(KPI_NAME_LABEL, metric.get("name"))
         state = str(metric.get("state") or "").strip().lower()
+        estimasi = _estimasi_teks(metric)
         if state == "available" and metric.get("value") is not None:
-            rows.append([name, format_metric(metric.get("value"), metric.get("unit"))])
+            sel = format_metric(metric.get("value"), metric.get("unit"))
+            if estimasi:
+                sel = f"{sel} ({estimasi})"
+                ada_estimasi = True
+            rows.append([name, sel])
         else:
             alasan = _text(metric.get("reason")) if metric.get("reason") else MISSING
             rows.append([name, f"{MISSING} ({alasan})"])
             belum += 1
 
+    mode = str((envelope or {}).get("data_mode") or "operational").strip().lower()
     catatan = _footnote(
         [
-            note,
+            _periode_kpi(envelope or {}),
+            MODE_SOURCE_SENTENCE.get(mode, MODE_SOURCE_SENTENCE["operational"]),
+            (
+                "Angka berlabel estimasi adalah proyeksi model, bukan kejadian tercatat."
+                if ada_estimasi
+                else None
+            ),
             (
                 f"{belum} indikator belum bisa dihitung; alasannya ikut ditulis supaya "
                 "tidak terbaca nol."
             )
             if belum
             else None,
+            note,
         ]
     )
     teks = (
@@ -580,6 +647,17 @@ def kpi_report(envelope: Mapping[str, Any] | None, *, note: str | None = None) -
 
 
 # --- antrean usulan ----------------------------------------------------------------------
+
+
+def kpi_scope_problem(reason: str, *, note: str | None = None) -> str:
+    """Cakupan KPI yang diminta tidak bisa dihitung — sebut sebabnya, jangan menebak sesi."""
+    return _footnote(
+        [
+            f"KPI untuk cakupan itu tidak bisa ditampilkan: {reason}.",
+            MODE_SOURCE_SENTENCE["operational"],
+            note,
+        ]
+    )
 
 
 def approval_queue_report(

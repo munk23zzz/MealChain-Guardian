@@ -2646,7 +2646,7 @@
           "kpi"
         ],
         "summary": "Get Kpi",
-        "description": "KPI tujuh metrik, state available/no_data/unavailable + reason.\n\nSPPG hanya scope lokasinya (403 foreign); bgn_monitor global atau\nlokasi mana pun (read-only). Naive timestamp ditolak 422 (kontrak\nRFC3339 dengan offset eksplisit).",
+        "description": "KPI tujuh metrik, state available/no_data/unavailable + reason.\n\nSPPG hanya scope lokasinya (403 foreign); bgn_monitor global atau\nlokasi mana pun (read-only). Naive timestamp ditolak 422 (kontrak\nRFC3339 dengan offset eksplisit).\n\nCakupan (Fase 8): angka operasional dan angka sesi demo TIDAK boleh\ntercampur. `include_demo=false` menyaring `demo_session_id IS NULL`;\n`include_demo=true` menyaring SATU sesi yang disebut pemanggil. Kombinasi\nyang tidak masuk akal (demo tanpa sesi, atau sesi tanpa include_demo)\nditolak 422 — menebak berarti menyajikan angka milik sesi lain.",
         "operationId": "get_kpi_kpi_get",
         "security": [
           {
@@ -2722,6 +2722,37 @@
               ],
               "title": "Location Id"
             }
+          },
+          {
+            "name": "include_demo",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Cakupan data. false (bawaan) = fakta operasional saja (demo_session_id IS NULL). true = satu sesi demo, WAJIB disertai demo_session_id (tanpa itu 422).",
+              "default": false,
+              "title": "Include Demo"
+            },
+            "description": "Cakupan data. false (bawaan) = fakta operasional saja (demo_session_id IS NULL). true = satu sesi demo, WAJIB disertai demo_session_id (tanpa itu 422)."
+          },
+          {
+            "name": "demo_session_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Sesi demo eksplisit yang diminta. Tidak ada jalur 'sesi terbaru'.",
+              "title": "Demo Session Id"
+            },
+            "description": "Sesi demo eksplisit yang diminta. Tidak ada jalur 'sesi terbaru'."
           }
         ],
         "responses": {

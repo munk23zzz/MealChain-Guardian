@@ -345,7 +345,13 @@ class ReadOnlyBackend(Protocol):
     def suppliers(self) -> list[dict[str, Any]]: ...
     def locations(self) -> list[dict[str, Any]]: ...
     def balance_map(self, commodity: str) -> dict[str, Any]: ...
-    def kpi(self, days: int = ...) -> dict[str, Any]: ...
+    def kpi(
+        self,
+        days: int = ...,
+        *,
+        scope: str = ...,
+        demo_session_id: str | None = ...,
+    ) -> dict[str, Any]: ...
     def pending_decisions(self) -> list[dict[str, Any]]: ...
     def purchase_orders(self) -> list[dict[str, Any]]: ...
     def supply_point(self, location_id: str, commodity: str) -> dict[str, Any]: ...
@@ -604,7 +610,20 @@ def render_skill(
 
     note = _data_source_note(client)
     if skill == SKILL_KPI:
-        return report.kpi_report(client.kpi(), note=note)
+        # Cakupan KPI (Fase 8): bawaan = fakta operasional. Pemanggil yang minta
+        # cakupan simulasi WAJIB menyebut sesinya; tanpa itu jawabannya menolak
+        # dengan kalimat, bukan menebak sesi terakhir (angka milik sesi lain
+        # adalah cacat yang justru ditutup Fase 8).
+        opsi = payload if isinstance(payload, Mapping) else {}
+        scope = str(opsi.get("scope") or "operational").strip().lower()
+        sesi = opsi.get("demo_session_id") or opsi.get("session_id")
+        try:
+            envelope = client.kpi(
+                scope=scope, demo_session_id=str(sesi) if sesi else None
+            )
+        except ValueError as exc:
+            return report.kpi_scope_problem(str(exc), note=note)
+        return report.kpi_report(envelope, note=note)
     if skill == SKILL_QUEUE:
         # `pending_decisions()` hanya melengkapi DETAIL_LIMIT baris teratas; jumlah terbuka
         # yang sebenarnya dihitung dari daftar keputusan mentah supaya judul tidak berbohong.

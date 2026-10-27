@@ -294,17 +294,39 @@ class MealchainClient:
         payload = self._get("/balance/map", params={"commodity": commodity})
         return payload if isinstance(payload, dict) else {}
 
-    def kpi(self, days: int = KPI_DEFAULT_DAYS) -> dict[str, Any]:
-        """Envelope KPI untuk jendela `days` hari terakhir.
+    def kpi(
+        self,
+        days: int = KPI_DEFAULT_DAYS,
+        *,
+        scope: str = "operational",
+        demo_session_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Envelope KPI untuk jendela `days` hari terakhir, dalam SATU cakupan data.
 
         Jendela ditolak di sini kalau tidak masuk akal: `/kpi` mensyaratkan
         `start <= end` dan akan menjawab 422 tanpa penjelasan yang berguna bagi pengguna Joule.
+
+        Cakupan (Fase 8): `operational` = fakta kerja saja (backend menyaring
+        `demo_session_id IS NULL`); `demo` = satu sesi demo yang HARUS disebut
+        eksplisit. Tidak ada jalur "sesi terbaru" — backend menolak
+        `include_demo=true` tanpa `demo_session_id`, dan menebak id di sini akan
+        menyaring data sesi lain lalu menampilkan angka yang salah pemiliknya.
         """
         if days <= 0:
             raise ValueError("jendela KPI harus lebih dari 0 hari")
+        cakupan = str(scope or "").strip().lower()
+        if cakupan not in ("operational", "demo"):
+            raise ValueError("scope KPI harus 'operational' atau 'demo'")
         end = _dt.datetime.now(_dt.timezone.utc)
         start = end - _dt.timedelta(days=days)
-        payload = self._get("/kpi", params={"start": _rfc3339(start), "end": _rfc3339(end)})
+        params: dict[str, Any] = {"start": _rfc3339(start), "end": _rfc3339(end)}
+        if cakupan == "demo":
+            sesi = str(demo_session_id or "").strip()
+            if not sesi:
+                raise ValueError("cakupan demo butuh demo_session_id eksplisit")
+            params["include_demo"] = "true"
+            params["demo_session_id"] = sesi
+        payload = self._get("/kpi", params=params)
         return payload if isinstance(payload, dict) else {}
 
     def decisions(self) -> list[dict[str, Any]]:

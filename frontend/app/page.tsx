@@ -29,6 +29,7 @@ import { useDecisionDetail } from "../lib/hooks/useDecisionDetail";
 import { readDecisionLink, withDecisionLink } from "../lib/decision-link";
 import { useExclusions } from "../lib/hooks/useExclusions";
 import { useKpi } from "../lib/hooks/useKpi";
+import { useDemoSessionId } from "../lib/hooks/useDemoSessionId";
 import { useWasteSummary } from "../lib/hooks/useWasteSummary";
 import { useSurplusPlan } from "../lib/hooks/useSurplusPlan";
 import { usePurchaseOrders } from "../lib/hooks/usePurchaseOrders";
@@ -46,6 +47,7 @@ import {
 // (bukan angka karangan): tahun pemilih = tahun yang dicakup rentang ini.
 import { RANGE_MAX, RANGE_MIN } from "../lib/demo-data";
 import type { KpiWindowKey } from "../lib/kpi";
+import type { KpiScope } from "../lib/kpi-provenance";
 import { useMe } from "../lib/hooks/useMe";
 import { useQualitySample } from "../lib/hooks/useQualitySample";
 import { useSuppliers } from "../lib/hooks/useSuppliers";
@@ -611,7 +613,20 @@ export default function Home() {
   // hook butuh nilainya untuk memuat rentang yang benar, dan komponen butuh
   // nilai yang sama untuk menandai pilihan aktif. Default: hari kalender berjalan.
   const [kpiWindow, setKpiWindow] = useState<KpiWindowKey>("today");
-  const kpiQuery = useKpi(token, identityScope, tab, kpiWindow);
+  // Cakupan data KPI (Fase 8): fakta kerja (bawaan) atau SATU sesi demo yang
+  // eksplisit. Sesi demo aktif dicari lewat hook kecil; tanpa sesi, pilihan
+  // "Simulasi" dimatikan dan tidak ada permintaan yang ditembak (server akan
+  // menolak `include_demo=true` tanpa `demo_session_id`).
+  const [kpiScope, setKpiScope] = useState<KpiScope>("operational");
+  const demoSession = useDemoSessionId(token, tab === "kpi-kualitas" || tab === "today");
+  const kpiQuery = useKpi(
+    token,
+    identityScope,
+    tab,
+    kpiWindow,
+    kpiScope,
+    demoSession.sessionId
+  );
   // Limbah + mitra pengolahan (18 Okt 2026): panel Surplus & Limbah dulu menulis
   // "—" karena tidak ada sumbernya. Sekarang dari server, dimuat hanya di tab itu.
   const wasteQuery = useWasteSummary(token, identityScope, tab);
@@ -1978,6 +1993,13 @@ export default function Home() {
             onRetryKpi={() => void kpiQuery.refetch()}
             windowKey={kpiWindow}
             onWindowChange={setKpiWindow}
+            scope={kpiScope}
+            onScopeChange={setKpiScope}
+            scopeDisabledReason={
+              demoSession.active
+                ? null
+                : "Belum ada sesi demo aktif, jadi cakupan simulasi tidak tersedia."
+            }
             runs={qualityRuns}
             evaluatedCount={evaluatedCount}
             totalDecisions={decisions.length}

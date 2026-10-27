@@ -6953,6 +6953,92 @@ a:focus-visible {
   color: var(--ink-muted);
 }
 
+/* Provenance KPI (Fase 8, 27 Okt 2026): setiap kartu menyebut tingkat bukti,
+   sumber tabel.kolom, periode, metode, dan baseline. Detailnya dilipat supaya
+   grid tidak berubah menjadi dinding teks; ringkasan bukti tetap terlihat
+   karena itulah yang membedakan angka lapangan dari estimasi. */
+.kpi-group {
+  margin: 0 0 8px;
+}
+
+.kpi-group-title {
+  margin: 8px 0 4px;
+  font-size: var(--fs-3);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.kpi-group-note {
+  margin: 0 0 10px;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  max-width: 72ch;
+}
+
+.kpi-scope-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+}
+
+.kpi-scope-hint {
+  flex: 1 1 320px;
+  min-width: 240px;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.kpi-prov {
+  margin: 6px 0 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.kpi-prov-evidence {
+  margin: 0;
+}
+
+.kpi-prov-detail summary {
+  cursor: pointer;
+  color: var(--primary);
+}
+
+.kpi-prov-detail dl {
+  margin: 6px 0 0;
+}
+
+.kpi-prov-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 28%) 1fr;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.kpi-prov-row dt {
+  color: var(--ink-muted);
+}
+
+.kpi-prov-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.kpi-estimate,
+.kpi-fact {
+  margin: 6px 0 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.kpi-estimate {
+  /* Estimasi harus terbaca sebagai estimasi, bukan hasil lapangan: garis
+     putus-putus + label teks (bukan hanya warna). */
+  border-left: 2px dashed var(--line, #e2e8f0);
+  padding-left: 8px;
+}
+
 /* Trend: delta badge kecil dengan ikon panah SVG, bukan emoji */
 .kpi-trend {
   display: inline-flex;

@@ -23,7 +23,7 @@ from app.api.auth import get_current_user
 from app.core.kpi_period import LABEL_PERIODE, PERIODE_KPI, ZONA_KPI, resolve_periode
 from app.db import get_db
 from app.models import User
-from app.services.kpi_service import compute_kpis
+from app.services.kpi_service import METHOD_VERSION, compute_kpis
 
 router = APIRouter(prefix="", tags=["kpi"])
 
@@ -43,6 +43,18 @@ async def get_kpi(
     start: datetime | None = Query(None),
     end: datetime | None = Query(None),
     location_id: uuid.UUID | None = Query(None),
+    include_demo: bool = Query(
+        False,
+        description=(
+            "Cakupan data. false (bawaan) = fakta operasional saja "
+            "(demo_session_id IS NULL). true = satu sesi demo, WAJIB disertai "
+            "demo_session_id (tanpa itu 422)."
+        ),
+    ),
+    demo_session_id: uuid.UUID | None = Query(
+        None,
+        description="Sesi demo eksplisit yang diminta. Tidak ada jalur 'sesi terbaru'.",
+    ),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
@@ -51,6 +63,12 @@ async def get_kpi(
     SPPG hanya scope lokasinya (403 foreign); bgn_monitor global atau
     lokasi mana pun (read-only). Naive timestamp ditolak 422 (kontrak
     RFC3339 dengan offset eksplisit).
+
+    Cakupan (Fase 8): angka operasional dan angka sesi demo TIDAK boleh
+    tercampur. `include_demo=false` menyaring `demo_session_id IS NULL`;
+    `include_demo=true` menyaring SATU sesi yang disebut pemanggil. Kombinasi
+    yang tidak masuk akal (demo tanpa sesi, atau sesi tanpa include_demo)
+    ditolak 422 — menebak berarti menyajikan angka milik sesi lain.
     """
     kunci: str | None = None
     label: str | None = None
@@ -109,7 +127,14 @@ async def get_kpi(
             )
         location_id = user.location_id
 
-    metrics = await compute_kpis(db, start, end, location_id)
+    metrics = await compute_kpis(
+        db,
+        start,
+        end,
+        location_id,
+        include_demo=include_demo,
+        demo_session_id=demo_session_id,
+    )
     return {
         "period": {
             "key": kunci,
@@ -124,5 +149,11 @@ async def get_kpi(
         },
         "computed_at": datetime.now(timezone.utc).isoformat(),
         "data_source": "live_aggregate",
+        # Cakupan yang BENAR-BENAR dipakai jawaban ini (bukan yang diminta UI):
+        # tanpa ini, layar tidak bisa membedakan angka operasional dari angka
+        # sesi demo hanya dengan melihat nilainya.
+        "data_mode": "demo" if include_demo else "operational",
+        "demo_session_id": str(demo_session_id) if include_demo and demo_session_id else None,
+        "method_version": METHOD_VERSION,
         "metrics": metrics,
     }

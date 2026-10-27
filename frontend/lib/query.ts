@@ -62,8 +62,10 @@ export const queryKeys = {
   me: (scope: string) => ["me", scope] as const,
   balanceMap: (scope: string, commodity: string) =>
     ["balance-map", scope, commodity] as const,
-  kpiLive: (scope: string, windowKey: string = "today") =>
-    ["kpi-live", scope, windowKey] as const,
+  kpiLive: (scope: string, windowKey: string = "today", mode: string = "") =>
+    ["kpi-live", scope, windowKey, mode] as const,
+  // Sesi demo aktif: dipakai KPI untuk memilih cakupan simulasi (Fase 8).
+  demoSession: () => ["demo-session"] as const,
   // Limbah + mitra pengolahan (18 Okt 2026): satu angka per panel Surplus &
   // Limbah. Kunci memuat scope karena SPPG hanya melihat lokasinya.
   wasteSummary: (scope: string) => ["waste-summary", scope] as const,

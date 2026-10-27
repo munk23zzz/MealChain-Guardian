@@ -2,33 +2,47 @@
 
 Ruling O-KPI (plan addendum §23): state available/no_data/unavailable +
 reason eksplisit; TANPA fake 0/proxy. Definisi per worksheet §10:
-- Meal Continuity Rate: porsi terkirim ÷ porsi rencana, KEDUA sisi memakai
-  sumbu `plan_date` (tanggal rencana WIB, batas inklusif) dari facts
+- Meal Continuity Rate: porsi terkirim TERCATAT ÷ porsi rencana, KEDUA sisi
+  memakai sumbu `plan_date` (tanggal rencana WIB, batas inklusif) dari facts
   `menu_plans` ⋈ `delivery_events`; `no_data` hanya bila tak ada rencana.
+  Sejak Fase 8 (27 Okt 2026) metrik ini TIDAK lagi memakai porsi hasil konversi
+  penerimaan bahan: kg yang diterima bukan porsi tersaji. Proyeksi porsi dari
+  bahan diterima dilaporkan terpisah di blok `estimate` (evidence_kind
+  `simulated_estimate`) dan tidak pernah masuk nilai metrik.
 - Avoidable Food Loss: kg buangan ÷ (buangan + pasokan tercatat) dari
-  `disposal_events` ⋈ `supply_records`; `no_data` bila penyebut nol.
+  `disposal_events` ⋈ `supply_records`; `no_data` bila penyebut nol. Angka ini
+  adalah DISPOSAL TERCATAT, bukan estimasi dari skor freshness. Estimasi susut
+  (freshness × kg diterima) hanya muncul di blok `estimate`.
 - Regional Imbalance Resolution Rate: root lineage (supersedes chain)
   dedupe; denominator DETECT root cases; numerator root dengan status
   executed di window.
 - Safe Delivered Cost: mean SDC decision yang PO-nya committed pada
   window (anchor eksekusi = PO.created_at, bukan decision.created_at).
+  Rata-rata harga invoice PO dilaporkan TERPISAH di `facts` — dua basis
+  berbeda (SDC analitis vs harga komersial) tidak boleh dibaca sebagai satu
+  angka (Fase 8).
 - Procurement Price Deviation: magnitudo absolut mean, pairing quote →
   referensi PIHPS terakhir pada lokasi+komoditas sama sebelum quote
   (O-NUM: absolut di aggregate, tanpa mengubah signed contract core).
 - Decision Time: mean (first DETECT → last ACT) per decision; ACT hanya
-  dihitung bila committed (PO ada); coverage = sample/eligible. Keputusan
-  `demo_case` IKUT dihitung sejak 26 Okt 2026 (sebelumnya dikeluarkan diam-diam
-  sehingga metrik mati saat demo).
+  dihitung bila committed (PO ada); coverage = sample/eligible.
 - Evidence Completeness: % decision dengan ≥2 distinct evidence type
   is_consistent SEBELUM approval-complete cutoff; bukti sesudah cutoff
-  tidak dihitung; dua salinan tipe sama bukan dua sumber. Penyebutnya =
-  keputusan yang PUNYA cutoff approval (16 Okt 2026): keputusan yang belum
-  disetujui siapa pun tidak bisa dinilai lengkap/tidak, jadi ia keluar dari
-  penyebut dan bagiannya dilaporkan `coverage`; tanpa satu pun approval
-  metriknya `no_data`, bukan 0%.
+  tidak dihitung; dua salinan tipe sama bukan dua sumber.
 
 Semua query period `[start, end)`. Omit location untuk SPPG difilter di
 API layer (service menerima location_id=None = global).
+
+Provenance (Fase 8, 27 Okt 2026): setiap metrik membawa `provenance` dengan
+kunci `source` (tabel.kolom yang benar-benar dibaca, bukan prosa), `period`
+(rentang + BASIS waktu), `sample_count`, `coverage`, `definition`, `formula`,
+`method_version`, `evidence_kind`, dan `baseline`. Baseline yang tidak ada
+ditulis `kind="no_baseline"` + `reason`; ia TIDAK diganti nol.
+
+Pemisahan demo vs operasional: `include_demo=False` (bawaan) menyaring SETIAP
+tabel fakta dengan `demo_session_id IS NULL`; `include_demo=True` menyaring ke
+SATU sesi yang disebut eksplisit. Tidak ada jalur "sesi terbaru" — sesi lain
+bisa dibuka bersamaan (lihat `services/demo_session.py`).
 """
 
 import uuid
@@ -50,10 +64,63 @@ METRIC_NAMES = (
     "Evidence Completeness",
 )
 
+#: Versi metode agregasi. Naikkan bila rumus/definisi metrik berubah, supaya
+#: angka lama di dokumen/laporan bisa dibedakan dari angka baru.
+METHOD_VERSION = "kpi-2026.10.27"
+
+#: Kelas bukti yang boleh muncul pada sebuah nilai.
+EVIDENCE_KINDS = ("recorded_fact", "derived", "simulated_estimate")
+
+
+def _prov(
+    *,
+    source: str,
+    period: dict,
+    definition: str,
+    formula: str,
+    evidence_kind: str,
+    baseline_reason: str | None = None,
+    baseline_value=None,
+    sample_count: int = 0,
+    coverage=None,
+) -> dict:
+    """Provenance satu metrik — sumber, periode, metode, dan tingkat bukti.
+
+    `baseline` sengaja TIDAK memberi nilai bawaan 0: baseline yang tidak ada
+    ditulis `no_baseline` + alasannya. Mengganti baseline hilang dengan nol
+    membuat pembaca mengira ada pembanding yang terukur.
+    """
+    assert evidence_kind in EVIDENCE_KINDS, evidence_kind
+    if baseline_value is None:
+        baseline = {
+            "kind": "no_baseline",
+            "value": None,
+            "reason": baseline_reason
+            or "belum ada baseline/target yang disepakati untuk metrik ini",
+        }
+    else:
+        baseline = {
+            "kind": "value",
+            "value": str(quantize2(baseline_value)),
+            "reason": baseline_reason,
+        }
+    return {
+        "source": source,
+        "period": period,
+        "sample_count": sample_count,
+        "coverage": None if coverage is None else str(quantize2(coverage)),
+        "definition": definition,
+        "formula": formula,
+        "method_version": METHOD_VERSION,
+        "evidence_kind": evidence_kind,
+        "baseline": baseline,
+    }
+
 
 def _metric(name, unit, state, value=None, reason=None, sample_count=0,
-            coverage=None, previous_value=None, trend=None):
-    return {
+            coverage=None, previous_value=None, trend=None, *, provenance=None,
+            estimate=None, facts=None):
+    m = {
         "name": name,
         "unit": unit,
         "state": state,
@@ -66,13 +133,75 @@ def _metric(name, unit, state, value=None, reason=None, sample_count=0,
         ),
         "trend": trend,
     }
+    if provenance is not None:
+        m["provenance"] = provenance
+    if estimate is not None:
+        m["estimate"] = estimate
+    if facts is not None:
+        m["facts"] = facts
+    return m
 
 
-def _no_data(name, unit, sample_count=0, reason=None):
+def _no_data(name, unit, sample_count=0, reason=None, **kwargs):
     return _metric(
         name, unit, "no_data", reason=reason or "tidak ada record pada periode ini",
-        sample_count=sample_count,
+        sample_count=sample_count, **kwargs,
     )
+
+
+def _estimasi(*, source: str, definition: str, method: str) -> dict:
+    """Blok `estimate` — angka proyeksi yang TIDAK boleh dibaca sebagai fakta.
+
+    Bentuknya sama untuk semua metrik (`state`/`value`/`reason`) supaya UI tidak
+    perlu tahu metrik mana yang punya proyeksi, dan `evidence_kind` ikut di
+    payload supaya klaim "ini estimasi" bukan hanya komentar kode.
+    """
+    return {
+        "state": "no_data",
+        "value": None,
+        "unit": None,
+        "source": source,
+        "definition": definition,
+        "method": method,
+        "method_version": METHOD_VERSION,
+        "evidence_kind": "simulated_estimate",
+        "coverage": None,
+        "reason": None,
+    }
+
+
+def _isi_estimasi(blok: dict, *, value=None, unit: str | None = None,
+                  reason: str | None = None, coverage=None) -> dict:
+    blok["state"] = "available" if value is not None else "no_data"
+    blok["value"] = None if value is None else str(quantize2(value))
+    blok["unit"] = unit if value is not None else None
+    blok["coverage"] = None if coverage is None else str(quantize2(coverage))
+    blok["reason"] = None if value is not None else (
+        reason or "tidak ada bahan/proyeksi yang bisa dihitung pada periode ini"
+    )
+    return blok
+
+
+def _periode(start: datetime, end: datetime, basis: str) -> dict:
+    return {
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "basis": basis,
+        "window": "[start, end)",
+    }
+
+
+def _scope(alias: str, include_demo: bool) -> str:
+    """Predikat pemisah fakta demo vs operasional untuk satu alias tabel.
+
+    `include_demo=False` → `alias.demo_session_id IS NULL` (fakta operasional).
+    `include_demo=True`  → `alias.demo_session_id = :demo_session_id` (SATU sesi
+    eksplisit). Tidak ada cabang "sesi terbaru": itu akan mencampur data sesi
+    lain yang kebetulan dibuka belakangan.
+    """
+    if include_demo:
+        return f" AND {alias}.demo_session_id = :demo_session_id "
+    return f" AND {alias}.demo_session_id IS NULL "
 
 
 async def _rows(db: AsyncSession, stmt: str, params: dict | None = None):
@@ -124,111 +253,262 @@ def _plan_date_range(alias: str = "") -> str:
     )
 
 
+async def _proyeksi_porsi_penerimaan(
+    db: AsyncSession,
+    start: datetime,
+    end: datetime,
+    location_id: uuid.UUID | None,
+    include_demo: bool,
+    demo_session_id: uuid.UUID | None,
+) -> dict:
+    """Proyeksi porsi dari BAHAN YANG DITERIMA (bukan porsi tersaji).
+
+    Kg yang diterima dikonversi dengan gram/porsi komoditas
+    (`settings.menu_grams_*`). Hasilnya hanya boleh muncul sebagai `estimate`;
+    ia tidak pernah menambah nilai Meal Continuity — itu persis klaim yang
+    dilarang gate Fase 8.
+    """
+    rows = await _rows(
+        db,
+        "SELECT c.name, SUM(b.quantity_kg) "
+        "FROM batch_receipts r "
+        "JOIN batches b ON b.id = r.batch_id "
+        "JOIN commodities c ON c.id = b.commodity_id "
+        "WHERE r.status = 'disetujui' "
+        "AND r.reviewed_at >= :start AND r.reviewed_at < :end "
+        + ("AND b.location_id = :loc " if location_id else "")
+        + _scope("r", include_demo)
+        + _scope("b", include_demo)
+        + "GROUP BY c.name",
+        {"start": start, "end": end, "demo_session_id": demo_session_id,
+         **({"loc": location_id} if location_id else {})},
+    )
+    from app.services.settlement import _gram_per_porsi
+
+    porsi = Decimal(0)
+    tanpa_gram_kg = Decimal(0)
+    total_kg = Decimal(0)
+    for nama, kg in rows:
+        kg = Decimal(str(kg or 0))
+        total_kg += kg
+        gram = _gram_per_porsi(nama)
+        if not gram:
+            tanpa_gram_kg += kg
+            continue
+        porsi += kg * Decimal(1000) / Decimal(str(gram))
+    return {
+        "porsi": porsi,
+        "total_kg": total_kg,
+        "tanpa_gram_kg": tanpa_gram_kg,
+    }
+
+
+async def _estimasi_susut(
+    db: AsyncSession,
+    start: datetime,
+    end: datetime,
+    location_id: uuid.UUID | None,
+    include_demo: bool,
+    demo_session_id: uuid.UUID | None,
+) -> dict:
+    """Estimasi susut dari skor freshness bahan yang diterima (PROYEKSI).
+
+    `estimated_shrinkage_kg = Σ kg_diterima × (1 − freshness_score)`. Ini
+    estimasi model, BUKAN disposal aktual: tidak ada satu baris pun yang ditulis
+    ke `disposal_events` dari jalur ini.
+    """
+    rows = await _rows(
+        db,
+        "SELECT "
+        "SUM(b.quantity_kg) FILTER (WHERE b.freshness_score IS NOT NULL), "
+        "SUM(b.quantity_kg * (1 - b.freshness_score)) "
+        "  FILTER (WHERE b.freshness_score IS NOT NULL), "
+        "SUM(b.quantity_kg), "
+        "COUNT(*) "
+        "FROM batch_receipts r JOIN batches b ON b.id = r.batch_id "
+        "WHERE r.status = 'disetujui' "
+        "AND r.reviewed_at >= :start AND r.reviewed_at < :end "
+        + ("AND b.location_id = :loc " if location_id else "")
+        + _scope("r", include_demo)
+        + _scope("b", include_demo),
+        {"start": start, "end": end, "demo_session_id": demo_session_id,
+         **({"loc": location_id} if location_id else {})},
+    )
+    kg_terukur = (
+        Decimal(str(rows[0][0])) if rows and rows[0][0] is not None else Decimal(0)
+    )
+    susut = (
+        Decimal(str(rows[0][1])) if rows and rows[0][1] is not None else Decimal(0)
+    )
+    kg_total = (
+        Decimal(str(rows[0][2])) if rows and rows[0][2] is not None else Decimal(0)
+    )
+    n = int(rows[0][3] or 0) if rows else 0
+    coverage = (kg_terukur / kg_total) if kg_total > 0 else None
+    return {"susut_kg": susut, "kg_terukur": kg_terukur, "kg_total": kg_total,
+            "sample_count": n, "coverage": coverage}
+
+
 async def compute_kpis(
     db: AsyncSession,
     start: datetime,
     end: datetime,
     location_id: uuid.UUID | None,
+    *,
+    include_demo: bool = False,
+    demo_session_id: uuid.UUID | None = None,
 ) -> dict:
-    """Hitung tujuh KPI pada [start, end). Read-only."""
+    """Hitung tujuh KPI pada [start, end). Read-only.
+
+    `include_demo=False` (bawaan) = fakta operasional saja
+    (`demo_session_id IS NULL`). `include_demo=True` wajib menyebut
+    `demo_session_id` eksplisit.
+    """
+    if include_demo and demo_session_id is None:
+        raise ValueError(
+            "include_demo=True membutuhkan demo_session_id eksplisit"
+        )
+
+    loc_param = {"loc": location_id} if location_id else {}
+    dasar = {**loc_param, "demo_session_id": demo_session_id}
     loc_filter_dec = (
         "AND (d.source_location_id = :loc OR d.target_location_id = :loc)"
         if location_id else ""
     )
-    loc_param = {"loc": location_id} if location_id else {}
 
     metrics: list[dict] = []
 
-    # ---- 1. Meal Continuity Rate (P6, 009: facts menu/fulfilment kini ada)
-    # = SUM(delivered_portions) / SUM(planned_portions) pada window.
-    # Sumbu waktu KEDUA sisi = plan_date (tanggal rencana, WIB) — bukan
-    # delivered_at: kalau pembilang difilter delivered_at sementara penyebut
-    # difilter plan_date, rencana kemarin ikut penyebut padahal kirimannya
-    # sudah keluar jendela 24 jam → rasio mentok ~50% secara struktural
-    # (audit 2026-10-23, KPI-01). delivered_at tetap disimpan sebagai fakta.
-    # Batas atas INKLUSIF (<=): `end` = sekarang, jadi `< end::date` membuang
-    # rencana HARI INI dan membuat kartu 24 jam selalu 0,00%.
-    # delivered_portions > planned → tetap dibatasi planned per plan (over-
-    # delivery bukan continuity >100%, dibatasi 100% per plan-day).
+    # ---- 1. Meal Continuity Rate (porsi terkirim TERCATAT / porsi rencana) ---
+    # Numerator hanya `delivery_events` yang benar-benar tercatat. Konversi kg
+    # penerimaan → porsi DIPINDAHKAN ke blok `estimate` (Fase 8): bahan diterima
+    # bukan porsi tersaji, dan mencampurnya membuat kartu mengklaim makanan
+    # tersaji yang tidak pernah dicatat.
+    de_inner = (
+        "SELECT menu_plan_id, SUM(delivered_portions) AS delivered "
+        "FROM delivery_events WHERE 1=1 "
+        + _scope("delivery_events", include_demo)
+        + "GROUP BY menu_plan_id"
+    )
     mc_rows = await _rows(
         db,
         "SELECT SUM(mp.planned_portions), "
         "SUM(LEAST(COALESCE(de.delivered, 0), mp.planned_portions)) "
-        "FROM menu_plans mp LEFT JOIN ("
-        "SELECT menu_plan_id, SUM(delivered_portions) AS delivered "
-        "FROM delivery_events GROUP BY menu_plan_id"
-        ") de ON de.menu_plan_id = mp.id "
-        # plan_date (bukan created_at): window continuity = tanggal rencana,
-        # bukan kapan row dibuat (seed idempoten bisa dibuat ulang kapan pun).
-        # Batas `tanggal_kirim`: rencana yang jendela kirimnya belum lewat tidak
-        # dinilai — KECUALI sudah ada kiriman tercatat untuk rencana itu (data
-        # mengalahkan jam: kiriman yang ada berarti rencananya memang berjalan).
+        f"FROM menu_plans mp LEFT JOIN ({de_inner}) de ON de.menu_plan_id = mp.id "
         f"WHERE {_plan_date_range()} "
         "AND (mp.plan_date <= :tanggal_kirim OR de.delivered IS NOT NULL) "
-        + ("AND mp.location_id = :loc" if location_id else ""),
+        + _scope("mp", include_demo)
+        + ("AND mp.location_id = :loc " if location_id else ""),
         {
             "start": start,
             "end": end,
             "tanggal_kirim": tanggal_kiriman_terakhir(end),
-            **loc_param,
+            **dasar,
         },
     )
     planned_total = mc_rows[0][0] if mc_rows else None
     delivered_total = mc_rows[0][1] if mc_rows else None
+
+    proyeksi = await _proyeksi_porsi_penerimaan(
+        db, start, end, location_id, include_demo, demo_session_id
+    )
+    estimasi_mc = _estimasi(
+        source="batch_receipts.status/reviewed_at, batches.quantity_kg, "
+               "commodities.name, config menu_grams_*",
+        definition=(
+            "Proyeksi porsi yang bisa disajikan dari BAHAN YANG DITERIMA "
+            "(kg ÷ gram per porsi). BUKAN porsi tersaji dan tidak menambah "
+            "nilai Meal Continuity."
+        ),
+        method="Σ (kg_diterima × 1000 ÷ gram_per_porsi) per komoditas",
+    )
+    if proyeksi["porsi"] > 0:
+        _isi_estimasi(
+            estimasi_mc,
+            value=proyeksi["porsi"],
+            unit="porsi",
+            coverage=(
+                (proyeksi["total_kg"] - proyeksi["tanpa_gram_kg"])
+                / proyeksi["total_kg"]
+                if proyeksi["total_kg"] > 0 else None
+            ),
+        )
+        if proyeksi["tanpa_gram_kg"] > 0:
+            estimasi_mc["definition"] += (
+                f". {quantize2(proyeksi['tanpa_gram_kg'])} kg komoditas tanpa "
+                "gram/porsi tidak diproyeksikan"
+            )
+    else:
+        _isi_estimasi(
+            estimasi_mc,
+            reason="tidak ada penerimaan disetujui pada periode ini — "
+                   "proyeksi porsi tidak bisa dihitung",
+        )
+
+    prov_mc = dict(
+        source="menu_plans.plan_date, menu_plans.planned_portions, "
+               "delivery_events.menu_plan_id, delivery_events.delivered_portions",
+        period=_periode(start, end, "plan_date (tanggal rencana, Asia/Jakarta)"),
+        definition=(
+            "Porsi terkirim TERCATAT ÷ porsi rencana pada tanggal rencana. "
+            "Ini bukan porsi tersaji: penerimaan bahan tidak menulis porsi. "
+            "Rencana yang jendela kirimnya belum lewat tidak dinilai."
+        ),
+        formula="SUM(LEAST(delivered_portions, planned_portions)) ÷ "
+                "SUM(planned_portions) × 100",
+        evidence_kind="derived",
+        baseline_reason=(
+            "tidak ada target kontinuitas resmi di dataset; pembanding antar-"
+            "periode belum disepakati pemilik"
+        ),
+    )
     if planned_total and int(planned_total) > 0:
         mc_rate = Decimal(delivered_total) * 100 / Decimal(planned_total)
         plan_days = await _rows(
             db,
-            "SELECT COUNT(*) FROM menu_plans mp LEFT JOIN ("
-            "SELECT menu_plan_id, SUM(delivered_portions) AS delivered "
-            "FROM delivery_events GROUP BY menu_plan_id"
-            ") de ON de.menu_plan_id = mp.id "
+            "SELECT COUNT(*) FROM menu_plans mp LEFT JOIN "
+            f"({de_inner}) de ON de.menu_plan_id = mp.id "
             f"WHERE {_plan_date_range('mp.')} "
             "AND (mp.plan_date <= :tanggal_kirim OR de.delivered IS NOT NULL) "
-            + (" AND mp.location_id = :loc" if location_id else ""),
-            {
-                "start": start,
-                "end": end,
-                "tanggal_kirim": tanggal_kiriman_terakhir(end),
-                **loc_param,
-            },
+            + _scope("mp", include_demo)
+            + ("AND mp.location_id = :loc " if location_id else ""),
+            {"start": start, "end": end,
+             "tanggal_kirim": tanggal_kiriman_terakhir(end), **dasar},
         )
+        sampel = int(plan_days[0][0]) if plan_days else 0
         mc_metric = _metric(
             "Meal Continuity Rate", "percent", "available",
             value=mc_rate,
-            sample_count=int(plan_days[0][0]) if plan_days else 0,
+            sample_count=sampel,
             coverage=Decimal(1),
+            provenance=_prov(**prov_mc, sample_count=sampel, coverage=Decimal(1)),
+            estimate=estimasi_mc,
+            facts={
+                "planned_portions": int(planned_total),
+                "delivered_portions": int(delivered_total or 0),
+            },
         )
     else:
-        # KPI-02 (audit 24 Okt 2026): dulu semua keadaan jatuh ke satu kalimat,
-        # sehingga "belum ada data" tidak bisa dibedakan dari "ada data, tetapi
-        # penyebutnya nol". Dua sebab itu butuh tindakan berbeda: yang pertama
-        # menunggu data masuk, yang kedua menandakan rencana tanpa porsi.
+        # KPI-02 (audit 24 Okt 2026): "belum ada data" harus dibedakan dari
+        # "ada data tetapi penyebutnya nol" — dua sebab, dua tindakan.
         cek_rencana = await _rows(
             db,
             "SELECT COUNT(*), COALESCE(SUM(mp.planned_portions), 0) "
-            "FROM menu_plans mp LEFT JOIN ("
-            "SELECT menu_plan_id, SUM(delivered_portions) AS delivered "
-            "FROM delivery_events GROUP BY menu_plan_id"
-            ") de ON de.menu_plan_id = mp.id "
+            "FROM menu_plans mp LEFT JOIN "
+            f"({de_inner}) de ON de.menu_plan_id = mp.id "
             f"WHERE {_plan_date_range('mp.')} "
             "AND (mp.plan_date <= :tanggal_kirim OR de.delivered IS NOT NULL) "
-            + ("AND mp.location_id = :loc" if location_id else ""),
-            {
-                "start": start,
-                "end": end,
-                "tanggal_kirim": tanggal_kiriman_terakhir(end),
-                **loc_param,
-            },
+            + _scope("mp", include_demo)
+            + ("AND mp.location_id = :loc " if location_id else ""),
+            {"start": start, "end": end,
+             "tanggal_kirim": tanggal_kiriman_terakhir(end), **dasar},
         )
         jml_rencana = int(cek_rencana[0][0] or 0) if cek_rencana else 0
-        # Ada rencana di jendela tetapi belum masuk jendela kirim? Itu keadaan
-        # "belum terjadi", bukan "tidak ada data" dan bukan 0% (26 Okt 2026).
         cek_semua = await _rows(
             db,
             f"SELECT COUNT(*) FROM menu_plans WHERE {_plan_date_range()} "
-            + ("AND location_id = :loc" if location_id else ""),
-            {"start": start, "end": end, **loc_param},
+            + _scope("menu_plans", include_demo)
+            + ("AND location_id = :loc " if location_id else ""),
+            {"start": start, "end": end, **dasar},
         )
         jml_semua = int(cek_semua[0][0] or 0) if cek_semua else 0
         if jml_rencana == 0 and jml_semua > 0:
@@ -240,6 +520,8 @@ async def compute_kpis(
                     "tiba (kiriman hari ini baru terjadi setelah 21.00 WIB) — "
                     "belum ada yang bisa dinilai"
                 ),
+                provenance=_prov(**prov_mc, sample_count=jml_semua),
+                estimate=estimasi_mc,
             )
         elif jml_rencana > 0:
             mc_metric = _no_data(
@@ -249,41 +531,94 @@ async def compute_kpis(
                     f"{jml_rencana} menu plan ada, tetapi total porsi rencana 0 — "
                     "penyebut nol, bukan data hilang"
                 ),
+                provenance=_prov(**prov_mc, sample_count=jml_rencana),
+                estimate=estimasi_mc,
             )
         else:
             mc_metric = _no_data(
                 "Meal Continuity Rate", "percent",
                 reason=(
-                    "tidak ada menu plan pada periode ini — "
-                    "unavailable bila tabel facts belum dimigrasi (009)"
+                    "tidak ada menu plan fakta operasional pada periode ini"
                 ),
+                provenance=_prov(**prov_mc),
+                estimate=estimasi_mc,
             )
     metrics.append(mc_metric)
 
-    # ---- 2. Avoidable Food Loss (P6, 009: disposal event kini ada)
-    # = SUM(disposal kg) / (SUM disposal + SUM supply batch tercatat)
-    # * 100 pada window — loss atas total input makanan nyata.
+    # ---- 2. Avoidable Food Loss (DISPOSAL TERCATAT / input makanan) ---------
+    # `value` HANYA dari `disposal_events` yang benar-benar dicatat. Skor
+    # freshness tidak pernah membuat disposal aktual — ia hanya memberi
+    # `estimate` susut di bawah.
     fl_rows = await _rows(
         db,
         "SELECT (SELECT COALESCE(SUM(quantity_kg),0) FROM disposal_events "
         "WHERE disposed_at >= :start AND disposed_at < :end"
-        + (" AND location_id = :loc" if location_id else "") +
-        ") AS disposed_kg, "
+        + _scope("disposal_events", include_demo)
+        + ("AND location_id = :loc " if location_id else "")
+        + ") AS disposed_kg, "
         "(SELECT COALESCE(SUM(quantity_kg),0) FROM supply_records "
         "WHERE recorded_at >= :start AND recorded_at < :end"
-        + (" AND location_id = :loc" if location_id else "") +
-        ") AS supply_kg, "
-        # sample_count = jumlah event disposal yang benar-benar dipakai di window
-        # ini (dulu di-hardcode 2 sehingga angka sampel tidak mencerminkan data).
+        + _scope("supply_records", include_demo)
+        + ("AND location_id = :loc " if location_id else "")
+        + ") AS supply_kg, "
         "(SELECT COUNT(*) FROM disposal_events "
         "WHERE disposed_at >= :start AND disposed_at < :end"
-        + (" AND location_id = :loc" if location_id else "") +
-        ") AS disposal_events",
-        {"start": start, "end": end, **loc_param},
+        + _scope("disposal_events", include_demo)
+        + ("AND location_id = :loc " if location_id else "")
+        + ") AS disposal_events",
+        {"start": start, "end": end, **dasar},
     )
     disposed_kg = Decimal(str(fl_rows[0][0] or 0)) if fl_rows else Decimal(0)
     supply_kg = Decimal(str(fl_rows[0][1] or 0)) if fl_rows else Decimal(0)
     disposal_count = int(fl_rows[0][2] or 0) if fl_rows else 0
+
+    susut = await _estimasi_susut(
+        db, start, end, location_id, include_demo, demo_session_id
+    )
+    estimasi_fl = _estimasi(
+        source="batch_receipts.status/reviewed_at, batches.quantity_kg, "
+               "batches.freshness_score",
+        definition=(
+            "Estimasi susut dari skor freshness bahan yang diterima. Ini "
+            "PROYEKSI model, bukan disposal aktual: tidak ada baris "
+            "`disposal_events` yang ditulis dari jalur ini."
+        ),
+        method="Σ kg_diterima × (1 − freshness_score)",
+    )
+    if susut["susut_kg"] > 0:
+        _isi_estimasi(
+            estimasi_fl, value=susut["susut_kg"], unit="kg",
+            coverage=susut["coverage"],
+        )
+    else:
+        _isi_estimasi(
+            estimasi_fl,
+            reason=(
+                "tidak ada bahan diterima dengan skor freshness pada periode ini"
+                if susut["sample_count"] == 0
+                else "skor freshness bahan yang diterima sempurna (1,00) — "
+                     "estimasi susut 0 kg"
+            ),
+        )
+
+    prov_fl = dict(
+        source="disposal_events.disposed_at, disposal_events.quantity_kg, "
+               "supply_records.recorded_at, supply_records.quantity_kg",
+        period=_periode(start, end, "disposed_at / recorded_at (jam dinding)"),
+        definition=(
+            "Kg pangan yang DIBUANG dan dicatat ÷ (dibuang + pasokan tercatat). "
+            "Angka ini hanya bergerak bila ada bukti pembuangan; estimasi susut "
+            "dari freshness dilaporkan terpisah di `estimate`."
+        ),
+        formula="SUM(disposal_events.quantity_kg) ÷ "
+                "(SUM(disposal_events.quantity_kg) + "
+                "SUM(supply_records.quantity_kg)) × 100",
+        evidence_kind="recorded_fact",
+        baseline_reason=(
+            "tidak ada ambang susut yang disepakati; angka hanya bisa "
+            "dibandingkan antar-periode"
+        ),
+    )
     if disposed_kg > 0:
         denom = disposed_kg + supply_kg
         fl_rate = disposed_kg * 100 / denom if denom > 0 else None
@@ -292,11 +627,19 @@ async def compute_kpis(
             value=fl_rate,
             sample_count=disposal_count,
             coverage=Decimal(1),
+            provenance=_prov(**prov_fl, sample_count=disposal_count,
+                             coverage=Decimal(1)),
+            estimate=estimasi_fl,
+            facts={"disposed_kg": str(quantize2(disposed_kg)),
+                   "supply_kg": str(quantize2(supply_kg))},
         )
     elif disposed_kg == 0 and supply_kg > 0:
         fl_metric = _no_data(
             "Avoidable Food Loss", "percent",
             reason="tidak ada disposal event pada periode ini",
+            provenance=_prov(**prov_fl),
+            estimate=estimasi_fl,
+            facts={"disposed_kg": "0.00", "supply_kg": str(quantize2(supply_kg))},
         )
     else:
         fl_metric = _no_data(
@@ -305,17 +648,19 @@ async def compute_kpis(
                 "tidak ada disposal event maupun pasokan tercatat pada periode "
                 "ini — penyebut nol"
             ),
+            provenance=_prov(**prov_fl),
+            estimate=estimasi_fl,
         )
     metrics.append(fl_metric)
 
-    # ---- 3. Regional Imbalance Resolution Rate (dedupe root lineage) ----
+    # ---- 3. Regional Imbalance Resolution Rate (dedupe root lineage) -------
     det_rows = await _rows(
         db,
         "SELECT d.id, d.supersedes_id, d.status FROM decisions d "
         "JOIN agent_traces t ON t.decision_id = d.id AND t.step_name = 'DETECT' "
         "WHERE t.step_at >= :start AND t.step_at < :end "
-        "AND d.demo_case IS NULL " + loc_filter_dec,
-        {"start": start, "end": end, **loc_param},
+        "AND d.demo_case IS NULL " + _scope("d", include_demo) + loc_filter_dec,
+        {"start": start, "end": end, **dasar},
     )
     imbalance_rate = None
     imbalance_count = 0
@@ -331,6 +676,20 @@ async def compute_kpis(
         imbalance_count = len(roots)
         executed = sum(1 for ok in roots.values() if ok)
         imbalance_rate = Decimal(executed) * 100 / Decimal(imbalance_count)
+    prov_imb = dict(
+        source="decisions.id, decisions.supersedes_id, decisions.status, "
+               "agent_traces.decision_id, agent_traces.step_name, "
+               "agent_traces.step_at",
+        period=_periode(start, end, "agent_traces.step_at (DETECT)"),
+        definition=(
+            "Akar lineage (rantai `supersedes_id`) yang selesai ÷ akar yang "
+            "terdeteksi di jendela. Kasus `demo_case` dikecualikan sebagai "
+            "anti-noise; fakta sesi demo dikecualikan oleh filter sesi."
+        ),
+        formula="COUNT(root dengan status='executed') ÷ COUNT(root) × 100",
+        evidence_kind="derived",
+        baseline_reason="belum ada target penyelesaian yang disepakati",
+    )
     metrics.append(
         _metric(
             "Regional Imbalance Resolution Rate", "percent",
@@ -340,54 +699,99 @@ async def compute_kpis(
             coverage=Decimal(1),
             reason=None if imbalance_rate is not None
             else "tidak ada DETECT pada periode ini",
+            provenance=_prov(**prov_imb, sample_count=imbalance_count,
+                             coverage=Decimal(1)),
         )
     )
 
-    # ---- 4. Safe Delivered Cost: mean SDC executed (PO committed anchor) --
+    # ---- 4. Safe Delivered Cost (analitis) + invoice TERPISAH --------------
     sdc_rows = await _rows(
         db,
         "SELECT d.safe_delivered_cost FROM decisions d "
         "JOIN sap_mock_purchase_orders po ON po.decision_id = d.id "
-        f"WHERE po.created_at >= :start AND po.created_at < :end "
-        f"AND d.safe_delivered_cost IS NOT NULL {loc_filter_dec}",
-        {"start": start, "end": end, **loc_param},
+        "WHERE po.created_at >= :start AND po.created_at < :end "
+        f"AND d.safe_delivered_cost IS NOT NULL {loc_filter_dec} "
+        + _scope("d", include_demo) + _scope("po", include_demo),
+        {"start": start, "end": end, **dasar},
+    )
+    invoice_rows = await _rows(
+        db,
+        "SELECT po.price FROM sap_mock_purchase_orders po "
+        "WHERE po.created_at >= :start AND po.created_at < :end "
+        + _scope("po", include_demo),
+        {"start": start, "end": end, **dasar},
     )
     sdc_values = [Decimal(str(r[0])) for r in sdc_rows]
+    invoice_values = [
+        Decimal(str(r[0])) for r in invoice_rows if r[0] is not None
+    ]
+    prov_sdc = dict(
+        source="decisions.safe_delivered_cost, sap_mock_purchase_orders."
+               "decision_id, sap_mock_purchase_orders.created_at, "
+               "sap_mock_purchase_orders.price",
+        period=_periode(start, end, "sap_mock_purchase_orders.created_at"),
+        definition=(
+            "Rata-rata biaya kirim AMAN (SDC analitis: invoice + expected loss "
+            "+ risiko freshness + penalti safety) untuk keputusan yang PO-nya "
+            "terbit di jendela. Rata-rata harga invoice PO dilaporkan terpisah "
+            "di `facts` — dua basis berbeda tidak digabung."
+        ),
+        formula="AVG(decisions.safe_delivered_cost) atas PO committed",
+        evidence_kind="derived",
+        baseline_reason="belum ada patokan biaya kirim aman yang disepakati",
+    )
+    sdc_facts = {
+        "invoice_unit_price_mean_idr": (
+            str(quantize2(sum(invoice_values) / Decimal(len(invoice_values))))
+            if invoice_values else None
+        ),
+        "invoice_sample_count": len(invoice_values),
+        "note": "invoice_unit_price_mean_idr = harga komersial PO (tanpa "
+                "expected loss/freshness/safety), bukan SDC",
+    }
     if sdc_values:
         sdc_mean = sum(sdc_values) / Decimal(len(sdc_values))
         sdc_metric = _metric(
             "Safe Delivered Cost", "IDR", "available",
             value=sdc_mean, sample_count=len(sdc_values),
             coverage=Decimal(1),
+            provenance=_prov(**prov_sdc, sample_count=len(sdc_values),
+                             coverage=Decimal(1)),
+            facts=sdc_facts,
         )
     else:
         sdc_metric = _no_data(
             "Safe Delivered Cost", "IDR",
             reason=(
-                "tidak ada batch terkirim yang punya biaya pada periode ini "
+                "tidak ada PO committed dengan biaya pada periode ini "
                 "(penyebut kosong)"
             ),
+            provenance=_prov(**prov_sdc),
+            facts=sdc_facts,
         )
     metrics.append(sdc_metric)
 
-    # ---- 5. Procurement Price Deviation (absolut, pairing per lokasi) ----
+    # ---- 5. Procurement Price Deviation (harga BAHAN vs acuan) ------------
     ps_rows = await _rows(
         db,
         "SELECT ps.location_id, ps.commodity_id, ps.price_per_kg, ps.recorded_at "
         "FROM price_signals ps WHERE ps.source = 'supplier_quote' "
         "AND ps.recorded_at >= :start AND ps.recorded_at < :end "
-        + ("AND ps.location_id = :loc" if location_id else ""),
-        {"start": start, "end": end, **loc_param},
+        + _scope("ps", include_demo)
+        + ("AND ps.location_id = :loc " if location_id else ""),
+        {"start": start, "end": end, **dasar},
     )
     deviations: list[Decimal] = []
     for loc, com, quote, recorded_at in ps_rows:
         ref = await _rows(
             db,
-            "SELECT price_per_kg FROM price_signals "
-            "WHERE source='pihps_reference' AND location_id=:loc "
-            "AND commodity_id=:com AND recorded_at <= :t "
-            "ORDER BY recorded_at DESC LIMIT 1",
-            {"loc": loc, "com": com, "t": recorded_at},
+            "SELECT ps.price_per_kg FROM price_signals ps "
+            "WHERE ps.source='pihps_reference' AND ps.location_id=:loc "
+            "AND ps.commodity_id=:com AND ps.recorded_at <= :t "
+            + _scope("ps", include_demo)
+            + "ORDER BY ps.recorded_at DESC LIMIT 1",
+            {"loc": loc, "com": com, "t": recorded_at,
+             "demo_session_id": demo_session_id},
         )
         if not ref:
             continue  # unpaired → excluded, bukan dianggap 0%
@@ -396,12 +800,28 @@ async def compute_kpis(
             continue
         q = Decimal(str(quote))
         deviations.append(abs(q - reference) / reference * Decimal("100"))
+    prov_price = dict(
+        source="price_signals.source, price_signals.price_per_kg, "
+               "price_signals.recorded_at, price_signals.location_id, "
+               "price_signals.commodity_id",
+        period=_periode(start, end, "price_signals.recorded_at"),
+        definition=(
+            "Simpangan absolut harga BAHAN (kutipan pemasok) terhadap acuan "
+            "PIHPS terakhir pada lokasi+komoditas yang sama. Biaya logistik "
+            "invoice tidak dihitung sebagai deviasi harga bahan."
+        ),
+        formula="AVG(|harga_bahan − harga_acuan| ÷ harga_acuan × 100)",
+        evidence_kind="derived",
+        baseline_reason="tidak ada ambang deviasi harga yang disepakati",
+    )
     if deviations:
         price_mean = sum(deviations) / Decimal(len(deviations))
         price_metric = _metric(
             "Procurement Price Deviation", "percent", "available",
             value=price_mean, sample_count=len(deviations),
             coverage=Decimal(1),
+            provenance=_prov(**prov_price, sample_count=len(deviations),
+                             coverage=Decimal(1)),
         )
     else:
         if ps_rows:
@@ -412,11 +832,13 @@ async def compute_kpis(
                     f"{len(ps_rows)} kutipan pemasok ada, tetapi tidak ada "
                     "pembanding harga referensi (PIHPS) — penyebut nol"
                 ),
+                provenance=_prov(**prov_price, sample_count=len(ps_rows)),
             )
         else:
             price_metric = _no_data(
                 "Procurement Price Deviation", "percent",
                 reason="tidak ada kutipan pemasok (supplier_quote) pada periode ini",
+                provenance=_prov(**prov_price),
             )
     metrics.append(price_metric)
 
@@ -428,20 +850,16 @@ async def compute_kpis(
         "MAX(t.step_at) FILTER (WHERE t.step_name='ACT') AS act_at "
         "FROM decisions d JOIN agent_traces t ON t.decision_id = d.id "
         "WHERE t.step_at >= :start AND t.step_at < :end "
-        # 26 Okt 2026: filter `demo_case IS NULL` DIHAPUS. Dulu keputusan demo
-        # dikeluarkan diam-diam (tidak tercatat di kamus KPI), akibatnya metrik
-        # ini mustahil bergerak saat operator menjalankan kartu demo — padahal
-        # keputusan itu nyata di DB dan PO-nya nyata. Regional Imbalance tetap
-        # mengecualikan `demo_case` (aturan anti-noise yang memang terdokumentasi).
-        + loc_filter_dec + " GROUP BY d.id",
-        {"start": start, "end": end, **loc_param},
+        + _scope("d", include_demo) + loc_filter_dec + " GROUP BY d.id",
+        {"start": start, "end": end, **dasar},
     )
     durations: list[Decimal] = []
     committed = await _rows(
         db,
-        "SELECT decision_id FROM sap_mock_purchase_orders "
-        "WHERE created_at >= :start AND created_at < :end",
-        {"start": start, "end": end},
+        "SELECT po.decision_id FROM sap_mock_purchase_orders po "
+        "WHERE po.created_at >= :start AND po.created_at < :end "
+        + _scope("po", include_demo),
+        {"start": start, "end": end, "demo_session_id": demo_session_id},
     )
     committed_ids = {str(r[0]) for r in committed}
     eligible = 0
@@ -454,14 +872,32 @@ async def compute_kpis(
         durations.append(
             Decimal(str((act_at - detect_at).total_seconds())) / Decimal("60")
         )
+    prov_dt = dict(
+        source="agent_traces.step_at, agent_traces.step_name, decisions.id, "
+               "sap_mock_purchase_orders.decision_id, "
+               "sap_mock_purchase_orders.created_at",
+        period=_periode(start, end, "agent_traces.step_at (DETECT & ACT)"),
+        definition=(
+            "Rata-rata selang DETECT pertama → ACT terakhir per keputusan, "
+            "hanya untuk ACT yang punya PO (committed). Tanpa PO, ACT tidak "
+            "dihitung dan bagiannya dilaporkan lewat `coverage`."
+        ),
+        formula="AVG((last ACT − first DETECT) dalam menit)",
+        evidence_kind="recorded_fact",
+        baseline_reason="tidak ada SLA waktu keputusan di dataset",
+    )
     if durations:
         dt_mean = sum(durations) / Decimal(len(durations))
+        dt_coverage = (
+            (Decimal(len(durations)) / Decimal(eligible)) if eligible else None
+        )
         dt_metric = _metric(
             "Decision Time", "minutes", "available",
             value=dt_mean,
             sample_count=len(durations),
-            coverage=(Decimal(len(durations)) / Decimal(eligible))
-            if eligible else None,
+            coverage=dt_coverage,
+            provenance=_prov(**prov_dt, sample_count=len(durations),
+                             coverage=dt_coverage),
         )
     else:
         if eligible:
@@ -472,11 +908,13 @@ async def compute_kpis(
                     f"{eligible} keputusan punya jejak DETECT, tetapi belum ada "
                     "ACT yang committed — penyebut nol"
                 ),
+                provenance=_prov(**prov_dt, sample_count=eligible),
             )
         else:
             dt_metric = _no_data(
                 "Decision Time", "minutes",
                 reason="tidak ada keputusan dengan jejak DETECT pada periode ini",
+                provenance=_prov(**prov_dt),
             )
     metrics.append(dt_metric)
 
@@ -487,16 +925,17 @@ async def compute_kpis(
         "MIN(a.approved_at) FILTER (WHERE a.approved IS TRUE) AS first_approve "
         "FROM decisions d "
         "LEFT JOIN approvals a ON a.decision_id = d.id "
-        f"WHERE d.created_at >= :start AND d.created_at < :end {loc_filter_dec} "
-        "GROUP BY d.id",
-        {"start": start, "end": end, **loc_param},
+        "WHERE d.created_at >= :start AND d.created_at < :end "
+        + _scope("d", include_demo) + loc_filter_dec + " GROUP BY d.id",
+        {"start": start, "end": end, **dasar},
     )
     ev_details = await _rows(
         db,
         "SELECT e.decision_id, e.evidence_type, e.is_consistent, e.recorded_at "
         "FROM decision_evidence e JOIN decisions d ON d.id = e.decision_id "
-        f"WHERE d.created_at >= :start AND d.created_at < :end {loc_filter_dec}",
-        {"start": start, "end": end, **loc_param},
+        "WHERE d.created_at >= :start AND d.created_at < :end "
+        + _scope("d", include_demo) + loc_filter_dec,
+        {"start": start, "end": end, **dasar},
     )
     ev_by_decision: dict[str, list[tuple]] = {}
     for did, etype, consistent, recorded_at in ev_details:
@@ -506,12 +945,9 @@ async def compute_kpis(
     complete = 0
     judged = 0
     # Penyebut = keputusan yang PUNYA cutoff approval, yaitu yang bisa dinilai
-    # "bukti lengkap sebelum disetujui". Sebelum 2026-10-16 semua keputusan di
-    # jendela dihitung, sehingga keputusan yang belum disetujui siapa pun
-    # terhitung sebagai TIDAK lengkap dan kartu menampilkan 0,00% berlabel
-    # "tersedia" padahal belum ada satu pun bukti yang dinilai. Keputusan tanpa
-    # approval tidak bisa dinilai lengkap/tidak → keluar dari penyebut, dan
-    # bagiannya dilaporkan lewat `coverage`, bukan disembunyikan.
+    # "bukti lengkap sebelum disetujui". Keputusan tanpa approval tidak bisa
+    # dinilai lengkap/tidak → keluar dari penyebut, dan bagiannya dilaporkan
+    # lewat `coverage`, bukan disembunyikan.
     for did, _status, first_approve in ev_rows:
         if first_approve is None:
             continue  # belum ada approval → belum ada cutoff untuk dibandingkan
@@ -531,15 +967,39 @@ async def compute_kpis(
                 distinct.add(etype)
         if len(distinct) >= 2:
             complete += 1
+    prov_ev = dict(
+        source="decisions.created_at, approvals.approved_at, "
+               "approvals.approved, decision_evidence.evidence_type, "
+               "decision_evidence.is_consistent, "
+               "decision_evidence.recorded_at",
+        period=_periode(
+            start, end,
+            "decisions.created_at (cutoff: approvals.approved_at)",
+        ),
+        definition=(
+            "Keputusan dengan ≥2 TIPE bukti berbeda yang konsisten SEBELUM "
+            "approval pertama ÷ keputusan yang punya approval (yang bisa "
+            "dinilai). Keputusan tanpa approval keluar dari penyebut dan "
+            "bagiannya dilaporkan di `coverage`. `on_hold` tidak dihitung "
+            "lengkap karena `is_consistent=false` tidak masuk himpunan."
+        ),
+        formula="COUNT(keputusan dengan ≥2 tipe bukti konsisten sebelum cutoff) "
+                "÷ COUNT(keputusan ber-approval) × 100",
+        evidence_kind="derived",
+        baseline_reason="tidak ada target kelengkapan bukti yang disepakati",
+    )
     if judged:
         ev_rate = Decimal(complete) * 100 / Decimal(judged)
+        ev_coverage = (
+            (Decimal(judged) / Decimal(len(ev_rows))) if ev_rows else None
+        )
         ev_metric = _metric(
             "Evidence Completeness", "percent", "available",
             value=ev_rate,
             sample_count=judged,
-            coverage=(
-                Decimal(judged) / Decimal(len(ev_rows)) if ev_rows else None
-            ),
+            coverage=ev_coverage,
+            provenance=_prov(**prov_ev, sample_count=judged,
+                             coverage=ev_coverage),
         )
     else:
         ev_metric = _no_data(
@@ -553,6 +1013,7 @@ async def compute_kpis(
                     "disetujui — tanpa approval tidak ada cutoff untuk menilai bukti"
                 )
             ),
+            provenance=_prov(**prov_ev),
         )
     metrics.append(ev_metric)
 
