@@ -45,7 +45,15 @@ export function useKpi(
   const simulasi = kpiScope === "demo";
   const adaSesi = Boolean(demoSessionId);
   const query = useQuery({
-    queryKey: queryKeys.kpiLive(scope, windowKey, simulasi ? "demo" : "operational"),
+    queryKey: queryKeys.kpiLive(
+      scope,
+      windowKey,
+      simulasi ? "demo" : "operational",
+      // Id sesi ikut kunci (Fase 8): dua sesi demo berbagi mode yang sama, dan
+      // tanpa id di kunci panel bisa menyajikan angka sesi lama sebagai jawaban
+      // untuk sesi baru sampai polling berikutnya.
+      simulasi ? demoSessionId ?? "" : ""
+    ),
     queryFn: () => {
       // Hanya KUNCI periode yang dikirim: backend yang menghitung rentangnya
       // dalam hari kalender Asia/Jakarta. Menghitung tanggal di klien membuat

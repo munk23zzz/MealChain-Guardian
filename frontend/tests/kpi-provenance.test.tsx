@@ -21,6 +21,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import KPIDashboard, { KpiScopeToggle } from "../components/KPIDashboard";
+import { queryKeys } from "../lib/query";
 import {
   baselineText,
   estimateLine,
@@ -418,5 +419,26 @@ describe("KPIDashboard — provenance lengkap (regresi)", () => {
     expect(html).toContain("Simulasi (sesi demo)");
     expect(html).toContain("kpi-demo-note");
     expect(html).toContain("Tingkat bukti");
+  });
+});
+
+/* ------------------------------------------------- kunci cache antar-sesi
+ *
+ * Dua sesi demo berbagi `mode` yang sama ("demo"). Kalau id sesinya tidak ikut
+ * kunci cache, panel bisa menyajikan angka sesi A sebagai jawaban untuk sesi B
+ * sampai polling berikutnya — angka milik sesi lain di bawah label sesi ini,
+ * persis cacat yang ditutup cakupan eksplisit di backend.
+ */
+describe("kunci cache KPI memisahkan sesi demo", () => {
+  it("dua sesi demo berbeda menghasilkan kunci berbeda", () => {
+    expect(queryKeys.kpiLive("loc", "today", "demo", "sesi-a")).not.toEqual(
+      queryKeys.kpiLive("loc", "today", "demo", "sesi-b")
+    );
+  });
+
+  it("cakupan operasional tidak membawa id sesi", () => {
+    expect(queryKeys.kpiLive("loc", "today", "operational", "sesi-a")).toEqual(
+      queryKeys.kpiLive("loc", "today", "operational", null)
+    );
   });
 });

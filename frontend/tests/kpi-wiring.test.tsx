@@ -51,7 +51,11 @@ describe("wiring KPI di app/page.tsx (S4-03)", () => {
     expect(hookSrc).toContain("KPI_DEFAULT_WINDOW");
     expect(hookSrc).not.toContain("kpiWindowRange");
     expect(hookSrc).not.toMatch(/new Date\(/);
-    expect(hookSrc).toMatch(/kpiLive\(scope, windowKey/);
+    // 27 Okt 2026 (Fase 8): kunci cache KPI membawa id sesi demo dan
+    // pemanggilannya kini multi-baris. Pin ini mengunci MAKNA-nya — kunci
+    // periode dari server + id sesi ikut kunci — bukan bentuk satu barisnya.
+    expect(hookSrc).toMatch(/kpiLive\(\s*scope,\s*windowKey/);
+    expect(hookSrc).toMatch(/demoSessionId \?\? ""/);
     expect(hookSrc).not.toContain("KPI_WINDOW_MS");
   });
 

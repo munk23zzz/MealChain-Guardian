@@ -62,10 +62,29 @@ export const queryKeys = {
   me: (scope: string) => ["me", scope] as const,
   balanceMap: (scope: string, commodity: string) =>
     ["balance-map", scope, commodity] as const,
-  kpiLive: (scope: string, windowKey: string = "today", mode: string = "") =>
-    ["kpi-live", scope, windowKey, mode] as const,
+  kpiLive: (
+    scope: string,
+    windowKey: string = "today",
+    mode: string = "",
+    sessionId: string | null = ""
+  ) =>
+    // Sesi hanya bermakna untuk cakupan simulasi: pada operasional kuncinya
+    // tidak boleh ikut berubah karena id sesi (kalau tidak, cache pecah tanpa
+    // alasan dan panel bisa memuat ulang data yang sama).
+    [
+      "kpi-live",
+      scope,
+      windowKey,
+      mode,
+      mode === "demo" ? sessionId ?? "" : "",
+    ] as const,
   // Sesi demo aktif: dipakai KPI untuk memilih cakupan simulasi (Fase 8).
   demoSession: () => ["demo-session"] as const,
+  // Angka pengadaan (PO terbit / eksekusi / truk berangkat) untuk tile Overview.
+  // Memuat scope DAN kunci periode: kepala SPPG hanya melihat PA lokasinya, dan
+  // "hari ini" tidak boleh menimpa cache "7 hari" di layar yang sama.
+  procurementSummary: (scope: string, windowKey: string = "today") =>
+    ["procurement-summary", scope, windowKey] as const,
   // Limbah + mitra pengolahan (18 Okt 2026): satu angka per panel Surplus &
   // Limbah. Kunci memuat scope karena SPPG hanya melihat lokasinya.
   wasteSummary: (scope: string) => ["waste-summary", scope] as const,
