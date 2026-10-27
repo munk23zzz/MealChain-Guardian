@@ -172,7 +172,14 @@ def test_context_diambil_dari_approval_summary() -> None:
     workers = {name: CaptureWorker(name) for name in AgentName}
     run = run_review("decision-9", api=api, workers=workers)
 
-    assert api.paths == ["/decisions/decision-9/approval-summary"]
+    # Dua bacaan: (1) orkestrator mengambil context dari approval-summary,
+    # (2) verifier (agent ke-8) mengambil FAKTA-nya sendiri dari audit-facts
+    # sesudah narasi. Urutan ini mengunci bahwa verifier tidak menerima
+    # narasi sebagai sumber data.
+    assert api.paths == [
+        "/decisions/decision-9/approval-summary",
+        "/decisions/decision-9/audit-facts",
+    ]
     assert captured == {
         "location": "Jakarta",
         "commodity": "telur",

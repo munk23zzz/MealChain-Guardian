@@ -32,6 +32,7 @@ from app.models import (
     User,
 )
 from app.services.approval_summary import build_approval_summary
+from app.services.audit_facts import build_audit_facts
 
 router = APIRouter()
 
@@ -504,6 +505,31 @@ async def get_approval_summary(
         raise HTTPException(status_code=404, detail="decision tidak ditemukan")
     await _assert_decision_readable(db, user, row)
     return await build_approval_summary(db, row, viewer_id=user.id)
+
+
+@router.get("/decisions/{decision_id}/audit-facts")
+async def get_audit_facts(
+    decision_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Fakta audit deterministik untuk Verifier Agent (AUD-9A-03).
+
+    Verifier agent (agent ke-8) tidak boleh menerima narasi supervisor sebagai
+    sumber data. Endpoint ini adalah alat bacanya sendiri: SDC vs rincian,
+    batch sumber + gerbang kesegaran, bukti keputusan, exclusion yang berlaku,
+    dan blok ledger — semuanya dihitung fungsi domain yang sudah ada.
+
+    Read-only: tidak ada mutation, tanpa panggilan model. Semua angka lahir
+    dari kode; klien (termasuk agent) tidak memasok angka apa pun.
+    """
+    row = (
+        await db.execute(select(Decision).where(Decision.id == decision_id))
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="decision tidak ditemukan")
+    await _assert_decision_readable(db, user, row)
+    return await build_audit_facts(db, row)
 
 
 @router.get("/decisions/{decision_id}")

@@ -332,10 +332,31 @@ def run_review(
         from .workers.verifier import VerifierWorker
 
         audit = VerifierWorker().audit
+    # Verifier adalah RUN ANAK (AUD-9A-03): ia berjalan sesudah narasi, membaca
+    # faktanya sendiri lewat context.api, dan meninggalkan jejak dengan
+    # `run_id` sendiri + `parent_run_id` = run review ini.
+    verifier_run_id = uuid4()
     try:
-        run = run.model_copy(update={"verifier_finding": audit(run)})
+        temuan = audit(run, context=context, run_id=verifier_run_id)
+    except TypeError as exc:
+        # Hanya tanda tangan lama (fake auditor tanpa parameter) yang jatuh ke
+        # sini; TypeError dari DALAM audit tidak boleh disamarkan.
+        if "unexpected keyword argument" not in str(exc):
+            temuan = None
+        else:
+            try:
+                temuan = audit(run)
+            except Exception:  # noqa: BLE001 - auditor gagal ≠ review gagal
+                temuan = None
     except Exception:  # noqa: BLE001 - auditor gagal ≠ review gagal
-        pass
+        temuan = None
+    if temuan is not None:
+        run = run.model_copy(
+            update={
+                "verifier_finding": temuan,
+                "verifier_run_id": verifier_run_id,
+            }
+        )
     return run
 
 

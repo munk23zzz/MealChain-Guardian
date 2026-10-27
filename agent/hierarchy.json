@@ -93,8 +93,8 @@
       "blocking_allowed": false,
       "description": "Mengaudit konsistensi tujuh worker analitik, narasi supervisor, dan status keras. Berjalan SESUDAH narasi; tidak menghitung ulang angka dan tidak boleh mengubah status keras.",
       "endpoints": [
-        "GET /decisions/{decision_id}/approval-summary",
-        "GET /decisions/{decision_id}/traces"
+        "GET /decisions/{decision_id}/audit-facts",
+        "GET /decisions/{decision_id}/approval-summary"
       ]
     }
   ],

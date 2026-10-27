@@ -111,3 +111,96 @@ def validasi_angka_rekomendasi(
                 )
 
     return qty, biaya
+
+
+#: Komponen biaya yang WAJIB menjumlah ke `safe_delivered_cost` — cermin
+#: `app.seed.demo_template.KOMPONEN_BIAYA` dan urutan penjumlahan di
+#: `app.core.safe_delivered_cost.calculate_safe_delivered_cost`.
+#: Dipakai audit verifier saat `cost_breakdown` tidak memuat kunci `total`
+#: (bentuk yang dipakai data kanonik: komponen, bukan total).
+KOMPONEN_BIAYA: tuple[str, ...] = (
+    "purchase",
+    "transport",
+    "handling",
+    "expected_loss",
+    "freshness_risk",
+    "safety_penalty",
+)
+
+
+def _total_komponen(cost_breakdown: Any) -> Decimal | None:
+    """Jumlah komponen biaya; `None` bila tidak ada satu pun komponen."""
+    if not isinstance(cost_breakdown, dict):
+        return None
+    nilai = [cost_breakdown.get(nama) for nama in KOMPONEN_BIAYA]
+    if all(item is None or item == "" for item in nilai):
+        return None
+    total = Decimal("0")
+    for nama, item in zip(KOMPONEN_BIAYA, nilai):
+        if item is None or item == "":
+            continue
+        bagian = _desimal(item, nama=f"cost_breakdown.{nama}")
+        if bagian is None:
+            continue
+        total += bagian
+    return total
+
+
+def ringkasan_rincian(
+    safe_delivered_cost: Any,
+    cost_breakdown: Any,
+) -> dict[str, Any]:
+    """Fakta konsistensi SDC vs total rincian — TANPA melempar.
+
+    Verifier agent membutuhkan jawaban "cocok/tidak" sebagai FAKTA yang sudah
+    dihitung kode. Aturannya sengaja memakai fungsi & toleransi modul ini
+    (`_total_rincian`/`_total_komponen` + `TOLERANSI_RINCIAN`) supaya tidak
+    lahir kalkulator kedua: bila aturan pembuatan keputusan berubah, audit ikut
+    berubah.
+
+    Sumber total: kunci `cost_breakdown.total` bila ada (bentuk snapshot
+    rekomendasi), kalau tidak jumlah `KOMPONEN_BIAYA` (bentuk data kanonik).
+
+    `cocok=None` berarti tidak dapat dinilai (SDC atau total tidak ada /
+    tidak terbaca) — pemanggil wajib memperlakukannya sebagai belum terbukti,
+    bukan sebagai lulus.
+    """
+    try:
+        biaya = _desimal(safe_delivered_cost, nama="safe_delivered_cost")
+        total = _total_rincian(cost_breakdown)
+        sumber_total = "total"
+        if total is None:
+            total = _total_komponen(cost_breakdown)
+            sumber_total = "komponen" if total is not None else None
+    except InvalidRecommendationNumbers as exc:
+        return {
+            "safe_delivered_cost": None,
+            "breakdown_total": None,
+            "selisih": None,
+            "toleransi": float(TOLERANSI_RINCIAN),
+            "cocok": None,
+            "sumber_total": None,
+            "alasan": exc.kode,
+        }
+    if biaya is None or total is None:
+        return {
+            "safe_delivered_cost": float(biaya) if biaya is not None else None,
+            "breakdown_total": float(total) if total is not None else None,
+            "selisih": None,
+            "toleransi": float(TOLERANSI_RINCIAN),
+            "cocok": None,
+            "sumber_total": sumber_total,
+            "alasan": "rincian_total_tidak_tersedia" if total is None else "sdc_tidak_tersedia",
+        }
+    selisih = abs(total - biaya)
+    cocok = selisih <= (biaya * TOLERANSI_RINCIAN)
+    return {
+        "safe_delivered_cost": float(biaya),
+        "breakdown_total": float(total),
+        "selisih": float(selisih),
+        "toleransi": float(TOLERANSI_RINCIAN),
+        "cocok": cocok,
+        "sumber_total": sumber_total,
+        "alasan": None if cocok else KODE_RINCIAN_TIDAK_COCOK,
+    }
+

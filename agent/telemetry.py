@@ -47,9 +47,18 @@ def build_trace_rows(run: AgentRun) -> list[dict]:
     # temuan analitik → audit → ringkasan.
     audit = run.verifier_finding
     if audit is not None:
+        # Run anak (AUD-9A-03): baris VERIFY punya identitas run sendiri dan
+        # menunjuk run review yang diauditnya lewat `parent_run_id`. Dengan
+        # begitu jejak audit bisa direkonstruksi dari DB tanpa menebak.
+        verifier_run_id = str(run.verifier_run_id or run.run_id)
+        # `parent_run_id` hanya diisi bila run verifier punya identitas SENDIRI;
+        # tanpa itu baris ini adalah baris biasa dari run induk (runtime lama),
+        # bukan run anak — jangan menulis induk yang sama dengan run_id.
+        parent_run_id = str(run.run_id) if run.verifier_run_id else None
         rows.append(
             {
-                "run_id": str(run.run_id),
+                "run_id": verifier_run_id,
+                "parent_run_id": parent_run_id,
                 "decision_id": run.decision_id,
                 "step_name": "VERIFY",
                 "agent_name": audit.agent.value,
@@ -60,9 +69,11 @@ def build_trace_rows(run: AgentRun) -> list[dict]:
                 "confidence": audit.confidence,
                 "citations": [c.model_dump() for c in audit.citations],
                 "input_summary": {
-                    "run_id": str(run.run_id),
+                    "run_id": verifier_run_id,
+                    "parent_run_id": parent_run_id,
                     "agent": audit.agent.value,
-                    "sumber": "agent/verify.py",
+                    "dasar": "agent/verify.py + /decisions/{id}/audit-facts",
+                    "fakta_sumber": audit.facts.get("fakta_sumber", []),
                 },
                 "output_summary": {
                     "status": audit.status.value,
@@ -71,7 +82,27 @@ def build_trace_rows(run: AgentRun) -> list[dict]:
                     "warning_count": len(audit.warnings),
                     "warnings": audit.warnings,
                     "citation_count": len(audit.citations),
-                    "facts": audit.facts,
+                    # Verdict audit + cek + sitasi id disimpan supaya putaran
+                    # ini bisa direkonstruksi dari `agent_traces` saja.
+                    "audit_verdict": audit.facts.get("audit_verdict"),
+                    "verdict_gerbang": audit.facts.get("verdict"),
+                    "checks": audit.facts.get("checks", []),
+                    "checks_total": audit.facts.get("checks_total"),
+                    "checks_failed": audit.facts.get("checks_failed"),
+                    "citations": audit.facts.get("citations", []),
+                    "catatan": audit.facts.get("catatan"),
+                    "model_verdict": audit.facts.get("model_verdict"),
+                    "facts": {
+                        kunci: nilai
+                        for kunci, nilai in audit.facts.items()
+                        if kunci
+                        not in {
+                            "checks",
+                            "model_checks",
+                            "reasons",
+                            "citations",
+                        }
+                    },
                 },
             }
         )

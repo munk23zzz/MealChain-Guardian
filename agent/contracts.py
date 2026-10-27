@@ -202,6 +202,10 @@ class AgentRun(BaseModel):
     # status run, narasi, dan veto tetap dihitung dari tujuh worker analitik —
     # auditor tidak boleh mengubah hasil yang diauditnya.
     verifier_finding: AgentFinding | None = None
+    # Identitas run verifier (AUD-9A-03): auditor adalah run ANAK dari run ini.
+    # `verifier_run_id` = identitasnya, `run_id` di atas = induknya. Dipakai
+    # telemetry untuk mengisi `agent_traces.parent_run_id`.
+    verifier_run_id: UUID | None = None
     total_latency_ms: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")

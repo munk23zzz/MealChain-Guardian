@@ -1434,6 +1434,50 @@
         }
       }
     },
+  "/decisions/{decision_id}/audit-facts": {
+      "get": {
+        "summary": "Get Audit Facts",
+        "description": "Fakta audit deterministik untuk Verifier Agent (AUD-9A-03).\n\nVerifier agent (agent ke-8) tidak boleh menerima narasi supervisor sebagai\nsumber data. Endpoint ini adalah alat bacanya sendiri: SDC vs rincian,\nbatch sumber + gerbang kesegaran, bukti keputusan, exclusion yang berlaku,\ndan blok ledger — semuanya dihitung fungsi domain yang sudah ada.\n\nRead-only: tidak ada mutation, tanpa panggilan model. Semua angka lahir\ndari kode; klien (termasuk agent) tidak memasok angka apa pun.",
+        "operationId": "get_audit_facts_decisions__decision_id__audit_facts_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Decision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/decisions/{decision_id}": {
       "get": {
         "summary": "Get Decision",

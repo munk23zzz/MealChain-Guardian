@@ -35,7 +35,20 @@ STUB_WORKERS: tuple[StubWorker, ...] = tuple(
 
 
 def build_workers() -> list[StubWorker]:
-    return list(WORKERS)
+    """Worker untuk satu putaran review.
+
+    Verifier memakai model dari environment (`VERIFIER_AGENT_MODEL` atau
+    `SUPERVISOR_MODEL_PRIMARY`) bila tersedia. Prompt-nya tetap prompt verifier
+    sendiri, dan fakta tetap dibacanya sendiri dari `/audit-facts`; tanpa model
+    audit tetap berjalan deterministik dan `consistent` tidak pernah dikarang.
+    """
+    from ..verifier_model import model_dari_env
+
+    verifier = VerifierWorker(model=model_dari_env())
+    return [
+        verifier if isinstance(worker, VerifierWorker) else worker
+        for worker in WORKERS
+    ]
 
 
 def build_stub_findings(run_id: UUID, decision_id: str) -> list[AgentFinding]:

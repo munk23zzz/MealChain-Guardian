@@ -177,7 +177,13 @@
       {
         "name": "migrasi alembic head",
         "sql": "SELECT version_num FROM alembic_version",
-        "expect": "033_indeks_fk_hilang"
+        "expect": "039_agent_trace_parent_run_id"
+      },
+      {
+        "name": "kolom agent_traces.parent_run_id ada (migrasi 039)",
+        "sql": "SELECT count(*) FROM information_schema.columns WHERE table_name = 'agent_traces' AND column_name = 'parent_run_id'",
+        "expect": 1,
+        "_note": "AUD-9A-03: baris VERIFY adalah run anak; tanpa kolom ini jejak auditor tidak bisa direkonstruksi dari DB."
       },
       {
         "name": "jumlah batch di DB",

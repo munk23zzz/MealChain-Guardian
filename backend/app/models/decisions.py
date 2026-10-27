@@ -218,6 +218,13 @@ class AgentTrace(Base):
     run_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), nullable=True, index=True
     )
+    # AUD-9A-03 (verifier agent): baris VERIFY adalah RUN ANAK dari run review
+    # yang diauditnya. `run_id` = identitas verifier, `parent_run_id` = run
+    # review induk. Baris analitik memakai `run_id` = run review dan
+    # `parent_run_id` NULL (mereka langkah dari run itu, bukan run terpisah).
+    parent_run_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
     agent_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     citations: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
