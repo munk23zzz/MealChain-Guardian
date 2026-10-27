@@ -29,6 +29,7 @@ from app.models import (
     Decision,
     DecisionEvidence,
     Location,
+    PriceSignal,
     Supplier,
     User,
 )
@@ -573,6 +574,30 @@ async def get_decision(
     pemasok = (
         await db.get(Supplier, row.supplier_id) if row.supplier_id else None
     )
+    # Referensi pasar untuk pembanding HARGA BAHAN (Fase 5 butir 5). Sumbernya
+    # `price_signals` PIHPS — bukan biaya PO: baris ini hanya menjawab "harga
+    # bahan keputusan ini mahal atau tidak", dan tidak boleh masuk deviasi
+    # harga bahan bersama logistik. Tidak ada baris → `null` (bukan 0).
+    referensi_pasar = None
+    if row.target_location_id and row.commodity_id:
+        ref = (
+            await db.execute(
+                select(PriceSignal.price_per_kg, PriceSignal.recorded_at)
+                .where(
+                    PriceSignal.source == "pihps_reference",
+                    PriceSignal.location_id == row.target_location_id,
+                    PriceSignal.commodity_id == row.commodity_id,
+                )
+                .order_by(PriceSignal.recorded_at.desc())
+                .limit(1)
+            )
+        ).first()
+        if ref is not None:
+            referensi_pasar = {
+                "source": "pihps_reference",
+                "price_per_kg": float(ref[0]),
+                "recorded_at": ref[1].isoformat(),
+            }
     return {
         "decision_id": str(row.id),
         "decision_type": row.decision_type,
@@ -603,6 +628,9 @@ async def get_decision(
             row.quantity_kg,
             row.cost_breakdown if isinstance(row.cost_breakdown, dict) else None,
         ),
+        # Pembanding harga bahan (PIHPS terakhir pada lokasi tujuan + komoditas).
+        # `null` = tidak ada acuan; UI menulis "tidak tercatat", bukan Rp 0.
+        "market_reference": referensi_pasar,
         "expires_at": row.expires_at.isoformat(),
         "created_at": row.created_at.isoformat(),
         "valid": validity["valid"],

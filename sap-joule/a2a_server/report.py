@@ -780,11 +780,38 @@ def _label(peta: Mapping[str, str], value: Any) -> str:
     return peta.get(teks, teks)
 
 
+#: Basis harga PO (`cost_legacy` dari `GET /sap/purchase-orders`). PO lama tidak
+#: pernah ditulis ulang; yang ditambahkan hanya label supaya pembaca tahu
+#: dokumen mana yang masih memakai kontrak biaya lama.
+COST_LEGACY_LABEL = {
+    "legacy_unmigrated": "format biaya lama (belum dimigrasi)",
+    "migrated": "basis komersial (bahan + transportasi + penanganan)",
+    "not_applicable": "tidak berlaku (tanpa rincian biaya)",
+}
+
+
 def _po_detail(po: Mapping[str, Any], *, jumlah_terbaca: int, note: str | None) -> str:
-    """Satu PO sebagai daftar kolom→nilai (bukan tabel selebar layar chat)."""
+    """Satu PO sebagai daftar kolom→nilai (bukan tabel selebar layar chat).
+
+    Dua arti biaya dipisah (Fase 5 butir 7): **Total PO** adalah yang
+    ditagihkan (bahan + transportasi + penanganan), sedangkan **SDC analitis**
+    adalah pembanding internal yang memuat penalti risiko dan TIDAK pernah
+    ditagihkan ke pemasok. Angka yang tidak dikirim backend ditulis apa adanya
+    (—/"tidak tercatat"), bukan Rp 0.
+    """
     keputusan = short_id(po.get("decisionId"))
     if keputusan != MISSING:
         keputusan = f"{keputusan} — {_label(DECISION_STATUS_LABEL, po.get('decisionStatus'))}"
+    # PO lama tidak punya kolom invoice: jatuh ke kolom yang memang ada, dan
+    # label basis di bawah menyebut bahwa harganya bukan kontrak komersial.
+    harga_invoice = po.get("invoiceUnitPrice")
+    if harga_invoice is None:
+        harga_invoice = po.get("pricePerKg")
+    total_po = po.get("invoiceTotal")
+    if total_po is None:
+        total_po = po.get("totalValue")
+    sdc = po.get("sdcTotal")
+    basis = COST_LEGACY_LABEL.get(str(po.get("costLegacy") or ""), "tidak tercatat")
     baris = [
         ("Status PO", _label(PO_STATUS_LABEL, po.get("status"))),
         ("Dibuat", wib(po.get("createdAt"))),
@@ -792,8 +819,13 @@ def _po_detail(po: Mapping[str, Any], *, jumlah_terbaca: int, note: str | None) 
         ("Pemasok", _text(po.get("supplierName"))),
         ("Bahan", _text(po.get("commodityName"))),
         ("Jumlah", kg(po.get("quantityKg"))),
-        ("Harga per kg", rupiah(po.get("pricePerKg"))),
-        ("Total nilai", rupiah(po.get("totalValue"))),
+        ("Harga satuan PO (invoice)", rupiah(harga_invoice)),
+        ("Total PO (ditagihkan)", rupiah(total_po)),
+        (
+            "SDC analitis (pembanding internal)",
+            "tidak tercatat" if sdc is None else rupiah(sdc),
+        ),
+        ("Basis biaya", basis),
         ("Keputusan", keputusan),
         ("Asal baris", _label(ORIGIN_LABEL, po.get("origin"))),
     ]

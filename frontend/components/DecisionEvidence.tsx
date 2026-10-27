@@ -57,6 +57,7 @@ import {
 } from "../lib/evidence";
 import { downloadDossier } from "../lib/export";
 import FactList from "./FactList";
+import DecisionEconomics from "./DecisionEconomics";
 import GovernanceStatus from "./GovernanceStatus";
 import { governanceView } from "../lib/governance";
 import { useEffect, useState } from "react";
@@ -543,9 +544,17 @@ export default function DecisionEvidence({
           {/* ── D. BUKTI ────────────────────────────────────────────────────── */}
           <section className="evidence-block jump-target" id="bukti">
             <h2 className="evidence-block-title">Bukti</h2>
+            {/* Dua arti biaya dipisah di satu tempat (Fase 5 butir 5): PO =
+                bahan + transportasi + handling (ditagihkan), SDC = PO +
+                penalti risiko internal (analitis). Referensi pasar hanya
+                pembanding harga bahan, bukan komponen biaya PO. */}
+            <DecisionEconomics
+              cost={selected?.commercial_cost ?? null}
+              market={selected?.market_reference ?? null}
+            />
             <div className="evidence-grid">
             <article className="card">
-              <h2>Biaya</h2>
+              <h2>Rincian komponen biaya</h2>
               <FactList rows={costFacts({ ...selected, summary })} collapseEmpty />
             </article>
 

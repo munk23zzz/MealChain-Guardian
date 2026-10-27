@@ -59,6 +59,15 @@ FIELDS = {
     "ordered_quantity_kg",
     "price_per_kg",
     "total_value",
+    # Fase 5: arti harga dinamai eksplisit, dan dua arti biaya dikirim terpisah.
+    # `price_per_kg` dipertahankan sebagai alias (artinya sama: harga yang
+    # ditagihkan), `cost_legacy` menyebut basis harganya, `sdc_total` adalah
+    # pembanding analitis (bukan tagihan; NULL untuk PO tanpa keputusan).
+    "invoice_unit_price",
+    "invoice_total",
+    "cost_legacy",
+    "cost_legacy_label",
+    "sdc_total",
     "source",
     # Asal baris: PO yang lahir dari eksekusi keputusan vs baris seed demo.
     # Dipakai panel untuk berhenti menyebut semua baris "terbit dari eksekusi".

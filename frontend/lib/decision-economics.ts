@@ -106,8 +106,15 @@ function _riskView(
   };
 }
 
+export type MarketReference = {
+  source: string;
+  price_per_kg: number | string;
+  recorded_at?: string | null;
+};
+
 export function buildCostView(
-  payload: CommercialCostPayload | null | undefined
+  payload: CommercialCostPayload | null | undefined,
+  market?: MarketReference | null
 ): CostView {
   if (!payload) {
     return {
@@ -118,6 +125,21 @@ export function buildCostView(
     };
   }
 
+  // Referensi pasar adalah pembanding HARGA BAHAN (PIHPS), bukan komponen PO.
+  // Tidak ada acuan → "tidak tercatat"; Rp 0 akan terbaca sebagai acuan gratis.
+  const acuanPasar =
+    market && Number.isFinite(Number(market.price_per_kg))
+      ? {
+          label: "Referensi pasar",
+          value: `${formatRupiah(market.price_per_kg)} per kg`,
+          note: "harga acuan PIHPS — pembanding bahan, bukan biaya PO",
+        }
+      : {
+          label: "Referensi pasar",
+          value: TIDAK_TERCATAT,
+          note: "tidak ada acuan PIHPS untuk lokasi + komoditas ini",
+        };
+
   const po: CostBlock = {
     key: "po",
     title: "Biaya PO",
@@ -126,6 +148,7 @@ export function buildCostView(
       { label: "Bahan", value: formatRupiah(payload.purchase_total) },
       { label: "Transportasi", value: formatRupiah(payload.transport_total) },
       { label: "Handling", value: formatRupiah(payload.handling_total) },
+      acuanPasar,
       {
         label: "Harga satuan PO",
         value: formatRupiah(payload.invoice_unit_price),

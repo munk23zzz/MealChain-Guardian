@@ -363,6 +363,12 @@ class MealchainClient:
                 "quantityKg": row.get("ordered_quantity_kg"),
                 "pricePerKg": row.get("price_per_kg"),
                 "totalValue": row.get("total_value"),
+                # Fase 5: dua arti biaya dibawa terpisah supaya laporan PO tidak
+                # mencampur tagihan dengan penalti risiko internal.
+                "invoiceUnitPrice": row.get("invoice_unit_price"),
+                "invoiceTotal": row.get("invoice_total"),
+                "sdcTotal": row.get("sdc_total"),
+                "costLegacy": row.get("cost_legacy"),
                 "decisionId": row.get("decision_id"),
                 "decisionStatus": row.get("decision_status"),
                 "origin": row.get("origin"),

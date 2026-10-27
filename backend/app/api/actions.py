@@ -7,7 +7,7 @@ Tidak ada eksekusi otomatis oleh agent.
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Callable
 
 import pydantic
@@ -21,6 +21,7 @@ from app.ai_providers.verifier_client import run_verifier
 from app.api.auth import require_roles
 from app.api.dependencies import get_db
 from app.core.approval_matrix import approval_requirement, evaluate_approvals
+from app.core.commercial_cost import commercial_cost, komponen_desimal
 from app.core.decision_validity import is_decision_valid
 from app.core.po_number import nomor_po
 from app.core.safety_gate import (
@@ -818,8 +819,26 @@ async def execute_action(
     qty = decision.quantity_kg or Decimal("0")
     if qty <= 0:
         raise HTTPException(status_code=422, detail="quantity decision tidak valid")
-    sdc = decision.safe_delivered_cost
-    unit_price = (sdc / qty) if (sdc and qty > 0) else Decimal("0")
+    # Fase 5 butir 2/4: harga PO = harga INVOICE (bahan + transportasi +
+    # penanganan), bukan `sdc / qty`. Sebelum perbaikan ini `price` memuat
+    # expected_loss + penalti kesegaran + penalti keamanan, sehingga dokumen
+    # yang dibayar pemasok menagihkan kerugian internal yang tidak pernah ia
+    # sebabkan (terukur: 37.171,00 vs 29.421,00 pada rincian uji Fase 5).
+    breakdown = decision.cost_breakdown if isinstance(decision.cost_breakdown, dict) else None
+    biaya = commercial_cost(qty, breakdown)
+    if biaya is not None:
+        unit_price = biaya.invoice_unit_price
+    else:
+        # Rincian belum lengkap (bentuk data lama `{"purchase": ...}`): PO tetap
+        # terbit dari komponen yang TERCATAT — harga bahan apa adanya — dan
+        # barisnya ditandai `legacy_unmigrated` saat dibaca. Tidak ada komponen
+        # yang dikarang, dan tidak ada penalti yang ditagihkan.
+        purchase = komponen_desimal(breakdown, "purchase")
+        unit_price = (
+            (purchase / qty).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if purchase is not None and purchase > 0
+            else Decimal("0")
+        )
     if unit_price <= 0:
         raise HTTPException(status_code=422, detail="unit price decision tidak valid")
 

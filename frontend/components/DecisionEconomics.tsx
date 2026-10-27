@@ -6,7 +6,10 @@
 // Semua angka datang dari server (`commercial_cost` pada GET /decisions/{id});
 // komponen ini TIDAK menghitung biaya. `cost === null` berarti keputusan
 // administratif tanpa transfer: tampilkan "tidak berlaku", jangan Rp 0.
-import type { CommercialCostPayload } from "../lib/decision-economics";
+import type {
+  CommercialCostPayload,
+  MarketReference,
+} from "../lib/decision-economics";
 import { buildCostView } from "../lib/decision-economics";
 
 const TONE_KELAS: Record<string, string> = {
@@ -17,10 +20,12 @@ const TONE_KELAS: Record<string, string> = {
 
 export default function DecisionEconomics({
   cost,
+  market = null,
 }: {
   cost: CommercialCostPayload | null;
+  market?: MarketReference | null;
 }) {
-  const view = buildCostView(cost);
+  const view = buildCostView(cost, market);
 
   if (view.status === "tidak_berlaku") {
     return (

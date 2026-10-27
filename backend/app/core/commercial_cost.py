@@ -59,6 +59,31 @@ def _uang(nilai: Decimal) -> Decimal:
     return nilai.quantize(_TWO_DP, rounding=ROUND_HALF_UP)
 
 
+def komponen_desimal(
+    breakdown: Mapping[str, Any] | None, nama: str
+) -> Decimal | None:
+    """Satu komponen rincian biaya sebagai Decimal; `None` bila tidak tercatat.
+
+    Dipakai jalur PO untuk data bentuk lama (`{"purchase": ...}` tanpa
+    transportasi/penanganan). Komponen yang tidak ada TIDAK ditebak nol: `None`
+    berarti "tidak tercatat", dan pemanggil memutuskan apa yang boleh
+    diterbitkan. Alias `logistics` (nama lama untuk transportasi) ikut dibaca
+    supaya baris lama tidak tampak kehilangan komponen.
+    """
+    if not isinstance(breakdown, Mapping):
+        return None
+    kunci = (nama,) if nama != "transport" else ("transport", "logistics")
+    for k in kunci:
+        mentah = breakdown.get(k)
+        if mentah is None or mentah == "" or isinstance(mentah, bool):
+            continue
+        nilai = _desimal(mentah)
+        if nilai is None or nilai < 0:
+            return None
+        return nilai
+    return None
+
+
 @dataclass(frozen=True)
 class RiskMethod:
     """Dasar dan versi metode risiko; bagian dari bukti, bukan hiasan."""

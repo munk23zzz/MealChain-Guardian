@@ -396,6 +396,104 @@ def bangun_pdf(dokumen: dict) -> bytes:
     if cerita_status:
         story.append(_p(cerita_status, g["catatan"]))
 
+    # ── Rincian biaya: PO (ditagihkan) vs SDC (analitis) ─────────────────────
+    # Dua arti biaya TIDAK boleh tercampur di satu angka: PO menagih bahan +
+    # transportasi + penanganan; SDC menambahkan penyesuaian risiko internal.
+    # Komponen yang tidak tercatat tidak dicetak sebagai Rp 0 — barisnya hilang
+    # dan pembaca melihat label legacy di bawah.
+    biaya = dokumen.get("commercial_cost")
+    if isinstance(biaya, dict):
+        story.append(_p("Rincian biaya komersial (PO)", g["bagian"]))
+        baris_biaya = [[_p("Komponen", g["sel_tebal"]), _p("Nilai", g["sel_tebal"])]]
+        for label, kunci in (
+            ("Bahan", "purchase_total"),
+            ("Transportasi", "transport_total"),
+            ("Penanganan", "handling_total"),
+        ):
+            nilai = biaya.get(kunci)
+            if nilai is None:
+                continue
+            baris_biaya.append(
+                [_p(label, g["sel"]), _p(rupiah(float(nilai)), g["sel"])]
+            )
+        total_invoice = biaya.get("invoice_total")
+        if total_invoice is not None:
+            baris_biaya.append(
+                [
+                    _p("Total invoice (bahan + transportasi + penanganan)", g["sel_tebal"]),
+                    _p(rupiah(float(total_invoice)), g["sel_tebal"]),
+                ]
+            )
+        baris_biaya.append(
+            [_p("Total PO yang ditagihkan", g["sel_tebal"]), _p(rupiah(total), g["sel_tebal"])]
+        )
+        story.append(
+            _tabel(
+                baris_biaya,
+                [lebar * 0.62, lebar * 0.38],
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), _TINT),
+                    ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+                    ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#FAFAF9")),
+                ],
+            )
+        )
+
+        if biaya.get("sdc_total") is not None:
+            story.append(_p("Safe Delivered Cost (analitis, bukan tagihan)", g["bagian"]))
+            baris_sdc = [[_p("Komponen risiko", g["sel_tebal"]), _p("Nilai", g["sel_tebal"])]]
+            for label, kunci in (
+                ("Perkiraan kerugian", "expected_loss"),
+                ("Risiko kesegaran", "freshness_risk"),
+                ("Penalti keamanan", "safety_penalty"),
+            ):
+                nilai = biaya.get(kunci)
+                if nilai is None:
+                    continue
+                baris_sdc.append(
+                    [_p(label, g["sel"]), _p(rupiah(float(nilai)), g["sel"])]
+                )
+            baris_sdc.append(
+                [
+                    _p("Safe Delivered Cost", g["sel_tebal"]),
+                    _p(rupiah(float(biaya["sdc_total"])), g["sel_tebal"]),
+                ]
+            )
+            story.append(
+                _tabel(
+                    baris_sdc,
+                    [lebar * 0.62, lebar * 0.38],
+                    [
+                        ("BACKGROUND", (0, 0), (-1, 0), _TINT),
+                        ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+                        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#FAFAF9")),
+                    ],
+                )
+            )
+            metode = biaya.get("risk_method") or {}
+            versi = metode.get("version") or "demo"
+            jenis = metode.get("kind") or "tanpa dasar"
+            story.append(
+                _p(
+                    "Penalti risiko di atas adalah kebijakan simulasi "
+                    f"(bobot {versi}, {jenis}) "
+                    "untuk membandingkan pilihan — bukan kerugian nyata dan tidak "
+                    "ditagihkan pada pemasok.",
+                    g["catatan"],
+                )
+            )
+
+    if dokumen.get("cost_legacy") == "legacy_unmigrated":
+        story.append(
+            _p(
+                "Biaya: legacy_unmigrated — PO ini memakai format biaya lama "
+                "(sebelum kontrak invoice), jadi komponennya tidak dapat "
+                "direkonsiliasi. Angka historis tidak diubah; migrasi butuh "
+                "keputusan pemilik.",
+                g["catatan"],
+            )
+        )
+
     # ── Dasar persetujuan ───────────────────────────────────────────────────
     keputusan = dokumen.get("keputusan") or {}
     story.append(_p("Dasar persetujuan", g["bagian"]))

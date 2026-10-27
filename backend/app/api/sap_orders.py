@@ -32,8 +32,10 @@ Modul ini menutup celah itu dengan tiga aturan:
    `MC-<12 hex id keputusan>` — satu aturan, satu pembentuk (`core/po_number`).
 """
 
+import json
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -43,6 +45,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import get_current_user
 from app.api.dependencies import get_db
 from app.core.approval_matrix import evaluate_approvals
+from app.core.commercial_cost import commercial_cost, commercial_cost_payload
 from app.core.scope import is_national_scope, scope_location_id
 from app.models import Decision, User
 from app.services import po_document
@@ -66,6 +69,8 @@ _SELECT = (
     "d.status AS decision_status, d.target_location_id AS location_id, "
     "l.name AS location_name, po.supplier_id, s.name AS supplier_name, "
     "po.material_number, po.ordered_quantity, po.price, "
+    "d.quantity_kg AS decision_quantity, d.cost_breakdown AS cost_breakdown, "
+    "d.safe_delivered_cost AS decision_sdc, "
     # Nama bahan dari keputusan (relasi commodities). Baris impor SAP tanpa
     # keputusan memang tidak punya nama — frontend menulis "bahan tidak
     # tercatat", bukan menebak dari kode `MAT-BERA`.
@@ -78,10 +83,66 @@ _SELECT = (
 )
 
 
+def _breakdown(row) -> dict | None:
+    """`cost_breakdown` dari SELECT mentah: jsonb bisa datang sebagai dict atau str.
+
+    Query di modul ini memakai `text()`, jadi tipenya tidak dikenali driver dan
+    asyncpg bisa mengembalikan JSON mentah. Keduanya diterima; yang tidak bisa
+    diartikan diperlakukan sebagai "tidak tercatat", bukan sebagai nol.
+    """
+    mentah = row["cost_breakdown"] if "cost_breakdown" in row.keys() else None
+    if isinstance(mentah, dict):
+        return mentah
+    if isinstance(mentah, str) and mentah.strip():
+        try:
+            dibaca = json.loads(mentah)
+        except ValueError:
+            return None
+        return dibaca if isinstance(dibaca, dict) else None
+    return None
+
+
+def cost_legacy_of(row) -> str:
+    """Basis harga satu baris PO: komersial, lama, atau tidak berlaku.
+
+    Tiga nilai (kontrak `GET /sap/purchase-orders`):
+
+    - ``not_applicable`` — tidak ada keputusan/rincian biaya, jadi tidak ada
+      yang bisa dibandingkan (mis. baris impor SAP tanpa keputusan).
+    - ``legacy_unmigrated`` — rincian ada tetapi harga tersimpan BUKAN harga
+      invoice (masih `sdc / qty`), atau rincian belum lengkap sehingga invoice
+      tidak bisa diturunkan. Angkanya TIDAK diubah: menulis ulang dokumen
+      historis butuh keputusan pemilik (rencana Fase 5 butir 8).
+    - ``migrated`` — harga tersimpan sama dengan harga satuan komersial
+      (`bahan + transportasi + penanganan`) untuk rincian yang sama.
+
+    Label ini fakta terukur (perbandingan angka), bukan penanda yang disetel
+    saat menulis: baris lama tidak bisa mengaku berkontrak baru.
+    """
+    breakdown = _breakdown(row)
+    qty = row["decision_quantity"] if "decision_quantity" in row.keys() else None
+    if not breakdown or qty is None:
+        return "not_applicable"
+    biaya = commercial_cost(qty, breakdown)
+    if biaya is None:
+        return "legacy_unmigrated"
+    tersimpan = Decimal(str(row["price"])).quantize(Decimal("0.01"))
+    dasar = biaya.invoice_unit_price.quantize(Decimal("0.01"))
+    return "migrated" if tersimpan == dasar else "legacy_unmigrated"
+
+
+COST_LEGACY_LABEL = {
+    "legacy_unmigrated": "format biaya lama (belum dimigrasi)",
+    "migrated": "basis komersial (bahan + transportasi + penanganan)",
+    "not_applicable": "tidak berlaku (tanpa rincian biaya)",
+}
+
+
 def _baris(row) -> dict:
     """Satu PO → bentuk kabel. Nilai dibaca apa adanya dari kolom."""
     qty = float(row["ordered_quantity"])
     harga = float(row["price"])
+    cost_legacy = cost_legacy_of(row)
     return {
         "po_number": row["po_number"],
         "status": row["status"],
@@ -95,7 +156,22 @@ def _baris(row) -> dict:
         "material_number": row["material_number"],
         "commodity_name": row["commodity_name"],
         "ordered_quantity_kg": qty,
+        # Dua nama untuk SATU arti: `price` di tabel ini adalah harga yang
+        # ditagihkan (sejak Fase 5 = harga satuan invoice). Nama lama
+        # `price_per_kg` dipertahankan karena panel/tes lama memakainya, tetapi
+        # artinya sekarang dinamai eksplisit supaya klien tidak menebak.
         "price_per_kg": harga,
+        "invoice_unit_price": harga,
+        "invoice_total": round(harga * qty, 2),
+        "cost_legacy": cost_legacy,
+        "cost_legacy_label": COST_LEGACY_LABEL[cost_legacy],
+        # SDC analitis keputusan (pembanding internal, BUKAN tagihan). `None`
+        # untuk PO tanpa keputusan — pembaca harus melihat absennya, bukan nol.
+        "sdc_total": (
+            float(row["decision_sdc"])
+            if "decision_sdc" in row.keys() and row["decision_sdc"] is not None
+            else None
+        ),
         "total_value": round(harga * qty, 2),
         "source": SUMBER,
         # Fakta turunan, bukan label seragam: hanya baris yang lahir dari
@@ -194,6 +270,7 @@ async def ringkas_purchase_order(
 _SELECT_SATU = (
     "SELECT po.po_number, po.status, po.created_at, po.ordered_quantity, po.price, "
     "po.decision_id, po.material_number, "
+    "d.quantity_kg AS decision_quantity, d.cost_breakdown AS cost_breakdown, "
     "l.name AS location_name, s.name AS supplier_name, c.name AS commodity_name "
     "FROM sap_mock_purchase_orders po "
     "LEFT JOIN decisions d ON d.id = po.decision_id "
@@ -289,6 +366,14 @@ async def unduh_purchase_order_pdf(
             "commodity_name": row["commodity_name"],
             "location_name": row["location_name"],
             "supplier_name": row["supplier_name"],
+            # Dua arti biaya dikirim TERPISAH ke dokumen: `commercial_cost`
+            # (bahan/transportasi/penanganan + SDC analitis) dan `cost_legacy`
+            # (apakah harga tersimpan masih basis lama). `None` = tidak
+            # tercatat → dokumen tidak mencetak komponen karangan.
+            "commercial_cost": commercial_cost_payload(
+                keputusan.quantity_kg, keputusan.cost_breakdown
+            ),
+            "cost_legacy": cost_legacy_of(row),
             "keputusan": {
                 "id": str(keputusan.id),
                 "jenis": keputusan.decision_type,

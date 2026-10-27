@@ -32,7 +32,10 @@ const PAYLOAD: CommercialCostPayload = {
 };
 
 describe("buildCostView — invoice vs SDC", () => {
-  it("baris PO hanya bahan, transportasi, handling", () => {
+  it("baris PO hanya bahan, transportasi, handling (+ pembanding pasar)", () => {
+    // Fase 5 butir 5: referensi pasar masuk blok PO sebagai PEMBANDING harga
+    // bahan. Tanpa acuan ia tetap tampil dengan "tidak tercatat" — menghapus
+    // barisnya membuat pembaca mengira tidak ada acuan sama sekali.
     const view = buildCostView(PAYLOAD);
     const po = view.blocks.find((b) => b.key === "po");
     expect(po).toBeDefined();
@@ -40,6 +43,7 @@ describe("buildCostView — invoice vs SDC", () => {
       "Bahan",
       "Transportasi",
       "Handling",
+      "Referensi pasar",
       "Harga satuan PO",
       "Total PO",
     ]);
@@ -47,9 +51,22 @@ describe("buildCostView — invoice vs SDC", () => {
       "Rp 5.700.000",
       "Rp 34.200",
       "Rp 150.000",
+      "tidak tercatat",
       "Rp 29.421",
       "Rp 5.884.200",
     ]);
+  });
+
+  it("referensi pasar terisi bila backend mengirim acuan PIHPS", () => {
+    const view = buildCostView(PAYLOAD, {
+      source: "pihps_reference",
+      price_per_kg: 31000,
+      recorded_at: "2026-10-10T00:00:00+00:00",
+    });
+    const po = view.blocks.find((b) => b.key === "po")!;
+    const baris = po.rows.find((r) => r.label === "Referensi pasar")!;
+    expect(baris.value).toBe("Rp 31.000 per kg");
+    expect((baris.note ?? "").toLowerCase()).toContain("bukan biaya po");
   });
 
   it("penalti risiko hanya ada di blok SDC", () => {
