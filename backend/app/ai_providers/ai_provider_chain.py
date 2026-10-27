@@ -70,6 +70,17 @@ def _build_ref_caller(ref: ModelRef) -> Callable[[str], str]:
     raise ValueError(f"kind model tidak dikenal: {ref.kind}")
 
 
+def build_caller_for_ref(ref: ModelRef) -> Callable[[str], str]:
+    """Callable untuk SATU `ModelRef` (pintu publik `_build_ref_caller`).
+
+    Dipakai jalur review lokal (`AGENT_REVIEW_MODE=local`) yang memilih model
+    verifier dari `VERIFIER_AGENT_MODEL` tanpa membangun rantai slot penuh.
+    Slot yang env-nya belum lengkap tetap gagal SAAT DIPANGGIL (bukan saat
+    dibangun), sama seperti di rantai.
+    """
+    return _build_ref_caller(ref)
+
+
 def build_default_callers(agent: str) -> list[tuple[str, Callable[[str], str], str]]:
     """Rantai callable default agent dari env: [(label, fn, kind), ...]."""
     chain = get_agent_chain(agent)

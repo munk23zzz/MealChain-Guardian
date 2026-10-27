@@ -78,6 +78,17 @@ def _issue_token(user: User) -> str:
     return pyjwt.encode(payload, _secret(), algorithm=_algorithm())
 
 
+def issue_token_for_user(user: User) -> str:
+    """Token Bearer untuk SATU user (dipakai jalur review in-process).
+
+    Review lokal (`AGENT_REVIEW_MODE=local`) berjalan di dalam backend dan harus
+    membaca API dengan identitas pemanggil — bukan token layanan berumur panjang
+    yang bisa kedaluwarsa di tengah demo, dan bukan identitas lain. Umur token
+    tetap mengikuti `JWT_EXPIRE_MINUTES` yang sudah dijepit `_expire_minutes()`.
+    """
+    return _issue_token(user)
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: AsyncSession = Depends(get_db),

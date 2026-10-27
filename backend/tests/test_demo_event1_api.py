@@ -245,6 +245,9 @@ def test_agent_review_on_runtime_mati_tetap_201(
     )
     monkeypatch.setattr("app.api.demo.review_decision", _fake_review)
     monkeypatch.setattr("app.api.demo.settings.multi_agent_review", True)
+    # Jalur AgentCore harus DIPAKSA di sini: `AGENT_REVIEW_MODE` bisa bernilai
+    # `local` di `.env` mesin demo, dan tes ini menguji pemanggilan runtime.
+    monkeypatch.setattr("app.api.demo.settings.agent_review_mode", "advisory")
     monkeypatch.setattr("app.api.demo.settings.agent_review_timeout_seconds", 75)
     before = _jumlah_keputusan()
 
@@ -286,6 +289,8 @@ def test_agent_review_on_completed_membawa_run_id(
         ),
     )
     monkeypatch.setattr("app.api.demo.settings.multi_agent_review", True)
+    # Tes ini mengunci jalur runtime AgentCore; `.env` mesin demo boleh `local`.
+    monkeypatch.setattr("app.api.demo.settings.agent_review_mode", "advisory")
 
     head = pemakai("sppg_head", "Jakarta")
     headers = _login(client, head)
@@ -341,6 +346,8 @@ def test_agent_review_completed_mempersist_9_baris(client, monkeypatch, pemakai)
         ),
     )
     monkeypatch.setattr("app.api.demo.settings.multi_agent_review", True)
+    # Tes ini mengunci jalur runtime AgentCore; `.env` mesin demo boleh `local`.
+    monkeypatch.setattr("app.api.demo.settings.agent_review_mode", "advisory")
 
     head = pemakai("sppg_head", "Jakarta")
     headers = _login(client, head)

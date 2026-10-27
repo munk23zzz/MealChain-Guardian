@@ -34,7 +34,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import require_roles
+from app.api.auth import issue_token_for_user, require_roles
 from app.api.demo_session import butuh_sesi_aktif
 from app.api.dependencies import get_db
 from app.core.config import settings
@@ -60,6 +60,10 @@ from app.seed.timeseries import (
     validate_range,
 )
 from app.services.agent_review_client import AgentReviewResult, review_decision
+from app.services.agent_review_local import (
+    review_decision_local,
+    transport as agent_review_transport,
+)
 from app.services.demo_cost import hitung_biaya_demo
 from app.services.demo_procurement_orchestrator import (
     run_supplier_procurement,
@@ -1018,14 +1022,23 @@ async def run_demo_event1(
         # bukan kerusakan server.
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    outcome["agent_review"] = await _jalankan_agent_review(db, outcome)
+    outcome["agent_review"] = await _jalankan_agent_review(db, outcome, user=user)
     return outcome
 
 
 async def _jalankan_agent_review(
-    db: AsyncSession, outcome: dict
+    db: AsyncSession, outcome: dict, *, user: User | None = None
 ) -> dict:
-    """Review opsional setelah decision dibuat; kegagalan tidak membatalkan 201."""
+    """Review opsional setelah decision dibuat; kegagalan tidak membatalkan 201.
+
+    Dua jalur yang benar-benar berbeda, dipilih `AGENT_REVIEW_MODE`:
+
+    - `local`  → orkestrator IN-PROSES dari repo ini (`agent/orchestrator.py`).
+      Dipakai saat runtime AgentCore yang ter-deploy bisa tertinggal dari repo;
+      kode yang mengaudit adalah kode yang diuji di sini.
+    - lainnya (`advisory`/`predecision`/`agentcore`/kosong) → runtime AgentCore
+      lewat `AGENTCORE_RUNTIME_ARN`, yaitu perilaku lama (default aman).
+    """
     disabled = {"status": "disabled", "run_id": None}
     if not settings.multi_agent_review:
         return disabled
@@ -1034,13 +1047,44 @@ async def _jalankan_agent_review(
     if not isinstance(decision_id, str) or not decision_id.strip():
         return {"status": "failed", "run_id": None}
 
-    timeout = float(min(max(settings.agent_review_timeout_seconds, 1), 45))
-    try:
-        result = await run_in_threadpool(
-            review_decision, decision_id, timeout_seconds=timeout
-        )
-    except Exception:
-        result = AgentReviewResult(status="failed", error="review client gagal")
+    jalur = agent_review_transport(settings.agent_review_mode)
+    if jalur == "local":
+        # Review lokal membaca API dengan identitas PEMANGGIL (bukan token
+        # layanan berumur panjang): cakupan peran tetap ditegakkan endpoint.
+        if user is None:
+            result = AgentReviewResult(
+                status="unavailable",
+                error="user pemanggil tidak tersedia untuk token review lokal",
+            )
+        else:
+            try:
+                token = issue_token_for_user(user)
+            except Exception as exc:  # noqa: BLE001 - JWT_SECRET hilang dsb.
+                result = AgentReviewResult(
+                    status="unavailable",
+                    error=f"token review lokal gagal dibuat: {type(exc).__name__}",
+                )
+            else:
+                # Model berlatensi detik (verifier memanggilnya sekali); beri
+                # anggaran lebih lega daripada jalur runtime, tetap berbatas.
+                anggaran = float(
+                    min(max(settings.agent_review_timeout_seconds, 30), 120)
+                )
+                result = await run_in_threadpool(
+                    review_decision_local,
+                    decision_id,
+                    token=token,
+                    mode=settings.agent_review_mode,
+                    timeout_seconds=anggaran,
+                )
+    else:
+        timeout = float(min(max(settings.agent_review_timeout_seconds, 1), 45))
+        try:
+            result = await run_in_threadpool(
+                review_decision, decision_id, timeout_seconds=timeout
+            )
+        except Exception:
+            result = AgentReviewResult(status="failed", error="review client gagal")
 
     if not isinstance(result, AgentReviewResult):
         result = AgentReviewResult(status="failed", error="review client tidak valid")
@@ -1225,7 +1269,7 @@ async def run_demo_agent(
 
     outcome["commodity"] = isi.commodity
     outcome["target_location"] = lokasi.name
-    outcome["agent_review"] = await _jalankan_agent_review(db, outcome)
+    outcome["agent_review"] = await _jalankan_agent_review(db, outcome, user=user)
     return outcome
 
 
@@ -1356,7 +1400,22 @@ async def get_last_agent_run(
     # Run id review bisa datang dari baris worker (kolom run_id) atau dari
     # ringkasan SUPERVISE. Dua-duanya sah; jangan hanya bergantung pada satu
     # nama alat supaya status tidak tampak "belum tercatat" padahal ada.
-    run_review = next((t.run_id for t in langkah if t.agent_name), None)
+    # Run induk = run baris ringkasan supervisor (pola yang sama dengan
+    # `persist_agent_review`). Versi lama mengambil "baris pertama yang punya
+    # agent_name" — sejak runtime menulis 9 baris, baris VERIFIER (run ANAK)
+    # bisa terpilih lebih dulu, dan seluruh kartu worker lalu tampak "belum
+    # tercatat" padahal barisnya ada.
+    run_review = next(
+        (
+            t.run_id
+            for t in langkah
+            if t.step_name == "SUPERVISE" and t.agent_name == "supervisor" and t.run_id
+        ),
+        None,
+    )
+    if run_review is None:
+        ids = [t.run_id for t in langkah if t.agent_name and t.run_id]
+        run_review = max(set(ids), key=ids.count) if ids else None
     if run_review is None:
         run_review = next(
             (
