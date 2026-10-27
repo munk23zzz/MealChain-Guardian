@@ -364,3 +364,48 @@ def test_batch_lokasi_lain_tidak_ikut_dihitung(client, panggung):
     finally:
         _db_exec("DELETE FROM batches WHERE location_id = :l", {"l": lain})
         _db_exec("DELETE FROM locations WHERE id = :l", {"l": lain})
+
+
+def test_langkah_berikutnya_milik_batch_masing_masing(client, panggung):
+    """Satu keputusan bisa memuat batch kedaluwarsa DAN batch yang menunggu
+    catatan. Menyuruh "selesaikan verifikasi" untuk barang yang sudah lewat masa
+    layak adalah arahan yang salah — terukur di verifikasi browser 27 Okt 2026.
+    """
+    kedaluwarsa = str(
+        _db_one(
+            "INSERT INTO batches (commodity_id, location_id, supplier_id, quantity_kg, "
+            "harvested_at, temperature_log, freshness_score, safety_status, usable_until) "
+            "SELECT c.id, :l, :s, 70.00, now() - interval '30 hours', '[]'::jsonb, "
+            "0.90, 'pass', now() - interval '1 hour' FROM commodities c "
+            "WHERE c.name='telur' RETURNING id",
+            {"l": panggung["location_id"], "s": panggung["supplier_id"]},
+        )
+    )
+    try:
+        _db_exec("DELETE FROM batch_receipts WHERE batch_id = :b", {"b": panggung["batch_id"]})
+        body = _ringkasan(client, panggung, _login(client, panggung["kepala"]))
+        per_batch = {b["batch_id"]: b for b in body["receipt_gate"]["batches"]}
+        # Lokasi tujuan bisa memuat batch lain dari tes/fixture lain: yang penting
+        # dua batch yang dikendalikan tes ini hadir, bukan kesamaan himpunan.
+        assert {panggung["batch_id"], kedaluwarsa} <= set(per_batch), per_batch.keys()
+
+        langkah_layak = per_batch[panggung["batch_id"]]["next_step"]
+        assert langkah_layak == "catat hasil terima petugas lalu setujui penerimaan", langkah_layak
+
+        baris_kedaluwarsa = per_batch[kedaluwarsa]
+        assert baris_kedaluwarsa["status"] == "rejected", baris_kedaluwarsa
+        assert "batch_expired" in baris_kedaluwarsa["receive_reasons"], baris_kedaluwarsa
+        assert baris_kedaluwarsa["next_step"] != langkah_layak, baris_kedaluwarsa
+        assert "masa layak" in baris_kedaluwarsa["next_step"], baris_kedaluwarsa
+
+        # Agregat = langkah batch PERTAMA yang masih tertahan (urutan payload),
+        # bukan selalu batch pertama secara buta.
+        tertahan = [
+            b
+            for b in body["receipt_gate"]["batches"]
+            if b["receive_reasons"] or b["quarantine_reasons"]
+        ]
+        assert tertahan, body["receipt_gate"]
+        assert body["receipt_gate"]["next_step"] == tertahan[0]["next_step"], tertahan[0]
+    finally:
+        _db_exec("DELETE FROM batches WHERE id = :b", {"b": kedaluwarsa})
