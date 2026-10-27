@@ -26,7 +26,7 @@ komponen biaya angkut TANPA mengubah kontrak di atas:
 
 import inspect
 from dataclasses import replace
-from datetime import timezone
+from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import select
@@ -135,9 +135,12 @@ async def fetch_operational_facts(db, as_of):
     NYATA (`suppliers.latitude/longitude` vs `locations.latitude/longitude`);
     pemasok tanpa koordinat sengaja TIDAK muncul di peta (bukan 0 km).
     """
-    # `as_of=None` = jam DATASET (`decision_time.evaluation_clock`), bukan jam
-    # dinding: dataset demo berjangkar kanon sehingga bukti suhunya sah.
-    as_of = evaluation_clock(as_of)
+    # `as_of=None` = jam dinding: kontrak fungsi ini adalah "baris yang sudah
+    # terjadi sampai sekarang" (diuji `test_recommendation_as_of`). Jangkar
+    # sesi demo adalah jam EVALUASI, bukan batas data: ia diberikan pemanggil
+    # (`event1_orchestrator`, `/balance/*`) dan dipakai `build_recommendations`.
+    if as_of is None:
+        as_of = datetime.now(timezone.utc)
     loc_rows = (await db.execute(select(Location))).scalars().all()
     locs = {loc.id: loc.name for loc in loc_rows}
     coms = {c.id: c.name for c in (await db.execute(select(Commodity))).scalars()}
@@ -419,13 +422,32 @@ def _gerbang_jendela_kirim(
             needed_by=needed_by.get(kunci), evaluation_time=evaluation_time
         )
         est = logistics_by_pair.get((cand.source_location, cand.destination_location)) or {}
-        estimasi = float(est.get("estimated_time_min") or 0.0)
-        tiba = arrival_due_at(evaluation_time, estimasi) if est else None
+        # Fase 4 butir 6: batas waktu DISERAHKAN ke `estimate_logistics()`, bukan
+        # diperiksa di luarnya. Tanpa ini `feasible` selalu True semata karena
+        # fungsi dipanggil tanpa batas, dan kandidat yang tak mungkin tiba
+        # tetap lolos.
+        try:
+            hitung = estimate_logistics(
+                cand.source_location,
+                cand.destination_location,
+                float(cand.quantity_kg or 1),
+                delivery_window_min=jendela.window_min,
+            )
+        except ValueError:
+            hitung = None
+        dasar = hitung or est
+        estimasi = float(dasar.get("estimated_time_min") or 0.0)
+        tiba = arrival_due_at(evaluation_time, estimasi) if dasar else None
+
+        if jendela.state == TERLAMPAUI:
+            lewat = True
+        elif hitung is not None:
+            lewat = not bool(hitung["feasible"])
+        else:
+            lewat = muat_terlampaui(jendela, estimated_time_min=estimasi)
 
         alasan = []
-        if jendela.state == TERLAMPAUI or muat_terlampaui(
-            jendela, estimated_time_min=estimasi
-        ):
+        if lewat:
             alasan.append("delivery_window_exceeded")
         if tiba is not None:
             habis = [
@@ -483,7 +505,8 @@ async def build_recommendations(
     supply, demand, refs, quotes, batches = _filter_commodity(
         supply, demand, refs, quotes, batches, commodity
     )
-    as_of = evaluation_clock(as_of)
+    if as_of is None:
+        as_of = evaluation_clock()
 
     prices_map = _build_prices_map(refs, quotes)
     held: list = []
