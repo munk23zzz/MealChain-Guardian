@@ -247,6 +247,13 @@ export default function GoodsReceiptDrawer({
                       <span className="goods-receipt-quarantine" data-action="quarantine-hint">
                         {QUARANTINE_HOLD_LABEL} tersedia di papan Keamanan Pangan
                       </span>
+                    ) : baris.status === "quarantined" ? (
+                      // Batch yang SUDAH ditahan tidak bisa ditahan ulang; tindakannya
+                      // melepas karantina atau menolak batch, dan keduanya ada di papan
+                      // Keamanan Pangan. Petunjuk ini yang membedakan dari `on_hold`.
+                      <span className="goods-receipt-quarantine" data-action="release-hint">
+                        Lepas karantina atau tolak batch lewat papan Keamanan Pangan
+                      </span>
                     ) : null}
                   </div>
                 ) : (

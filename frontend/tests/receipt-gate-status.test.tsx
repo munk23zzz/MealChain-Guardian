@@ -170,6 +170,44 @@ describe("Fase 9 butir 2 — tombol mengikuti status kelayakan", () => {
   });
 });
 
+describe("Fase 9 butir 2 — tindakan quarantined berbeda dari on_hold", () => {
+  it("batch yang sudah ditahan menunjuk pelepasan karantina, bukan penahanan ulang", () => {
+    const html = render(
+      gate(
+        { can_receive: false, can_quarantine: false, next_step: "lepas karantina atau tolak batch" },
+        {
+          status: "quarantined",
+          can_receive: false,
+          can_quarantine: false,
+          receive_reasons: ["quarantined"],
+          quarantine_reasons: ["quarantine_transition_invalid"],
+        }
+      )
+    );
+    expect(html).toContain('data-action="release-hint"');
+    expect(html).toContain("Lepas karantina atau tolak batch lewat papan Keamanan Pangan");
+    expect(html).not.toContain('data-action="quarantine-hint"');
+    expect(html).not.toContain('data-action="receive"');
+  });
+
+  it("on_hold tetap menawarkan penahanan, bukan pelepasan", () => {
+    const html = render(
+      gate(
+        { can_receive: false, can_quarantine: true, next_step: "selesaikan verifikasi verifier" },
+        {
+          status: "on_hold",
+          can_receive: false,
+          can_quarantine: true,
+          receive_reasons: ["safety_needs_verification"],
+        }
+      )
+    );
+    expect(html).toContain('data-action="quarantine-hint"');
+    expect(html).not.toContain('data-action="release-hint"');
+    expect(html).not.toContain('data-action="receive"');
+  });
+});
+
 describe("Fase 9 butir 2 — langkah berikutnya per batch", () => {
   it("tiap baris memakai next_step miliknya sendiri, bukan langkah agregat", () => {
     const summary = {
