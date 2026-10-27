@@ -24,6 +24,9 @@ import {
 } from "../lib/goods-receipt";
 
 function gate(over: Record<string, unknown> = {}, batch: Record<string, unknown> = {}) {
+  // Server (sejak perbaikan browser 27 Okt) mengirim `next_step` PER BATCH;
+  // agregat hanya untuk ringkasan. Fixture lama yang menaruh langkah di level
+  // gerbang dipindahkan ke baris batch agar tetap menguji perilaku sebenarnya.
   const baris = {
     batch_id: "b1",
     status: "usable",
@@ -31,6 +34,7 @@ function gate(over: Record<string, unknown> = {}, batch: Record<string, unknown>
     can_quarantine: true,
     receive_reasons: [] as string[],
     quarantine_reasons: [] as string[],
+    next_step: (over.next_step as string | undefined) ?? null,
     ...batch,
   };
   return {
@@ -209,6 +213,60 @@ describe("Fase 9 butir 2 — langkah berikutnya per batch", () => {
     expect(html).toContain("tolak batch — sudah lewat masa layak");
     expect(html).toContain("sudah lewat masa layak");
     expect(html).not.toContain("batch_expired");
+  });
+
+  it("baris siap-terima tanpa langkah sendiri tidak mewarisi langkah agregat", () => {
+    const summary = {
+      decision_id: "d1",
+      can_receive: true,
+      can_quarantine: true,
+      receipt_gate: {
+        location_id: "loc-jkt",
+        location_name: null,
+        batches: [
+          {
+            batch_id: "b-siap",
+            status: "usable",
+            can_receive: true,
+            can_quarantine: true,
+            receive_reasons: [],
+            quarantine_reasons: [],
+            next_step: null,
+          },
+          {
+            batch_id: "b-karantina",
+            status: "quarantined",
+            can_receive: false,
+            can_quarantine: false,
+            receive_reasons: ["quarantined"],
+            quarantine_reasons: ["quarantine_transition_invalid"],
+            next_step: "lepas karantina atau tolak batch",
+          },
+        ],
+        can_receive: true,
+        can_quarantine: true,
+        receive_reasons: ["quarantined"],
+        quarantine_reasons: [],
+        next_step: "lepas karantina atau tolak batch",
+      },
+    };
+    const html = render(summary, {
+      receipts: { "b-siap": [{ id: "r1", status: "menunggu" }] },
+    });
+    // Potong per baris batch: baris memuat <ul> alasan (LI bersarang), jadi
+    // pemisah yang benar adalah penanda batch berikutnya, bukan "</li>" pertama.
+    const potong = (id: string) => {
+      const mulai = html.indexOf(`data-batch="${id}"`);
+      const sesudah = html.indexOf('data-batch="', mulai + 1);
+      return html.slice(mulai, sesudah === -1 ? undefined : sesudah);
+    };
+    // Baris siap-terima menampilkan tombolnya, bukan arahan milik baris karantina.
+    const barisSiap = potong("b-siap");
+    expect(barisSiap).toContain('data-action="receive"');
+    expect(barisSiap).not.toContain("lepas karantina atau tolak batch");
+    // Baris karantina tetap memakai langkah miliknya sendiri.
+    const barisKarantina = potong("b-karantina");
+    expect(barisKarantina).toContain("lepas karantina atau tolak batch");
   });
 });
 

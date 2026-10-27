@@ -126,8 +126,10 @@ export function receiptGateView(summary: unknown): ReceiptGateView {
     canReceive: b?.can_receive === true,
     canQuarantine: b?.can_quarantine === true,
     reasons: daftar(b?.receive_reasons),
-    // Langkah PER BATCH bila server mengirimnya; agregat hanya cadangan.
-    nextStep: (b?.next_step ?? gate.next_step ?? null) as string | null,
+    // Langkah PER BATCH saja — TANPA jatuh ke langkah agregat. Terukur di
+    // verifikasi browser: baris siap-terima (can_receive=true, langkahnya null)
+    // sempat menampilkan "lepas karantina atau tolak batch" milik baris lain.
+    nextStep: (b?.next_step ?? null) as string | null,
   }));
   const alasan = daftar(gate.receive_reasons);
   const canReceive = gate.can_receive === true;
