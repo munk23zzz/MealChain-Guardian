@@ -41,6 +41,7 @@ from app.core.config import settings
 from app.core.scope import assert_in_scope
 from app.models import (
     AgentTrace,
+    Approval,
     Batch,
     Commodity,
     Decision,
@@ -137,6 +138,56 @@ async def _commodity_id(db: AsyncSession, name: str):
     return row.id if row else None
 
 
+async def _kepala_penolak(db: AsyncSession, lokasi: Location) -> uuid.UUID | None:
+    """Akun yang mencatat penolakan: Kepala SPPG lokasi kasus, cadangan mana pun.
+
+    Dipakai agar keputusan `rejected` hasil semai punya baris approval negatif —
+    tanpa itu invarian "keputusan ditolak tanpa pencatat" gagal (audit 27 Okt 2026).
+    """
+    row = await db.scalar(
+        select(User.id)
+        .where(User.role == "sppg_head", User.location_id == lokasi.id)
+        .limit(1)
+    )
+    if row is not None:
+        return row
+    return await db.scalar(select(User.id).where(User.role == "sppg_head").limit(1))
+
+
+async def _catat_penolakan(
+    db: AsyncSession,
+    decision: Decision,
+    *,
+    alasan: str,
+    sekarang: datetime,
+    user_id: uuid.UUID | None,
+) -> None:
+    """Tulis satu baris `approvals(approved=false)` untuk keputusan yang ditolak.
+
+    Idempoten: semai ulang tidak menggandakan baris. Atribusi memakai akun yang
+    benar-benar berperan (Kepala SPPG lokasi kasus), bukan akun karangan.
+    """
+    if user_id is None:
+        return
+    sudah = await db.scalar(
+        select(func.count())
+        .select_from(Approval)
+        .where(Approval.decision_id == decision.id, Approval.approved.is_(False))
+    )
+    if sudah:
+        return
+    db.add(
+        Approval(
+            decision_id=decision.id,
+            approved_by=user_id,
+            approved=False,
+            comment=alasan,
+            approved_at=sekarang,
+        )
+    )
+    await db.flush()
+
+
 async def _bukti(
     db: AsyncSession,
     decision: Decision,
@@ -178,16 +229,36 @@ async def _ikat_sumber(db: AsyncSession, decision: Decision, sekarang: datetime)
     — kartu unggulan demo tidak bisa dieksekusi.
 
     Aturan pemilihan (deterministik, bukan tebakan tersembunyi): batch di lokasi
-    ASAL keputusan + komoditas yang sama, masih layak pakai (`usable_until` di
+    acuan keputusan + komoditas yang sama, masih layak pakai (`usable_until` di
     masa depan), kuantitas TERBESAR; seri dipecah oleh id terkecil. Bila tidak
     ada batch layak, TIDAK ada binding — layar lalu menampilkan alasan sebenarnya
     alih-alih pemasok karangan.
+
+    Lokasi acuan mengikuti jenis keputusan (audit 27 Okt 2026):
+
+    - **pengadaan** (`supplier_procurement`): batch di SPPG TUJUAN milik
+      `decisions.supplier_id` — sama dengan aturan penulis produksi
+      (`supplier_procurement.persist_supplier_binding`). Versi lama memakai
+      batch lokasi ASAL, sehingga keputusan pengadaan membawa binding
+      transfer: PO-nya bisa menunjuk pemasok yang BERBEDA dari pemasok yang
+      tampil di layar, dan setelah guard eksekusi diperbaiki binding itu
+      ditolak `409 binding batch/supplier berubah`.
+    - **jenis lain** (pemindahan antar-SPPG): batch di lokasi SUMBER.
     """
+    if decision.decision_type == "supplier_procurement":
+        if decision.supplier_id is None or decision.target_location_id is None:
+            return False
+        lokasi_acuan = decision.target_location_id
+        kondisi_pemasok = [Batch.supplier_id == decision.supplier_id]
+    else:
+        lokasi_acuan = decision.source_location_id
+        kondisi_pemasok = []
     batch = (
         await db.execute(
             select(Batch)
             .where(
-                Batch.location_id == decision.source_location_id,
+                Batch.location_id == lokasi_acuan,
+                *kondisi_pemasok,
                 Batch.commodity_id == decision.commodity_id,
                 Batch.usable_until.is_not(None),
                 Batch.usable_until >= sekarang,
@@ -452,6 +523,13 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
     created.append(v1.id)
     # Bukti penolakan iterasi 1: kuota SPPG penuh. Tanpa baris ini kartu
     # `rejected` tampil dengan panel bukti kosong.
+    await _catat_penolakan(
+        db,
+        v1,
+        alasan=f"Kuota SPPG {target.name} penuh minggu ini — coba skema bertahap.",
+        sekarang=sekarang,
+        user_id=await _kepala_penolak(db, target),
+    )
     await _bukti(
         db,
         v1,
@@ -490,6 +568,13 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
     created.append(v2.id)
     # Bukti penolakan: harga kutipan 12% di atas referensi — alasan kartu ini
     # ditolak, jadi panel bukti TIDAK boleh kosong.
+    await _catat_penolakan(
+        db,
+        v2,
+        alasan="Harga per kg naik 12% dari referensi — negosiasi ulang dulu.",
+        sekarang=sekarang,
+        user_id=await _kepala_penolak(db, target),
+    )
     await _bukti(
         db,
         v2,
@@ -600,6 +685,13 @@ async def _seed_demo_cases(db: AsyncSession, force: bool, target: Location) -> d
     created.append(g1.id)
     # Bukti penolakan logistik: status rute + perkiraan tunda — kartu ini ditolak
     # karena rute terganggu, jadi alasannya harus terbaca di panel bukti.
+    await _catat_penolakan(
+        db,
+        g1,
+        alasan=f"Rute menuju {target.name} terganggu banjir — cari sumber alternatif.",
+        sekarang=sekarang,
+        user_id=await _kepala_penolak(db, target),
+    )
     await _bukti(
         db,
         g1,

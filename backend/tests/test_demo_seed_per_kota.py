@@ -132,6 +132,46 @@ def test_seed_dari_bandung_menargetkan_bandung(client):
         _drop(kepala["email"])
 
 
+def test_keputusan_ditolak_punya_pencatat(client):
+    """Kasus `rejected` hasil semai wajib punya baris `approvals(approved=false)`.
+
+    Regresi 27 Okt 2026: penyemai menulis `rejection_reason` + bukti tetapi tidak
+    menulis baris approval negatif, sehingga invarian "keputusan ditolak tanpa
+    pencatat" gagal (12 baris) dan jejak penolakan tidak bisa diaudit.
+    """
+    kepala = _mk_user("sppg_head", "Bandung")
+    try:
+        resp = client.post(
+            "/demo/seed", json={"force": True}, headers=_login(client, kepala)
+        )
+        assert resp.status_code == 200, resp.text
+        eng = create_engine(DB_URL)
+        try:
+            with eng.connect() as conn:
+                total = conn.execute(
+                    text(
+                        "select count(*) from decisions d join locations l "
+                        "on l.id = d.target_location_id "
+                        "where l.name = 'Bandung' and d.status = 'rejected'"
+                    )
+                ).scalar_one()
+                tanpa = conn.execute(
+                    text(
+                        "select count(*) from decisions d join locations l "
+                        "on l.id = d.target_location_id "
+                        "where l.name = 'Bandung' and d.status = 'rejected' "
+                        "and not exists (select 1 from approvals a "
+                        "where a.decision_id = d.id and a.approved = false)"
+                    )
+                ).scalar_one()
+        finally:
+            eng.dispose()
+        assert total >= 1, "kasus tidak menghasilkan keputusan rejected"
+        assert tanpa == 0, f"{tanpa} keputusan rejected tanpa pencatat"
+    finally:
+        _drop(kepala["email"])
+
+
 def test_seed_idempoten_per_kota(client):
     kepala = _mk_user("sppg_head", "Bandung")
     try:
