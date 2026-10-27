@@ -210,7 +210,7 @@ def test_golden_04_safety_fail_blocking() -> None:
         }
     )
 
-    finding = SafetyWorker().run(_context(api))
+    finding = SafetyWorker().run(_context(api, source_location="Jakarta"))
 
     assert finding.facts["failed_count"] == 1
     assert finding.facts["worst_status"] == "fail"
@@ -234,7 +234,7 @@ def test_golden_05_freshness_rendah_memberi_warning() -> None:
         }
     )
 
-    finding = FreshnessWorker().run(_context(api))
+    finding = FreshnessWorker().run(_context(api, source_location="Jakarta"))
 
     assert finding.facts["worst_freshness_score"] == 0.8
     assert any("0.8" in warning and "aman" in warning for warning in finding.warnings)

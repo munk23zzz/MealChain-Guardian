@@ -124,6 +124,9 @@ async def _safety_view(db: AsyncSession, decision: Decision) -> dict:
         "blocked": False,
         "batches_checked": 0,
         "reason": None,
+        # AUD-9B-29: himpunan batch SUMBER yang dipakai execute. Worker agen
+        # (Safety/Freshness) menilai batch ini, bukan batch lokasi tujuan.
+        "batch_ids": [],
     }
     if decision.source_location_id is None or decision.commodity_id is None:
         return tak_terdefinisi
@@ -136,6 +139,7 @@ async def _safety_view(db: AsyncSession, decision: Decision) -> dict:
             "blocked": True,
             "batches_checked": 0,
             "reason": "safety revalidation gagal: tidak ada batch sumber",
+            "batch_ids": [],
         }
     statuses = [(b.safety_status or "pending") for b in batches]
     blocked = source_batch_safety_blocked(batches)
@@ -155,6 +159,9 @@ async def _safety_view(db: AsyncSession, decision: Decision) -> dict:
         "blocked": blocked,
         "batches_checked": len(batches),
         "reason": "safety revalidation gagal: batch sumber kini FAIL" if blocked else None,
+        # Himpunan yang SAMA dengan yang dipakai execute (`batch_sumber_transfer`),
+        # sehingga worker agen tidak perlu menebak dari lokasi tujuan.
+        "batch_ids": sorted(str(b.id) for b in batches),
     }
 
 
@@ -356,17 +363,13 @@ async def build_approval_summary(
         if decision.safe_delivered_cost is None or decision.safe_delivered_cost <= 0:
             blocking.append("unit price decision tidak valid")
         if supplier is not None:
-            from app.models import SupplierExclusion
+            from app.services.supplier_exclusion_service import exclusion_aktif_untuk
 
-            aktif = (
-                await db.execute(
-                    select(SupplierExclusion.id).where(
-                        SupplierExclusion.supplier_id == supplier.id,
-                        SupplierExclusion.scope_location_id == decision.target_location_id,
-                        SupplierExclusion.status == "active",
-                    )
-                )
-            ).first()
+            aktif = await exclusion_aktif_untuk(
+                db,
+                supplier_id=supplier.id,
+                target_location_id=decision.target_location_id,
+            )
             if aktif:
                 # Kalimat SAMA dengan `revalidate_transfer` — satu sumber pesan.
                 blocking.append("supplier excluded pada SPPG penerima")
@@ -393,6 +396,14 @@ async def build_approval_summary(
         "proposed_by": decision.proposed_by,
         "source_location": await _loc_name(decision.source_location_id),
         "target_location": await _loc_name(decision.target_location_id),
+        # Identitas lokasi (AUD-9B-29): cakupan exclusion hanya bisa dinilai
+        # dengan id, bukan nama. Additif; pembaca lama tidak terpengaruh.
+        "source_location_id": (
+            str(decision.source_location_id) if decision.source_location_id else None
+        ),
+        "target_location_id": (
+            str(decision.target_location_id) if decision.target_location_id else None
+        ),
         "commodity": commodity.name if commodity else None,
         "quantity_kg": (float(decision.quantity_kg) if decision.quantity_kg is not None else None),
         "safe_delivered_cost": (

@@ -34,10 +34,30 @@ LANES: tuple[tuple[AgentName, ...], ...] = (
 EVIDENCE_AGENT = AgentName.EVIDENCE
 
 
+def _id_teks(nilai: Any) -> str | None:
+    """Identitas (UUID sebagai string) dari summary; kosong → None, tanpa menebak."""
+    if not isinstance(nilai, str):
+        return None
+    teks = nilai.strip()
+    return teks or None
+
+
 def context_from_approval(
     decision_id: str, summary: dict[str, Any]
 ) -> WorkerContext:
-    """Bangun context worker dari `approval-summary`; tidak menebak field."""
+    """Bangun context worker dari `approval-summary`; tidak menebak field.
+
+    Sejak AUD-9B-29 context membawa identitas yang dipakai guardian untuk
+    menilai batch SUMBER dan mencakupkan exclusion:
+
+    - `target_location_id` + `supplier.id` → cakupan exclusion
+      (`supplier_exclusions.supplier_id` + `scope_location_id`);
+    - `safety.batch_ids` → himpunan batch sumber yang benar-benar dikirim
+      (sumber yang sama dengan `batch_sumber_transfer` di backend).
+
+    Field yang tidak ada dibiarkan None/kosong; worker lalu fail-closed,
+    bukan menebak dari lokasi tujuan.
+    """
     location = summary.get("target_location")
     commodity = summary.get("commodity")
     if not isinstance(location, str) or not location.strip():
@@ -47,6 +67,14 @@ def context_from_approval(
     source = summary.get("source_location")
     source_location = source.strip() if isinstance(source, str) and source.strip() else None
     quantity = as_number(summary.get("quantity_kg"), allow_numeric_string=True)
+    supplier = summary.get("supplier")
+    supplier_id = _id_teks(supplier.get("id")) if isinstance(supplier, dict) else None
+    safety = summary.get("safety")
+    batch_ids: tuple[str, ...] = ()
+    if isinstance(safety, dict) and isinstance(safety.get("batch_ids"), list):
+        batch_ids = tuple(
+            str(nilai) for nilai in safety["batch_ids"] if str(nilai).strip()
+        )
     return WorkerContext(
         run_id=uuid4(),
         decision_id=decision_id,
@@ -54,6 +82,10 @@ def context_from_approval(
         commodity=commodity.strip(),
         source_location=source_location,
         quantity_kg=quantity,
+        target_location_id=_id_teks(summary.get("target_location_id")),
+        source_location_id=_id_teks(summary.get("source_location_id")),
+        supplier_id=supplier_id,
+        source_batch_ids=batch_ids,
     )
 
 

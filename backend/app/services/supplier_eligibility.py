@@ -8,9 +8,22 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.evidence_consistency import binding_consistency
-from app.core.safety_gate import penghalang_sumber
-from app.models import Batch, Decision, DecisionEvidence, SupplierExclusion
+from app.core.safety_gate import (
+    BLOKIR_EKSEKUSI_KARANTINA,
+    BLOKIR_EKSEKUSI_KEDALUWARSA,
+    BLOKIR_SAFETY_FAIL_SUMBER,
+    penghalang_sumber,
+)
+from app.models import Batch, Decision, DecisionEvidence
 from app.services.supplier_exclusion_service import lock_supplier
+
+#: Pesan manusiawi untuk kode blokir batch sumber. Kode → kalimat, bukan
+#: sebaliknya, supaya "dikarantina" tidak pernah dilaporkan sebagai "FAIL".
+PESAN_BLOKIR = {
+    BLOKIR_SAFETY_FAIL_SUMBER: "batch sumber kini FAIL (temperature excursion)",
+    BLOKIR_EKSEKUSI_KARANTINA: "batch sumber dikarantina/gagal",
+    BLOKIR_EKSEKUSI_KEDALUWARSA: "batch sumber kedaluwarsa",
+}
 
 
 async def persist_binding(db: AsyncSession, decision: Decision, candidate: dict) -> None:
@@ -198,22 +211,25 @@ async def revalidate_transfer(db: AsyncSession, decision: Decision) -> uuid.UUID
     supplier_id, batches = await resolve_binding(db, decision)
     for batch in batches:
         await db.refresh(batch, with_for_update=True)
-    active = (
-        await db.execute(
-            select(SupplierExclusion.id).where(
-                SupplierExclusion.supplier_id == supplier_id,
-                SupplierExclusion.scope_location_id == decision.target_location_id,
-                SupplierExclusion.status == "active",
-            )
-        )
-    ).first()
+    from app.services.supplier_exclusion_service import exclusion_aktif_untuk
+
+    active = await exclusion_aktif_untuk(
+        db,
+        supplier_id=supplier_id,
+        target_location_id=decision.target_location_id,
+    )
     reasons = []
     if active:
         reasons.append("supplier excluded pada SPPG penerima")
     if not batches:
         reasons.append("safety revalidation gagal: tidak ada batch sumber")
-    elif source_batch_safety_blocked(batches):
-        reasons.append("safety revalidation gagal: batch sumber kini FAIL")
+    else:
+        # Satu definisi dengan guard `_source_batches_still_safe` dan
+        # `can_execute`; kode blokirnya disebut apa adanya supaya pesan tidak
+        # menyamakan "kedaluwarsa"/"dikarantina" dengan "FAIL".
+        blokir = penghalang_sumber(batches, sekarang=datetime.now(UTC))
+        if blokir is not None:
+            reasons.append(f"safety revalidation gagal: {PESAN_BLOKIR.get(blokir, blokir)}")
 
     if reasons:
         raise HTTPException(409, "; ".join(reasons))

@@ -44,11 +44,19 @@ class FakeApi:
 
 
 def _context(api: object) -> WorkerContext:
+    """Konteks uji dengan sumber = lokasi batch fixture (AUD-9B-29).
+
+    Sejak guardian menilai batch SUMBER, konteks wajib menyebut lokasi sumber.
+    Fixture ini menaruh batch di Jakarta dan memakai Jakarta sebagai sumber,
+    sehingga angka yang diuji tetap sama tanpa memakai lokasi tujuan sebagai
+    pengganti.
+    """
     return WorkerContext(
         run_id=uuid4(),
         decision_id="decision-1",
         location="Jakarta",
         commodity="telur",
+        source_location="Jakarta",
         api=api,
     )
 

@@ -42,11 +42,13 @@ class FakeApi:
 
 
 def _context(api: object, location: str = "Jakarta", commodity: str = "telur") -> WorkerContext:
+    """Sumber = lokasi batch fixture (AUD-9B-29: guardian menilai batch SUMBER)."""
     return WorkerContext(
         run_id=uuid4(),
         decision_id="decision-1",
         location=location,
         commodity=commodity,
+        source_location=location,
         api=api,
     )
 
@@ -238,6 +240,7 @@ def test_safety_menandai_fail_dan_exclusion_aktif() -> None:
         "pass_count": 1,
         "pending_count": 0,
         "failed_count": 1,
+        "quarantined_count": 0,
         "active_exclusion_count": 1,
     }
 
@@ -305,7 +308,11 @@ def test_freshness_daftar_kosong_adalah_nol_nyata() -> None:
     assert finding.facts["batch_count"] == 0
     assert finding.facts["expired_count"] == 0
     assert finding.facts["worst_freshness_score"] is None
-    assert finding.blocking is False
+    # AUD-9B-29: nol batch sumber tetap NOL yang nyata (bukan "tidak
+    # diketahui"), tetapi tidak ada bukti = tidak boleh dilaporkan aman.
+    # Sebelum perbaikan, himpunan kosong hasil penyaringan lokasi TUJUAN
+    # dilaporkan `blocking=False`.
+    assert finding.blocking is True
     assert _citations(finding) == {"batch_count": 0, "expired_count": 0}
 
 

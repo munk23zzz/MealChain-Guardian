@@ -28,6 +28,35 @@ async def lock_supplier(db: AsyncSession, supplier_id: uuid.UUID) -> Supplier:
     return supplier
 
 
+async def exclusion_aktif_untuk(
+    db: AsyncSession,
+    *,
+    supplier_id: uuid.UUID | None,
+    target_location_id: uuid.UUID | None,
+):
+    """Baris exclusion `active` yang BERLAKU untuk (pemasok, SPPG penerima).
+
+    Cakupan exclusion hanya `supplier_id` + `scope_location_id`
+    (`supplier_exclusions` tidak punya kolom komoditas). Definisi ini dipakai
+    bersama oleh `supplier_eligibility.revalidate_transfer` (guard eksekusi)
+    dan `approval_summary` (`can_execute`), supaya keduanya tidak bisa
+    menyimpang — dulu satu exclusion aktif di Jakarta memveto keputusan
+    ber-target lain (AUD-9B-29). Pemasok/lokasi yang tidak diketahui → `None`
+    (tidak ada baris yang bisa dicocokkan); pemanggil yang memutuskan sikapnya.
+    """
+    if supplier_id is None or target_location_id is None:
+        return None
+    return (
+        await db.execute(
+            select(SupplierExclusion.id).where(
+                SupplierExclusion.supplier_id == supplier_id,
+                SupplierExclusion.scope_location_id == target_location_id,
+                SupplierExclusion.status == "active",
+            )
+        )
+    ).first()
+
+
 async def validate_evidence(db: AsyncSession, supplier_id: uuid.UUID, refs: list[dict]) -> None:
     """Incident = persisted temperature DecisionEvidence, not invented incident table."""
     for ref in refs:

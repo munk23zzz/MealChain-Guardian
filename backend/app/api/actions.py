@@ -354,11 +354,17 @@ async def _source_batches_still_safe(db: AsyncSession, decision: Decision) -> bo
 
     Sekarang aturan diambil dari `penghalang_sumber` dan himpunan batch dari
     `batch_sumber_transfer`; keduanya dipakai juga oleh `supplier_eligibility`,
-    jadi paritas UI↔API bukan hasil kebetulan. Decision tanpa lokasi/komoditas
-    sumber (mis. price_anomaly) tidak direvalidasi.
+    jadi paritas UI↔API bukan hasil kebetulan.
+
+    AUD-9B-29 (fail-closed): keputusan tanpa identitas sumber (lokasi atau
+    komoditas kosong) TIDAK lagi diloloskan diam-diam. Jenis yang memang tidak
+    punya batch sumber (`price_anomaly`, `review_only`) tidak pernah sampai ke
+    jalur ini — sudah dipagari lebih dulu di
+    `execute_action`/`revalidate_transfer` — sehingga satu-satunya akibat
+    perubahan ini adalah menutup jalur "tidak dapat dibuktikan = boleh".
     """
     if decision.source_location_id is None or decision.commodity_id is None:
-        return True
+        return False
 
     from app.services.supplier_eligibility import batch_sumber_transfer
 

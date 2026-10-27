@@ -27,6 +27,15 @@ class WorkerContext:
     source_location: str | None = None
     quantity_kg: float | None = None
     api: Any = None
+    #: Identitas untuk mencakupkan exclusion & memilih batch sumber
+    #: (AUD-9B-29). `location` tetap lokasi TUJUAN; batch yang dinilai guardian
+    #: adalah batch SUMBER (`source_location` / `source_batch_ids`).
+    target_location_id: str | None = None
+    source_location_id: str | None = None
+    supplier_id: str | None = None
+    #: `batch_ids` binding keputusan (himpunan yang sama dengan
+    #: `batch_sumber_transfer` di backend). Kosong = tidak ada binding.
+    source_batch_ids: tuple[str, ...] = ()
 
 
 class StubWorker:

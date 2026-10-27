@@ -8,6 +8,7 @@ from time import monotonic
 from ..api_client import AgentApiError
 from ..contracts import AgentFinding, AgentName
 from .base import ReadOnlyWorker, WorkerContext, as_number
+from .sumber import pilih_batch_sumber
 
 #: Ambang kesegaran CERTIFIED — cermin `backend/app/core/freshness.py`
 #: (`PASS_THRESHOLD` / `VERIFY_THRESHOLD`, keputusan owner). Worker agen
@@ -60,6 +61,7 @@ class FreshnessWorker(ReadOnlyWorker):
                     "Daftar batch tidak tersedia; kesegaran tidak diketahui.",
                     facts={
                         "location": location,
+                        "source_location": context.source_location,
                         "commodity": commodity,
                         "batch_count": None,
                         "expired_count": None,
@@ -71,13 +73,8 @@ class FreshnessWorker(ReadOnlyWorker):
                 )
             return self._error(str(exc), latency_ms=latency)
 
-        selected = [
-            batch
-            for batch in batches
-            if isinstance(batch, dict)
-            and str(batch.get("location", "")).strip().lower() == location.lower()
-            and str(batch.get("commodity", "")).strip().lower() == commodity.lower()
-        ]
+        sumber = pilih_batch_sumber(context, batches)
+        selected = sumber.batches
 
         now = datetime.now(timezone.utc)
         scores: list[float] = []
@@ -106,36 +103,51 @@ class FreshnessWorker(ReadOnlyWorker):
         freshness_status = (
             classify_freshness(worst_score) if worst_score is not None else None
         )
+        teridentifikasi = sumber.teridentifikasi
         facts = {
             "location": location,
+            # Batch yang dinilai adalah batch SUMBER (AUD-9B-29), bukan batch
+            # lokasi tujuan.
+            "source_location": context.source_location,
             "commodity": commodity,
-            "batch_count": len(selected),
-            "expired_count": len(expired_ids),
-            "worst_freshness_score": worst_score,
+            # None = himpunan batch sumber tidak dapat diidentifikasi.
+            "batch_count": len(selected) if teridentifikasi else None,
+            "expired_count": len(expired_ids) if teridentifikasi else None,
+            "worst_freshness_score": worst_score if teridentifikasi else None,
             # Status gerbang certified. Sengaja STRING, bukan angka: setiap
             # angka di `facts` wajib punya sitasi (kontrak AgentFinding), dan
             # ambang 0,85/0,60 bukan hasil pengukuran batch melainkan aturan.
-            "freshness_status": freshness_status,
-            "earliest_usable_until": earliest.isoformat() if earliest else None,
+            "freshness_status": freshness_status if teridentifikasi else None,
+            "earliest_usable_until": (
+                earliest.isoformat() if earliest is not None and teridentifikasi else None
+            ),
             "expired_batch_ids": expired_ids,
         }
-        citations = [
-            self._citation("batch_count", "/batches", "batches[].usable_until (count)", len(selected)),
-            self._citation("expired_count", "/batches", "batches[].usable_until (count)", len(expired_ids)),
-        ]
-        if worst_score is not None:
-            citations.append(
+        citations = []
+        if teridentifikasi:
+            citations = [
                 self._citation(
-                    "worst_freshness_score",
-                    "/batches",
-                    "batches[].freshness_score (min)",
-                    worst_score,
+                    "batch_count", "/batches", "batches[].usable_until (count)", len(selected)
+                ),
+                self._citation(
+                    "expired_count", "/batches", "batches[].usable_until (count)", len(expired_ids)
+                ),
+            ]
+            if worst_score is not None:
+                citations.append(
+                    self._citation(
+                        "worst_freshness_score",
+                        "/batches",
+                        "batches[].freshness_score (min)",
+                        worst_score,
+                    )
                 )
-            )
 
         warnings: list[str] = []
-        if not selected:
-            warnings.append("tidak ada batch untuk lokasi/komoditas ini")
+        if not teridentifikasi:
+            warnings.append(f"batch sumber tidak dapat diidentifikasi: {sumber.alasan}")
+        elif not selected:
+            warnings.append("tidak ada batch sumber untuk lokasi/komoditas ini")
         if not scores:
             warnings.append("freshness_score tidak tersedia")
         if freshness_status in {"needs_verification", "fail"}:
@@ -157,14 +169,25 @@ class FreshnessWorker(ReadOnlyWorker):
         # keputusan produk, dicatat
         # sebagai butuh keputusan owner di 9_AGENT_REPAIR_LOG.md, bukan
         # disembunyikan di dalam patch ini.
-        blocking = len(expired_ids) > 0
-        summary = (
-            f"{len(selected)} batch; {len(expired_ids)} kedaluwarsa; "
-            f"skor kesegaran terburuk {worst_score if worst_score is not None else 'tidak tersedia'}"
-            + (f" (status {freshness_status})" if freshness_status else "")
-            + "."
-        )
-        if selected:
+        #
+        # Yang DITAMBAH (AUD-9B-29): batch sumber yang tidak dapat
+        # diidentifikasi memblokir (fail-closed) — dulu himpunan kosong hasil
+        # penyaringan lokasi tujuan dilaporkan sebagai "0 kedaluwarsa, aman".
+        blocking = len(expired_ids) > 0 or not teridentifikasi or not selected
+        if teridentifikasi:
+            summary = (
+                f"{len(selected)} batch sumber; {len(expired_ids)} kedaluwarsa; "
+                f"skor kesegaran terburuk "
+                f"{worst_score if worst_score is not None else 'tidak tersedia'}"
+                + (f" (status {freshness_status})" if freshness_status else "")
+                + "."
+            )
+        else:
+            summary = (
+                "Batch sumber tidak dapat diidentifikasi; kesegaran TIDAK dinilai "
+                "— jangan simpulkan aman."
+            )
+        if teridentifikasi and selected:
             return self._ok(
                 summary,
                 facts=facts,

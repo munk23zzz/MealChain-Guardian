@@ -120,8 +120,15 @@ async def test_tanpa_batch_sumber_memblokir_eksekusi():
 
 
 @pytest.mark.asyncio
-async def test_decision_tanpa_lokasi_sumber_tidak_direvalidasi():
-    """price_anomaly dsb. memang tidak punya batch sumber — tetap boleh jalan."""
+async def test_decision_tanpa_identitas_sumber_memblokir_eksekusi():
+    """AUD-9B-29: sumber tak teridentifikasi = fail-closed.
+
+    Dulu fungsi ini mengembalikan `True` untuk keputusan tanpa lokasi/komoditas
+    sumber ("tidak direvalidasi"). Itu jalur "tidak dapat dibuktikan = boleh";
+    jenis keputusan yang memang tidak punya batch sumber (price_anomaly,
+    review_only) sudah dipagari lebih dulu di `execute_action`, jadi sikap
+    konservatif di sini tidak memblokir alur sah mana pun.
+    """
     decision = SimpleNamespace(id="d-2", source_location_id=None, commodity_id=None)
     _BATCH_AKTIF[:] = []
-    assert await _source_batches_still_safe(_SesiApaSaja(), decision) is True
+    assert await _source_batches_still_safe(_SesiApaSaja(), decision) is False
