@@ -146,6 +146,17 @@ describe("agentReviewLine", () => {
     ).toContain("abcdef12");
   });
 
+  it("vetoed dinyatakan sebagai veto guardian, bukan selesai biasa", () => {
+    const kalimat = agentReviewLine({
+      status: "vetoed",
+      run_id: "abcdef1234567890",
+    });
+    expect(kalimat.toLowerCase()).toContain("veto");
+    expect(kalimat).toContain("abcdef12");
+    // Enum mentah tidak boleh bocor ke layar.
+    expect(kalimat).not.toContain("berstatus vetoed");
+  });
+
   it("tidak tercatat tetap dikatakan", () => {
     expect(agentReviewLine(undefined)).toContain("tidak tercatat");
     expect(agentReviewLine({ status: "missing" })).toContain("tidak tercatat");

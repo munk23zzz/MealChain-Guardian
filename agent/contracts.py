@@ -53,6 +53,12 @@ class RunStatus(str, Enum):
     FAILED = "failed"
     TIMEOUT = "timeout"
     UNAVAILABLE = "unavailable"
+    #: Ada guardian (Safety/Freshness/Evidence) yang `blocking=True`. Veto
+    #: BUKAN "selesai": keputusan tidak boleh dieksekusi sampai bukti diperbaiki,
+    #: jadi status run harus mengatakannya sendiri — bukan hanya flag terpisah
+    #: yang mudah dibaca sebagai putaran sukses (temuan C-09
+    #: INDEPENDENT_PROJECT_REVIEW.md).
+    VETOED = "vetoed"
 
 
 GUARDIAN_AGENTS = frozenset(

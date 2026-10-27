@@ -22,7 +22,12 @@ from typing import Any, Callable
 TASK = "review_decision"
 ENV_RUNTIME_ARN = "AGENTCORE_RUNTIME_ARN"
 DEFAULT_TIMEOUT_SECONDS = 45.0
-ALLOWED_STATUS = frozenset({"completed", "partial", "failed", "timeout", "unavailable"})
+#: `vetoed` = putaran selesai tetapi ada guardian yang memblokir. Ia bukan
+#: kegagalan teknis: payload 9 baris tetap valid dan wajib disimpan, jadi
+#: statusnya diterima di sini (bukan jatuh ke `failed`).
+ALLOWED_STATUS = frozenset(
+    {"completed", "partial", "vetoed", "failed", "timeout", "unavailable"}
+)
 
 
 @dataclass(frozen=True)
@@ -36,7 +41,10 @@ class AgentReviewResult:
 
     @property
     def completed(self) -> bool:
-        return self.status in {"completed", "partial"}
+        # `vetoed` = review selesai dijalankan (payload 9 baris lengkap), hanya
+        # hasilnya diblokir guardian. Menyimpannya wajib; itu bukti veto, bukan
+        # kegagalan runtime.
+        return self.status in {"completed", "partial", "vetoed"}
 
 
 def _default_caller() -> Callable[[str], str] | None:

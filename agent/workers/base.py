@@ -65,7 +65,14 @@ class StubWorker:
 
     @staticmethod
     def _latency_ms(started: float) -> int:
-        return max(0, int((monotonic() - started) * 1000))
+        """Durasi kerja terukur, dibulatkan ke atas minimal 1 ms.
+
+        `0` dipakai UI sebagai "tidak ada pekerjaan berjalan" (kartu bukti Demo
+        Control menulis "Durasi: 0 md"), padahal jalur cepat — model tidak
+        dikonfigurasi, fakta gagal terbaca — selesai di bawah satu milidetik.
+        Karena itu hasil pengukuran tidak pernah 0; "tidak diukur" tetap `None`.
+        """
+        return max(1, round((monotonic() - started) * 1000))
 
     @staticmethod
     def _citation(

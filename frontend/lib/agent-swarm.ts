@@ -46,6 +46,9 @@ const STATUS_LABELS: Record<string, string> = {
   error: "Gagal",
   skipped: "Dilewati",
   stub: "Belum aktif",
+  // Status run yang mencerminkan veto guardian (agent/contracts.py RunStatus).
+  // Tanpa label ini UI menampilkan "Tidak dikenal" untuk putaran yang diblokir.
+  vetoed: "Diblokir",
 };
 
 export type SwarmRun = {

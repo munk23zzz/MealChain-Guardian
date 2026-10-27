@@ -128,6 +128,9 @@ describe("label nilai — tidak menampilkan enum mentah", () => {
     expect(statusLabel("ok")).toBe("Selesai");
     expect(statusLabel("error")).toBe("Gagal");
     expect(statusLabel("degraded")).toBe("Terbatas");
+    // Status run yang mencerminkan veto guardian (agent/contracts.py) tidak
+    // boleh muncul sebagai enum mentah di layar.
+    expect(statusLabel("vetoed")).toBe("Diblokir");
     expect(statusLabel("SESUATU_BARU")).toBe("Tidak dikenal");
     expect(statusLabel(null)).toBe("—");
   });

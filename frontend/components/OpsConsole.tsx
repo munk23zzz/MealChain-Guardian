@@ -36,6 +36,8 @@ function labelReview7Agen(status?: string): string {
       return "selesai";
     case "partial":
       return "selesai sebagian";
+    case "vetoed":
+      return "diblokir guardian";
     case "timeout":
       return "masih berjalan (melewati batas)";
     case "unavailable":

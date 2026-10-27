@@ -154,9 +154,17 @@ def detect_contradictions(findings: list[AgentFinding]) -> list[Contradiction]:
 def run_status(
     findings: list[AgentFinding], contradictions: list[Contradiction] | None = None
 ) -> RunStatus:
-    """Status jujur untuk satu putaran review."""
+    """Status jujur untuk satu putaran review.
+
+    Veto guardian dihitung DI SINI, bukan sebagai flag terpisah: putaran yang
+    diblokir tidak pernah "selesai". Urutannya sengaja veto lebih dulu daripada
+    error/partial — temuan yang paling menentukan boleh-tidaknya eksekusi adalah
+    veto, dan menemani error worker tidak membuatnya hilang.
+    """
     if not findings or validate_findings(findings):
         return RunStatus.FAILED
+    if safety_veto(findings):
+        return RunStatus.VETOED
     if any(finding.status is WorkerStatus.ERROR for finding in findings):
         return RunStatus.PARTIAL
     if contradictions or any(

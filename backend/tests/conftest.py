@@ -58,6 +58,7 @@ AGENT_MODULES = [
     "test_agent_golden_cases.py",
     "test_agent_verify.py",
     "test_agent_verifier.py",
+    "test_agent_run_status_veto.py",
 ]
 
 # Tes yang butuh BERKAS AKAR REPO (compose, .env.example, .gitignore, struktur).

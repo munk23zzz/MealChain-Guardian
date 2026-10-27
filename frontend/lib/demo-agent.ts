@@ -201,6 +201,12 @@ export function agentReviewLine(review: AgentReview | null | undefined): string 
     const run = review?.run_id ? ` · run ${review.run_id.slice(0, 8)}` : "";
     return `Review 8 agen selesai (${status})${run}.`;
   }
+  if (status === "vetoed") {
+    // Guardian memblokir: review tetap berjalan lengkap, hasilnya tidak boleh
+    // dieksekusi. Jangan dilaporkan sebagai "selesai" biasa.
+    const run = review?.run_id ? ` · run ${review.run_id.slice(0, 8)}` : "";
+    return `Review 8 agen selesai dengan veto guardian (vetoed)${run}.`;
+  }
   if (status === "unavailable") {
     // Detail teknis (alamat runtime) sengaja TIDAK ditampilkan di layar;
     // panel ini membuktikan pipeline utama, bukan kesehatan infrastruktur.

@@ -26,11 +26,15 @@ def verify_run(run: AgentRun) -> VerifyResult:
             f"bukti_worker={bukti.value}"
         )
 
-    # Veto keamanan yang aktif berarti keputusan tidak boleh dilaporkan sebagai
-    # putaran selesai; manusia harus melihatnya.
-    if run.safety_veto and run.status is RunStatus.COMPLETED:
+    # Veto keamanan yang aktif WAJIB tercermin di status run (`vetoed`, dihitung
+    # `validation.run_status`). Cek ini tidak dilonggarkan: ia menangkap penulis
+    # status lain (runtime lama/agen lain) yang melaporkan putaran yang diblokir
+    # sebagai selesai/sebagian, karena itu membuat jejak audit bertentangan
+    # dengan kesimpulannya sendiri.
+    if run.safety_veto and run.status is not RunStatus.VETOED:
         reasons.append(
-            "safety_veto_aktif: ada temuan blocking, tetapi status run dilaporkan completed"
+            "safety_veto_aktif: ada temuan blocking, tetapi status run "
+            f"dilaporkan {run.status.value}"
         )
 
     # Heuristik kata kunci, bukan penilaian semantik: bila ada worker yang tidak
@@ -54,6 +58,14 @@ def verify_run(run: AgentRun) -> VerifyResult:
                 "tidak tersedia",
                 "tidak lengkap",
                 "partial",
+                # Narasi veto ("guardian memblokir / JANGAN EKSEKUSI") jelas
+                # TIDAK membaca sebagai "semuanya aman": ia justru menyatakan
+                # putaran ini tidak boleh dieksekusi. Tanpa kata-kata ini,
+                # setiap putaran ber-veto dengan worker degraded dituduh
+                # menghaluskan penurunan padahal narasinya paling keras.
+                "memblokir",
+                "diblokir",
+                "veto",
             )
         )
         if not jujur:
