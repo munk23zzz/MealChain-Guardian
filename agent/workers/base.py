@@ -195,7 +195,19 @@ class ReadOnlyWorker(StubWorker):
     (`_run_deterministik`), lalu — hanya bila `WORKER_AGENT_MODE=advisory` —
     memperkaya ringkasannya lewat `terapkan_penalaran()`. Status, `blocking`,
     dan sitasi tetap milik pemeriksa deterministik.
+
+    `latency_ms` temuan mengukur **seluruh kerja worker** (deterministik + waktu
+    model). Sebelum koreksi 27 Okt 2026 durasi hanya mengukur bagian
+    deterministik, sehingga worker yang menunggu jawaban model ~6 detik tetap
+    tercatat 22–112 ms di `agent_traces` dan terbaca sebagai "masih
+    deterministik". Waktu model SENDIRI tetap dicatat terpisah di
+    `facts.reasoning.latency` (dan waktu pemeriksa di
+    `facts.reasoning.deterministic_latency`) supaya jejak bisa memisahkan
+    keduanya.
     """
+
+    #: Label jalur saat model disuntik pemanggil (tes/probe), bukan dari env.
+    JALUR_INJEKSI = "injected"
 
     def _run_deterministik(self, context: WorkerContext) -> AgentFinding:
         return super().run(context)
@@ -205,20 +217,39 @@ class ReadOnlyWorker(StubWorker):
             MODE_ADVISORY,
             PromptWorker,
             mode_dari_env,
-            reasoner_dari_env,
+            reasoner_dan_jalur_dari_env,
             terapkan_penalaran,
         )
 
+        started = monotonic()
         finding = self._run_deterministik(context)
+        deterministik_ms = finding.latency_ms
         mode = context.reasoner_mode or mode_dari_env()
         if mode != MODE_ADVISORY:
             return finding
-        model = context.reasoner if context.reasoner is not None else reasoner_dari_env()
+        if context.reasoner is not None:
+            # Model disuntik pemanggil: jalurnya bukan salah satu dari env.
+            jalur, model = self.JALUR_INJEKSI, context.reasoner
+        else:
+            jalur, model = reasoner_dan_jalur_dari_env()
         prompt = PromptWorker.bangun_prompt(
             self.name, facts=finding.facts, summary=finding.summary
         )
-        return terapkan_penalaran(
-            finding, prompt=prompt, mode=mode, model=model, role=self.spec.role
+        hasil = terapkan_penalaran(
+            finding,
+            prompt=prompt,
+            mode=mode,
+            model=model,
+            role=self.spec.role,
+            provider=jalur,
+            deterministic_latency_ms=deterministik_ms,
+        )
+        # Temuan ERROR tidak menyentuh model (`terapkan_penalaran` mengembalikan
+        # objek yang sama); durasinya sudah lengkap dari jalur deterministik.
+        if hasil is finding:
+            return finding
+        return hasil.model_copy(
+            update={"latency_ms": max(1, round((monotonic() - started) * 1000))}
         )
 
 

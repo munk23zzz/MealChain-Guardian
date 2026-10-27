@@ -52,6 +52,7 @@ import json
 import os
 import re
 from collections.abc import Callable, Mapping
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from time import monotonic
 
@@ -116,6 +117,8 @@ SISTEM_WORKER = (
 
 #: Angka apa pun yang muncul di teks (termasuk desimal gaya 1.234,56 / 1234.56).
 _POLA_ANGKA = re.compile(r"\d+(?:[.,]\d+)*")
+#: Angka bergaya Indonesia: titik = pemisah ribuan, koma = desimal (1.080,0).
+_POLA_ANGKA_RIBUAN = re.compile(r"\d{1,3}(?:\.\d{3})+(?:,\d+)?")
 
 
 def prompt_sistem(agent: str) -> str:
@@ -438,11 +441,47 @@ class PromptWorker:
         )
 
 
-def _angka(teks: str) -> set[str]:
-    return {d.replace(",", ".") for d in _POLA_ANGKA.findall(teks or "")}
+def _desimal(mentah: str) -> Decimal | None:
+    """Satu token angka → nilai desimal, atau `None` bila tidak terbaca.
+
+    Dua gaya penulisan harus dibaca sebagai NILAI, bukan sebagai string:
+
+    - `1.080,0` (gaya Indonesia: titik ribuan, koma desimal) → 1080.0
+    - `1080.00` / `1080` / `1,080.00` → 1080
+
+    Tanpa ini, model yang menulis fakta `1080.00` sebagai "1.080,0" dianggap
+    MENGARANG angka baru (terukur 27 Okt 2026: worker `supply` ditolak padahal
+    angkanya persis sama dengan fakta). Guard tetap menolak angka yang benar-benar
+    berbeda nilainya.
+    """
+    teks = (mentah or "").strip()
+    if not teks:
+        return None
+    if _POLA_ANGKA_RIBUAN.fullmatch(teks):
+        bersih = teks.replace(".", "").replace(",", ".")
+    else:
+        # Gaya internasional: koma ribuan dibuang, titik desimal dipertahankan.
+        if _POLA_ANGKA_RIBUAN.fullmatch(teks.replace(",", ".")):
+            bersih = teks.replace(",", "")
+        else:
+            bersih = teks.replace(",", ".")
+    try:
+        return Decimal(bersih)
+    except (InvalidOperation, ValueError):
+        return None
 
 
-def _angka_fakta(facts: dict, ringkasan: str) -> set[str]:
+def _angka(teks: str) -> set[Decimal]:
+    """Himpunan NILAI angka di teks (bukan token string)."""
+    hasil: set[Decimal] = set()
+    for mentah in _POLA_ANGKA.findall(teks or ""):
+        nilai = _desimal(mentah)
+        if nilai is not None:
+            hasil.add(nilai)
+    return hasil
+
+
+def _angka_fakta(facts: dict, ringkasan: str) -> set[Decimal]:
     mentah = json.dumps(facts, ensure_ascii=False, sort_keys=True, default=str)
     return _angka(mentah) | _angka(ringkasan)
 
@@ -458,6 +497,7 @@ def _hasil_reasoning(
     warnings: list[str] | None = None,
     summary: str | None = None,
     confidence: float | None = None,
+    deterministic_latency_ms: int | None = None,
 ) -> AgentFinding:
     facts = dict(finding.facts)
     facts["reasoning"] = {
@@ -469,6 +509,13 @@ def _hasil_reasoning(
         # `AgentFinding` menolak angka telanjang di `facts` tanpa sitasi, jadi
         # nilainya disimpan sebagai teks bersatuan ("5645 ms").
         "latency": None if latency_ms is None else f"{latency_ms} ms",
+        # Waktu pemeriksa deterministik, dipisah dari waktu model supaya jejak
+        # bisa menjawab "berapa yang dihitung kode, berapa yang ditunggu model".
+        "deterministic_latency": (
+            None
+            if deterministic_latency_ms is None
+            else f"{deterministic_latency_ms} ms"
+        ),
     }
     gabungan = list(finding.warnings) + list(warnings or [])
     perubahan: dict[str, object] = {"facts": facts, "warnings": gabungan}
@@ -488,10 +535,22 @@ def terapkan_penalaran(
     mode: str,
     model: ModelCallable | None,
     role: str,
+    provider: str | None = None,
+    deterministic_latency_ms: int | None = None,
 ) -> AgentFinding:
-    """Terapkan penalaran model pada satu temuan; gagal apa pun tetap aman."""
+    """Terapkan penalaran model pada satu temuan; gagal apa pun tetap aman.
+
+    `provider` adalah nama jalur model NYATA (`provider_chain`, `bedrock_converse`,
+    `strands`, `injected`) — dicatat di `facts.reasoning.provider` supaya jejak
+    audit bisa menyebut siapa yang menjawab, bukan menebak. `deterministic_latency_ms`
+    adalah waktu pemeriksa deterministik, disimpan terpisah dari waktu model.
+    """
+    jejak = {
+        "provider": provider,
+        "deterministic_latency_ms": deterministic_latency_ms,
+    }
     if mode != MODE_ADVISORY:
-        return _hasil_reasoning(finding, status=MODE_OFF, role=role)
+        return _hasil_reasoning(finding, status=MODE_OFF, role=role, **jejak)
     if finding.status is WorkerStatus.ERROR:
         # Temuan ERROR berarti fakta tidak terbaca: tidak ada dasar untuk
         # menalar, dan menempelkan `facts.reasoning` pada temuan error membuat
@@ -506,6 +565,7 @@ def terapkan_penalaran(
                 "model_tidak_tersedia: lapisan penalaran dilewati, temuan "
                 "deterministik dipakai"
             ],
+            **jejak,
         )
 
     started = monotonic()
@@ -518,6 +578,7 @@ def terapkan_penalaran(
             role=role,
             latency_ms=max(1, round((monotonic() - started) * 1000)),
             warnings=[f"model_gagal: {type(exc).__name__}: {exc}"],
+            **jejak,
         )
 
     latency = max(1, round((monotonic() - started) * 1000))
@@ -530,6 +591,7 @@ def terapkan_penalaran(
             role=role,
             latency_ms=latency,
             warnings=["model_json_rusak: jawaban model tidak dipakai"],
+            **jejak,
         )
 
     if not isinstance(data, dict):
@@ -539,6 +601,7 @@ def terapkan_penalaran(
             role=role,
             latency_ms=latency,
             warnings=["model_json_rusak: bentuk jawaban bukan objek"],
+            **jejak,
         )
 
     # Guard 1 — jangan pernah melonggarkan blokir atau menaikkan status.
@@ -561,6 +624,7 @@ def terapkan_penalaran(
                 "reasoning_guard: model mencoba mengubah status/blokir — usulan "
                 "ditolak, keputusan tetap milik pemeriksa deterministik"
             ],
+            **jejak,
         )
 
     ringkasan = data.get("summary")
@@ -576,8 +640,9 @@ def terapkan_penalaran(
                 latency_ms=latency,
                 warnings=[
                     f"model_angka_baru: ringkasan memuat angka di luar fakta "
-                    f"({', '.join(sorted(baru))}) — ditolak"
+                    f"({', '.join(str(v) for v in sorted(baru))}) — ditolak"
                 ],
+                **jejak,
             )
 
     rationale = data.get("rationale")
@@ -595,6 +660,7 @@ def terapkan_penalaran(
         rationale=rationale,
         summary=ringkasan or None,
         confidence=confidence,
+        **jejak,
     )
 
 
