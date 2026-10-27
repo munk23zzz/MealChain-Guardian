@@ -1968,6 +1968,7 @@ async def _bekukan(db: AsyncSession) -> dict:
     """
     penanda = await sesi.cetakan(db)
     total = 0
+    dilepas = 0
     for model in sesi.model_bersesi():
         kolom = model.__table__.columns
         if "origin" in kolom:
@@ -1979,6 +1980,20 @@ async def _bekukan(db: AsyncSession) -> dict:
                 .values(demo_session_id=penanda)
                 .execution_options(synchronize_session=False)
             )
+            # Jaring untuk data lama: stempel yang TERLANJUR menempel pada baris
+            # non-demo dilepas di sini, pada level query. Dulu penjaga
+            # `before_flush` menstempel setiap objek baru, sehingga build ulang
+            # yang berjalan saat sesi aktif meninggalkan 78 batch + 7 keputusan
+            # + 40 fakta pasokan kanonik berstempel sesi (terukur 27 Okt 2026).
+            # Perbaikan akarnya ada di `demo_session.boleh_distempel`; langkah
+            # ini memulihkan baris yang sudah telanjur lahir begitu.
+            lepas = await db.execute(
+                update(model)
+                .where(kolom.origin != "demo", kolom.demo_session_id.isnot(None))
+                .values(demo_session_id=None)
+                .execution_options(synchronize_session=False)
+            )
+            dilepas += int(lepas.rowcount or 0)
         else:
             # Tabel jembatan tanpa kolom origin tidak bisa dibedakan; lepaskan
             # stempelnya seperti sebelumnya supaya tidak terhapus bersama sesi.
@@ -1989,7 +2004,11 @@ async def _bekukan(db: AsyncSession) -> dict:
             )
         total += int(hasil.rowcount or 0)
     await db.commit()
-    return {"baris_dibekukan": total, "cetakan_session_id": str(penanda)}
+    return {
+        "baris_dibekukan": total,
+        "stempel_kanonik_dilepas": dilepas,
+        "cetakan_session_id": str(penanda),
+    }
 
 
 

@@ -517,6 +517,30 @@ def _urutan_hapus(model: type[Base]) -> int:
 _terpasang = False
 
 
+def boleh_distempel(obj: Any) -> bool:
+    """True bila `obj` adalah baris DEMO yang boleh menerima stempel sesi.
+
+    Kenapa perlu (regresi 27 Okt 2026): penjaga `before_flush` dulu menstempel
+    SETIAP objek baru, termasuk baris kanonik `origin='seed'` yang lahir di
+    tengah sesi aktif. Jalur "Siapkan data demo" (`bangun_ulang`, dipanggil
+    tombol refresh) membangun ulang template SAAT sesi berjalan, dan `load_seed`
+    menulis snapshot kanonik lewat `merge()` (ORM) — terukur: 78 batch + 40 fakta
+    pasokan + 7 keputusan ber-`origin='seed'` ikut berstempel sesi aktif.
+    Invarian `verify/invariants.spec.json` ("baris kanonik tidak boleh
+    berstempel") menolak keadaan itu, dan baris kanonik tampak seperti milik
+    sesi padahal ia data kerja.
+
+    Aturan: model TANPA kolom `origin` (tabel jembatan) tetap distempel karena
+    barisnya memang lahir dari sesi. Model BER-kolom `origin` hanya distempel
+    bila `origin == 'demo'`; `origin` kosong berarti default DB `'seed'`
+    (kanonik) — kesimpulannya TIDAK distempel.
+    """
+    tabel = getattr(obj, "__table__", None)
+    if tabel is None or "origin" not in tabel.columns:
+        return True
+    return getattr(obj, "origin", None) == "demo"
+
+
 def pasang_penjaga() -> None:
     """Pasang stempel `before_flush` sekali per proses (idempoten).
 
@@ -543,8 +567,13 @@ def pasang_penjaga() -> None:
         if sesi_id is None:
             return
         for obj in session.new:
-            if hasattr(obj, "demo_session_id") and obj.demo_session_id is None:
-                obj.demo_session_id = sesi_id
+            if not hasattr(obj, "demo_session_id") or obj.demo_session_id is not None:
+                continue
+            # Hanya baris DEMO. Lihat `boleh_distempel`: baris kanonik
+            # (`origin='seed'` atau default DB) tidak boleh berstempel sesi.
+            if not boleh_distempel(obj):
+                continue
+            obj.demo_session_id = sesi_id
 
     _terpasang = True
 
@@ -558,6 +587,7 @@ __all__ = [
     "akhiri",
     "aktif",
     "bersihkan",
+    "boleh_distempel",
     "kosongkan_kecuali",
     "kunci_sesi",
     "bersihkan_warisan",
