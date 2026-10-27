@@ -161,18 +161,28 @@ def test_perubahan_lokasi_tercatat_di_ledger(skenario):
     lok = lokasi_awal[0]
     nama_baru = f"{lok['name']} (uji audit)"
 
-    resp = _client_sebagai(admin).patch(
-        f"/admin/locations/{lok['id']}", json={"name": nama_baru}
-    )
-    assert resp.status_code == 200, resp.text
+    try:
+        resp = _client_sebagai(admin).patch(
+            f"/admin/locations/{lok['id']}", json={"name": nama_baru}
+        )
+        assert resp.status_code == 200, resp.text
 
-    blok = _blok_baru(engine, tinggi_awal)
-    assert [b["action"] for b in blok] == ["admin.location.update"]
-    assert blok[0]["payload"]["perubahan"]["name"] == {
-        "sebelum": lok["name"],
-        "sesudah": nama_baru,
-    }
-    assert str(blok[0]["actor_id"]) == str(admin.id)
+        blok = _blok_baru(engine, tinggi_awal)
+        assert [b["action"] for b in blok] == ["admin.location.update"]
+        assert blok[0]["payload"]["perubahan"]["name"] == {
+            "sebelum": lok["name"],
+            "sesudah": nama_baru,
+        }
+        assert str(blok[0]["actor_id"]) == str(admin.id)
+    finally:
+        # Higiene suite: nama lokasi WAJIB dipulihkan. Tanpa ini, tes sesudahnya
+        # (event1/logistik) gagal dengan "lokasi tidak dikenal: ... (uji audit)"
+        # dan seluruh gate jadi merah karena polusi, bukan karena kode.
+        with engine.begin() as conn:
+            conn.execute(
+                text("UPDATE locations SET name = :n WHERE id = :i"),
+                {"n": lok["name"], "i": lok["id"]},
+            )
 
 
 def test_ubah_peran_sendiri_ditolak_tanpa_jejak_palsu(skenario):

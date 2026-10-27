@@ -289,3 +289,58 @@ class Decimalish(float):
 
     def __new__(cls, value):
         return super().__new__(cls, str(value))
+
+
+def test_memory_gagal_tidak_mengubah_angka_keputusan(client, monkeypatch):
+    """Fase 11 butir 6: Memory gagal → keputusan & angka IDENTIK.
+
+    `catat_learn` diganti versi yang melaporkan `unavailable` (persis seperti
+    hasil AccessDenied AWS). Yang diuji: verdict, pilihan kandidat, dan angka
+    tidak berubah; langkah LEARN tetap tercatat dengan status jujur.
+    """
+    from app.services import event1_orchestrator as eo
+
+    monkeypatch.setenv("AGENT_MEMORY_WRITE", "1")
+    monkeypatch.setattr(
+        eo,
+        "catat_learn",
+        lambda *a, **k: {
+            "provider": "agentcore",
+            "status": "unavailable",
+            "detail": "AccessDeniedException: no identity-based policy allows "
+            "bedrock-agentcore:CreateEvent",
+        },
+    )
+
+    outcome = eo.run_event1(commodity="telur", target_location="Jakarta")
+    try:
+        assert outcome["memory"]["status"] == "unavailable"
+        rec = outcome["decision_snapshot"]["recommendation"]
+        assert rec["eligible"] is True
+        by_id = {r["candidate_id"]: r for r in outcome["recommendations"]}
+        assert rec["safe_delivered_cost"] == by_id[rec["candidate_id"]]["safe_delivered_cost"]
+        assert outcome["verifier"]["verdict"] == "UNAVAILABLE"
+        assert outcome["kpi"]["eligible"] >= 1
+
+        langkah = [t["step_name"] for t in _trace_rows(outcome["decision_id"])]
+        assert "LEARN" in langkah
+        learn = next(
+            t for t in _trace_rows(outcome["decision_id"]) if t["step_name"] == "LEARN"
+        )
+        assert learn["tool_called"] == "agentcore.memory.write"
+        assert learn["output_summary"]["status"] == "unavailable"
+    finally:
+        _cleanup(outcome.get("decision_id"))
+
+
+def test_memory_mati_tidak_menambah_langkah_learn(client):
+    """Default (tanpa AGENT_MEMORY_WRITE) tidak memanggil Memory sama sekali."""
+    from app.services.event1_orchestrator import run_event1
+
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+    try:
+        assert outcome["memory"] is None
+        langkah = [t["step_name"] for t in _trace_rows(outcome["decision_id"])]
+        assert "LEARN" not in langkah
+    finally:
+        _cleanup(outcome.get("decision_id"))

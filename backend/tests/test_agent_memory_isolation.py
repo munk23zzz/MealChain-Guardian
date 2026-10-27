@@ -8,6 +8,8 @@ Kontrak:
   (tidak diam-diam memakai state global bersama).
 """
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from app.services.agent_memory import (
@@ -81,11 +83,73 @@ def test_create_memory_local_default_is_explicit_about_provider():
     assert mem.provider == "local"  # jujur: bukan klaim AgentCore
 
 
-def test_agentcore_backend_with_config_unavailable_is_explicit_on_use():
-    """Adapter AgentCore terpasang tapi runtime tidak dapat dihubungi →
-    error eksplisit saat dipakai, bukan fallback diam ke state global."""
-    mem = create_memory(
-        provider="agentcore", memory_id="mem-xyz", runtime_endpoint=None
+def test_catat_learn_tanpa_kredensial_melapor_tanpa_melempar(monkeypatch):
+    """Butir 6: kegagalan Memory dilaporkan sebagai status, bukan exception."""
+    from app.services.agent_memory import catat_learn
+
+    monkeypatch.setenv("AGENTCORE_MEMORY_ID", "mem-uji")
+    for key in (
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "AWS_PROFILE",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("AWS_EC2_METADATA_DISABLED", "true")
+    monkeypatch.setenv("AWS_SHARED_CREDENTIALS_FILE", "/tidak-ada")
+    monkeypatch.setenv("AWS_CONFIG_FILE", "/tidak-ada")
+
+    status = catat_learn("sesi-tanpa-izin", "learn", {"commodity": "telur"})
+    assert status["status"] in {"unavailable", "error"}
+    assert status["key"] == "learn"
+    assert "commodity" not in status
+
+
+def test_agentcore_backend_reports_client_error_explicitly():
+    """Adapter AgentCore nyata: galat AWS → error eksplisit, bukan fallback diam."""
+    from botocore.exceptions import ClientError
+
+    mem = create_memory(provider="agentcore", memory_id="mem-xyz", runtime_endpoint=None)
+    klien = MagicMock()
+    klien.create_event.side_effect = ClientError(
+        {"Error": {"Code": "AccessDeniedException", "Message": "denied"}}, "CreateEvent"
     )
-    with pytest.raises(MemoryUnavailableError):
+    mem._client = klien
+    with pytest.raises(MemoryUnavailableError) as excinfo:
         mem.write("session-A", "plan", {"step": "DETECT"})
+    assert "mem-xyz" in str(excinfo.value)
+    assert "AccessDeniedException" in str(excinfo.value)
+
+
+def test_agentcore_backend_namespace_isolates_sessions():
+    """Tulis di sesi A tidak terbaca dari sesi B — memakai API actor+session."""
+    import datetime as dt
+    import json
+
+    tersimpan: dict[str, list] = {}
+
+    def _create_event(**kwargs):
+        tersimpan.setdefault(kwargs["sessionId"], []).append(
+            {
+                "eventId": f"ev-{len(tersimpan[kwargs['sessionId']])}",
+                "payload": kwargs["payload"],
+            }
+        )
+        return {"eventId": "ev-x", "eventTimestamp": dt.datetime.now(dt.UTC)}
+
+    def _list_events(**kwargs):
+        return {"events": tersimpan.get(kwargs["sessionId"], [])}
+
+    mem = create_memory(provider="agentcore", memory_id="mem-xyz", runtime_endpoint=None)
+    klien = MagicMock()
+    klien.create_event.side_effect = _create_event
+    klien.list_events.side_effect = _list_events
+    mem._client = klien
+
+    mem.write("session-A", "plan", {"step": "DETECT", "password": "bocor"})
+    assert mem.read("session-A", "plan") == {"step": "DETECT"}
+    assert mem.read("session-B", "plan") is None
+    # payload yang dikirim ke AWS sudah disanitasi
+    teks = tersimpan["session-A"][0]["payload"][0]["conversational"]["content"]["text"]
+    assert "bocor" not in teks
+    assert json.loads(teks)["key"] == "plan"

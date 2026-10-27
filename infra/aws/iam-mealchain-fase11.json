@@ -1,0 +1,39 @@
+{
+  "Version": "2012-10-17",
+  "Comment": [
+    "Fase 11 MG: aksi IAM yang BELUM dimiliki user deployment (dibuktikan dengan",
+    "AccessDeniedException 2026-10-27). Lampirkan policy INI ke user/role yang",
+    "menjalankan backend + agent. Ganti ${AWS_ACCOUNT_ID} dan ${MEMORY_ID}",
+    "sebelum dipakai; jangan pakai '*' untuk Resource.",
+    "",
+    "Bukti kebutuhan:",
+    "  - Memory tulis-baca  : tests/test_agent_memory_live.py (RUN_LIVE_AGENTCORE=1)",
+    "  - Gateway target     : scripts/probe_agentcore_gateway.py (target_ready)",
+    "Keduanya sudah dibuat; tanpa policy ini statusnya UNVERIFIED, bukan DONE."
+  ],
+  "Statement": [
+    {
+      "Sid": "AgentCoreMemoryDataPlane",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:CreateEvent",
+        "bedrock-agentcore:GetEvent",
+        "bedrock-agentcore:ListEvents",
+        "bedrock-agentcore:DeleteEvent"
+      ],
+      "Resource": "arn:aws:bedrock-agentcore:us-west-2:${AWS_ACCOUNT_ID}:memory/${MEMORY_ID}"
+    },
+    {
+      "Sid": "AgentCoreGatewayTargets",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:CreateGatewayTarget",
+        "bedrock-agentcore:GetGatewayTarget",
+        "bedrock-agentcore:ListGatewayTargets",
+        "bedrock-agentcore:UpdateGatewayTarget",
+        "bedrock-agentcore:DeleteGatewayTarget"
+      ],
+      "Resource": "arn:aws:bedrock-agentcore:us-west-2:${AWS_ACCOUNT_ID}:gateway/*"
+    }
+  ]
+}

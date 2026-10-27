@@ -12,6 +12,7 @@ Semua angka safety-critical bersumber dari tools deterministik backend:
 from __future__ import annotations
 
 import asyncio
+import os
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -26,12 +27,29 @@ from app.ai_providers.forecast_client import (
 from app.ai_providers.verifier_client import run_verifier
 from app.core.config import settings
 from app.db import create_engine, create_session_maker
-from app.models import Commodity, Decision, DemandRecord, Location
+from app.models import Commodity, Decision, DemandRecord, DemoSession, Location
 from app.services import recommendation_service as rs
+from app.services.agent_memory import catat_learn
 from app.services.supervisor_client import run_supervisor
 from app.services.trace_persistence import persist_trace_steps
 
 DEFAULT_TTL_MINUTES = 30
+
+
+def _memory_write_aktif() -> bool:
+    """LEARN menulis AgentCore Memory hanya bila diminta eksplisit.
+
+    Default MATI: demo tidak boleh bergantung pada izin AWS yang mungkin belum
+    ada. Nyalakan dengan `AGENT_MEMORY_WRITE=1` setelah izin CreateEvent siap.
+    """
+    return os.environ.get("AGENT_MEMORY_WRITE", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 FORECAST_HORIZON_DAYS = 7
 
 
@@ -103,12 +121,25 @@ async def _run_event1(
     memori: dict | None = None
 
     async with maker() as session:
+        # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+        # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+        # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+        # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+        as_of = None
+        if demo_session_id is not None:
+            baris = (
+                await session.execute(
+                    select(DemoSession).where(DemoSession.id == demo_session_id)
+                )
+            ).scalar_one_or_none()
+            as_of = getattr(baris, "evaluation_anchor", None)
+
         # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
         # dengan POST /balance/recommend).
         async def _fetch():
-            return await rs.fetch_operational_facts(session, None)
+            return await rs.fetch_operational_facts(session, as_of)
 
-        out = await rs.build_recommendations(_fetch)
+        out = await rs.build_recommendations(_fetch, as_of=as_of)
         recommendations: list[dict] = out["recommendations"]
 
         pool = [
@@ -379,6 +410,43 @@ async def _run_event1(
 
         await session.commit()
 
+        # ------------------------------------------------------------------
+        # LEARN (Fase 11 MG): simpan pelajaran yang sudah disanitasi ke AgentCore
+        # Memory — HANYA bila `AGENT_MEMORY_WRITE=1`. Dijalankan SESUDAH commit
+        # supaya panggilan jaringan tidak menahan transaksi DB, dan kegagalannya
+        # hanya menjadi status di jejak: verdict, rekomendasi, dan angka tidak
+        # boleh berubah karena Memory (gerbang butir 6).
+        # ------------------------------------------------------------------
+        if _memory_write_aktif():
+            memori = await asyncio.to_thread(
+                catat_learn,
+                f"{demo_session_id or 'sesi-lokal'}:{decision.id}",
+                "learn",
+                {
+                    "decision_id": str(decision.id),
+                    "commodity": commodity,
+                    "target_location": target_location,
+                    "verifier_verdict": verifier_result.verdict,
+                    "chosen_candidate_id": chosen["candidate_id"],
+                    "safe_delivered_cost": chosen["safe_delivered_cost"],
+                    "surplus": detect.get("surplus"),
+                    "shortage": detect.get("shortage"),
+                },
+            )
+            persist_trace_steps(
+                session,
+                decision_id=str(decision.id),
+                steps=[
+                    {
+                        "step_name": "LEARN",
+                        "tool_called": "agentcore.memory.write",
+                        "input_summary": {"key": "learn", "decision_id": str(decision.id)},
+                        "output_summary": memori,
+                    }
+                ],
+            )
+            await session.commit()
+
     kpi = {
         "candidates_total": len(recommendations),
         "eligible": sum(1 for r in recommendations if r.get("eligible")),
@@ -407,6 +475,8 @@ async def _run_event1(
             "recommendation": chosen,
         },
         "kpi": kpi,
+        # Fase 11: status tulis Memory (None = fitur mati, bukan "gagal").
+        "memory": memori,
         "trace_steps": [t.step_name for t in traces],
     }
 
