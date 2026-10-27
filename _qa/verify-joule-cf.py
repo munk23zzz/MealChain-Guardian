@@ -10,10 +10,8 @@ Pakai: python _qa/verify-joule-cf.py [--bridge URL]
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import sys
-from typing import Any
 
 import httpx
 
@@ -245,7 +243,7 @@ def main() -> int:
         # 9. harga satu pasangan ---------------------------------------------------------
         teks = tanya(joule, "berapa harga ayam di Surabaya?")
         lok = api.get("/admin/locations").json()["locations"]
-        sid = next(l["id"] for l in lok if l["name"] == "Surabaya")
+        sid = next(item["id"] for item in lok if item["name"] == "Surabaya")
         harga = api.get(f"/price/{sid}/ayam").json()
         acuan = harga.get("price_per_kg")
         harga2 = api.get(f"/price/{sid}/ayam").json().get("price_per_kg")

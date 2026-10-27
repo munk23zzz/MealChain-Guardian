@@ -1660,10 +1660,10 @@ def route_matches(template: str, route: str) -> bool:
 
 def evaluate(rows_ctx: dict) -> list[dict]:
     api_index = rows_ctx["api_index"]
-    schema = rows_ctx["schema"]
+    _schema = rows_ctx["schema"]
     db_cols = rows_ctx["db_cols"]
     routes = rows_ctx["routes"]
-    components = rows_ctx["components"]
+    _components = rows_ctx["components"]
     tokens = rows_ctx["tokens"]
     params = rows_ctx["params"]
     cache = rows_ctx["http_cache"]
@@ -2012,7 +2012,7 @@ def render(rows: list[dict], enums: list[dict], ctx: dict) -> tuple[str, dict]:
     routes = ctx["routes"]
     schema = ctx["schema"]
     db_cols = ctx["db_cols"]
-    checks = ctx["checks"]
+    _checks = ctx["checks"]
     tab_comps = ctx["tab_components"]
     orphans = ctx["orphans"]
     api_index = ctx["api_index"]
@@ -2537,28 +2537,28 @@ def self_check(text: str, stats: dict) -> int:
     problems: list[str] = []
 
     matrix = written.split("## 1. Matriks layar → data")[1].split("## 2.")[0]
-    matrix_rows = [l for l in matrix.splitlines() if l.startswith("| ") and not l.startswith("| #")
-                   and not l.startswith("|---")]
+    matrix_rows = [row for row in matrix.splitlines() if row.startswith("| ") and not row.startswith("| #")
+                   and not row.startswith("|---")]
     if len(matrix_rows) != stats["rows"]:
         problems.append(f"baris matriks di berkas {len(matrix_rows)} != dilaporkan {stats['rows']}")
 
-    gap_cells = matrix_rows and sum(1 for l in matrix_rows if l.rstrip().endswith("GAP |"))
+    gap_cells = matrix_rows and sum(1 for row in matrix_rows if row.rstrip().endswith("GAP |"))
     if gap_cells != stats["gap"]:
         problems.append(f"status GAP di berkas {gap_cells} != dilaporkan {stats['gap']}")
 
     states_section = written.split("### 4.2 Bukti / alasan per state")[1].split("## 5.")[0]
-    state_rows = [l for l in states_section.splitlines() if l.startswith("| ") and "`" in l]
+    state_rows = [row for row in states_section.splitlines() if row.startswith("| ") and "`" in row]
     if len(state_rows) != stats["state_total"]:
         problems.append(f"sel state di berkas {len(state_rows)} != dilaporkan {stats['state_total']}")
-    proven_cells = sum(1 for l in state_rows if "| TERBUKTI |" in l)
-    gap_state_cells = sum(1 for l in state_rows if "| GAP |" in l)
+    proven_cells = sum(1 for row in state_rows if "| TERBUKTI |" in row)
+    gap_state_cells = sum(1 for row in state_rows if "| GAP |" in row)
     if proven_cells != stats["state_proven"]:
         problems.append(f"state TERBUKTI di berkas {proven_cells} != {stats['state_proven']}")
     if gap_state_cells != stats["state_gap"]:
         problems.append(f"state GAP di berkas {gap_state_cells} != {stats['state_gap']}")
 
     enum_section = written.split("### 3.1 Ketidaksinkronan kode vs skema vs data")[1].split("## 4.")[0]
-    enum_rows = [l for l in enum_section.splitlines() if l.startswith("| ") and "`" in l and "---" not in l]
+    enum_rows = [row for row in enum_section.splitlines() if row.startswith("| ") and "`" in row and "---" not in row]
     if len(enum_rows) != stats["enum_flags"]:
         problems.append(f"temuan enum di berkas {len(enum_rows)} != {stats['enum_flags']}")
 

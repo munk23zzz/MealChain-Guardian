@@ -24,7 +24,7 @@ from a2a.types import (
 
 import report
 import server
-from mealchain_client import MealchainRejected, MealchainUnavailable
+from mealchain_client import MealchainUnavailable
 
 
 class FakeClient:

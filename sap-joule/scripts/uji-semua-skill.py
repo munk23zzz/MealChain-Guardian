@@ -21,7 +21,6 @@ Opsi lingkungan: `MEALCHAIN_API_URL` (default http://localhost:8000), `PORT` (de
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
@@ -161,7 +160,7 @@ def main() -> int:
             ).json()["access_token"]
             kepala = {"Authorization": f"Bearer {token}"}
             keputusan = api.get("/decisions", headers=kepala).json().get("items") or []
-            batch = (api.get("/batches", params={"limit": 1}, headers=kepala).json().get("batches") or [{}])[0]
+            _batch = (api.get("/batches", params={"limit": 1}, headers=kepala).json().get("batches") or [{}])[0]
             total_batch = api.get("/batches", params={"limit": 1}, headers=kepala).json().get("total")
         decision_id = str((keputusan[0] if keputusan else {}).get("decision_id") or "")
         # `/receipts` hanya menjawab untuk batch yang punya penerimaan; ambil dari DB supaya

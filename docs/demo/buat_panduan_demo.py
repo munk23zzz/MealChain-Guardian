@@ -283,8 +283,8 @@ def halaman4():
     ]
     for judul, langkah in babak:
         blok = [p(judul, H2)]
-        for i, l in enumerate(langkah, 1):
-            blok.append(p("%d. %s" % (i, l)))
+        for i, teks_langkah in enumerate(langkah, 1):
+            blok.append(p("%d. %s" % (i, teks_langkah)))
         out.append(KeepTogether(blok))
     return out
 

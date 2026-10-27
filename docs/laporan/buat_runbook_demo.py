@@ -23,9 +23,9 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 from buat_laporan import (  # noqa: E402  (gaya bersama)
-    AMBER, BLUE, BODY, BORDER, BULLET, CAP, CELL, CELLB, GREEN, H1, H2, HEAD, INK,
-    LEAD, LIGHT, M_B, M_L, M_R, M_T, MUTED, NAVY, PAGE_H, PAGE_W, ROW, SLATE,
-    VIOLET, bullets, callout, h1, p, rows_table,
+    AMBER, BLUE, BODY, BORDER, CAP, CELL, CELLB, GREEN, INK,
+    LEAD, LIGHT, M_B, M_L, M_R, M_T, MUTED, NAVY, PAGE_H, PAGE_W, SLATE,
+    callout, h1, p, rows_table,
 )
 
 KUNING = colors.HexColor("#B45309")
@@ -61,7 +61,7 @@ def footer(canvas, doc):
 
 def angka_band(items):
     """Enam angka besar: dibaca juri dari jauh, jadi tipografinya tebal dan lapang."""
-    sel = [[Paragraph(v, BIG) for v, _ in items], [Paragraph(l, BIGLBL) for _, l in items]]
+    sel = [[Paragraph(v, BIG) for v, _ in items], [Paragraph(label, BIGLBL) for _, label in items]]
     w = (PAGE_W - M_L - M_R) / len(items)
     t = Table(sel, colWidths=[w] * len(items), hAlign="LEFT")
     t.setStyle(TableStyle([

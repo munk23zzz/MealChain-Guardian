@@ -75,7 +75,6 @@ def rows_table(data, widths, header=True, zebra=True, size=8.1, center=(), capti
              ("LEFTPADDING", (0, 0), (-1, -1), 4), ("RIGHTPADDING", (0, 0), (-1, -1), 4),
              ("TOPPADDING", (0, 0), (-1, -1), 3.4), ("BOTTOMPADDING", (0, 0), (-1, -1), 3.4)]
     if caption:
-        n = len(body)
         style += [("SPAN", (0, 0), (-1, 0)),
                   ("BACKGROUND", (0, 0), (-1, 0), colors.white),
                   ("TOPPADDING", (0, 0), (-1, 0), 5)]

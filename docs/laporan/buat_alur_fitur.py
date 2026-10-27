@@ -17,13 +17,12 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
-from reportlab.platypus import (BaseDocTemplate, Frame, KeepTogether,
-                                NextPageTemplate, PageBreak, PageTemplate,
-                                Paragraph, Spacer, Table, TableStyle)
+from reportlab.platypus import (BaseDocTemplate, Frame, NextPageTemplate, PageBreak, PageTemplate,
+                                Paragraph, Spacer)
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "demo"))
-from buat_panduan_demo import (AKSEN, BODY, CELL, H1, H2, HEAD, JUDUL,  # noqa: E402
-                               KECIL, NAVY, SUB, callout, kode, p, tabel)
+from buat_panduan_demo import (BODY, CELL, H1, H2, JUDUL,  # noqa: E402
+                               KECIL, SUB, callout, kode, p, tabel)
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "alur-fitur-mealchain.pdf")
 TANGGAL = "26 Oktober 2026, 11.51 WIB"

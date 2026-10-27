@@ -732,7 +732,7 @@ def render_skill(
         for satu in ids:
             try:
                 compliance = client.decision_compliance(satu)
-            except MealchainRejected as exc:
+            except MealchainRejected:
                 gagal_ev.append(report.short_id(satu))
                 continue
             rantai: Mapping[str, Any] = {}
