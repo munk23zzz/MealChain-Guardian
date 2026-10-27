@@ -21,6 +21,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
+from app.api.demo import DEMO_CASES
 from app.main import app
 from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
 
@@ -89,13 +90,23 @@ def _rows(query: str, params: dict | None = None) -> list[dict]:
 
 
 def _demo_rows(kota: str) -> list[dict]:
+    """Baris kasus `/demo/seed` untuk satu kota.
+
+    Disaring ke namespace `DEMO_CASES` milik endpoint itu, bukan "semua baris
+    yang punya `demo_case` di kota ini": builder pelengkap cakupan
+    (`seed/demo_extra.py`) menulis `demo_case='extra:*'` untuk kota yang sama,
+    jadi tanpa saringan ini tes menghitung 8 baris padahal endpoint menyemai 4,
+    dan `already` (7) tidak sama dengan `jumlah` (8). Saringan ini menyatakan
+    maksud tesnya (keluaran `/demo/seed`), bukan melonggarkan asersinya —
+    himpunan yang dituntut tetap `set(CASES)` dan target tetap harus kota itu.
+    """
     return _rows(
         "SELECT d.id, d.demo_case, d.status, dl.name AS target, sl.name AS sumber "
         "FROM decisions d "
         "JOIN locations dl ON dl.id = d.target_location_id "
         "LEFT JOIN locations sl ON sl.id = d.source_location_id "
-        "WHERE d.demo_case IS NOT NULL AND dl.name = :k",
-        {"k": kota},
+        "WHERE d.demo_case = ANY(:kasus) AND dl.name = :k",
+        {"k": kota, "kasus": list(DEMO_CASES)},
     )
 
 
