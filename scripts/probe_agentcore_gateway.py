@@ -37,11 +37,19 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 
-STATUS_OK = "VERIFIED"
-STATUS_UNVERIFIED = "UNVERIFIED"
-STATUS_NOT_CONFIGURED = "NOT_CONFIGURED"
-STATUS_DENIED = "UNVERIFIED"
+# Modul backend = sumber tunggal kosakata status (diuji tests/test_agentcore_live_smoke.py).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
+
+from app.services.agentcore_evidence import (
+    STATUS_NOT_CONFIGURED,
+    STATUS_OK,
+    STATUS_UNVERIFIED,
+    app_uses_gateway,
+    ringkas,
+    status_from_error,
+)
 
 
 def _pendek(nilai: str | None, n: int = 24) -> str | None:
@@ -56,20 +64,30 @@ def _klien(nama: str, region: str):
     return boto3.client(nama, region_name=region)
 
 
+def _muat_env() -> None:
+    """Muat kredensial dari .env lalu secrets/aws-app.env (nilai kosong dilewati).
+
+    Tanpa ini probe gagal dengan NoCredentialsError dan melaporkan UNVERIFIED
+    padahal penyebabnya bukan IAM — laporan jadi menyesatkan.
+    """
+    akar = Path(__file__).resolve().parents[1]
+    for nama in (".env", "secrets/aws-app.env"):
+        berkas = akar / nama
+        if not berkas.exists():
+            continue
+        for baris in berkas.read_text(encoding="utf-8", errors="ignore").splitlines():
+            baris = baris.strip()
+            if not baris or baris.startswith("#") or "=" not in baris:
+                continue
+            kunci, nilai = baris.split("=", 1)
+            nilai = nilai.strip().strip('"').strip("'")
+            if kunci and nilai:
+                os.environ[kunci] = nilai
+
+
 def _bukti_aplikasi() -> dict:
     """Bukti keempat: apakah APLIKASI (bukan hanya env) memakai Gateway."""
-    url = (os.environ.get("AGENTCORE_GATEWAY_URL") or "").strip()
-    if url:
-        return {
-            "status": STATUS_UNVERIFIED,
-            "detail": "AGENTCORE_GATEWAY_URL terisi; pemakaian nyata belum dibuktikan "
-            "di sesi ini (butuh satu tool dipanggil lewat aplikasi)",
-        }
-    return {
-        "status": STATUS_NOT_CONFIGURED,
-        "detail": "AGENTCORE_GATEWAY_URL kosong — aplikasi tidak memakai Gateway, "
-        "jangan menandai integrasi ini DONE",
-    }
+    return app_uses_gateway(os.environ.get("AGENTCORE_GATEWAY_URL"))
 
 
 def probe_gateway(region: str) -> dict:
@@ -140,9 +158,8 @@ def probe_gateway(region: str) -> dict:
         }
     except Exception as exc:  # noqa: BLE001
         kode = getattr(exc, "response", {}).get("Error", {}).get("Code", type(exc).__name__)
-        status = STATUS_DENIED if "AccessDenied" in kode else STATUS_UNVERIFIED
         hasil["resource_exists"] = {
-            "status": status,
+            "status": status_from_error(exc),
             "detail": f"probe gagal: {kode}",
             "gateways": [],
         }
@@ -169,7 +186,7 @@ def probe_memory(region: str) -> dict:
         kode = getattr(exc, "response", {}).get("Error", {}).get("Code", type(exc).__name__)
         return {
             "resource_exists": {
-                "status": STATUS_DENIED if "AccessDenied" in kode else STATUS_UNVERIFIED,
+                "status": status_from_error(exc),
                 "detail": f"GetMemory gagal: {kode}",
             }
         }
@@ -189,7 +206,7 @@ def probe_memory(region: str) -> dict:
     except Exception as exc:  # noqa: BLE001
         kode = getattr(exc, "response", {}).get("Error", {}).get("Code", type(exc).__name__)
         baca = {
-            "status": STATUS_DENIED if "AccessDenied" in kode else STATUS_UNVERIFIED,
+            "status": status_from_error(exc),
             "detail": f"ListEvents gagal: {kode}",
         }
 
@@ -212,6 +229,7 @@ def probe_memory(region: str) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _muat_env()
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--region", default=os.environ.get("AWS_REGION", "us-west-2"))
     p.add_argument("--ringkas", action="store_true", help="hanya cetak baris status")
@@ -225,6 +243,7 @@ def main(argv: list[str] | None = None) -> int:
         "gateway": probe_gateway(args.region),
         "memory": probe_memory(args.region),
     }
+    laporan["ringkas_gateway"] = ringkas(laporan["gateway"])
 
     if not args.ringkas:
         print(json.dumps(laporan, indent=2, ensure_ascii=False))
@@ -236,6 +255,12 @@ def main(argv: list[str] | None = None) -> int:
     for nama, isi in laporan["memory"].items():
         if isinstance(isi, dict) and "status" in isi:
             print(f"  {nama:18s} {isi['status']:16s} {isi.get('detail') or ''}", file=sys.stderr)
+    ringkasan = laporan["ringkas_gateway"]
+    print(
+        "  integrasi_aktif      "
+        f"{ringkasan['integrasi_aktif']!s:16s} belum: {', '.join(ringkasan['belum_terbukti']) or '-'}",
+        file=sys.stderr,
+    )
     return 0
 
 
