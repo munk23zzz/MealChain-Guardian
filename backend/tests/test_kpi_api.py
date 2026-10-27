@@ -318,3 +318,32 @@ def test_kpi_tanpa_periode_dan_tanpa_rentang_422(scope_ctx, client):
     )
     assert r.status_code == 422
 
+
+
+# ------------------------------------------------------- cakupan data (Fase 8)
+#
+# Kontrak yang dijanjikan docstring endpoint: kombinasi cakupan yang tidak masuk
+# akal ditolak 422 — "demo tanpa sesi" dan "sesi tanpa include_demo". Sebelum ini
+# keduanya tidak diuji di level HTTP: yang pertama berakhir 500 (ValueError lolos
+# ke server) dan yang kedua diam-diam diabaikan (200 cakupan operasional), jadi
+# klien yang salah kirim mendapat jawaban yang membingungkan alih-alih penolakan.
+
+
+def test_kpi_include_demo_tanpa_sesi_422(scope_ctx, client):
+    """Cakupan demo tanpa sesi = tebakan; harus 422, bukan 500."""
+    r = client.get(
+        f"/kpi?{_qs()}&include_demo=true",
+        headers={"Authorization": f"Bearer {scope_ctx['monitor']}"},
+    )
+    assert r.status_code == 422, r.text
+    assert "demo_session_id" in r.text
+
+
+def test_kpi_sesi_tanpa_include_demo_422(scope_ctx, client):
+    """Sesi demo tanpa `include_demo` juga ambigu; jangan diabaikan diam-diam."""
+    r = client.get(
+        f"/kpi?{_qs()}&demo_session_id={uuid.uuid4()}",
+        headers={"Authorization": f"Bearer {scope_ctx['monitor']}"},
+    )
+    assert r.status_code == 422, r.text
+    assert "include_demo" in r.text

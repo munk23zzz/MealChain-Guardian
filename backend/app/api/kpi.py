@@ -23,6 +23,7 @@ from app.api.auth import get_current_user
 from app.core.kpi_period import LABEL_PERIODE, PERIODE_KPI, ZONA_KPI, resolve_periode
 from app.db import get_db
 from app.models import User
+from app.models.demo_sessions import DemoSession
 from app.services.kpi_service import METHOD_VERSION, compute_kpis
 
 router = APIRouter(prefix="", tags=["kpi"])
@@ -112,6 +113,29 @@ async def get_kpi(
                 detail=f"rentang maksimum {MAX_RANGE_DAYS} hari",
             )
 
+    # Cakupan data (Fase 8): dua kombinasi tidak masuk akal dan ditolak di sini,
+    # bukan dibiarkan lolos. `compute_kpis` sudah menolak demo tanpa sesi dengan
+    # ValueError, tetapi tanpa penjagaan ini nilainya keluar sebagai 500 (galat
+    # server) — bukan penolakan yang bisa diperbaiki pemanggil. Sesi tanpa
+    # `include_demo` dulu diabaikan diam-diam dan dijawab 200 cakupan
+    # operasional: pemanggil mengira ia melihat sesi yang ia sebut.
+    if include_demo and demo_session_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "include_demo=true wajib menyertakan demo_session_id eksplisit; "
+                "tidak ada jalur 'sesi terbaru'"
+            ),
+        )
+    if demo_session_id is not None and not include_demo:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "demo_session_id hanya berlaku bersama include_demo=true; "
+                "tanpa itu jawabannya cakupan operasional"
+            ),
+        )
+
     scope = str(user.location_id) if user.location_id else None
     if user.role == "bgn_monitor":
         scope = str(location_id) if location_id else None  # global bila omit
@@ -135,6 +159,20 @@ async def get_kpi(
         include_demo=include_demo,
         demo_session_id=demo_session_id,
     )
+    # Fase 10 MG: jawaban ini WAJIB menyebut waktu acuan dataset yang dipakai.
+    # Tanpa jangkar, "hari ini" pada angka simulasi tidak bisa dibedakan dari
+    # "hari ini" pada data lapangan — dan Joule akan menuliskannya sebagai satu
+    # kalimat sumber yang menyesatkan.
+    sesi = None
+    if include_demo and demo_session_id is not None:
+        baris = await db.get(DemoSession, demo_session_id)
+        if baris is not None:
+            sesi = {
+                "id": str(baris.id),
+                "mode": baris.mode,
+                "evaluation_anchor": baris.evaluation_anchor.isoformat(),
+                "dataset_version": baris.dataset_version,
+            }
     return {
         "period": {
             "key": kunci,
@@ -154,6 +192,8 @@ async def get_kpi(
         # sesi demo hanya dengan melihat nilainya.
         "data_mode": "demo" if include_demo else "operational",
         "demo_session_id": str(demo_session_id) if include_demo and demo_session_id else None,
+        # Sesi yang BENAR-BENAR dipakai: mode + jangkar evaluasi (Fase 10 MG).
+        "demo_session": sesi,
         "method_version": METHOD_VERSION,
         "metrics": metrics,
     }
