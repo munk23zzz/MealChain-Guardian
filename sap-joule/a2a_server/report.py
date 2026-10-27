@@ -838,6 +838,8 @@ def _po_detail(po: Mapping[str, Any], *, jumlah_terbaca: int, note: str | None) 
                 note,
                 f"Diambil dari tabel purchase order SAP simulasi di MealChain Guardian — 1 dari "
                 f"{jumlah_terbaca} PO yang terbaca.",
+                "Total PO = bahan + transportasi + penanganan; SDC menambahkan penalti "
+                "risiko internal dan tidak ditagihkan ke pemasok.",
                 "Angka ditampilkan apa adanya, tanpa hitung ulang.",
                 "Dokumen PDF PO diunduh dari UI MealChain (tab Decision & Evidence) setelah "
                 "keputusan disetujui — Joule hanya mengirim teks, tidak melampirkan berkas.",
