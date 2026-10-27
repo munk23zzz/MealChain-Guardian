@@ -50,6 +50,20 @@ SAFETY_LABEL = {
     "NEEDS_VERIFICATION": "perlu verifikasi",
     "PENDING": "menunggu pemeriksaan",
 }
+#: Label kelengkapan bukti suhu (Fase 3 MG butir 5–6). Diteruskan APA ADANYA
+#: dari payload backend; Joule tidak menilai ulang dan tidak menghitung skor.
+EVIDENCE_STATE_LABEL = {
+    "sufficient": "bukti cukup",
+    "insufficient": "bukti tidak cukup",
+    "ambiguous": "bukti bercampur",
+}
+#: Label observasi mentah → bahasa laporan.
+OBSERVATION_LABEL = {
+    "observed": "suhu tercatat",
+    "missing": "suhu tidak tercatat",
+    "malformed": "log suhu rusak",
+    "stale": "log suhu kedaluwarsa",
+}
 DECISION_TYPE_LABEL = {
     "regional_balance": "penyeimbangan wilayah",
     "price_anomaly": "anomali harga",
@@ -145,6 +159,36 @@ def _text(value: Any) -> str:
     if value is None or value == "":
         return MISSING
     return str(value)
+
+
+def _bukti_teks(row: Mapping[str, Any]) -> str:
+    """Sel "bukti suhu": meneruskan label backend, TIDAK menilai ulang.
+
+    Fase 3 MG butir 6: Joule meneruskan label observasi dan waktu tanpa
+    menghitung skor baru. Karena itu semua teks di sini berasal dari payload
+    (`evidence.evidence_state`, `temperature_observation`, `source_label`,
+    `observed_at`); bila payload tidak membawanya, itu dikatakan terus terang
+    alih-alih ditebak "cukup".
+    """
+    bukti = row.get("evidence")
+    if not isinstance(bukti, Mapping):
+        return "bukti tidak tercatat"
+    keadaan = EVIDENCE_STATE_LABEL.get(
+        str(bukti.get("evidence_state") or "").strip().lower()
+    )
+    bagian = [keadaan or "bukti tidak diketahui"]
+    observasi = OBSERVATION_LABEL.get(
+        str(bukti.get("temperature_observation") or "").strip().lower()
+    )
+    if observasi:
+        bagian.append(observasi)
+    sumber = bukti.get("source_label")
+    if sumber:
+        bagian.append(str(sumber))
+    waktu = bukti.get("observed_at")
+    if waktu:
+        bagian.append(f"diamati {wib(waktu)}")
+    return " · ".join(bagian)
 
 
 def _table(header: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
@@ -331,7 +375,7 @@ def supply_report(
                 else ""
             )
             + _table(
-                ["SPPG", "Komoditas", "Jumlah", "Keamanan", "Skor kesegaran", "Batas simpan"],
+                ["SPPG", "Komoditas", "Jumlah", "Keamanan", "Skor kesegaran", "Batas simpan", "Bukti suhu"],
                 [
                     [
                         _text(row.get("location")),
@@ -340,6 +384,8 @@ def supply_report(
                         SAFETY_LABEL.get(str(row.get("safety_status")), _text(row.get("safety_status"))),
                         num(row.get("freshness_score"), digits=2),
                         wib(row.get("usable_until")),
+                        # Fase 3 MG butir 6: label bukti diteruskan apa adanya.
+                        _bukti_teks(row),
                     ]
                     for row in tampil_batch
                 ],

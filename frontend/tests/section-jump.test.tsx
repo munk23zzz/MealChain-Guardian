@@ -228,15 +228,19 @@ describe("daftar bagian per halaman", () => {
   });
 
   it("Keamanan Pangan: tujuan mengikuti bagian yang benar-benar dirender", () => {
-    // Tanpa lokasi sendiri dan tanpa daftar keputusan: hanya tiga bagian tetap.
+    // Tanpa lokasi sendiri dan tanpa daftar keputusan: empat bagian tetap.
+    // `bukti` masuk sejak Fase 3 MG butir 5: panel bukti suhu selalu dirender,
+    // jadi jangkarnya tidak boleh hilang dari navigasi.
     expect(safetySections({ ownLocation: false, hasDecisions: false }).map((i) => i.id)).toEqual([
       SAFETY_SECTION_IDS.ringkasan,
+      SAFETY_SECTION_IDS.bukti,
       SAFETY_SECTION_IDS.segera,
       SAFETY_SECTION_IDS.batch,
     ]);
     // Kepala SPPG: penerimaan barang ikut muncul…
     expect(safetySections({ ownLocation: true, hasDecisions: false }).map((i) => i.id)).toEqual([
       SAFETY_SECTION_IDS.ringkasan,
+      SAFETY_SECTION_IDS.bukti,
       SAFETY_SECTION_IDS.segera,
       SAFETY_SECTION_IDS.terima,
       SAFETY_SECTION_IDS.batch,
@@ -244,6 +248,7 @@ describe("daftar bagian per halaman", () => {
     // …dan panel keputusan menyusul saat daftar keputusan tersedia.
     expect(safetySections({ ownLocation: true, hasDecisions: true }).map((i) => i.id)).toEqual([
       SAFETY_SECTION_IDS.ringkasan,
+      SAFETY_SECTION_IDS.bukti,
       SAFETY_SECTION_IDS.segera,
       SAFETY_SECTION_IDS.terima,
       SAFETY_SECTION_IDS.batch,

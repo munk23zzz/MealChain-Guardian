@@ -83,14 +83,22 @@ describe("FoodSafetyBoard — navigasi bagian", () => {
     return hasil;
   }
 
-  it("tanpa lokasi sendiri dan tanpa keputusan: tiga tujuan yang pasti ada", () => {
-    expect(tujuan(render())).toEqual(["safety-ringkasan", "safety-segera", "safety-batch"]);
+  it("tanpa lokasi sendiri dan tanpa keputusan: empat tujuan yang pasti ada", () => {
+    // `safety-bukti-suhu` masuk sejak Fase 3 MG butir 5: panel bukti suhu
+    // selalu dirender, jadi jangkarnya ikut di navigasi.
+    expect(tujuan(render())).toEqual([
+      "safety-ringkasan",
+      "safety-bukti-suhu",
+      "safety-segera",
+      "safety-batch",
+    ]);
   });
 
   it("kepala SPPG mendapat tujuan penerimaan barang", () => {
     const html = render({ ownLocation: "Jakarta", ownLocationId: "loc-jkt" });
     expect(tujuan(html)).toEqual([
       "safety-ringkasan",
+      "safety-bukti-suhu",
       "safety-segera",
       "safety-terima",
       "safety-batch",
@@ -407,5 +415,50 @@ describe("FoodSafetyBoard — opsi penerimaan terpisah dari cakupan tabel", () =
     expect(sumber).toContain("receivingBatchOptions(rows, ownLocation)");
     expect(sumber).not.toMatch(/batchOpsi\s*=\s*urut/);
     expect(sumber).not.toMatch(/incomingBatchId\(rows,/);
+  });
+});
+
+// Fase 3 MG butir 5: "Goods Receipt menjelaskan apakah bukti suhu cukup."
+// Penjelasan itu wajib memakai blok `evidence` dari server apa adanya —
+// sumber log, kelengkapan, dan waktu observasi — bukan disimpulkan di layar.
+describe("FoodSafetyBoard — penerimaan menjelaskan bukti suhu", () => {
+  const denganBukti = [
+    {
+      id: "t1",
+      location: "Cianjur",
+      commodity: "telur",
+      quantity_kg: 300,
+      // Hanya batch "pending" yang muncul di daftar penerimaan (lihat
+      // receivingBatchOptions): batch yang sudah dinilai bukan pekerjaan terima.
+      safety_status: "pending",
+      freshness_score: 0.7,
+      usable_until: "2026-10-12T12:00:00Z",
+      evidence: {
+        temperature_observation: "missing",
+        evidence_state: "insufficient",
+        source: "seed",
+        source_label: "log simulasi",
+        observed_at: null,
+        sample_count: 0,
+        evidence_sufficient: false,
+      },
+    },
+  ];
+
+  it("menyebut kelengkapan bukti + asal log untuk batch yang diterima", () => {
+    const html = renderToStaticMarkup(
+      <FoodSafetyBoard batches={denganBukti} now={NOW} ownLocation="Cianjur" />
+    );
+    expect(html).toContain('data-role="bukti-terima"');
+    expect(html).toContain("Bukti suhu kiriman ini");
+    expect(html).toContain("log simulasi");
+    expect(html).not.toContain("sensor aktif");
+  });
+
+  it("bukti tidak cukup dinyatakan, bukan disembunyikan", () => {
+    const html = renderToStaticMarkup(
+      <FoodSafetyBoard batches={denganBukti} now={NOW} ownLocation="Cianjur" />
+    );
+    expect(html).toContain("periksa dulu sebelum dipakai");
   });
 });

@@ -2,6 +2,7 @@
 
 from app.models.batches import Batch
 from app.models.commodities import Commodity
+from app.models.commodity_policies import CommodityPolicyRow
 from app.models.decisions import AgentTrace, Approval, Decision, DecisionEvidence
 from app.models.demand_records import DemandRecord
 from app.models.demo_sessions import DemoSession
@@ -30,6 +31,7 @@ __all__ = [
     "RoadRoute",
     "Batch",
     "BatchReceipt",
+    "CommodityPolicyRow",
     "SapMockMaterialStock",
     "SapMockPurchaseOrder",
     "Decision",

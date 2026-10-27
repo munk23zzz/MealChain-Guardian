@@ -25,6 +25,22 @@ export type SafetyBatch = {
   quarantine_status?: string | null;
   /** Status catatan penerimaan terakhir (`GET /batches`, 20 Okt 2026). */
   receipt_status?: string | null;
+  /**
+   * Blok bukti suhu (Fase 3 MG butir 5): profil yang dipakai, hasil observasi,
+   * `evidence_state`, dan ASAL log (`source`/`source_label`). Bentuknya milik
+   * server (`GET /batches` dan `GET /batches/{id}` mengirim yang sama).
+   */
+  evidence?: {
+    commodity_profile?: Record<string, unknown> | null;
+    temperature_observation?: string | null;
+    evidence_state?: string | null;
+    sample_count?: number | null;
+    observed_at?: string | null;
+    source?: string | null;
+    source_label?: string | null;
+    evidence_sufficient?: boolean | null;
+    evidence_reasons?: string[] | null;
+  } | null;
 };
 
 export type SafetyTone = "ok" | "warn" | "danger" | "muted";
@@ -1017,4 +1033,181 @@ export function receiptRows(payload: unknown): ReceiptCardRow[] {
       stockKg: Number.isFinite(stok) ? stok : null,
     };
   });
+}
+
+
+// ── Bukti suhu (Fase 3 MG butir 5) ─────────────────────────────────────────
+//
+// Backend sekarang mengirim blok `evidence` per batch dari SATU parser
+// (`app/core/temperature.parse_temperature_log`), dipakai freshness, safety,
+// API, dan Joule. Layar ini TIDAK boleh menyimpulkan kelengkapan bukti sendiri:
+// yang dilakukannya hanya menerjemahkan hasil server menjadi kalimat.
+//
+// Kenapa label asal log penting: repo ini tidak punya satu pun jalur penulisan
+// log dari sensor sungguhan. Log ditulis penyemai (`seed`) atau jalur demo
+// (`demo`). Menampilkan "sensor aktif" akan menjadi klaim yang tidak bisa
+// dipertanggungjawabkan di depan juri.
+
+export type EvidenceState = "sufficient" | "insufficient" | "ambiguous" | "unknown";
+
+const EVIDENCE_VALID: readonly EvidenceState[] = [
+  "sufficient",
+  "insufficient",
+  "ambiguous",
+];
+
+/** Keadaan bukti dari server; nilai asing dibaca "unknown", bukan diteruskan. */
+export function evidenceStateOf(value: unknown): EvidenceState {
+  const key = text(value)?.toLowerCase();
+  return EVIDENCE_VALID.find((state) => state === key) ?? "unknown";
+}
+
+const EVIDENCE_LABEL: Record<EvidenceState, string> = {
+  sufficient: "Bukti cukup",
+  insufficient: "Bukti kurang",
+  ambiguous: "Bukti bertentangan",
+  unknown: "Tidak tercatat",
+};
+
+export function evidenceLabel(state: unknown): string {
+  return EVIDENCE_LABEL[evidenceStateOf(state)];
+}
+
+/** Hanya bukti CUKUP yang boleh berwarna aman. */
+export function evidenceTone(state: unknown): SafetyTone {
+  switch (evidenceStateOf(state)) {
+    case "sufficient":
+      return "ok";
+    case "insufficient":
+    case "ambiguous":
+      return "warn";
+    default:
+      return "muted";
+  }
+}
+
+/** Label asal log. `unknown` = tidak ada jejak asal, bukan "sensor". */
+export function sourceLabelOf(value: unknown): string {
+  const key = text(value)?.toLowerCase();
+  if (key === "seed" || key === "demo") return "log simulasi";
+  if (key === "unrecorded") return "tanpa jejak asal log";
+  return "tidak tercatat";
+}
+
+/** Label observasi suhu; nilai asing tidak diteruskan mentah. */
+const OBSERVATION_LABEL: Record<string, string> = {
+  observed: "Teramati",
+  missing: "Tidak ada log",
+  malformed: "Log tidak terbaca",
+  stale: "Log kedaluwarsa",
+};
+
+export type EvidenceRow = {
+  id: string | null;
+  commodity: string;
+  /** Kode mentah server: `observed` | `missing` | `malformed` | `stale` | null. */
+  observation: string | null;
+  observationLabel: string;
+  state: EvidenceState;
+  stateLabel: string;
+  tone: SafetyTone;
+  sufficient: boolean;
+  sampleCount: number | null;
+  observedAt: string | null;
+  /** `seed` | `demo` | `unrecorded` | null — asal log APA ADANYA. */
+  source: string | null;
+  sourceLabel: string;
+  profileVersion: string | null;
+  policyKind: string | null;
+  coldChainRequired: boolean | null;
+  /** Alasan dari server, diteruskan apa adanya (bukan diringkas ulang). */
+  reasons: string[];
+};
+
+/** Satu baris bukti per batch; data lama tanpa blok `evidence` tetap terlihat. */
+export function evidenceRows(batches: unknown): EvidenceRow[] {
+  const list = Array.isArray(batches)
+    ? (batches as SafetyBatch[])
+    : Array.isArray((batches as { batches?: unknown })?.batches)
+      ? ((batches as { batches: SafetyBatch[] }).batches as SafetyBatch[])
+      : [];
+  return list.map((batch) => {
+    const blok = (batch?.evidence ?? null) as {
+      commodity_profile?: { policy_version?: unknown; policy_kind?: unknown; cold_chain_required?: unknown } | null;
+      temperature_observation?: unknown;
+      evidence_state?: unknown;
+      sample_count?: unknown;
+      observed_at?: unknown;
+      source?: unknown;
+      source_label?: unknown;
+      evidence_sufficient?: unknown;
+      evidence_reasons?: unknown;
+    } | null;
+    const samples = Number(blok?.sample_count);
+    const reasons = Array.isArray(blok?.evidence_reasons)
+      ? (blok?.evidence_reasons as unknown[]).map((r) => String(r))
+      : [];
+    const observationKey = text(blok?.temperature_observation)?.toLowerCase() ?? null;
+    const state = blok ? evidenceStateOf(blok.evidence_state) : "unknown";
+    const coldChain =
+      typeof blok?.commodity_profile?.cold_chain_required === "boolean"
+        ? (blok.commodity_profile.cold_chain_required as boolean)
+        : null;
+    return {
+      id: text(batch?.id),
+      commodity: text(batch?.commodity) ?? DASH,
+      observation: observationKey,
+      observationLabel: observationKey
+        ? (OBSERVATION_LABEL[observationKey] ?? "tidak tercatat")
+        : "tidak tercatat",
+      state,
+      stateLabel: evidenceLabel(state),
+      // Ambient tidak boleh diwarnai peringatan: profilnya tidak punya rentang
+      // dingin, jadi tidak ada bukti suhu yang bisa dilanggar.
+      tone: coldChain === false ? "muted" : evidenceTone(state),
+      // Server sudah memutuskan; klien tidak menghitung ulang "cukup" dari
+      // jumlah sampel — dua definisi kelengkapan adalah bug yang Fase 3 tutup.
+      sufficient: blok?.evidence_sufficient === true,
+      sampleCount: Number.isFinite(samples) ? samples : null,
+      observedAt: text(blok?.observed_at),
+      source: text(blok?.source),
+      sourceLabel: sourceLabelOf(blok?.source),
+      profileVersion: text(blok?.commodity_profile?.policy_version),
+      policyKind: text(blok?.commodity_profile?.policy_kind),
+      coldChainRequired: coldChain,
+      reasons,
+    };
+  });
+}
+
+export type EvidenceSummary = {
+  total: number;
+  sufficient: number;
+  insufficient: number;
+  ambiguous: number;
+  unknown: number;
+  /** Bukti belum cukup DAN komoditasnya memang menuntut bukti suhu. */
+  perluVerifikasi: number;
+};
+
+export function evidenceSummary(rows: readonly EvidenceRow[]): EvidenceSummary {
+  const ringkas: EvidenceSummary = {
+    total: rows.length,
+    sufficient: 0,
+    insufficient: 0,
+    ambiguous: 0,
+    unknown: 0,
+    perluVerifikasi: 0,
+  };
+  for (const row of rows) {
+    ringkas[row.state] += 1;
+    // Fail-closed: yang dihitung perlu verifikasi adalah setiap batch yang
+    // buktinya BELUM cukup, kecuali komoditas ambient yang profilnya memang
+    // tidak mewajibkan bukti suhu. `coldChainRequired === null` (komoditas tanpa
+    // profil / data lama) IKUT dihitung: "tidak tahu" bukan "aman".
+    if (!row.sufficient && row.coldChainRequired !== false) {
+      ringkas.perluVerifikasi += 1;
+    }
+  }
+  return ringkas;
 }

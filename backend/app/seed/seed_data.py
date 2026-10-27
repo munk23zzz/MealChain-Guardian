@@ -595,6 +595,21 @@ async def load_seed(reference_time: datetime, seed_path: Path | None = None) -> 
                 )
             )
             await session.commit()
+            # Fase 3 MG: profil komoditas diisi SESUDAH komoditas ada. Migrasi 041
+            # menulis profil dengan `INSERT ... SELECT FROM commodities`, jadi pada
+            # DB yang dimigrasi lebih dulu daripada diseed ia menulis NOL baris
+            # tanpa galat — dan pembaca jatuh ke bawaan kode selamanya. Seed yang
+            # sama dengan `core.commodity_policy.PROFILES` menutup celah itu.
+            from app.seed.commodity_policies import seed_commodity_policies
+
+            profil = await seed_commodity_policies()
+            counts["commodity_policies"] = profil["baru"]
+            if profil["dilewati"]:
+                counts["commodity_policies_dilewati"] = profil["dilewati"]
+            if profil["komoditas_tanpa_profil"]:
+                counts["commodity_policies_tanpa_komoditas"] = len(
+                    profil["komoditas_tanpa_profil"]
+                )
     finally:
         await engine.dispose()
     return counts

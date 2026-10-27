@@ -56,6 +56,8 @@ export const OVERVIEW_SECTION_IDS = {
 /** Jangkar halaman Keamanan Pangan (dipasang di `components/FoodSafetyBoard.tsx`). */
 export const SAFETY_SECTION_IDS = {
   ringkasan: "safety-ringkasan",
+  // Fase 3 MG butir 5: panel bukti suhu bisa dijangkau lewat navigasi bagian.
+  bukti: "safety-bukti-suhu",
   segera: "safety-segera",
   terima: "safety-terima",
   batch: "safety-batch",
@@ -110,6 +112,8 @@ export function safetySections({
 }): JumpItem[] {
   const items: JumpItem[] = [
     { id: SAFETY_SECTION_IDS.ringkasan, label: "Ringkasan" },
+    // Panel bukti suhu selalu dirender (Fase 3 butir 5), jadi jangkarnya tetap.
+    { id: SAFETY_SECTION_IDS.bukti, label: "Bukti suhu" },
     { id: SAFETY_SECTION_IDS.segera, label: "Segera dipakai" },
   ];
   if (ownLocation) items.push({ id: SAFETY_SECTION_IDS.terima, label: "Penerimaan" });

@@ -28,6 +28,9 @@ import {
   balanceForLocation,
   checkedForReceipt,
   coverageSentence,
+  evidenceLabel,
+  evidenceRows,
+  evidenceSummary,
   expiryState,
   incomingBatchId,
   incomingKgForCommodity,
@@ -80,6 +83,7 @@ function waktuCatat(iso: string): string {
 }
 import styles from "./FoodSafetyBoard.module.css";
 import { paginate } from "../lib/pagination";
+import { rowNextSteps } from "../lib/safety-gate";
 
 // Baris batch yang ditampilkan di kartu ringkas; dipakai di slice DAN kalimat
 // "Menampilkan N dari M" supaya keduanya tidak bisa menyimpang (audit angka
@@ -220,6 +224,20 @@ export default function FoodSafetyBoard({
   const halamanData = paginate(tersaring, halaman, 8);
   const summary = safetySummaryOfRows(tampil);
   const summaryJaringan = safetySummaryOfRows(rows);
+  // Bukti suhu mengikuti CAKUPAN baris yang sama dengan tabel status: `own`
+  // menyaring lokasi sendiri, `all` memakai seluruh jaringan. Menghitungnya dari
+  // daftar penuh akan membuat panel bukti berbeda cakupan dengan tabel di bawah.
+  const bukti = evidenceRows(
+    Array.isArray(batches)
+      ? batches.filter((b) => {
+          if (jaringan) return true;
+          if (!ownLocation) return true;
+          const lokasi = String((b as { location?: unknown })?.location ?? "").trim();
+          return lokasi === ownLocation.trim();
+        })
+      : batches,
+  );
+  const buktiRingkas = evidenceSummary(bukti);
   // Sisa partisi status uji: batch yang ditahan padahal ujinya lolos tidak masuk
   // "Aman" (tidak boleh dialokasikan) dan juga bukan gagal/perlu-verifikasi.
   // Tanpa tile ini, empat angka tidak menjumlah ke total dan terlihat seperti
@@ -272,6 +290,10 @@ export default function FoodSafetyBoard({
     : null;
   const idTerima = terimaId ?? batchKiriman ?? batchOpsi[0]?.id ?? null;
   const batchTerpilih = batchOpsi.find((row) => row.id === idTerima) ?? null;
+  // Blok bukti batch yang sedang diterima (MG/phase-03 butir 5): diambil dari
+  // baris `/batches` mentah, bukan dihitung ulang di layar.
+  const buktiTerpilih =
+    evidenceRows(batches).find((row) => row.id !== null && row.id === idTerima) ?? null;
   // Dua langkah: komoditas dulu, baru batch. Nilai komoditas mengikuti batch
   // yang sedang terpilih supaya kedua <select> tidak pernah saling bertentangan.
   const komoditasTerpilih = batchTerpilih?.commodity ?? grupKomoditas[0]?.commodity ?? "";
@@ -792,6 +814,73 @@ export default function FoodSafetyBoard({
           )}
         </article>
 
+        <article className="card jump-target" id="safety-bukti-suhu">
+          <h2>Bukti suhu</h2>
+          {/* Fase 3 MG butir 5. Satu-satunya sumber label di sini adalah blok
+              `evidence` server (`GET /batches`), bukan hitungan klien: klien yang
+              menghitung ulang kelengkapan bukti adalah bug yang fase ini tutup.
+              Asal log disebut "log simulasi" karena repo ini tidak punya jalur
+              penulisan log dari sensor sungguhan. */}
+          <p className="evidence-note">
+            {buktiRingkas.total === 0
+              ? "Belum ada batch pada cakupan ini."
+              : `${buktiRingkas.total} batch diperiksa. ${buktiRingkas.sufficient} punya bukti suhu cukup, ` +
+                `${buktiRingkas.insufficient} kurang, ${buktiRingkas.ambiguous} bertentangan, ` +
+                `${buktiRingkas.unknown} tidak tercatat.`}
+          </p>
+          {buktiRingkas.perluVerifikasi > 0 ? (
+            <p className="board-alert">
+              {buktiRingkas.perluVerifikasi} batch menuntut bukti suhu tetapi belum cukup — lengkapi
+              pembacaan suhu lalu verifikasi sebelum dialokasikan.
+            </p>
+          ) : buktiRingkas.total > 0 ? (
+            <p className="evidence-note">
+              Semua batch pada cakupan ini punya bukti suhu yang cukup (atau komoditasnya memang tidak
+              diwajibkan bukti suhu).
+            </p>
+          ) : null}
+          {bukti.length > 0 ? (
+            <ul className="board-list">
+              {bukti.slice(0, 6).map((row) => (
+                <li key={`bukti-${row.id ?? `${row.commodity}-${row.observation}`}`}>
+                  <span className="board-list-title">
+                    {row.commodity} · {row.stateLabel}
+                  </span>
+                  <span className="board-list-meta">
+                    {row.observationLabel}
+                    {row.sampleCount === null ? "" : ` · ${row.sampleCount} sampel`}
+                    {row.sourceLabel ? ` · ${row.sourceLabel}` : ""}
+                  </span>
+                  {row.profileVersion ? (
+                    <span className="board-list-meta">
+                      profil {row.profileVersion}
+                      {row.policyKind === "simulated_policy" ? " (simulasi, bukan standar regulasi)" : ""}
+                    </span>
+                  ) : (
+                    <span className="board-list-meta">
+                      komoditas ini belum punya profil suhu — tidak dinilai
+                    </span>
+                  )}
+                  {row.reasons.length > 0 ? (
+                    <span className="board-list-meta">{row.reasons.join("; ")}</span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {bukti.length > 6 ? (
+            <p className="evidence-note">
+              Ditampilkan 6 dari {bukti.length} batch; tabel di bawah memuat seluruhnya.
+            </p>
+          ) : null}
+          {bukti.some((row) => !row.sufficient) ? (
+            <p className="evidence-note">
+              Bukti kurang tidak pernah dibaca sebagai aman: statusnya{" "}
+              {evidenceLabel("insufficient").toLowerCase()} sampai pembacaan suhu dilengkapi.
+            </p>
+          ) : null}
+        </article>
+
         <article className="card jump-target" id="safety-segera">
           <h2>Batch perlu segera dipakai</h2>
           {urut.filter((row) => row.hoursLeft !== null && row.hoursLeft <= 48).length === 0 ? (
@@ -880,6 +969,15 @@ export default function FoodSafetyBoard({
             <h2>Penerimaan barang</h2>
             <span className="board-badge board-badge-muted">daftar periksa petugas</span>
           </div>
+          {/* MG/phase-04 poin 7: ceklis penerimaan (`POST /receipts`) dan
+              karantina (`POST /batches/{id}/quarantine`) adalah dua tindakan
+              berbeda dengan akibat berbeda. Petugas pernah membacanya sebagai
+              satu hal, lalu mengira mencentang kotak berarti menahan batch. */}
+          <p className="evidence-note">
+            Ini ceklis penerimaan, <strong>bukan karantina</strong>: catatan di sini
+            tidak menahan batch dan tidak mengubah status keamanannya. Menahan atau
+            melepas batch dilakukan lewat tombol karantina di kolom Tindakan.
+          </p>
           <p className="evidence-note">
             Petugas memeriksa kiriman sebelum barang dipakai. Tombol di bawah menulis dua hal ke
             database: catatan periksa ini (titik yang dicentang + isian &quot;Lainnya&quot;), lalu
@@ -958,6 +1056,23 @@ export default function FoodSafetyBoard({
               {batchTerpilih.hoursLeft !== null && batchTerpilih.hoursLeft < 0
                 ? " · sudah kedaluwarsa"
                 : ""}
+            </p>
+          ) : null}
+          {/* MG/phase-03 butir 5: "Goods Receipt menjelaskan apakah bukti suhu
+              cukup." Penjelasannya memakai blok `evidence` dari server apa
+              adanya — asal log, kelengkapan, dan waktu observasi — supaya
+              petugas tahu apakah kiriman ini terverifikasi atau menunggu. */}
+          {buktiTerpilih ? (
+            <p className="evidence-note safety-pick-state" data-role="bukti-terima">
+              Bukti suhu kiriman ini: <strong>{buktiTerpilih.stateLabel}</strong>
+              {" · "}
+              {buktiTerpilih.observationLabel}
+              {" · "}
+              {buktiTerpilih.sourceLabel}
+              {buktiTerpilih.observedAt ? ` · diamati ${buktiTerpilih.observedAt}` : ""}
+              {buktiTerpilih.sufficient
+                ? " — boleh dicentang dan dipakai."
+                : " — periksa dulu sebelum dipakai."}
             </p>
           ) : null}
           <fieldset className="safety-checks-set">
@@ -1337,6 +1452,21 @@ export default function FoodSafetyBoard({
                               </span>
                             </>
                           ) : null}
+                          {/* MG/phase-04 poin 7: keadaan tertahan harus disertai
+                              LANGKAH berikutnya. Batch bisa sekaligus menunggu
+                              verifikasi DAN dikarantina, jadi keduanya ditulis
+                              terpisah — bukan salah satu menutupi yang lain,
+                              dan bukan kode mentah dari evaluator. */}
+                          {(() => {
+                            const langkah = rowNextSteps(row.safetyStatus, row.quarantine);
+                            if (!langkah.safety && !langkah.karantina) return null;
+                            return (
+                              <span className="cell-meta safety-row-next">
+                                {langkah.safety ? <>Langkah: {langkah.safety}.</> : null}
+                                {langkah.karantina ? <> Karantina: {langkah.karantina}.</> : null}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="num" data-label="Kesegaran">{row.freshness}</td>
                         <td data-label="Layak sampai">{row.usableUntil}</td>
