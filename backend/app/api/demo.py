@@ -127,6 +127,9 @@ class Event1Request(BaseModel):
     #: kolom ini klien tidak punya cara menyebut sesi, dan keputusan hasil
     #: analisis hanya dimiliki "sesi yang kebetulan aktif".
     demo_session: uuid.UUID | None = None
+    #: Fase 2 MG butir 8: mode yang diyakini klien. Bertentangan dengan mode
+    #: sesi pemilik = 422; tanpa ini klien realtime bisa menulis ke sesi replay.
+    mode: Literal["replay", "realtime"] | None = None
 
 
 def _loc_map(locations) -> dict:
@@ -1204,7 +1207,7 @@ async def run_demo_event1(
         )
     assert_in_scope(user, location.id, what="lokasi tujuan")
 
-    pemilik = await _sesi_pemilik_analisis(db, payload.demo_session)
+    pemilik = await _sesi_pemilik_analisis(db, payload.demo_session, mode=payload.mode)
 
     def _jalankan_event1() -> dict:
         opsi: dict = {"ttl_minutes": payload.ttl_minutes}

@@ -752,6 +752,38 @@ def test_event1_endpoint_meneruskan_sesi(tanpa_sesi_aktif, monkeypatch):
         _hapus_sesi(sid)
 
 
+def test_event1_mode_bertentangan_ditolak_422(tanpa_sesi_aktif, monkeypatch):
+    """Event 1 juga menolak mode yang bertentangan dengan sesi pemilik.
+
+    Tanpa ini lubangnya cuma berpindah: `/demo/agent/run` menolak klien yang
+    mengaku realtime, tetapi `/demo/event1` masih menerimanya dan menulis
+    keputusan berjangkar replay.
+    """
+    sid = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
+
+    def _fake(*_a, **_kw):  # pragma: no cover - tidak boleh dipanggil
+        raise AssertionError("orkestrator jalan padahal mode bertentangan")
+
+    monkeypatch.setattr("app.api.demo.run_event1", _fake)
+    try:
+        with TestClient(app) as client:
+            head = _login(client)
+            resp = client.post(
+                "/demo/event1",
+                json={
+                    "commodity": "telur",
+                    "target_location": "Jakarta",
+                    "demo_session": str(sid),
+                    "mode": "realtime",
+                },
+                headers=head,
+            )
+        assert resp.status_code == 422, resp.text
+        assert "realtime" in resp.text and "replay" in resp.text
+    finally:
+        _hapus_sesi(sid)
+
+
 def test_agent_run_meneruskan_sesi(tanpa_sesi_aktif, monkeypatch):
     """`POST /demo/agent/run` meneruskan sesi ke orkestrator pengadaan.
 
