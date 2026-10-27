@@ -64,6 +64,9 @@ htmlcov/
 # Ekspor dump database — memuat hash kata sandi pengguna demo; regenerasi lokal
 # lewat `pg_dump` bila perlu, jangan dibagikan lewat git.
 /data/export/
+# Checkpoint anchor ledger (Fase 11 butir 2): dibuat lokal oleh
+# `scripts/ledger_anchor.py`, isinya keadaan mesin ini — bukan artefak untuk git.
+/data/anchors/
 # Bukti audit DB (dump penuh 1,3 MB + hash kata sandi) — regenerasi lokal dengan
 # `verify/audit-db/run_checks.py`, bukan artefak untuk git.
 /verify/audit-db/

@@ -86,6 +86,14 @@ class Settings(BaseSettings):
     aws_region: str = "us-west-2"
     supervisor_model_primary: str = ""
 
+    # Checkpoint ledger di luar database (Fase 11 MG, butir 2). Berkas JSON yang
+    # ditulis role migrasi dari HOST (`scripts/ledger_anchor.py`), lalu dibaca
+    # aplikasi lewat mount `./data:/data:ro`. Karena aplikasi hanya memegang hak
+    # baca di mount itu, ia TIDAK dapat memalsukan anchor — itulah yang membuat
+    # "valid=true dari database yang sama" bukan lagi satu-satunya bukti.
+    # Path kosong = fitur mati secara eksplisit (laporan `anchor.configured=false`).
+    ledger_anchor_path: str = "/data/anchors/ledger-checkpoint.json"
+
     # SAP lewat AWS for SAP MCP Server (A4). Default TETAP mock: adapter MCP
     # hanya dipakai bila diminta eksplisit DAN endpoint-nya ada. Endpoint/token
     # kosong = penolakan di factory, bukan fallback diam-diam ke data simulasi.

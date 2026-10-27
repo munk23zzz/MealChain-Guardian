@@ -25,7 +25,7 @@ import { fetchDossier, verifyLedger } from "../lib/api";
 import ComplianceEvidencePanel from "./ComplianceEvidencePanel";
 import { dossierToCsv, dossierToJson, downloadText } from "../lib/export";
 import type { ComplianceDossier } from "../lib/evidence";
-import { coverageNote } from "../lib/ledger";
+import { anchorNote, coverageNote } from "../lib/ledger";
 
 type LedgerResult = {
   valid: boolean;
@@ -40,6 +40,15 @@ type LedgerResult = {
   archived_blocks?: number;
   linked_ratio?: number | null;
   coverage_warning?: string | null;
+  /** Checkpoint di luar database (Fase 11 MG, butir 2). */
+  anchor?: {
+    configured?: boolean;
+    match?: boolean | null;
+    reason?: string | null;
+    height?: number | null;
+    payload_hash?: string | null;
+    created_at?: string | null;
+  } | null;
 };
 
 type DossierResult = ComplianceDossier & {
@@ -88,21 +97,36 @@ export default function IntegrityPanel({
   const refresh = useCallback(async () => {
     setBusy(true);
     setError(null);
+    // Dua endpoint dipisah: dulu satu `try` membungkus keduanya, sehingga
+    // kegagalan ledger membuat dossier tidak pernah dimuat DAN sebaliknya —
+    // panel lalu selamanya menampilkan "memeriksa rantai…"/"memuat dossier…".
+    const gagal: string[] = [];
     try {
       const lv = (await verifyLedger(token)) as LedgerResult;
       setLedger(lv);
-      if (decisionId) {
+    } catch (e: any) {
+      gagal.push(`rantai audit: ${e?.message ?? "gagal dimuat"}`);
+    }
+    if (decisionId) {
+      try {
         const dz = (await fetchDossier(decisionId, token)) as DossierResult;
         setDossier(dz);
-      } else {
-        setDossier(null);
+      } catch (e: any) {
+        gagal.push(`dossier: ${e?.message ?? "gagal dimuat"}`);
       }
-    } catch (e: any) {
-      setError(e?.message ?? "gagal memuat integritas");
-    } finally {
-      setBusy(false);
+    } else {
+      setDossier(null);
     }
+    if (gagal.length) setError(gagal.join(" · "));
+    setBusy(false);
   }, [token, decisionId]);
+
+  // Keputusan berganti → dossier lama HARUS dibuang sebelum fetch baru selesai,
+  // kalau tidak alamat konten & tanda tangan keputusan sebelumnya tampil di
+  // bawah judul keputusan yang baru.
+  useEffect(() => {
+    setDossier(null);
+  }, [decisionId]);
 
   useEffect(() => {
     void refresh();
@@ -112,6 +136,9 @@ export default function IntegrityPanel({
   const berkas = dossierState(decisionId, dossier);
   // Audit A4: rantai valid ≠ bukti lengkap — blok yatim tetap disebut.
   const sisaBukti = ledger === null ? null : coverageNote(ledger);
+  // Fase 11 butir 2: rantai valid di dalam DB ≠ riwayat tidak ditulis ulang.
+  const catatanAnchor = anchorNote(ledger);
+  const anchorBeda = ledger?.anchor?.match === false;
 
   return (
     <section className="integrity-panel card" data-testid="integrity-panel">
@@ -159,10 +186,34 @@ export default function IntegrityPanel({
                 <dd className="integrity-num">blok {ledger.broken_at}</dd>
               </div>
             ) : null}
+            {ledger.anchor && ledger.anchor.match !== null ? (
+              <div>
+                <dt>Checkpoint</dt>
+                <dd
+                  className="integrity-num"
+                  data-testid="ledger-anchor-match"
+                  data-match={ledger.anchor.match ? "true" : "false"}
+                >
+                  {ledger.anchor.match ? "cocok" : "berbeda"}
+                  {typeof ledger.anchor.height === "number"
+                    ? ` · blok ${ledger.anchor.height}`
+                    : ""}
+                </dd>
+              </div>
+            ) : null}
           </dl>
         )}
         {ledger !== null && !ledger.valid && ledger.reason ? (
           <p className="integrity-reason">{ledger.reason}</p>
+        ) : null}
+        {catatanAnchor ? (
+          <p
+            className={anchorBeda ? "integrity-warning" : "integrity-reason"}
+            data-testid="ledger-anchor"
+            data-tone={anchorBeda ? "danger" : "plain"}
+          >
+            {catatanAnchor}
+          </p>
         ) : null}
         {sisaBukti ? (
           <p className="integrity-warning" data-testid="ledger-coverage">

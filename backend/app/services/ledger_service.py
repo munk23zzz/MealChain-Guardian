@@ -8,13 +8,161 @@ UPDATE/DELETE pada tabel ini di produksi (lihat Rules.md).
 
 import hashlib
 import json
+import os
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
+
 GENESIS = "0" * 64
+
+
+def baca_checkpoint(jalur: str | None = None) -> dict | None:
+    """Baca checkpoint ledger dari LUAR database (Fase 11 butir 2).
+
+    Berkas ini ditulis role migrasi dari host (`scripts/ledger_anchor.py`) dan
+    hanya bisa DIBACA aplikasi (mount `./data:/data:ro`). Karena itu hash di
+    dalamnya tidak dapat dipalsukan oleh kode aplikasi — berbeda dari
+    `payload_hash` di database, yang bisa ditulis ulang oleh siapa pun yang
+    memegang hak tulis tabel.
+
+    Mengembalikan `None` bila path kosong, berkas tidak ada, atau isinya tidak
+    berbentuk checkpoint yang sah. Tidak ada nilai karangan: pemanggil harus
+    melaporkan "belum ada anchor", bukan "cocok".
+    """
+    path = jalur if jalur is not None else settings.ledger_anchor_path
+    if not path:
+        return None
+    try:
+        with open(path, encoding="utf-8") as berkas:
+            data = json.load(berkas)
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    if "height" not in data or "payload_hash" not in data:
+        return None
+    return data
+
+
+async def _laporan_anchor(db: AsyncSession, jalur: str | None = None) -> dict:
+    """Bandingkan rantai di database dengan checkpoint eksternal.
+
+    `match` sengaja TIDAK ikut menentukan `valid`: `valid` berarti integritas
+    rantai menurut database itu sendiri, sedangkan `anchor.match` berarti
+    "sama dengan salinan yang disimpan di luar database". Dua pertanyaan
+    berbeda; menggabungkannya akan menyembunyikan kasus paling berbahaya —
+    rantai yang ditulis ulang rapi (valid=true) tetapi tidak sama dengan
+    checkpoint.
+    """
+    path = jalur if jalur is not None else settings.ledger_anchor_path
+    checkpoint = baca_checkpoint(path)
+    if checkpoint is None:
+        return {
+            "configured": bool(path),
+            "path": path or None,
+            "match": None,
+            "reason": (
+                "checkpoint belum dibuat (jalankan scripts/ledger_anchor.py)"
+                if path
+                else "LEDGER_ANCHOR_PATH kosong — anchor eksternal dimatikan"
+            ),
+            "height": None,
+            "payload_hash": None,
+            "created_at": None,
+        }
+
+    tinggi = int(checkpoint["height"])
+    hash_anchor = str(checkpoint["payload_hash"])
+    baris = (
+        await db.execute(
+            text("SELECT payload_hash FROM ledger_blocks WHERE height = :h"),
+            {"h": tinggi},
+        )
+    ).fetchone()
+
+    dasar = {
+        "configured": True,
+        "path": path,
+        "height": tinggi,
+        "payload_hash": hash_anchor,
+        "created_at": checkpoint.get("created_at"),
+    }
+    if baris is None:
+        return {
+            **dasar,
+            "match": False,
+            "reason": (
+                f"blok setinggi {tinggi} tidak ada di database — checkpoint lebih "
+                "tinggi dari rantai (riwayat dipangkas, atau DB dipulihkan dari "
+                "salinan yang lebih lama)"
+            ),
+        }
+    if str(baris[0]) != hash_anchor:
+        return {
+            **dasar,
+            "match": False,
+            "reason": (
+                f"hash blok {tinggi} di database berbeda dari anchor — riwayat "
+                "ditulis ulang setelah checkpoint"
+            ),
+        }
+    return {**dasar, "match": True, "reason": None}
+
+
+async def tulis_checkpoint(db: AsyncSession, jalur: str | None = None) -> dict:
+    """Tulis checkpoint anchor dari keadaan rantai SEKARANG (role migrasi).
+
+    Dipanggil `scripts/ledger_anchor.py` dari host, bukan dari jalur kerja
+    aplikasi: yang menandatangani riwayat harus pihak yang berwenang, dan
+    berkasnya harus berada di tempat aplikasi tidak bisa menulis (mount :ro).
+
+    Tulis atomik (`tmp` lalu `os.replace`) supaya verifikasi yang membaca
+    berkas di tengah penulisan tidak melihat JSON separuh.
+    """
+    path = jalur if jalur is not None else settings.ledger_anchor_path
+    if not path:
+        raise ValueError("LEDGER_ANCHOR_PATH kosong — tidak ada tempat menulis anchor")
+
+    jumlah = int(
+        (await db.execute(text("SELECT count(*) FROM ledger_blocks"))).scalar_one()
+    )
+    kepala = (
+        await db.execute(
+            text(
+                "SELECT height, payload_hash, generation, created_at "
+                "FROM ledger_blocks ORDER BY height DESC LIMIT 1"
+            )
+        )
+    ).fetchone()
+    if kepala is None:
+        raise ValueError("ledger kosong — tidak ada blok untuk dijadikan anchor")
+
+    data = {
+        "height": int(kepala[0]),
+        "payload_hash": str(kepala[1]),
+        "generation": int(kepala[2]) if kepala[2] is not None else None,
+        "blocks": jumlah,
+        "block_created_at": (
+            kepala[3].isoformat() if hasattr(kepala[3], "isoformat") else None
+        ),
+        "created_at": datetime.now(UTC).isoformat(),
+        "written_by": "scripts/ledger_anchor.py",
+    }
+
+    direktori = os.path.dirname(path)
+    if direktori:
+        os.makedirs(direktori, exist_ok=True)
+    sementara = f"{path}.tmp"
+    with open(sementara, "w", encoding="utf-8") as berkas:
+        json.dump(data, berkas, indent=2, sort_keys=True)
+        berkas.write("\n")
+    os.replace(sementara, path)
+    return data
 
 
 async def current_generation(db: AsyncSession) -> int:
@@ -149,7 +297,7 @@ async def append_block(
     }
 
 
-async def verify_chain(db: AsyncSession) -> dict:
+async def verify_chain(db: AsyncSession, *, anchor_path: str | None = None) -> dict:
     """Verifikasi ulang seluruh rantai dari genesis (murni read).
 
     Sejak 18 Okt 2026 respons juga menyatakan KETERKAITAN blok, bukan hanya
@@ -157,8 +305,14 @@ async def verify_chain(db: AsyncSession) -> dict:
     itu kebenaran teknis yang tidak boleh dipalsukan — tetapi blok yang
     menunjuk keputusan/batch yang sudah dihapus dilaporkan terpisah supaya
     tidak terbaca sebagai "bukti lengkap".
+
+    Sejak Fase 11 butir 2 respons memuat `anchor`: perbandingan dengan
+    checkpoint di LUAR database. `valid=true` pada database yang sama TIDAK
+    cukup — penulis yang memegang hak tulis bisa menghitung ulang seluruh hash.
+    `anchor.match=false` adalah bukti bahwa riwayat ditulis ulang.
     """
     linkage = await _linkage(db)
+    anchor = await _laporan_anchor(db, anchor_path)
     rows = (
         await db.execute(
             text(
@@ -171,15 +325,16 @@ async def verify_chain(db: AsyncSession) -> dict:
     for h, ph, expected, payload in rows:
         if h != 1 and ph != prev:
             return {"valid": False, "blocks": len(rows), "broken_at": h,
-                    "reason": "prev_hash tidak nyambung", **linkage}
+                    "reason": "prev_hash tidak nyambung", "anchor": anchor,
+                    **linkage}
         actual = hashlib.sha256((ph + payload).encode()).hexdigest()
         if actual != expected:
             return {"valid": False, "blocks": len(rows), "broken_at": h,
                     "reason": "payload_hash tidak cocok dengan sha256(prev+payload)",
-                    **linkage}
+                    "anchor": anchor, **linkage}
         prev = expected
     return {"valid": True, "blocks": len(rows), "head": prev if rows else None,
-            **linkage}
+            "anchor": anchor, **linkage}
 
 
 async def _linkage(db: AsyncSession) -> dict:
