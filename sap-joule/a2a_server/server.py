@@ -41,7 +41,7 @@ import asyncio
 import json
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
@@ -66,10 +66,26 @@ from fastapi.middleware.cors import CORSMiddleware
 import report
 from mealchain_client import (
     EVIDENCE_LIMIT,
+    KPI_DEFAULT_DAYS,
     PAIR_LIMIT,
     MealchainClient,
     MealchainRejected,
     MealchainUnavailable,
+)
+
+_BULAN = (
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "Mei",
+    "Jun",
+    "Jul",
+    "Agu",
+    "Sep",
+    "Okt",
+    "Nov",
+    "Des",
 )
 
 ARTIFACT_ID = "mealchain_report"
@@ -291,6 +307,18 @@ _BUANG_WORDS: tuple[str, ...] = (
 #: lebih dulu daripada kata kunci mana pun karena bentuknya tidak ambigu.
 _PO_NUMBER = re.compile(r"\b(MC-[0-9A-Fa-f]{6,})\b")
 
+# Perintah TULIS (Fase 12): jembatan ini hanya baca, jadi permintaan menyetujui/
+# menolak/mengeksekusi harus dijawab dengan penolakan + arah ke cockpit — bukan
+# dijawab tabel PO (yang membuat penanya mengira permintaannya diproses).
+# Dianker di AWAL pesan supaya pertanyaan seperti "PO mana yang sudah disetujui?"
+# atau "status eksekusi PO …" tetap jatuh ke skill baca yang benar.
+_WRITE_INTENT = re.compile(
+    r"^\s*(tolong\s+|mohon\s+|please\s+|silakan\s+|bisa\s+)?"
+    r"(setujui|menyetujui|approve|tolak|menolak|reject|"
+    r"eksekusi|mengeksekusi|execute|batalkan|cancel|sahkan)\b",
+    re.IGNORECASE,
+)
+
 #: Nomor PO gaya SAP (hanya angka, mis. `4500000001`). Hanya diakui kalau menempel pada kata
 #: `PO`, supaya nominal rupiah 10 digit tidak diperlakukan sebagai nomor dokumen.
 _PO_ANGKA = re.compile(
@@ -341,6 +369,7 @@ class ReadOnlyBackend(Protocol):
     def __exit__(self, *_: object) -> None: ...
     def close(self) -> None: ...
     def health(self) -> dict[str, Any]: ...
+    def demo_session(self) -> dict[str, Any]: ...
     def batches(self) -> list[dict[str, Any]]: ...
     def suppliers(self) -> list[dict[str, Any]]: ...
     def locations(self) -> list[dict[str, Any]]: ...
@@ -363,6 +392,7 @@ class ReadOnlyBackend(Protocol):
     def supplier_exclusions(self) -> list[dict[str, Any]]: ...
     def supplier_routes(self) -> dict[str, Any]: ...
     def decision_compliance(self, decision_id: str) -> dict[str, Any]: ...
+    def decision_packet(self, decision_id: str) -> dict[str, Any]: ...
     def decision_chain(self, decision_id: str) -> dict[str, Any]: ...
     def decision_traces(self, decision_id: str) -> dict[str, Any]: ...
     def decisions(self) -> list[dict[str, Any]]: ...
@@ -433,6 +463,64 @@ def resolve_skill(user_input: str) -> tuple[str, Mapping[str, Any]]:
     if nomor and any(k in teks for k in _RECEIPT_WORDS):
         return SKILL_SUPPLY, {"batch_id": nomor.group(1)}
     return SKILL_SUPPLY, {}
+
+
+def _kalimat_sesi(sesi: Mapping[str, Any]) -> str:
+    """Konteks sesi demo untuk jawaban KPI: mode, jangkar, dan id sesi.
+
+    Fase 12 MG. Tanpa kalimat ini pembaca Joule tidak bisa membedakan "hari ini"
+    pada tabel (catatan operasional) dari jangkar simulasi yang sedang dimuat
+    operator, dan tidak bisa mencocokkan sesinya dengan `GET /demo/session`.
+    """
+    mode = str(sesi.get("mode") or "").strip().lower()
+    ident = str(sesi.get("session_id") or sesi.get("id") or "").strip()
+    jangkar = str(sesi.get("evaluation_anchor") or "").strip()
+    tanggal = ""
+    if jangkar:
+        try:
+            saat = datetime.fromisoformat(jangkar.replace("Z", "+00:00"))
+        except ValueError:
+            saat = None
+        if saat is not None:
+            if saat.tzinfo is not None:
+                saat = saat.astimezone(timezone(timedelta(hours=7)))
+            tanggal = f"{saat.day} {_BULAN[saat.month - 1]} {saat.year} {saat:%H:%M} WIB"
+    potongan = [f"mode {mode}" if mode else None]
+    if tanggal:
+        potongan.append(f"jangkar {tanggal}")
+    if ident:
+        potongan.append(f"sesi {ident[:8]}")
+    rinci = ", ".join([p for p in potongan if p])
+    if not rinci:
+        return ""
+    return (
+        f"Sesi demo aktif: {rinci} — angka KPI di atas tetap catatan operasional, "
+        "bukan hasil simulasi."
+    )
+
+
+def _jendela_kpi(sesi: Mapping[str, Any] | None) -> int:
+    """Jendela KPI yang cukup lebar untuk memuat JANGKAR sesi demo.
+
+    Mode replay berjangkar 8 Okt 2026; jendela bawaan 7 hari pada 27 Okt tidak
+    memuat satu baris pun, sehingga seluruh indikator berbunyi "belum bisa
+    dihitung" padahal datanya ada di sesi. Jendela diperlebar sampai jangkar,
+    tidak lebih: memperlebar tanpa batas akan mencampur periode lain.
+    """
+    dasar = KPI_DEFAULT_DAYS
+    if not isinstance(sesi, Mapping):
+        return dasar
+    jangkar = str(sesi.get("evaluation_anchor") or "").strip()
+    if not jangkar:
+        return dasar
+    try:
+        saat = datetime.fromisoformat(jangkar.replace("Z", "+00:00"))
+    except ValueError:
+        return dasar
+    if saat.tzinfo is None:
+        saat = saat.replace(tzinfo=timezone.utc)
+    selisih = (datetime.now(timezone.utc) - saat).days + 1
+    return max(dasar, selisih + 1)
 
 
 def _data_source_note(client: ReadOnlyBackend) -> str | None:
@@ -608,6 +696,21 @@ def render_skill(
     if skill == SKILL_SUPPLY and teks is not None and _permintaan_bantuan(teks):
         return teks_bantuan()
 
+    # Perintah tulis ditolak SEBELUM skill mana pun: tanpa ini "Setujui PO MC-…"
+    # dijawab tabel PO (terlihat seperti sudah diproses) padahal tidak ada apa pun
+    # yang diubah. Otorisasi tetap milik cockpit MealChain + token approver.
+    if teks is not None and _WRITE_INTENT.search(teks):
+        return (
+            "Saya tidak bisa menyetujui, menolak, atau mengeksekusi apa pun — jembatan "
+            "ini hanya membaca data MealChain Guardian.\n\n"
+            "Persetujuan tetap dilakukan manusia di cockpit MealChain: buka tab "
+            "**Keputusan** → pilih keputusan → **Setujui** (kepala SPPG) dan satu peran "
+            "kedua, lalu **Eksekusi**. Setiap token approver hanya berlaku untuk perannya "
+            "sendiri, dan bukti yang kurang akan menahan keputusan sebagai `on_hold`.\n\n"
+            "Yang bisa saya bantu: membaca pasokan, KPI, antrean persetujuan, status PO, "
+            "kiriman, dan bukti keputusan."
+        )
+
     note = _data_source_note(client)
     if skill == SKILL_KPI:
         # Cakupan KPI (Fase 8): bawaan = fakta operasional. Pemanggil yang minta
@@ -615,8 +718,28 @@ def render_skill(
         # dengan kalimat, bukan menebak sesi terakhir (angka milik sesi lain
         # adalah cacat yang justru ditutup Fase 8).
         opsi = payload if isinstance(payload, Mapping) else {}
-        scope = str(opsi.get("scope") or "operational").strip().lower()
+        scope = str(opsi.get("scope") or "").strip().lower()
         sesi = opsi.get("demo_session_id") or opsi.get("session_id")
+        # Fase 12 MG: konteks sesi WAJIB disebut, tetapi angka KPI tetap
+        # cakupan operasional kecuali pemanggil meminta cakupan demo secara
+        # eksplisit. Alasannya terukur (27 Okt 2026): baris dataset template
+        # dimiliki sesi "cetakan" (sentinel), sedangkan sesi yang dimuat
+        # operator adalah sesi lain — cakupan demo untuk sesi operator
+        # mengembalikan 7 indikator `no_data` padahal datanya ada. Menyebut
+        # sesi + menyatakan angkanya operasional lebih jujur daripada tabel
+        # kosong, dan tetap memenuhi syarat "jelaskan konteks sesi".
+        aktif: Mapping[str, Any] = {}
+        pembaca_sesi = getattr(client, "demo_session", None)
+        if callable(pembaca_sesi):
+            hasil_sesi = pembaca_sesi()
+            if isinstance(hasil_sesi, Mapping):
+                aktif = hasil_sesi
+        if not scope:
+            scope = "operational"
+        sesi_aktif = aktif.get("session_id") or aktif.get("id")
+        if aktif.get("active") is not False and sesi_aktif and scope == "operational":
+            kalimat = _kalimat_sesi(aktif)
+            note = f"{note} {kalimat}".strip() if note else kalimat
         try:
             envelope = client.kpi(
                 scope=scope, demo_session_id=str(sesi) if sesi else None
@@ -764,7 +887,22 @@ def render_skill(
                 jejak = client.decision_traces(satu)
             except MealchainRejected as exc:
                 gagal_ev.append(f"jejak {satu} ({exc})")
-            cases.append({"id": satu, "compliance": compliance, "chain": rantai, "traces": jejak})
+            # Fase 6 butir 4: state bukti batch dibaca dari PAKET keputusan (read model
+            # yang sama dengan layar), bukan dihitung ulang di jembatan.
+            paket: dict[str, Any] = {}
+            try:
+                paket = client.decision_packet(satu)
+            except MealchainRejected as exc:
+                gagal_ev.append(f"paket {satu} ({exc})")
+            cases.append(
+                {
+                    "id": satu,
+                    "compliance": compliance,
+                    "chain": rantai,
+                    "traces": jejak,
+                    "packet": paket,
+                }
+            )
         return report.decision_evidence_report(
             cases,
             note=_gabung(

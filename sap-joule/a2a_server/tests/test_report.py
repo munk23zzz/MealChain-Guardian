@@ -701,3 +701,60 @@ def test_penerimaan_barang_kosong_disebut_kosong():
 
     assert "Belum ada penerimaan barang" in teks
     assert "0 kg" not in teks
+
+
+def test_bukti_keputusan_menyebut_state_bukti_batch_dari_paket():
+    """Fase 6 butir 4: Joule menarasikan state bukti dari paket keputusan, tanpa skor baru.
+
+    Yang tampil hanya apa yang dihitung backend: berapa batch dievaluasi, berapa layak,
+    berapa ditahan, dan kode alasan yang dikirim. Jembatan tidak menilai ulang suhu.
+    """
+    teks = report.decision_evidence_report(
+        [
+            {
+                "id": "cec7e30d-3eb5-4c29-82ee-c5fee581add1",
+                "compliance": {"decision": {"decision_type": "regional_balance", "status": "proposed"}},
+                "packet": {
+                    "decision_id": "cec7e30d-3eb5-4c29-82ee-c5fee581add1",
+                    "batch_evaluations": [
+                        {"batch_id": "b-1", "status": "usable", "blocking_reasons": []},
+                        {
+                            "batch_id": "b-2",
+                            "status": "on_hold",
+                            "blocking_reasons": ["temperature_evidence_incomplete"],
+                        },
+                    ],
+                },
+            }
+        ]
+    )
+
+    assert "State bukti batch" in teks
+    assert "2 dievaluasi" in teks and "1 layak" in teks and "1 ditahan" in teks
+    # Kode alasan diteruskan apa adanya (audit), dalam bahasa manusia.
+    assert "bukti suhu belum cukup" in teks
+    assert "temperature_evidence_incomplete" in teks
+
+
+def test_bukti_keputusan_tanpa_paket_tidak_mengarang_state_bukti():
+    """Tanpa `packet`, baris state bukti TIDAK dirender — bukan '0 dievaluasi'."""
+    teks = report.decision_evidence_report(
+        [{"id": "cec7e30d-3eb5-4c29-82ee-c5fee581add1", "compliance": {"decision": {"status": "proposed"}}}]
+    )
+
+    assert "State bukti batch" not in teks
+    assert "0 dievaluasi" not in teks
+
+
+def test_bukti_keputusan_administratif_menyebut_tanpa_batch_terikat():
+    teks = report.decision_evidence_report(
+        [
+            {
+                "id": "cec7e30d-3eb5-4c29-82ee-c5fee581add1",
+                "compliance": {"decision": {"decision_type": "supplier_exclusion", "status": "executed"}},
+                "packet": {"decision_id": "cec7e30d", "batch_evaluations": [], "costs": None},
+            }
+        ]
+    )
+
+    assert "tidak ada batch terikat" in teks

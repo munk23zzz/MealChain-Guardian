@@ -647,9 +647,14 @@ def _waktu_acuan(envelope: Mapping[str, Any] | None) -> str | None:
         saat = saat.astimezone(WIB)
     mode = str(sesi.get("mode") or "").strip().lower()
     tanggal = f"{saat.day} {BULAN[saat.month - 1]} {saat.year} {saat:%H:%M} WIB"
+    # Fase 12 MG: id sesi ikut disebut (8 karakter pertama) supaya pembaca bisa
+    # mencocokkannya dengan `GET /demo/session` di backend. Tanpa id, dua sesi
+    # replay yang berbeda jangkarnya tidak bisa dibedakan dari jawaban Joule.
+    ident = str(sesi.get("id") or sesi.get("session_id") or "").strip()
+    ekor = f", sesi {ident[:8]}" if ident else ""
     if mode:
-        return f"Waktu acuan dataset simulasi: {tanggal} (mode {mode})."
-    return f"Waktu acuan dataset simulasi: {tanggal}."
+        return f"Waktu acuan dataset simulasi: {tanggal} (mode {mode}{ekor})."
+    return f"Waktu acuan dataset simulasi: {tanggal}{ekor}."
 
 
 def _estimasi_teks(metric: Mapping[str, Any]) -> str | None:
@@ -1415,6 +1420,49 @@ def supplier_risk_report(
 # --- bukti & jejak keputusan -------------------------------------------------------------
 
 
+#: Kode gerbang kelayakan → kalimat pendek untuk chat. Kode TIDAK dikenal
+#: ditampilkan apa adanya (audit), bukan disembunyikan atau diterjemahkan karangan.
+GATE_REASON_LABEL = {
+    "temperature_evidence_incomplete": "bukti suhu belum cukup",
+    "safety_pending": "status keamanan belum final",
+    "safety_fail": "uji keamanan gagal",
+    "delivery_window_exceeded": "waktu tiba melewati tenggat",
+    "expiry_unknown": "masa layak tidak tercatat",
+    "expired": "batch kedaluwarsa",
+    "quarantined": "batch dikarantina",
+}
+
+
+def _packet_evidence_line(packet: Mapping[str, Any] | None) -> str | None:
+    """State bukti batch dari paket keputusan — angka DISALIN, bukan dihitung ulang.
+
+    `None` bila backend tidak mengirim paket: lebih baik barisnya tidak ada
+    daripada tampil "0 dievaluasi" yang terbaca seperti hasil penilaian.
+    """
+    if not isinstance(packet, Mapping) or not packet:
+        return None
+    evaluasi = packet.get("batch_evaluations")
+    if evaluasi is None:
+        return None
+    rows = [r for r in evaluasi if isinstance(r, Mapping)]
+    if not rows:
+        return "tidak ada batch terikat pada keputusan ini (tanpa evaluasi batch)"
+    layak = sum(1 for r in rows if str(r.get("status") or "").strip().lower() == "usable")
+    ditahan = len(rows) - layak
+    teks = f"{len(rows)} dievaluasi · {layak} layak · {ditahan} ditahan"
+    alasan: list[str] = []
+    for row in rows:
+        for kode in row.get("blocking_reasons") or ():
+            kunci = str(kode)
+            label = GATE_REASON_LABEL.get(kunci)
+            frasa = f"{label} ({kunci})" if label else kunci
+            if frasa not in alasan:
+                alasan.append(frasa)
+    if alasan:
+        teks += " — " + "; ".join(alasan[:3])
+    return teks
+
+
 def _signature_line(compliance: Mapping[str, Any]) -> str:
     """Satu baris ringkas keadaan tanda tangan + hasil verifikasi materi."""
     tanda = compliance.get("signature") or {}
@@ -1489,6 +1537,11 @@ def decision_evidence_report(
             ),
             ("Iterasi dalam rantai", _text(len(chain)) if chain else MISSING),
         ]
+        # Fase 6 butir 4: state bukti batch dari PAKET keputusan (satu read model
+        # dengan layar). Baris dilewati bila backend tidak mengirim paket.
+        state_bukti = _packet_evidence_line(case.get("packet"))
+        if state_bukti:
+            isi.append(("State bukti batch", state_bukti))
         teks_kasus = "\n".join(f"- **{judul}:** {nilai}" for judul, nilai in isi)
         blok.append(
             f"**Keputusan {short_id(case.get('id') or compliance.get('decision_id'))}**\n\n{teks_kasus}"

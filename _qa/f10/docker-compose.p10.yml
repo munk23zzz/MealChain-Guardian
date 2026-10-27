@@ -1,0 +1,125 @@
+# Stack REHEARSAL Fase 12 — jalur demo replay/realtime pada DB klon sekali pakai.
+#
+# Kenapa ada: rehearsal Fase 12 menulis (mulai sesi, seed kasus, approval, PO,
+# kiriman, ceklis, penerimaan, reset sesi). Aturan keras fase melarang menulis ke
+# DB demo `mealchain`, jadi seluruh rehearsal berjalan pada klon `mealchain_r12`
+# (hasil `pg_dump` DB demo + `alembic upgrade head`).
+#
+# Bedanya dengan `verify/docker-compose.mutations.yml`:
+#   - DEMO_MODE=true  → router `/demo/*` hidup, supaya replay/realtime bisa diuji
+#   - memakai SERVER POSTGRES YANG SUDAH ADA (klon, bukan volume baru), agar isi
+#     klon = salinan 1:1 DB demo
+#   - port sendiri (18100/13110/18101) supaya tidak bertabrakan dengan stack demo
+#
+# Pemakaian:
+#   docker compose -p mcg-f12 -f verify/docker-compose.rehearsal.yml up -d --wait
+#   ...
+#   docker compose -p mcg-f12 -f verify/docker-compose.rehearsal.yml down -v
+#
+# Variabel: REH_DB (bawaan mealchain_r12), REH_BACKEND_PORT (18100),
+#           REH_FRONTEND_PORT (13110), REH_MOCK_SAP_PORT (18101),
+#           REH_DEMO_MODE (true; set false untuk uji mode operasional),
+#           REH_DEMO_ENFORCE (true)
+services:
+  backend:
+    image: mealchain-guardian-backend:latest
+    working_dir: /app
+    container_name: mcg-p10-backend
+    env_file:
+      - ../../.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mealchain:${POSTGRES_PASSWORD:-mealchain_local}@postgres:5432/${REH_DB:-mealchain_r12}
+      # Migrasi/backup tetap memakai role pemilik (pola Fase 11 butir 3).
+      MIGRATION_DATABASE_URL: ""
+      DEMO_MODE: "${REH_DEMO_MODE:-true}"
+      DEMO_SESSION_ENFORCE: "${REH_DEMO_ENFORCE:-true}"
+      DEBUG: "false"
+      PYTHONPATH: /app:/agent
+      CORS_ORIGINS: "http://localhost:${REH_FRONTEND_PORT:-13110},http://127.0.0.1:${REH_FRONTEND_PORT:-13110}"
+      # Provider verifier sengaja kosong: jalur demo tidak boleh bergantung LLM.
+      VERIFIER_MODEL_PRIMARY: ""
+      WORKER_AGENT_MODE: "off"
+      MULTI_AGENT_REVIEW: "false"
+    command: >-
+      uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "127.0.0.1:${REH_BACKEND_PORT:-18100}:8000"
+    volumes:
+      - ../../backend:/app
+      - ../../agent:/agent:ro
+      - ../../data:/data:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3).status==200 else 1)"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    networks:
+      - mealchain-network
+
+  frontend:
+    image: mealchain-frontend-dev:latest
+    working_dir: /app
+    container_name: mcg-p10-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      # KOSONG = UI memakai origin sendiri; Next mem-proxy ke BACKEND_INTERNAL_URL.
+      # Alasannya: browser otomasi hanya bisa menjangkau origin halaman (13210).
+      NEXT_PUBLIC_API_URL: ""
+      BACKEND_INTERNAL_URL: "http://mcg-p10-backend:8000"
+      # Folder build sendiri: .next dipakai bersama stack demo lain, dan isinya
+      # masih meng-inline NEXT_PUBLIC_API_URL lama.
+      NEXT_DIST_DIR: ".next-p10"
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    command: npm run dev
+    ports:
+      - "127.0.0.1:${REH_FRONTEND_PORT:-13110}:3000"
+    volumes:
+      - ../../frontend:/app
+      - /app/node_modules
+      - /app/.next
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 150s
+    networks:
+      - mealchain-network
+
+  mock-sap:
+    image: mealchain-guardian-backend:latest
+    working_dir: /app
+    container_name: mcg-p10-mock-sap
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mealchain:${POSTGRES_PASSWORD:-mealchain_local}@postgres:5432/${REH_DB:-mealchain_r12}
+      DEMO_MODE: "${REH_DEMO_MODE:-true}"
+    command: uvicorn app.sap_integration.mock_service:app --host 0.0.0.0 --port 8001
+    ports:
+      - "127.0.0.1:${REH_MOCK_SAP_PORT:-18101}:8001"
+    volumes:
+      - ../../backend:/app
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/health',timeout=3).status==200 else 1)"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    networks:
+      - mealchain-network
+
+networks:
+  mealchain-network:
+    external: true
+    name: mealchain-guardian_mealchain-network

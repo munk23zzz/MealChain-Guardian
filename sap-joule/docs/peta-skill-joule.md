@@ -411,3 +411,34 @@ print(resolve_skill('Pemasok mana yang melayani SPPG Bandung?')); \
 print(resolve_skill('Penerimaan barang mana yang menunggu persetujuan?')); \
 print(resolve_skill('Batch mana yang sedang dikarantina?'))"
 ```
+
+---
+
+## 7. Status as-built — 27 Oktober 2026 (Fase 12 MG)
+
+Bagian ini **bukan** rancangan; isinya hasil pengukuran pada jembatan yang benar-benar
+dijalankan di hari itu (`uvicorn server:app --port 18091`, `MEALCHAIN_API_URL` menunjuk backend
+sesi rehearsal `127.0.0.1:18100`, akun baca `bgn.monitor@demo.local`). Bukti mentah:
+`_qa/f12/out/joule-replay.json` dan `_qa/f12/out/joule-realtime.json`.
+
+| # | Yang diuji | Hasil terukur |
+|---|---|---|
+| 1 | `GET /health` | `{status:"ok", service:"mealchain-joule-bridge", backend:{reachable:true}}`; **`GET /ready` → 404** (memang tidak ada) |
+| 2 | Skill **pasokan** (`supply_situation`) | menjawab dari `/supply/*` + inventaris batch; menyebut kg, kebutuhan, selisih, status keamanan, skor kesegaran, bukti suhu |
+| 3 | Skill **KPI** (`kpi_snapshot`) | 7 indikator; kaki laporan menyebut **`Sumber: catatan operasional MealChain Guardian`** dan **`historical_seed: N baris sumber`**, plus "2 indikator belum bisa dihitung" — bukan nol karangan |
+| 4 | Skill **antrean** (`approval_queue`) | 32 usulan terbuka, id 8 karakter + jenis + asal→tujuan + jumlah + status |
+| 5 | Skill **PO** (`purchase_order`) | 13 PO; setiap nomor `MC-…` yang disebut **ada** di `GET /sap/purchase-orders` backend (0 nomor karangan) |
+| 6 | Skill **kiriman** (pertanyaan "status kiriman") | dirutekan ke keseimbangan pasokan per SPPG (tidak ada skill kiriman khusus) — dicatat apa adanya, bukan diklaim sebagai skill kelima yang terpisah |
+| 7 | Permintaan **approval** ("setujui usulan <id>") | **ditolak** dan diarahkan ke cockpit; status keputusan di backend **tidak berubah** sebelum vs sesudah |
+
+Batas yang ikut diukur:
+
+- **Konteks sesi.** Sudah ditutup hari yang sama: jawaban KPI menutup dengan "Sesi demo aktif:
+  mode …, jangkar …, sesi <id8> — angka KPI di atas tetap catatan operasional, bukan hasil
+  simulasi." (`client.demo_session()` membaca `/demo/session`; `_kalimat_sesi()` menyusun kalimat;
+  id sesi dicocokkan dengan backend). Cakupan KPI tetap operasional karena baris template milik
+  sesi sentinel — memindahkan scope ke sesi operator mengembalikan `no_data`, dan itu lebih buruk
+  daripada menyebut konteks. Tes: `tests/test_session_context.py` (4 kasus).
+- **Kanal Joule/BTP sendiri** (destination, `joule list`) tidak diuji ulang: sesi CF milik
+  operator ada, tetapi push ulang jembatan tidak dilakukan pada fase ini. Statusnya
+  `INCONCLUSIVE`, bukan sukses.

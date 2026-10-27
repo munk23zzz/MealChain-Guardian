@@ -1,0 +1,93 @@
+{
+  "bridge_pid": 21524,
+  "health": {
+    "status": "ok",
+    "service": "mealchain-joule-bridge",
+    "backend": {
+      "reachable": true,
+      "status": "healthy",
+      "service": "mealchain-backend"
+    }
+  },
+  "jumlah_skill": 13,
+  "jawaban": [
+    {
+      "skill": "supply_situation",
+      "pertanyaan": "Bagaimana kondisi pasokan SPPG hari ini?",
+      "http": 200,
+      "respons": "{\"id\": \"q1\", \"jsonrpc\": \"2.0\", \"result\": {\"artifacts\": [{\"artifactId\": \"mealchain_report\", \"name\": \"mealchain_report\", \"parts\": [{\"kind\": \"text\", \"text\": \"Keseimbangan pasokan per SPPG (40 pasangan SPPG\\u2013komoditas: 31 kurang \\u00b7 9 lebih)\\n\\n| SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | Status |\\n|---|---|---|---|---|---|\\n| Bandung | ayam | 250 kg | 308 kg | kurang 58 kg | KURANG |\\n| Bandung | telur | 400 kg | 538 kg | kurang 138 kg | KURANG |\\n| Bandung | wortel | 350 kg | 392 kg | kurang 42 kg | KURANG |\\n| Bogor | ayam | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Bogor | wortel | 200 kg | 408 kg | kurang 208 kg | KURANG |\\n| Jakarta | beras | 900 kg | 3.010 kg | kurang 2.110 kg | KURANG |\\n| Jakarta | telur | 300 kg | 1.080 kg | kurang 780 kg | KURANG |\\n| Makassar | ayam | 150 kg | 156 kg | kurang 6 kg | KURANG |\\n| Makassar | beras | 600 kg | 845 kg | kurang 245 kg | KURANG |\\n| Makassar | telur | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Makassar | wortel | 200 kg | 206 kg | kurang 6 kg | KURANG |\\n| Medan | ayam | 100 kg | 106 kg | kurang 6 kg | KURANG |\\n\\nInventaris batch (87 batch: 2 gagal \\u00b7 5 perlu verifikasi \\u00b7 1 menunggu pemeriksaan \\u00b7 79"
+    },
+    {
+      "skill": "kpi_snapshot",
+      "pertanyaan": "Bagaimana kondisi pasokan SPPG hari ini?",
+      "http": 200,
+      "respons": "{\"id\": \"q2\", \"jsonrpc\": \"2.0\", \"result\": {\"artifacts\": [{\"artifactId\": \"mealchain_report\", \"name\": \"mealchain_report\", \"parts\": [{\"kind\": \"text\", \"text\": \"Keseimbangan pasokan per SPPG (40 pasangan SPPG\\u2013komoditas: 31 kurang \\u00b7 9 lebih)\\n\\n| SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | Status |\\n|---|---|---|---|---|---|\\n| Bandung | ayam | 250 kg | 308 kg | kurang 58 kg | KURANG |\\n| Bandung | telur | 400 kg | 538 kg | kurang 138 kg | KURANG |\\n| Bandung | wortel | 350 kg | 392 kg | kurang 42 kg | KURANG |\\n| Bogor | ayam | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Bogor | wortel | 200 kg | 408 kg | kurang 208 kg | KURANG |\\n| Jakarta | beras | 900 kg | 3.010 kg | kurang 2.110 kg | KURANG |\\n| Jakarta | telur | 300 kg | 1.080 kg | kurang 780 kg | KURANG |\\n| Makassar | ayam | 150 kg | 156 kg | kurang 6 kg | KURANG |\\n| Makassar | beras | 600 kg | 845 kg | kurang 245 kg | KURANG |\\n| Makassar | telur | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Makassar | wortel | 200 kg | 206 kg | kurang 6 kg | KURANG |\\n| Medan | ayam | 100 kg | 106 kg | kurang 6 kg | KURANG |\\n\\nInventaris batch (87 batch: 2 gagal \\u00b7 5 perlu verifikasi \\u00b7 1 menunggu pemeriksaan \\u00b7 79"
+    },
+    {
+      "skill": "approval_queue",
+      "pertanyaan": "Bagaimana kondisi pasokan SPPG hari ini?",
+      "http": 200,
+      "respons": "{\"id\": \"q3\", \"jsonrpc\": \"2.0\", \"result\": {\"artifacts\": [{\"artifactId\": \"mealchain_report\", \"name\": \"mealchain_report\", \"parts\": [{\"kind\": \"text\", \"text\": \"Keseimbangan pasokan per SPPG (40 pasangan SPPG\\u2013komoditas: 31 kurang \\u00b7 9 lebih)\\n\\n| SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | Status |\\n|---|---|---|---|---|---|\\n| Bandung | ayam | 250 kg | 308 kg | kurang 58 kg | KURANG |\\n| Bandung | telur | 400 kg | 538 kg | kurang 138 kg | KURANG |\\n| Bandung | wortel | 350 kg | 392 kg | kurang 42 kg | KURANG |\\n| Bogor | ayam | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Bogor | wortel | 200 kg | 408 kg | kurang 208 kg | KURANG |\\n| Jakarta | beras | 900 kg | 3.010 kg | kurang 2.110 kg | KURANG |\\n| Jakarta | telur | 300 kg | 1.080 kg | kurang 780 kg | KURANG |\\n| Makassar | ayam | 150 kg | 156 kg | kurang 6 kg | KURANG |\\n| Makassar | beras | 600 kg | 845 kg | kurang 245 kg | KURANG |\\n| Makassar | telur | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Makassar | wortel | 200 kg | 206 kg | kurang 6 kg | KURANG |\\n| Medan | ayam | 100 kg | 106 kg | kurang 6 kg | KURANG |\\n\\nInventaris batch (87 batch: 2 gagal \\u00b7 5 perlu verifikasi \\u00b7 1 menunggu pemeriksaan \\u00b7 79"
+    },
+    {
+      "skill": "receipts_queue",
+      "pertanyaan": "Bagaimana kondisi pasokan SPPG hari ini?",
+      "http": 200,
+      "respons": "{\"id\": \"q4\", \"jsonrpc\": \"2.0\", \"result\": {\"artifacts\": [{\"artifactId\": \"mealchain_report\", \"name\": \"mealchain_report\", \"parts\": [{\"kind\": \"text\", \"text\": \"Keseimbangan pasokan per SPPG (40 pasangan SPPG\\u2013komoditas: 31 kurang \\u00b7 9 lebih)\\n\\n| SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | Status |\\n|---|---|---|---|---|---|\\n| Bandung | ayam | 250 kg | 308 kg | kurang 58 kg | KURANG |\\n| Bandung | telur | 400 kg | 538 kg | kurang 138 kg | KURANG |\\n| Bandung | wortel | 350 kg | 392 kg | kurang 42 kg | KURANG |\\n| Bogor | ayam | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Bogor | wortel | 200 kg | 408 kg | kurang 208 kg | KURANG |\\n| Jakarta | beras | 900 kg | 3.010 kg | kurang 2.110 kg | KURANG |\\n| Jakarta | telur | 300 kg | 1.080 kg | kurang 780 kg | KURANG |\\n| Makassar | ayam | 150 kg | 156 kg | kurang 6 kg | KURANG |\\n| Makassar | beras | 600 kg | 845 kg | kurang 245 kg | KURANG |\\n| Makassar | telur | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Makassar | wortel | 200 kg | 206 kg | kurang 6 kg | KURANG |\\n| Medan | ayam | 100 kg | 106 kg | kurang 6 kg | KURANG |\\n\\nInventaris batch (87 batch: 2 gagal \\u00b7 5 perlu verifikasi \\u00b7 1 menunggu pemeriksaan \\u00b7 79"
+    },
+    {
+      "skill": "quarantine_status",
+      "pertanyaan": "Bagaimana kondisi pasokan SPPG hari ini?",
+      "http": 200,
+      "respons": "{\"id\": \"q5\", \"jsonrpc\": \"2.0\", \"result\": {\"artifacts\": [{\"artifactId\": \"mealchain_report\", \"name\": \"mealchain_report\", \"parts\": [{\"kind\": \"text\", \"text\": \"Keseimbangan pasokan per SPPG (40 pasangan SPPG\\u2013komoditas: 31 kurang \\u00b7 9 lebih)\\n\\n| SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | Status |\\n|---|---|---|---|---|---|\\n| Bandung | ayam | 250 kg | 308 kg | kurang 58 kg | KURANG |\\n| Bandung | telur | 400 kg | 538 kg | kurang 138 kg | KURANG |\\n| Bandung | wortel | 350 kg | 392 kg | kurang 42 kg | KURANG |\\n| Bogor | ayam | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Bogor | wortel | 200 kg | 408 kg | kurang 208 kg | KURANG |\\n| Jakarta | beras | 900 kg | 3.010 kg | kurang 2.110 kg | KURANG |\\n| Jakarta | telur | 300 kg | 1.080 kg | kurang 780 kg | KURANG |\\n| Makassar | ayam | 150 kg | 156 kg | kurang 6 kg | KURANG |\\n| Makassar | beras | 600 kg | 845 kg | kurang 245 kg | KURANG |\\n| Makassar | telur | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Makassar | wortel | 200 kg | 206 kg | kurang 6 kg | KURANG |\\n| Medan | ayam | 100 kg | 106 kg | kurang 6 kg | KURANG |\\n\\nInventaris batch (87 batch: 2 gagal \\u00b7 5 perlu verifikasi \\u00b7 1 menunggu pemeriksaan \\u00b7 79"
+    },
+    {
+      "skill": "purchase_order",
+      "pertanyaan": "Bagaimana kondisi pasokan SPPG hari ini?",
+      "http": 200,
+      "respons": "{\"id\": \"q6\", \"jsonrpc\": \"2.0\", \"result\": {\"artifacts\": [{\"artifactId\": \"mealchain_report\", \"name\": \"mealchain_report\", \"parts\": [{\"kind\": \"text\", \"text\": \"Keseimbangan pasokan per SPPG (40 pasangan SPPG\\u2013komoditas: 31 kurang \\u00b7 9 lebih)\\n\\n| SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | Status |\\n|---|---|---|---|---|---|\\n| Bandung | ayam | 250 kg | 308 kg | kurang 58 kg | KURANG |\\n| Bandung | telur | 400 kg | 538 kg | kurang 138 kg | KURANG |\\n| Bandung | wortel | 350 kg | 392 kg | kurang 42 kg | KURANG |\\n| Bogor | ayam | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Bogor | wortel | 200 kg | 408 kg | kurang 208 kg | KURANG |\\n| Jakarta | beras | 900 kg | 3.010 kg | kurang 2.110 kg | KURANG |\\n| Jakarta | telur | 300 kg | 1.080 kg | kurang 780 kg | KURANG |\\n| Makassar | ayam | 150 kg | 156 kg | kurang 6 kg | KURANG |\\n| Makassar | beras | 600 kg | 845 kg | kurang 245 kg | KURANG |\\n| Makassar | telur | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Makassar | wortel | 200 kg | 206 kg | kurang 6 kg | KURANG |\\n| Medan | ayam | 100 kg | 106 kg | kurang 6 kg | KURANG |\\n\\nInventaris batch (87 batch: 2 gagal \\u00b7 5 perlu verifikasi \\u00b7 1 menunggu pemeriksaan \\u00b7 79"
+    },
+    {
+      "skill": "supplier_directory",
+      "pertanyaan": "Bagaimana kondisi pasokan SPPG hari ini?",
+      "http": 200,
+      "respons": "{\"id\": \"q7\", \"jsonrpc\": \"2.0\", \"result\": {\"artifacts\": [{\"artifactId\": \"mealchain_report\", \"name\": \"mealchain_report\", \"parts\": [{\"kind\": \"text\", \"text\": \"Keseimbangan pasokan per SPPG (40 pasangan SPPG\\u2013komoditas: 31 kurang \\u00b7 9 lebih)\\n\\n| SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | Status |\\n|---|---|---|---|---|---|\\n| Bandung | ayam | 250 kg | 308 kg | kurang 58 kg | KURANG |\\n| Bandung | telur | 400 kg | 538 kg | kurang 138 kg | KURANG |\\n| Bandung | wortel | 350 kg | 392 kg | kurang 42 kg | KURANG |\\n| Bogor | ayam | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Bogor | wortel | 200 kg | 408 kg | kurang 208 kg | KURANG |\\n| Jakarta | beras | 900 kg | 3.010 kg | kurang 2.110 kg | KURANG |\\n| Jakarta | telur | 300 kg | 1.080 kg | kurang 780 kg | KURANG |\\n| Makassar | ayam | 150 kg | 156 kg | kurang 6 kg | KURANG |\\n| Makassar | beras | 600 kg | 845 kg | kurang 245 kg | KURANG |\\n| Makassar | telur | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Makassar | wortel | 200 kg | 206 kg | kurang 6 kg | KURANG |\\n| Medan | ayam | 100 kg | 106 kg | kurang 6 kg | KURANG |\\n\\nInventaris batch (87 batch: 2 gagal \\u00b7 5 perlu verifikasi \\u00b7 1 menunggu pemeriksaan \\u00b7 79"
+    },
+    {
+      "skill": "price_intelligence",
+      "pertanyaan": "Bagaimana kondisi pasokan SPPG hari ini?",
+      "http": 200,
+      "respons": "{\"id\": \"q8\", \"jsonrpc\": \"2.0\", \"result\": {\"artifacts\": [{\"artifactId\": \"mealchain_report\", \"name\": \"mealchain_report\", \"parts\": [{\"kind\": \"text\", \"text\": \"Keseimbangan pasokan per SPPG (40 pasangan SPPG\\u2013komoditas: 31 kurang \\u00b7 9 lebih)\\n\\n| SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | Status |\\n|---|---|---|---|---|---|\\n| Bandung | ayam | 250 kg | 308 kg | kurang 58 kg | KURANG |\\n| Bandung | telur | 400 kg | 538 kg | kurang 138 kg | KURANG |\\n| Bandung | wortel | 350 kg | 392 kg | kurang 42 kg | KURANG |\\n| Bogor | ayam | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Bogor | wortel | 200 kg | 408 kg | kurang 208 kg | KURANG |\\n| Jakarta | beras | 900 kg | 3.010 kg | kurang 2.110 kg | KURANG |\\n| Jakarta | telur | 300 kg | 1.080 kg | kurang 780 kg | KURANG |\\n| Makassar | ayam | 150 kg | 156 kg | kurang 6 kg | KURANG |\\n| Makassar | beras | 600 kg | 845 kg | kurang 245 kg | KURANG |\\n| Makassar | telur | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Makassar | wortel | 200 kg | 206 kg | kurang 6 kg | KURANG |\\n| Medan | ayam | 100 kg | 106 kg | kurang 6 kg | KURANG |\\n\\nInventaris batch (87 batch: 2 gagal \\u00b7 5 perlu verifikasi \\u00b7 1 menunggu pemeriksaan \\u00b7 79"
+    },
+    {
+      "skill": "demand_forecast",
+      "pertanyaan": "Bagaimana kondisi pasokan SPPG hari ini?",
+      "http": 200,
+      "respons": "{\"id\": \"q9\", \"jsonrpc\": \"2.0\", \"result\": {\"artifacts\": [{\"artifactId\": \"mealchain_report\", \"name\": \"mealchain_report\", \"parts\": [{\"kind\": \"text\", \"text\": \"Keseimbangan pasokan per SPPG (40 pasangan SPPG\\u2013komoditas: 31 kurang \\u00b7 9 lebih)\\n\\n| SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | Status |\\n|---|---|---|---|---|---|\\n| Bandung | ayam | 250 kg | 308 kg | kurang 58 kg | KURANG |\\n| Bandung | telur | 400 kg | 538 kg | kurang 138 kg | KURANG |\\n| Bandung | wortel | 350 kg | 392 kg | kurang 42 kg | KURANG |\\n| Bogor | ayam | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Bogor | wortel | 200 kg | 408 kg | kurang 208 kg | KURANG |\\n| Jakarta | beras | 900 kg | 3.010 kg | kurang 2.110 kg | KURANG |\\n| Jakarta | telur | 300 kg | 1.080 kg | kurang 780 kg | KURANG |\\n| Makassar | ayam | 150 kg | 156 kg | kurang 6 kg | KURANG |\\n| Makassar | beras | 600 kg | 845 kg | kurang 245 kg | KURANG |\\n| Makassar | telur | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Makassar | wortel | 200 kg | 206 kg | kurang 6 kg | KURANG |\\n| Medan | ayam | 100 kg | 106 kg | kurang 6 kg | KURANG |\\n\\nInventaris batch (87 batch: 2 gagal \\u00b7 5 perlu verifikasi \\u00b7 1 menunggu pemeriksaan \\u00b7 79"
+    },
+    {
+      "skill": "food_loss",
+      "pertanyaan": "Bagaimana kondisi pasokan SPPG hari ini?",
+      "http": 200,
+      "respons": "{\"id\": \"q10\", \"jsonrpc\": \"2.0\", \"result\": {\"artifacts\": [{\"artifactId\": \"mealchain_report\", \"name\": \"mealchain_report\", \"parts\": [{\"kind\": \"text\", \"text\": \"Keseimbangan pasokan per SPPG (40 pasangan SPPG\\u2013komoditas: 31 kurang \\u00b7 9 lebih)\\n\\n| SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | Status |\\n|---|---|---|---|---|---|\\n| Bandung | ayam | 250 kg | 308 kg | kurang 58 kg | KURANG |\\n| Bandung | telur | 400 kg | 538 kg | kurang 138 kg | KURANG |\\n| Bandung | wortel | 350 kg | 392 kg | kurang 42 kg | KURANG |\\n| Bogor | ayam | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Bogor | wortel | 200 kg | 408 kg | kurang 208 kg | KURANG |\\n| Jakarta | beras | 900 kg | 3.010 kg | kurang 2.110 kg | KURANG |\\n| Jakarta | telur | 300 kg | 1.080 kg | kurang 780 kg | KURANG |\\n| Makassar | ayam | 150 kg | 156 kg | kurang 6 kg | KURANG |\\n| Makassar | beras | 600 kg | 845 kg | kurang 245 kg | KURANG |\\n| Makassar | telur | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Makassar | wortel | 200 kg | 206 kg | kurang 6 kg | KURANG |\\n| Medan | ayam | 100 kg | 106 kg | kurang 6 kg | KURANG |\\n\\nInventaris batch (87 batch: 2 gagal \\u00b7 5 perlu verifikasi \\u00b7 1 menunggu pemeriksaan \\u00b7 7"
+    },
+    {
+      "skill": "supplier_risk",
+      "pertanyaan": "Bagaimana kondisi pasokan SPPG hari ini?",
+      "http": 200,
+      "respons": "{\"id\": \"q11\", \"jsonrpc\": \"2.0\", \"result\": {\"artifacts\": [{\"artifactId\": \"mealchain_report\", \"name\": \"mealchain_report\", \"parts\": [{\"kind\": \"text\", \"text\": \"Keseimbangan pasokan per SPPG (40 pasangan SPPG\\u2013komoditas: 31 kurang \\u00b7 9 lebih)\\n\\n| SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | Status |\\n|---|---|---|---|---|---|\\n| Bandung | ayam | 250 kg | 308 kg | kurang 58 kg | KURANG |\\n| Bandung | telur | 400 kg | 538 kg | kurang 138 kg | KURANG |\\n| Bandung | wortel | 350 kg | 392 kg | kurang 42 kg | KURANG |\\n| Bogor | ayam | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Bogor | wortel | 200 kg | 408 kg | kurang 208 kg | KURANG |\\n| Jakarta | beras | 900 kg | 3.010 kg | kurang 2.110 kg | KURANG |\\n| Jakarta | telur | 300 kg | 1.080 kg | kurang 780 kg | KURANG |\\n| Makassar | ayam | 150 kg | 156 kg | kurang 6 kg | KURANG |\\n| Makassar | beras | 600 kg | 845 kg | kurang 245 kg | KURANG |\\n| Makassar | telur | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Makassar | wortel | 200 kg | 206 kg | kurang 6 kg | KURANG |\\n| Medan | ayam | 100 kg | 106 kg | kurang 6 kg | KURANG |\\n\\nInventaris batch (87 batch: 2 gagal \\u00b7 5 perlu verifikasi \\u00b7 1 menunggu pemeriksaan \\u00b7 7"
+    },
+    {
+      "skill": "decision_evidence",
+      "pertanyaan": "Bagaimana kondisi pasokan SPPG hari ini?",
+      "http": 200,
+      "respons": "{\"id\": \"q12\", \"jsonrpc\": \"2.0\", \"result\": {\"artifacts\": [{\"artifactId\": \"mealchain_report\", \"name\": \"mealchain_report\", \"parts\": [{\"kind\": \"text\", \"text\": \"Keseimbangan pasokan per SPPG (40 pasangan SPPG\\u2013komoditas: 31 kurang \\u00b7 9 lebih)\\n\\n| SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | Status |\\n|---|---|---|---|---|---|\\n| Bandung | ayam | 250 kg | 308 kg | kurang 58 kg | KURANG |\\n| Bandung | telur | 400 kg | 538 kg | kurang 138 kg | KURANG |\\n| Bandung | wortel | 350 kg | 392 kg | kurang 42 kg | KURANG |\\n| Bogor | ayam | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Bogor | wortel | 200 kg | 408 kg | kurang 208 kg | KURANG |\\n| Jakarta | beras | 900 kg | 3.010 kg | kurang 2.110 kg | KURANG |\\n| Jakarta | telur | 300 kg | 1.080 kg | kurang 780 kg | KURANG |\\n| Makassar | ayam | 150 kg | 156 kg | kurang 6 kg | KURANG |\\n| Makassar | beras | 600 kg | 845 kg | kurang 245 kg | KURANG |\\n| Makassar | telur | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Makassar | wortel | 200 kg | 206 kg | kurang 6 kg | KURANG |\\n| Medan | ayam | 100 kg | 106 kg | kurang 6 kg | KURANG |\\n\\nInventaris batch (87 batch: 2 gagal \\u00b7 5 perlu verifikasi \\u00b7 1 menunggu pemeriksaan \\u00b7 7"
+    },
+    {
+      "skill": "system_status",
+      "pertanyaan": "Bagaimana kondisi pasokan SPPG hari ini?",
+      "http": 200,
+      "respons": "{\"id\": \"q13\", \"jsonrpc\": \"2.0\", \"result\": {\"artifacts\": [{\"artifactId\": \"mealchain_report\", \"name\": \"mealchain_report\", \"parts\": [{\"kind\": \"text\", \"text\": \"Keseimbangan pasokan per SPPG (40 pasangan SPPG\\u2013komoditas: 31 kurang \\u00b7 9 lebih)\\n\\n| SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | Status |\\n|---|---|---|---|---|---|\\n| Bandung | ayam | 250 kg | 308 kg | kurang 58 kg | KURANG |\\n| Bandung | telur | 400 kg | 538 kg | kurang 138 kg | KURANG |\\n| Bandung | wortel | 350 kg | 392 kg | kurang 42 kg | KURANG |\\n| Bogor | ayam | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Bogor | wortel | 200 kg | 408 kg | kurang 208 kg | KURANG |\\n| Jakarta | beras | 900 kg | 3.010 kg | kurang 2.110 kg | KURANG |\\n| Jakarta | telur | 300 kg | 1.080 kg | kurang 780 kg | KURANG |\\n| Makassar | ayam | 150 kg | 156 kg | kurang 6 kg | KURANG |\\n| Makassar | beras | 600 kg | 845 kg | kurang 245 kg | KURANG |\\n| Makassar | telur | 300 kg | 306 kg | kurang 6 kg | KURANG |\\n| Makassar | wortel | 200 kg | 206 kg | kurang 6 kg | KURANG |\\n| Medan | ayam | 100 kg | 106 kg | kurang 6 kg | KURANG |\\n\\nInventaris batch (87 batch: 2 gagal \\u00b7 5 perlu verifikasi \\u00b7 1 menunggu pemeriksaan \\u00b7 7"
+    }
+  ]
+}

@@ -599,3 +599,31 @@ def test_supply_point_memakai_path_per_pasangan():
 
     with _client(handler) as client:
         assert client.supply_point("l-1", "telur")["quantity_kg"] == 1207.32
+
+
+def test_paket_keputusan_dibaca_dari_endpoint_paket():
+    """Fase 6 butir 4: jembatan membaca SATU read model keputusan (`/decisions/{id}/packet`).
+
+    Bentuk yang dipakai layar (biaya, approval, trace) harus sama dengan yang dipakai
+    Joule — kalau jembatan merakit sendiri dari endpoint lain, dua permukaan bisa
+    menyimpulkan hal berbeda dari data yang sama.
+    """
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/login":
+            return httpx.Response(200, json={"access_token": "t1"})
+        assert request.url.path == "/decisions/d-1/packet"
+        return httpx.Response(
+            200,
+            json={
+                "decision_id": "d-1",
+                "batch_evaluations": [{"batch_id": "b-1", "status": "usable"}],
+                "costs": None,
+            },
+        )
+
+    with _client(handler) as client:
+        paket = client.decision_packet("d-1")
+
+    assert paket["decision_id"] == "d-1"
+    assert paket["batch_evaluations"][0]["status"] == "usable"
+    assert paket["costs"] is None

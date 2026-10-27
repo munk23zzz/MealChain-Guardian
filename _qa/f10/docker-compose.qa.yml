@@ -1,0 +1,92 @@
+# Stack QA FASE 10 (Demo Control replay/realtime) — DB klon sekali pakai.
+#
+# Kenapa berkas ini ada: butir 5 Fase 10 meminta alur demo diuji di BROWSER
+# (muat kasus -> analisis -> approval 2 akun -> PO -> eksekusi -> kiriman ->
+# ceklis -> penerimaan -> KPI -> Joule). Aturan keras fase: DB demo hanya
+# SELECT, jadi seluruh alur tulis berjalan pada klon `mealchain_f10q`
+# (hasil `pg_dump` DB demo) di SERVER POSTGRES YANG SUDAH ADA.
+#
+# Berbeda dari `verify/docker-compose.rehearsal.yml` (proyek `mcg-f12` milik
+# sesi lain): nama container, port, dan proyek compose sendiri supaya dua
+# stack bisa hidup bersamaan tanpa saling menimpa.
+#
+# Pemakaian:
+#   docker compose -p mcg-f10qa -f _qa/f10/docker-compose.qa.yml up -d --wait
+#   ... uji browser ...
+#   docker compose -p mcg-f10qa -f _qa/f10/docker-compose.qa.yml down -v
+services:
+  backend:
+    image: mealchain-guardian-backend:latest
+    working_dir: /app
+    container_name: mcg-f10qa-backend
+    env_file:
+      - ../../.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mealchain:${POSTGRES_PASSWORD:-mealchain_local}@postgres:5432/${QA_DB:-mealchain_f10q}
+      MIGRATION_DATABASE_URL: ""
+      DEMO_MODE: "true"
+      DEMO_SESSION_ENFORCE: "true"
+      DEBUG: "false"
+      PYTHONPATH: /app:/agent
+      CORS_ORIGINS: "http://localhost:13210,http://127.0.0.1:13210"
+      VERIFIER_MODEL_PRIMARY: ""
+      WORKER_AGENT_MODE: "off"
+      MULTI_AGENT_REVIEW: "false"
+    command: >-
+      uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "127.0.0.1:18200:8000"
+    volumes:
+      - ../../backend:/app
+      - ../../agent:/agent:ro
+      - ../../data:/data:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3).status==200 else 1)"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    networks:
+      - mealchain-network
+
+  frontend:
+    image: mealchain-frontend-dev:latest
+    working_dir: /app
+    container_name: mcg-f10qa-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      # Harus origin HALAMAN ini (bukan kosong): `lib/api.ts` memakai
+      # `NEXT_PUBLIC_API_URL || "http://localhost:8000"`, jadi nilai kosong
+      # jatuh ke port backend stack demo dan diblokir CORS. Dengan origin
+      # sendiri, setiap request same-origin dan diteruskan Next ke
+      # BACKEND_INTERNAL_URL lewat `API_ROOTS`.
+      NEXT_PUBLIC_API_URL: "http://127.0.0.1:13210"
+      BACKEND_INTERNAL_URL: "http://mcg-f10qa-backend:8000"
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    command: npm run dev
+    ports:
+      - "127.0.0.1:13210:3000"
+    volumes:
+      - ../../frontend:/app
+      - /app/node_modules
+      - /app/.next
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 150s
+    networks:
+      - mealchain-network
+
+networks:
+  mealchain-network:
+    external: true
+    name: mealchain-guardian_mealchain-network

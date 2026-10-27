@@ -1,0 +1,1662 @@
+FE.E.FEFEFE.FE.                                                          [100%]
+==================================== ERRORS ====================================
+___ ERROR at teardown of test_start_meneruskan_mode_realtime_ke_pembuat_sesi ___
+
+self = <sqlalchemy.engine.base.Connection object at 0x7c81680c5910>
+dialect = <sqlalchemy.dialects.postgresql.psycopg.PGDialect_psycopg object at 0x7c81680c4fe0>
+context = <sqlalchemy.dialects.postgresql.psycopg.PGExecutionContext_psycopg object at 0x7c81680c61e0>
+statement = <sqlalchemy.dialects.postgresql.psycopg.PGCompiler_psycopg object at 0x7c81680c6d80>
+parameters = [{'s': UUID('efae5e06-5bd8-4f69-af9e-1662b916722d')}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7c816457e5d0>
+query = 'DELETE FROM agent_traces WHERE demo_session_id = %(s)s'
+params = {'s': UUID('efae5e06-5bd8-4f69-af9e-1662b916722d')}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.UndefinedColumn: column "demo_session_id" does not exist
+E           LINE 1: DELETE FROM agent_traces WHERE demo_session_id = $1
+E                                                  ^
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: UndefinedColumn
+
+The above exception was the direct cause of the following exception:
+
+    @pytest.fixture()
+    def sesi_bersih():
+        """Catat sesi aktif operator, lalu pastikan bersih sesudah tes."""
+        engine = _db()
+        awal: list[tuple] = []
+        try:
+            with engine.begin() as conn:
+                awal = conn.execute(
+                    text("SELECT id, status, expires_at FROM demo_sessions WHERE status='active'")
+                ).all()
+                for sid, _st, _exp in awal:
+                    conn.execute(
+                        text("UPDATE demo_sessions SET status='expired' WHERE id = :i"),
+                        {"i": sid},
+                    )
+        finally:
+            engine.dispose()
+        dibuat: list[uuid.UUID] = []
+        yield dibuat
+        engine = _db()
+        try:
+            with engine.begin() as conn:
+                for sid in dibuat:
+                    conn.execute(
+                        text("DELETE FROM approvals WHERE decision_id IN "
+                             "(SELECT id FROM decisions WHERE demo_session_id = :s)"),
+                        {"s": sid},
+                    )
+>                   conn.execute(
+                        text("DELETE FROM agent_traces WHERE demo_session_id = :s"), {"s": sid}
+                    )
+
+tests/test_demo_control_modes.py:90: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7c816457e5d0>
+query = 'DELETE FROM agent_traces WHERE demo_session_id = %(s)s'
+params = {'s': UUID('efae5e06-5bd8-4f69-af9e-1662b916722d')}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedColumn) column "demo_session_id" does not exist
+E           LINE 1: DELETE FROM agent_traces WHERE demo_session_id = $1
+E                                                  ^
+E           [SQL: DELETE FROM agent_traces WHERE demo_session_id = %(s)s]
+E           [parameters: {'s': UUID('efae5e06-5bd8-4f69-af9e-1662b916722d')}]
+E           (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: ProgrammingError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+_________ ERROR at teardown of test_start_replay_memakai_jangkar_kanon _________
+
+self = <sqlalchemy.engine.base.Connection object at 0x7c8163df0bf0>
+dialect = <sqlalchemy.dialects.postgresql.psycopg.PGDialect_psycopg object at 0x7c8163df3650>
+context = <sqlalchemy.dialects.postgresql.psycopg.PGExecutionContext_psycopg object at 0x7c8163df2210>
+statement = <sqlalchemy.dialects.postgresql.psycopg.PGCompiler_psycopg object at 0x7c8163df04d0>
+parameters = [{'s': UUID('9dde2ae4-4e3d-4373-b181-c3453f41f4ff')}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7c816457d010>
+query = 'DELETE FROM agent_traces WHERE demo_session_id = %(s)s'
+params = {'s': UUID('9dde2ae4-4e3d-4373-b181-c3453f41f4ff')}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.UndefinedColumn: column "demo_session_id" does not exist
+E           LINE 1: DELETE FROM agent_traces WHERE demo_session_id = $1
+E                                                  ^
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: UndefinedColumn
+
+The above exception was the direct cause of the following exception:
+
+    @pytest.fixture()
+    def sesi_bersih():
+        """Catat sesi aktif operator, lalu pastikan bersih sesudah tes."""
+        engine = _db()
+        awal: list[tuple] = []
+        try:
+            with engine.begin() as conn:
+                awal = conn.execute(
+                    text("SELECT id, status, expires_at FROM demo_sessions WHERE status='active'")
+                ).all()
+                for sid, _st, _exp in awal:
+                    conn.execute(
+                        text("UPDATE demo_sessions SET status='expired' WHERE id = :i"),
+                        {"i": sid},
+                    )
+        finally:
+            engine.dispose()
+        dibuat: list[uuid.UUID] = []
+        yield dibuat
+        engine = _db()
+        try:
+            with engine.begin() as conn:
+                for sid in dibuat:
+                    conn.execute(
+                        text("DELETE FROM approvals WHERE decision_id IN "
+                             "(SELECT id FROM decisions WHERE demo_session_id = :s)"),
+                        {"s": sid},
+                    )
+>                   conn.execute(
+                        text("DELETE FROM agent_traces WHERE demo_session_id = :s"), {"s": sid}
+                    )
+
+tests/test_demo_control_modes.py:90: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7c816457d010>
+query = 'DELETE FROM agent_traces WHERE demo_session_id = %(s)s'
+params = {'s': UUID('9dde2ae4-4e3d-4373-b181-c3453f41f4ff')}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedColumn) column "demo_session_id" does not exist
+E           LINE 1: DELETE FROM agent_traces WHERE demo_session_id = $1
+E                                                  ^
+E           [SQL: DELETE FROM agent_traces WHERE demo_session_id = %(s)s]
+E           [parameters: {'s': UUID('9dde2ae4-4e3d-4373-b181-c3453f41f4ff')}]
+E           (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: ProgrammingError
+_ ERROR at teardown of test_muat_ulang_tanpa_replace_tidak_mengganti_mode_berjalan _
+
+self = <sqlalchemy.engine.base.Connection object at 0x7c81639470b0>
+dialect = <sqlalchemy.dialects.postgresql.psycopg.PGDialect_psycopg object at 0x7c8163946930>
+context = <sqlalchemy.dialects.postgresql.psycopg.PGExecutionContext_psycopg object at 0x7c8163947260>
+statement = <sqlalchemy.dialects.postgresql.psycopg.PGCompiler_psycopg object at 0x7c81639463c0>
+parameters = [{'s': UUID('2759e507-a38a-43c5-9a8c-a9aac9350612')}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7c816457d6d0>
+query = 'DELETE FROM agent_traces WHERE demo_session_id = %(s)s'
+params = {'s': UUID('2759e507-a38a-43c5-9a8c-a9aac9350612')}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.UndefinedColumn: column "demo_session_id" does not exist
+E           LINE 1: DELETE FROM agent_traces WHERE demo_session_id = $1
+E                                                  ^
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: UndefinedColumn
+
+The above exception was the direct cause of the following exception:
+
+    @pytest.fixture()
+    def sesi_bersih():
+        """Catat sesi aktif operator, lalu pastikan bersih sesudah tes."""
+        engine = _db()
+        awal: list[tuple] = []
+        try:
+            with engine.begin() as conn:
+                awal = conn.execute(
+                    text("SELECT id, status, expires_at FROM demo_sessions WHERE status='active'")
+                ).all()
+                for sid, _st, _exp in awal:
+                    conn.execute(
+                        text("UPDATE demo_sessions SET status='expired' WHERE id = :i"),
+                        {"i": sid},
+                    )
+        finally:
+            engine.dispose()
+        dibuat: list[uuid.UUID] = []
+        yield dibuat
+        engine = _db()
+        try:
+            with engine.begin() as conn:
+                for sid in dibuat:
+                    conn.execute(
+                        text("DELETE FROM approvals WHERE decision_id IN "
+                             "(SELECT id FROM decisions WHERE demo_session_id = :s)"),
+                        {"s": sid},
+                    )
+>                   conn.execute(
+                        text("DELETE FROM agent_traces WHERE demo_session_id = :s"), {"s": sid}
+                    )
+
+tests/test_demo_control_modes.py:90: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7c816457d6d0>
+query = 'DELETE FROM agent_traces WHERE demo_session_id = %(s)s'
+params = {'s': UUID('2759e507-a38a-43c5-9a8c-a9aac9350612')}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedColumn) column "demo_session_id" does not exist
+E           LINE 1: DELETE FROM agent_traces WHERE demo_session_id = $1
+E                                                  ^
+E           [SQL: DELETE FROM agent_traces WHERE demo_session_id = %(s)s]
+E           [parameters: {'s': UUID('2759e507-a38a-43c5-9a8c-a9aac9350612')}]
+E           (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: ProgrammingError
+___ ERROR at teardown of test_tombol_muat_demo_dengan_replace_mengganti_sesi ___
+
+self = <sqlalchemy.engine.base.Connection object at 0x7c81680c5f10>
+dialect = <sqlalchemy.dialects.postgresql.psycopg.PGDialect_psycopg object at 0x7c81680c4170>
+context = <sqlalchemy.dialects.postgresql.psycopg.PGExecutionContext_psycopg object at 0x7c81639fbdd0>
+statement = <sqlalchemy.dialects.postgresql.psycopg.PGCompiler_psycopg object at 0x7c81639faf00>
+parameters = [{'s': UUID('01945e93-e0f5-4a26-89a0-1bd50470418f')}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7c816457fd10>
+query = 'DELETE FROM agent_traces WHERE demo_session_id = %(s)s'
+params = {'s': UUID('01945e93-e0f5-4a26-89a0-1bd50470418f')}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.UndefinedColumn: column "demo_session_id" does not exist
+E           LINE 1: DELETE FROM agent_traces WHERE demo_session_id = $1
+E                                                  ^
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: UndefinedColumn
+
+The above exception was the direct cause of the following exception:
+
+    @pytest.fixture()
+    def sesi_bersih():
+        """Catat sesi aktif operator, lalu pastikan bersih sesudah tes."""
+        engine = _db()
+        awal: list[tuple] = []
+        try:
+            with engine.begin() as conn:
+                awal = conn.execute(
+                    text("SELECT id, status, expires_at FROM demo_sessions WHERE status='active'")
+                ).all()
+                for sid, _st, _exp in awal:
+                    conn.execute(
+                        text("UPDATE demo_sessions SET status='expired' WHERE id = :i"),
+                        {"i": sid},
+                    )
+        finally:
+            engine.dispose()
+        dibuat: list[uuid.UUID] = []
+        yield dibuat
+        engine = _db()
+        try:
+            with engine.begin() as conn:
+                for sid in dibuat:
+                    conn.execute(
+                        text("DELETE FROM approvals WHERE decision_id IN "
+                             "(SELECT id FROM decisions WHERE demo_session_id = :s)"),
+                        {"s": sid},
+                    )
+>                   conn.execute(
+                        text("DELETE FROM agent_traces WHERE demo_session_id = :s"), {"s": sid}
+                    )
+
+tests/test_demo_control_modes.py:90: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7c816457fd10>
+query = 'DELETE FROM agent_traces WHERE demo_session_id = %(s)s'
+params = {'s': UUID('01945e93-e0f5-4a26-89a0-1bd50470418f')}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedColumn) column "demo_session_id" does not exist
+E           LINE 1: DELETE FROM agent_traces WHERE demo_session_id = $1
+E                                                  ^
+E           [SQL: DELETE FROM agent_traces WHERE demo_session_id = %(s)s]
+E           [parameters: {'s': UUID('01945e93-e0f5-4a26-89a0-1bd50470418f')}]
+E           (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: ProgrammingError
+_ ERROR at teardown of test_agent_run_membawa_demo_session_dan_menempel_keputusan _
+
+self = <sqlalchemy.engine.base.Connection object at 0x7c8163d85970>
+dialect = <sqlalchemy.dialects.postgresql.psycopg.PGDialect_psycopg object at 0x7c8165ae1700>
+context = <sqlalchemy.dialects.postgresql.psycopg.PGExecutionContext_psycopg object at 0x7c81639fb650>
+statement = <sqlalchemy.dialects.postgresql.psycopg.PGCompiler_psycopg object at 0x7c81639fb7a0>
+parameters = [{'s': UUID('85b44705-0fc9-4986-9f0b-38f01ce3cba6')}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7c816457d850>
+query = 'DELETE FROM agent_traces WHERE demo_session_id = %(s)s'
+params = {'s': UUID('85b44705-0fc9-4986-9f0b-38f01ce3cba6')}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.UndefinedColumn: column "demo_session_id" does not exist
+E           LINE 1: DELETE FROM agent_traces WHERE demo_session_id = $1
+E                                                  ^
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: UndefinedColumn
+
+The above exception was the direct cause of the following exception:
+
+    @pytest.fixture()
+    def sesi_bersih():
+        """Catat sesi aktif operator, lalu pastikan bersih sesudah tes."""
+        engine = _db()
+        awal: list[tuple] = []
+        try:
+            with engine.begin() as conn:
+                awal = conn.execute(
+                    text("SELECT id, status, expires_at FROM demo_sessions WHERE status='active'")
+                ).all()
+                for sid, _st, _exp in awal:
+                    conn.execute(
+                        text("UPDATE demo_sessions SET status='expired' WHERE id = :i"),
+                        {"i": sid},
+                    )
+        finally:
+            engine.dispose()
+        dibuat: list[uuid.UUID] = []
+        yield dibuat
+        engine = _db()
+        try:
+            with engine.begin() as conn:
+                for sid in dibuat:
+                    conn.execute(
+                        text("DELETE FROM approvals WHERE decision_id IN "
+                             "(SELECT id FROM decisions WHERE demo_session_id = :s)"),
+                        {"s": sid},
+                    )
+>                   conn.execute(
+                        text("DELETE FROM agent_traces WHERE demo_session_id = :s"), {"s": sid}
+                    )
+
+tests/test_demo_control_modes.py:90: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7c816457d850>
+query = 'DELETE FROM agent_traces WHERE demo_session_id = %(s)s'
+params = {'s': UUID('85b44705-0fc9-4986-9f0b-38f01ce3cba6')}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedColumn) column "demo_session_id" does not exist
+E           LINE 1: DELETE FROM agent_traces WHERE demo_session_id = $1
+E                                                  ^
+E           [SQL: DELETE FROM agent_traces WHERE demo_session_id = %(s)s]
+E           [parameters: {'s': UUID('85b44705-0fc9-4986-9f0b-38f01ce3cba6')}]
+E           (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: ProgrammingError
+____________ ERROR at teardown of test_analyze_membawa_demo_session ____________
+
+self = <sqlalchemy.engine.base.Connection object at 0x7c8163945070>
+dialect = <sqlalchemy.dialects.postgresql.psycopg.PGDialect_psycopg object at 0x7c8163946ba0>
+context = <sqlalchemy.dialects.postgresql.psycopg.PGExecutionContext_psycopg object at 0x7c816392ea20>
+statement = <sqlalchemy.dialects.postgresql.psycopg.PGCompiler_psycopg object at 0x7c816392de20>
+parameters = [{'s': UUID('408d848e-1a47-4209-a37c-6ae0c4e5305e')}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7c816457f890>
+query = 'DELETE FROM agent_traces WHERE demo_session_id = %(s)s'
+params = {'s': UUID('408d848e-1a47-4209-a37c-6ae0c4e5305e')}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.UndefinedColumn: column "demo_session_id" does not exist
+E           LINE 1: DELETE FROM agent_traces WHERE demo_session_id = $1
+E                                                  ^
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: UndefinedColumn
+
+The above exception was the direct cause of the following exception:
+
+    @pytest.fixture()
+    def sesi_bersih():
+        """Catat sesi aktif operator, lalu pastikan bersih sesudah tes."""
+        engine = _db()
+        awal: list[tuple] = []
+        try:
+            with engine.begin() as conn:
+                awal = conn.execute(
+                    text("SELECT id, status, expires_at FROM demo_sessions WHERE status='active'")
+                ).all()
+                for sid, _st, _exp in awal:
+                    conn.execute(
+                        text("UPDATE demo_sessions SET status='expired' WHERE id = :i"),
+                        {"i": sid},
+                    )
+        finally:
+            engine.dispose()
+        dibuat: list[uuid.UUID] = []
+        yield dibuat
+        engine = _db()
+        try:
+            with engine.begin() as conn:
+                for sid in dibuat:
+                    conn.execute(
+                        text("DELETE FROM approvals WHERE decision_id IN "
+                             "(SELECT id FROM decisions WHERE demo_session_id = :s)"),
+                        {"s": sid},
+                    )
+>                   conn.execute(
+                        text("DELETE FROM agent_traces WHERE demo_session_id = :s"), {"s": sid}
+                    )
+
+tests/test_demo_control_modes.py:90: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7c816457f890>
+query = 'DELETE FROM agent_traces WHERE demo_session_id = %(s)s'
+params = {'s': UUID('408d848e-1a47-4209-a37c-6ae0c4e5305e')}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedColumn) column "demo_session_id" does not exist
+E           LINE 1: DELETE FROM agent_traces WHERE demo_session_id = $1
+E                                                  ^
+E           [SQL: DELETE FROM agent_traces WHERE demo_session_id = %(s)s]
+E           [parameters: {'s': UUID('408d848e-1a47-4209-a37c-6ae0c4e5305e')}]
+E           (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: ProgrammingError
+=================================== FAILURES ===================================
+_____________ test_start_meneruskan_mode_realtime_ke_pembuat_sesi ______________
+
+klien = <starlette.testclient.TestClient object at 0x7c816a68d250>
+sesi_bersih = [UUID('efae5e06-5bd8-4f69-af9e-1662b916722d')]
+pembuat_sesi_ringan = <function pembuat_sesi_ringan.<locals>.palsu at 0x7c81649a49a0>
+
+    def test_start_meneruskan_mode_realtime_ke_pembuat_sesi(klien, sesi_bersih, pembuat_sesi_ringan):
+        headers = _login(klien)
+        resp = klien.post("/demo/session/start", json={"mode": "realtime"}, headers=headers)
+        assert resp.status_code == 200, resp.text
+        isi = resp.json()
+        sesi_bersih.append(uuid.UUID(isi["session_id"]))
+    
+        assert isi["created"] is True
+>       assert isi["mode"] == "realtime"
+E       AssertionError: assert 'replay' == 'realtime'
+E         
+E         - realtime
+E         + replay
+
+tests/test_demo_control_modes.py:164: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+_________ test_muat_ulang_tanpa_replace_tidak_mengganti_mode_berjalan __________
+
+klien = <starlette.testclient.TestClient object at 0x7c81639f9df0>
+sesi_bersih = [UUID('2759e507-a38a-43c5-9a8c-a9aac9350612')]
+pembuat_sesi_ringan = <function pembuat_sesi_ringan.<locals>.palsu at 0x7c8163dd67a0>
+
+    def test_muat_ulang_tanpa_replace_tidak_mengganti_mode_berjalan(
+        klien, sesi_bersih, pembuat_sesi_ringan
+    ):
+        """Tombol lama ("Siapkan data demo") mengirim `mode=replay` eksplisit, tetapi
+        tidak boleh menutup sesi realtime yang sedang berjalan."""
+        headers = _login(klien)
+        pertama = klien.post(
+            "/demo/session/start", json={"mode": "realtime"}, headers=headers
+        ).json()
+        sesi_bersih.append(uuid.UUID(pertama["session_id"]))
+    
+        kedua = klien.post("/demo/session/start", json={"mode": "replay"}, headers=headers)
+        assert kedua.status_code == 200, kedua.text
+        isi = kedua.json()
+    
+        assert isi["created"] is False
+        assert isi["session_id"] == pertama["session_id"], "sesi realtime tidak boleh diganti"
+>       assert isi["mode"] == "realtime"
+E       AssertionError: assert 'replay' == 'realtime'
+E         
+E         - realtime
+E         + replay
+
+tests/test_demo_control_modes.py:204: AssertionError
+_____________ test_tombol_muat_demo_dengan_replace_mengganti_sesi ______________
+
+klien = <starlette.testclient.TestClient object at 0x7c8168263fe0>
+sesi_bersih = [UUID('01945e93-e0f5-4a26-89a0-1bd50470418f'), UUID('01945e93-e0f5-4a26-89a0-1bd50470418f')]
+pembuat_sesi_ringan = <function pembuat_sesi_ringan.<locals>.palsu at 0x7c81639376a0>
+
+    def test_tombol_muat_demo_dengan_replace_mengganti_sesi(
+        klien, sesi_bersih, pembuat_sesi_ringan
+    ):
+        headers = _login(klien)
+        pertama = klien.post(
+            "/demo/session/start", json={"mode": "realtime"}, headers=headers
+        ).json()
+        sesi_bersih.append(uuid.UUID(pertama["session_id"]))
+    
+        kedua = klien.post(
+            "/demo/session/start",
+            json={"mode": "replay", "replace": True},
+            headers=headers,
+        )
+        assert kedua.status_code == 200, kedua.text
+        isi = kedua.json()
+        sesi_bersih.append(uuid.UUID(isi["session_id"]))
+    
+>       assert isi["created"] is True
+E       assert False is True
+
+tests/test_demo_control_modes.py:226: AssertionError
+__________ test_agent_run_membawa_demo_session_dan_menempel_keputusan __________
+
+klien = <starlette.testclient.TestClient object at 0x7c8163da0860>
+sesi_bersih = [UUID('85b44705-0fc9-4986-9f0b-38f01ce3cba6')]
+pembuat_sesi_ringan = <function pembuat_sesi_ringan.<locals>.palsu at 0x7c8163904c20>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c8163947380>
+
+    def test_agent_run_membawa_demo_session_dan_menempel_keputusan(
+        klien, sesi_bersih, pembuat_sesi_ringan, monkeypatch
+    ):
+        headers = _login(klien)
+        sesi_row = klien.post(
+            "/demo/session/start", json={"mode": "realtime"}, headers=headers
+        ).json()
+        sid = uuid.UUID(sesi_row["session_id"])
+        sesi_bersih.append(sid)
+    
+        did = _buat_keputusan_tanpa_stempel()
+        dipanggil: dict = {}
+    
+        def fake_procurement(commodity, target_location, **kwargs):
+            dipanggil["commodity"] = commodity
+            dipanggil["target"] = target_location
+            return {
+                "decision_id": str(did),
+                "status": "proposed",
+                "commodity": commodity,
+                "target_location": target_location,
+                "quantity_kg": "100",
+            }
+    
+        async def fake_review(db, outcome, **kwargs):
+            return {"status": "disabled", "error": None, "run_id": None}
+    
+        monkeypatch.setattr(demo_api, "run_supplier_procurement", fake_procurement)
+        monkeypatch.setattr(demo_api, "_jalankan_agent_review", fake_review)
+    
+        resp = klien.post(
+            "/demo/agent/run",
+            json={"commodity": "beras", "demo_session": str(sid)},
+            headers=headers,
+        )
+        assert resp.status_code == 201, resp.text
+        assert dipanggil, "pipeline agent harus dijalankan"
+    
+        isi = resp.json()
+>       assert isi["demo_session"]["id"] == str(sid)
+E       KeyError: 'demo_session'
+
+tests/test_demo_control_modes.py:304: KeyError
+______________________ test_analyze_membawa_demo_session _______________________
+
+klien = <starlette.testclient.TestClient object at 0x7c81639fbcb0>
+sesi_bersih = [UUID('408d848e-1a47-4209-a37c-6ae0c4e5305e')]
+pembuat_sesi_ringan = <function pembuat_sesi_ringan.<locals>.palsu at 0x7c8163dd4cc0>
+
+    def test_analyze_membawa_demo_session(klien, sesi_bersih, pembuat_sesi_ringan):
+        headers = _login(klien)
+        sesi_row = klien.post(
+            "/demo/session/start", json={"mode": "realtime"}, headers=headers
+        ).json()
+        sid = uuid.UUID(sesi_row["session_id"])
+        sesi_bersih.append(sid)
+    
+        resp = klien.post(
+            "/balance/analyze",
+            json={"commodity": "beras", "demo_session": str(sid)},
+            headers=headers,
+        )
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":[{"type":"extra_forbidden","loc":["body","demo_session"],"msg":"Extra inputs are not permitted","input":"408d848e-1a47-4209-a37c-6ae0c4e5305e"}]}
+E       assert 422 == 200
+E        +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+
+tests/test_demo_control_modes.py:342: AssertionError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_demo_control_modes.py::test_start_meneruskan_mode_realtime_ke_pembuat_sesi
+FAILED tests/test_demo_control_modes.py::test_muat_ulang_tanpa_replace_tidak_mengganti_mode_berjalan
+FAILED tests/test_demo_control_modes.py::test_tombol_muat_demo_dengan_replace_mengganti_sesi
+FAILED tests/test_demo_control_modes.py::test_agent_run_membawa_demo_session_dan_menempel_keputusan
+FAILED tests/test_demo_control_modes.py::test_analyze_membawa_demo_session - ...
+ERROR tests/test_demo_control_modes.py::test_start_meneruskan_mode_realtime_ke_pembuat_sesi
+ERROR tests/test_demo_control_modes.py::test_start_replay_memakai_jangkar_kanon
+ERROR tests/test_demo_control_modes.py::test_muat_ulang_tanpa_replace_tidak_mengganti_mode_berjalan
+ERROR tests/test_demo_control_modes.py::test_tombol_muat_demo_dengan_replace_mengganti_sesi
+ERROR tests/test_demo_control_modes.py::test_agent_run_membawa_demo_session_dan_menempel_keputusan
+ERROR tests/test_demo_control_modes.py::test_analyze_membawa_demo_session - s...
+5 failed, 4 passed, 1 warning, 6 errors in 9.33s

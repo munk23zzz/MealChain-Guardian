@@ -411,3 +411,24 @@ Batas yang tetap berlaku: **(a)** Joule hanya mengirim teks — dokumen PDF PO t
 UI MealChain; **(b)** routing masih berbasis kata kunci, jadi kalimat yang menyebut "PO" untuk
 maksud lain (mis. "usulan PO") akan masuk skill PO; **(c)** akun baca `bgn_monitor` melihat PO
 nasional, sedangkan akun SPPG hanya PO lokasinya.
+
+---
+
+## Status terukur — 27 Oktober 2026 (Fase 12 MG)
+
+Diukur dari host operator dengan `cf target` / `cf app` / `curl` (tanpa push, tanpa restage):
+
+| Hal | Hasil |
+|---|---|
+| Org / space | `SEAIO_aws-sap-hackathon-si4ykj9d` / `hackathon-4sehat3trio` (sesi CF masih aktif) |
+| App | `mealchain-joule-bridge-4sehat3trio` — `started`, `web:1/1`, ready `true`, 512M |
+| Route | `mealchain-joule-bridge-4sehat3trio.cfapps.ap10.hana.ondemand.com` |
+| `last uploaded` | **Mon 26 Oct 11:36:39 +07 2026** — lebih lama daripada commit `sap-joule/` terakhir, jadi kode di CF **bukan** kode terbaru |
+| `GET /health` | `{"status":"ok","service":"mealchain-joule-bridge","backend":{"reachable":false,"detail":"/health tidak bisa dihubungi: [Errno -2] Name or service not known"}}` |
+| `GET /ready` | 404 (memang tidak ada endpoint itu) |
+| Arti | Jembatan hidup, tetapi **backend yang ditunjuk tidak resolve**. Bukan bukti integrasi hidup. |
+
+Tindakan yang **belum** dilakukan dan menunggu keputusan pemilik: `cf push` ulang jembatan
+untuk memuat kode terakhir dan `cf set-env MEALCHAIN_API_URL <backend yang hidup>` +
+`cf restage`. Aturan fase melarang push tanpa izin, jadi status hari itu dicatat sebagai
+batas, bukan sebagai selesai.

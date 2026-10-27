@@ -119,3 +119,6 @@ data/backups/
 de_probe.py
 de_probe2.py
 sap-joule/_qa/
+
+# Folder build frontend khusus stack rehearsi Fase 10 (docker-compose.p10.yml)
+frontend/.next-p10/

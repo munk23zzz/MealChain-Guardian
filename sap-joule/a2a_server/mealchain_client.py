@@ -242,6 +242,25 @@ class MealchainClient:
             raise MealchainRejected(f"/health → HTTP {response.status_code}")
         return response.json()
 
+    def demo_session(self) -> dict[str, Any]:
+        """Sesi demo yang sedang aktif di backend, atau `{}` bila tidak ada.
+
+        Fase 12 MG. Joule harus bisa menyebut konteks sesi (mode + jangkar +
+        id sesi) supaya angka KPI yang dibacanya tidak tertukar dengan sesi
+        lain. Endpoint `/demo/session` 404 di mode operasional — itu bukan
+        kesalahan, hanya berarti tidak ada sesi.
+        """
+        try:
+            payload = self._get("/demo/session")
+        except (MealchainRejected, MealchainUnavailable):
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        if payload.get("active") is False:
+            return {}
+        return payload
+
+
     def locations(self) -> list[dict[str, Any]]:
         """Daftar lokasi SPPG (id + nama) untuk menerjemahkan id menjadi nama di laporan."""
         return self._rows(self._get("/admin/locations"), "locations")
@@ -537,6 +556,15 @@ class MealchainClient:
         """Berkas kepatuhan satu keputusan (`/decisions/{id}/compliance`): bukti, approval,
         jejak agen, tanda tangan kriptografis, dan hasil verifikasi."""
         payload = self._get(f"/decisions/{quote(str(decision_id), safe='')}/compliance")
+        return payload if isinstance(payload, dict) else {}
+
+    def decision_packet(self, decision_id: str) -> dict[str, Any]:
+        """SATU read model keputusan (`/decisions/{id}/packet`) — Fase 6 butir 4.
+
+        Bentuk yang sama dengan yang dipakai layar (biaya, approval, trace), jadi
+        jembatan tidak merakit ulang evaluasi batch dari endpoint lain.
+        """
+        payload = self._get(f"/decisions/{quote(str(decision_id), safe='')}/packet")
         return payload if isinstance(payload, dict) else {}
 
     def decision_chain(self, decision_id: str) -> dict[str, Any]:

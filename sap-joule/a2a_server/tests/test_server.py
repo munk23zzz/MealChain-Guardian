@@ -323,6 +323,26 @@ class FakeClient:
             "verify": True,
         }
 
+    def decision_packet(self, decision_id: str) -> dict:
+        """Fase 6 butir 4: satu read model keputusan (bentuk yang sama dengan layar)."""
+        self.dipanggil.append(f"decision_packet:{decision_id}")
+        self._cek()
+        return {
+            "decision_id": decision_id,
+            "batch_evaluations": [
+                {"batch_id": "b-1", "status": "usable", "blocking_reasons": []},
+                {
+                    "batch_id": "b-2",
+                    "status": "on_hold",
+                    "blocking_reasons": ["temperature_evidence_incomplete"],
+                },
+            ],
+            "costs": None,
+            "delivery": {"due_at": None, "needed_by": None, "feasible": None},
+            "evidence": {"source_types": [], "source_refs": [], "completeness": {}},
+            "review": {"verifier": None, "approvals": [], "blocking_reasons": []},
+        }
+
     def decision_chain(self, decision_id: str) -> dict:
         self.dipanggil.append(f"decision_chain:{decision_id}")
         self._cek()
@@ -934,3 +954,18 @@ def test_penerimaan_barang_dibaca_per_batch_yang_disebut():
     # Batch spesifik = jawaban spesifik: tabel pasokan tidak ikut disodorkan.
     assert "Keseimbangan pasokan per SPPG" not in teks
     assert "kemasan: belum" in teks and "selisih 20 kg dilaporkan" in teks
+
+
+def test_bukti_keputusan_membawa_paket_dari_endpoint_paket():
+    """Fase 6 butir 4: jembatan meneruskan paket keputusan, bukan merakit sendiri.
+
+    Laporan bukti harus memuat state bukti batch yang DIKIRIM backend; jembatan
+    tidak menghitung ulang skor apa pun.
+    """
+    fake = FakeClient()
+    events = _jalan(server.MealchainExecutor(lambda: fake), "bukti keputusan cec7e30d")
+    teks = _teks_artefak(events[1])
+
+    assert "decision_packet:cec7e30d-3eb5-4c29-82ee-c5fee581add1" in fake.dipanggil
+    assert "State bukti batch" in teks
+    assert "2 dievaluasi" in teks and "1 ditahan" in teks
