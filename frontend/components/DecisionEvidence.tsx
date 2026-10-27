@@ -31,6 +31,9 @@ import PageHeader from "./PageHeader";
 import SectionJump from "./SectionJump";
 import { evidenceSections } from "../lib/section-jump";
 import { SupplierExclusionView } from "./SupplierExclusionPanel";
+// Fase 9 butir 2 & 4: status penerimaan barang satu keputusan — tombolnya
+// mengikuti `receipt_gate` server (`can_receive`/`can_quarantine`).
+import GoodsReceiptDrawer from "./GoodsReceiptDrawer";
 import { dueLabel, pendingDecisions, type TodayDecision } from "../lib/today";
 import { decisionGroups, statusWord } from "../lib/decision-picker";
 import DecisionPicker from "./DecisionPicker";
@@ -582,6 +585,11 @@ export default function DecisionEvidence({
           </section>
 
           {/* Form pengecualian pemasok (governance) tampil lebar penuh setelah bukti. */}
+          {/* Fase 9 butir 2 & 4: penerimaan barang. Status & tombol dari server
+              (`receipt_gate`), bukan hitungan klien. */}
+          {selected ? (
+            <GoodsReceiptDrawer summary={summary} token={token} role={role} />
+          ) : null}
           {supplierContext && (
             <SupplierExclusionView
               key={selected.decision_id}
