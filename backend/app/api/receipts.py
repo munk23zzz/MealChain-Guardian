@@ -42,7 +42,7 @@ from app.core.safety_gate import (
 )
 from app.core.scope import assert_in_scope
 from app.models import Batch, BatchReceipt, Commodity, Location, SupplyRecord, User
-from app.services import settlement
+from app.services import receipt_value, settlement
 from app.services.demo_session import sesi_sekarang
 
 #: Pesan 409 per alasan blokir. Ditulis eksplisit supaya petugas dapur tahu
@@ -106,6 +106,7 @@ def _row(
     nama: str | None = None,
     pemeriksa: str | None = None,
     kg: float | None = None,
+    nilai: float | None = None,
 ) -> dict:
     """Bentuk balasan yang stabil untuk UI (jumlah titik dihitung SERVER)."""
     dicek = receipt.checked or {}
@@ -127,6 +128,9 @@ def _row(
         "supply_record_id": (
             str(receipt.supply_record_id) if receipt.supply_record_id else None
         ),
+        #: Nilai rupiah barang yang diterima menurut HARGA INVOICE PO (Fase 5).
+        #: None = batch tanpa ikatan bukti/PO ("tidak tercatat"), beda dari 0.
+        "accepted_value_idr": nilai if receipt.status == "disetujui" else None,
         #: Kg yang masuk stok karena persetujuan ini (None bila belum disetujui).
         "stock_kg": kg if receipt.status == "disetujui" else None,
     }
@@ -218,8 +222,14 @@ async def approve_receipt(
 
     if receipt.status == "disetujui":
         nama = await _nama(db, receipt.reviewed_by)
+        kg = float(batch.quantity_kg)
         return {
-            **_row(receipt, pemeriksa=nama, kg=float(batch.quantity_kg)),
+            **_row(
+                receipt,
+                pemeriksa=nama,
+                kg=kg,
+                nilai=await receipt_value.nilai_diterima(db, batch.id, kg),
+            ),
             "sudah": True,
         }
     if receipt.status == "ditolak":
@@ -316,7 +326,12 @@ async def approve_receipt(
             detail="batch ini sudah punya penerimaan yang disetujui",
         ) from exc
     await db.refresh(receipt)
-    return _row(receipt, pemeriksa=user.name, kg=float(batch.quantity_kg))
+    return _row(
+        receipt,
+        pemeriksa=user.name,
+        kg=float(batch.quantity_kg),
+        nilai=await receipt_value.nilai_diterima(db, batch.id, float(batch.quantity_kg)),
+    )
 
 
 @router.post("/receipts/{receipt_id}/reject")
@@ -416,6 +431,10 @@ async def list_receipts_menunggu(
                 "checked_count": sum(1 for nilai in dicek.values() if nilai is True),
                 "recorded_by_name": nama,
                 "recorded_at": receipt.recorded_at.isoformat(),
+                # Antrean ini hanya berisi catatan yang BELUM disetujui, jadi
+                # nilai rupiah belum ada — kuncinya tetap dikirim (None) supaya
+                # UI membaca satu bentuk payload saja.
+                "accepted_value_idr": None,
             }
         )
     return {"items": items, "total": len(items)}
@@ -445,9 +464,12 @@ async def list_receipts(
             .limit(limit)
         )
     ).all()
+    # Satu batch per permintaan → satu kueri harga, bukan satu per baris.
+    kg_batch = float(baris[0][3]) if baris else None
+    nilai = await receipt_value.nilai_diterima(db, batch_id, kg_batch)
     return {
         "items": [
-            _row(receipt, nama=nama, pemeriksa=nama_pemeriksa, kg=float(kg))
+            _row(receipt, nama=nama, pemeriksa=nama_pemeriksa, kg=float(kg), nilai=nilai)
             for receipt, nama, nama_pemeriksa, kg in baris
         ]
     }
