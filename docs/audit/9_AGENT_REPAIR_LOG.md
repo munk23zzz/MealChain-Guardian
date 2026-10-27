@@ -391,3 +391,144 @@ H. exclusion Bandung (pemasok sama) + review Bandung → blocking=True, active_e
   `needs_verification` pada banyak batch; `blocking` hanya naik bila batch sumber
   benar-benar lewat `usable_until` atau kosong. Ambang tidak diubah.
 
+
+---
+
+## 9. AUD-9A-03 / AUD-9A-12 — verifier memeriksa fakta sendiri (basis `b5d97e1`)
+
+Tanggal: 27 Oktober 2026. Basis commit: `b5d97e1` (tree bersih). Lingkungan dan aturan DB
+sama seperti §0: uji tulis hanya di klon sekali pakai (`pg_dump` → `createdb`), DB demo
+`mealchain` dibaca saja — kecuali satu migrasi skema aditif yang dijelaskan di §9.4.
+
+### 9.1 Masalah yang diselesaikan
+
+`VerifierWorker.audit` hanya **mewarisi** `run.verification` (verdict gerbang) dan tidak
+pernah membaca data. Ia juga tidak punya prompt sendiri: `run_verifier` menempelkan teks
+verifier ke dalam prompt supervisor, dan `VerifierWorker()` dibuat tanpa model di produksi,
+sehingga "agent ke-8" adalah presenter verdict, bukan penilai. Akibatnya lima klaim palsu
+lolos tanpa jejak (kolom LAMA di §9.2).
+
+Yang dibangun:
+
+| Komponen | Berkas | Isi |
+|---|---|---|
+| System prompt sendiri | `agent/prompts/verifier_system_prompt.md` | identitas VERIFIER, "klaim supervisor bukan fakta", angka wajib bersitasi, DILARANG menghitung, DILARANG menaikkan verdict, kosakata tiga verdict, skema JSON wajib |
+| Toolset baca-saja | `agent/verifier_facts.py` | `VerifierFactsSource.baca()` → `GET /decisions/{id}/audit-facts` + `/approval-summary`; tanpa POST, tanpa tulis |
+| Fakta yang dihitung kode | `backend/app/services/audit_facts.py` + `GET /decisions/{id}/audit-facts` | SDC vs rincian (memakai `recommendation_numbers`), evidence, batch sumber (safety/freshness via `supplier_eligibility` + `core/freshness`), exclusion (`supplier_exclusion_service`), blok ledger |
+| Cek deterministik | `agent/verifier_checks.py` | 8 cek: angka bersitasi, SDC, safety batch, kesegaran, bukti, exclusion, ledger, konsistensi gerbang |
+| Output tervalidasi | `agent/verifier_contracts.py` | pydantic: `verdict` ∈ {consistent, flagged, unavailable}, `checks[]` {nama, klaim, aktual, lulus}, `citations[]` {decision_id/batch_id/evidence_id/ledger_block_id}, `catatan`; tidak sah → `unavailable` |
+| Guard pasca-LLM | `agent/verifier_checks.py::jaga_verdict` | model hanya boleh menurunkan/menandai; `consistent` + ada cek gagal / tanpa sitasi / gerbang flag → `flagged`; fakta tidak terbaca → `unavailable`; `blocking` selalu `False` |
+| Jejak run | `agent/telemetry.py`, `backend/app/models/decisions.py`, migrasi 039, `backend/app/services/trace_persistence.py` | baris VERIFY = **run anak**: `run_id` sendiri + `parent_run_id` = run review; `persist_agent_review` menerima satu run induk + satu run anak (bentuk 8 baris lama tetap sah) |
+| Model produksi | `agent/verifier_model.py` | callable opsional dari `VERIFIER_AGENT_MODEL`/`SUPERVISOR_MODEL_PRIMARY`; tanpa model, verifier tetap deterministik dan `consistent` tidak pernah dikarang |
+
+Empat pagar skill `verifier-agent-adapter` yang **sudah ada** dan dipertahankan: (1) verifier
+berjalan sesudah narasi dan tidak masuk `run.findings`; (2) temuannya di `run.verifier_finding`,
+status/veto run tetap milik worker analitik; (3) verifier tidak dipakai lane paralel dan
+`blocking_allowed=false` di `agent/hierarchy.json`; (4) model hanya membaca fakta, tidak
+menghitung ulang angka bisnis.
+
+### 9.2 Red-team sebelum vs sesudah (diukur, bukan diklaim)
+
+Probe memakai lima klaim supervisor yang sama dan fakta yang sama; kolom LAMA = kode `HEAD`
+b5d97e1, BARU = kode setelah patch. Model pada kedua kolom diminta menjawab `consistent`.
+
+```
+skenario                 LAMA (HEAD)                  BARU                         cek_gagal
+a_sdc_selisih            ok/pass                      flagged/degraded             ['sdc_vs_cost_breakdown']
+b_safety_fail            ok/pass                      flagged/degraded             ['safety_batch_sumber']
+c_bukti_hilang           ok/pass                      flagged/degraded             ['bukti_keputusan']
+d_angka_tanpa_sumber     ok/pass                      flagged/degraded             ['angka_bersitasi']
+e_freshness_082          ok/pass                      flagged/degraded             ['kesegaran_certified']
+```
+
+Kelimanya kini dikunci sebagai tes otomatis `backend/tests/test_agent_verifier_independence.py`
+(14 tes): 5 skenario di atas + skema tidak sah, `consistent` tanpa sitasi, model tidak bisa
+menaikkan `flagged`, cek ledger, koreksi skema sekali, fakta tidak terbaca (fail-closed),
+toolset hanya GET, prompt verifier ≠ prompt supervisor, dan baris VERIFY membawa
+`run_id`/`parent_run_id`/sitasi.
+
+### 9.3 Patch yang menyentuh kontrak/perilaku lama
+
+1. **`build_workers()`** kini memberi verifier model dari env (bila ada). Tanpa kredensial,
+   perilakunya sama seperti sebelumnya (deterministik).
+2. **`test_agent_verifier.py`** — tiga assertion lama yang mengunci "tanpa fakta boleh `ok`"
+   **diperketat**: tanpa fakta terbaca hasilnya `unavailable`/`degraded` (fail-closed), bukan
+   `ok`. Tidak ada tes yang di-skip atau dilonggarkan.
+3. **`test_agent_orchestrator.py`** — daftar endpoint yang dipanggil bertambah
+   `/audit-facts` (verifier membaca fakta sendiri). Assertion tetap eksak.
+4. **`persist_agent_review`** — aturan baru: baris tanpa `parent_run_id` wajib satu `run_id`
+   (regresi lama tetap ditolak dengan pesan "satu run_id"); baris ber-`parent_run_id` wajib
+   menunjuk run induk.
+5. **`agent/verifier_checks.py`** — cek angka hanya memeriksa **narasi supervisor**, bukan
+   ringkasan tujuh worker: ringkasan worker adalah bahan masukan, bukan klaim yang diaudit.
+   Tanpa ini setiap review dini ditandai karena angka turunan worker.
+
+### 9.4 Migrasi 039 (skema aditif)
+
+`backend/alembic/versions/039_agent_trace_parent_run_id.py` menambah
+`agent_traces.parent_run_id` (UUID NULL) + indeks, `downgrade` menghapus keduanya.
+
+Diuji pada DB **kosong**: `alembic upgrade head` → 24 tabel, `version_num =
+039_agent_trace_parent_run_id`; `downgrade -1` → kolom hilang; `upgrade head` → kembali.
+DB demo dimigrasikan (skema saja, tanpa mengubah baris) karena model `AgentTrace` sudah
+memetakan kolom itu — tanpa migrasi, setiap INSERT jejak pada demo akan gagal.
+
+### 9.5 Satu putaran review NYATA (bukan stub)
+
+Dijalankan di container backend terhadap API yang hidup (baca-saja); provider
+`primary:agentcore` menjawab. Keputusan `dea2227f…`:
+
+- fakta yang dibaca verifier sendiri: `sdc_check.cocok=true` (komponen = 16.132.215,46),
+  `evidence_count=1`, `batch_sumber=[45268526…, 97b17fd4…]`, `ledger.count=0`;
+- verdict model: `flagged`; cek deterministik 8, gagal 0 (gerbang sudah `flag`, narasi disebut
+  jujur sebagai memblokir);
+- sitasi: `decision_id` + 2 `batch_id` + 1 `evidence_id` (tanpa duplikat);
+- baris jejak VERIFY: `run_id=8e7dbebe…`, `parent_run_id=bcf187a5…`, `citations=6`
+  (2 hitungan + 4 id) di `AgentFinding`, `audit_verdict=flagged`, `checks_total=8`,
+  `checks_failed=0`;
+- potongan `catatan` model: "…freshness_score=0.82 berada di bawah ambang pass (0.85) dengan
+  status 'needs_verification'… SDC dan bukti konsisten dengan fakta, tetapi kesegaran…".
+
+Ini penting: verifier **tidak** menyalin narasi supervisor dan **tidak** mewarisi verdict —
+ia membaca fakta yang sama dari DB dan menilai sendiri, lalu guard menahan `consistent`
+karena gerbang sudah `flag`.
+
+### 9.6 Verifikasi (exit code nyata)
+
+| Perintah | Exit | Hasil |
+|---|---|---|
+| `cd backend && .venv/Scripts/ruff.exe check .` | 0 | `All checks passed!` |
+| `ruff check` berkas agent baru | 0 | `All checks passed!` |
+| `pytest` verifier/agent/trace di klon `mealchain_verifverif` | 0 | **53 passed** |
+| `pytest` tes angka audit (`test_audit_facts_numbers.py`) | 0 | **6 passed** |
+| `pytest` penuh di klon baru `mealchain_verif2` | 1 | **9 failed, 1644 passed, 28 skipped**, 562,75 s |
+| `pytest` penuh di klon baru `mealchain_headbase` pada **HEAD `b5d97e1`** (pembanding) | 1 | **8 failed, 1618 passed, 28 skipped**, 550,39 s |
+| `cd frontend && npx tsc --noEmit` | 0 | tanpa error |
+| `cd frontend && npx vitest run` | 0 | suite lulus (48 s) |
+| gate `verify_stack.py verify/invariants.spec.json` | 1 | **FAIL 56 / FAIL 4 / SKIP 1** — 4 invarian **data demo**, lihat di bawah |
+
+Sembilan kegagalan pytest penuh = 8 kegagalan yang **sama persis** dengan baseline HEAD
+(`test_akun_multi_kota` ×2, `test_demo_seed_per_kota` ×4, `test_demo_session_mulai_atomik`,
+`test_demo_template_provenance_ledger`) + 1 tes milik patch ini yang gagal karena pytest
+mengumpulkan versi berkas sebelum konstanta uji diperbaiki (lolos saat dijalankan ulang: 6
+passed). Delapan sisanya adalah tes penyemaian demo yang bergantung urutan pada klon
+`pg_dump` — bukan akibat patch ini, dibuktikan oleh run pembanding di HEAD.
+
+Empat kegagalan gate juga **data**, bukan kode: `baris kanonik batch/keputusan/pasokan
+berstempel sesi` (78/7/40 baris) dan `PO tanpa decision_id` (1 baris) — baris-baris itu
+ber-`created_at` 2026-10-27 01:34–01:35 UTC (08:34–08:35 WIB), **sebelum** sesi ini mulai
+(08:56 WIB); gate PASS terakhir 08:03 WIB. Invarian baru
+`kolom agent_traces.parent_run_id` **PASS**.
+
+### 9.7 Sisa risiko
+
+- **Model masih boleh sama dengan supervisor** (`SUPERVISOR_MODEL_PRIMARY`). Yang independen:
+  prompt + sumber fakta + cek deterministik. Bila model yang sama keliru membaca fakta, guard
+  deterministik tetap menahan `consistent`; tetapi penalaran kualitatifnya tidak independen.
+  Untuk independensi penuh, isi `VERIFIER_AGENT_MODEL` dengan model lain.
+- **Endpoint `/actions/{id}/verify`** (`backend/app/ai_providers/verifier_client.py`) masih
+  memakai runtime + prompt supervisor. Perbaikan ini menyentuh auditor lapis agent, bukan
+  endpoint itu — AUD-9A-03 karena itu **sebagian** diperbaiki.
+- Cek `angka_bersitasi` hanya memeriksa narasi supervisor; angka turunan di ringkasan worker
+  tidak diaudit (kesengajaan, lihat §9.3 butir 5).
+- `parent_run_id` hanya terisi untuk baris VERIFY baru; baris historis tetap NULL (tanpa backfill).

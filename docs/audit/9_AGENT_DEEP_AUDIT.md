@@ -16,7 +16,7 @@ Pasangan: `9_AGENT_INVENTORY.md` (tabel peran + jumlah aktual).
 |---|---|---|---|
 | AUD-9A-01 | **P2** | Baris `SUPERVISE` pada putaran review adalah **template string**, bukan LLM/agent — padahal UI menyebut "Ringkasan supervisor" | FAIL |
 | AUD-9A-02 | **P2** | 9 baris review **tidak pernah tersimpan** di DB demo (0 baris ber-`run_id`, 0 `SUPERVISE`); klaim "review 9 agen" tak punya bukti terekam | FAIL |
-| AUD-9A-03 | **P1** | Verifier LLM berbagi **runtime + model + system prompt** dengan Supervisor; verdict `CONSISTENT` diberikan untuk freshness 0,82 (ambang certified: needs_verification) | FAIL |
+| AUD-9A-03 | **P1** | Verifier LLM berbagi **runtime + model + system prompt** dengan Supervisor; verdict `CONSISTENT` diberikan untuk freshness 0,82 (ambang certified: needs_verification) | **SEBAGIAN** — auditor lapis agent kini punya prompt + fakta sendiri (lihat §AUD-9A-03 "Status"); endpoint `/actions/{id}/verify` masih berbagi runtime/prompt |
 | AUD-9A-04 | **P2** | Safety Guardian memveto berdasarkan daftar exclusion **global**, tidak di-scope ke keputusan; `GET /supplier-exclusions/context/{decision_id}` yang dideklarasikan tidak dipakai | FAIL |
 | AUD-9A-05 | **P1** | Freshness Guardian tidak memakai ambang certified (PASS ≥0,85); batch skor 0,82 dilaporkan `ok` tanpa verdict `needs_verification`, `blocking=False` | FAIL |
 | AUD-9A-06 | **P2** | Price & Logistics bergantung pada `POST` komputasi yang diblokir gerbang sesi demo (409) dan role guard (403) → degradasi permanen di luar sesi demo | FAIL |
@@ -337,12 +337,45 @@ penilai dan penulis narasi adalah model & prompt yang sama. Ini tidak otomatis m
 Rekomendasi: slot model verifier **tanpa** ARN AgentCore supervisor (mis. langsung `sap-ai-core:llm`
 dengan system prompt verifier), atau runtime terpisah.
 
-### AUD-9A-12 (P3, PARTIAL) — auditor deterministik hanya mewarisi verdict
-`VerifierWorker.audit` memakai `run.verification` apa adanya (`agent/workers/verifier.py:74-106`);
-tidak ada perhitungan ulang, dan `model` tidak pernah dipasang di produksi
-(`agent/orchestrator.py:295-304` membuat `VerifierWorker()` tanpa argumen). Jadi "agent ke-8"
-adalah **presenter** hasil gerbang, bukan penilai kedua. Ini konsisten dengan desain
-(`blocking` selalu False), tetapi jangan disebut "audit independen".
+**Status 27 Okt 2026 — SEBAGIAN diperbaiki (lapis agent).**
+
+Auditor lapis agent (`agent/workers/verifier.py`) sekarang:
+
+1. punya **system prompt sendiri** (`agent/prompts/verifier_system_prompt.md`) yang menyatakan
+   klaim supervisor bukan fakta dan melarang verifier menghitung/menaikkan verdict;
+2. **membaca fakta sendiri** lewat toolset baca-saja `agent/verifier_facts.py` →
+   `GET /decisions/{id}/audit-facts` (dihitung `backend/app/services/audit_facts.py` dari
+   `recommendation_numbers`, `supplier_eligibility`, `core/freshness`,
+   `supplier_exclusion_service`, ledger) + `GET /approval-summary`;
+3. mengeluarkan **JSON tervalidasi** (`agent/verifier_contracts.py`) dengan `verdict`
+   (`consistent|flagged|unavailable`), `checks[]`, `citations[]`; output tidak sah → `unavailable`;
+4. dijaga **guard deterministik** pasca-LLM (`jaga_verdict`) — `consistent` turun menjadi
+   `flagged` bila ada cek gagal / tanpa sitasi / gerbang `flag`; model tidak bisa menaikkan;
+5. menyimpan jejak dengan **`run_id` sendiri + `parent_run_id`** (run induk) dan sitasi, lewat
+   migrasi `039_agent_trace_parent_run_id` dan `persist_agent_review`.
+
+Red-team terukur (klaim palsu yang sama, model diminta `consistent`): SDC ≠ Σ rincian,
+batch `safety_status='fail'`, `decision_evidence` hilang, angka tanpa sumber, dan freshness
+0,82 diklaim aman — **semua** `ok/pass` pada kode lama, **semua** `flagged/degraded` sekarang
+(`backend/tests/test_agent_verifier_independence.py`, 14 tes).
+
+**Masih terbuka:** endpoint `POST /actions/{decision_id}/verify`
+(`backend/app/ai_providers/verifier_client.py`) tetap memakai runtime + prompt supervisor
+(`get_agent_chain("verifier")` → slot `agentcore` supervisor). Perbaikan ini tidak menyentuh
+jalur itu, jadi klaim "penilai independen" untuk endpoint tersebut **belum** benar.
+Independensi model juga belum penuh: `VERIFIER_AGENT_MODEL` boleh kosong dan jatuh ke
+`SUPERVISOR_MODEL_PRIMARY` — yang independen adalah prompt, sumber fakta, dan cek deterministik.
+
+### AUD-9A-12 (P3, DIPERBAIKI 27 Okt 2026) — auditor kini membaca fakta sendiri
+Status lama: `VerifierWorker.audit` memakai `run.verification` apa adanya dan `model` tidak
+pernah dipasang di produksi, jadi "agent ke-8" adalah presenter verdict.
+
+Sesudah perbaikan: verifier mengambil fakta sendiri (`/decisions/{id}/audit-facts` +
+`/approval-summary`), menjalankan 8 cek deterministik, memvalidasi JSON model, dan menjaga
+verdict lewat `jaga_verdict`. `build_workers()` memasang model dari `VERIFIER_AGENT_MODEL`
+(cadangan `SUPERVISOR_MODEL_PRIMARY`); tanpa model, verifier tetap menandai (`flagged`) bila
+cek gagal dan menjawab `unavailable` bila semua lulus — `consistent` tidak pernah dikarang.
+`blocking` tetap `False` dan status/veto run tetap dihitung dari worker analitik.
 
 ### AUD-9A-13 (P3, FAIL) — gerbang salah tuduh pada narasi veto
 Runtime: `verification.reasons = ["narasi_tidak_menyebut_penurunan: worker price tidak utuh tetapi
@@ -442,7 +475,7 @@ Rekomendasi: pakai (a) dan ganti istilah "9 agent" menjadi **"9 baris jejak: 7 w
 | Price | ada | `degraded` (409) | 6 tes | **PARTIAL** (AUD-9A-06) |
 | Logistics | ada | `ok`, 406 ms | 3 tes | **PARTIAL** (jalur estimasi) |
 | Evidence Fusion | ada | `ok` + `blocking=True` | 5 tes | **PASS** dengan catatan kontradiksi (AUD-9A-10) |
-| Independent Verifier | ada (3 entitas berbeda) | `CONSISTENT` (LLM) | ≥23 tes | **FAIL** (AUD-9A-03) |
+| Independent Verifier | ada (3 entitas berbeda) | `flagged` (audit agent, 27 Okt) | ≥23 tes + 14 tes red-team | **SEBAGIAN** (AUD-9A-03: lapis agent diperbaiki, endpoint `/actions/verify` terbuka) |
 
 ---
 

@@ -46,7 +46,8 @@ Status: **DIPERBAIKI** / **SEBAGIAN** / **TERBUKA** / **BLOCKED** / **KEPUTUSAN 
 
 | ID | Temuan | Status | Catatan |
 |---|---|---|---|
-| AUD-9A-03 | Verifier LLM berbagi runtime/model/system prompt dengan Supervisor | **SEBAGIAN** | Akibat perilakunya ditutup guard deterministik (0,82 tidak bisa `CONSISTENT` lagi). Independensi model tetap terbuka → butuh konfigurasi terpisah (keputusan owner). |
+| AUD-9A-03 | Verifier LLM berbagi runtime/model/system prompt dengan Supervisor | **SEBAGIAN (lapis agent DIPERBAIKI 27 Okt)** | Auditor lapis agent kini punya system prompt sendiri, membaca fakta sendiri (`/decisions/{id}/audit-facts`), mengeluarkan JSON tervalidasi + sitasi, dijaga `jaga_verdict`, dan menyimpan `run_id`+`parent_run_id`. Red-team 5 skenario: semuanya `ok/pass` sebelum, `flagged/degraded` sesudah. **Terbuka:** `POST /actions/{id}/verify` masih memakai runtime + prompt supervisor; model verifier masih boleh = model supervisor (`VERIFIER_AGENT_MODEL` kosong). |
+| AUD-9B-26 | `verify_run` tidak memeriksa angka/kontradiksi | **SEBAGIAN** | 8 cek deterministik baru menolak angka tanpa sumber, SDC ≠ Σ rincian, batch FAIL, bukti hilang, dan 0,82 diklaim aman — tetapi cek angka hanya pada narasi supervisor (bukan ringkasan worker). |
 | AUD-9A-05 | Worker Freshness tidak memakai gerbang certified 0,85/0,60 | **SEBAGIAN** | Klasifikasi certified kini fakta + warning (`freshness_status`), `blocking`/veto tidak diubah (alasan data: 40/40 pasangan demo < 0,85; 30 tepat 0,82). |
 | AUD-9B-01 | `freshness_score` tidak dapat direproduksi (literal 0,82 pada 39 batch demo; simpangan s.d. 28 pp) | **TERBUKA** | Data/seed. Prasyarat sebelum gerbang kesegaran boleh memveto. |
 | AUD-9B-02 | `usable_until` bertentangan dengan skor (48/120 batch, maks 75,4 hari) | **TERBUKA** | Data/seed. |
@@ -58,7 +59,6 @@ Status: **DIPERBAIKI** / **SEBAGIAN** / **TERBUKA** / **BLOCKED** / **KEPUTUSAN 
 | AUD-9B-19 | Angka keamanan dua basis (read model sumber vs agent tujuan) | **TERBUKA** | Berpasangan dengan AUD-9B-29. |
 | AUD-9B-24 | Kegagalan auditor ditelan (`verifier_finding=None`, run tetap `completed`) | **TERBUKA** | P1 orkestrasi. |
 | AUD-9B-25 | Pasokan vs permintaan antar-agent tidak pernah dibandingkan | **TERBUKA** | Terukur ulang: Supply 300,0 kg vs Demand 1074,11 kg hadir berdampingan, `completed`, 0 kontradiksi. |
-| AUD-9B-26 | `verify_run` tidak memeriksa angka/kontradiksi | **TERBUKA** | Verifier menulis "Audit sepakat" untuk angka mustahil. |
 | AUD-9B-35 | Prioritas "pasokan cukup tetapi terlambat" tidak ditegakkan | **TERBUKA** | `delivery_window`/`needed_by` tidak dipakai. |
 
 ### P2/P3 terbuka (ringkas, detail di dokumen asal)
