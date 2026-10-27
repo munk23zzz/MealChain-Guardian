@@ -357,3 +357,81 @@ def test_baseline_tidak_dikarang_nol():
         if b["kind"] == "no_baseline":
             assert b["value"] is None, f"{nama}: baseline 'tidak ada' tidak boleh diisi angka"
             assert "0" not in str(b["value"] or ""), nama
+
+
+# ------------------------------------- 5. klasifikasi asal baris (baris 23 fase)
+#
+# Spesifikasi: baris lama harus DIKLASIFIKASIKAN `historical_seed`, dan query
+# operasional tidak boleh memperlakukannya sebagai fakta baru. Tanpa ini angka
+# operasional terbaca seolah catatan lapangan hari ini, padahal seluruh faktanya
+# berasal dari data seed (di DB demo: 100% baris 30 hari terakhir).
+
+
+def test_basis_asal_empat_kemungkinan():
+    from app.services.kpi_service import _basis_asal
+
+    assert _basis_asal(0, 0) == "tidak_ada_data"
+    assert _basis_asal(3, 0) == "historical_seed"
+    assert _basis_asal(0, 3) == "live"
+    assert _basis_asal(2, 1) == "campuran"
+
+
+def test_metrik_operasional_menyebut_barisnya_historical_seed():
+    async def _skenario(db):
+        await _bersihkan(db)
+        await _rencana_dan_kiriman(db, None, porsi=1000, terkirim=1000)
+        await db.commit()
+        try:
+            prov = (await _kpi(db))["Meal Continuity Rate"]["provenance"]
+            assert prov["data_basis"] == "historical_seed", prov.get("data_basis")
+            kl = prov["classification"]
+            # menu_plans + delivery_events yang baru dibuat = dua baris seed.
+            assert kl["historical_seed"] == 2, kl
+            assert kl["live"] == 0, kl
+        finally:
+            await _bersihkan(db)
+
+    _jalankan(_skenario)
+
+
+def test_metrik_sesi_demo_tidak_disebut_live_maupun_seed():
+    async def _skenario(db):
+        await _bersihkan(db)
+        sesi = await _sesi_demo(db, dibuat="2031-06-01")
+        await _rencana_dan_kiriman(db, sesi, porsi=800, terkirim=800)
+        await db.commit()
+        try:
+            prov = (
+                await _kpi(db, include_demo=True, demo_session_id=sesi)
+            )["Meal Continuity Rate"]["provenance"]
+            assert prov["data_basis"] == "sesi_demo", prov.get("data_basis")
+            assert "classification" not in prov or prov["classification"].get(
+                "historical_seed"
+            ) in (0, None)
+        finally:
+            await _bersihkan(db)
+
+    _jalankan(_skenario)
+
+
+def test_klasifikasi_menghitung_baris_bukan_metrik():
+    """`classification` menghitung baris sumber; `sample_count` menghitung unit
+    analisis. Dua angka berbeda tidak boleh disamakan: pembaca perlu tahu berapa
+    baris historis yang menyusun angka, bukan hanya berapa sampel yang dinilai."""
+
+    async def _skenario(db):
+        await _bersihkan(db)
+        await _rencana_dan_kiriman(db, None, porsi=1000, terkirim=900)
+        await _rencana_dan_kiriman(
+            db, None, porsi=1000, terkirim=950, tanggal=TANGGAL_KEDUA
+        )
+        await db.commit()
+        try:
+            m = (await _kpi(db))["Meal Continuity Rate"]
+            prov = m["provenance"]
+            assert prov["classification"]["historical_seed"] == 4, prov["classification"]
+            assert prov["sample_count"] >= 2, prov["sample_count"]
+        finally:
+            await _bersihkan(db)
+
+    _jalankan(_skenario)

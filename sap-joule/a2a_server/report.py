@@ -577,6 +577,35 @@ def _periode_kpi(envelope: Mapping[str, Any]) -> str | None:
     return f"Periode: {rentang} ({zona})."
 
 
+def _waktu_acuan(envelope: Mapping[str, Any] | None) -> str | None:
+    """`Waktu acuan dataset simulasi: 8 Okt 2026 19:00 WIB (mode replay).`
+
+    Fase 10 MG. Angka sesi demo dievaluasi pada jangkar sesi itu — bukan pada
+    "hari ini" jam dinding. Tanpa kalimat ini, pembaca Joule tidak bisa tahu
+    bahwa "hari ini" pada tabel berarti 8 Okt 2026.
+
+    Sesi yang tidak menyebut jangkar (baris lama/pra-Fase 2) DILEWATI, bukan
+    diberi tanggal karangan.
+    """
+    sesi = (envelope or {}).get("demo_session")
+    if not isinstance(sesi, Mapping):
+        return None
+    jangkar = str(sesi.get("evaluation_anchor") or "").strip()
+    if not jangkar:
+        return None
+    try:
+        saat = _dt.datetime.fromisoformat(jangkar.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if saat.tzinfo is not None:
+        saat = saat.astimezone(WIB)
+    mode = str(sesi.get("mode") or "").strip().lower()
+    tanggal = f"{saat.day} {BULAN[saat.month - 1]} {saat.year} {saat:%H:%M} WIB"
+    if mode:
+        return f"Waktu acuan dataset simulasi: {tanggal} (mode {mode})."
+    return f"Waktu acuan dataset simulasi: {tanggal}."
+
+
 def _estimasi_teks(metric: Mapping[str, Any]) -> str | None:
     """Anotasi proyeksi untuk satu metrik — selalu berawalan `estimasi`."""
     est = metric.get("estimate")
@@ -586,6 +615,42 @@ def _estimasi_teks(metric: Mapping[str, Any]) -> str | None:
     if state != "available" or est.get("value") is None:
         return None
     return f"estimasi {format_metric(est.get('value'), est.get('unit'))}"
+
+
+def _asal_baris_kpi(metrics: Sequence[Mapping[str, Any]]) -> str | None:
+    """Kalimat asal baris: seed historis bukan catatan lapangan hari ini.
+
+    Spesifikasi Fase 8 baris 23: baris lama diklasifikasikan `historical_seed`
+    dan tidak boleh terbaca sebagai fakta operasional baru. Tanpa kalimat ini
+    laporan menyebut "data operasional" untuk angka yang seluruhnya tersusun
+    dari baris seed.
+    """
+    basis = set()
+    seed = 0
+    for m in metrics:
+        prov = m.get("provenance") or {}
+        if not isinstance(prov, Mapping):
+            continue
+        b = str(prov.get("data_basis") or "").strip()
+        if b:
+            basis.add(b)
+        kl = prov.get("classification") or {}
+        if isinstance(kl, Mapping):
+            try:
+                seed += int(kl.get("historical_seed") or 0)
+            except (TypeError, ValueError):
+                pass
+    if "campuran" in basis:
+        return (
+            f"Sebagian angka berasal dari data historis (historical_seed: {seed} baris "
+            "sumber), bukan catatan lapangan hari ini."
+        )
+    if "historical_seed" in basis:
+        return (
+            f"Seluruh angka dihitung dari data historis (historical_seed: {seed} baris "
+            "sumber) — bukan catatan lapangan hari ini."
+        )
+    return None
 
 
 def kpi_report(envelope: Mapping[str, Any] | None, *, note: str | None = None) -> str:
@@ -621,10 +686,13 @@ def kpi_report(envelope: Mapping[str, Any] | None, *, note: str | None = None) -
             belum += 1
 
     mode = str((envelope or {}).get("data_mode") or "operational").strip().lower()
+    asal = _asal_baris_kpi(metrics)
     catatan = _footnote(
         [
             _periode_kpi(envelope or {}),
             MODE_SOURCE_SENTENCE.get(mode, MODE_SOURCE_SENTENCE["operational"]),
+            _waktu_acuan(envelope),
+            asal,
             (
                 "Angka berlabel estimasi adalah proyeksi model, bukan kejadian tercatat."
                 if ada_estimasi

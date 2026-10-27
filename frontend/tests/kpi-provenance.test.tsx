@@ -26,6 +26,7 @@ import {
   baselineText,
   estimateLine,
   evidenceLabel,
+  klasifikasiAsalOf,
   scopeLabel,
 } from "../lib/kpi-provenance";
 
@@ -440,5 +441,72 @@ describe("kunci cache KPI memisahkan sesi demo", () => {
     expect(queryKeys.kpiLive("loc", "today", "operational", "sesi-a")).toEqual(
       queryKeys.kpiLive("loc", "today", "operational", null)
     );
+  });
+});
+
+/* --------------------------------------- asal baris (spesifikasi baris 23)
+ *
+ * Angka operasional di lingkungan demo tersusun 100% dari baris seed historis.
+ * Kalau asal barisnya tidak dinyatakan, kartu terbaca seolah catatan lapangan
+ * hari ini — kelas klaim yang justru dilarang fase ini. Labelnya harus terlihat
+ * tanpa membuka detail, karena ia mengubah cara angka dibaca.
+ */
+const METRIK_HISTORIS = {
+  name: "Meal Continuity Rate",
+  unit: "percent",
+  state: "available",
+  value: "99.97",
+  reason: null,
+  sample_count: 70,
+  coverage: "1.00",
+  previous_value: null,
+  trend: null,
+  provenance: {
+    ...PROV_LENGKAP,
+    evidence_kind: "derived",
+    data_basis: "historical_seed",
+    classification: { historical_seed: 70, live: 0 },
+  },
+};
+
+const METRIK_LAPANGAN = {
+  ...METRIK_HISTORIS,
+  name: "Procurement Price Deviation",
+  provenance: {
+    ...PROV_LENGKAP,
+    evidence_kind: "derived",
+    data_basis: "live",
+    classification: { historical_seed: 0, live: 9 },
+  },
+};
+
+describe("asal baris pada kartu KPI", () => {
+  it("menerjemahkan basis historical_seed menjadi kalimat dengan jumlah baris", () => {
+    const asal = klasifikasiAsalOf(METRIK_HISTORIS);
+    expect(asal?.basis).toBe("historical_seed");
+    expect(asal?.historicalSeed).toBe(70);
+    expect(asal?.text).toContain("70");
+    expect(asal?.text.toLowerCase()).toContain("bukan catatan lapangan");
+  });
+
+  it("kartu menyatakan asal baris historis tanpa membuka detail", () => {
+    const html = renderToStaticMarkup(
+      <KPIDashboard
+        kpi={{ ...envelope("operational"), metrics: [METRIK_HISTORIS] }}
+        scope="operational"
+      />
+    );
+    expect(html).toContain('data-testid="kpi-basis"');
+    expect(html).toContain("historical_seed");
+  });
+
+  it("kartu berisi catatan lapangan tidak diberi label historis", () => {
+    const html = renderToStaticMarkup(
+      <KPIDashboard
+        kpi={{ ...envelope("operational"), metrics: [METRIK_LAPANGAN] }}
+        scope="operational"
+      />
+    );
+    expect(html).not.toContain('data-testid="kpi-basis"');
   });
 });

@@ -28,6 +28,7 @@ import {
   estimateOf,
   factLine,
   KPI_SCOPES,
+  klasifikasiAsalOf,
   provenanceLines,
   SCOPE_EXPLANATION,
   scopeLabel,
@@ -333,6 +334,7 @@ export default function KPIDashboard({
           const bullet = bulletOf(m);
           const arah = bullet ? directionLabel(bullet.direction) : null;
           const prov = provenanceLines(m);
+          const asal = klasifikasiAsalOf(m);
           const est = estimateOf(m);
           const estText = estimateLine(m);
           const factText = factLine(m);
@@ -404,6 +406,15 @@ export default function KPIDashboard({
                       {prov.find((l) => l.key === "evidence")?.value ?? "—"}
                     </strong>
                   </p>
+                  {/* Asal baris (Fase 8, spesifikasi baris 23): angka yang
+                      seluruhnya dari seed historis tidak boleh tampak sebagai
+                      catatan lapangan baru. Ditampilkan terbuka, bukan di balik
+                      satu klik, karena ini mengubah cara angka harus dibaca. */}
+                  {asal && (asal.basis === "historical_seed" || asal.basis === "campuran") ? (
+                    <p className="kpi-meta kpi-basis-note" data-testid="kpi-basis">
+                      Basis data: {asal.text}
+                    </p>
+                  ) : null}
                   <details className="kpi-prov-detail">
                     <summary>Asal data, periode, dan metode</summary>
                     <dl>

@@ -64,9 +64,11 @@ METRIC_NAMES = (
     "Evidence Completeness",
 )
 
-#: Versi metode agregasi. Naikkan bila rumus/definisi metrik berubah, supaya
-#: angka lama di dokumen/laporan bisa dibedakan dari angka baru.
-METHOD_VERSION = "kpi-2026.10.27"
+#: Versi metode agregasi. Naikkan bila rumus/definisi metrik berubah, ATAU bila
+#: shape provenance berubah sehingga angka lama tidak bisa dibandingkan langsung
+#: dengan angka baru. 28 Okt 2026: provenance menambah `data_basis` +
+#: `classification` (asal baris historical_seed), jadi versinya dinaikkan.
+METHOD_VERSION = "kpi-2026.10.28"
 
 #: Kelas bukti yang boleh muncul pada sebuah nilai.
 EVIDENCE_KINDS = ("recorded_fact", "derived", "simulated_estimate")
@@ -347,6 +349,117 @@ async def _estimasi_susut(
     coverage = (kg_terukur / kg_total) if kg_total > 0 else None
     return {"susut_kg": susut, "kg_terukur": kg_terukur, "kg_total": kg_total,
             "sample_count": n, "coverage": coverage}
+
+
+#: Tabel fakta + kolom waktu yang menyusun tiap metrik. Dipakai untuk
+#: mengklasifikasi ASAL baris (spesifikasi Fase 8 baris 23): baris hasil seed
+#: historis tidak boleh terbaca sebagai fakta operasional baru.
+_ASAL_PER_METRIK: dict[str, tuple[tuple[str, str], ...]] = {
+    "Meal Continuity Rate": (("menu_plans", "plan_date"), ("delivery_events", "delivered_at")),
+    "Avoidable Food Loss": (("disposal_events", "disposed_at"),),
+    "Regional Imbalance Resolution Rate": (("decisions", "created_at"),),
+    "Safe Delivered Cost": (
+        ("decisions", "created_at"),
+        ("sap_mock_purchase_orders", "created_at"),
+    ),
+    "Procurement Price Deviation": (("price_signals", "recorded_at"),),
+    "Decision Time": (("decisions", "created_at"),),
+    "Evidence Completeness": (("decisions", "created_at"),),
+}
+
+#: Tabel yang punya kolom `location_id` sendiri. Filter lokasi hanya berlaku di
+#: tabel ini; memaksakannya ke tabel lain akan error, bukan lebih teliti.
+_TABEL_LOKASI = frozenset({"menu_plans", "disposal_events", "price_signals"})
+
+
+def _basis_asal(seed: int, live: int) -> str:
+    """Basis asal baris sebuah angka — bukan tingkat bukti, tapi ASAL barisnya."""
+    if seed and live:
+        return "campuran"
+    if seed:
+        return "historical_seed"
+    if live:
+        return "live"
+    return "tidak_ada_data"
+
+
+async def _hitung_asal(
+    db,
+    tabel: str,
+    kolom_waktu: str,
+    *,
+    start: datetime,
+    end: datetime,
+    location_id,
+    demo_session_id=None,
+) -> dict[str, int]:
+    """Hitung baris per `origin` pada tabel sumber, di jendela yang sama.
+
+    Operasional (`demo_session_id=None`) menyaring `demo_session_id IS NULL`
+    seperti query metrik; cakupan demo menyaring ke satu sesi. Yang dihitung
+    adalah BARIS SUMBER, jadi angkanya lebih besar dari `sample_count` metrik
+    yang menghitung unit analisis (mis. per lokasi-hari).
+    """
+    kondisi = [f"{kolom_waktu} >= :start", f"{kolom_waktu} < :end"]
+    params: dict = {}
+    if kolom_waktu.endswith("_date"):
+        # `plan_date` bertipe date; membandingkannya dengan timestamptz membuat
+        # batas jendela bergeser satu hari di zona waktu non-UTC.
+        params["start"] = start.date()
+        params["end"] = end.date()
+    else:
+        params["start"] = start
+        params["end"] = end
+    if demo_session_id is not None:
+        kondisi.append("demo_session_id = :sesi")
+        params["sesi"] = demo_session_id
+    else:
+        kondisi.append("demo_session_id IS NULL")
+    if location_id is not None and tabel in _TABEL_LOKASI:
+        kondisi.append("location_id = :loc")
+        params["loc"] = location_id
+    rows = (
+        await db.execute(
+            text(
+                f"SELECT origin, count(*) FROM {tabel} "
+                f"WHERE {' AND '.join(kondisi)} GROUP BY 1"
+            ),
+            params,
+        )
+    ).all()
+    return {str(r[0]): int(r[1]) for r in rows}
+
+
+async def _tempel_klasifikasi_asal(
+    db, metrics, *, start: datetime, end: datetime, location_id, demo_session_id=None
+) -> None:
+    """Tambahkan `data_basis` + `classification` ke provenance setiap metrik.
+
+    Tanpa ini seluruh angka operasional (yang di DB demo 100% berasal dari baris
+    `origin='seed'`) tampil seolah catatan lapangan hari ini. Klasifikasi tidak
+    mengubah nilai: ia menyatakan asalnya, supaya pembaca bisa menilai sendiri.
+    """
+    for m in metrics:
+        prov = m.get("provenance")
+        if not isinstance(prov, dict):
+            continue
+        if demo_session_id is not None:
+            prov["data_basis"] = "sesi_demo"
+            continue
+        seed = lain = 0
+        for tabel, kolom in _ASAL_PER_METRIK.get(m["name"], ()):
+            mix = await _hitung_asal(
+                db,
+                tabel,
+                kolom,
+                start=start,
+                end=end,
+                location_id=location_id,
+            )
+            seed += mix.get("seed", 0)
+            lain += sum(v for k, v in mix.items() if k != "seed")
+        prov["data_basis"] = _basis_asal(seed, lain)
+        prov["classification"] = {"historical_seed": seed, "live": lain}
 
 
 async def compute_kpis(
@@ -1018,4 +1131,12 @@ async def compute_kpis(
     metrics.append(ev_metric)
 
     assert [m["name"] for m in metrics] == list(METRIC_NAMES)
+    await _tempel_klasifikasi_asal(
+        db,
+        metrics,
+        start=start,
+        end=end,
+        location_id=location_id,
+        demo_session_id=demo_session_id if include_demo else None,
+    )
     return metrics

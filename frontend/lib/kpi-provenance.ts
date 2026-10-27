@@ -101,6 +101,46 @@ export function baselineText(baseline: KpiBaseline | null): string {
 
 export type ProvLine = { key: string; label: string; value: string };
 
+export type KpiAsal = {
+  basis: string;
+  historicalSeed: number;
+  live: number;
+  text: string;
+};
+
+/**
+ * Klasifikasi ASAL baris sebuah angka (spesifikasi Fase 8 baris 23).
+ *
+ * Di lingkungan demo seluruh baris operasional berasal dari seed historis. Tanpa
+ * label ini angka tampil seolah catatan lapangan hari ini — beda antara "bukti
+ * kejadian" dan "asal barisnya" yang mudah tertukar kalau hanya ada satu label.
+ */
+export function klasifikasiAsalOf(metric: any): KpiAsal | null {
+  const p = metric?.provenance;
+  const basis = p?.classification ? String(p.data_basis ?? "") : String(p?.data_basis ?? "");
+  if (!basis) return null;
+  const seed = Number(p?.classification?.historical_seed ?? 0) || 0;
+  const live = Number(p?.classification?.live ?? 0) || 0;
+  let text: string;
+  switch (basis) {
+    case "historical_seed":
+      text = `data historis (historical_seed): ${seed} baris — bukan catatan lapangan baru`;
+      break;
+    case "campuran":
+      text = `campuran: ${seed} baris historis + ${live} baris lapangan`;
+      break;
+    case "live":
+      text = `catatan lapangan: ${live} baris`;
+      break;
+    case "sesi_demo":
+      text = "baris milik sesi demo (simulasi)";
+      break;
+    default:
+      text = "belum ada baris sumber pada periode ini";
+  }
+  return { basis, historicalSeed: seed, live, text };
+}
+
 /**
  * Baris provenance untuk satu kartu. Urutannya tetap supaya dua kartu bisa
  * dibandingkan baris per baris. Nilai yang tidak dikirim server dilewati —
@@ -117,6 +157,7 @@ export function provenanceLines(metric: any): ProvLine[] {
   push("evidence", "Tingkat bukti", evidenceLabel(p.evidence_kind));
   push("source", "Sumber", p.source);
   push("period", "Basis periode", p.period?.basis);
+  push("asal", "Basis asal baris", klasifikasiAsalOf(metric)?.text);
   push("method", "Metode", p.method_version);
   push("baseline", "Pembanding", baselineText(baselineOf(metric)));
   push("definition", "Definisi", p.definition);

@@ -219,3 +219,45 @@ def test_render_skill_menolak_demo_tanpa_sesi_dengan_kalimat():
     teks = server.render_skill(klien, server.SKILL_KPI, payload={"scope": "demo"})
     assert "tidak bisa ditampilkan" in teks.lower()
     assert "demo_session_id" in teks
+
+
+# ------------------------------------------------- 4. asal baris (baris 23 fase)
+
+
+def test_laporan_menyebut_asal_baris_historical_seed():
+    """Angka dari baris seed tidak boleh disebut "catatan lapangan hari ini"."""
+    amplop = _kpi_envelope()
+    for m in amplop["metrics"]:
+        m["provenance"] = {
+            "evidence_kind": "recorded_fact",
+            "data_basis": "historical_seed",
+            "classification": {"historical_seed": 70, "live": 0},
+        }
+    teks = report.kpi_report(amplop)
+    assert "data historis" in teks.lower()
+    assert "historical_seed" in teks
+    assert "bukan catatan lapangan" in teks.lower()
+
+
+def test_laporan_campuran_menyebut_sebagian_bukan_seluruh():
+    amplop = _kpi_envelope()
+    amplop["metrics"][0]["provenance"] = {
+        "evidence_kind": "recorded_fact",
+        "data_basis": "campuran",
+        "classification": {"historical_seed": 3, "live": 4},
+    }
+    teks = report.kpi_report(amplop)
+    assert "sebagian angka" in teks.lower()
+    assert "historis" in teks.lower()
+
+
+def test_laporan_angka_lapangan_tidak_menambah_kalimat_historis():
+    amplop = _kpi_envelope()
+    for m in amplop["metrics"]:
+        m["provenance"] = {
+            "evidence_kind": "recorded_fact",
+            "data_basis": "live",
+            "classification": {"historical_seed": 0, "live": 9},
+        }
+    teks = report.kpi_report(amplop)
+    assert "historical_seed" not in teks
