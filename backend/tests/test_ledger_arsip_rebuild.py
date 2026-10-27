@@ -22,6 +22,7 @@ from pathlib import Path
 from sqlalchemy import text
 
 from app.services import ledger_service
+from tests.ledger_pemeliharaan import buka_pintu_async
 from tests.test_ledger_generasi import _jalankan, _kembalikan
 
 
@@ -81,6 +82,7 @@ def test_bump_lalu_append_menyisakan_arsip_dan_rantai_tetap_valid():
             # Blok baru menunjuk entitas yang tidak ada -> yatim, dan itu jujur.
             assert laporan["orphan_blocks"] >= 1
         finally:
+            await buka_pintu_async(db)
             await db.execute(
                 text("DELETE FROM ledger_blocks WHERE height > :h"), {"h": puncak}
             )

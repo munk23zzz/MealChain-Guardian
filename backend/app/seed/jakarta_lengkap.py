@@ -928,6 +928,12 @@ async def rebuild_ledger(session: AsyncSession, now: datetime) -> dict:
     """
     from app.services.ledger_service import append_block
 
+    # Fase 11 (migrasi 042): trigger `prevent_ledger_mutation` menolak DELETE
+    # pada `ledger_blocks`. Rebuild penuh di bawah ini hanya sah dijalankan oleh
+    # role migrasi (seed lokal dari DB kosong), jadi pintu pemeliharaan
+    # dinyatakan eksplisit di sini. Jalur reset demo TIDAK memakai fungsi ini —
+    # ia hanya menaikkan generasi (lihat `app/seed/demo_template.py`).
+    await session.execute(text("SET LOCAL mealchain.ledger_maintenance = 'on'"))
     await session.execute(text("DELETE FROM ledger_blocks"))
     await session.flush()
 

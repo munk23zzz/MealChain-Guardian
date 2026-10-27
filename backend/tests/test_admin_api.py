@@ -17,6 +17,7 @@ from app.api.auth import get_current_user
 from app.main import app
 from app.models import User
 from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
+from tests.ledger_pemeliharaan import buka_pintu
 
 DB_URL = DSN_SYNC
 
@@ -92,7 +93,9 @@ def skenario():
                 )
             # AUTH-01: PATCH admin kini menambah blok ledger. Tes ini menulis ke
             # DB bersama, jadi blok yang dibuatnya harus dipangkas dari ekor rantai
-            # (bukan dihapus di tengah — itu memutus prev_hash).
+            # (bukan dihapus di tengah — itu memutus prev_hash). Fase 11: lewat
+            # pintu pemeliharaan, karena trigger menolak DELETE biasa.
+            buka_pintu(conn)
             conn.execute(
                 text("DELETE FROM ledger_blocks WHERE height > :h"), {"h": tinggi_ledger}
             )

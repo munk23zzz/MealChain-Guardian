@@ -101,12 +101,22 @@ async def append_block(
     actor_id,
     payload: dict,
 ) -> dict:
-    """Tambah satu block ke ujung rantai (row-level lock anti race)."""
+    """Tambah satu block ke ujung rantai (kunci antrean anti race).
+
+    Kunci memakai `pg_advisory_xact_lock`, bukan `SELECT ... FOR UPDATE`:
+    `FOR UPDATE` menuntut hak `UPDATE` pada tabel, sehingga role aplikasi yang
+    hanya memegang `SELECT` + `INSERT` (Fase 11, migrasi 042) GAGAL menambah
+    blok dengan `permission denied for table ledger_blocks`. Advisory lock
+    memberi serialisasi yang sama tanpa hak tulis.
+    """
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext('ledger_blocks_append')::bigint)")
+    )
     last = (
         await db.execute(
             text(
                 "SELECT height, payload_hash FROM ledger_blocks "
-                "ORDER BY height DESC LIMIT 1 FOR UPDATE"
+                "ORDER BY height DESC LIMIT 1"
             )
         )
     ).fetchone()

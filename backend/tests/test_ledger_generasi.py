@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.services import ledger_service
 from tests.dsn import DSN_ASYNC
+from tests.ledger_pemeliharaan import buka_pintu_async
 
 
 def _jalankan(fn):
@@ -45,9 +46,13 @@ def _kembalikan(db, puncak: int, generasi: int):
 
     Memotong ujung rantai tidak merusak verifikasi (tinggi tetap berurutan dari
     1). Menghapus blok di tengah justru akan memutus `prev_hash`.
+
+    Fase 11 (migrasi 042): trigger `prevent_ledger_mutation` menolak DELETE pada
+    `ledger_blocks`, jadi pembersihan ini WAJIB lewat pintu pemeliharaan.
     """
 
     async def _kerja():
+        await buka_pintu_async(db)
         await db.execute(
             text("DELETE FROM ledger_blocks WHERE height > :p"), {"p": puncak}
         )
@@ -150,6 +155,7 @@ def test_rantai_dan_generasi_tetap_konsisten_setelah_bump():
             assert hasil["generation"] == awal + 1
             assert hasil["blocks"] >= 1
         finally:
+            await buka_pintu_async(db)
             await db.execute(
                 text("DELETE FROM ledger_blocks WHERE height > :h"), {"h": puncak}
             )

@@ -15,17 +15,21 @@ import bcrypt
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import DBAPIError
 
 from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
+from tests.ledger_pemeliharaan import buka_pintu  # Fase 11: pintu pemeliharaan
 
 DB = DSN_SYNC
 PW = "TestPass#2026"
 
 
-def _db_exec(stmt, params=None):
+def _db_exec(stmt, params=None, *, maintenance=False):
     eng = create_engine(DB)
     try:
         with eng.begin() as conn:
+            if maintenance:
+                buka_pintu(conn)
             res = conn.execute(text(stmt), params or {})
             try:
                 return res.fetchall()
@@ -51,8 +55,9 @@ def ledger_approver():
     )
     yield {"id": uid, "email": email, "password": PW}
     # cleanup: approvals + ledger block milik user ini, lalu user-nya.
+    # Fase 11: blok ledger hanya bisa dipangkas lewat pintu pemeliharaan.
     _db_exec(
-        "DELETE FROM ledger_blocks WHERE actor_id = :u", {"u": uid}
+        "DELETE FROM ledger_blocks WHERE actor_id = :u", {"u": uid}, maintenance=True
     )
     _db_exec(
         "DELETE FROM approvals WHERE approved_by = :u", {"u": uid}
@@ -89,18 +94,36 @@ def test_ledger_requires_auth():
 
 
 def test_ledger_verify_detects_tamper(auth_headers):
+    """Manipulasi hash hanya mungkin lewat pintu pemeliharaan; verify menangkapnya.
+
+    Fase 11 (migrasi 042): `UPDATE ledger_blocks` langsung DITOLAK database oleh
+    trigger `prevent_ledger_mutation`. Supaya deteksi manipulasi tetap terbukti
+    (bukan hanya "tidak bisa"), tes merusak hash lewat pintu pemeliharaan — role
+    migrasi yang menyatakan niatnya — lalu memastikan `/ledger/verify`
+    menyatakan rantai TIDAK valid.
+    """
     rows = _db_exec(
         "SELECT id, payload_hash FROM ledger_blocks ORDER BY height LIMIT 1"
     )
     if not rows:
         pytest.skip("ledger kosong (belum ada aksi approve/execute)")
     block_id, original = rows[0][0], rows[0][1]
+
+    # Jalur biasa: database menolak sebelum perubahan apa pun terjadi.
+    with pytest.raises(DBAPIError) as galat:
+        _db_exec(
+            "UPDATE ledger_blocks SET payload_hash = :p WHERE id = :i",
+            {"p": "f" * 64, "i": block_id},
+        )
+    assert "ledger_append_only" in str(galat.value)
+
     try:
+        _db_exec(
+            "UPDATE ledger_blocks SET payload_hash = :p WHERE id = :i",
+            {"p": "f" * 64, "i": block_id},
+            maintenance=True,
+        )
         with _client() as c:
-            _db_exec(
-                "UPDATE ledger_blocks SET payload_hash = :p WHERE id = :i",
-                {"p": "f" * 64, "i": block_id},
-            )
             r = c.get("/ledger/verify", headers=auth_headers)
             assert r.status_code == 200, r.text
             assert r.json()["valid"] is False
@@ -108,6 +131,7 @@ def test_ledger_verify_detects_tamper(auth_headers):
         _db_exec(
             "UPDATE ledger_blocks SET payload_hash = :p WHERE id = :i",
             {"p": original, "i": block_id},
+            maintenance=True,
         )
 
 

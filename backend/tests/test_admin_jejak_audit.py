@@ -29,6 +29,7 @@ from app.api.auth import get_current_user
 from app.main import app
 from app.models import User
 from tests.dsn import DSN_SYNC
+from tests.ledger_pemeliharaan import buka_pintu
 
 DB_URL = DSN_SYNC
 
@@ -96,6 +97,8 @@ def skenario():
                     },
                 )
             # Hapus hanya blok yang dibuat tes (ekor rantai) — rantai lama utuh.
+            # Fase 11: trigger menolak DELETE biasa; buka pintu pemeliharaan.
+            buka_pintu(conn)
             conn.execute(
                 text("DELETE FROM ledger_blocks WHERE height > :h"), {"h": tinggi_awal}
             )
