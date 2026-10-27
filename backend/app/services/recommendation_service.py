@@ -26,18 +26,27 @@ komponen biaya angkut TANPA mengubah kontrak di atas:
 
 import inspect
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import timezone
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import select
 
 from app.core.candidate import PriceInfo
 from app.core.candidate_generation import generate_candidates
+from app.core.commodity_policy import policy_for
 from app.core.config import settings
-from app.core.freshness import classify_freshness, compute_freshness_score
+from app.core.delivery_policy import (
+    TERLAMPAUI,
+    arrival_due_at,
+    jendela_kirim,
+    muat_terlampaui,
+)
+from app.core.freshness import evaluate_freshness
 from app.core.logistics import estimate_logistics
 from app.core.menu_hierarchy import cadangan_kontinuitas_kg, kebutuhan_menu_kg
+from app.core.policy_store import baca_semua_profil
 from app.core.price import price_deviation
+from app.core.proposal_explain import held_candidate
 from app.core.ranking import ScoredCandidate, rank_candidates
 from app.core.safe_delivered_cost import (
     SafeDeliveredCostInputs,
@@ -61,6 +70,7 @@ from app.models import (
     SupplierExclusion,
     SupplyRecord,
 )
+from app.services.decision_time import evaluation_clock
 
 __all__ = ["build_recommendations", "fetch_operational_facts"]
 
@@ -100,13 +110,21 @@ async def _latest_rows(db, model, as_of):
     return latest
 
 
-def _shelf_life_map():
-    return {
-        "telur": settings.shelf_life_days_telur,
-        "ayam": settings.shelf_life_days_ayam,
-        "wortel": settings.shelf_life_days_wortel,
-        "beras": settings.shelf_life_days_beras,
-    }
+def _suhu_lengkap(log: list, policy, as_of) -> bool:
+    """Bukti suhu memadai menurut profil komoditas (parser kanonik).
+
+    - Profil ambient tanpa kewajiban rantai dingin (`has_temperature_band`
+      False): tidak ada bukti suhu yang dituntut → `True`.
+    - Profil rantai dingin: cukup bila parser menilai `sufficient`; sampel yang
+      terlalu tua (`max_observation_age_minutes`) membuatnya TIDAK cukup, dan
+      itu memang yang ingin ditahan gerbang.
+    """
+    if getattr(policy, "has_temperature_band", True) is False:
+        return True
+    from app.core.temperature import parse_temperature_log
+
+    parsed = parse_temperature_log(list(log), policy=policy, evaluation_time=as_of)
+    return parsed.evidence_state == "sufficient"
 
 
 async def fetch_operational_facts(db, as_of):
@@ -117,12 +135,16 @@ async def fetch_operational_facts(db, as_of):
     NYATA (`suppliers.latitude/longitude` vs `locations.latitude/longitude`);
     pemasok tanpa koordinat sengaja TIDAK muncul di peta (bukan 0 km).
     """
-    if as_of is None:
-        as_of = datetime.now(timezone.utc)
+    # `as_of=None` = jam DATASET (`decision_time.evaluation_clock`), bukan jam
+    # dinding: dataset demo berjangkar kanon sehingga bukti suhunya sah.
+    as_of = evaluation_clock(as_of)
     loc_rows = (await db.execute(select(Location))).scalars().all()
     locs = {loc.id: loc.name for loc in loc_rows}
     coms = {c.id: c.name for c in (await db.execute(select(Commodity))).scalars()}
-    shelf = _shelf_life_map()
+    # Catatan Fase 3 MG: peta masa layak lokal (`_shelf_life_map()`) TIDAK lagi
+    # dipakai di sini — masa layak kini milik profil komoditas
+    # (`commodity_policies`), dibaca bersama rentang suhu dan batas usia sampel
+    # supaya ketiganya tidak bisa saling bertentangan.
 
     supply = {}
     for (loc_id, com_id), row in (
@@ -131,10 +153,15 @@ async def fetch_operational_facts(db, as_of):
         supply[(locs[loc_id], coms[com_id])] = Decimal(str(row.quantity_kg))
 
     demand = {}
+    needed_by = {}
     for (loc_id, com_id), row in (
         await _latest_rows(db, DemandRecord, as_of)
     ).items():
         demand[(locs[loc_id], coms[com_id])] = Decimal(str(row.quantity_kg))
+        # Fase 4 butir 6: `needed_by` = jam barang DIBUTUHKAN, dari baris yang
+        # sama dengan kuantitas permintaan. Tanpa ini tidak ada dasar untuk
+        # menyatakan sebuah kandidat masih bisa tiba tepat waktu.
+        needed_by[(locs[loc_id], coms[com_id])] = row.needed_by
 
     refs, quotes = {}, {}
     # Harga: latest per (location, commodity, SOURCE) — pihps dan quote
@@ -170,15 +197,21 @@ async def fetch_operational_facts(db, as_of):
     # Exclude them at the query boundary, including for explicit historical as_of;
     # never advance the clock or award freshness to a future harvest.
     batch_query = select(Batch).where(Batch.harvested_at <= as_of)
+    # Fase 3 MG: profil komoditas dibaca SEKALI dari `commodity_policies`
+    # (fallback bawaan kode), bukan `settings.safe_temp_min_c/max_c` untuk semua
+    # komoditas. Sebelumnya beras dinilai terhadap 0-8 °C sehingga log suhu ruang
+    # 27 °C dihitung excursion dan skornya turun tanpa alasan domain.
+    profil_komoditas = await baca_semua_profil(db)
     for b in (await db.execute(batch_query)).scalars():
         name = coms[b.commodity_id]
-        score = compute_freshness_score(
-            b.harvested_at,
-            as_of,
-            shelf[name],
-            b.temperature_log or [],
-            settings.safe_temp_min_c,
-            settings.safe_temp_max_c,
+        policy, _asal = profil_komoditas.get(
+            (name or "").strip().lower(), (policy_for(name), "bawaan")
+        )
+        hasil = evaluate_freshness(
+            harvested_at=b.harvested_at,
+            as_of=as_of,
+            policy=policy,
+            temperature_log=b.temperature_log or [],
         )
         batches.append(
             {
@@ -192,13 +225,38 @@ async def fetch_operational_facts(db, as_of):
                 "location": locs[b.location_id],
                 "commodity": name,
                 "quantity_kg": Decimal(str(b.quantity_kg)),
-                "freshness_score": _score(Decimal(str(score))),
-                "freshness_status": classify_freshness(float(score)),
+                "freshness_score": _score(Decimal(str(hasil.score))),
+                # Status memakai gerbang bukti: batch rantai dingin tanpa bukti
+                # suhu cukup tidak bisa `pass` hanya karena umurnya masih muda.
+                "freshness_status": hasil.status,
+                # Bukti suhu ikut dibawa supaya agregasi (dan Joule) bisa
+                # menyebut bukti TERLEMAH, bukan hanya skor rata-rata.
+                "temperature_observation": hasil.temperature_observation,
+                "evidence_state": hasil.evidence_state,
+                # Fase 6: gerbang kelayakan butuh jawaban "bukti suhu cukup?"
+                # TANPA membawa log penuh ke generator (JSONB bisa besar).
+                # Nilainya dari parser yang SAMA dengan gate dispatch, dan
+                # `evidence_state` freshness TIDAK dipakai di sini: untuk
+                # komoditas ambient (beras) state itu "insufficient" padahal
+                # tidak ada bukti suhu yang diwajibkan.
+                "temperature_evidence_complete": _suhu_lengkap(
+                    b.temperature_log or [], policy, as_of
+                ),
+                "observed_at": (
+                    hasil.observation.last_sample_at.isoformat()
+                    if hasil.observation.last_sample_at
+                    else None
+                ),
+                "policy_version": policy.policy_version,
                 "safety_status": b.safety_status,
                 # Karantina dibaca oleh generate_candidates: batch ditahan
                 # dikeluarkan dari kandidat, jadi kilogramnya tidak masuk
                 # available_kg walau stok fisik tetap tercatat.
                 "quarantine_status": b.quarantine_status,
+                # Fase 4 butir 6: masa layak dibawa supaya gerbang jendela bisa
+                # menolak barang yang kedaluwarsa DI JALAN (tiba > usable_until),
+                # bukan hanya yang sudah kedaluwarsa saat evaluasi.
+                "usable_until": b.usable_until,
             }
         )
 
@@ -217,6 +275,9 @@ async def fetch_operational_facts(db, as_of):
     menu_requirements, continuity_reserve = await _menu_hierarchy_maps(
         db, locs, as_of
     )
+    # Fase 6: gerbang bukti memakai profil komoditas yang SAMA dengan evaluasi
+    # freshness di atas — satu profil, bukan dua salinan aturan.
+    policies = {nama: pol for nama, (pol, _asal) in profil_komoditas.items()}
 
     return (
         supply,
@@ -226,7 +287,12 @@ async def fetch_operational_facts(db, as_of):
         batches,
         reliability,
         supplier_legs,
-        {"menu_requirements": menu_requirements, "continuity_reserve": continuity_reserve},
+        {
+            "menu_requirements": menu_requirements,
+            "continuity_reserve": continuity_reserve,
+            "policies": policies,
+            "needed_by": needed_by,
+        },
     )
 
 
@@ -329,6 +395,68 @@ def _resolve_supplier_leg(supplier_legs, supplier_id, source_location):
     return Decimal(str(km)), LEG_REFERENCE_COORDINATES
 
 
+def _ke_utc(nilai):
+    """Waktu dari DB bisa naif; bandingkan di zona yang sama, jangan menebak."""
+    if nilai is None:
+        return None
+    if nilai.tzinfo is None:
+        return nilai.replace(tzinfo=timezone.utc)
+    return nilai
+
+
+def _gerbang_jendela_kirim(
+    candidates, *, needed_by, umur_batch, logistics_by_pair, evaluation_time, held
+):
+    """Saring kandidat dengan jendela kirim; kembalikan (lolos, peta jendela).
+
+    `peta` menyimpan (JendelaKirim, waktu_tiba) per (sumber, tujuan, komoditas)
+    supaya payload bisa menjelaskan ALASAN lolos/gugur, bukan hanya hasilnya.
+    """
+    lolos, peta = [], {}
+    for cand in candidates:
+        kunci = (cand.destination_location, cand.commodity)
+        jendela = jendela_kirim(
+            needed_by=needed_by.get(kunci), evaluation_time=evaluation_time
+        )
+        est = logistics_by_pair.get((cand.source_location, cand.destination_location)) or {}
+        estimasi = float(est.get("estimated_time_min") or 0.0)
+        tiba = arrival_due_at(evaluation_time, estimasi) if est else None
+
+        alasan = []
+        if jendela.state == TERLAMPAUI or muat_terlampaui(
+            jendela, estimated_time_min=estimasi
+        ):
+            alasan.append("delivery_window_exceeded")
+        if tiba is not None:
+            habis = [
+                u
+                for u in (_ke_utc(umur_batch.get(str(b))) for b in cand.batch_ids)
+                if u is not None
+            ]
+            if habis and min(habis) < tiba:
+                alasan.append("expired_before_arrival")
+        if alasan:
+            held.append(
+                held_candidate(
+                    source_location=cand.source_location,
+                    destination_location=cand.destination_location,
+                    commodity=cand.commodity,
+                    supplier_id=cand.supplier_id,
+                    quantity_kg=cand.quantity_kg,
+                    status="held",
+                    reasons=alasan,
+                    batch_ids=cand.batch_ids,
+                )
+            )
+            continue
+        peta[(cand.source_location, cand.destination_location, cand.commodity)] = (
+            jendela,
+            tiba,
+        )
+        lolos.append(cand)
+    return lolos, peta
+
+
 async def build_recommendations(
     fetch_facts, as_of=None, logistics_by_pair=None, commodity: str | None = None
 ):
@@ -351,13 +479,14 @@ async def build_recommendations(
     hierarki = facts[7] if len(facts) > 7 else {}
     menu_requirements = hierarki.get("menu_requirements") or None
     continuity_reserve = hierarki.get("continuity_reserve") or None
+    policies = hierarki.get("policies") or None
     supply, demand, refs, quotes, batches = _filter_commodity(
         supply, demand, refs, quotes, batches, commodity
     )
-    if as_of is None:
-        as_of = datetime.now(timezone.utc)
+    as_of = evaluation_clock(as_of)
 
     prices_map = _build_prices_map(refs, quotes)
+    held: list = []
     if logistics_by_pair is None:
         logistics_by_pair = {}
         for s_loc, d_loc, _com in prices_map:
@@ -374,6 +503,23 @@ async def build_recommendations(
         prices=prices_map,
         menu_requirements=menu_requirements,
         continuity_reserve=continuity_reserve,
+        # Fase 6: gerbang bukti + laporan kandidat yang tertahan.
+        policies=policies,
+        evaluation_time=as_of,
+        held=held,
+    )
+
+    # Fase 4 butir 6: kandidat yang lolos gerbang bukti masih harus MUAT dalam
+    # jendela kirim. Dua pemeriksaan, keduanya memakai modul murni yang sama
+    # dengan tesnya: anggaran waktu vs estimasi angkut, dan masa layak batch vs
+    # waktu tiba. Kandidat yang gugur masuk `held`, tidak hilang diam-diam.
+    candidates, jendela_per_kunci = _gerbang_jendela_kirim(
+        candidates,
+        needed_by=hierarki.get("needed_by") or {},
+        umur_batch={str(b.get("batch_id")): b.get("usable_until") for b in batches},
+        logistics_by_pair=logistics_by_pair,
+        evaluation_time=as_of,
+        held=held,
     )
 
     scored = []
@@ -456,6 +602,19 @@ async def build_recommendations(
         payload = rc.to_dict()
         payload["rank"] = rc.rank
         payload["cost_breakdown"] = breakdowns[rc.candidate_id]
+        jendela, tiba = jendela_per_kunci.get(
+            (cand.source_location, cand.destination_location, cand.commodity),
+            (None, None),
+        )
+        if jendela is not None:
+            payload["delivery_window"] = {
+                "state": jendela.state,
+                "needed_by": (
+                    jendela.needed_by.isoformat() if jendela.needed_by else None
+                ),
+                "window_min": jendela.window_min,
+                "arrival_due_at": tiba.isoformat() if tiba else None,
+            }
         # Fase 7d: kaki pertama angkut dilaporkan eksplisit (auditable).
         leg_bd = breakdowns[rc.candidate_id]
         payload["supplier_leg"] = {
@@ -509,4 +668,8 @@ async def build_recommendations(
             "demand": {f"{k[0]}:{k[1]}": str(v) for k, v in demand.items()},
         },
         "recommendations": recommendations,
+        # Fase 6: kandidat yang TERTAHAN gerbang (on_hold/ditolak) dilaporkan
+        # terpisah. Mereka bukan usulan dan tidak punya `rank`; menghapusnya
+        # dari respons akan menyembunyikan pekerjaan verifikasi yang tersisa.
+        "held": [h.to_dict() for h in held],
     }

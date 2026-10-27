@@ -60,6 +60,7 @@ BATCHES = [
         "quantity_kg": Decimal("600"),
         "freshness_score": Decimal("0.90"),
         "freshness_status": "pass",
+        "usable_until": datetime(2099, 1, 1, tzinfo=timezone.utc),
         "safety_status": "pass",
     }
 ]

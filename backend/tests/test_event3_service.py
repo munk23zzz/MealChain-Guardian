@@ -158,6 +158,7 @@ def _facts_bogor_eligible(b: dict):
                     "quantity_kg": Decimal("499.99"),
                     "freshness_score": Decimal("0.900000"),
                     "freshness_status": "pass",
+                    "usable_until": datetime(2099, 1, 1, tzinfo=timezone.utc),
                     "safety_status": "fail",
                 },
                 {
@@ -167,6 +168,7 @@ def _facts_bogor_eligible(b: dict):
                     "quantity_kg": Decimal("501.01"),
                     "freshness_score": Decimal("0.900000"),
                     "freshness_status": "pass",
+                    "usable_until": datetime(2099, 1, 1, tzinfo=timezone.utc),
                     "safety_status": "pass",
                 },
             ],
@@ -195,6 +197,7 @@ def _facts_no_alternative(b: dict):
                     "quantity_kg": Decimal("499.99"),
                     "freshness_score": Decimal("0.900000"),
                     "freshness_status": "pass",
+                    "usable_until": datetime(2099, 1, 1, tzinfo=timezone.utc),
                     "safety_status": "fail",
                 },
             ],

@@ -6,6 +6,7 @@ safety/logistics hidup di dalam `candidate`, supplier_id di
 """
 
 import json
+from datetime import datetime, timezone
 
 import pytest
 
@@ -38,6 +39,7 @@ OUT = {
                 "commodity": "telur",
                 "quantity_kg": "600",
                 "freshness_status": "pass",
+                "usable_until": datetime(2099, 1, 1, tzinfo=timezone.utc),
                 "safety_status": "pass",
                 "logistics_feasible": True,
                 "logistics_distance_km": "120",
@@ -102,7 +104,9 @@ def test_context_missing_required_key_rejected():
 
 
 def test_context_candidate_missing_status_rejected():
-    broken = json.loads(json.dumps(OUT))
+    # `default=str`: fixture kini membawa `usable_until` (datetime) untuk
+    # gerbang bukti Fase 4; round-trip JSON tetap dilakukan apa adanya.
+    broken = json.loads(json.dumps(OUT, default=str))
     del broken["recommendations"][0]["candidate"]["freshness_status"]
     with pytest.raises(ValueError):
         build_supervisor_context(broken)
@@ -130,6 +134,7 @@ def test_context_integration_with_real_service_emission():
         "quantity_kg": Decimal("600"),
         "freshness_score": Decimal("0.90"),
         "freshness_status": "pass",
+        "usable_until": datetime(2099, 1, 1, tzinfo=timezone.utc),
         "safety_status": "pass",
     }]
     reliability = {

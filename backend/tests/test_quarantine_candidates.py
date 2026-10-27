@@ -5,6 +5,7 @@ kilogramnya TIDAK boleh dipakai menyusun rekomendasi, walaupun stok fisiknya
 masih tercatat (physical inventory != usable inventory).
 """
 
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from app.core.candidate import PriceInfo
@@ -21,6 +22,7 @@ def _batch(**overrides):
         "quantity_kg": Decimal("600"),
         "freshness_score": Decimal("0.92"),
         "freshness_status": "pass",
+        "usable_until": datetime(2099, 1, 1, tzinfo=timezone.utc),
         "safety_status": "needs_verification",
         "supplier_id": SUPPLIER,
         "batch_id": "b-1",

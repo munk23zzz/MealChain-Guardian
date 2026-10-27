@@ -215,6 +215,7 @@ BATCHES = [
         "quantity_kg": 600,
         "freshness_score": 0.90,
         "freshness_status": "pass",
+        "usable_until": datetime(2099, 1, 1, tzinfo=timezone.utc),
         "safety_status": "pass",
     },
     {
@@ -224,6 +225,7 @@ BATCHES = [
         "quantity_kg": 200,
         "freshness_score": 0.88,
         "freshness_status": "pass",
+        "usable_until": datetime(2099, 1, 1, tzinfo=timezone.utc),
         "safety_status": "pass",
     },
 ]

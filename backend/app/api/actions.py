@@ -344,33 +344,117 @@ async def _dispatch_bound_batches(
     return dikirim, ditahan
 
 
-async def _source_batches_still_safe(db: AsyncSession, decision: Decision) -> bool:
-    """Revalidasi safety saat eksekusi — SATU definisi dengan `can_execute`.
+async def _source_batches_block_reason(db: AsyncSession, decision: Decision) -> str | None:
+    """Alasan revalidasi safety saat eksekusi, atau `None` bila semua batch usable.
 
-    Versi pertama perbaikan (25 Okt 2026) menuntut SEMUA batch lokasi+komoditas
-    berstatus `pass`. Akibatnya satu batch `pending` yang tak terkait memblokir
-    eksekusi selamanya (seed kanonik: Jakarta/ayam `['fail','pass']`,
-    Surabaya/telur, Medan/ayam) dan `can_execute` di approval-summary — yang
-    hanya melihat `fail` — tidak lagi sejalan.
-
-    Sekarang aturan diambil dari `penghalang_sumber` dan himpunan batch dari
-    `batch_sumber_transfer`; keduanya dipakai juga oleh `supplier_eligibility`,
-    jadi paritas UI↔API bukan hasil kebetulan.
-
-    AUD-9B-29 (fail-closed): keputusan tanpa identitas sumber (lokasi atau
-    komoditas kosong) TIDAK lagi diloloskan diam-diam. Jenis yang memang tidak
-    punya batch sumber (`price_anomaly`, `review_only`) tidak pernah sampai ke
-    jalur ini — sudah dipagari lebih dulu di
-    `execute_action`/`revalidate_transfer` — sehingga satu-satunya akibat
-    perubahan ini adalah menutup jalur "tidak dapat dibuktikan = boleh".
+    Fase 4 MG: aturannya milik `app.core.batch_eligibility` (satu evaluator
+    untuk rekomendasi, approval, dispatch, penerimaan). `pending` dan
+    `needs_verification` kini DIBLOKIR sebagai `on_hold` — sebelumnya diloloskan,
+    dan batch yang belum terbukti aman bisa menjadi stok `usable`.
     """
-    if decision.source_location_id is None or decision.commodity_id is None:
-        return False
+    if decision.commodity_id is None:
+        return "commodity_missing"
 
-    from app.services.supplier_eligibility import batch_sumber_transfer
+    from app.services.supplier_eligibility import batch_sumber_transfer, lokasi_batch_acuan
+
+    # Pengadaan punya batch di SPPG TUJUAN (sisi asal NULL) — definisi lokasi
+    # diambil dari satu tempat (`lokasi_batch_acuan`), jadi jenis lain tetap
+    # fail-closed.
+    if lokasi_batch_acuan(decision) is None:
+        return "source_location_missing"
 
     batches = await batch_sumber_transfer(db, decision)
-    return penghalang_sumber(batches, sekarang=_now_utc()) is None
+    return penghalang_sumber(batches, sekarang=_now_utc())
+
+
+async def _source_batches_still_safe(db: AsyncSession, decision: Decision) -> bool:
+    """True bila SEMUA batch sumber usable (paritas dengan `can_execute`)."""
+    return await _source_batches_block_reason(db, decision) is None
+
+
+async def _sidik_bukti(db: AsyncSession, decision: Decision) -> dict | None:
+    """Sidik bukti keputusan SAAT INI (Fase 4 butir 4).
+
+    Approval manusia diberikan atas bukti tertentu: batch mana, pemasok mana,
+    kuantitas/biaya berapa, profil komoditas versi apa, dan status evaluasinya
+    apa. Sidik yang disimpan saat approve dibandingkan dengan sidik yang
+    dihitung ulang saat eksekusi, sehingga pergantian batch atau profil setelah
+    persetujuan tidak bisa lolos diam-diam.
+    """
+    from app.core.commodity_policy import policy_for
+    from app.core.decision_fingerprint import dari_decision, hitung_sidik
+    from app.core.policy_store import baca_semua_profil
+    from app.models import Commodity
+    from app.services.supplier_eligibility import batch_sumber_transfer
+
+    if decision.commodity_id is None:
+        return None
+    nama = (
+        await db.execute(
+            select(Commodity.name).where(Commodity.id == decision.commodity_id)
+        )
+    ).scalar_one_or_none()
+    profil, _asal = (await baca_semua_profil(db)).get(
+        (nama or "").strip().lower(), (policy_for(nama), "bawaan")
+    )
+    batches = await batch_sumber_transfer(db, decision)
+    alasan = await _source_batches_block_reason(db, decision)
+
+    sidik = dari_decision(
+        decision,
+        batch_ids=[getattr(b, "id", b) for b in batches],
+        supplier_id=str(decision.supplier_id) if decision.supplier_id else None,
+        policy_version=profil.policy_version,
+        evaluation_status="usable" if alasan is None else "on_hold",
+        blocking_reasons=() if alasan is None else (alasan,),
+    )
+    return {
+        # `jenis` membedakan sidik approval dari hasil inspeksi manusia biasa;
+        # tabel `decision_evidence` punya CHECK tertutup pada `evidence_type`
+        # (append-only, migrasi 042), jadi jenis dibedakan di dalam payload —
+        # bukan dengan menambah nilai CHECK yang butuh migrasi baru.
+        "jenis": "approval_binding",
+        "fingerprint": hitung_sidik(sidik),
+        "evaluation_status": sidik.evaluation_status,
+        "blocking_reasons": list(sidik.blocking_reasons),
+        "batch_ids": list(sidik.batch_ids),
+        "policy_version": sidik.policy_version,
+    }
+
+
+async def _sidik_berubah(db: AsyncSession, decision: Decision) -> str | None:
+    """Sebutkan apa yang berubah sejak approval, atau `None` bila masih sama.
+
+    Keputusan yang disetujui SEBELUM sidik ada (data demo/seed) tidak dihukum:
+    `None` berarti "tidak ada sidik tersimpan", dan gate safety tetap berjalan.
+    """
+    tersimpan = (
+        await db.execute(
+            select(DecisionEvidence)
+            .where(
+                DecisionEvidence.decision_id == decision.id,
+                DecisionEvidence.evidence_type == "human_inspection",
+                DecisionEvidence.payload["jenis"].astext == "approval_binding",
+            )
+            .order_by(DecisionEvidence.recorded_at.desc())
+        )
+    ).scalars().first()
+    if tersimpan is None:
+        return None
+    kini = await _sidik_bukti(db, decision)
+    if kini is None:
+        return "bukti keputusan tidak dapat dihitung ulang"
+    lama = tersimpan.payload or {}
+    if lama.get("fingerprint") == kini["fingerprint"]:
+        return None
+    aspek = []
+    if set(lama.get("batch_ids") or []) != set(kini["batch_ids"]):
+        aspek.append("batch sumber")
+    if lama.get("evaluation_status") != kini["evaluation_status"]:
+        aspek.append("status bukti")
+    if lama.get("policy_version") != kini["policy_version"]:
+        aspek.append("profil komoditas")
+    return ", ".join(aspek) or "isi keputusan"
 
 
 def _now_utc() -> datetime:
@@ -632,6 +716,20 @@ async def approve_action(
             comment=payload.comment,
         )
     )
+    if payload.approved:
+        # Fase 4 butir 4: simpan sidik bukti yang DISETUJUI. Tanpa ini,
+        # approval hanya mengikat "keputusan dengan id ini" — batch bisa
+        # berganti dan approval lama tetap dianggap sah.
+        sidik = await _sidik_bukti(db, decision)
+        if sidik is not None:
+            db.add(
+                DecisionEvidence(
+                    decision_id=decision.id,
+                    evidence_type="human_inspection",
+                    payload=sidik,
+                    is_consistent=True,
+                )
+            )
     if not payload.approved:
         decision.status = "rejected"
         decision.rejection_reason = payload.comment.strip()
@@ -800,13 +898,30 @@ async def execute_action(
     supplier_id = await revalidate_transfer(db, decision)
 
     # O-EVENT-2 revalidation: safety batch sumber dicek ULANG saat eksekusi
-    # — rekomendasi lama tidak aman selamanya (plan §22).
-    if not await _source_batches_still_safe(db, decision):
+    # — rekomendasi lama tidak aman selamanya (plan §22). Fase 4: alasan
+    # berasal dari evaluator yang sama dengan `can_execute`, jadi pesan 409
+    # menyebut SEBAB yang benar (`safety_pending` ≠ `safety_fail`).
+    from app.services.supplier_eligibility import PESAN_BLOKIR
+
+    alasan_safety = await _source_batches_block_reason(db, decision)
+    if alasan_safety is not None:
         raise HTTPException(
             status_code=409,
             detail=(
-                "safety revalidation gagal: batch sumber kini FAIL "
-                "(temperature excursion) — decision tidak dapat dieksekusi"
+                f"safety revalidation gagal: "
+                f"{PESAN_BLOKIR.get(alasan_safety, alasan_safety)}"
+                " — decision tidak dapat dieksekusi"
+            ),
+        )
+
+    # Fase 4 butir 4: approval mengikat BUKTI, bukan hanya id keputusan.
+    alasan_sidik = await _sidik_berubah(db, decision)
+    if alasan_sidik is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"bukti berubah sejak disetujui ({alasan_sidik}) — "
+                "ajukan ulang agar disetujui atas bukti yang sekarang"
             ),
         )
 
@@ -949,6 +1064,45 @@ class ReproposeRequest(BaseModel):
     ttl_minutes: int = Field(default=30, ge=1, le=1440)
 
 
+async def _salin_binding_induk(db: AsyncSession, parent: Decision, child: Decision) -> None:
+    """Salin bukti `allocation_binding` induk ke iterasi baru, lewat validator.
+
+    Penolakan manusia tidak mengubah batch/pemasok yang dipakai; tanpa salinan
+    ini iterasi pengadaan kehilangan identitas alokasinya (temuan F6 audit
+    27 Okt 2026). Bukti induk yang sudah tidak sah → tidak disalin, bukan
+    dipaksakan: `persist_binding` yang memutuskan, dan kegagalan validasinya
+    dibiarkan lewat supaya re-propose tidak mati hanya karena data lama busuk.
+    """
+    from app.services.supplier_eligibility import persist_binding
+
+    evidence = (
+        (
+            await db.execute(
+                select(DecisionEvidence).where(
+                    DecisionEvidence.decision_id == parent.id,
+                    DecisionEvidence.payload["allocation_binding"].astext == "true",
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if len(evidence) != 1:
+        return
+    payload = evidence[0].payload or {}
+    try:
+        await persist_binding(
+            db,
+            child,
+            {
+                "batch_ids": payload.get("batch_ids") or [],
+                "supplier_id": payload.get("supplier_id"),
+            },
+        )
+    except HTTPException:
+        return
+
+
 @router.post("/actions/repropose", status_code=201)
 async def repropose_action(
     payload: ReproposeRequest,
@@ -993,6 +1147,11 @@ async def repropose_action(
         quantity_kg=parent.quantity_kg,
         safe_delivered_cost=parent.safe_delivered_cost,
         cost_breakdown=parent.cost_breakdown,
+        # Pengadaan: pemasok adalah identitas keputusan (`supplier_id`), bukan
+        # turunan lokasi. Dulu kolom ini tidak disalin, sehingga iterasi baru
+        # dari pengadaan yang ditolak kehilangan pemasoknya dan eksekusinya
+        # ditolak `409 supplier_unknown` (audit 27 Okt 2026, F6).
+        supplier_id=parent.supplier_id,
         expires_at=datetime.now(timezone.utc) + timedelta(minutes=payload.ttl_minutes),
         iteration=(parent.iteration or 1) + 1,
         supersedes_id=parent.id,
@@ -1000,6 +1159,11 @@ async def repropose_action(
     )
     db.add(child)
     await db.flush()
+    # Binding induk disalin lewat validator yang sama dengan penulis produksi.
+    # Kalau bukti induk sudah tidak sah (batch hilang/berpindah), binding TIDAK
+    # ditulis: anak tetap bisa dieksekusi lewat jalur `supplier_id` + batch
+    # pemasok di SPPG tujuan, dan layar menampilkan alasan sebenarnya.
+    await _salin_binding_induk(db, parent, child)
     db.add(
         AgentTrace(
             decision_id=child.id,
@@ -1042,3 +1206,65 @@ async def _resolve_supplier_id(db: AsyncSession, target_location_id, commodity: 
         {"loc": target_location_id},
     )
     return result.scalar_one_or_none()
+
+
+# ---------------------------------------------------------------------------
+# Fase 6 butir 3 & 5 — penerimaan manusia atas bukti batch
+# ---------------------------------------------------------------------------
+
+
+class TemperatureSampleIn(BaseModel):
+    """Satu sampel suhu yang dibawa reviewer (bukan dihitung ulang di sini)."""
+
+    model_config = pydantic.ConfigDict(extra="forbid")
+
+    timestamp: datetime
+    temperature_c: float
+
+
+class ReviewRequest(BaseModel):
+    """Review manusia: alasan + bukti wajib; identitas & waktu TIDAK dari klien.
+
+    `extra="forbid"` bukan gaya penulisan: tanpa itu klien bisa mengirim
+    `reviewed_by`/`reviewed_at` dan payload akan tampak seperti review orang
+    lain pada waktu lain. Yang mencatat keduanya hanya server.
+    """
+
+    model_config = pydantic.ConfigDict(extra="forbid")
+
+    batch_id: uuid.UUID
+    #: Alasan wajib dan cukup panjang: "aman" bukan alasan yang dapat ditinjau.
+    reason: str = Field(min_length=10, max_length=2000)
+    #: Rujukan bukti (nomor berita acara, id inspeksi, dsb.) — minimal satu.
+    evidence_refs: list[str] = Field(min_length=1, max_length=20)
+    #: Sampel suhu yang ditambahkan reviewer; kosong = tidak ada bukti baru.
+    temperature_samples: list[TemperatureSampleIn] = Field(default_factory=list)
+
+    @pydantic.field_validator("evidence_refs")
+    @classmethod
+    def _refs_tidak_kosong(cls, nilai: list[str]) -> list[str]:
+        bersih = [str(v).strip() for v in nilai]
+        if any(not v for v in bersih):
+            raise ValueError("evidence_refs tidak boleh berisi teks kosong")
+        return bersih
+
+
+@router.post("/decisions/{decision_id}/review", status_code=200)
+async def review_decision(
+    decision_id: uuid.UUID,
+    payload: ReviewRequest,
+    user: User = Depends(require_roles(*VERIFIER_ROLES)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Tinjau bukti batch terikat; status hanya berubah bila bukti mencukupi.
+
+    Endpoint ini TIDAK menerima verdict. Ia menambahkan bukti (sampel suhu),
+    lalu `core.safety.evaluate_safety` menghitung ulang status terhadap profil
+    komoditas. `fail` tidak dapat dibalik, `pass` tidak perlu ditinjau, dan
+    review tanpa bukti baru menghasilkan `status_changed=false` beserta alasan.
+    """
+    from app.services.human_review import review_batch
+
+    decision = await _load_decision(db, decision_id)
+    _require_decision_scope(user, decision)
+    return await review_batch(db, decision, payload, user)

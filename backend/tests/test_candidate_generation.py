@@ -16,6 +16,7 @@ Kontrak (plan Task 3):
   dari caller (Task 9 yang baca DB), tanpa kalkulasi harga di generator.
 """
 
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -39,6 +40,7 @@ def _batch(**overrides):
         "quantity_kg": Decimal("600"),
         "freshness_score": Decimal("0.92"),
         "freshness_status": "pass",
+        "usable_until": datetime(2099, 1, 1, tzinfo=timezone.utc),
         "safety_status": "pass",
     }
     base.update(overrides)
