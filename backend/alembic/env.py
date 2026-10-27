@@ -25,8 +25,16 @@ from app.models import (  # noqa: F401
 
 config = context.config
 
-DB_URL = os.environ.get(
-    "DATABASE_URL", "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain"
+# DSN migrasi/backup (role pemilik). Dipakai lebih dulu daripada DATABASE_URL
+# supaya `alembic upgrade head` tetap berjalan sebagai role berwenang walau
+# aplikasi sudah memakai akun minimum (Fase 11 butir 3). Kosong = pakai
+# DATABASE_URL seperti sebelumnya.
+DB_URL = (
+    os.environ.get("MIGRATION_DATABASE_URL")
+    or os.environ.get(
+        "DATABASE_URL",
+        "postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain",
+    )
 )
 config.set_main_option("sqlalchemy.url", DB_URL)
 

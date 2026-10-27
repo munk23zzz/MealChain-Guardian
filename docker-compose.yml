@@ -44,7 +44,15 @@ services:
       # baru tidak perlu masuk ke berkas yang di-track git.
       - secrets/aws-app.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mealchain}:${POSTGRES_PASSWORD:-mealchain_local}@postgres:5432/${POSTGRES_DB:-mealchain}
+      # Koneksi aplikasi. Bila `APP_DATABASE_URL` diisi di `.env`, aplikasi
+      # memakai akun minimum (`mealchain_app_login`, Fase 11 butir 3) dan DSN
+      # pemilik hanya dipakai migrasi lewat `MIGRATION_DATABASE_URL`. Kosong =
+      # perilaku lama (role pemilik) supaya sesi lain tidak terkejut.
+      DATABASE_URL: ${APP_DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-mealchain}:${POSTGRES_PASSWORD:-mealchain_local}@postgres:5432/${POSTGRES_DB:-mealchain}}
+      # DSN khusus migrasi/backup (role pemilik). Dipakai `backend/alembic/env.py`
+      # lebih dulu daripada DATABASE_URL, sehingga `alembic upgrade head` tetap
+      # berjalan sebagai role berwenang walau aplikasi sudah memakai akun minimum.
+      MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:-}
       # `/` agar `import agent` menemukan mount ./agent:/agent (DEP-04). Aplikasi
       # sendiri tetap diimpor dari /app (cwd), jadi urutannya tidak mengubah apa pun.
       PYTHONPATH: /app:/
