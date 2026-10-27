@@ -13,6 +13,8 @@ data, satu set tes.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +23,7 @@ from app.api.auth import MUTATING_ROLES, get_current_user, require_roles
 from app.api.dependencies import get_db
 from app.core.config import settings
 from app.models import User
+from app.services import decision_time
 from app.services import demo_session as sesi
 
 router = APIRouter()
@@ -51,6 +54,20 @@ class MulaiRequest(BaseModel):
         le=1440,
         description="Durasi sesi dalam menit; kosong = nilai bawaan server.",
     )
+    #: Fase 10 MG: dua tombol Demo Control mengirim mode EKSPLISIT. `Literal`
+    #: dipakai supaya nilai asing ditolak 422 oleh kontrak request — bukan
+    #: diabaikan lalu jatuh ke mode bawaan tanpa ada yang tahu.
+    mode: Literal["replay", "realtime"] | None = Field(
+        default=None,
+        description="Mode dataset: `replay` (jangkar kanon) atau `realtime` (waktu sesi).",
+    )
+    #: Hanya tombol "Muat Demo …" yang boleh MENGGANTI sesi bermode lain.
+    #: Tanpa ini, tombol lama ("Siapkan data demo") yang mengirim
+    #: `mode=replay` akan diam-diam menutup sesi realtime yang sedang berjalan.
+    replace: bool = Field(
+        default=False,
+        description="Tutup sesi berjalan dan buka sesi baru dengan mode yang diminta.",
+    )
 
 
 class PerpanjangRequest(BaseModel):
@@ -62,9 +79,38 @@ async def status_sesi(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Status sesi + hitungan mundur. Aman dipanggil berkali-kali (poling UI)."""
+    """Status sesi + hitungan mundur. Aman dipanggil berkali-kali (poling UI).
+
+    Sejak Fase 7 MG payload juga membawa `cases`: jumlah KASUS demo yang
+    dimiliki sesi ini, dibaca dari DB (bukan dari ingatan klien). Panel Demo
+    Control perlu menyebut "berapa kasus termuat" sesudah halaman di-reload —
+    tanpa angka dari server, klien hanya bisa mengarang atau kosong.
+    """
     aktif = await sesi.aktif(db)
-    return sesi.status_payload(aktif)
+    payload = sesi.status_payload(aktif)
+    payload["cases"] = await jumlah_kasus_sesi(db, aktif) if aktif is not None else None
+    return payload
+
+
+async def jumlah_kasus_sesi(db: AsyncSession, sesi_row) -> int:
+    """Jumlah `demo_case` berbeda yang dimiliki satu sesi (bukan jumlah baris).
+
+    Satu kasus bisa punya beberapa baris keputusan (siklus penolakan), jadi
+    menghitung baris akan melebih-lebihkan "jumlah kasus" di layar.
+    """
+    from sqlalchemy import func, select
+
+    from app.models import Decision
+
+    hasil = (
+        await db.execute(
+            select(func.count(func.distinct(Decision.demo_case))).where(
+                Decision.demo_session_id == sesi_row.id,
+                Decision.demo_case.is_not(None),
+            )
+        )
+    ).scalar()
+    return int(hasil or 0)
 
 
 async def _semai_riwayat(hari: int) -> dict:
@@ -122,12 +168,31 @@ async def mulai_sesi(
 
     Idempoten terhadap klik ganda: kalau sesi masih berjalan, sesi itu yang
     dikembalikan (`created=false`) — data dan jam tidak di-reset diam-diam.
+
+    Fase 10 MG — dua tombol Demo Control:
+
+    - `mode` diminta eksplisit (`replay`/`realtime`); mode asing 422.
+    - `replace=true` = tombol "Muat Demo …": sesi bermode LAIN ditutup lalu
+      sesi baru dibangun dengan mode yang diminta.
+    - Tanpa `replace`, permintaan bermode lain TIDAK menutup apa pun; balasannya
+      membawa `conflict` (mode diminta vs mode berjalan) supaya panel bisa
+      mengatakan yang sebenarnya alih-alih mengganti pilihan operator.
     """
     berjalan = await sesi.aktif(db)
+    mode_diminta = decision_time.mode_sah(payload.mode) if payload and payload.mode else None
     if berjalan is not None:
-        return {**sesi.status_payload(berjalan), "created": False}
+        ganti = bool(payload and payload.replace)
+        if mode_diminta is None or mode_diminta == berjalan.mode or not ganti:
+            hasil = {**sesi.status_payload(berjalan), "created": False}
+            if mode_diminta is not None and mode_diminta != berjalan.mode:
+                hasil["conflict"] = {
+                    "requested_mode": mode_diminta,
+                    "active_mode": berjalan.mode,
+                }
+            return hasil
 
     durasi = payload.menit if payload else None
+    mode_baru = mode_diminta or "replay"
     # Kunci: penyemaian di bawah ini bisa puluhan detik; "Akhiri sesi" harus
     # menunggu, bukan berjalan bersamaan lalu meninggalkan baris sisa.
     async with sesi.kunci_sesi():
@@ -144,7 +209,7 @@ async def mulai_sesi(
         # created=false sehingga sistem tidak pulih tanpa "Akhiri sesi".
         try:
             baru, laporan = await sesi.mulai_dengan_template(
-                db, menit=durasi, created_by=user.id
+                db, menit=durasi, created_by=user.id, mode=mode_baru
             )
         except Exception as exc:  # noqa: BLE001 — dilaporkan, bukan ditelan
             await db.rollback()

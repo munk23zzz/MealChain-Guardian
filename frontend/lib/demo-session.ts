@@ -23,6 +23,12 @@ export type StatusSesiDemo = {
   mode?: "replay" | "realtime" | null;
   evaluation_anchor?: string | null;
   dataset_version?: string | null;
+  /**
+   * Fase 7 MG: jumlah KASUS demo milik sesi ini, dihitung server
+   * (`GET /demo/session`). `null`/`undefined` = belum dihitung atau sesi pra
+   * Fase 7 — panel tidak boleh menampilkan "0 kasus" untuk keadaan itu.
+   */
+  cases?: number | null;
   expires_at: string | null;
   anchor_now: string | null;
   server_now: string;
@@ -67,6 +73,8 @@ export type RingkasanSesi = {
   /** Jangkar evaluasi terformat, mis. `8 Okt 2026 12:00 UTC`. */
   anchor: string | null;
   datasetVersion: string | null;
+  /** Jumlah KASUS milik sesi (dari server); `null` = belum dihitung. */
+  kasus: number | null;
   /** true hanya bila ada sesi demo aktif: suhu dataset demo SIMULASI. */
   simulasi: boolean;
   /** Satu kalimat siap tampil; `null` bila tidak ada sesi aktif. */
@@ -89,20 +97,27 @@ export function ringkasSesi(sesi: StatusSesiDemo | null): RingkasanSesi {
       mode,
       anchor,
       datasetVersion: null,
+      kasus: null,
       simulasi: false,
       baris: null,
     };
   }
-  const bagian = [
-    `Dataset ${labelSesi(mode)}`,
-    anchor ? `jangkar ${anchor}` : "jangkar tidak tercatat",
-  ];
+  // Angka kasus hanya dari server: `null` berarti belum dihitung, dan baris
+  // ringkasan tidak menyebut jumlah sama sekali daripada menulis "0 kasus".
+  const kasus =
+    typeof sesi?.cases === "number" && Number.isFinite(sesi.cases)
+      ? sesi.cases
+      : null;
+  const bagian = [`Dataset ${labelSesi(mode)}`];
+  if (kasus !== null) bagian.push(`${kasus} kasus`);
+  bagian.push(anchor ? `jangkar ${anchor}` : "jangkar tidak tercatat");
   if (sesi?.dataset_version) bagian.push(`versi ${sesi.dataset_version}`);
   bagian.push("suhu simulasi");
   return {
     mode,
     anchor,
     datasetVersion: sesi?.dataset_version ?? null,
+    kasus,
     simulasi: true,
     baris: bagian.join(" · "),
   };

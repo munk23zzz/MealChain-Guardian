@@ -56,6 +56,7 @@ export default function OpsConsole({
   token,
   ownLocationName = null,
   asOf = null,
+  demoSessionId = null,
   onSubmitted,
   onDecisionCreated,
   snapshot: initialSnapshot = null,
@@ -68,6 +69,8 @@ export default function OpsConsole({
   ownLocationName?: string | null;
   /** Batas waktu snapshot peta; detail memakai instant yang sama. */
   asOf?: string | null;
+  /** Sesi demo yang sedang dipilih (Fase 10 MG). `null` = data operasional. */
+  demoSessionId?: string | null;
   token: string | null;
   onSubmitted?: () => void;
   /** Dipanggil setelah keputusan Event 1 dibuat — TANPA memindah tab, supaya
@@ -124,7 +127,9 @@ export default function OpsConsole({
     try {
       // Ruling S4-05 p10: pipeline difilter ke komoditas panel —
       // proposal mengikuti komoditas yang dianalisis (bukan rank-1 global).
-      const data = await runAnalysis(token, commodity);
+      // Fase 10 MG: sesi demo yang dipilih ikut dikirim, supaya balasan dan
+      // keputusan berikutnya tidak dicap "sesi aktif" yang berbeda.
+      const data = await runAnalysis(token, commodity, demoSessionId);
       setAnalysis(data);
     } catch (e: any) {
       setMsg(String(e.message ?? e));
@@ -141,7 +146,7 @@ export default function OpsConsole({
     setBusy("event1");
     setMsg(null);
     try {
-      const data = await runEvent1(commodity, location, token);
+      const data = await runEvent1(commodity, location, token, 30, demoSessionId);
       setEvent1(data);
       setMsg(
         `Event 1 penuh selesai — keputusan ${data.decision_id} masuk feed (menunggu persetujuan).`

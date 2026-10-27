@@ -26,13 +26,14 @@ freshness 0,90). Tidak ada auto-approve — loop manusia tetap wajib.
 """
 
 import uuid
+from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import issue_token_for_user, require_roles
@@ -48,6 +49,7 @@ from app.models import (
     Decision,
     DecisionEvidence,
     DemandRecord,
+    DemoSession,
     Location,
     PriceSignal,
     Supplier,
@@ -274,7 +276,13 @@ async def _bukti(
     )
 
 
-async def _ikat_sumber(db: AsyncSession, decision: Decision, sekarang: datetime) -> bool:
+async def _ikat_sumber(
+    db: AsyncSession,
+    decision: Decision,
+    sekarang: datetime,
+    *,
+    batch_ids: Sequence[uuid.UUID] | None = None,
+) -> bool:
     """Tulis bukti `allocation_binding` untuk satu kasus demo. True bila terikat.
 
     Kenapa perlu: `resolve_binding` sengaja TIDAK menebak pemasok ketika satu
@@ -284,11 +292,18 @@ async def _ikat_sumber(db: AsyncSession, decision: Decision, sekarang: datetime)
     dengan "pemasok tidak dikenal: keputusan lama perlu binding batch eksplisit"
     — kartu unggulan demo tidak bisa dieksekusi.
 
-    Aturan pemilihan (deterministik, bukan tebakan tersembunyi): batch di lokasi
-    acuan keputusan + komoditas yang sama, masih layak pakai (`usable_until` di
-    masa depan), kuantitas TERBESAR; seri dipecah oleh id terkecil. Bila tidak
-    ada batch layak, TIDAK ada binding — layar lalu menampilkan alasan sebenarnya
-    alih-alih pemasok karangan.
+    `batch_ids` (Fase 7 MG) dipakai kasus yang SUDAH TAHU batchnya sendiri —
+    generator menulis batch kasus itu beberapa baris sebelumnya. Tanpa ini
+    pemilihan "kuantitas terbesar" mengikat DUA kasus komoditas yang berbagi
+    lokasi+komoditas+pemasok ke batch yang SAMA: keputusan `on_hold` (380 kg,
+    bukti kurang) membaca batch 420 kg yang `pass`, lalu layar menyatakan aman
+    untuk kasus yang sengaja disiapkan sebagai verifikasi.
+
+    Aturan pemilihan bawaan (deterministik, bukan tebakan tersembunyi): batch di
+    lokasi acuan keputusan + komoditas yang sama, masih layak pakai
+    (`usable_until` di masa depan), kuantitas TERBESAR; seri dipecah oleh id
+    terkecil. Bila tidak ada batch layak, TIDAK ada binding — layar lalu
+    menampilkan alasan sebenarnya alih-alih pemasok karangan.
 
     Lokasi acuan mengikuti jenis keputusan (audit 27 Okt 2026):
 
@@ -301,6 +316,37 @@ async def _ikat_sumber(db: AsyncSession, decision: Decision, sekarang: datetime)
       ditolak `409 binding batch/supplier berubah`.
     - **jenis lain** (pemindahan antar-SPPG): batch di lokasi SUMBER.
     """
+    eksplisit = [uuid.UUID(str(b)) for b in (batch_ids or ())]
+    if eksplisit:
+        baris = (
+            (await db.execute(select(Batch).where(Batch.id.in_(eksplisit))))
+            .scalars()
+            .all()
+        )
+        urutan = {bid: posisi for posisi, bid in enumerate(eksplisit)}
+        terpilih = sorted(baris, key=lambda b: urutan[b.id])
+        pemasok = {b.supplier_id for b in terpilih}
+        if not terpilih or len(pemasok) != 1 or None in pemasok:
+            # Batch kasus tidak lengkap / pemasoknya campur: jangan mengarang
+            # binding. Guard execute akan menolak dengan alasan yang sebenarnya.
+            return False
+        db.add(
+            DecisionEvidence(
+                id=uuid.uuid5(decision.id, "bukti:allocation_binding"),
+                decision_id=decision.id,
+                evidence_type="human_inspection",
+                payload={
+                    "allocation_binding": True,
+                    "supplier_id": str(next(iter(pemasok))),
+                    "batch_ids": [str(b.id) for b in terpilih],
+                    "demo": True,
+                },
+                is_consistent=True,
+                recorded_at=sekarang,
+            )
+        )
+        return True
+
     if decision.decision_type == "supplier_procurement":
         if decision.supplier_id is None or decision.target_location_id is None:
             return False
@@ -396,13 +442,23 @@ def _decision(
     demo_session_id=None,
     decision_id=None,
     generated_at=None,
+    decision_type: str | None = None,
 ) -> Decision:
     baris = Decision(
         # rejection-loop-kuota = siklus penolakan pada PENGADAAN dari pemasok,
         # bukan pemindahan stok antar-SPPG. Versi lama memberinya tipe
         # `regional_balance`, sehingga kartunya berlabel "Penyeimbangan pasokan
         # regional" padahal baris pengirimnya menyebut nama pemasok.
-        decision_type=(
+        #
+        # Fase 7 MG: kasus yang punya `ScenarioCaseSpec.decision_type` memakai
+        # TIPE ITU. Sebelumnya tipe diturunkan dari NAMA kasus, sehingga tiga
+        # kasus komoditas (pengadaan dari pemasok, batch di SPPG TUJUAN) jatuh
+        # ke `price_anomaly`; lokasi acuan batch lalu dianggap lokasi SUMBER dan
+        # read model menolak binding batch kasus itu sendiri
+        # ("binding batch/supplier berubah"), sehingga status keamanannya dibaca
+        # dari batch lain.
+        decision_type=decision_type
+        or (
             "safety_disruption"
             if case in {"shortage-darurat", "gangguan-logistik"}
             else "supplier_procurement"
@@ -474,9 +530,10 @@ async def _seed_demo_cases(
 
     - semua keputusan yang lahir di sini (termasuk yang langsung `rejected`)
       membawa sesi itu, bukan sesi yang kebetulan aktif;
-    - `force=true` hanya menghapus ulang baris MILIK SESI ITU. Tanpa batas ini,
-      menyemai sesi kedua menghapus kasus sesi pertama (dua sesi saling
-      menimpa), dan reset sesi pertama menghapus data sesi kedua.
+    - `force=true` hanya menghapus ulang baris MILIK SESI ITU (dan baris kasus
+      tanpa pemilik / ber-`dataset_version` sama — lihat catatan di bawah).
+      Tanpa batas ini, menyemai sesi kedua menghapus kasus sesi pertama (dua
+      sesi saling menimpa), dan reset sesi pertama menghapus data sesi kedua.
       Tanpa `demo_session_id` (jalur lama/seeder template) perilaku lama
       dipertahankan: hapus ulang per kota.
 
@@ -512,14 +569,55 @@ async def _seed_demo_cases(
             target=target.name,
         )
 
-    filter_hapus = [
+    filter_lingkup = [
         Decision.demo_case.in_(DEMO_CASES + kasus_komoditas_keys),
         Decision.target_location_id == target.id,
     ]
-    if demo_session_id is not None:
-        filter_hapus.append(Decision.demo_session_id == demo_session_id)
+    if force and demo_session_id is not None:
+        # Fase 2 MG butir 6: `force=true` = RESET SESI AKTIF. Bukan hanya
+        # keputusan kasusnya — PO, kiriman, pasokan, dan fakta milik sesi ini
+        # ikut dihapus, sedangkan sesi lain tidak disentuh sama sekali.
+        # `demo_purge.purge_session` memakai satu kriteria di semua tabel
+        # ber-sesi: `demo_session_id = <sesi>` (bukan `origin='demo'`).
+        from app.services import demo_purge
+
+        await demo_purge.purge_session(db, demo_session_id)
+        await db.flush()
+    if demo_session_id is None:
+        # Jalur lama (template/`/demo/refresh`): hapus ulang per kota.
+        filter_hapus = list(filter_lingkup)
+        filter_sudah_ada = list(filter_lingkup)
+    else:
+        # Fase 2 MG: yang dihapus hanya baris MILIK SESI INI (dan kota ini).
+        # Fase 7 MG menambahkan IDENTITAS dataset: ID keputusan kini
+        # deterministik dari `(mode, dataset_version, kasus, kota)`, jadi
+        # menyemai ulang dataset yang SAMA harus menimpa barisnya, bukan
+        # menabrak `decisions_pkey`. Karena itu baris KASUS yang (a) milik sesi
+        # ini, (b) tidak punya pemilik (sisa jalur template/lama), atau
+        # (c) milik sesi lain ber-`dataset_version` sama ikut dihapus — (c)
+        # adalah dataset yang identik, bukan data sesi bermode lain. Sesi
+        # bermode/ber-anchor lain TIDAK disentuh, sehingga aturan "dua sesi
+        # tidak saling menimpa" tetap berlaku.
+        sesi_sama_dataset = select(DemoSession.id).where(
+            DemoSession.dataset_version == dataset_versi
+        )
+        milik_dataset = or_(
+            Decision.demo_session_id == demo_session_id,
+            Decision.demo_session_id.in_(sesi_sama_dataset),
+        )
+        filter_hapus = [
+            *filter_lingkup,
+            or_(milik_dataset, Decision.demo_session_id.is_(None)),
+        ]
+        # Gerbang "sudah ada": baris tanpa pemilik hanya dihitung untuk replay.
+        # Itu sisa jalur template yang memang ber-identitas kanon; untuk
+        # realtime, sisa sesi yang sudah dihapus (FK `ON DELETE SET NULL`)
+        # bukan alasan menjawab "kasus sudah ada" bagi anchor baru.
+        filter_sudah_ada = (
+            filter_hapus if mode_final == "replay" else [*filter_lingkup, milik_dataset]
+        )
     existing = (
-        await db.execute(select(Decision).where(*filter_hapus))
+        await db.execute(select(Decision).where(*filter_sudah_ada))
     ).scalars().all()
     if existing and not force:
         return {
@@ -528,6 +626,11 @@ async def _seed_demo_cases(
             "target": target.name,
             "message": "Kasus demo sudah ada — pakai force=true untuk reset.",
         }
+    if force:
+        baris_lama = (
+            await db.execute(select(Decision).where(*filter_hapus))
+        ).scalars().all()
+        existing = baris_lama
     if force and existing:
         # Hanya baris demo MILIK SESI INI (dan kota ini) yang dihapus.
         ids = [d.id for d in existing]
@@ -687,12 +790,15 @@ async def _seed_demo_cases(
 
         Satu tempat untuk tiga hal yang tidak boleh terlewat di satu pun dari
         tujuh keputusan kasus: pemilik baris (sesi), ID deterministik dari
-        identitas kasus, dan `generated_at` sebagai offset jangkar.
+        identitas kasus, dan `generated_at` sebagai offset jangkar. Tipe
+        keputusan ikut dari spec (Fase 7 MG): tiga kasus komoditas adalah
+        pengadaan dari pemasok, bukan anomali harga.
         """
         kunci, iterasi = args[0], args[1]
         spec = _spec(kunci)
         identitas = _identitas(spec)
         kwargs.setdefault("demo_session_id", demo_session_id)
+        kwargs.setdefault("decision_type", spec.decision_type)
         kwargs.setdefault(
             "decision_id", scenario.id_decision(identitas, iteration=iterasi)
         )
@@ -940,7 +1046,16 @@ async def _seed_demo_cases(
     # bukan dibangun dengan angka karangan. Alasannya dikembalikan ke pemanggil
     # supaya panel bisa menampilkannya.
     info_komoditas: list[dict] = []
-    acuan_evaluasi = acuan or sekarang
+    # Waktu acuan EVALUASI. Replay selalu berjangkar kanon — termasuk saat
+    # pemanggil tidak menyebut anchor (jalur `/demo/refresh`, template, seed
+    # tanpa sesi): ID keputusan deterministik replay diturunkan dari identitas
+    # kanon, jadi timestamp-nya pun harus dari jangkar itu. Kalau tidak, dua
+    # pembuatan replay menghasilkan ID sama tetapi `recorded_at` berbeda →
+    # INSERT menabrak `demand_records_pkey` (terukur 27 Okt 2026) dan replay
+    # tidak lagi reproducible (Fase 7 butir 1).
+    acuan_evaluasi = acuan or (
+        decision_time.REPLAY_ANCHOR if mode_final == "replay" else sekarang
+    )
     for spec in kasus_komoditas():
         ringkas_kasus = {"case": spec.key, "outcome": spec.intended_outcome}
         cid = await _commodity_id(db, spec.commodity)
@@ -1107,7 +1222,17 @@ async def _seed_demo_cases(
         # Binding memakai waktu EVALUASI: batch replay memang berjangkar, dan
         # menilai "masih layak" dengan jam dinding akan menolak data replay
         # hanya karena dibangun beberapa hari lalu.
-        await _ikat_sumber(db, keputusan, acuan_evaluasi)
+        #
+        # Fase 7 MG: batch kasus disebut EKSPLISIT. Dua kasus wortel berbagi
+        # kota+komoditas+pemasok, jadi pemilihan "kuantitas terbesar" mengikat
+        # keduanya ke batch 420 kg yang `pass` — keputusan `on_hold` lalu tampil
+        # aman (terukur 27 Okt 2026: worst_status `pass` untuk kasus bukti kurang).
+        await _ikat_sumber(
+            db,
+            keputusan,
+            acuan_evaluasi,
+            batch_ids=[scenario.id_batch(identitas, batch) for batch in spec.batches],
+        )
         await _jejak(
             keputusan.id,
             "DETECT",
@@ -1195,12 +1320,22 @@ async def _seed_demo_cases(
                 }
 
     await db.commit()
+    kasus_dibangun = len(DEMO_CASES) + sum(
+        1 for info in info_komoditas if not info.get("skipped")
+    )
     return {
         "seeded": True,
-        "cases": len(DEMO_CASES),
+        # Jumlah KASUS yang benar-benar dibangun (4 cerita + kasus komoditas yang
+        # lolos policy). Dulu angka ini tetap 4 walau tiga kasus komoditas ikut
+        # ditulis, sehingga panel dan Joule menyebut jumlah yang lebih kecil
+        # daripada isi datasetnya.
+        "cases": kasus_dibangun,
         "decisions": len(created),
         "target": target.name,
-        "message": f"4 kasus demo {target.name} siap — v3 kuota & v2 logistik siap approve.",
+        "message": (
+            f"{kasus_dibangun} kasus demo {target.name} siap — "
+            "v3 kuota & v2 logistik siap approve."
+        ),
         # Fase 7 MG: apa yang dibangun, dalam mode apa, dan pada waktu acuan mana.
         # Panel memakai ini untuk menampilkan mode/jangkar/jumlah kasus; Joule
         # memakainya untuk menyebut waktu acuan tanpa menebak.
@@ -1210,9 +1345,7 @@ async def _seed_demo_cases(
         "scenario_version": scenario.SCENARIO_VERSION,
         "temperature_source": scenario.MODE_SIMULASI[mode_final],
         "commodity_cases": info_komoditas,
-        "cases_total": len(DEMO_CASES) + sum(
-            1 for info in info_komoditas if not info.get("skipped")
-        ),
+        "cases_total": kasus_dibangun,
     }
 
 
@@ -1265,7 +1398,12 @@ async def seed_demo(
     await db.commit()
     if pemilik is not None:
         await db.refresh(pemilik)
-    return {**hasil, "session": demo_ownership.blok_sesi(pemilik)}
+    return {
+        **hasil,
+        "session": demo_ownership.blok_sesi(
+            pemilik, kasus=hasil.get("cases_total")
+        ),
+    }
 
 
 # --------------------------------------------------------------------------
@@ -1329,6 +1467,7 @@ async def generate_timeseries_data(
     payload: TimeseriesRequest,
     _sesi: object = Depends(butuh_sesi_aktif),
     _user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Buat/perbarui baris demo `origin='demo'`. Idempoten.
 
@@ -1339,9 +1478,20 @@ async def generate_timeseries_data(
     summary: dict = {"purged": None}
     if payload.force:
         summary["purged"] = await purge_demo_rows()
+    # Fase 2 MG: generator menulis lewat Core, jadi pemiliknya harus DISEBUT.
+    # Yang berhak adalah sesi yang sedang berjalan saat operator menekan tombol
+    # (bukan "sesi terbaru" di tabel) — tanpa ini kiriman lahir tanpa pemilik.
+    from app.services import demo_session as _sesi_demo
+
+    pemilik_kiriman = await _sesi_demo.aktif(db)
     summary.update(
         await generate_timeseries(
-            payload.start, payload.end, interval_hours=payload.interval_hours
+            payload.start,
+            payload.end,
+            interval_hours=payload.interval_hours,
+            demo_session_id=(
+                pemilik_kiriman.id if pemilik_kiriman is not None else None
+            ),
         )
     )
     return summary
