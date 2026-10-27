@@ -41,7 +41,10 @@ from app.core.delivery_policy import (
     jendela_kirim,
     muat_terlampaui,
 )
-from app.core.freshness import evaluate_freshness
+from app.core.freshness import (
+    compute_freshness_score,  # noqa: F401  (re-export
+    evaluate_freshness,
+)
 from app.core.logistics import estimate_logistics
 from app.core.menu_hierarchy import cadangan_kontinuitas_kg, kebutuhan_menu_kg
 from app.core.policy_store import baca_semua_profil
@@ -70,6 +73,9 @@ from app.models import (
     SupplierExclusion,
     SupplyRecord,
 )
+
+# untuk pemanggil lama: fungsi pindah ke `core/freshness` saat profil komoditas
+# masuk; tes snapshot & tool lain masih membaca `rs.compute_freshness_score`)
 from app.services.decision_time import evaluation_clock
 
 __all__ = ["build_recommendations", "fetch_operational_facts"]

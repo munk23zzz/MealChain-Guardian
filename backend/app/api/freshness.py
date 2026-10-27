@@ -1,6 +1,18 @@
-"""Router freshness (Task 12) — tipis: validasi, ambil batch, panggil core, persist."""
+"""Router freshness (Task 12) — tipis: validasi, ambil batch, panggil core, persist.
+
+Fase 3 MG (27 Okt 2026): endpoint ini berhenti memakai peta Python sendiri
+(`_SHELF_LIFE_BY_COMMODITY` dari `settings`) dan membaca PROFIL KOMODITAS
+berversi (`commodity_policies`) lewat `core/policy_store.py`. Responsnya kini
+membawa bukti suhu yang dipakai — `temperature_observation`, `evidence_state`,
+`source`, `observed_at` — supaya pemanggil bisa melihat MENGAPA statusnya
+begitu, bukan hanya angkanya.
+
+Dua hal yang TIDAK berubah: `as_of` tetap hanya boleh di-override dalam
+`DEMO_MODE`, dan skor tetap disimpan ke `batches.freshness_score`.
+"""
 
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,24 +22,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import MUTATING_ROLES, require_roles
 from app.api.dependencies import get_db
-from app.core.commodity_limits import safe_temp_for
 from app.core.config import settings
-from app.core.freshness import classify_freshness, compute_freshness_score, compute_usable_until
-from app.models import Batch, Commodity, User
+from app.core.freshness import classify_freshness, evaluate_freshness
+from app.core.policy_store import profil_untuk_komoditas
+from app.models import Batch, User
 
 router = APIRouter()
-
-_SHELF_LIFE_BY_COMMODITY = {
-    "telur": settings.shelf_life_days_telur,
-    "ayam": settings.shelf_life_days_ayam,
-    "wortel": settings.shelf_life_days_wortel,
-    "beras": settings.shelf_life_days_beras,
-}
-
-# Rentang suhu aman PER KOMODITAS dipusatkan di `app/core/commodity_limits.py`
-# supaya safety & freshness tidak memakai batas berbeda untuk batch yang sama.
-# Beras adalah barang kering pada suhu ruang (26-28 C di Indonesia): rentang
-# dingin 0-8 C akan menuduhnya "temperature excursion" padahal penyimpanannya benar.
 
 
 class FreshnessRequest(BaseModel):
@@ -39,7 +39,7 @@ class FreshnessRequest(BaseModel):
 
 
 @router.post("/freshness/evaluate")
-async def evaluate_freshness(
+async def evaluate_freshness_endpoint(
     payload: FreshnessRequest,
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles(*MUTATING_ROLES)),
@@ -58,41 +58,43 @@ async def evaluate_freshness(
         )
     as_of = payload.as_of or datetime.now(batch.harvested_at.tzinfo)
 
-    commodity_name = str(
-        (
-            await db.execute(
-                select(Commodity.name).where(Commodity.id == batch.commodity_id)
-            )
-        ).scalar_one()
-    )
-    if commodity_name not in _SHELF_LIFE_BY_COMMODITY:
-        raise HTTPException(
-            status_code=422,
-            detail=f"komoditas '{commodity_name}' belum punya masa layak",
-        )
-    shelf_life_days = _SHELF_LIFE_BY_COMMODITY[commodity_name]
-    safe_min_c, safe_max_c = safe_temp_for(commodity_name)
-    score = compute_freshness_score(
+    # Profil komoditas dibaca dari `commodity_policies` (fallback bawaan kode
+    # bila DB pra-migrasi 041 — lihat `policy_store`).
+    try:
+        policy, asal_profil = await profil_untuk_komoditas(db, batch.commodity_id)
+    except KeyError as galat:
+        # Komoditas tanpa profil TIDAK dinilai dengan rentang karangan: itulah
+        # bug yang Fase 3 tutup (bawaan 0-8 °C untuk semua komoditas).
+        raise HTTPException(status_code=422, detail=str(galat)) from galat
+
+    hasil = evaluate_freshness(
         harvested_at=batch.harvested_at,
         as_of=as_of,
-        shelf_life_days=shelf_life_days,
+        policy=policy,
         temperature_log=batch.temperature_log or [],
-        safe_min_c=safe_min_c,
-        safe_max_c=safe_max_c,
-    )
-    status = classify_freshness(score)
-    usable_until = compute_usable_until(
-        harvested_at=batch.harvested_at,
-        shelf_life_days=shelf_life_days,
-        score=score,
     )
 
-    batch.freshness_score = round(score, 2)
-    batch.usable_until = usable_until
+    batch.freshness_score = Decimal(str(round(hasil.score, 2)))
+    batch.usable_until = hasil.usable_until
     await db.commit()
 
     return {
-        "freshness_score": float(batch.freshness_score),
-        "status": status,
-        "usable_until": usable_until.isoformat(),
+        "freshness_score": float(round(hasil.score, 2)),
+        "status": hasil.status,
+        "usable_until": hasil.usable_until.isoformat(),
+        # ── bukti yang dipakai (Fase 3, butir 4 & 5) ──────────────────────
+        "commodity_profile": policy.to_dict(),
+        "profile_source": asal_profil,
+        "temperature_observation": hasil.temperature_observation,
+        "evidence_state": hasil.evidence_state,
+        "sample_count": hasil.observation.sample_count,
+        "observed_at": (
+            hasil.observation.last_sample_at.isoformat()
+            if hasil.observation.last_sample_at
+            else None
+        ),
+        "evidence_reasons": list(hasil.observation.issues),
+        # Klasifikasi murni atas skor tetap dikirim untuk konsumen lama, tetapi
+        # `status` di atas sudah memperhitungkan kecukupan bukti.
+        "status_skor_saja": classify_freshness(hasil.score),
     }

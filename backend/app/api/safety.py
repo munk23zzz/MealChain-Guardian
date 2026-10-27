@@ -1,5 +1,15 @@
-"""Router safety (Task 12) — status API uppercase, DB lowercase, tanpa override."""
+"""Router safety (Task 12) — status API uppercase, DB lowercase, tanpa override.
 
+Fase 3 MG (27 Okt 2026): endpoint ini membaca PROFIL KOMODITAS ber-versi
+(`commodity_policies`) dan memakai parser bukti yang sama dengan freshness
+(`core/temperature.parse_temperature_log`). Komoditas ambient (beras) tidak lagi
+diukur terhadap rentang dingin — profilnya memang tidak punya rentang.
+
+Respons membawa bukti yang dipakai (`temperature_observation`, `evidence_state`,
+`observed_at`) sehingga verdict bisa ditelusuri, bukan hanya dipercaya.
+"""
+
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import MUTATING_ROLES, require_roles
 from app.api.dependencies import get_db
-from app.core.commodity_limits import safe_temp_for
+from app.core.policy_store import profil_untuk_komoditas
 from app.core.safety import evaluate_safety
 from app.models import Batch, Commodity, User
 
@@ -21,6 +31,10 @@ class SafetyRequest(BaseModel):
     # Sebelumnya string mentah diteruskan ke asyncpg dan endpoint membalas 500
     # (terukur: batch_id '' -> DataError 'invalid UUID').
     batch_id: UUID
+    #: Waktu EVALUASI (bukan jam dinding). Kosong = waktu sampel terakhir di log,
+    #: sehingga log historis tidak otomatis disebut "stale" hanya karena hari ini
+    #: bukan hari kejadian.
+    evaluation_time: datetime | None = None
 
 
 @router.post("/safety/evaluate")
@@ -29,8 +43,6 @@ async def evaluate_safety_endpoint(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles(*MUTATING_ROLES)),
 ) -> dict:
-    # Nama komoditas ikut dibaca: batas suhu aman berbeda per komoditas
-    # (beras 15–30 °C, protein/sayur 0–8 °C) dan harus sama dengan freshness.
     baris = (
         await db.execute(
             select(Batch, Commodity.name)
@@ -40,21 +52,36 @@ async def evaluate_safety_endpoint(
     ).one_or_none()
     if baris is None:
         raise HTTPException(status_code=404, detail="batch tidak ditemukan")
-    batch, commodity_name = baris
+    batch, _commodity_name = baris
 
-    safe_min_c, safe_max_c = safe_temp_for(commodity_name)
+    try:
+        policy, asal_profil = await profil_untuk_komoditas(db, batch.commodity_id)
+    except KeyError as galat:
+        raise HTTPException(status_code=422, detail=str(galat)) from galat
+
     result = evaluate_safety(
         temperature_log=batch.temperature_log or [],
-        safe_min_c=safe_min_c,
-        safe_max_c=safe_max_c,
+        policy=policy,
+        evaluation_time=payload.evaluation_time,
     )
 
     # DB lowercase (kontrak Schema.md), API uppercase (kontrak Skill.md §5)
     batch.safety_status = str(result["safety_status"]).lower()
     await db.commit()
 
+    last_sample = result["last_sample_at"]
+    alasan = result["reasons"]
     return {
         "safety_status": str(result["safety_status"]).upper(),
-        "reasons": list(result["reasons"]),
+        "reasons": [str(r) for r in alasan] if isinstance(alasan, list | tuple) else [],
         "excursion_minutes": float(result["excursion_minutes"]),
+        # ── bukti yang dipakai (Fase 3, butir 4 & 5) ──────────────────────
+        "commodity_profile": policy.to_dict(),
+        "profile_source": asal_profil,
+        "temperature_observation": result["temperature_observation"],
+        "evidence_state": result["evidence_state"],
+        "sample_count": result["sample_count"],
+        "observed_at": (
+            last_sample.isoformat() if isinstance(last_sample, datetime) else None
+        ),
     }

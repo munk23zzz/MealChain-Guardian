@@ -1,26 +1,49 @@
-"""Batas suhu aman PER KOMODITAS — satu sumber untuk safety & freshness.
+"""Batas suhu aman PER KOMODITAS — fasad tipis di atas `core/commodity_policy.py`.
 
-Sebelumnya `api/freshness.py` punya peta sendiri (beras 15–30 °C), sedangkan
-`api/safety.py` memakai `settings.safe_temp_min_c/max_c` (0–8 °C) untuk semua
-komoditas. Akibatnya mencatat penerimaan beras pada suhu ruang 27 °C langsung
-dinilai `fail` dan tidak bisa disetujui — bertentangan dengan freshness yang
-justru menganggapnya wajar. Peta ini dipakai kedua endpoint supaya penilaian
-keamanan dan kesegaran tidak saling bertentangan.
+Sejarah (jangan dihapus tanpa membaca `MG/phase-03-commodity-evidence.md`):
+
+- Awalnya modul ini memuat peta `SAFE_TEMP_BY_COMMODITY` (telur/ayam/wortel
+  0-8 °C, beras 15-30 °C) plus `DEFAULT_SAFE_TEMP = (0, 8)` untuk komoditas
+  lain. Peta itu memperbaiki bug 20 Okt 2026 (`api/safety.py` memakai settings
+  global sehingga beras 27 °C dinilai `fail`), tetapi menyisakan tiga masalah
+  yang ditutup Fase 3:
+
+  1. **Bawaan 0-8 °C untuk komoditas tak dikenal** — komoditas baru otomatis
+     dianggap rantai dingin tanpa dasar apa pun. Sekarang ditolak (`KeyError`).
+  2. **Tidak ada `cold_chain_required`** — tidak ada cara menyatakan "komoditas
+     ini TIDAK diukur terhadap rentang", hanya rentang lebar (beras 15-30 °C
+     masih menuduh suhu ruang 32 °C sebagai excursion).
+  3. **Tidak ada versi/dasar kebijakan** — angka demo tidak bisa dibedakan dari
+     standar regulasi.
+
+Modul ini tinggal meneruskan ke profil supaya pemanggil lama tidak perlu
+berubah serentak; sumber kebenarannya satu (`PROFILES`).
 """
 
 from __future__ import annotations
 
-SAFE_TEMP_BY_COMMODITY: dict[str, tuple[float, float]] = {
-    "telur": (0.0, 8.0),
-    "ayam": (0.0, 8.0),
-    "wortel": (0.0, 8.0),
-    "beras": (15.0, 30.0),
-}
+from app.core.commodity_policy import PROFILES, CommodityPolicy, policy_for
 
-DEFAULT_SAFE_TEMP: tuple[float, float] = (0.0, 8.0)
+__all__ = [
+    "PROFILES",
+    "CommodityPolicy",
+    "cold_chain_required",
+    "policy_for",
+    "safe_temp_for",
+]
 
 
-def safe_temp_for(commodity: str | None) -> tuple[float, float]:
-    """Rentang suhu aman untuk satu nama komoditas (bawaan 0–8 °C)."""
-    kunci = (commodity or "").strip().lower()
-    return SAFE_TEMP_BY_COMMODITY.get(kunci, DEFAULT_SAFE_TEMP)
+def safe_temp_for(commodity: str | None) -> tuple[float, float] | None:
+    """Rentang suhu aman untuk satu komoditas, atau `None` bila ambient.
+
+    `None` BUKAN "tidak tahu": artinya profil komoditas ini memang tidak
+    mengukur excursion (mis. beras disimpan pada suhu ruang). Pemanggil yang
+    memaksa tuple mendapat `TypeError` — dan itu benar, karena mengarang
+    rentang untuk komoditas ambient justru bug yang sedang diperbaiki.
+    """
+    return policy_for(commodity).temp_band
+
+
+def cold_chain_required(commodity: str | None) -> bool:
+    """True bila komoditas ini wajib punya bukti suhu rantai dingin."""
+    return policy_for(commodity).cold_chain_required

@@ -35,10 +35,22 @@ logistics_time_min dibulatkan KE ATAS ke menit penuh (konservatif,
 deterministik) karena model mewajibkan integer.
 """
 
+from dataclasses import replace
+from datetime import datetime, timezone
 from decimal import ROUND_CEILING, Decimal
 
+from app.core.batch_eligibility import (
+    DELIVERY_WINDOW_EXCEEDED,
+    POLICY_BAWAAN,
+    REJECTED,
+    USABLE,
+    BatchPolicy,
+    batch_policy_from,
+    fuse_evidence,
+)
 from app.core.candidate import BalancingCandidate, PriceInfo
 from app.core.menu_hierarchy import shortage_setelah_gizi, surplus_setelah_kontinuitas
+from app.core.proposal_explain import held_candidate
 
 __all__ = ["generate_candidates"]
 
@@ -114,24 +126,42 @@ def generate_candidates(
     commodity=None,
     menu_requirements=None,
     continuity_reserve=None,
+    policies=None,
+    evaluation_time=None,
+    held=None,
 ) -> list:
+    """Kandidat yang LOLOS gerbang hierarki (Fase 6 butir 1 & 2).
+
+    `policies` (opsional) = peta nama komoditas → profil berversi
+    (`core.commodity_policy.CommodityPolicy`). `evaluation_time` wajib untuk
+    menilai masa layak/bukti; bawaannya jam dinding UTC.
+
+    `held` (opsional, list) diisi kandidat yang TERTAHAN gerbang beserta
+    alasannya — informasi tidak dihapus, hanya tidak diberi peringkat. Kandidat
+    yang lolos tetap menjalani ranking lama (`Candidate Score DESC`, lalu SDC
+    ASC): hierarki berjalan SEBELUM ranking, bukan sebagai bobot baru.
+    """
     _require_mapping(source_records, "source_records")
     _require_mapping(destination_records, "destination_records")
     _require_mapping(logistics_by_pair, "logistics_by_pair")
     _require_mapping(prices, "prices")
+    waktu = evaluation_time or datetime.now(timezone.utc)
 
-    # Batches eligible per (location, commodity): buang fail di sini.
+    # Batches per (location, commodity, supplier). `fail`/`quarantined` TIDAK
+    # dibuang di sini: evaluator yang memutuskan dan alasannya ikut dilaporkan
+    # (dulu batch seperti itu hilang tanpa jejak). Identitas pemasok yang tidak
+    # dapat diketahui tetap dilewati — itu bukan soal bukti.
     eligible = {}
     for b in batches:
-        if b["safety_status"] == "fail" or b["freshness_status"] == "fail":
-            continue
-        # Batch yang DITAHAN (karantina) tidak boleh menyumbang kilogram ke
-        # kandidat sama sekali — beda dari needs_verification yang tetap masuk
-        # sebagai review-required. Setelah dilepas, batch kembali dihitung.
-        if b.get("quarantine_status") == "quarantined":
-            continue
         if "supplier_id" in b and not b["supplier_id"]:
             continue  # supplier_unknown: explicit identity cannot be inferred
+        if policies is None:
+            # Jalur warisan (tanpa profil komoditas): aturan lama tetap berlaku
+            # supaya perilaku pemanggil 6-tuple tidak berubah.
+            if b["safety_status"] == "fail" or b["freshness_status"] == "fail":
+                continue
+            if b.get("quarantine_status") == "quarantined":
+                continue
         key = (b["location"], b["commodity"], b.get("supplier_id"))
         if commodity is not None and b["commodity"] != commodity:
             continue
@@ -187,16 +217,89 @@ def generate_candidates(
                         d_com,
                         logistics_by_pair,
                         prices,
+                        policies=policies,
+                        evaluation_time=waktu,
+                        held=held,
                     )
                 )
     return candidates
 
 
+def _policy_untuk(profil, group) -> BatchPolicy:
+    """Profil komoditas → `BatchPolicy`; warisan tanpa-bukti tetap sah.
+
+    Pemanggil lama (`generate_candidates` 6-tuple Task 9) menyuplai fakta batch
+    tanpa `temperature_log`/`temperature_evidence_complete`. Fakta yang tidak
+    membawa informasi suhu TIDAK boleh dihukum sebagai "bukti hilang" — itu
+    akan mematikan seluruh pipeline lama tanpa satu pun data yang berubah.
+    Pipeline produksi (Fase 3+) selalu membawa bukti suhu, jadi di sana gerbang
+    bukti benar-benar berjalan.
+    """
+    if profil is not None:
+        return batch_policy_from(profil)
+    ada_bukti = any(
+        "temperature_log" in b or "temperature_evidence_complete" in b for b in group
+    )
+    return replace(POLICY_BAWAAN, require_temperature_log=ada_bukti)
+
+
 def _candidates_for_group(
-    group, supplier_id, surplus_s, shortage, s_loc, d_loc, d_com, logistics_by_pair, prices
+    group,
+    supplier_id,
+    surplus_s,
+    shortage,
+    s_loc,
+    d_loc,
+    d_com,
+    logistics_by_pair,
+    prices,
+    *,
+    policies=None,
+    evaluation_time=None,
+    held=None,
 ):
-    candidates = []
-    agg = _aggregate_batches(group)
+    waktu = evaluation_time or datetime.now(timezone.utc)
+    # Gerbang bukti hanya aktif bila pemanggil menyerahkan profil komoditas.
+    # Pemanggil warisan (tanpa profil) tetap memakai aturan lama; menyalakan
+    # gerbang tanpa fakta bukti berarti menghukum data yang tidak ada.
+    gerbang = policies is not None
+    profil = (policies or {}).get(d_com)
+    fisik_kg = sum(
+        (_to_decimal(b["quantity_kg"], "quantity_kg") for b in group), Decimal("0")
+    )
+
+    def tahan(status: str, alasan) -> list:
+        if held is not None:
+            held.append(
+                held_candidate(
+                    source_location=s_loc,
+                    destination_location=d_loc,
+                    commodity=d_com,
+                    supplier_id=str(supplier_id) if supplier_id else None,
+                    quantity_kg=fisik_kg,
+                    status=status,
+                    reasons=alasan,
+                    batch_ids=[
+                        str(b.get("batch_id")) for b in group if b.get("batch_id")
+                    ],
+                )
+            )
+        return []
+
+    if gerbang:
+        fusion = fuse_evidence(
+            group, policy=_policy_untuk(profil, group), evaluation_time=waktu
+        )
+        if fusion.status != USABLE:
+            # Bukti tidak cukup (on_hold) atau ditolak: TIDAK ada kandidat aman.
+            return tahan(fusion.status, fusion.blocking_reasons)
+        usable_ids = set(fusion.usable_batch_ids)
+    else:
+        usable_ids = {str(b.get("batch_id")) for b in group}
+
+    agg = _aggregate_batches(
+        [b for b in group if str(b.get("batch_id")) in usable_ids]
+    )
     quantity = min(surplus_s, shortage, agg["available_kg"])
     if quantity <= 0:
         return []
@@ -209,7 +312,8 @@ def _candidates_for_group(
         )
     logistics = logistics_by_pair[pair]
     if not logistics["feasible"]:
-        return []  # delivery window terlampaui → exclude
+        # Lapis 2 hierarki: waktu tiba tidak memenuhi jendela → bukan kandidat.
+        return tahan(REJECTED, (DELIVERY_WINDOW_EXCEEDED,))
 
     price_key = (s_loc, d_loc, d_com)
     if price_key not in prices:
@@ -227,7 +331,7 @@ def _candidates_for_group(
     time_min = Decimal(str(logistics["estimated_time_min"]))
     time_min_int = int(time_min.to_integral_value(rounding=ROUND_CEILING))
 
-    candidates.append(
+    return [
         BalancingCandidate(
             source_location=s_loc,
             destination_location=d_loc,
@@ -244,7 +348,14 @@ def _candidates_for_group(
             logistics_time_min=time_min_int,
             price=price,
             supplier_id=str(supplier_id) if supplier_id else None,
-            batch_ids=tuple(sorted(str(b["batch_id"]) for b in group if b.get("batch_id"))),
+            # `usable_ids` dipakai, bukan seluruh `group`: batch yang ditahan
+            # tidak boleh ikut tercatat sebagai bukti kandidat ini.
+            batch_ids=tuple(
+                sorted(
+                    str(b["batch_id"])
+                    for b in group
+                    if b.get("batch_id") and str(b.get("batch_id")) in usable_ids
+                )
+            ),
         )
-    )
-    return candidates
+    ]
