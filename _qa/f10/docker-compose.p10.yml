@@ -21,7 +21,12 @@
 #           REH_DEMO_MODE (true; set false untuk uji mode operasional),
 #           REH_DEMO_ENFORCE (true)
 services:
-  backend:
+  # Nama service SENGAJA bukan `backend` (28 Okt 2026). Compose memberi alias
+  # DNS = nama service pada jaringan eksternal `mealchain-network`, sehingga
+  # `backend` di jaringan itu menunjuk DUA container (demo + klon p10). Akibat
+  # terukur: UI :3010 kadang membaca sesi klon (`2b8ecfb5`) lalu menulis ke
+  # backend demo → "sesi demo ... tidak ditemukan" dan bukti agent kosong.
+  p10-backend:
     image: mealchain-guardian-backend:latest
     working_dir: /app
     container_name: mcg-p10-backend
@@ -66,7 +71,7 @@ services:
     working_dir: /app
     container_name: mcg-p10-frontend
     depends_on:
-      backend:
+      p10-backend:
         condition: service_healthy
     environment:
       # KOSONG = UI memakai origin sendiri; Next mem-proxy ke BACKEND_INTERNAL_URL.

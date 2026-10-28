@@ -656,9 +656,10 @@ export async function startDemoSession(
 ) {
   const payload: Record<string, unknown> = {};
   if (menit) payload.menit = menit;
-  // Fase 2 MG: tombol "Siapkan data demo" memulai sesi dalam mode REPLAY
-  // (jangkar kanon 8 Okt). Mode dikirim eksplisit supaya sesi tidak ditentukan
-  // diam-diam oleh keadaan server.
+  // Tombol "Muat Demo" mengirim mode eksplisit (`realtime` sejak 28 Okt 2026:
+  // jangkar = waktu data dibangun). Mode tidak boleh ditentukan diam-diam oleh
+  // keadaan server — `replay` masih diterima API untuk skrip/geladi berbasis
+  // klon DB, tetapi tidak lagi punya tombol di panel.
   if (opsi.mode) payload.mode = opsi.mode;
   if (opsi.replace) payload.replace = true;
   return request("/demo/session/start", {
@@ -1039,9 +1040,10 @@ export async function updateAdminLocation(
 
 // --- Demo Control sederhana (keputusan Roy 2026-10-19) ---
 // Panel demo tidak lagi memilih skenario: satu tombol menjalankan agent, satu
-// endpoint membaca buktinya dari DB. Komoditas & lokasi TIDAK dikirim dari UI
-// secara bawaan — backend memakai `beras` + lokasi SPPG akun yang login, supaya
-// cakupan peran tidak bisa dilanggar lewat payload.
+// endpoint membaca buktinya dari DB. Komoditas TIDAK dikirim dari UI secara
+// bawaan — tanpa `commodity` server menjalankan satu putaran untuk setiap
+// komoditas yang punya data — dan lokasi selalu lokasi SPPG akun yang login,
+// supaya cakupan peran tidak bisa dilanggar lewat payload.
 
 /**
  * `POST /demo/agent/run` — jalankan pipeline agent penuh (DETECT → SUPERVISE).
@@ -1085,8 +1087,21 @@ export async function fetchDemoAgentCommodities(token: string) {
 }
 
 /** `GET /demo/agent/last-run` — bukti putaran agent terakhir, dibaca dari DB. */
-export async function fetchDemoAgentLastRun(token: string) {
-  return request("/demo/agent/last-run", { headers: authHeaders(token) });
+export async function fetchDemoAgentLastRun(
+  token: string,
+  commodity?: string,
+  decisionId?: string,
+) {
+  // `commodity` (28 Okt 2026): tanpa parameter ini panel bisa menampilkan bukti
+  // komoditas LAIN yang kebetulan lebih baru beberapa milidetik.
+  // `decision_id` (28 Okt 2026): id keputusan yang BARU dibuat tombol Jalankan,
+  // supaya pembacaan bukti tidak bergantung pada "yang paling baru" (bisa kalah
+  // balapan dengan commit jejak → kartu Bukti agent kosong sesaat).
+  const kueri = new URLSearchParams();
+  if (commodity) kueri.set("commodity", commodity);
+  if (decisionId) kueri.set("decision_id", decisionId);
+  const akhiran = kueri.toString() ? `?${kueri.toString()}` : "";
+  return request(`/demo/agent/last-run${akhiran}`, { headers: authHeaders(token) });
 }
 
 /**

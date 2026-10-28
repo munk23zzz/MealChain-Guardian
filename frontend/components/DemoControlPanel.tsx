@@ -17,7 +17,7 @@
 //   bergerak seolah tahu langkah mana yang sedang dieksekusi.
 // - **Tidak ada angka karangan.** Semua nilai berasal dari payload backend
 //   (lihat lib/demo-agent.ts untuk peringkasannya, murni & teruji).
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { LoadingState } from "./LoadingState";
 import {
@@ -54,6 +54,7 @@ import {
   elapsedLine,
   proofFacts,
   ringkasPutaran,
+  idKeputusanPutaran,
   ringkasSatuKomoditas,
   runButtonLabel,
   stepNames,
@@ -308,6 +309,10 @@ export default function DemoControlPanel({
   const [status, setStatus] = useState<any>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [bukti, setBukti] = useState<AgentRun | null>(null);
+  // Id keputusan yang BARU dibuat tombol Jalankan (28 Okt 2026). Disimpan di
+  // ref supaya `muatBukti()` langsung memakainya pada render yang sama —
+  // membaca lewat state bisa memakai nilai lama dan meninggalkan kartu kosong.
+  const idBuktiRef = useRef<string | null>(null);
   const [buktiError, setBuktiError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"data" | "agent" | "bangun" | null>(null);
   const [detik, setDetik] = useState(0);
@@ -367,12 +372,29 @@ export default function DemoControlPanel({
     if (!token || !bolehLihatBukti) return;
     setBuktiError(null);
     try {
-      setBukti(await fetchDemoAgentLastRun(token));
+      // Bukti harus milik komoditas yang barusan dijalankan, bukan sekadar
+      // putaran terbaru (satu putaran bisa menulis beberapa keputusan).
+      // Bila tombol Jalankan baru saja berhasil, id keputusannya dipakai
+      // eksplisit: server bisa menyelesaikan commit jejak beberapa milidetik
+      // setelah balasan HTTP, sehingga pencarian "terbaru" bisa kosong.
+      const hasil = await fetchDemoAgentLastRun(
+        token,
+        komoditas || undefined,
+        idBuktiRef.current ?? undefined,
+      );
+      setBukti(hasil);
+      if (!hasil?.found && idBuktiRef.current) {
+        // Satu kesempatan lagi: jejak biasanya sudah terlihat setelah jeda ini.
+        await new Promise((r) => setTimeout(r, 700));
+        setBukti(
+          await fetchDemoAgentLastRun(token, komoditas || undefined, idBuktiRef.current),
+        );
+      }
     } catch (e: any) {
       setBukti(null);
       setBuktiError(String(e?.message ?? e));
     }
-  }, [token, bolehLihatBukti]);
+  }, [token, bolehLihatBukti, komoditas]);
 
   const muatKomoditas = useCallback(async () => {
     if (!token || !bolehLihatBukti) return;
@@ -592,6 +614,9 @@ export default function DemoControlPanel({
       // tampak seperti tidak terjadi apa-apa (gejala 28 Okt 2026: "tidak bisa
       // menjalankan agent" padahal keputusan lahir).
       setHasilAgent(ringkasPutaran(hasil) ?? ringkasSatuKomoditas(hasil, komoditas));
+      // Id keputusan dari payload server (created[0] untuk backend baru,
+      // decision_id untuk yang lama) → dipakai muatBukti di bawah.
+      idBuktiRef.current = idKeputusanPutaran(hasil);
       // Sumber kebenaran blok bukti adalah DB, bukan respons tombol di atas.
       await muatBukti();
       await muatStatus();
@@ -757,7 +782,12 @@ export default function DemoControlPanel({
               className="dc-select"
               aria-label="Komoditas"
               value={komoditas}
-              onChange={(e) => setKomoditas(e.target.value)}
+              onChange={(e) => {
+                // Penanda keputusan hanya berlaku untuk putaran yang barusan
+                // dijalankan; ganti komoditas = bukti dibaca ulang dari DB.
+                idBuktiRef.current = null;
+                setKomoditas(e.target.value);
+              }}
               disabled={!token || !bolehJalankan || busy !== null || daftarKomoditas.length === 0}
               title="Komoditas yang punya data di database — wajib dipilih sebelum menjalankan agent"
             >

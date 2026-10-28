@@ -27,6 +27,7 @@ freshness 0,90). Tidak ada auto-approve — loop manusia tetap wajib.
 
 import uuid
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
@@ -626,12 +627,19 @@ async def _seed_demo_cases(
             "target": target.name,
             "message": "Kasus demo sudah ada — pakai force=true untuk reset.",
         }
+    # Jalankan juga saat `existing` KOSONG. Dulu blok ini hanya berjalan bila
+    # ada keputusan lama; ketika baris keputusan sudah hilang (mis. tes lain
+    # menghapus `decisions WHERE demo_case IS NOT NULL`) sementara batch kasus
+    # masih ada (batch tidak punya FK ke keputusan), penyemaian ulang menabrak
+    # `batches_pkey` dan SELURUH suite gagal di 7 tes seed. Terukur 28 Okt 2026:
+    # satu kondisi itu cukup mereproduksi 7 kegagalan gate; membersihkan id
+    # deterministik lebih dulu membuat penyemaian kembali normal (7 kasus/10
+    # keputusan). Ini juga jalur produksi: reset sesi lalu semai ulang.
     if force:
         baris_lama = (
             await db.execute(select(Decision).where(*filter_hapus))
         ).scalars().all()
         existing = baris_lama
-    if force and existing:
         # Hanya baris demo MILIK SESI INI (dan kota ini) yang dihapus.
         ids = [d.id for d in existing]
         await db.execute(delete(Decision).where(*filter_hapus))
@@ -1913,8 +1921,12 @@ async def _catat_review_gagal(
 # dibuat-buat.
 # ---------------------------------------------------------------------------
 
-#: Komoditas bawaan tombol "Jalankan agent".
-DEFAULT_AGENT_COMMODITY = "beras"
+#: Komoditas bawaan tombol "Jalankan agent" — `None` berarti SEMUA komoditas
+#: yang ada di database (satu putaran per komoditas). Nilai `beras` yang dulu
+#: dipaku membuat tombolnya selalu 409 ketika beras tidak punya celah pasokan di
+#: lokasi itu (terukur 28 Okt 2026 di Bandung), sehingga agent tampak "tidak bisa
+#: jalan" padahal komoditas lain punya celah.
+DEFAULT_AGENT_COMMODITY: str | None = None
 
 #: Urutan langkah pipeline. `step_at` TIDAK bisa dipakai mengurutkan: seluruh
 #: langkah satu putaran ditulis dalam satu transaksi, dan Postgres `now()`
@@ -1935,7 +1947,10 @@ STEP_ORDER = (
 class AgentRunRequest(BaseModel):
     """Payload opsional; UI sederhana cukup memanggil tanpa body."""
 
-    commodity: str = DEFAULT_AGENT_COMMODITY
+    #: `None`/kosong = SEMUA komoditas (bawaan). Nama tunggal tetap didukung
+    #: untuk demo satu komoditas; nama yang tidak punya celah pasokan dijawab
+    #: 409 hanya pada mode satu komoditas.
+    commodity: str | None = DEFAULT_AGENT_COMMODITY
     ttl_minutes: int = Field(default=30, ge=1, le=1440)
     #: Fase 2 MG: sesi pemilik keputusan (lihat `Event1Request.demo_session`).
     demo_session: uuid.UUID | None = None
@@ -1971,29 +1986,141 @@ async def run_demo_agent(
     penawaran harga untuk SPPG itu, jarak pemasok→SPPG, reliabilitas, dan
     status pengecualian. Tidak ada pemasok dari kota lain yang ditebak.
 
-    Batas jujur yang sama dengan `/demo/event1`: tidak ada approve/execute.
-    Keputusan lahir `proposed` dan tetap menunggu loop approval manusia.
+    Tanpa `commodity` endpoint ini menjalankan SATU PUTARAN PER KOMODITAS yang
+    ada di database (28 Okt 2026). Sebelumnya `beras` dipaku sebagai bawaan;
+    di lokasi yang tidak kekurangan beras setiap klik berakhir 409 dan fitur
+    tampak rusak padahal komoditas lain punya celah pasokan. Komoditas yang
+    tidak punya celah DILEWATI dan dilaporkan di `skipped`, bukan menggagalkan
+    seluruh permintaan.
+
+    Batas jujur: tidak ada approve/execute di sini. Keputusan lahir
+    `pending_approval` (atau `verifier_flagged` kalau verifier menandai) dan
+    tetap menunggu loop approval manusia — statusnya DITURUNKAN dari verdict
+    verifier, tidak pernah dari model.
     """
+    def _gap_kg(keluar: dict) -> float:
+        """Celah pasokan satu putaran; `0.0` bila bentuk jawabannya tidak memuat.
+
+        Fungsi ini tidak mengarang angka: ketiadaan `detect.gap_kg` (mis. runtime
+        yang menjawab ringkas) berarti celah tidak diketahui, dan keputusan
+        seperti itu diurutkan paling belakang — bukan ditebak dari angka lain.
+        """
+        nilai = (keluar.get("detect") or {}).get("gap_kg")
+        try:
+            return float(nilai)
+        except (TypeError, ValueError):
+            return 0.0
+
     isi = payload or AgentRunRequest()
     lokasi = await _lokasi_akun(db, user)
     pemilik = await _sesi_pemilik_analisis(db, isi.demo_session, mode=isi.mode)
 
-    def _jalankan_pengadaan() -> dict:
+    from app.services import demo_session as sesi_demo
+
+    if pemilik is None:
+        # Klien tidak menyebut sesi: pakai sesi yang SEDANG berjalan. Ini yang
+        # membuat hasil agent ikut terhapus saat jendela demo berakhir —
+        # keputusan tanpa `demo_session_id` tidak pernah ikut disapu
+        # `kosongkan_bertanda` dan hidup selamanya di database demo.
+        pemilik = await sesi_demo.aktif(db)
+    if pemilik is None and settings.demo_session_enforce:
+        # Jangan buntu. Dulu jalur ini membalas 409 "tekan Muat Demo dulu",
+        # sehingga setelah "Akhiri sesi" (atau sesi kedaluwarsa) tombol
+        # Jalankan Agent di Demo Control tampak rusak (terukur 28 Okt 2026:
+        # frontend mencatat POST /demo/session/end lalu setiap run 409).
+        # Sekarang sesi dibuka otomatis; `kosongkan=False` agar data yang ada
+        # tidak dihapus diam-diam, dan keputusan tetap terikat ke sesi.
+        pemilik = await sesi_demo.mulai(
+            db,
+            created_by=getattr(user, "id", None),
+            kosongkan=False,
+            mode=isi.mode or "realtime",
+        )
+
+    diminta = (isi.commodity or "").strip()
+    semua = diminta == "" or diminta.lower() in {"semua", "all", "*"}
+    if semua:
+        daftar = list(
+            (
+                await db.execute(select(Commodity.name).order_by(Commodity.name))
+            ).scalars()
+        )
+    else:
+        daftar = [diminta]
+
+    def _jalankan_pengadaan(nama_komoditas: str) -> dict:
         opsi: dict = {"ttl_minutes": isi.ttl_minutes}
         # Fase 2 MG: keputusan putaran ini milik sesi yang diminta klien.
         if pemilik is not None:
             opsi["demo_session_id"] = pemilik.id
-        return run_supplier_procurement(isi.commodity, lokasi.name, **opsi)
-
-    try:
         # Sejak 2026-10-19 panel ini menilai PEMASOK yang memasok SPPG akun
         # sendiri (bukan surplus SPPG lain): lihat supplier_procurement.py.
-        outcome = await run_in_threadpool(_jalankan_pengadaan)
-    except ValueError as exc:
-        # Tidak ada kandidat eligible = keadaan data, bukan kerusakan server.
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return run_supplier_procurement(nama_komoditas, lokasi.name, **opsi)
 
-    outcome["commodity"] = isi.commodity
+    if not semua:
+        try:
+            outcome = await run_in_threadpool(_jalankan_pengadaan, diminta)
+        except ValueError as exc:
+            # Tidak ada kandidat eligible = keadaan data, bukan kerusakan server.
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        komoditas_utama = diminta
+        dibuat = [{"commodity": diminta, "decision_id": outcome["decision_id"]}]
+        dilewati: list[dict] = []
+    else:
+
+        def _putaran_semua() -> tuple[list[dict], list[dict], dict[str, dict]]:
+            """Satu putaran per komoditas, paralel; kegagalan satu tidak
+            membatalkan yang lain."""
+            buat: list[dict] = []
+            lewat: list[dict] = []
+            hasil: dict[str, dict] = {}
+            with ThreadPoolExecutor(max_workers=min(4, max(1, len(daftar)))) as pool:
+                futures = {pool.submit(_jalankan_pengadaan, c): c for c in daftar}
+                for fut in as_completed(futures):
+                    nama = futures[fut]
+                    try:
+                        keluar = fut.result()
+                    except ValueError as exc:
+                        lewat.append({"commodity": nama, "reason": str(exc)})
+                    except Exception as exc:  # noqa: BLE001 — dilaporkan apa adanya
+                        lewat.append(
+                            {
+                                "commodity": nama,
+                                "reason": f"{type(exc).__name__}: {exc}",
+                            }
+                        )
+                    else:
+                        hasil[nama] = keluar
+                        buat.append(
+                            {
+                                "commodity": nama,
+                                "decision_id": keluar["decision_id"],
+                                "gap_kg": _gap_kg(keluar),
+                                "status": (keluar.get("decision_snapshot") or {}).get("status"),
+                                "expires_at": (keluar.get("decision_snapshot") or {}).get(
+                                    "expires_at"
+                                ),
+                            }
+                        )
+            return buat, lewat, hasil
+
+        dibuat, dilewati, semua_hasil = await run_in_threadpool(_putaran_semua)
+        if not semua_hasil:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "tidak ada komoditas yang bisa diproses di lokasi ini: "
+                    + "; ".join(f"{d['commodity']}={d['reason']}" for d in dilewati)
+                ),
+            )
+        # Keputusan utama = celah pasokan TERBESAR: itulah yang dibahas agen
+        # dan ditampilkan sebagai ringkasan putaran.
+        komoditas_utama, outcome = max(
+            semua_hasil.items(),
+            key=lambda pasangan: _gap_kg(pasangan[1]),
+        )
+
+    outcome["commodity"] = komoditas_utama
     outcome["target_location"] = lokasi.name
     #: Fase 10 MG: sesi pemilik putaran ini dikembalikan APA ADANYA supaya UI
     #: (dan Joule) bisa menyebut mode serta jangkar dataset yang dipakai —
@@ -2001,7 +2128,18 @@ async def run_demo_agent(
     from app.services.demo_ownership import blok_sesi
 
     outcome["demo_session"] = blok_sesi(pemilik)
+
+    # Stempel sesi untuk baris-baris yang ditulis lewat Core/bulk (evidence,
+    # trace) sehingga tidak lolos dari `before_flush`; tanpa ini mereka menjadi
+    # yatim yang tidak ikut terhapus saat sesi berakhir.
+    if pemilik is not None:
+        await sesi_demo.tandai_sesi(db, pemilik.id)
+
     outcome["agent_review"] = await _jalankan_agent_review(db, outcome, user=user)
+    outcome["primary_decision_id"] = outcome["decision_id"]
+    outcome["created"] = dibuat
+    outcome["skipped"] = sorted(dilewati, key=lambda d: d["commodity"])
+    outcome["scope"] = "semua" if semua else diminta
     return outcome
 
 
@@ -2119,10 +2257,19 @@ async def list_agent_commodities(
 
 @router.get("/demo/agent/last-run")
 async def get_last_agent_run(
+    commodity: str | None = None,
+    decision_id: uuid.UUID | None = None,
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
 ) -> dict:
-    """Bukti putaran agent terakhir, dibaca ulang dari DB (tahan reload halaman)."""
+    """Bukti putaran agent terakhir, dibaca ulang dari DB (tahan reload halaman).
+
+    `commodity` (28 Okt 2026) mempersempit ke putaran komoditas itu. Tanpa
+    parameter ini, panel yang baru menjalankan wortel bisa menampilkan bukti
+    telur — putaran terakhir secara WAKTU, bukan putaran yang barusan ditekan,
+    karena satu putaran "semua komoditas" menulis beberapa keputusan dalam
+    transaksi yang sama (selisihnya milidetik).
+    """
     kosong = {
         "found": False,
         "decision_id": None,
@@ -2155,6 +2302,16 @@ async def get_last_agent_run(
     #   (c) urutan wajib deterministik: keputusan terbaru menang, bukan "baris
     #       mana pun yang step_at-nya sama" (satu putaran menulis semua langkahnya
     #       dalam satu transaksi sehingga `step_at` baris-barisnya identik).
+    com_id = None
+    if commodity and commodity.strip():
+        com_id = (
+            await db.execute(
+                select(Commodity.id).where(Commodity.name == commodity.strip())
+            )
+        ).scalar_one_or_none()
+        if com_id is None:
+            return kosong
+
     kandidat = (
         (
             await db.execute(
@@ -2164,6 +2321,11 @@ async def get_last_agent_run(
                     AgentTrace.step_name == "DETECT",
                     AgentTrace.agent_name.is_(None),
                     Decision.demo_case.is_(None),
+                    *(
+                        [Decision.commodity_id == com_id]
+                        if com_id is not None
+                        else []
+                    ),
                 )
                 .order_by(Decision.created_at.desc(), AgentTrace.step_at.desc())
                 .limit(25)
@@ -2172,6 +2334,17 @@ async def get_last_agent_run(
         .scalars()
         .all()
     )
+    # `decision_id` (28 Okt 2026): panel memegang id keputusan yang BARU dibuat
+    # oleh tombol Jalankan. Mencari lewat "terbaru" bisa kalah balapan dengan
+    # commit jejak — gejala: kartu Bukti agent kosong tepat setelah run wortel
+    # padahal keputusannya ada.
+    #
+    # Id eksplisit MENGGANTIKAN pencarian, bukan ditambahkan di depannya: bila
+    # jejak id itu belum ada, jawabannya harus "belum ada" — bukan bukti
+    # komoditas lain. (Terukur 28 Okt 2026: id acak dibalas bukti telur.)
+    if decision_id is not None:
+        kandidat = [decision_id]
+
     terakhir = None
     for calon in dict.fromkeys(kandidat):
         nama_langkah = set(

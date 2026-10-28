@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   agentReviewLine,
   demoAgentCards,
+  idKeputusanPutaran,
   defaultCommodity,
   elapsedLine,
   kmLabel,
@@ -529,5 +530,26 @@ describe("ringkasSatuKomoditas", () => {
   it("tanpa decision_id tidak mengarang bukti", () => {
     expect(ringkasSatuKomoditas({ commodity: "telur" }, "telur")).toBeNull();
     expect(ringkasSatuKomoditas(null, "telur")).toBeNull();
+  });
+});
+
+
+describe("idKeputusanPutaran", () => {
+  it("memakai decision_id dari created[0] (backend baru)", () => {
+    expect(
+      idKeputusanPutaran({
+        created: [{ commodity: "wortel", decision_id: "d-wortel" }],
+        skipped: [],
+      }),
+    ).toBe("d-wortel");
+  });
+
+  it("jatuh ke decision_id akar untuk payload backend lama", () => {
+    expect(idKeputusanPutaran({ decision_id: "d-lama" })).toBe("d-lama");
+  });
+
+  it("null bila tidak ada id — tidak menebak", () => {
+    expect(idKeputusanPutaran({ created: [{ commodity: "wortel" }] })).toBeNull();
+    expect(idKeputusanPutaran(null)).toBeNull();
   });
 });

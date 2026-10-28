@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 //
-// Fase 10 MG — bukti interaksi Demo Control (butir 1, 2, 3).
+// Bukti interaksi Demo Control (butir 1, 2, 3).
 //
 // Kenapa berkas ini ada padahal `realtime-demo-control.test.tsx` sudah menguji
 // bentuk payload: berkas itu membaca SUMBER. Yang tidak bisa dibuktikan dengan
 // membaca sumber adalah hal yang justru dijanjikan rencana —
 //
-//   - klik tombol benar-benar mengirim payload berbeda (bukan mengganti label),
+//   - klik "Muat Demo" benar-benar mengirim payload yang benar (bukan mengganti
+//     label saja), dan tidak ada lagi tombol mode terpisah di layar,
 //   - SESI hasil balasan server BENAR-BENAR masuk state (dan dipakai analisis
 //     berikutnya),
 //   - refresh membaca sesi dari server (mode + jangkar yang sama), lalu sesi
@@ -75,13 +76,16 @@ const STATUS_DATA = {
 function pasangFetch(rute: Record<string, (p: Panggilan) => unknown>) {
   const panggilan: Panggilan[] = [];
   const palsu = vi.fn(async (url: string, init?: RequestInit) => {
+    // `jalur` disimpan UTUH (termasuk query) supaya asersi bisa memeriksa
+    // parameter; routing memakai pathname-nya.
     const jalur = String(url).replace(/^https?:\/\/[^/]+/, "");
+    const pathname = jalur.split("?")[0];
     const metode = (init?.method ?? "GET").toUpperCase();
     const badan = init?.body ? JSON.parse(String(init.body)) : null;
-    const rekam = { metode, jalur: jalur.split("?")[0], badan };
+    const rekam = { metode, jalur, badan };
     panggilan.push(rekam);
-    const kunci = `${metode} ${rekam.jalur}`;
-    const penangan = rute[kunci] ?? rute[rekam.jalur];
+    const kunci = `${metode} ${pathname}`;
+    const penangan = rute[kunci] ?? rute[pathname];
     if (!penangan) return jawab({ detail: `tidak ada rute ${kunci}` }, 404);
     return jawab(penangan(rekam));
   });
@@ -136,10 +140,10 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-// --- butir 1: dua tombol, dua payload, dua sesi -----------------------------
+// --- butir 1: satu tombol, satu payload ------------------------------------
 
-describe("klik dua tombol memuat dataset", () => {
-  it("Muat Demo Real-time mengirim mode=realtime + replace, lalu sesi server masuk state", async () => {
+describe("klik tombol Muat Demo memuat dataset", () => {
+  it("Muat Demo mengirim mode=realtime + replace, lalu sesi server masuk state", async () => {
     const panggilan = pasangFetch({
       "GET /demo/session": () => sesi(),
       "GET /demo/data-status": () => STATUS_DATA,
@@ -157,7 +161,10 @@ describe("klik dua tombol memuat dataset", () => {
 
     const wadah = await pasangPanel();
     expect(teks(wadah)).toContain("8 Okt 2026 12:00 UTC");
-    await klik(wadah, "Muat Demo Real-time");
+    // Tombol mode terpisah sudah dihapus: yang ada hanya "Muat Demo".
+    expect(teks(wadah)).not.toContain("Muat Demo Utama");
+    expect(teks(wadah)).not.toContain("Muat Demo Real-time");
+    await klik(wadah, "Muat Demo");
 
     const mulai = panggilan.filter((p) => p.metode === "POST" && p.jalur === "/demo/session/start");
     expect(mulai).toHaveLength(1);
@@ -180,22 +187,35 @@ describe("klik dua tombol memuat dataset", () => {
     expect(jalan[0].badan.mode).toBe("realtime");
   });
 
-  it("Muat Demo Utama mengirim mode=replay + replace", async () => {
+  it("sesi replay yang masih tersisa diganti dataset realtime, bukan diteruskan", async () => {
+    // Keadaan nyata setelah tombol replay dihapus: DB masih memegang sesi replay
+    // dari geladi sebelumnya. Menekan "Muat Demo" harus MENGGANTI sesi itu
+    // (replace), bukan menumpang jangkar 8 Okt yang sudah tidak bisa dipilih.
     const panggilan = pasangFetch({
-      "GET /demo/session": () => sesi({ mode: "realtime", evaluation_anchor: ANCHOR_REALTIME }),
+      "GET /demo/session": () => sesi({ mode: "replay", evaluation_anchor: ANCHOR_REPLAY }),
       "GET /demo/data-status": () => STATUS_DATA,
       "GET /demo/agent/last-run": () => ({ found: false }),
       "GET /demo/agent/commodities": () => ({ commodities: ["beras"] }),
-      "POST /demo/session/start": () => sesi({ created: false, session_id: SID_BARU }),
+      "POST /demo/session/start": () =>
+        sesi({
+          created: false,
+          session_id: SID_BARU,
+          mode: "realtime",
+          evaluation_anchor: ANCHOR_REALTIME,
+          dataset_version: "realtime-2026-10-27T08:15:00Z",
+        }),
     });
 
     const wadah = await pasangPanel();
-    await klik(wadah, "Muat Demo Utama");
+    expect(teks(wadah)).toContain("8 Okt 2026 12:00 UTC");
+    await klik(wadah, "Muat Demo");
 
     const mulai = panggilan.filter((p) => p.metode === "POST" && p.jalur === "/demo/session/start");
     expect(mulai).toHaveLength(1);
-    expect(mulai[0].badan).toEqual({ mode: "replay", replace: true });
-    expect(teks(wadah)).toContain("8 Okt 2026 12:00 UTC");
+    expect(mulai[0].badan).toEqual({ mode: "realtime", replace: true });
+    // Jangkar replay hilang dari layar: yang tampil jangkar sesi baru.
+    expect(teks(wadah)).not.toContain("8 Okt 2026 12:00 UTC");
+    expect(teks(wadah)).toContain("27 Okt 2026 08:15 UTC");
   });
 });
 
@@ -317,5 +337,36 @@ describe("kesiapan kasus pada panel sesi", () => {
     });
     const wadah = await pasangPanel();
     expect(teks(wadah)).not.toContain("Kesiapan kasus");
+  });
+});
+
+describe("bukti putaran mengikuti komoditas yang dijalankan", () => {
+  it("last-run diminta dengan ?commodity= setelah agent dijalankan", async () => {
+    // 28 Okt 2026: satu putaran "semua" menulis beberapa keputusan dalam satu
+    // transaksi, jadi "putaran terbaru" bisa milik komoditas lain. Panel harus
+    // meminta bukti untuk komoditas yang barusan ditekan.
+    const panggilan = pasangFetch({
+      "GET /demo/session": () => sesi(),
+      "GET /demo/data-status": () => STATUS_DATA,
+      "GET /demo/agent/last-run": () => ({ found: false }),
+      "GET /demo/agent/commodities": () => ({ commodities: ["beras", "wortel"] }),
+      "POST /demo/agent/run": () => ({
+        commodity: "beras",
+        decision_id: "d-beras",
+        created: [{ commodity: "beras", decision_id: "d-beras" }],
+      }),
+    });
+
+    const wadah = await pasangPanel();
+    await klik(wadah, "Jalankan agent");
+
+    const bukti = panggilan.filter(
+      (p) => p.metode === "GET" && p.jalur.startsWith("/demo/agent/last-run?")
+    );
+    expect(bukti.length).toBeGreaterThan(0);
+    expect(bukti.at(-1)!.jalur).toContain("commodity=beras");
+    // 28 Okt 2026: id keputusan dari respons run dipakai eksplisit, supaya
+    // pembacaan bukti tidak kalah balapan dengan commit jejak di server.
+    expect(bukti.at(-1)!.jalur).toContain("decision_id=d-beras");
   });
 });

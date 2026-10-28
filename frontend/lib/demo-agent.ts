@@ -96,6 +96,29 @@ export type PutaranKomoditas = {
 };
 
 /**
+ * Id keputusan yang lahir dari satu putaran "Jalankan agent", kalau ada.
+ *
+ * Panel memakainya untuk membaca bukti SECARA EKSPLISIT: pencarian "putaran
+ * terbaru" bisa kosong sesaat karena server menyelesaikan commit jejak
+ * beberapa milidetik setelah balasan HTTP (gejala 28 Okt 2026: kartu Bukti
+ * agent kosong tepat setelah berhasil menjalankan wortel).
+ *
+ * Backend baru mengirim `created[0].decision_id`; backend lama hanya
+ * `decision_id` di akar payload. Selain itu → `null`, bukan tebakan.
+ */
+export function idKeputusanPutaran(outcome: unknown): string | null {
+  if (!outcome || typeof outcome !== "object") return null;
+  const isi = outcome as PutaranKomoditas & { decision_id?: string | null };
+  const dibuat = Array.isArray(isi.created) ? isi.created : [];
+  for (const baris of dibuat) {
+    const id = String(baris?.decision_id ?? "").trim();
+    if (id) return id;
+  }
+  const akar = String(isi.decision_id ?? "").trim();
+  return akar || null;
+}
+
+/**
  * Ringkasan satu putaran "Jalankan agent" untuk dibaca operator.
  *
  * Murni: setiap angka dan nama diambil dari payload server (`created`/

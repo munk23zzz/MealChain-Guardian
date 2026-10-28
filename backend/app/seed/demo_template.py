@@ -53,10 +53,12 @@ from app.models import (
     BatchReceipt,
     Commodity,
     Decision,
+    DemandRecord,
     Location,
     SapMockPurchaseOrder,
     Supplier,
     SupplierExclusion,
+    SupplyRecord,
     User,
 )
 from app.seed.demo_kasus_bukti import semai_kasus_bukti_hari_ini
@@ -230,8 +232,17 @@ async def _semai_inti(db: AsyncSession, now: datetime) -> dict:
             "rute": rute, "rute_error": rute_error}
 
 
-async def _semai_kasus(db: AsyncSession) -> dict:
-    """Empat kasus skrip untuk tiap kota demo (kartu bisa disetujui peran kota itu)."""
+async def _semai_kasus(
+    db: AsyncSession, *, mode: str | None = None, anchor: datetime | None = None
+) -> dict:
+    """Kasus skrip (dan kasus komoditas) untuk tiap kota demo.
+
+    Kartu harus bisa disetujui peran kota itu. `mode`/`anchor` (Fase 7 MG)
+    diteruskan ke `_seed_demo_cases` supaya ID dan WAKTU kejadian kasus mengikuti
+    jangkar sesi yang sedang dibangun: replay memakai jangkar kanon, realtime
+    memakai waktu sesi. Tanpa penerusan ini, dua mode menghasilkan data yang
+    sama persis dan pilihan mode hanya menjadi label di layar.
+    """
     from app.api.demo import _seed_demo_cases
 
     hasil = {}
@@ -240,7 +251,9 @@ async def _semai_kasus(db: AsyncSession) -> dict:
         if kota is None:
             hasil[nama] = "lokasi tidak ada"
             continue
-        hasil[nama] = await _seed_demo_cases(db, force=True, target=kota)
+        hasil[nama] = await _seed_demo_cases(
+            db, force=True, target=kota, mode=mode, anchor=anchor
+        )
     return hasil
 
 
@@ -468,9 +481,9 @@ async def _semai_stok_mendekati_batas(db: AsyncSession, now: datetime) -> dict:
         if komoditas_id is None:
             hasil[kunci] = "komoditas tidak ada"
             continue
-        batch_id = (
+        baris = (
             await db.execute(
-                select(Batch.id)
+                select(Batch.id, Batch.dispatched_at)
                 .where(
                     Batch.location_id == lokasi.id,
                     Batch.commodity_id == komoditas_id,
@@ -481,16 +494,18 @@ async def _semai_stok_mendekati_batas(db: AsyncSession, now: datetime) -> dict:
                 .order_by(Batch.quantity_kg.asc(), Batch.id)
                 .limit(1)
             )
-        ).scalar_one_or_none()
-        if batch_id is None:
+        ).first()
+        if baris is None:
             hasil[kunci] = "tanpa batch layak"
             continue
+        batch_id, berangkat = baris
+        panen = panen_aman(item["harvested_at"], berangkat)
         await db.execute(
             update(Batch)
             .where(Batch.id == batch_id)
             .values(
                 usable_until=item["usable_until"],
-                harvested_at=item["harvested_at"],
+                harvested_at=panen,
                 freshness_score=item["freshness_score"],
             )
         )
@@ -1756,6 +1771,307 @@ WHERE lb.generation = :g AND lb.entity_id IS NOT NULL
 """
 
 
+def target_kebutuhan_demo(pasokan_kg: Decimal) -> Decimal:
+    """Kebutuhan yang dipakai saat demo butuh CELAH pasokan.
+
+    Aturan: 125% pasokan + 40 kg. Angkanya sengaja tidak mepet (celah minimal
+    25% agar kandidat punya `demand_fit` yang wajar) dan tidak berlebihan
+    (supaya cerita "tambah porsi" tetap masuk akal untuk satu SPPG).
+
+    Murni: tanpa DB, tanpa jam — bisa diuji langsung.
+    """
+    if pasokan_kg <= 0:
+        raise ValueError("pasokan harus > 0; celah tidak bisa dibuat dari nol")
+    return (pasokan_kg * Decimal("1.25") + Decimal("40")).quantize(Decimal("0.01"))
+
+
+def panen_aman(panen: datetime, berangkat: datetime | None) -> datetime:
+    """Jaga `dispatched_at >= harvested_at` (CHECK `batches_dispatch_after_harvest`).
+
+    Menggeser jangkar panen ke jendela ≤48 jam bisa membuat panen jatuh SESUDAH
+    keberangkatan batch yang sama; DB menolaknya dan seluruh build realtime
+    gagal (terukur 28 Okt 2026 pada DB demo, batch 0ff8f2b1: panen 07:29,
+    berangkat 07:00). Panen dijepit 5 menit sebelum keberangkatan.
+    """
+    if berangkat is not None and panen >= berangkat:
+        return berangkat - timedelta(minutes=5)
+    return panen
+
+
+def boleh_menambah_celah(mode: str | None) -> bool:
+    """Celah hanya ditambahkan pada sesi REALTIME.
+
+    Replay memakai dataset kanonik 8 Okt 2026 — di situ Jakarta/wortel memang
+    SURPLUS dan itu kontrak pemilik (`test_seed_kasus_surplus_jakarta.py`).
+    Menambah kebutuhan di replay akan menghapus kasus surplus yang dipakai
+    skenario transfer. Sebaliknya di realtime, "menu hari ini menambah porsi"
+    adalah cerita yang sah dan membuat keempat komoditas bisa dijalankan.
+    """
+    return (mode or "realtime").strip().lower() != "replay"
+
+
+def butuh_penyesuaian_kebutuhan(
+    pasokan_kg: Decimal, permintaan_kg: Decimal | None
+) -> bool:
+    """True bila kebutuhan BELUM melebihi pasokan (celah ≤ 0).
+
+    Komoditas yang sudah kekurangan TIDAK boleh diubah — menaikkan angka yang
+    sudah benar akan menggeser KPI dan cerita yang sudah terbukti.
+    """
+    return permintaan_kg is None or permintaan_kg <= pasokan_kg
+
+
+async def _pastikan_kebutuhan_demo(
+    db: AsyncSession,
+    now: datetime,
+    *,
+    anchor: datetime | None = None,
+    mode: str | None = None,
+) -> dict:
+    """Pastikan KEBUTUHAN demo melebihi PASOKAN pada jangkar, per kota×komoditas.
+
+    Kenapa (28 Okt 2026): "Jalankan agent" hanya bisa membuat keputusan bila ada
+    celah pasokan (`gap_kg > 0`); tanpa celah, server menjawab 409 "SPPG ini
+    tidak kekurangan komoditas tersebut". Seed kanonik sengaja menyimpan
+    Jakarta/wortel SURPLUS (kontrak `test_seed_kasus_surplus_jakarta.py`), jadi
+    tombol itu selalu gagal untuk wortel walau stok dan pemasoknya siap —
+    juri melihat fitur yang tampak rusak.
+
+    Langkah ini TIDAK menyentuh kontrak itu: baris kanonik (`origin='seed'`)
+    tidak diubah, dan baris yang ditulis di sini ber-`origin='demo'` sehingga
+    ikut terhapus saat sesi berakhir. Ceritanya masuk akal untuk demo: menu hari
+    ini menambah porsi, jadi kebutuhan naik di atas pasokan yang ada.
+
+    Dipakai hanya bila memang TIDAK ada celah; komoditas yang sudah kekurangan
+    dibiarkan apa adanya (jangan menaikkan angka yang sudah benar).
+    """
+    # `evaluate_suppliers` dipanggil TANPA `as_of` oleh orkestrator pengadaan,
+    # jadi celah dihitung pada JAM DINDING, bukan pada `evaluation_anchor` sesi.
+    # Karena itu baris yang disesuaikan di sini juga berpatokan pada `now` —
+    # kalau memakai anchor, baris snapshot yang ditulis build ini (beberapa
+    # perseratus detik SETELAH anchor) tak terlihat dan celah tetap 0.
+    if not boleh_menambah_celah(mode):
+        return {"dilewati": f"mode {mode}: surplus kanonik dipertahankan"}
+    stempel = now
+    # Hanya kota yang PUNYA AKUN SPPG demo (Jakarta/Bandung/Surabaya): di situlah
+    # operator bisa menekan "Jalankan agent". Kota sumber surplus (Cianjur/Bogor)
+    # sengaja TIDAK disentuh supaya cerita surplus→kekurangan tetap utuh.
+    kota_akun = set(
+        (
+            await db.execute(
+                select(User.location_id).where(User.location_id.is_not(None))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    lokasi = {
+        lok.id: lok.name
+        for lok in (await db.execute(select(Location))).scalars().all()
+        if lok.id in kota_akun
+    }
+    komoditas = {
+        kom.id: kom.name
+        for kom in (await db.execute(select(Commodity))).scalars().all()
+    }
+
+    disentuh: list[str] = []
+    for loc_id, nama_lokasi in sorted(lokasi.items(), key=lambda p: p[1]):
+        for com_id, nama_komoditas in sorted(komoditas.items(), key=lambda p: p[1]):
+            pasokan = (
+                await db.execute(
+                    select(SupplyRecord)
+                    .where(
+                        SupplyRecord.location_id == loc_id,
+                        SupplyRecord.commodity_id == com_id,
+                        SupplyRecord.recorded_at <= stempel,
+                    )
+                    .order_by(SupplyRecord.recorded_at.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if pasokan is None or pasokan.quantity_kg <= 0:
+                continue
+            # Dua baris bisa mewakili "hari ini": baris demo terakhir sebelum
+            # jangkar, dan snapshot seed yang ditulis build ini beberapa saat
+            # SETELAH jangkar (selisih <1 detik). Keduanya dinaikkan ke angka
+            # yang sama supaya agen (as_of = jangkar) dan dashboard (as_of = now)
+            # tidak saling bertentangan.
+            kandidat = (
+                (
+                    await db.execute(
+                        select(DemandRecord)
+                        .where(
+                            DemandRecord.location_id == loc_id,
+                            DemandRecord.commodity_id == com_id,
+                            DemandRecord.recorded_at <= stempel,
+                        )
+                        .order_by(DemandRecord.recorded_at.desc())
+                        .limit(2)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            terkini = kandidat[0] if kandidat else None
+            if not butuh_penyesuaian_kebutuhan(
+                pasokan.quantity_kg, terkini.quantity_kg if terkini else None
+            ):
+                continue
+            target = target_kebutuhan_demo(pasokan.quantity_kg)
+            needed_by = stempel + timedelta(days=3)
+            if kandidat:
+                for baris in kandidat:
+                    baris.quantity_kg = target
+                    baris.needed_by = needed_by
+                    baris.generated_at = now
+            else:
+                db.add(
+                    DemandRecord(
+                        id=_uid(
+                            "kebutuhan-demo",
+                            nama_lokasi,
+                            nama_komoditas,
+                            stempel.isoformat(),
+                        ),
+                        location_id=loc_id,
+                        commodity_id=com_id,
+                        quantity_kg=target,
+                        needed_by=needed_by,
+                        recorded_at=stempel - timedelta(minutes=1),
+                        origin="demo",
+                        generated_at=now,
+                    )
+                )
+            disentuh.append(f"{nama_lokasi}/{nama_komoditas}")
+
+    await db.flush()
+    return {"disesuaikan": len(disentuh), "pasangan": disentuh[:10]}
+
+
+async def _pastikan_stok_siap_dibeli(db: AsyncSession, now: datetime) -> dict:
+    """Satu batch BELUM BERANGKAT per (lokasi, komoditas) supaya bisa dibeli.
+
+    Kenapa (28 Okt 2026): garis truk di peta dibuat dengan memberi
+    `dispatched_at` pada hampir semua batch. Setelah aturan "stok yang sudah
+    berangkat bukan kandidat pengadaan" ditegakkan, pengadaan bisa kehabisan
+    stok: tombol "Jalankan agent" menjawab 409 "tidak ada pemasok ... yang bisa
+    dikirim sekarang" dan juri melihat fitur yang tampak rusak. Langkah ini
+    membuka kembali satu batch per pasangan (lokasi, komoditas) — dipilih yang
+    kesegarannya tertinggi — hanya bila pasangan itu tidak punya stok siap
+    dibeli sama sekali, dan hanya bila masih tersisa minimal dua kiriman
+    berjalan agar peta tidak kehilangan garis.
+    """
+    from app.models import DecisionEvidence
+
+    terikat: set[str] = set()
+    # SEMUA binding keputusan (bukan hanya yang belum dieksekusi): batch yang
+    # sudah dipakai keputusan/PO adalah bukti yang dipakai ulang tes penerimaan
+    # dan binding. Menarik status berangkatnya mengubah keamanan/kesegarannya
+    # dan mematahkan rantai bukti (terukur 28 Okt 2026: 5 tes penerimaan &
+    # binding gagal karena batch PO berubah jadi needs_verification/fail).
+    payloads = (
+        (await db.execute(select(DecisionEvidence.payload)))
+        .scalars()
+        .all()
+    )
+    for payload in payloads:
+        for nilai in (payload or {}).get("batch_ids") or []:
+            terikat.add(str(nilai))
+
+    baris = (await db.execute(select(Batch))).scalars().all()
+    grup: dict[tuple[uuid.UUID, uuid.UUID], list[Batch]] = {}
+    for b in baris:
+        if b.location_id is None or b.commodity_id is None:
+            continue
+        grup.setdefault((b.location_id, b.commodity_id), []).append(b)
+
+    def _aman(b: Batch) -> bool:
+        return (
+            b.safety_status == "pass"
+            and (b.quarantine_status or "none") == "none"
+            and (b.usable_until is None or b.usable_until > now)
+            and str(b.id) not in terikat
+        )
+
+    dibuka: list[str] = []
+    for daftar in grup.values():
+        if any(b.dispatched_at is None and _aman(b) for b in daftar):
+            continue
+        berjalan = [b for b in daftar if b.dispatched_at is not None]
+        if not berjalan:
+            continue
+        # Satu kiriman pun boleh ditarik kembali: alur "beli → kirim → truk
+        # bergerak" lebih penting daripada satu garis tambahan di peta. Kalau
+        # pasangan ini tetap tanpa stok siap dibeli, tombol "Jalankan agent"
+        # berakhir 409 dan fitur tampak rusak (terukur 28 Okt 2026).
+        calon = sorted(
+            (b for b in berjalan if _aman(b)),
+            key=lambda b: (b.freshness_score or 0.0),
+            reverse=True,
+        )
+        if calon:
+            calon[0].dispatched_at = None
+            dibuka.append(str(calon[0].id))
+            continue
+        # Tidak ada batch yang bisa dipakai (semua terikat keputusan lain,
+        # kedaluwarsa, atau gagal uji). Menarik status berangkat tidak menolong:
+        # stoknya memang tidak layak. Buat satu batch segar supaya janji
+        # "pengadaan bisa jalan" tetap benar (terukur 28 Okt 2026: Jakarta/telur
+        # punya 13 batch dan semuanya sudah berangkat/terikat → 409).
+        contoh = max(daftar, key=lambda b: (b.harvested_at or now))
+        if contoh.supplier_id is None:
+            continue
+        # Suhu contoh HARUS di dalam pita aman profil komoditas. Dulu selalu
+        # 26,0 C, sehingga batch ayam rantai dingin lahir "pass" dengan log
+        # 7 x 26 C — mustahil secara domain dan membuat verifier menandai
+        # keputusan yang memakainya (terukur 28 Okt 2026 pada batch 00d39840).
+        from app.core.policy_store import profil_untuk_komoditas
+
+        profil_contoh, _asal_contoh = await profil_untuk_komoditas(
+            db, contoh.commodity_id
+        )
+        if (
+            profil_contoh.safe_temp_min_c is not None
+            and profil_contoh.safe_temp_max_c is not None
+        ):
+            suhu_contoh = round(
+                (profil_contoh.safe_temp_min_c + profil_contoh.safe_temp_max_c) / 2, 1
+            )
+        else:
+            suhu_contoh = 26.0
+        jumlah_sampel = max(7, int(profil_contoh.min_temperature_samples or 0))
+        segar = Batch(
+            commodity_id=contoh.commodity_id,
+            location_id=contoh.location_id,
+            supplier_id=contoh.supplier_id,
+            quantity_kg=Decimal("300"),
+            harvested_at=now - timedelta(hours=6),
+            usable_until=now + timedelta(days=30),
+            certification_status=contoh.certification_status,
+            # origin "seed", bukan "demo": batch ini pengganti stok kanonik, dan
+            # langkah `_bersihkan_sisa` menyapu baris demo tanpa stempel sesi —
+            # dengan "demo" batch barunya ikut terhapus lagi (terukur 28 Okt
+            # 2026: lulus saat diuji sendiri, gagal di suite penuh).
+            origin="seed",
+            safety_status="pass",
+            quarantine_status="none",
+            freshness_score=Decimal("0.95"),
+            temperature_log=[
+                {
+                    "timestamp": (now - timedelta(hours=6 - jam)).isoformat(),
+                    "temperature_c": suhu_contoh,
+                }
+                for jam in range(jumlah_sampel)
+            ],
+        )
+        db.add(segar)
+        dibuka.append("baru")
+
+    await db.flush()
+    return {"dibuka": len(dibuka), "batch": dibuka[:10]}
+
+
 async def _rapikan_cakupan_ledger(db: AsyncSession) -> dict:
     """Tutup celah blok yatim secara struktural di akhir bangun-ulang.
 
@@ -2134,8 +2450,14 @@ async def _semai_deret() -> dict:
 
 
 async def build_into(db: AsyncSession, *, purge: bool = True, freeze: bool = True,
-                     bersihkan_sisa: bool = True) -> dict:
-    """Bangun template di sesi DB yang sudah ada (dipakai CLI dan endpoint sesi)."""
+                     bersihkan_sisa: bool = True, mode: str | None = None,
+                     anchor: datetime | None = None) -> dict:
+    """Bangun template di sesi DB yang sudah ada (dipakai CLI dan endpoint sesi).
+
+    `mode`/`anchor` (Fase 7 MG) = kerangka waktu sesi yang SEDANG dibangun.
+    Diteruskan ke penyemai kasus; langkah lain tetap memakai `now` karena data
+    kanonik memang dataset "digeser ke hari ini".
+    """
     now = datetime.now(timezone.utc)
     laporan: dict = {}
     if purge:
@@ -2145,7 +2467,7 @@ async def build_into(db: AsyncSession, *, purge: bool = True, freeze: bool = Tru
     # harus sudah terlihat oleh koneksi itu sebelum jangkar dibaca.
     await db.commit()
     laporan["deret"] = await _semai_deret()
-    laporan["kasus"] = await _semai_kasus(db)
+    laporan["kasus"] = await _semai_kasus(db, mode=mode, anchor=anchor)
     laporan["kasus_jakarta"] = await _perkaya_kasus_jakarta(db, now)
     laporan["karantina"] = await _semai_karantina(db, now)
     laporan["penerimaan"] = await _semai_penerimaan(db, now)
@@ -2174,6 +2496,15 @@ async def build_into(db: AsyncSession, *, purge: bool = True, freeze: bool = Tru
     # dengan satu approval tanpa mengubah rumus KPI. Lihat
     # `app/seed/demo_kasus_bukti.py`.
     laporan["kasus_bukti"] = await semai_kasus_bukti_hari_ini(db, now)
+    # Celah pasokan: tanpa gap_kg > 0, "Jalankan agent" menjawab 409 "SPPG ini
+    # tidak kekurangan komoditas tersebut" (kasus Jakarta/wortel yang sengaja
+    # surplus di seed kanonik). Lihat docstring fungsinya.
+    laporan["kebutuhan_demo"] = await _pastikan_kebutuhan_demo(
+        db, now, anchor=anchor, mode=mode
+    )
+    # Stok yang benar-benar bisa dibeli: tanpa langkah ini seluruh batch habis
+    # diberangkatkan untuk garis peta, sehingga "Jalankan agent" berakhir 409.
+    laporan["stok_siap_dibeli"] = await _pastikan_stok_siap_dibeli(db, now)
     # D-02: tidak boleh ada blok ledger generasi aktif yang menunjuk entitas
     # yang sudah dihapus langkah-langkah di atas. Jaring terakhir, bukan
     # pengganti perbaikan per-langkah.
