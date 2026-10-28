@@ -46,7 +46,15 @@ def _iter_angka(value: Any) -> Iterable[float]:
         try:
             yield float(teks)
         except ValueError:
-            return
+            pass
+        # Angka yang TERTANAM di teks fakta ("900 kg", "3.010,5 kg", "55,606 km").
+        # Tanpa ini, besaran yang ditulis sebagai teks tidak masuk `angka_dikenal`
+        # dan narasi yang menyebutnya utuh tetap dituduh tanpa sumber (terukur
+        # 28 Okt 2026: beras `2e8154ac`, telur `5315abc4`, wortel `09dbde4e`).
+        from .verifier_checks import angka_dalam_teks
+
+        for _raw, nilai in angka_dalam_teks(teks):
+            yield nilai
         return
     if isinstance(value, dict):
         for item in value.values():

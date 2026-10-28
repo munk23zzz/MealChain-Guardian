@@ -92,6 +92,13 @@ def angka_dalam_teks(teks: str) -> list[tuple[str, float]]:
         raw = match.group(0)
         if _ID_PANJANG.match(raw):
             continue
+        # Potongan id ("2e8154ac" → "8154", "bf6fccbd" → "6") bukan besaran.
+        # 28 Okt 2026: narasi menyebut id keputusan dan cek menuduhnya angka
+        # tanpa sumber, padahal itu bagian dari id.
+        sebelum = isi[match.start() - 1] if match.start() > 0 else ""
+        sesudah = isi[match.end()] if match.end() < len(isi) else ""
+        if (sebelum.isalnum() or sebelum == "_") or (sesudah.isalnum() or sesudah == "_"):
+            continue
         nilai = _ke_float(raw)
         if nilai is None:
             continue
@@ -229,6 +236,12 @@ def _presisi_teks(raw: str) -> int:
     return 0
 
 
+def _tahun(raw: str) -> bool:
+    """Angka 4 digit tanpa pemisah pada rentang 1900–2100 = tahun, bukan besaran."""
+    teks = raw.strip()
+    return bool(re.fullmatch(r"\d{4}", teks)) and 1900 <= int(teks) <= 2100
+
+
 def cek_angka_bersitasi(
     klaim: KlaimSupervisor, fakta: dict[str, Any], angka_dikenal: Iterable[float]
 ) -> VerifierCheck:
@@ -237,6 +250,10 @@ def cek_angka_bersitasi(
     tanpa_sumber: list[str] = []
     for raw, nilai in angka_dalam_teks(klaim.teks):
         if nilai in ANGKA_STRUKTURAL or nilai in ANGKA_AMBANG:
+            continue
+        # Tahun ("2026", "2027") bukan besaran pasokan/harga; menuntutnya
+        # bersitasi membuat setiap narasi bertanggal ditandai gagal.
+        if _tahun(raw):
             continue
         # Toleransi = setengah satuan digit terakhir yang ditulis narasi.
         toleransi = 0.5 * 10 ** (-_presisi_teks(raw))
@@ -430,6 +447,18 @@ def cek_ledger(
     # akan menandai setiap review dini. Yang diaudit: klaim "sudah tercatat"
     # pada keputusan yang sudah punya aksi.
     status = str(fakta.get("status") or "").lower()
+    # Penentu sebenarnya bukan label status, melainkan ada-tidaknya aksi:
+    # blok ledger lahir saat eksekusi. Keputusan tanpa aksi (termasuk
+    # `needs_verification`/`verifier_flagged` dan label baru di kemudian hari)
+    # tidak boleh dituntut sudah punya blok.
+    aksi = ledger.get("actions")
+    if jumlah == 0 and not aksi:
+        return _cek(
+            "ledger_tercatat",
+            "ada blok ledger untuk keputusan",
+            aktual + " (belum ada aksi)",
+            True,
+        )
     # Blok ledger lahir saat eksekusi. `pending_approval` juga belum punya
     # aksi — dulu status itu tidak ada di daftar, sehingga SETIAP review yang
     # lahir dari Demo Control ditandai gagal `ledger_tercatat` dan keputusan
