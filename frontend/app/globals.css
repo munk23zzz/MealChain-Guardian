@@ -5677,10 +5677,27 @@ a:focus-visible {
 .agenda-groups {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 14px 22px;
+  gap: 18px 28px;
+  align-items: start;
+}
+/* Dua kolom di layar lebar: tiga kolom sempit memaksa keterangan "13 menunggu
+   persetujuan · 2 dieksekusi · 2 ditandai" membungkus jadi dua baris pendek.
+   Kelompok ganjil terakhir memakai lebar penuh supaya tidak menyisakan lubang. */
+@media (min-width: 720px) {
+  .agenda-groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .agenda-group:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+.agenda-group {
+  display: grid;
+  gap: 2px;
+  align-content: start;
 }
 .agenda-group-title {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   font-size: var(--fs-1);
   font-weight: 600;
   letter-spacing: var(--track-caps);
@@ -5810,46 +5827,63 @@ a:focus-visible {
 }
 
 .agenda-panel {
-  margin-top: 12px;
-  border-top: 1px solid var(--line, #e2e8f0);
-  padding-top: 10px;
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
 }
 
 .agenda-panel h3 {
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   font-size: var(--fs-3);
 }
 
+/* Satu baris agenda = dua kolom tetap (label | nilai). Dulu flex
+   space-between: nilai panjang membungkus di tengah sehingga tepi kanan
+   bergerigi dan baris tidak sejajar satu sama lain. */
 .agenda-rows {
   display: grid;
-  gap: 6px;
+  gap: 0;
   margin: 0;
 }
 
 .agenda-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
   align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  border-bottom: 1px dashed var(--line, #e2e8f0);
-  padding-bottom: 4px;
+  gap: 2px 14px;
+  padding-block: 7px;
+}
+
+/* Pemisah rambut hanya ANTAR baris dalam satu kelompok: garis putus-putus di
+   setiap baris (termasuk baris terakhir) membuat kolom terbaca seperti formulir
+   yang belum diisi. */
+.agenda-row + .agenda-row {
+  border-top: 1px solid var(--line);
 }
 
 .agenda-row dt {
-  color: var(--slate);
+  color: var(--ink-muted);
   font-size: var(--fs-2);
 }
 
 .agenda-row dd {
   margin: 0;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+  text-align: right;
+  min-width: 0;
 }
 
-.agenda-row dd.agenda-none {
+.agenda-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.agenda-row dd.agenda-none .agenda-value {
   font-weight: 400;
-  color: var(--slate);
+  color: var(--ink-muted);
 }
 
 .agenda-hint {
@@ -5857,7 +5891,8 @@ a:focus-visible {
      Dipatok ke token terkecil supaya tetap 12 px (17 Okt). */
   font-size: var(--fs-1);
   font-weight: 400;
-  color: var(--slate);
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
 }
 
 .agenda-muted {
@@ -14737,5 +14772,16 @@ p, li, dd { text-wrap: pretty; }
 @media (max-width: 720px) {
   .approval-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .agenda-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1px;
+  }
+  .agenda-row dd {
+    justify-items: start;
+    text-align: left;
   }
 }

@@ -115,10 +115,16 @@ describe("kalender agenda — baris ringkasan hari", () => {
       decisions: { rows: 12, by_status: { pending_approval: 12 }, available: true },
       activity: 7,
     };
-    const byLabel = Object.fromEntries(agendaRows(penuh).map((r) => [r.label, r.value]));
+    const baris = agendaRows(penuh);
+    const byLabel = Object.fromEntries(baris.map((r) => [r.label, r.value]));
     expect(byLabel["Pengiriman makan tiba"]).toBe("1.200 porsi");
     expect(byLabel["Limbah dibuang"]).toBe("4 kg");
-    expect(byLabel["Keputusan agen"]).toBe("12 (12 menunggu persetujuan)");
+    // Angka pokok dan rincian status DIPISAH: nilai panjang di dalam kurung
+    // membuat baris agenda membungkus di tengah kalimat.
+    expect(byLabel["Keputusan agen"]).toBe("12 keputusan");
+    expect(baris.find((r) => r.label === "Keputusan agen")?.hint).toBe(
+      "12 menunggu persetujuan"
+    );
   });
 });
 

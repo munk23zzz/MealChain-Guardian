@@ -166,9 +166,15 @@ export default function TodayAgendaCalendar({
                   {grup.rows.map((row) => (
                     <div className="agenda-row" key={row.label}>
                       <dt>{row.label}</dt>
+                      {/* Nilai dan keterangannya dua baris, bukan satu kalimat
+                          panjang berpemisah " · ": baris agenda dibaca sambil
+                          lalu, dan nilai yang membungkus di tengah membuat
+                          kolom kanan bergerigi. */}
                       <dd className={row.available ? "" : "agenda-none"}>
-                        {row.available ? row.value : AGENDA_NO_DATA}
-                        {row.hint ? <small className="agenda-hint"> · {row.hint}</small> : null}
+                        <span className="agenda-value">
+                          {row.available ? row.value : AGENDA_NO_DATA}
+                        </span>
+                        {row.hint ? <small className="agenda-hint">{row.hint}</small> : null}
                       </dd>
                     </div>
                   ))}

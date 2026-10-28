@@ -243,10 +243,12 @@ export function agendaRows(hari: AgendaDay): AgendaRow[] {
     },
     {
       label: "Keputusan agen",
-      value: keputusan
-        ? `${angka(keputusan.rows)}${rincianStatus.length ? ` (${rincianStatus.join(", ")})` : ""}`
-        : null,
+      // Angka pokok dan rincian status DIPISAH: nilai panjang di dalam kurung
+      // membuat baris agenda membungkus di tengah kalimat. Rinciannya menjadi
+      // `hint` yang dicetak pada barisnya sendiri.
+      value: keputusan ? `${angka(keputusan.rows)} keputusan` : null,
       available: Boolean(keputusan),
+      hint: keputusan && rincianStatus.length ? rincianStatus.join(" · ") : undefined,
     },
   ];
 }
