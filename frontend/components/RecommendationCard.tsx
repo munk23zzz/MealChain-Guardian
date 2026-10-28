@@ -1,13 +1,14 @@
 // RecommendationCard — item feed (design.md §3.2), disusun mengikuti kartu
 // keputusan acuan (`components/decisions/recommendation-card.tsx`):
-// judul + baris meta (jumlah · SDC · waktu) di kiri, badge status bertumpuk di
-// kanan, lalu baris chip + keterangan singkat. Tepi kiri berwarna tetap dipakai
+// Judul + baris meta (komoditas · jumlah · SDC · waktu) di kiri, badge status
+// bertumpuk di kanan. Tepi kiri berwarna tetap dipakai
 // sebagai penanda tingkat (danger/warning/netral) — seperan dengan badge urgensi
 // di acuan, tetapi terbaca bahkan saat kartu dipindai cepat.
 //
-// Data yang dipakai HANYA yang ada di envelope /decisions (envelope itu tidak
-// membawa komoditas/lokasi). Tidak ada baris yang dikarang: bila suatu nilai
-// tidak ada, ia ditulis apa adanya ("—" dari formatKg/formatIDR).
+// Data yang dipakai HANYA yang ada di envelope /decisions (termasuk
+// `commodity_name`, yang sejak 29 Okt 2026 dicetak sebagai label barang).
+// Envelope itu tidak membawa lokasi. Tidak ada baris yang dikarang: bila suatu
+// nilai tidak ada, ia ditulis apa adanya ("—" dari formatKg/formatIDR).
 
 import StatusBadge from "./StatusBadge";
 import { cardEdge } from "../lib/recommendations";
