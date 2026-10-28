@@ -87,7 +87,7 @@ export default function SurplusBoard({
       />
 
       {commodities && commodities.length > 0 && onChangeCommodity && (
-        <div className="commodity-filters filter-card" role="group" aria-label="Komoditas peta">
+        <div className="commodity-filters" role="group" aria-label="Komoditas peta">
           <span className="commodity-filters-label">Komoditas:</span>
           {commodities.map((c) => (
             <button

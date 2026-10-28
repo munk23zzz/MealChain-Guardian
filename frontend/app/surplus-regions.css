@@ -1,0 +1,423 @@
+/*
+ * Overview: "Kecukupan pasokan" (kiri, setengah halaman) + "Surplus wilayah
+ * lain" (kanan) — 28 Okt 2026.
+ *
+ * Dua kartu ini satu bahasa visual: kelas `supply-adequacy` / `sa-*` dipakai
+ * bersama (aturan grafik tetap di supply-adequacy.css). Berkas ini HANYA memuat
+ * (a) susunan dua kolom, (b) penyesuaian baris ketika kartu menjadi sempit
+ * (setengah halaman), dan (c) bagian khas panel surplus wilayah (hero total,
+ * warna komoditas, lencana "terbesar"). Tidak ada warna status baru.
+ */
+
+/* ── (a) Dua kolom: grafik setengah, surplus wilayah setengah ─────────────── */
+.ov-pasokan-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  /* Tinggi kedua kartu DIPAKSA SAMA (koreksi 28 Okt 2026: "perbaiki lagi
+     keduanya"). Dulu `align-items: start` — pilihan itu membuat tepi bawah
+     ragged (terukur grafik 372 px vs panel surplus 328 px, selisih 44 px).
+     Dengan stretch, kelebihan tinggi TIDAK menganggur di tengah: panel surplus
+     jadi kolom flex, daftar wilayahnya tumbuh mengisi sisa, dan baris chip
+     "Asal" tetap menempel di dasar kartu (lihat aturan `.sr-panel` di bawah). */
+  align-items: stretch;
+}
+
+.ov-pasokan-grid > * {
+  /* minmax(0, …) + min-width: 0: tanpa ini batang yang panjang memaksa track
+     melebar keluar kolom dan halaman melebar di viewport 1024 px. */
+  min-width: 0;
+}
+
+/* Kartu di dalam grid melebar setinggi pasangannya dan barisnya dibagi rata:
+   dua kartu berdampingan terbaca sebagai SATU grafik, bukan dua kotak dengan
+   tinggi berbeda. */
+.ov-pasokan-grid > .supply-adequacy {
+  display: flex;
+  flex-direction: column;
+  container-type: inline-size;
+}
+
+.ov-pasokan-grid .sa-rows {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.ov-pasokan-grid .sa-foot {
+  margin-top: auto;
+}
+
+@media (max-width: 1180px) {
+  /* Satu kolom: dua kartu selebar setengah halaman tidak lagi terbaca. */
+  .ov-pasokan-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── (b) Kartu sempit: batang jadi bintangnya ─────────────────────────────── */
+@container (max-width: 680px) {
+  .ov-pasokan-grid .sa-row-btn {
+    /* Dua baris, bukan tiga: nama + angka di baris atas, batang penuh di
+       bawahnya. Kolom batang dilepas dari baris atas supaya bar bisa memakai
+       SELURUH lebar kartu — itulah yang membuatnya terbaca sebagai bar chart. */
+    grid-template-columns: minmax(80px, 1fr) auto auto;
+    grid-template-areas:
+      "name nilai1 nilai2"
+      "track track track";
+    row-gap: 8px;
+    column-gap: 10px;
+    padding: 12px 10px 12px 14px;
+  }
+
+  .ov-pasokan-grid .sa-name {
+    grid-area: name;
+  }
+
+  .ov-pasokan-grid .sa-track {
+    grid-area: track;
+    height: 30px;
+    border-radius: var(--radius-control);
+  }
+
+  /* Grafik kecukupan: cakupan lalu selisih, keduanya di kanan atas. */
+  .supply-adequacy:not(.sr-panel) .sa-coverage {
+    grid-area: nilai1;
+  }
+
+  .supply-adequacy:not(.sr-panel) .sa-gap {
+    grid-area: nilai2;
+  }
+
+  /* Panel surplus: hanya ada SATU blok nilai (kg wilayah). */
+  .sr-panel .sa-coverage {
+    grid-area: nilai1;
+  }
+
+  .sr-panel .sa-gap {
+    grid-area: nilai2;
+  }
+
+  .ov-pasokan-grid .sa-rows {
+    gap: 0;
+  }
+
+  .ov-pasokan-grid .sa-commodity {
+    font-size: var(--fs-4);
+  }
+}
+
+/* ── (c) Panel "Surplus wilayah lain" ─────────────────────────────────────── */
+
+/* Kolom flex supaya tinggi kartu bisa disamakan dengan grafik di sebelahnya:
+   daftar wilayah tumbuh mengisi sisa tinggi, chip "Asal" tetap di dasar.
+   Tanpa ini, `align-items: stretch` hanya memindahkan kelebihan tinggi ke
+   lubang di antara baris wilayah dan baris chip. */
+.ov-pasokan-grid > .sr-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.ov-pasokan-grid > .sr-panel > .sa-rows {
+  flex: 1 1 auto;
+  /* Baris wilayah di-TENGAHKAN di sisa tinggi, bukan ditempel ke atas: dengan
+     satu wilayah layak (kasus BGN nasional) sebelumnya sisa ~100 px menganggur
+     di antara baris terakhir dan chip "Asal" — terbaca seperti kartu bocor.
+     Di tengah, kelebihan itu terbagi rata atas-bawah dan barisnya terbaca
+     sebagai isi kartu, bukan barang yang menggantung. */
+  display: flex;
+  flex-direction: column;
+  /* `safe center`: di tengah selama ada sisa ruang, tetapi kembali ke atas
+     begitu isinya lebih tinggi dari kartu — tanpa `safe`, wilayah yang banyak
+     (peran SPPG) bisa terpotong di sisi atas dan tidak bisa digulir. */
+  justify-content: safe center;
+}
+
+.ov-pasokan-grid > .sr-panel > .sa-rows > .sa-row {
+  flex: 0 0 auto;
+}
+
+.ov-pasokan-grid > .sr-panel > .sr-mix {
+  margin-top: auto;
+}
+
+/* Angka utama: satu per kartu, ditonjolkan. Latar tint aksen membuatnya jadi
+   titik masuk mata tanpa memakai warna status (hijau/merah tetap berarti
+   aman/bahaya di seluruh aplikasi). */
+.sr-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 8px 12px 9px;
+  /* Biru muda penuh membuat kotak ini terbaca sebagai peringatan; angkanya
+     sudah cukup menonjol lewat ukuran. Nada netral + garis biasa (29 Okt 2026). */
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+}
+
+.sr-hero strong {
+  color: var(--ink);
+  /* 32/700 → 24/600 (29 Okt 2026): permintaan pemilik "terlalu mencolok".
+     Angka hero halaman tetap 32 px; ini angka di dalam kartu. */
+  font-size: var(--fs-7);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-hero em {
+  margin-top: 5px;
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  font-style: normal;
+  font-weight: 500;
+}
+
+.sr-summary {
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.sr-row-btn {
+  /* Wilayah butuh lebih banyak ruang untuk batang bertumpuk, angka kg cukup
+     satu kolom sempit. */
+  grid-template-columns: minmax(140px, 1.05fr) minmax(120px, 2.4fr) minmax(112px, auto);
+  grid-template-areas: "name track nilai2";
+}
+
+.sr-row-btn .sa-name {
+  grid-area: name;
+}
+
+.sr-row-btn .sa-track {
+  grid-area: track;
+}
+
+.sr-row-btn .sa-gap {
+  grid-area: nilai2;
+}
+
+.sr-track {
+  overflow: hidden;
+  border-radius: var(--radius-control);
+}
+
+.sr-seg {
+  /* Garis tipis pemisah antar-komoditas: tanpa ini dua komoditas senada terlihat
+     sebagai satu batang panjang. */
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.8);
+}
+
+/* Palet komoditas = palet IDENTITAS yang sudah didokumentasikan (docs/design.md):
+   telur amber, ayam rose, beras biru, wortel violet — sama dengan titik pada pil
+   komoditas di peta, jadi satu komoditas berwarna SAMA di peta, legenda, dan
+   panel ini. Tidak memakai token status (aman/tinjau/bahaya) supaya makna warna
+   status tidak kabur. Kelas hanya menetapkan HUENYA (--sr-komod); bobotnya
+   diatur sekali di bawah: batang dicampur 74% ke permukaan (setara batang
+   status di kartu kecukupan di sebelahnya), titik memakai warna penuh karena
+   ukurannya hanya 10 px. */
+.sr-komod-blue {
+  --sr-komod: var(--cat-blue-solid);
+}
+
+.sr-komod-amber {
+  --sr-komod: var(--cat-amber-solid);
+}
+
+.sr-komod-rose {
+  --sr-komod: var(--cat-rose-solid);
+}
+
+.sr-komod-violet {
+  --sr-komod: var(--cat-violet-solid);
+}
+
+.sr-komod-teal {
+  --sr-komod: var(--cat-teal-solid);
+}
+
+/* Cadangan untuk komoditas di luar empat kanonik: indeks urutan daftar. */
+.sr-komod-0 {
+  --sr-komod: var(--cat-blue-solid);
+}
+
+.sr-komod-1 {
+  --sr-komod: var(--cat-violet-solid);
+}
+
+.sr-komod-2 {
+  --sr-komod: var(--cat-teal-solid);
+}
+
+.sr-komod-3 {
+  --sr-komod: var(--cat-amber-solid);
+}
+
+.sr-komod-netral {
+  --sr-komod: var(--line-strong);
+}
+
+.sr-seg {
+  /* Isi batang = identitas komoditas yang DICAMPUR ke permukaan (29 Okt 2026).
+     Warna penuh dipertahankan untuk titik legenda & rel 10 px (ukuran kecil
+     butuh kontras), tetapi blok besar 30 px dengan warna penuh (#92400E,
+     #1D4ED8) mendominasi kartu dan berselisih dengan garis grafik di bawahnya.
+     Campuran 82% (bukan 68%) dipilih setelah diukur di layar: pada 68% batang
+     bergeser terlalu terang sehingga tidak lagi sewarna dengan garis grafik di
+     bawahnya. 82% mempertahankan hue yang sama dengan garis & titik legenda,
+     cukup lembut untuk blok besar. */
+  background-color: color-mix(
+    in srgb,
+    var(--sr-komod, var(--line-strong)) 82%,
+    var(--surface)
+  );
+}
+
+.sr-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-chip);
+  background-color: var(--sr-komod, var(--line-strong));
+}
+
+/* Rel kiri baris = identitas komoditas penyumbang teratas (bukan status, bukan
+   aksen): dengan begitu rel, batang, dan titik legenda satu wilayah memakai
+   warna yang SAMA. `.sr-panel .sa-row` mendapat kelas `sr-komod-*` dari
+   komponen; tanpa komoditas, rel jatuh ke garis netral. */
+.sr-panel .sa-row-btn::before {
+  background: var(--sr-komod, var(--line-strong));
+}
+
+/* Angka kg di baris = TINTA NETRAL, sesuai docs/design.md ("angka hero tetap
+   tinta netral, hanya wash yang berwarna"). Sebelumnya angka ini mewarisi
+   `--sa-tone` (hijau) sehingga satu baris memakai tiga warna: rel amber,
+   batang amber, angka hijau. */
+.sr-panel .sa-row-btn .sa-gap {
+  color: var(--ink);
+}
+
+.sr-legend {
+  gap: 6px 12px;
+}
+
+.sr-legend span {
+  text-transform: capitalize;
+}
+
+.sr-badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: var(--radius-chip);
+  background: var(--cat-blue-bg);
+  color: var(--cat-blue-ink);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sr-mix {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+
+.sr-mix-label {
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  font-weight: 500;
+}
+
+.sr-mix-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-transform: capitalize;
+}
+
+/* Surplus kecil: tetap disebut, tetapi satu baris — bukan baris grafik 0,5 kg
+   yang batangnya tak terlihat dan mengubur wilayah yang penting. */
+.sr-tail {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-control-sm);
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-tail strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Wilayah teratas TIDAK lagi memakai rel aksen biru (koreksi warna 28 Okt 2026):
+   warna baris mengikuti identitas komoditas penyumbangnya (lihat
+   `.sr-panel .sa-row-btn::before`), sehingga satu baris hanya punya SATU warna
+   data. Penanda "terbesar" cukup lencana biru di sebelah nama wilayah — rel
+   surplus tetap hijau lewat `.sa-tone-safe`, jadi aturan `.sr-row-teratas`
+   tidak lagi dibutuhkan dan DIHAPUS (bukan CSS mati). */
+
+/* Redesign "simple" 28 Okt 2026: judul panel tidak boleh terlipat dua baris
+   gara-gara angka besar di kanan. Kepala panel ditumpuk: judul → angka. */
+.sr-panel .sa-head {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.sr-panel .sr-summary {
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sr-panel .sr-hero {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Warna SOLID (28 Okt 2026, permintaan pemilik): segmen komoditas memakai satu
+   warna, bukan lapisan gradasi putih warisan `.sa-seg` di supply-adequacy.css. */
+.sr-seg {
+  background-image: none;
+}
+
+.sr-panel .sa-empty {
+  margin: 14px 0 4px;
+  padding: 14px 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+  line-height: 1.5;
+}
+
+.sr-panel .sa-gap small {
+  white-space: normal;
+  text-align: right;
+  line-height: 1.3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sr-badge,
+  .sr-hero {
+    transition: none;
+  }
+}

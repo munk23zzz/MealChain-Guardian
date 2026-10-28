@@ -15,13 +15,21 @@ export const TEKS_PETUNJUK = "Geser tabel ke samping untuk melihat kolom lain.";
 
 export const KELAS_WADAH_TABEL = "board-table-wrap";
 
-export default function ScrollHint({ teks = TEKS_PETUNJUK }: { teks?: string }) {
+export default function ScrollHint({
+  teks = TEKS_PETUNJUK,
+  kelasWadah = KELAS_WADAH_TABEL,
+}: {
+  teks?: string;
+  /** Kelas wadah tabel yang diukur. Bawaannya wadah konsol `.board-table-wrap`;
+   *  panel yang memakai wadah sendiri (mis. `.tableScroll`) mengirim kelasnya. */
+  kelasWadah?: string;
+}) {
   const ref = useRef<HTMLParagraphElement | null>(null);
   const [tampil, setTampil] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
-    const wadah = el?.parentElement?.querySelector<HTMLElement>(`.${KELAS_WADAH_TABEL}`) ?? null;
+    const wadah = el?.parentElement?.querySelector<HTMLElement>(`.${kelasWadah}`) ?? null;
     if (!el || !wadah) return;
 
     const ukur = () => setTampil(perluGeser(wadah));
@@ -41,7 +49,7 @@ export default function ScrollHint({ teks = TEKS_PETUNJUK }: { teks?: string }) 
       pengamat?.disconnect();
       window.removeEventListener("resize", ukur);
     };
-  }, []);
+  }, [kelasWadah]);
 
   return (
     <p ref={ref} className="board-scroll-hint" data-tampil={tampil ? "true" : "false"}>

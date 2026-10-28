@@ -14,7 +14,6 @@
 //   3. Di kepala keputusan, label "RINGKASAN KEPUTUSAN" bisa terpisah 35 px
 //      dari judulnya (1440: 15 px, 1280: 35 px) karena dua baris grid direntang
 //      kotak "Langkah berikutnya" di sebelahnya. Jaraknya harus tetap.
-//   4. Di 375 px bilah pintasan memotong keadaan menjadi "menunggu perset…".
 //
 // Semua angka & nama aturan diambil dari pengukuran aplikasi hidup
 // (`_qa/decision-evidence-rapi/`), bukan dari kesan pada tangkapan layar.
@@ -106,54 +105,12 @@ describe("kerapian — kepala keputusan: label menempel judulnya", () => {
   });
 });
 
-describe("kerapian — panah tautan tidak menempel kata", () => {
-  it("tautan 'Ke zona keputusan ↓' memberi jarak lewat gap, bukan spasi yang dipangkas", () => {
-    const tautan = blok(dossier, ".evidence-page .evidence-hero-jump");
-    expect(tautan).toMatch(/gap:\s*var\(--space-1\)/);
-  });
-});
 
-describe("kerapian — jalur persetujuan rata tengah", () => {
-  it("langkah & penanda duduk di tengah kolomnya, bukan menempel kiri", () => {
-    const langkah = blok(dossier, ".evidence-route-step");
-    expect(langkah).toContain("text-align: center");
-    // Padding simetris supaya pusat penanda benar-benar 50% kolom.
-    expect(langkah).toMatch(/padding:\s*0 var\(--space-3\)/);
-    expect(blok(dossier, ".evidence-route-mark")).toMatch(/margin:\s*0 auto 8px/);
-  });
-
-  it("garis sambung berangkat & berhenti 16 px dari pusat penanda", () => {
-    // 16 px = radius penanda (12) + celah (4): garis tidak menyentuh bulatan,
-    // dan tetap bertemu di pusat penanda langkah berikutnya.
-    const garis = blok(dossier, ".evidence-route-step::before");
-    expect(garis).toContain("left: calc(50% + 16px)");
-    expect(garis).toContain("right: calc(-50% + 16px)");
-  });
-});
-
-describe("pintasan bawah — perilaku di sumber komponen", () => {
-  const sumber = readFileSync(join(__dirname, "..", "components", "DecisionEvidence.tsx"), "utf8");
-
-  it("keterlihatan ditentukan butuhTindakan + posisi zona, bukan sekadar 'terlihat'", () => {
-    expect(sumber).toContain("butuhTindakan({");
-    expect(sumber).toContain('zonaPosisi !== "terlihat"');
-    // Pengamat irisan lama tidak boleh hidup lagi: dua sumber kebenaran bisa
-    // berselisih, dan pengamat itu tidak tahu arah (dilewati vs belum sampai).
-    expect(sumber).not.toContain("new IntersectionObserver");
-  });
-
-  it("teks & panah pintasan diambil dari zonaShortcut, bukan ditulis mati", () => {
-    expect(sumber).toContain("zonaShortcut(zonaPosisi).text");
-    expect(sumber).toContain("zonaShortcut(zonaPosisi).arrow");
-    expect(sumber).not.toContain("Ke zona keputusan\n");
-  });
-});
-
-describe("kerapian — bilah pintasan di ponsel", () => {
-  it("keadaan tidak dipotong elipsis; teks boleh dua baris", () => {
-    const media = dossier.slice(dossier.indexOf("@media (max-width: 560px)"));
-    expect(media.slice(0, 600)).toContain(".evidence-actionbar-text strong");
-    expect(media.slice(0, 600)).toContain("white-space: normal");
-    expect(media.slice(0, 600)).toContain("text-overflow: clip");
+describe("kerapian — stepper jalur persetujuan sudah tidak ada", () => {
+  it("aturan stepper (rata tengah, penanda, garis sambung) tercabut dari dossier", () => {
+    // Kartu "Jalur persetujuan" dilepas 29 Okt 2026 beserta CSS-nya; yang
+    // dibaca sekarang hanya kartu "Bukti" + blok governance.
+    expect(dossier).not.toMatch(/\.evidence-route-(step|mark|body|label|detail)/);
+    expect(dossier).not.toContain("evidence-route-step::before");
   });
 });

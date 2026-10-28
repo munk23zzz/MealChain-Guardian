@@ -89,8 +89,11 @@ describe("ApprovalModal (summary kanonik S4-04)", () => {
     );
     expect(html).toContain("Sudah Anda setujui");
     expect(html).toContain("disabled");
-    expect(html).toContain("menunggu role lain");
-    expect(html).toContain("sppg_nutritionist");
+    // 29 Okt 2026: catatan ini menyebut PERANNYA, bukan kode backend. Dulu
+    // kalimatnya "menunggu role lain (sppg_nutritionist)" — campuran Inggris
+    // dan enum mentah di layar berbahasa Indonesia.
+    expect(html).toContain("menunggu Ahli Gizi SPPG");
+    expect(html).not.toContain("sppg_nutritionist");
   });
 
   it("can_approve=true meski can_execute=false → Setuju aktif (approval ≠ eksekusi)", () => {

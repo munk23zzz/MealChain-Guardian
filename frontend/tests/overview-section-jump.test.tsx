@@ -25,20 +25,29 @@ describe("Overview — navigasi bagian", () => {
     expect(pageSrc).toMatch(/<SectionJump[\s\S]{0,160}overviewSections\(/);
   });
 
-  it("tujuan kiriman mengikuti ada-tidaknya kiriman aktif", () => {
-    // Kartu kiriman tidak merender apa pun saat daftar kosong; nav tidak boleh
-    // menunjuk tempat yang tidak ada.
-    expect(pageSrc).toMatch(/hasShipments/);
+  it("bagian yang dilepas tidak lagi dipasang di halaman", () => {
+    // 28 Okt 2026: "Informasi pengiriman" (ShipmentCard), "Telemetri Node", dan
+    // daftar "Status Lokasi" dilepas dari Overview dan diganti panel harga.
+    // Komponennya TETAP ada di repo — tes ini mengunci ketiadaan PEMASANGAN,
+    // bukan penghapusan fitur.
+    expect(pageSrc).not.toContain("<ShipmentCard");
+    expect(pageSrc).not.toContain("<NodeTelemetry");
+    expect(pageSrc).not.toContain("<StatusLocationList");
+    expect(pageSrc).not.toContain('id="ov-kiriman"');
+    expect(pageSrc).not.toContain('id="ov-telemetri"');
+    // ...dan penggantinya benar-benar terpasang.
+    expect(pageSrc).toContain("<PriceMonitor");
+    expect(pageSrc).toMatch(/id="ov-harga"/);
   });
 
   it("setiap tujuan punya tepat satu sasaran ber-id", () => {
-    for (const { id } of overviewSections({ isApprover: true, hasShipments: true })) {
+    for (const { id } of overviewSections({ isApprover: true })) {
       expect((pageSrc.match(new RegExp(`id="${id}"`, "g")) ?? []).length).toBe(1);
     }
   });
 
   it("sasaran nav memakai kelas jump-target", () => {
-    for (const { id } of overviewSections({ isApprover: true, hasShipments: true })) {
+    for (const { id } of overviewSections({ isApprover: true })) {
       expect(pageSrc).toMatch(new RegExp(`className="[^"]*jump-target[^"]*"\\s+id="${id}"`));
     }
   });

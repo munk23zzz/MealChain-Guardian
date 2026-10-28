@@ -60,15 +60,16 @@ describe("bayangan memakai token peran", () => {
     expect(pelanggaran).toEqual([]);
   });
 
-  it("tiga peran kunci memakai token yang tepat", () => {
+  it("dua peran kunci memakai token yang tepat", () => {
     const pin = /^\.map-pin-dot\s*\{([^}]*)\}/m.exec(css);
     expect(pin?.[1]).toContain("box-shadow: var(--shadow-pin)");
 
     const pop = /^\.top-bar-notif-panel\s*\{([^}]*)\}/m.exec(css);
     expect(pop?.[1]).toContain("box-shadow: var(--shadow-pop)");
 
-    const dock = /^\.evidence-actionbar\s*\{([^}]*)\}/m.exec(css);
-    expect(dock?.[1]).toContain("box-shadow: var(--shadow-dock)");
+    // 29 Okt 2026: bilah pintasan `.evidence-actionbar` (pemakai ketiga
+    // `--shadow-dock`) dilepas dari halaman, jadi peran itu tidak diuji lagi.
+    // Token `--shadow-dock` tetap ada untuk docs/design.md.
   });
 
   it("pin pengirim memakai token warna hidup, tanpa bayangan literal", () => {

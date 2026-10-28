@@ -103,7 +103,6 @@ export default function DecisionEvidence({
     <section className="evidence-page">
       <PageHeader
         title="Decision & Evidence"
-        description="Satu keputusan, seluruh buktinya — biaya, keamanan, pemasok, persetujuan, riwayat, dan bukti tersimpan. Semua angka di halaman ini datang dari API."
         meta={
           // Pemilih keputusan: dulu tanpa label (hanya opsi "— pilih keputusan —")
           // dan tanpa konteks jumlah, sehingga pengguna tidak tahu ada berapa

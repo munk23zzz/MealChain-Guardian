@@ -61,7 +61,10 @@ describe("ApprovalMenu (isi popup governance & persetujuan)", () => {
     expect(html).toContain("Konfirmasi persetujuan");
     expect(html).toContain("600 kg");
     expect(html).toContain("Rp16.206.000");
-    expect(html).toContain("Konsisten");
+    // 29 Okt 2026: verdict "consistent" TIDAK lagi dicetak sebagai baris —
+    // ia keadaan normal; mengulanginya di setiap approval mendorong masa berlaku
+    // dan tombol Setuju ke bawah. Yang tetap dicetak: verdict yang perlu dibaca.
+    expect(html).not.toContain("Konsisten");
     // Ringkasan tidak lagi mengklaim dirinya dialog: popup yang memegang
     // role="dialog"/aria-modal, jadi tidak ada dialog bersarang.
     expect(html).not.toContain('role="dialog"');

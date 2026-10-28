@@ -113,3 +113,36 @@ describe("DecisionActions — label pemicu per keadaan", () => {
     expect(label(html)).toBe("Lihat hasil");
   });
 });
+
+// 28 Okt 2026 — label "Menunggu rekan" hanya benar bagi orang yang SUDAH
+// menyetujui. Ahli Gizi pada keadaan yang sama adalah orang yang ditunggu;
+// label lama membuatnya menunggu dirinya sendiri (terukur di aplikasi hidup).
+describe("DecisionActions — keadaan sebagian, dibaca dari sisi yang berbeda", () => {
+  const sebagian = ringkas({
+    approval_state: {
+      satisfied: false,
+      rejected: false,
+      missing: [["sppg_nutritionist"]],
+      approved_roles: ["sppg_head"],
+    },
+  });
+
+  it("Kepala SPPG (sudah setuju): 'Menunggu rekan'", () => {
+    const html = renderToStaticMarkup(
+      <DecisionActions {...dasar} status="pending_approval" summary={sebagian} />
+    );
+    expect(label(html)).toBe("Menunggu rekan");
+  });
+
+  it("Ahli Gizi (belum setuju): 'Setujui sekarang'", () => {
+    const html = renderToStaticMarkup(
+      <DecisionActions
+        {...dasar}
+        role="sppg_nutritionist"
+        status="pending_approval"
+        summary={sebagian}
+      />
+    );
+    expect(label(html)).toBe("Setujui sekarang");
+  });
+});

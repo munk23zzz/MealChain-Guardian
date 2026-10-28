@@ -28,6 +28,60 @@ describe("FoodSafetyBoard", () => {
     expect(html).toContain("120 kg");
   });
 
+  it("lima angka eksklusif: jumlahnya = batch diperiksa, tanpa bar atau persentase", () => {
+    // Pemilik 29 Okt 2026: "desain begitu masih sulit dipahami". Versi lama
+    // menampilkan empat angka yang TIDAK menjumlah ke total, lalu menambal
+    // selisihnya dengan bar komposisi, persentase per angka, titik warna, dan
+    // lipatan "Cara membaca". Kontrak sekarang: lima kelompok eksklusif
+    // (aman, gagal, perlu verifikasi, belum diuji, ditahan) yang jumlahnya
+    // selalu = total, sehingga tidak ada yang perlu dijelaskan lagi.
+    const html = render();
+    // Hanya kartu Ringkasan yang diperiksa: persen di kolom Kesegaran tabel
+    // adalah angka lain, bukan pengkodean kedua untuk partisi yang sama.
+    const kartu = html.slice(
+      html.indexOf('id="safety-ringkasan"'),
+      html.indexOf("</article>", html.indexOf('id="safety-ringkasan"'))
+    );
+    const angka = Array.from(kartu.matchAll(/class="safety-count-value">(\d+)</g)).map((m) => Number(m[1]));
+    expect(kartu.match(/class="safety-count /g) ?? []).toHaveLength(5);
+    expect(angka).toHaveLength(5);
+    expect(angka.reduce((a, b) => a + b, 0)).toBe(2);
+    expect(kartu).toContain("dari 2 batch");
+    // Tidak ada pengkodean kedua untuk himpunan data yang sama.
+    expect(kartu).not.toContain("safety-ratio");
+    expect(kartu).not.toContain("safety-figure-swatch");
+    expect(kartu).not.toContain("%");
+    expect(kartu).not.toContain("Cara membaca angka ini");
+  });
+
+  it("penanda memisahkan hitungan dari beratnya (tidak terbaca 1540 kg)", () => {
+    const html = render({
+      batches: [
+        ...BATCHES,
+        {
+          id: "b3",
+          location: "Cianjur",
+          commodity: "beras",
+          quantity_kg: 540,
+          safety_status: "pass",
+          freshness_score: 0.5,
+          usable_until: "2026-10-11T18:00:00Z",
+          quarantine_status: "quarantined",
+        },
+      ],
+    });
+    // Angka penanda (jumlah batch) dan berat karantina dulu berdempet tanpa
+    // pemisah sehingga "1 540 kg" terbaca sebagai satu berat. Yang diuji adalah
+    // teks yang dibaca pengguna (tag dibuang lebih dulu).
+    const teks = html.replace(/<[^>]+>/g, "");
+    // Berat kini menempel pada angka yang diterangkannya: catatan kecil di bawah
+    // label "DITAHAN", bukan baris kaki kartu. Alasan larangan ada di title.
+    expect(html).toContain("safety-count-note");
+    expect(teks).toContain("540 kg");
+    expect(html).toContain("tidak boleh dialokasikan");
+    expect(teks).not.toContain("1 540 kg");
+  });
+
   it("batch gagal dinyatakan terang-terangan beserta lokasinya", () => {
     const html = render();
     expect(html).toContain("Batch gagal uji: Surabaya");
@@ -35,6 +89,65 @@ describe("FoodSafetyBoard", () => {
     // bukan lagi hint penanda karantina: penanda bernilai nol tidak dirender
     // (28 Okt 2026), jadi hint-nya tidak muncul saat tidak ada batch ditahan.
     expect(html).toContain("alokasi hanya boleh memakai batch berstatus aman");
+  });
+
+  // Permintaan pemilik 29 Okt 2026: "kerjakan dari bagian atas dulu".
+  // Di kartu Ringkasan, kalimat putusan dulu duduk PALING BAWAH — di bawah bar
+  // komposisi, penanda, dan dua lipatan — sehingga pembaca melihat empat angka
+  // dan cetakan kecil sebelum tahu ada batch gagal. Kontrak yang dijaga sekarang:
+  // putusan lebih dulu, angka sesudahnya.
+  it("putusan gagal uji tampil sebelum angka ringkasan", () => {
+    const html = render();
+    const putusan = html.indexOf("safety-verdict");
+    const angka = html.indexOf("safety-counts");
+    expect(putusan).toBeGreaterThan(-1);
+    expect(angka).toBeGreaterThan(-1);
+    expect(putusan).toBeLessThan(angka);
+  });
+
+  // 29 Okt 2026 (putaran kedua, "UI kurang enak dilihat"): putusan tidak lagi
+  // berupa bidang peringatan selebar kartu. Bidang penuh membuat satu batch gagal
+  // terbaca sebagai halaman galat dan menenggelamkan angka di bawahnya; nada
+  // status dipindah ke titik kecil + aksen tepi kartu.
+  it("putusan memakai titik status, bukan bidang peringatan penuh", () => {
+    const html = render();
+    const kartu = html.slice(
+      html.indexOf('id="safety-ringkasan"'),
+      html.indexOf("</article>", html.indexOf('id="safety-ringkasan"'))
+    );
+    expect(kartu).toContain("safety-verdict-dot");
+    expect(kartu).not.toContain("board-alert");
+    // Status tidak diulang sebagai lencana di kepala kartu.
+    expect(kartu).not.toContain("board-badge");
+  });
+
+  it("satu penanda per kondisi: batch ditahan yang lolos uji tidak dihitung dua kali", () => {
+    const html = render({
+      batches: [
+        ...BATCHES,
+        {
+          id: "b9",
+          location: "Cianjur",
+          commodity: "beras",
+          quantity_kg: 540,
+          safety_status: "pass",
+          freshness_score: 0.5,
+          usable_until: "2026-10-11T18:00:00Z",
+          quarantine_status: "quarantined",
+        },
+      ],
+    });
+    // Batch karantina menjadi kelompok sendiri ("Ditahan"), BUKAN penanda
+    // terpisah di samping empat angka. Karena itu aman turun (karantina tidak
+    // dihitung aman) dan jumlah lima angka tetap = total:
+    // 1 aman + 1 gagal + 0 verifikasi + 0 belum + 1 ditahan = 3 batch.
+    const angka = Array.from(html.matchAll(/class="safety-count-value">(\d+)</g)).map((m) => Number(m[1]));
+    expect(angka.reduce((a, b) => a + b, 0)).toBe(3);
+    expect(html).toContain("Ditahan");
+    expect(html).toContain("540 kg");
+    // Satu catatan saja: tidak ada baris kedua yang menghitung batch sama.
+    expect((html.match(/safety-count-note/g) ?? []).length).toBe(1);
+    expect(html).not.toContain("Ditahan walau uji lolos");
   });
 
   it("tabel per batch memuat status, kesegaran, dan sisa masa", () => {

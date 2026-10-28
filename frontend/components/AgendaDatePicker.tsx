@@ -169,13 +169,6 @@ export default function AgendaDatePicker({
               Hari ini
             </button>
           ) : null}
-          <button
-            type="button"
-            className="button button-secondary agenda-picker-close"
-            onClick={onClose}
-          >
-            Tutup
-          </button>
         </div>
       </div>
     </Popup>

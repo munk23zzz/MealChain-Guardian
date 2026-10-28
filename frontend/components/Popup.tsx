@@ -17,6 +17,7 @@
 
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import TombolTutup from "./TombolTutup";
 
 const FOCUSABLE =
   'a[href], area[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])';
@@ -147,23 +148,14 @@ export default function Popup({
             </h3>
             {meta ? <div className="popup-meta">{meta}</div> : null}
           </div>
-          <button
-            type="button"
+          {/* Penutup seragam (29 Okt 2026): satu komponen X bulat untuk semua
+              jendela. Kelas `popup-close` dipertahankan sebagai kait CSS/tes. */}
+          <TombolTutup
             className="popup-close"
-            onClick={() => closeRef.current()}
-            aria-label="Tutup jendela"
+            label="Tutup jendela"
             title="Tutup (Esc)"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-              <path
-                d="M3.5 3.5l9 9M12.5 3.5l-9 9"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-              />
-            </svg>
-          </button>
+            onClick={() => closeRef.current()}
+          />
         </header>
         {description ? (
           <p className="popup-desc" id={`${labelledBy}-desc`}>

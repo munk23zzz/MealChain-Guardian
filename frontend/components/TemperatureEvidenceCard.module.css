@@ -202,6 +202,24 @@
   color: var(--ink-subtle);
 }
 
+/* Catatan profil kartu (menggantikan pengulangan di tiap baris): satu kalimat
+   yang berlaku untuk seluruh daftar, dipisah garis rambut supaya tidak terbaca
+   sebagai bagian dari baris terakhir. */
+.profileNote {
+  margin: 8px 0 0;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+  line-height: 1.45;
+}
+
+.profileNote strong {
+  color: var(--ink-muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Kaki kartu memakai `.evidence-note`; modul hanya menambah jarak. */
 .foot {
   margin: 9px 0 0;

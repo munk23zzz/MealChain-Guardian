@@ -13,6 +13,8 @@ type Props = {
   role: string;
   token: string;
   onCreated: (decisionId: string) => void;
+  /** Halaman bukti memindahkan kalimat penjelas ke blok "Catatan teknis". */
+  tanpaCatatan?: boolean;
 };
 type Submit = (operation: () => Promise<string>, success: string) => Promise<boolean>;
 const evidenceKey = (ref: EvidenceRef) => `${ref.type}:${ref.id}`;
@@ -67,7 +69,7 @@ function RestorationForm({ exclusion, supplier, disabled, submit, token }: {
   </form>;
 }
 
-export function SupplierExclusionView({ context, role, token, onCreated }: Props) {
+export function SupplierExclusionView({ context, role, token, onCreated, tanpaCatatan = false }: Props) {
   const [supplierId, setSupplierId] = useState(context.suppliers[0]?.id ?? "");
   const [reason, setReason] = useState("");
   const [notice, setNotice] = useState<{ kind: "error" | "success"; text: string } | null>(null);
@@ -108,10 +110,12 @@ export function SupplierExclusionView({ context, role, token, onCreated }: Props
       SPPG penerima:{" "}
       {context.scope_location_id ? `#${String(context.scope_location_id).slice(0, 8)}` : "tidak tersedia"}.
     </p>
-    <p className={styles.safety}>
-      Pemulihan administratif tidak mengubah status keamanan batch. Batch yang gagal
-      pemeriksaan tetap tidak bisa dipakai.
-    </p>
+    {!tanpaCatatan && (
+      <p className={styles.safety}>
+        Pemulihan administratif tidak mengubah status keamanan batch. Batch yang gagal
+        pemeriksaan tetap tidak bisa dipakai.
+      </p>
+    )}
     {context.suppliers.map(item => <div className={styles.record} key={item.id}>
       <strong>{item.name}</strong><span>Supplier: {item.id}</span>
       {item.batches.map(batch => <span key={batch.id}>Batch {batch.id} · Keamanan: <strong>{safetyLabel(batch.safety_status) ?? "status belum ada"}</strong></span>)}
@@ -127,7 +131,7 @@ export function SupplierExclusionView({ context, role, token, onCreated }: Props
         <p>Bukti tersimpan: {supplier?.evidence_refs.map(evidenceKey).join(", ") || "tidak tersedia"}</p>
         <button className="button" type="submit" disabled={busy || !reason.trim() || !supplier?.evidence_refs.length}>Ajukan exclusion</button>
       </fieldset>
-      <p>Usulan hanya masuk approval. Tidak ada auto execute.</p>
+      {!tanpaCatatan && <p>Usulan hanya masuk approval. Tidak ada auto execute.</p>}
     </form>}
     {context.exclusions.map(exclusion => {
       const linkedSupplier = context.suppliers.find(item => item.id === exclusion.supplier_id);

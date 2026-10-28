@@ -14,17 +14,12 @@ import {
   approvalFacts,
   auditTimeline,
   windowUsage,
-  approvalRoute,
   attentionFlags,
-  butuhTindakan,
-  zonaShortcut,
-  consequences,
   decisionHeadline,
   decisionMetrics,
   costFacts,
   decisionFacts,
   hiddenFactsLabel,
-  nextStep,
   hasValue,
   splitFacts,
   defaultEvidenceId,
@@ -438,79 +433,6 @@ describe("rincian yang belum ada datanya disembunyikan (progressive disclosure)"
   });
 });
 
-describe("langkah berikutnya: satu kalimat yang menjawab \"apa yang harus saya lakukan\"", () => {
-  const dasar = { role: "sppg_head", status: "pending_approval", summary: SUMMARY };
-
-  it("menunggu persetujuan: menyebut jumlah persetujuan dan yang menahan", () => {
-    const hasil = nextStep({
-      role: "sppg_head",
-      status: "pending_approval",
-      summary: { ...SUMMARY, can_execute: false, blocking_reasons: ["menunggu ahli gizi"], expiry: { valid: true } },
-    });
-    expect(hasil.text).toContain("Menunggu persetujuan (1 dari 2)");
-    expect(hasil.text).toContain("menunggu ahli gizi");
-    expect(hasil.tone).toBe("warn");
-  });
-
-  it("keputusan `proposed`: menyuruh mengajukan, bukan diam", () => {
-    // Audit 18 Okt BLOCKER A1: dulu keputusan ini jatuh ke "Tidak ada tindakan
-    // mendesak", padahal justru di sinilah satu-satunya langkah yang hilang.
-    const hasil = nextStep({
-      role: "sppg_head",
-      status: "proposed",
-      summary: { ...SUMMARY, can_execute: false, expiry: { valid: true } },
-    });
-    expect(hasil.text).toContain("belum diajukan");
-    expect(hasil.text).toContain("ajukan untuk persetujuan");
-    expect(hasil.tone).toBe("warn");
-  });
-
-  it("jendela berlaku lewat: dikatakan lewat, bukan disembunyikan", () => {
-    const hasil = nextStep({ ...dasar, summary: { ...SUMMARY, expiry: { valid: false }, can_execute: false } });
-    expect(hasil.text).toContain("sudah lewat");
-    expect(hasil.tone).toBe("warn");
-  });
-
-  it("semua syarat terpenuhi: siap dieksekusi", () => {
-    const hasil = nextStep({ ...dasar, summary: { ...SUMMARY, can_execute: true, expiry: { valid: true } } });
-    expect(hasil.text).toContain("siap dieksekusi");
-    expect(hasil.tone).toBe("ok");
-  });
-
-  it("ditolak: menjelaskan agent bisa mengajukan iterasi baru", () => {
-    const hasil = nextStep({ ...dasar, status: "rejected", summary: { ...SUMMARY, expiry: { valid: true } } });
-    expect(hasil.text).toContain("ditolak");
-    expect(hasil.tone).toBe("danger");
-  });
-
-  it("peran pengawas: tidak dijanjikan tombol yang tidak ada (paritas dengan DecisionActions)", () => {
-    const hasil = nextStep({ role: "bgn_monitor", status: "pending_approval", summary: SUMMARY });
-    expect(hasil.tone).toBe("muted");
-    expect(hasil.text.toLowerCase()).toContain("pengawasan");
-    const approver = nextStep({ role: "sppg_nutritionist", status: "pending_approval", summary: { ...SUMMARY, expiry: { valid: true } } });
-    expect(approver.tone).not.toBe("muted");
-  });
-
-  it("daftar penahan dipangkas supaya kalimatnya tetap terbaca", () => {
-    const hasil = nextStep({
-      role: "sppg_head",
-      status: "pending_approval",
-      summary: {
-        ...SUMMARY,
-        expiry: { valid: true },
-        blocking_reasons: ["alasan satu", "alasan dua", "alasan tiga", "alasan empat"],
-      },
-    });
-    expect(hasil.text).toContain("alasan satu · alasan dua");
-    expect(hasil.text).toContain("(+2 lain)");
-    expect(hasil.text).not.toContain("alasan tiga");
-  });
-  it("tanpa ringkasan (data belum tiba): tidak mengarang, tetap satu kalimat", () => {
-    const hasil = nextStep({ role: "sppg_head", status: "pending_approval", summary: null });
-    expect(hasil.text.length).toBeGreaterThan(10);
-    expect(hasil.text).not.toContain("undefined");
-  });
-});
 
 // Daftar kanonik jenis keputusan = CheckConstraint `decisions_decision_type_check`
 // di backend/app/models/decisions.py (enam nilai, tidak lebih). Dipakai tes judul:
@@ -685,64 +607,7 @@ describe("flag triase: yang perlu diperhatikan, bersumber data", () => {
   });
 });
 
-describe("jalur persetujuan: siapa memegang, siapa berikutnya", () => {
-  const ringkas = {
-    ...SUMMARY,
-    approval_requirement: { verdict: "flagged", min_approvals: 2, required_roles: [["sppg_head"], ["sppg_nutritionist"]] },
-    approval_state: { satisfied: false, rejected: false, missing: [["sppg_nutritionist"]], approved_roles: ["sppg_head"] },
-  };
 
-  it("empat langkah tetap, urut, dengan keadaan dan rincian", () => {
-    const steps = approvalRoute({ decision: { status: "pending_approval", created_at: "2026-10-07T23:47:00+07:00", proposed_by: "supervisor_agent" }, summary: ringkas, now: new Date(0) });
-    expect(steps.map((s) => s.id)).toEqual(["proposed", "verify", "approve", "execute"]);
-    expect(steps[0].state).toBe("done");
-    expect(steps[0].detail).toContain("Agen supervisor");
-    expect(steps[2].state).toBe("current");
-    expect(steps[2].detail).toContain("1 dari 2");
-    expect(steps[2].detail).toContain("Ahli Gizi SPPG");
-    expect(steps[3].state).toBe("waiting");
-  });
-
-  it("sudah tidak ada yang kurang: langkah persetujuan selesai", () => {
-    const steps = approvalRoute({
-      decision: { status: "approved" },
-      summary: { ...ringkas, approval_state: { satisfied: true, rejected: false, missing: [], approved_roles: ["sppg_head", "sppg_nutritionist"] } },
-      now: null,
-    });
-    expect(steps[2].state).toBe("done");
-    expect(steps[2].detail).toContain("2 dari 2");
-  });
-
-  it("ditolak: langkah persetujuan jadi terhalang, bukan diam-diam selesai", () => {
-    const steps = approvalRoute({ decision: { status: "rejected" }, summary: ringkas, now: null });
-    expect(steps[2].state).toBe("blocked");
-  });
-});
-
-describe("konsekuensi: akibat tiap pilihan, dari data", () => {
-  it("bisa dieksekusi di target MOCK: dikatakan bahwa tidak ada pesanan nyata", () => {
-    const hasil = consequences({ decision: { status: "pending_approval" }, summary: { ...SUMMARY, can_execute: true } });
-    expect(hasil.approve).toContain("simulasi (mock)");
-    expect(hasil.approve).toContain("tidak ada pesanan nyata");
-  });
-
-  it("terhalang: sebabnya disebut dari blocking_reasons, dipangkas", () => {
-    const hasil = consequences({
-      decision: { status: "pending_approval" },
-      summary: { ...SUMMARY, can_execute: false, blocking_reasons: ["a satu", "b dua", "c tiga", "d empat"] },
-    });
-    expect(hasil.approve).toContain("a satu · b dua");
-    expect(hasil.approve).toContain("(+2 lain)");
-    expect(hasil.approve).not.toContain("c tiga");
-  });
-
-  it("ditolak: agent bisa mengajukan iterasi berikutnya", () => {
-    const hasil = consequences({ decision: { status: "rejected", iteration: 3 }, summary: SUMMARY });
-    expect(hasil.reject.toLowerCase()).toContain("ditola");
-    const belum = consequences({ decision: { status: "pending_approval", iteration: 3 }, summary: SUMMARY });
-    expect(belum.reject).toContain("v4");
-  });
-});
 
 // ── Langkah 2 (17 Okt 2026): lini masa audit + umur jendela ───────────────
 describe("lini masa audit: siapa, kapan, versi mana", () => {
@@ -864,23 +729,6 @@ describe("umur jendela berlaku: dipakai apa adanya, tanpa ambang karangan", () =
   });
 });
 
-describe("nextStep — temuan review_only (audit M6)", () => {
-  it("temuan tidak menyuruh eksekusi dan tidak bicara jendela kedaluwarsa", () => {
-    const hasil = nextStep({
-      role: "sppg_head",
-      status: "review_only",
-      summary: {
-        status: "review_only",
-        can_execute: false,
-        expiry: { valid: false },
-        blocking_reasons: ["decision tinjauan (review-only) — tidak untuk dieksekusi"],
-      },
-    });
-    expect(hasil.text).toContain("Temuan tinjauan");
-    expect(hasil.text).not.toContain("Jendela berlaku");
-    expect(hasil.tone).toBe("plain");
-  });
-});
 
 // --- pengadaan pemasok (19 Okt 2026) ---------------------------------------
 // Keputusan pengadaan punya source_location_id NULL (barang datang dari
@@ -938,80 +786,5 @@ describe("decisionFacts — pengadaan pemasok", () => {
     );
     expect(supplierNameOf({ supplier: "UD Beras Rancaekek" })).toBe("UD Beras Rancaekek");
     expect(supplierNameOf({})).toBeNull();
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Pintasan "Ke zona keputusan" (permintaan pemilik, 20 Okt 2026):
-//   1) hanya muncul kalau memang ADA yang harus disetujui — bukan setiap kali
-//      zona tergulir, dan bukan untuk peran pengawas;
-//   2) arah panahnya jujur: zona masih di bawah → turun (↓); zona sudah
-//      dilewati → panah dibalik, ajakan kembali (↑).
-// Keduanya logika murni supaya bisa diuji tanpa DOM.
-describe("pintasan 'Ke zona keputusan' — hanya saat persetujuan memang tertunda", () => {
-  const ringkas = (ubah: Record<string, unknown> = {}) => ({
-    status: "pending_approval",
-    can_approve: true,
-    can_reject: true,
-    approvals: [{ approver_role: "sppg_head" }],
-    approval_requirement: { min_approvals: 2, roles: ["sppg_head", "sppg_nutritionist"] },
-    ...ubah,
-  });
-
-  it("muncul untuk Kepala SPPG & Ahli Gizi saat kuorum belum penuh", () => {
-    expect(
-      butuhTindakan({ role: "sppg_head", status: "pending_approval", summary: ringkas() })
-    ).toBe(true);
-    expect(
-      butuhTindakan({ role: "sppg_nutritionist", status: "verifier_flagged", summary: ringkas() })
-    ).toBe(true);
-  });
-
-  it("tidak muncul untuk peran pengawasan", () => {
-    expect(
-      butuhTindakan({ role: "bgn_monitor", status: "pending_approval", summary: ringkas() })
-    ).toBe(false);
-    expect(butuhTindakan({ role: "", status: "pending_approval", summary: ringkas() })).toBe(false);
-  });
-
-  it("tidak muncul saat kuorum sudah penuh atau keputusan sudah selesai", () => {
-    const penuh = ringkas({ approvals: [{}, {}] });
-    expect(butuhTindakan({ role: "sppg_head", status: "pending_approval", summary: penuh })).toBe(
-      false
-    );
-    for (const status of ["approved", "executed", "rejected", "review_only", "expired"]) {
-      expect(butuhTindakan({ role: "sppg_head", status, summary: ringkas() })).toBe(false);
-    }
-  });
-
-  it("tidak muncul sebelum ringkasan tiba atau saat gerbang aksi tertutup", () => {
-    expect(butuhTindakan({ role: "sppg_head", status: "pending_approval", summary: null })).toBe(
-      false
-    );
-    expect(
-      butuhTindakan({
-        role: "sppg_head",
-        status: "pending_approval",
-        summary: ringkas({ can_reject: false }),
-      })
-    ).toBe(false);
-  });
-});
-
-describe("pintasan 'Ke zona keputusan' — panah mengikuti posisi zona", () => {
-  it("zona masih di bawah lipatan: ajak turun", () => {
-    expect(zonaShortcut("bawah")).toEqual({
-      text: "Ke zona keputusan",
-      arrow: "↓",
-      label: "Pintasan ke zona keputusan",
-    });
-  });
-
-  it("zona sudah dilewati: panah dibalik, ajak kembali", () => {
-    expect(zonaShortcut("lewat")).toEqual({
-      text: "Kembali ke zona keputusan",
-      arrow: "↑",
-      label: "Pintasan kembali ke zona keputusan",
-    });
   });
 });

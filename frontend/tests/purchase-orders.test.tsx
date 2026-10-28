@@ -27,6 +27,8 @@ import PurchaseOrderList, {
   progressNote,
   sourceNote,
   statusLabel,
+  varianceLabel,
+  varianceNada,
 } from "../components/PurchaseOrderList";
 
 const PAYLOAD = {
@@ -68,6 +70,37 @@ const PAYLOAD = {
       total_value: 1080000,
       source: "mock_sap_table",
       origin: "demo",
+      // Realisasi nyata: 40 kg dipesan Rp 27.000/kg = Rp 1.080.000, barang
+      // masuk 25 kg = Rp 675.000 → kurang Rp 405.000 (−37,5%).
+      received_kg: 25,
+      received_value_idr: 675000,
+      variance_idr: -405000,
+      variance_pct: -37.5,
+      received_batch_count: 1,
+      received_basis: "inspection_binding",
+    },
+    {
+      // PO yang belum punya ikatan bukti penerimaan: semua angka realisasi
+      // `null` — bukan 0 kg dan bukan Rp 0.
+      po_number: "DEMO-PO-JAKA-BERAS",
+      status: "submitted",
+      decision_status: null,
+      location_id: null,
+      location_name: null,
+      supplier_id: null,
+      supplier_name: null,
+      material_number: "MAT-003",
+      ordered_quantity_kg: 100,
+      price_per_kg: 12000,
+      total_value: 1200000,
+      source: "mock_sap_table",
+      origin: "demo",
+      received_kg: null,
+      received_value_idr: null,
+      variance_idr: null,
+      variance_pct: null,
+      received_batch_count: 0,
+      received_basis: null,
     },
   ],
 };
@@ -247,5 +280,44 @@ describe("trace ACT menyebut nomor PO", () => {
     );
     expect(html).toContain("MC-54EDFCA1EF77");
     expect(html).toContain("PO");
+  });
+});
+
+
+describe("realisasi PO: nilai PO vs nilai barang masuk (Dok 05 §9)", () => {
+  it("menampilkan dua angka berlabel berdampingan dalam satu baris", () => {
+    const html = render();
+    const iNilaiPo = html.indexOf("Nilai PO");
+    const iDiterima = html.indexOf("Diterima");
+    expect(iNilaiPo).toBeGreaterThan(-1);
+    expect(iDiterima).toBeGreaterThan(iNilaiPo);
+    // Angka server dipakai apa adanya: Rp 1.080.000,00 dan Rp 675.000,00.
+    expect(html).toContain("Rp 1.080.000,00");
+    expect(html).toContain("Rp 675.000,00");
+  });
+
+  it("selisih diberi tanda arah dan nada, bukan warna saja", () => {
+    const html = render();
+    expect(html).toContain("−Rp 405.000,00 (−37,5%)");
+    expect(html).toContain("po-variance-kurang");
+
+    expect(varianceNada(8300000)).toBe("lebih");
+    expect(varianceNada(-405000)).toBe("kurang");
+    expect(varianceNada(0)).toBe("pas");
+    expect(varianceNada(null)).toBe("belum");
+    expect(varianceLabel(null, null)).toBe("belum ada barang tercatat");
+    expect(varianceLabel(0, 0)).toBe("sama dengan nilai PO");
+    expect(varianceLabel(8300000, 33.33)).toBe("+Rp 8.300.000,00 (+33,33%)");
+  });
+
+  it("PO tanpa barang tercatat menulis kalimat, tidak pernah Rp 0", () => {
+    const html = render();
+    const barisBeras = html.split("DEMO-PO-JAKA-BERAS")[1] ?? "";
+    expect(barisBeras).toContain("belum ada barang tercatat");
+    expect(barisBeras).toContain("po-variance-belum");
+    // Nilai PO baris itu tetap tampil (Rp 1.200.000,00); yang absen hanya
+    // sisi "Diterima", ditandai em dash lewat formatRupiahOpsional.
+    expect(barisBeras).toContain("Rp 1.200.000,00");
+    expect(barisBeras).not.toContain("Diterima</span><span class=\"po-value\">Rp 0,00");
   });
 });

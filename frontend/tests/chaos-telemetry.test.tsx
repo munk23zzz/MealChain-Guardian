@@ -18,10 +18,17 @@ describe("markup kontrak P4/P5 (file-level, tanpa render app penuh)", () => {
       path.resolve(__dirname, "../app/page.tsx"),
       "utf-8"
     );
-    const evidence = fs.readFileSync(
-      path.resolve(__dirname, "../components/DecisionEvidence.tsx"),
-      "utf-8"
-    );
+    const evidence =
+      fs.readFileSync(
+        path.resolve(__dirname, "../components/DecisionEvidence.tsx"),
+        "utf-8"
+      ) +
+      // 28 Okt 2026: isi detail dipindah ke DecisionDetail.tsx (dipakai halaman
+      // DAN popup detail) — kontrak dibaca dari keduanya, bukan satu berkas.
+      fs.readFileSync(
+        path.resolve(__dirname, "../components/DecisionDetail.tsx"),
+        "utf-8"
+      );
     // Panel integritas dipasang di halaman Decision & Evidence, bukan lagi
     // di tab agent-log (jejak agen vs bukti keputusan = dua halaman).
     expect(src).toContain("DecisionEvidence");

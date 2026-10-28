@@ -21,6 +21,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { fetchDecisionPacket, reviewDecision } from "../lib/api";
 import { humanizeBlocker, safetyLabel } from "../lib/bahasa";
+import { evidenceLabel } from "../lib/food-safety";
 import { REASON_MIN, REVIEW_ROLES, reviewReadiness } from "../lib/review-gate";
 
 type Sample = { timestamp: string; temperature_c: string };
@@ -66,6 +67,7 @@ export default function HumanReviewPanel({
   role,
   packet,
   onReviewed,
+  tanpaCatatan = false,
 }: {
   decisionId: string | null;
   token: string | null;
@@ -73,6 +75,8 @@ export default function HumanReviewPanel({
   /** Paket keputusan yang sudah diambil induk. Bila ada, panel TIDAK mengambil
       ulang — satu pembacaan untuk satu layar (butir 4: satu bentuk data). */
   packet?: any | null;
+  /** Halaman bukti memindahkan kalimat metode ke blok "Catatan teknis". */
+  tanpaCatatan?: boolean;
   onReviewed?: () => void;
 }) {
   const [packetSendiri, setPacketSendiri] = useState<any>(null);
@@ -168,7 +172,9 @@ export default function HumanReviewPanel({
         <h2>Verifikasi bukti batch</h2>
         <span className="evidence-note">
           {bolehMeninjau
-            ? "Reviewer menambah bukti; status dihitung server."
+            ? tanpaCatatan
+              ? null
+              : "Reviewer menambah bukti; status dihitung server."
             : "Peran ini hanya dapat melihat catatan review (read-only)."}
         </span>
       </div>
@@ -321,8 +327,8 @@ export default function HumanReviewPanel({
             {hasil.status_changed ? "(berubah)" : "(tidak berubah)"}
           </p>
           <p>
-            Keadaan bukti: <strong>{hasil.evidence_state}</strong> · sampel:{" "}
-            {hasil.sample_count} · excursion: {hasil.excursion_minutes} menit
+            Keadaan bukti: <strong>{evidenceLabel(hasil.evidence_state)}</strong> · sampel:{" "}
+            {hasil.sample_count} · di luar rentang: {hasil.excursion_minutes} menit
           </p>
           {(hasil.blocking_reasons ?? []).length > 0 && (
             <p>

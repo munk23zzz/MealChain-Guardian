@@ -253,7 +253,10 @@ describe("ApprovalModal (friksi disengaja)", () => {
     );
     expect(html).toContain("600");
     expect(html).toContain("Rp16.206.000");
-    expect(html).toContain("Konsisten");
+    // 29 Okt 2026: verdict "consistent" TIDAK lagi dicetak sebagai baris —
+    // ia keadaan normal; mengulanginya di setiap approval mendorong masa berlaku
+    // dan tombol Setuju ke bawah. Yang tetap dicetak: verdict yang perlu dibaca.
+    expect(html).not.toContain("Konsisten");
     expect(html).toContain("Konfirmasi persetujuan");
   });
 

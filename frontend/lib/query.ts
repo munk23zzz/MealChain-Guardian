@@ -59,6 +59,9 @@ export const queryKeys = {
     ["suppliers", scope, reachKm ?? "all", commodity ?? "all"] as const,
   supplierRoutes: (scope: string, commodity?: string | null, location?: string | null) =>
     ["supplier-routes", scope, commodity ?? "all", location ?? "all"] as const,
+  // Monitor harga pasar (28 Okt 2026): kunci memuat wilayah + jendela hari + komoditas.
+  priceMonitor: (region: string | null, days: number, commodity: string | null) =>
+    ["price-monitor", region ?? "nasional", days, commodity ?? "proyek"] as const,
   me: (scope: string) => ["me", scope] as const,
   balanceMap: (scope: string, commodity: string) =>
     ["balance-map", scope, commodity] as const,
@@ -92,6 +95,17 @@ export const queryKeys = {
   // scope: rencananya memang lintas lokasi (server yang menghitung), jadi
   // jangan dibuat berbeda per peran — hasilnya sama untuk komoditas yang sama.
   surplusPlan: (commodity: string) => ["surplus-plan", commodity] as const,
+  // Surplus per WILAYAH untuk panel di samping grafik kecukupan (28 Okt 2026).
+  // Kunci memuat daftar komoditas + lokasi yang dilewati: grafik SPPG memakai
+  // empat komoditas, grafik BGN nasional satu komoditas — dua bentuk itu tidak
+  // boleh berbagi cache. `scope` tetap ikut karena `exclude` diturunkan dari
+  // lokasi pengguna.
+  surplusRegions: (
+    scope: string,
+    commodities: readonly string[],
+    exclude: string | null
+  ) =>
+    ["surplus-regions", scope, commodities.join(","), exclude ?? "all"] as const,
   // Kalender agenda (langkah 2, 2026-10-16): rentang grid bulan masuk kunci
   // query supaya berpindah bulan memakai cache yang benar dan bulan yang sama
   // tidak diambil dua kali.
@@ -113,6 +127,7 @@ export const queryKeys = {
     ["quality-sample", scope, sampleKey] as const,
   supplierContext: (decisionId: string) => ["supplier-context", decisionId] as const,
   traces: (decisionId: string) => ["traces", decisionId] as const,
+  supervisorHealth: () => ["supervisor-health"] as const,
   approvalSummary: (decisionId: string) => ["approval-summary", decisionId] as const,
   approvalLog: (decisionId: string) => ["approval-log", decisionId] as const,
 } as const;

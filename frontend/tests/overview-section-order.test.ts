@@ -26,24 +26,30 @@ function urutanDiHalaman(): string[] {
 describe("urutan bagian Overview", () => {
   it("nav mengikuti urutan render halaman", () => {
     const diHalaman = urutanDiHalaman();
-    const diNav = overviewSections({ isApprover: true, hasShipments: true }).map((item) => item.id);
+    const diNav = overviewSections({ isApprover: true }).map((item) => item.id);
     // Halaman boleh memuat jangkar tambahan; yang wajib sama adalah urutan
     // bersama keduanya.
     const bersama = diHalaman.filter((id) => diNav.includes(id));
     expect(bersama).toEqual(diNav.filter((id) => diHalaman.includes(id)));
   });
 
-  it("Kecukupan dirender sebelum Kiriman di halaman", () => {
+  it("Kecukupan dirender sebelum panel harga di halaman", () => {
     const diHalaman = urutanDiHalaman();
     expect(diHalaman.indexOf("ov-kecukupan")).toBeGreaterThan(-1);
-    expect(diHalaman.indexOf("ov-kecukupan")).toBeLessThan(diHalaman.indexOf("ov-kiriman"));
+    expect(diHalaman.indexOf("ov-kecukupan")).toBeLessThan(diHalaman.indexOf("ov-harga"));
+  });
+
+  it("jangkar kiriman & telemetri sudah tidak ada di halaman", () => {
+    const diHalaman = urutanDiHalaman();
+    expect(diHalaman).not.toContain("ov-kiriman");
+    expect(diHalaman).not.toContain("ov-telemetri");
   });
 
   it("peran non-approver tetap memakai urutan yang sama", () => {
-    const ids = overviewSections({ isApprover: false, hasShipments: true }).map((item) => item.id);
-    expect(ids.indexOf("ov-kecukupan")).toBeLessThan(ids.indexOf("ov-kiriman"));
+    const ids = overviewSections({ isApprover: false }).map((item) => item.id);
+    expect(ids.indexOf("ov-kecukupan")).toBeLessThan(ids.indexOf("ov-harga"));
     // Label berubah mengikuti peran, urutannya tidak.
-    expect(overviewSections({ isApprover: false, hasShipments: true })).toContainEqual({
+    expect(overviewSections({ isApprover: false })).toContainEqual({
       id: "ov-kecukupan",
       label: "Pasokan per lokasi",
     });

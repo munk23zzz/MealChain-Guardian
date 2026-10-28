@@ -93,6 +93,13 @@ export function humanizeBlocker(reason: unknown): string | null {
     const kata = statusWord(kode);
     return `status ${kata} tidak dapat dieksekusi`;
   });
+  // Dua gerbang eksekusi (dokumen 02-approval-action.md §6): kalimat server
+  // "purchase order MC-… menunggu review Kepala SPPG" membawa nomor PO, jadi
+  // tidak bisa jadi kunci peta statis. Yang diterjemahkan hanya istilahnya.
+  hasil = hasil.replace(
+    /purchase order\s+(\S+)\s+menunggu review Kepala SPPG/gi,
+    "PO $1 menunggu review Kepala SPPG"
+  );
   return hasil;
 }
 
@@ -139,6 +146,9 @@ const STATUS_ID: Record<string, string> = {
   APPROVED: "Disetujui",
   REJECTED: "Ditolak",
   EXECUTED: "Dieksekusi",
+  // 29 Okt 2026: status ini tidak ada di peta, sehingga lencana kartu feed
+  // mencetak enum Inggris utuh "REVIEW ONLY" di tengah UI berbahasa Indonesia.
+  REVIEW_ONLY: "Temuan tinjauan",
   SURPLUS: "Surplus",
   SHORTAGE: "Shortage",
   TIGHT: "Ketat",

@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import OpsConsole from "../components/OpsConsole";
 import RoleHero, { roleProfile } from "../components/RoleHero";
-import RecommendationCard from "../components/RecommendationCard";
+import RecommendationCard, { caseLabelOf } from "../components/RecommendationCard";
 import DecisionActions, { visibleActions } from "../components/DecisionActions";
 import ApprovalMenu from "../components/ApprovalMenu";
 
@@ -149,8 +149,11 @@ describe("RoleHero — identitas role tanpa panduan peran", () => {
   });
 });
 
-describe("Label kasus demo pada kartu feed", () => {
-  it("kartu dengan demo_case menampilkan label kasus", () => {
+describe("Label kasus demo: kartu feed vs kepala Decision & Evidence", () => {
+  // 28 Okt 2026: badge "Kasus: …" DISHAPUS dari kartu feed saat kartu
+  // diringkas. Sumber labelnya (`caseLabelOf`) tetap hidup karena kepala
+  // halaman Decision & Evidence memakainya — lihat tests/decision-evidence.test.tsx.
+  it("kartu feed dengan demo_case TIDAK lagi menampilkan label kasus", () => {
     const html = renderToStaticMarkup(
       <RecommendationCard
         decision={{
@@ -165,24 +168,13 @@ describe("Label kasus demo pada kartu feed", () => {
         }}
       />
     );
-    expect(html).toContain("Kasus: Shortage Darurat");
+    expect(html).not.toContain("Kasus:");
+    expect(html).not.toContain("rec-case");
   });
 
-  it("kartu tanpa demo_case tidak menampilkan label kasus", () => {
-    const html = renderToStaticMarkup(
-      <RecommendationCard
-        decision={{
-          decision_type: "regional_balance",
-          status: "pending_approval",
-          quantity_kg: 600,
-          safe_delivered_cost: 16206000,
-          valid: true,
-          seconds_remaining: 600,
-          iteration: 1,
-        }}
-      />
-    );
-    expect(html).not.toContain("Kasus:");
+  it("caseLabelOf tetap memberi label untuk kepala halaman bukti", () => {
+    expect(caseLabelOf({ demo_case: "shortage-darurat" })).toBe("Kasus: Shortage Darurat");
+    expect(caseLabelOf({})).toBeNull();
   });
 });
 

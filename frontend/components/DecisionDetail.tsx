@@ -25,26 +25,22 @@ import IntegrityPanel from "./IntegrityPanel";
 import DecisionPurchaseOrder from "./DecisionPurchaseOrder";
 import DecisionTraceList from "./DecisionTraceList";
 import { SupplierExclusionView } from "./SupplierExclusionPanel";
+import { CatatanTeknis } from "./CatatanTeknis";
 import GoodsReceiptDrawer from "./GoodsReceiptDrawer";
 import { statusWord } from "../lib/decision-picker";
 import { shortId } from "../lib/agent-quality";
 import type { SupplierContext } from "../lib/supplier-exclusions";
 import {
-  approvalRoute,
   attentionFlags,
   auditTimeline,
-  butuhTindakan,
-  consequences,
   costFacts,
   decisionFacts,
   decisionHeadline,
   decisionMetrics,
-  nextStep,
+  safetyBadge,
   safetyFacts,
   supplierFact,
   windowUsage,
-  zonaShortcut,
-  type ZonaPosisi,
 } from "../lib/evidence";
 import { downloadDossier } from "../lib/export";
 import FactList from "./FactList";
@@ -68,20 +64,6 @@ const STATUS_TONES: Record<string, string> = {
   expired: "danger",
 };
 
-// Penanda langkah rute. Bentuknya BUKAN satu-satunya pembawa arti: teks keadaan
-// dibacakan lewat `.sr-only`, jadi warna/bentuk saja tidak pernah jadi kuncinya.
-const ROUTE_MARKS: Record<string, string> = {
-  done: "✓",
-  current: "●",
-  waiting: "○",
-  blocked: "✕",
-};
-const ROUTE_STATE_WORDS: Record<string, string> = {
-  done: "selesai",
-  current: "sedang di sini",
-  waiting: "menunggu",
-  blocked: "terhalang",
-};
 
 /**
  * @param dalamPopup true = dirender di dalam dialog. Dua hal yang berbeda di
@@ -135,8 +117,6 @@ export default function DecisionDetail({
   }
   // Semua kalimat & angka disusun di `lib/evidence.ts` (murni, ada tesnya) —
   // komponen ini hanya menaruh hasilnya.
-  const langkah = nextStep({ role, status: String(selected?.status ?? ""), summary });
-  const konsekuensi = consequences({ decision: selected, summary });
   const judul = decisionHeadline(selected, summary);
   const metrik = decisionMetrics(selected, summary, now);
   // Ringkasan persetujuan datang dari API terpisah (ikut poll 5 detik). Saat
@@ -146,21 +126,18 @@ export default function DecisionDetail({
   const adaRingkasan =
     Boolean(summary) && typeof summary === "object" && Object.keys(summary as object).length > 0;
   const flags = adaRingkasan ? attentionFlags({ decision: selected, summary }) : [];
-  const rute = approvalRoute({ decision: selected, summary, now });
   const audit = auditTimeline({ decision: selected, summary, chain });
+  // Putusan safety satu keputusan: lencana di kepala kartu "Keamanan & pemasok".
+  // Angka "N batch diperiksa" pindah ke lencana, jadi baris fakta yang sama
+  // tidak dicetak dua kali (`countInBadge`).
+  const badgeSafety = safetyBadge(summary);
+  const faktaSafety = safetyFacts(summary, { countInBadge: true });
   const umur = windowUsage({
     created_at: selected?.created_at,
     expires_at: selected?.expires_at,
     now: now ?? null,
   });
   const statusKey = String(selected?.status ?? "").toLowerCase();
-
-  // ── Posisi zona keputusan (pintasan ↓ / ↑) — HANYA di halaman ─────────────
-  // Penanda "bagian mana yang sedang dibaca" untuk nav ada di komponen bersama
-  // `SectionJump`; yang tersisa di sini hanya pertanyaan khas halaman ini —
-  // apakah zona keputusan ada di bawah lipatan, sedang terbaca, atau sudah
-  // dilewati. Di popup pertanyaan itu tidak ada (gulirnya bukan gulir jendela).
-  const [zonaPosisi, setZonaPosisi] = useState<ZonaPosisi>("terlihat");
 
   // Fase 6 butir 4: SATU paket keputusan untuk layar ini — evaluasi batch,
   // biaya, bukti, dan review dibaca dari bentuk server, bukan dirakit ulang di
@@ -185,65 +162,6 @@ export default function DecisionDetail({
       batal = true;
     };
   }, [selected?.decision_id, token]);
-
-  useEffect(() => {
-    if (dalamPopup) return;
-    if (!selected?.decision_id) return;
-    let raf = 0;
-    const ukur = () => {
-      raf = 0;
-
-      // Posisi zona keputusan: di bawah lipatan (pintasan ↓), sedang terbaca
-      // (pintasan disembunyikan total), atau sudah dilewati (pintasan ↑).
-      // "Terbaca" = setidaknya separuh panelnya berada di antara bar atas (96 px)
-      // dan dasar layar. Ambang separuh dipilih supaya pintasan tetap muncul di
-      // puncak halaman, saat panelnya cuma mengintip beberapa puluh piksel di
-      // dasar layar — di situlah pintasan paling dibutuhkan.
-      const zona = document.getElementById("zona-keputusan");
-      if (zona) {
-        const kotak = zona.getBoundingClientRect();
-        const atasLayar = 96;
-        const dasarLayar = window.innerHeight;
-        const tampak = Math.min(kotak.bottom, dasarLayar) - Math.max(kotak.top, atasLayar);
-        const ruang = Math.min(kotak.height || 1, dasarLayar - atasLayar) || 1;
-        let posisi: ZonaPosisi;
-        if (kotak.bottom <= atasLayar) posisi = "lewat";
-        else if (kotak.top >= dasarLayar) posisi = "bawah";
-        else if (tampak / ruang >= 0.5) posisi = "terlihat";
-        else posisi = kotak.top > atasLayar ? "bawah" : "lewat";
-        setZonaPosisi((sebelum) => (sebelum === posisi ? sebelum : posisi));
-      }
-    };
-    const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(ukur);
-    };
-    ukur();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [selected?.decision_id, dalamPopup]);
-
-  // Peran pengawas tidak punya aksi, dan keputusan yang sudah selesai tidak
-  // menunggu siapa pun. Pintasan bawah hanya muncul kalau memang ada
-  // persetujuan yang tertunda untuk peran ini (permintaan pemilik 20 Okt 2026).
-  const perluTindakan = butuhTindakan({
-    role,
-    status: statusKey,
-    summary,
-  });
-  const ringkasanGov = (summary ?? {}) as Record<string, unknown>;
-  const jumlahSetuju = Array.isArray(ringkasanGov.approvals)
-    ? (ringkasanGov.approvals as unknown[]).length
-    : null;
-  const ambangSetuju = Number((ringkasanGov.approval_requirement as Record<string, unknown> | undefined)?.min_approvals);
-  const hitunganSetuju =
-    jumlahSetuju !== null && Number.isFinite(ambangSetuju)
-      ? `${jumlahSetuju} dari ${ambangSetuju} persetujuan`
-      : null;
 
   if (!selected) return null;
 
@@ -290,10 +208,6 @@ export default function DecisionDetail({
             >
               {unduh.state === "jalan" ? "Menyiapkan bukti…" : "Unduh bukti (JSON)"}
             </button>
-            <a className="evidence-hero-jump" href="#zona-keputusan">
-              {zonaShortcut("bawah").text}
-              <span aria-hidden="true"> {zonaShortcut("bawah").arrow}</span>
-            </a>
           </span>
         </div>
         {unduh.state === "sukses" && (
@@ -344,32 +258,11 @@ export default function DecisionDetail({
           </div>
         )}
 
-        {/* Satu kalimat "apa yang harus saya lakukan" (lib/evidence.nextStep). */}
-        <div className={`evidence-next evidence-next-${langkah.tone}`} role="status">
-          <span className="evidence-next-label">Langkah berikutnya</span>
-          <p className="evidence-next-text">{langkah.text}</p>
-        </div>
-
-        {/* Akibat tiap pilihan — dilipat (F1) supaya kepala keputusan tidak
-            memanjang. Ringkasan menyebut kedua cabang, dan tidak ada angka
-            yang hanya hidup di dalam lipatan: angkanya dari strip metrik. */}
-        <details className="evidence-consequence">
-          <summary className="evidence-consequence-summary">
-            Akibat tiap pilihan
-            <span className="evidence-consequence-hint">disetujui / ditolak</span>
-          </summary>
-          <dl className="evidence-consequence-list">
-            <div className="evidence-consequence-row">
-              <dt>Kalau disetujui</dt>
-              <dd>{konsekuensi.approve}</dd>
-            </div>
-            <div className="evidence-consequence-row">
-              <dt>Kalau ditolak</dt>
-              <dd>{konsekuensi.reject}</dd>
-            </div>
-          </dl>
-        </details>
-
+        {/* Ringkasan keputusan: fakta yang dibaca sebagai angka, bukan paragraf.
+            Kotak "Langkah berikutnya" dan lipatan "Akibat tiap pilihan" dilepas
+            29 Okt 2026 — keduanya milik momen MEMUTUSKAN dan sudah ada di popup
+            Recommendations; halaman ini menyimpan buktinya, bukan menawarkan
+            tindakan. Status tetap terbaca di kepala keputusan. */}
       </article>
 
       {/* ── B + C. PERSETUJUAN: KEPUTUSAN LALU JALUR ─────────────────────
@@ -378,7 +271,7 @@ export default function DecisionDetail({
           terjadi setelah ini), baru kronologinya. Sebelum 28 Okt 2026 kartu
           jalur berdiri di atas kartu keputusan, sehingga pembaca melihat
           riwayat sebelum tahu apa yang harus dilakukan. */}
-      <section className="evidence-block jump-target" id="rute">
+      <section className="evidence-block">
         <article className="card evidence-decide jump-target" id="zona-keputusan" data-bagian="keputusan">
           {/* Kepala: judul + aksi berdampingan supaya aksi menempel pada
               statusnya, bukan menggantung di bawah daftar fakta. */}
@@ -394,6 +287,7 @@ export default function DecisionDetail({
               status={selected.status}
               token={token}
               summary={summary}
+              izinPersetujuan={false}
             />
           </div>
           {/* Modul persetujuan (dokumen `02-approval-action.md` §7, 28 Okt 2026):
@@ -408,30 +302,6 @@ export default function DecisionDetail({
               Ringkasan persetujuan sedang dimuat — status keputusan di atas tetap
               berasal dari data keputusan, bukan dari panel ini.
             </p>
-          )}
-        </article>
-
-        <article className="card evidence-route" data-bagian="jalur">
-          <h2>Jalur persetujuan</h2>
-          {rute.length === 0 ? (
-            <p className="evidence-note">
-              Belum ada langkah yang bisa dibaca untuk keputusan ini.
-            </p>
-          ) : (
-            <ol className="evidence-route-steps">
-              {rute.map((step) => (
-                <li className={`evidence-route-step evidence-route-${step.state}`} key={step.id}>
-                  <span className="evidence-route-mark" aria-hidden="true">
-                    {ROUTE_MARKS[step.state]}
-                  </span>
-                  <span className="evidence-route-body">
-                    <span className="evidence-route-label">{step.label}</span>
-                    <span className="evidence-route-detail">{step.detail}</span>
-                  </span>
-                  <span className="sr-only">Keadaan langkah: {ROUTE_STATE_WORDS[step.state]}</span>
-                </li>
-              ))}
-            </ol>
           )}
         </article>
       </section>
@@ -502,22 +372,28 @@ export default function DecisionDetail({
           token={token}
           role={role}
           packet={paket}
+          tanpaCatatan
         />
+
+        {/* Penerimaan barang + governance pemasok: keduanya BUKTI pelaksanaan,
+            jadi tinggal di blok Bukti yang sama (29 Okt 2026). Sebelumnya dua
+            kartu ini mengambang di antara #bukti dan #jejak tanpa wadah —
+            jaraknya beda dari kartu lain dan tidak bisa ditautkan. */}
+        {/* Fase 9 butir 2 & 4: penerimaan barang. Status & tombol dari server
+            (`receipt_gate`), bukan hitungan klien. */}
+        <GoodsReceiptDrawer summary={summary} token={token} role={role} />
+        {supplierContext && (
+          <SupplierExclusionView
+            key={selected.decision_id}
+            context={supplierContext}
+            role={role}
+            token={token ?? ""}
+            onCreated={onSupplierCreated ?? (() => {})}
+            tanpaCatatan
+          />
+        )}
       </section>
 
-      {/* Form pengecualian pemasok (governance) tampil lebar penuh setelah bukti. */}
-      {/* Fase 9 butir 2 & 4: penerimaan barang. Status & tombol dari server
-          (`receipt_gate`), bukan hitungan klien. */}
-      <GoodsReceiptDrawer summary={summary} token={token} role={role} />
-      {supplierContext && (
-        <SupplierExclusionView
-          key={selected.decision_id}
-          context={supplierContext}
-          role={role}
-          token={token ?? ""}
-          onCreated={onSupplierCreated ?? (() => {})}
-        />
-      )}
 
       {/* ── E. JEJAK & INTEGRITAS ───────────────────────────────────────── */}
       <section className="evidence-block evidence-bottom jump-target" id="jejak" data-bagian="jejak">
@@ -533,6 +409,8 @@ export default function DecisionDetail({
           <DecisionPurchaseOrder
             purchaseOrders={purchaseOrders}
             decisionId={selected?.decision_id}
+            token={token ?? null}
+            decisionStatus={selected?.status ?? null}
           />
         </article>
 
@@ -555,37 +433,9 @@ export default function DecisionDetail({
           token={token ?? ""}
           decisionId={selected.decision_id}
         />
-      </section>
 
-      {/* F3: hanya pintasan, bukan aksi kedua — kontrol yang sama tetap di
-          #zona-keputusan. Muncul HANYA kalau persetujuan memang tertunda untuk
-          peran ini, dan disembunyikan saat zonanya sedang terlihat. Panahnya
-          mengikuti posisi zona: ↓ saat masih di bawah, ↑ saat sudah dilewati.
-          Tidak dirender di popup: gulirnya bukan gulir jendela. */}
-      {!dalamPopup && perluTindakan && zonaPosisi !== "terlihat" && (
-        <div
-          className="evidence-actionbar"
-          role="region"
-          aria-label={zonaShortcut(zonaPosisi).label}
-          data-tone={STATUS_TONES[statusKey] ?? "neutral"}
-        >
-          {/* Titik nada + dua baris teks: keadaan dulu (yang menentukan apakah
-              ada yang bisa dikerjakan), lalu hitungan approval sebagai detail.
-              Sebelumnya satu baris abu-abu "status · hitungan" — dua informasi
-              berbeda bobotnya disamakan. */}
-          <span className="evidence-actionbar-state">
-            <span className="evidence-actionbar-dot" aria-hidden="true" />
-            <span className="evidence-actionbar-text">
-              <strong>{statusWord(selected.status)}</strong>
-              {hitunganSetuju ? <span>{hitunganSetuju}</span> : null}
-            </span>
-          </span>
-          <a className="button button-primary evidence-actionbar-link" href="#zona-keputusan">
-            {zonaShortcut(zonaPosisi).text}
-            <span aria-hidden="true"> {zonaShortcut(zonaPosisi).arrow}</span>
-          </a>
-        </div>
-      )}
+        <CatatanTeknis />
+      </section>
     </>
   );
 }

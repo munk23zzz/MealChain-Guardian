@@ -1,0 +1,102 @@
+/* Sisa gaya khusus halaman Location Network.
+   Semua yang sudah ada di globals.css (`card`, `board-card-head`, `location-table`,
+   `commodity-filters`, `commodity-pill`, `evidence-note`, `button`) TIDAK
+   diduplikasi di sini — itu yang membuat halaman ini dulu terasa berbeda dari
+   tab lain. Yang tersisa hanya tiga hal yang belum punya padanan global:
+   kalimat ringkasan, tombol baris lokasi, dan angka rata kanan. */
+
+.headline {
+  margin: 0;
+  max-width: 72ch;
+  color: var(--navy-900);
+  font-size: var(--fs-4);
+  font-weight: 600;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+
+.issues {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  color: var(--warn-ink);
+  font-size: var(--fs-2);
+}
+
+.issues li::before {
+  content: "· ";
+  color: var(--ink-muted);
+}
+
+.rowButton {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--navy-900);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rowButton:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rowButton:focus-visible {
+  outline: 2px solid var(--navy-900);
+  outline-offset: 2px;
+  border-radius: var(--radius-chip);
+}
+
+.flag {
+  color: var(--warn-ink);
+  font-size: var(--fs-1);
+  font-weight: 400;
+}
+
+.region {
+  color: var(--ink-muted);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.num[data-status="shortage"] {
+  color: var(--danger);
+}
+
+.num[data-status="surplus"] {
+  color: var(--ok-ink);
+}
+
+@media (max-width: 640px) {
+  .headline {
+    font-size: var(--fs-3);
+  }
+
+  .region {
+    display: none;
+  }
+}
+
+/* Penanda bahwa nama lokasi bisa dibuka; tanpa ini baris terlihat seperti teks biasa. */
+.chevron {
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+}
+
+.openRow td {
+  background: var(--surface-muted, #f4f6f9);
+}

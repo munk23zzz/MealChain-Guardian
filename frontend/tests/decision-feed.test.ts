@@ -75,7 +75,12 @@ describe("feedChips (label + urutan chip filter)", () => {
     const chips = feedChips(DATA);
     const labels = chips.map((c) => c.label);
     expect(labels).toContain("menunggu persetujuan");
-    expect(labels).toContain("ditandai verifier");
+    // 29 Okt 2026: "verifikator", bukan "verifier" — lencana di kartu yang sama
+    // sudah menulis "Ditandai verifikator"; satu layar tidak boleh punya dua
+    // sebutan untuk satu status. "temuan tinjauan", bukan "tinjauan
+    // (review-only)" yang membawa enum Inggris ke layar berbahasa Indonesia.
+    expect(labels).toContain("ditandai verifikator");
+    expect(labels.join(" ")).not.toContain("review-only");
     expect(labels.join(" ")).not.toContain("PENDING_APPROVAL");
     expect(labels.join(" ")).not.toContain("VERIFIER_FLAGGED");
   });
@@ -99,6 +104,20 @@ describe("feedChips (label + urutan chip filter)", () => {
 
   it("baris tanpa status tidak dihitung ke chip mana pun", () => {
     expect(feedChips([row({ status: "" }), row({ status: null })])).toEqual([]);
+  });
+
+  // 29 Okt 2026 — satu status, satu istilah Indonesia. Chip dulu menulis
+  // "ditandai verifier" sementara lencana kartu menulis "Ditandai verifikator",
+  // dan "tinjauan (review-only)" membawa enum Inggris ke layar.
+  it("status tinjauan & verifikasi memakai satu istilah Indonesia", () => {
+    const chips = feedChips([
+      row({ decision_id: "r1", status: "review_only" }),
+      row({ decision_id: "r2", status: "verifier_flagged" }),
+    ]);
+    const labels = chips.map((c) => c.label);
+    expect(labels).toContain("temuan tinjauan");
+    expect(labels).toContain("ditandai verifikator");
+    expect(labels.join(" ")).not.toContain("review-only");
   });
 });
 
@@ -144,6 +163,43 @@ describe("feedVisible (cakupan + pencarian)", () => {
 
   it("kata kunci yang tidak ada → daftar kosong (bukan diam-diam semua)", () => {
     expect(feedVisible(DATA, { scope: "all", query: "wortel-di-bulan" })).toEqual([]);
+  });
+
+  // 29 Okt 2026 — pencarian harus mencocokkan kata yang BENAR-BENAR tercetak
+  // di kartu (aturan yang sudah ditulis di kepala lib/decision-feed.ts), dan
+  // tidak mencocokkan teks yang sudah tidak dirender lagi.
+  it("pencarian cocok dengan komoditas yang tercetak di baris meta kartu", () => {
+    // id sengaja TIDAK memuat kata komoditas: kalau id-nya "id-telur", tes ini
+    // lulus lewat kecocokan id dan tidak membuktikan apa pun soal komoditas.
+    const data = [
+      row({ decision_id: "aa11", commodity_name: "telur" }),
+      row({ decision_id: "bb22", commodity_name: "beras" }),
+    ];
+    expect(feedVisible(data, { query: "telur" }).map((d: any) => d.decision_id)).toEqual([
+      "aa11",
+    ]);
+  });
+
+  it("pencarian 'lewat tenggat' cocok dengan lencana yang tercetak, bukan kata 'kedaluwarsa'", () => {
+    const data = [
+      row({ decision_id: "cc33", valid: false }),
+      row({ decision_id: "dd44", valid: true }),
+    ];
+    expect(feedVisible(data, { query: "lewat tenggat" }).map((d: any) => d.decision_id)).toEqual([
+      "cc33",
+    ]);
+  });
+
+  it("teks yang TIDAK dicetak kartu tidak ikut dicocokkan (verdict verifier, nama kasus demo)", () => {
+    // `verifier_note` dan `demo_case` dulu ikut masuk haystack, padahal
+    // kartu sudah tidak merendernya sejak 28 Okt 2026 — pencarian bisa
+    // "menemukan" baris tanpa satu pun kata yang terlihat di layar.
+    const data = [
+      row({ decision_id: "id-verdict", verifier_note: "consistent" }),
+      row({ decision_id: "id-kasus", demo_case: "supplier-janggal" }),
+    ];
+    expect(feedVisible(data, { query: "consistent" })).toEqual([]);
+    expect(feedVisible(data, { query: "janggal" })).toEqual([]);
   });
 
   it("cakupan dan kata kunci digabung (AND), bukan salah satu", () => {

@@ -24,7 +24,7 @@ export function useWasteSummary(
   const query = useQuery({
     queryKey: queryKeys.wasteSummary(scope),
     queryFn: () => fetchWasteSummary(token as string, days),
-    enabled: Boolean(token) && tab === "surplus",
+    enabled: Boolean(token) && (tab === "surplus" || tab === "location-network"),
     refetchInterval: false,
   });
   return {

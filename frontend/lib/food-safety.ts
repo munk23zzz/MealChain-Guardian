@@ -119,9 +119,20 @@ export function hoursLeft(usableUntil: unknown, now: Date): number | null {
 export function hoursLabel(hours: number | null): string {
   if (hours === null) return DASH;
   const abs = Math.abs(hours);
+  // Pembulatan jam bisa mencapai 24 (mis. 3 hari − 1 menit). Tanpa dibawa ke
+  // satuan hari, layar menulis "2 hari 24 jam" — satuan yang tidak pernah
+  // dipakai orang.
+  let hari = Math.floor(abs / 24);
+  let jam = Math.round(abs % 24);
+  if (jam === 24) {
+    hari += 1;
+    jam = 0;
+  }
   const text =
-    abs >= 24
-      ? `${Math.floor(abs / 24)} hari ${Math.round(abs % 24)} jam`
+    hari >= 1
+      ? jam > 0
+        ? `${hari} hari ${jam} jam`
+        : `${hari} hari`
       : `${Math.round(abs)} jam`;
   return hours >= 0 ? `${text} lagi` : `lewat ${text}`;
 }
@@ -134,6 +145,12 @@ export type SafetyRow = {
   statusLabel: string;
   tone: SafetyTone;
   freshness: string;
+  /**
+   * Skor kesegaran numerik (0..1) untuk MENGURUTKAN. `null` = tidak terbaca —
+   * tidak pernah diganti 0, karena 0 berarti "paling tidak segar" dan itu klaim
+   * yang tidak pernah dikirim server. Yang tercetak tetap `freshness`.
+   */
+  freshnessScore: number | null;
   usableUntil: string;
   hoursLeft: number | null;
   hoursLabel: string;
@@ -190,6 +207,7 @@ export function safetyRows(batches: unknown, now: Date): SafetyRow[] {
       statusLabel: safetyLabel(batch?.safety_status),
       tone: safetyTone(batch?.safety_status),
       freshness: freshnessPercent(batch?.freshness_score),
+      freshnessScore: angka(batch?.freshness_score),
       usableUntil: usableLabel(batch?.usable_until),
       hoursLeft: hours,
       hoursLabel: hoursLabel(hours),
@@ -320,6 +338,42 @@ export function sortByDeadline(rows: SafetyRow[]): SafetyRow[] {
 
 export type ExpiryKey = "expired" | "urgent" | "watch" | "ok" | "unknown";
 export type ExpiryState = { key: ExpiryKey; label: string; detail: string };
+
+/**
+ * Jumlah baris kesegaran yang duduk TERBUKA di ringkasan (dokumen
+ * `07-safety-evidence.md` §4.2 butir 3). Sisa baris tetap tersedia di dalam satu
+ * lipatan — tidak ada baris yang dibuang, dan tabel status di bawah tetap
+ * menampilkan semuanya tanpa lipatan.
+ */
+export const FRESHNESS_OPEN = 3;
+
+/**
+ * Kesegaran terendah lebih dulu (yang paling perlu diperiksa lebih dulu).
+ *
+ * Batch tanpa skor diletakkan PALING AKHIR dan tidak pernah mengisi slot terbuka
+ * yang tersisa: skor kosong bukan 0, jadi menaruhnya di daftar "terendah" akan
+ * mengklaim kesegaran yang tidak pernah diukur.
+ */
+export function lowestFreshness(
+  rows: SafetyRow[],
+  limit: number = FRESHNESS_OPEN
+): { open: SafetyRow[]; rest: SafetyRow[] } {
+  const urut = [...rows].sort((a, b) => {
+    if (a.freshnessScore === null && b.freshnessScore === null) return 0;
+    if (a.freshnessScore === null) return 1;
+    if (b.freshnessScore === null) return -1;
+    return a.freshnessScore - b.freshnessScore;
+  });
+  const berSkor = urut.filter((row) => row.freshnessScore !== null);
+  const tanpaSkor = urut.filter((row) => row.freshnessScore === null);
+  const buka = Math.max(0, Math.min(limit, berSkor.length));
+  return {
+    open: berSkor.slice(0, buka),
+    // Sisa baris ber-skor + SEMUA baris tanpa skor tetap dikembalikan.
+    rest: [...berSkor.slice(buka), ...tanpaSkor],
+  };
+}
+
 
 /**
  * Keadaan masa layak — supaya batch lewat tanggal tidak cuma tampil sebagai
@@ -574,6 +628,11 @@ export type SafetyDecisionRow = {
   id: string;
   status: string;
   statusLabel: string;
+  /**
+   * Komoditas keputusan dari `GET /decisions` (`commodity_name`). `null` =
+   * server tidak mengirimnya; tidak pernah ditebak dari data batch.
+   */
+  commodity: string | null;
   kg: number | null;
   valid: boolean;
   secondsRemaining: number | null;
@@ -595,6 +654,10 @@ export type SafetyDecisionSummary = {
   pendingApproval: number;
   rejected: number;
   reproposable: number;
+  /** Komoditas yang benar-benar ada di data keputusan keamanan (urut abjad). */
+  commodities: string[];
+  /** Saringan aktif, atau `null` bila daftar tidak disaring. */
+  filteredCommodity: string | null;
   rows: SafetyDecisionRow[];
 };
 
@@ -605,23 +668,52 @@ const DECISION_STATUS_LABEL: Record<string, string> = {
   rejected: "Ditolak",
   executed: "Dieksekusi",
   verified: "Terverifikasi",
-  verifier_flagged: "Ditandai verifier",
-  review_only: "Tinjauan (review-only)",
+  verifier_flagged: "Ditandai verifikator",
+  review_only: "Temuan tinjauan",
 };
 
 /**
  * Riwayat keputusan KEAMANAN untuk lokasi ini (feed `GET /decisions` sudah
  * ber-scope server-side). Dipisah dari keputusan jenis lain supaya halaman
  * keamanan tidak menghitung pekerjaan yang bukan urusannya.
+ *
+ * `commodity` (opsional) menyaring daftar ke satu komoditas — tautan dari tabel
+ * postur ke gerbang (dokumen `07-safety-evidence.md` §4.2 butir 1). Saringannya
+ * bekerja pada data yang SUDAH dimuat klien; `allTotal` tetap menyebut seluruh
+ * feed supaya angka yang lebih kecil tidak terbaca sebagai riwayat yang hilang.
  */
-export function safetyDecisions(items: unknown): SafetyDecisionSummary {
+export function safetyDecisions(items: unknown, commodity?: string | null): SafetyDecisionSummary {
   const list = Array.isArray(items) ? items : [];
   const keamanan = list.filter((item) => {
     const row = item as Record<string, unknown> | null;
     return row && row["decision_type"] === "safety_disruption";
   });
 
-  const rows: SafetyDecisionRow[] = keamanan.map((item) => {
+  // Pilihan saringan dibangun dari SELURUH keputusan keamanan (bukan dari hasil
+  // saringan), jadi pilihan tidak saling menghapus saat berpindah komoditas.
+  // Array.from, bukan sebaran Set: target TS di repo ini di bawah es2015
+  // sehingga `[...set]` ditolak (TS2802).
+  const komoditasTersedia = Array.from(
+    new Set(
+      keamanan
+        .map((item) => text((item as Record<string, unknown>)["commodity_name"]))
+        .filter((nama): nama is string => Boolean(nama))
+    )
+  ).sort((a, b) => a.localeCompare(b, "id"));
+
+  const cari = text(commodity)?.toLowerCase() ?? null;
+  const terpilih = cari
+    ? keamanan.filter(
+        (item) => (text((item as Record<string, unknown>)["commodity_name"]) ?? "").toLowerCase() === cari
+      )
+    : keamanan;
+  // Nama kanonik dari data (bukan yang diketik pengguna) supaya kalimat layar
+  // menulis ejaan yang sama dengan tabel batch.
+  const namaTerpilih = cari
+    ? komoditasTersedia.find((nama) => nama.toLowerCase() === cari) ?? text(commodity)
+    : null;
+
+  const rows: SafetyDecisionRow[] = terpilih.map((item) => {
     const row = item as Record<string, unknown>;
     const status = text(row["status"]) ?? "unknown";
     const valid = row["valid"] === true;
@@ -630,6 +722,7 @@ export function safetyDecisions(items: unknown): SafetyDecisionSummary {
       id: text(row["decision_id"]) ?? DASH,
       status,
       statusLabel: DECISION_STATUS_LABEL[status] ?? status.replace(/_/g, " "),
+      commodity: text(row["commodity_name"]),
       kg: Number.isFinite(Number(row["quantity_kg"])) ? Number(row["quantity_kg"]) : null,
       valid,
       secondsRemaining: Number.isFinite(sisa) ? sisa : null,
@@ -671,6 +764,8 @@ export function safetyDecisions(items: unknown): SafetyDecisionSummary {
     pendingApproval: rows.filter((row) => row.status === "pending_approval").length,
     rejected: ditolak.length,
     reproposable: rows.filter((row) => row.canRepropose).length,
+    commodities: komoditasTersedia,
+    filteredCommodity: namaTerpilih,
     rows: rows.sort((a, b) => Number(b.canRepropose) - Number(a.canRepropose)),
   };
 }
@@ -695,7 +790,10 @@ export function safetyDecisionSummaryLine(s: SafetyDecisionSummary): string {
   bagian.push(`${s.expired} kedaluwarsa tanpa penolakan`);
   if (s.pendingApproval) bagian.push(`${s.pendingApproval} menunggu persetujuan`);
   const total = s.totalKg === null ? "" : ` · total ${formatKg(s.totalKg)}`;
-  return `${bagian.join(" · ")}${total}. Dari ${s.allTotal} keputusan yang menyasar lokasi ini.`;
+  // Daftar yang disaring menyebut saringannya lebih dulu: tanpa itu "1 keputusan
+  // keamanan" terbaca sebagai seluruh riwayat, padahal ada 3.
+  const saring = s.filteredCommodity ? `Disaring ke komoditas ${s.filteredCommodity} · ` : "";
+  return `${saring}${bagian.join(" · ")}${total}. Dari ${s.allTotal} keputusan yang menyasar lokasi ini.`;
 }
 
 // ── Penerimaan barang (kartu "Penerimaan barang") ───────────────────────────
@@ -944,7 +1042,10 @@ export function matchesSafetyFilter(row: SafetyRow, filter: SafetyFilter): boole
   if (filter === "semua") return true;
   if (filter === "gagal") return row.tone === "danger";
   if (filter === "verifikasi") return row.tone === "warn";
-  if (filter === "aman") return row.tone === "ok";
+  // "Aman" = boleh dialokasikan. Batch karantina TIDAK masuk meski ujinya
+  // lolos — kalau ikut, chip "Aman 3" di tabel bertabrakan dengan ringkasan
+  // yang menulis "2 aman · 1 ditahan" untuk data yang sama (terukur 29 Okt).
+  if (filter === "aman") return row.tone === "ok" && row.quarantine !== "quarantined";
   return row.tone === "danger" || row.tone === "warn" || row.quarantine !== "none";
 }
 
@@ -1210,4 +1311,63 @@ export function evidenceSummary(rows: readonly EvidenceRow[]): EvidenceSummary {
     }
   }
   return ringkas;
+}
+
+/**
+ * Pembagian EKSKLUSIF untuk baris angka ringkasan.
+ *
+ * `safetySummaryOfRows` menjawab "berapa aman / gagal / belum" dengan tumpang
+ * tindih: batch karantina tidak dihitung aman, tetapi kalau ujinya gagal ia
+ * tetap terhitung di `failed` — sehingga empat angka bisa berjumlah lebih atau
+ * kurang dari total. Akibatnya bagian Ringkasan butuh bar komposisi,
+ * persentase, dan lipatan "cara membaca" hanya untuk menjelaskan selisih itu.
+ *
+ * Fungsi ini memilih SATU kelompok per baris, dengan urutan keputusan:
+ *   1. karantina  — tidak boleh dialokasikan, apa pun hasil ujinya
+ *   2. gagal uji
+ *   3. perlu verifikasi
+ *   4. belum diuji
+ *   5. aman
+ * Jumlah kelima angka SELALU = jumlah baris yang diperiksa, jadi pembaca tidak
+ * perlu menghitung selisih atau membaca legenda.
+ */
+export type SafetyGroupKey = "ditahan" | "gagal" | "verifikasi" | "belum" | "aman";
+
+export type SafetyGroup = {
+  key: SafetyGroupKey;
+  label: string;
+  value: number;
+  tone: SafetyTone;
+};
+
+export function safetyStatusGroups(rows: SafetyRow[]): SafetyGroup[] {
+  let ditahan = 0;
+  let gagal = 0;
+  let verifikasi = 0;
+  let belum = 0;
+  let aman = 0;
+
+  for (const row of rows) {
+    if (row.quarantine === "quarantined") {
+      ditahan += 1;
+    } else if (row.tone === "danger") {
+      gagal += 1;
+    } else if (row.tone === "warn") {
+      verifikasi += 1;
+    } else if (row.tone === "ok") {
+      aman += 1;
+    } else {
+      // Tone tak dikenal diperlakukan "belum diuji", bukan "aman": tidak ada
+      // dasar untuk menyebutnya lolos.
+      belum += 1;
+    }
+  }
+
+  return [
+    { key: "aman", label: "Aman", value: aman, tone: "ok" },
+    { key: "gagal", label: "Gagal uji", value: gagal, tone: "danger" },
+    { key: "verifikasi", label: "Perlu verifikasi", value: verifikasi, tone: "warn" },
+    { key: "belum", label: "Belum diuji", value: belum, tone: "muted" },
+    { key: "ditahan", label: "Ditahan", value: ditahan, tone: "warn" },
+  ];
 }

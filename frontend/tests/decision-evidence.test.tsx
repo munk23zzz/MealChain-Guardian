@@ -124,10 +124,10 @@ describe("Decision & Evidence — dengan keputusan", () => {
     // F1: hitungan persetujuan hanya di stepper. Fixture ini tidak menyebut
     // peran penyetuju, jadi stepper jujur menulis "0 dari 2" — dan angkanya
     // tidak boleh muncul dua kali di layar yang sama.
-    // "0 dari 2" hanya boleh muncul sekali (stepper); "2 dari 2" di Syarat
-    // persetujuan adalah ambang, bukan hitungan yang sama.
-    expect(html).toContain("0 dari 2");
-    expect((html.match(/0 dari 2/g) ?? []).length).toBe(1);
+    // 29 Okt 2026: hitungan "0 dari 2" hanya ada di kotak Langkah-berikutnya
+    // yang kini dilepas (persetujuan dijalankan di popup Recommendations).
+    // Halaman bukti tidak lagi mengulang hitungan itu di kepala keputusan.
+    expect(html).not.toContain("0 dari 2");
   });
 
   it("tenggat memakai jam yang diberikan pemanggil", () => {
@@ -415,19 +415,23 @@ describe("Decision & Evidence — kerapian kartu fakta (17 Okt 2026)", () => {
   });
 });
 
-describe("Decision & Evidence — kalimat langkah berikutnya (17 Okt 2026)", () => {
-  it("kartu ringkasan dibuka oleh satu kalimat tindakan dari data", () => {
+describe("Decision & Evidence — kotak langkah berikutnya DILEPAS (29 Okt 2026)", () => {
+  it("ringkasan tidak lagi memuat ajakan bertindak; itu milik popup Recommendations", () => {
     const html = render();
-    expect(html).toContain("Langkah berikutnya");
-    expect(html).toContain("evidence-next");
+    // Asersi dibalik, bukan dihapus: kotak ini sengaja dipindahkan ke popup
+    // (persetujuan tidak lagi dijalankan di halaman ini), dan tes inilah yang
+    // mencegahnya kembali lewat refactor.
+    expect(html).not.toContain("Langkah berikutnya");
+    expect(html).not.toContain("evidence-next");
     // SUMMARY pada fixture: jendela berlaku sudah lewat (expiry.valid=false).
     expect(html).toContain("Jendela berlaku keputusan sudah lewat");
   });
 
-  it("peran pengawas: kalimatnya jujur bahwa ia tidak bisa menindaklanjuti", () => {
+  it("peran pengawas: halaman menyatakan hanya-baca, bukan menawarkan tindakan", () => {
     const html = render({ role: "bgn_monitor", summary: { ...SUMMARY, expiry: { valid: true } } });
-    expect(html).toContain("bersifat pengawasan");
-    expect(html).toContain("evidence-next-muted");
+    expect(html).toContain("Tampilan hanya-baca");
+    expect(html).toContain("bukan kewenangan peran ini");
+    expect(html).not.toContain("evidence-next");
   });
 });
 
@@ -460,36 +464,30 @@ describe("Decision & Evidence — struktur catatan keputusan", () => {
     expect(html).not.toContain("Belum diverifikasi");
   });
 
-  it("konsekuensi tiap pilihan disebut, termasuk nomor iterasi berikutnya", () => {
+  it("konsekuensi tiap pilihan tidak lagi dirender di halaman bukti", () => {
     const html = render();
-    expect(html).toContain("Kalau disetujui");
-    expect(html).toContain("Belum bisa dieksekusi: Kuota SPPG Jakarta penuh minggu ini.");
-    expect(html).toContain("Kalau ditolak");
-    expect(html).toContain("v4");
+    // Cabang "kalau disetujui / ditolak" adalah bahan memutuskan; popup
+    // Recommendations yang menampilkannya sejak 29 Okt 2026.
+    expect(html).not.toContain("Kalau disetujui");
+    expect(html).not.toContain("Kalau ditolak");
   });
 
-  it("jalur persetujuan: empat langkah berurutan dengan keadaan yang dibaca", () => {
+  it("kartu 'Jalur persetujuan' dilepas; kronologi dibaca di blok Governance", () => {
     const html = render();
-    // Empat langkah, berurutan (kelas langkah, bukan wadah "steps").
-    expect(html.split('class="evidence-route-step ').length - 1).toBe(4);
-    const label = ["Diajukan", "Verifikasi agent", "Persetujuan", "Eksekusi"].map((teks) =>
-      html.indexOf(`>${teks}<`)
-    );
-    expect(label.every((pos) => pos >= 0)).toBe(true);
-    expect(label[0]).toBeLessThan(label[1]);
-    expect(label[1]).toBeLessThan(label[2]);
-    expect(label[2]).toBeLessThan(label[3]);
-    expect(html).toContain("Agen supervisor");
-    expect(html).toContain("Keadaan langkah:");
-    expect(html).toContain("evidence-route-waiting");
+    // Empat langkah itu kini hanya hidup di popup Recommendations; di halaman
+    // bukti, urutan langkah tetap terbaca di "Langkah" milik Governance.
+    expect(html).not.toContain("Jalur persetujuan");
+    expect(html).not.toContain("evidence-route-step");
+    expect(html).toContain("Langkah");
   });
 
-  it("urutan region: kepala → zona keputusan → rute → bukti → jejak", () => {
+  it("urutan region: kepala → zona keputusan → bukti → jejak", () => {
     // Dokumen `02-approval-action.md` §7.1 (28 Okt 2026): jawaban (apa menahan,
     // siapa dibutuhkan, apa setelah ini) dibaca LEBIH DULU daripada kronologi.
-    // Karena itu kartu keputusan berdiri di atas kartu jalur.
+    // 29 Okt 2026: kartu "Jalur persetujuan" dilepas, jadi urutannya berhenti
+    // di blok keputusan lalu bukti.
     const html = render();
-    const urut = ["evidence-hero", "evidence-decide", "evidence-route", "evidence-grid", "evidence-bottom"].map(
+    const urut = ["evidence-hero", "evidence-decide", "evidence-grid", "evidence-bottom"].map(
       (kelas) => html.indexOf(kelas)
     );
     for (let i = 1; i < urut.length; i += 1) {
@@ -497,9 +495,8 @@ describe("Decision & Evidence — struktur catatan keputusan", () => {
     }
   });
 
-  it("ada jalan pintas ke zona keputusan (dan id-nya benar-benar ada)", () => {
+  it("zona keputusan tetap punya jangkar (nav bagian menunjuk ke sini)", () => {
     const html = render();
-    expect(html).toContain('href="#zona-keputusan"');
     expect(html).toContain('id="zona-keputusan"');
   });
 });

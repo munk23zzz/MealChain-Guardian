@@ -12,6 +12,7 @@ import {
   FEED_WINDOWS,
   FEED_WINDOW_DEFAULT,
   feedWindowHint,
+  feedWindowHintBilaBerbeda,
   feedWindowLabel,
 } from "../lib/decisions-window";
 
@@ -40,5 +41,14 @@ describe("jendela periode feed", () => {
   it("kunci tak dikenal jatuh ke hari ini, bukan kosong", () => {
     expect(feedWindowLabel("9z" as never)).toBe("Hari ini");
     expect(feedWindowHint("9z" as never)).toBe("24 jam terakhir");
+  });
+
+  // 29 Okt 2026 — petunjuk periode hanya dicetak bila menambah arti. Label
+  // "7 hari" + petunjuk "7 hari terakhir" adalah kalimat yang sama dua kali,
+  // dan di layar ia terbaca seperti chip keempat.
+  it("petunjuk periode hanya keluar bila menambah arti di luar labelnya", () => {
+    expect(feedWindowHintBilaBerbeda("24h")).toBe("24 jam terakhir");
+    expect(feedWindowHintBilaBerbeda("7d")).toBeNull();
+    expect(feedWindowHintBilaBerbeda("30d")).toContain("bulan berjalan");
   });
 });

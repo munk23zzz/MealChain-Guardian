@@ -31,6 +31,13 @@ import { langkahPersetujuan, peranSudahSetuju, poDari } from "../lib/approval-pa
 import { humanizeBlocker, statusLabel } from "../lib/bahasa";
 import { roleLabel } from "../lib/settings";
 import Popup from "./Popup";
+import TombolTutup from "./TombolTutup";
+// Satu aturan PDF untuk halaman ini dan panel: `bolehUnduhPdf` membaca status
+// keputusan (approved/executed), sama seperti tombol di Decision & Evidence.
+// Dulu aturan ini hanya hidup di sana, jadi panel yang dipakai saat
+// mengeksekusi tidak pernah menawarkan dokumennya.
+import { bolehUnduhPdf } from "./PurchaseOrderList";
+import { downloadPoPdf } from "../lib/export";
 
 const APPROVER_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
 
@@ -133,6 +140,7 @@ export default function DecisionActions({
   summary,
   tampil = "dialog",
   terbukaAwal = false,
+  izinPersetujuan = true,
 }: {
   decisionId: string;
   role: string;
@@ -148,6 +156,15 @@ export default function DecisionActions({
   tampil?: "dialog" | "panel";
   /** Panel konfirmasi langsung terbuka (dipakai tombol "Persetujuan" di kartu). */
   terbukaAwal?: boolean;
+  /**
+   * `false` = halaman ini TIDAK menjalankan persetujuan (29 Okt 2026: approval
+   * pindah ke popup Recommendations, lihat `DecisionDrawer`). Tombol setuju /
+   * tolak / verifikasi / ajukan ulang disembunyikan; eksekusi & review PO tetap
+   * ada karena keduanya langkah pemenuhan, bukan persetujuan. Bila tidak ada
+   * yang tersisa, komponen mencetak catatan hanya-baca yang menyebut di mana
+   * persetujuan dicatat — bukan tombol yang pasti ditolak.
+   */
+  izinPersetujuan?: boolean;
 }) {
   const [opened, setOpened] = useState(terbukaAwal);
   const [message, setMessage] = useState<string | null>(null);
@@ -204,6 +221,17 @@ export default function DecisionActions({
   const langkah = langkahPersetujuan({ summary, role });
   const reviewTersedia = langkah.reviewPo.tersedia;
   const poDraft = po !== null && po.status === "draft";
+  // 29 Okt 2026: di Decision & Evidence persetujuan hanya DIBACA (approval
+  // dijalankan dari popup Recommendations). Masking di satu tempat supaya
+  // popup, label pemicu, dan gerbang "tidak ada yang bisa dikerjakan" membaca
+  // izin yang sama — bukan tiga aturan yang bisa berselisih.
+  const izin = izinPersetujuan
+    ? actions
+    : { ...actions, approve: false, verify: false, propose: false, repropose: false };
+  // Dokumen PO hanya sah setelah kuorum penuh; server memakai aturan yang sama,
+  // jadi tombol ini tidak pernah menawarkan unduhan yang pasti ditolak 409.
+  const pdfTersedia = po !== null && bolehUnduhPdf(status);
+  const adaAksiLain = izin.execute || reviewTersedia || pdfTersedia;
   // Langkah 4 (19 Okt 2026): label mengikuti keadaan. "Kelola persetujuan"
   // pada keputusan final menjanjikan pekerjaan yang tidak ada, dan pada
   // keputusan yang baru disetujui sebagian yang ditunggu adalah REKAN.
@@ -213,13 +241,17 @@ export default function DecisionActions({
       ? "Review PO"
       : view.state === "selesai" || view.state === "ditolak"
         ? "Lihat hasil"
-        : view.state === "sebagian"
-          ? peranSudahSetuju(summary, role)
-            ? "Menunggu rekan"
-            : "Setujui sekarang"
-          : poDraft
-            ? "Menunggu review PO"
-            : "Kelola persetujuan";
+        : !izinPersetujuan
+          ? izin.execute
+            ? "Eksekusi"
+            : "Lihat hasil"
+          : view.state === "sebagian"
+            ? peranSudahSetuju(summary, role)
+              ? "Menunggu rekan"
+              : "Setujui sekarang"
+            : poDraft
+              ? "Menunggu review PO"
+              : "Kelola persetujuan";
   const administrative = [
     "supplier_exclusion",
     "supplier_exclusion_restoration",
@@ -243,6 +275,17 @@ export default function DecisionActions({
     return (
       <p className="read-only-note">
         Temuan tinjauan (review-only): tidak ada approval atau eksekusi untuk keputusan ini.
+      </p>
+    );
+  }
+  // 29 Okt 2026: halaman ini tidak menjalankan persetujuan, dan tidak ada
+  // eksekusi/PO yang tersisa untuk dikerjakan. Jangan tampilkan pemicu yang
+  // membuka popup kosong — sebutkan di mana persetujuan dicatat.
+  if (!izinPersetujuan && !adaAksiLain) {
+    return (
+      <p className="read-only-note" data-testid="persetujuan-di-rekomendasi">
+        Persetujuan dijalankan dari <strong>Recommendations</strong>; halaman ini
+        menyimpan buktinya.
       </p>
     );
   }
@@ -350,6 +393,23 @@ export default function DecisionActions({
     }
   }
 
+  /**
+   * Unduh dokumen PO (PDF) dari panel — permintaan pemilik 29 Okt 2026: setelah
+   * eksekusi, dokumennya harus bisa diambil di tempat orang mengeksekusi, bukan
+   * hanya di kartu "PO keputusan ini" yang jauh di halaman lain.
+   */
+  async function unduhDokumenPo(): Promise<string | null> {
+    if (!token) return "Login diperlukan";
+    if (!po) return "Belum ada PO untuk diunduh";
+    try {
+      const nama = await downloadPoPdf(po.po_number, token);
+      setMessage(`Dokumen PO tersimpan: ${nama}`);
+      return null;
+    } catch (err: any) {
+      return galatAksi("Dokumen PO gagal diunduh", err);
+    }
+  }
+
   async function verify(): Promise<string | null> {
     if (!token) return "Login diperlukan";
     try {
@@ -376,10 +436,12 @@ export default function DecisionActions({
   const menu = (
     <ApprovalMenu
       summary={summary}
-      actions={actions}
+      actions={izin}
       administrative={administrative}
       canReviewPo={reviewTersedia}
       poNumber={po?.po_number ?? null}
+      pdfNumber={pdfTersedia ? po?.po_number ?? null : null}
+      onUnduhPdf={unduhDokumenPo}
       onReviewPo={reviewPo}
       onApprove={approve}
       onReject={reject}
@@ -429,13 +491,17 @@ export default function DecisionActions({
           <div className="aksi-panel" id="aksi-panel" ref={panelRef} role="group" aria-label="Governance & persetujuan">
             <div className="aksi-panel-head">
               <span className="detail-h">Governance &amp; persetujuan</span>
-              <button
-                type="button"
-                className="button button-secondary"
+              {/* 29 Okt 2026 (permintaan pemilik): penutup panel jadi X bulat,
+                  bukan tombol teks "Tutup panel". Teks di kepala panel memakan
+                  lebar yang dibutuhkan judul, dan "tutup" bukan keputusan —
+                  tidak perlu bobot tombol sekunder. Label tetap ada untuk
+                  pembaca layar + tooltip. */}
+              <TombolTutup
+                className="aksi-panel-close"
+                label="Tutup panel"
+                size={14}
                 onClick={() => setOpened(false)}
-              >
-                Tutup panel
-              </button>
+              />
             </div>
             {/* Chip status tidak diulang di sini: ringkasan bukti tepat di
                 bawahnya sudah mencetak Status ("Menunggu persetujuan"), syarat

@@ -14,6 +14,12 @@ import "./overview-p0.css";
 // Grafik kecukupan: aturan .supply-adequacy/.sa-* dipisah dari globals.css
 // supaya lapisan grafik dapat di-commit tanpa hunk stylesheet bersama.
 import "./supply-adequacy.css";
+// Overview 28 Okt 2026: "Kecukupan pasokan" (setengah halaman) berdampingan
+// dengan panel "Surplus wilayah lain". Diimpor setelah supply-adequacy.css
+// karena ia menyusun ulang baris `sa-*` pada kartu yang sempit.
+import "./surplus-regions.css";
+import "./adequacy-columns.css";
+import "./agent-activity.css";
 // Tombol pil/oval di seluruh halaman (27 Okt 2026, permintaan pemilik).
 // Diimpor terakhir dengan alasan yang sama: menang urutan tanpa !important.
 import "./tombol-pil.css";

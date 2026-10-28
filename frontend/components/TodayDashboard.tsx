@@ -54,7 +54,10 @@ type KpiEnvelope = {
 // Jumlah agenda yang ditampilkan; dipakai di slice DAN di kalimat "+N lain"
 // supaya angka di layar tidak bisa menyimpang dari daftar yang benar-benar
 // dirender saat batas ini diubah (audit angka 18 Okt 2026).
-const MAKS_AGENDA_KEPUTUSAN = 6;
+const MAKS_AGENDA_KEPUTUSAN = 5;
+// Kartu batch: 5 baris terdekat (kedaluwarsa dulu, lalu yang segera). Lebih dari
+// itu dinyatakan sebagai "+N batch lain", bukan dipotong diam-diam.
+const MAKS_BATCH_KEDALUWARSA = 5;
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING_APPROVAL: "Menunggu persetujuan",
@@ -62,10 +65,14 @@ const STATUS_LABELS: Record<string, string> = {
   VERIFIER_FLAGGED: "Ditandai verifikator",
 };
 
+// Kosakata status keamanan batch dari backend
+// (`app/core/candidate.py::_SAFETY_STATUSES`). `needs_verification` dulu tidak
+// diterjemahkan, sehingga kartu "Hari Ini" mencetak kode mentah ke layar.
 const SAFETY_LABELS: Record<string, string> = {
   pass: "lolos uji",
   fail: "gagal uji",
   pending: "uji tertunda",
+  needs_verification: "belum diverifikasi",
 };
 
 function statusLabel(status: unknown): string {
@@ -306,7 +313,21 @@ export default function TodayDashboard({
                     <div className="today-row-main">
                       <span className="today-row-title">{typeLabel(decision.decision_type)}</span>
                       <span className="today-row-meta">
-                        {quantityLabel(decision.quantity_kg)} · {statusLabel(decision.status)}
+                        {/* Lima baris terdekat sering berasal dari jenis keputusan
+                            yang sama (demo menyemai banyak keputusan identik), jadi
+                            barisnya dulu terbaca persis sama. Yang membedakan:
+                            komoditas, tujuan, dan 8 karakter pertama id. */}
+                        {[
+                          (decision as Record<string, unknown>).commodity_name as string | null,
+                          quantityLabel(decision.quantity_kg),
+                          (decision as Record<string, unknown>).target_location_name as string | null,
+                          statusLabel(decision.status),
+                          decision.decision_id
+                            ? `#${String(decision.decision_id).slice(0, 8)}`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </span>
                     </div>
                     <span className={dueClass(dueTone(decision.expires_at, now, expired))}>
@@ -329,7 +350,7 @@ export default function TodayDashboard({
                 <li className="today-more">
                   <span>
                     +{pending.items.length - MAKS_AGENDA_KEPUTUSAN} keputusan lain
-                    menunggu tindakan
+                    menunggu tindakan · {MAKS_AGENDA_KEPUTUSAN} terdekat ditampilkan
                   </span>
                   {onOpenAllDecisions && (
                     <button
@@ -393,7 +414,7 @@ export default function TodayDashboard({
                       .join(" · ")}
               </p>
               <ul className="today-list">
-                {batchRows.slice(0, 6).map((batch, index) => {
+                {batchRows.slice(0, MAKS_BATCH_KEDALUWARSA).map((batch, index) => {
                   const isExpired = index < batchState.expired.length;
                   return (
                     <li
@@ -412,7 +433,7 @@ export default function TodayDashboard({
                               : null,
                             batch.safety_status
                               ? (SAFETY_LABELS[String(batch.safety_status)] ??
-                                String(batch.safety_status))
+                                "status tidak dikenal")
                               : null,
                           ]
                             .filter(Boolean)
@@ -425,10 +446,11 @@ export default function TodayDashboard({
                     </li>
                   );
                 })}
-                {batchRows.length > 6 && (
+                {batchRows.length > MAKS_BATCH_KEDALUWARSA && (
                   <li className="today-more">
                     <span>
-                      +{batchRows.length - 6} batch lain mendekati kedaluwarsa
+                      +{batchRows.length - MAKS_BATCH_KEDALUWARSA} batch lain mendekati
+                      kedaluwarsa · {MAKS_BATCH_KEDALUWARSA} terdekat ditampilkan
                     </span>
                     {onOpenBatches && (
                       <button

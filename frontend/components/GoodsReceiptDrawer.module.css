@@ -1,0 +1,343 @@
+/* GoodsReceiptDrawer.module.css — dokumen 05 §1–§8.
+   Hanya memakai token yang sudah ada di app/globals.css supaya tampilan tetap
+   konsisten dengan panel lain (tanpa warna/ukuran baru yang menyimpang). */
+
+.list {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface);
+}
+
+.rowMain {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.rowStatus {
+  margin: 0;
+  font-size: var(--fs-2);
+  color: var(--ink);
+}
+
+.rowFigures {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.rowFigures [data-tone="estimate"] {
+  color: var(--status-warning);
+}
+
+.sheet {
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* ---------- langkah ---------- */
+
+.step {
+  display: grid;
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.step:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.stepHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.stepNo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  font-size: var(--fs-1);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+  flex: none;
+}
+
+.stepTitle {
+  margin: 0;
+  font-size: var(--fs-3);
+  color: var(--ink);
+}
+
+.stepNote,
+.note {
+  margin: 0;
+  font-size: var(--fs-1);
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+.error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control-sm);
+  border: 1px solid var(--status-danger);
+  color: var(--status-danger);
+  font-size: var(--fs-2);
+  background: color-mix(in srgb, var(--status-danger) 8%, transparent);
+}
+
+/* ---------- langkah 1: titik periksa ---------- */
+
+.progress {
+  margin: 0;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+}
+
+.progress strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.checkpoints {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+  overflow: hidden;
+}
+
+.checkpoint {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  font-size: var(--fs-2);
+  color: var(--ink);
+}
+
+.checkpoint + .checkpoint {
+  border-top: 1px solid var(--line);
+}
+
+.checkpoint[data-checked="false"] {
+  color: var(--ink-muted);
+}
+
+.checkpointMark {
+  font-size: var(--fs-1);
+  color: var(--status-safe);
+  text-align: center;
+}
+
+.checkpoint[data-checked="false"] .checkpointMark {
+  color: var(--ink-subtle);
+}
+
+.checkpointLabel {
+  min-width: 0;
+}
+
+.checkpointFlag {
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+  white-space: nowrap;
+}
+
+/* ---------- langkah 2: tiga angka ---------- */
+
+.figures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.figure {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface-sunken);
+  min-width: 0;
+}
+
+.figureWide {
+  grid-column: 1 / -1;
+}
+
+.figureLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.figureValue {
+  font-size: var(--fs-4);
+  color: var(--ink);
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.figureBadge {
+  padding: 0 4px;
+  border-radius: var(--radius-chip);
+  border: 1px solid var(--status-warning);
+  color: var(--status-warning);
+  font-size: 10px;
+  line-height: 16px;
+  text-transform: lowercase;
+}
+
+.priceOrigin {
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.figureRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+.reasons {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: grid;
+  gap: 2px;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+}
+
+/* ---------- langkah 3: tombol ---------- */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.primary,
+.secondary,
+.danger {
+  padding: 6px 12px;
+  border-radius: var(--radius-control-sm);
+  font-size: var(--fs-2);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.primary {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: #fff;
+}
+
+.danger {
+  border-color: var(--status-danger);
+  color: var(--status-danger);
+}
+
+.primary:disabled,
+.secondary:disabled,
+.danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.rejectBox {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface-sunken);
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+}
+
+.fieldLabel {
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.input {
+  padding: 6px 8px;
+  border-radius: var(--radius-control-sm);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-2);
+}
+
+/* Layar sempit (popup jadi bottom sheet penuh): dua kolom angka terlalu sempit
+   untuk "Rp 33.200.000" + asal harga, jadi tumpuk satu kolom. */
+@media (max-width: 460px) {
+  .figures {
+    grid-template-columns: 1fr;
+  }
+  .checkpoint {
+    grid-template-columns: 16px 1fr;
+  }
+  .checkpointFlag {
+    grid-column: 2;
+    white-space: normal;
+  }
+}
+
+/* Sasaran sentuh: aturan 44 px di globals.css hanya menyasar `.popup .button`,
+   sedangkan tombol modul ini memakai kelas sendiri — jadi dinaikkan di sini
+   (syarat ui-ux: kontrol >= 44 px di perangkat sentuh). */
+@media (pointer: coarse), (max-width: 720px) {
+  .primary,
+  .secondary,
+  .danger {
+    min-height: 44px;
+  }
+  .row {
+    flex-wrap: wrap;
+  }
+}

@@ -18,6 +18,7 @@
 import { useState } from "react";
 import ApprovalModal from "./ApprovalModal";
 import { batchGateView } from "../lib/safety-gate";
+import TombolTutup from "./TombolTutup";
 
 export type MenuActions = {
   approve: boolean;
@@ -37,6 +38,8 @@ export default function ApprovalMenu({
   administrative,
   canReviewPo = false,
   poNumber = null,
+  pdfNumber = null,
+  onUnduhPdf,
   onReviewPo,
   onApprove,
   onReject,
@@ -53,6 +56,12 @@ export default function ApprovalMenu({
   /** PO draft menunggu review Kepala SPPG (gerbang kedua, §6 dokumen 02). */
   canReviewPo?: boolean;
   poNumber?: string | null;
+  /**
+   * Nomor PO yang dokumennya boleh diunduh (keputusan approved/executed).
+   * `null` = tidak ada dokumen sah, jadi tidak ada baris kosong yang dicetak.
+   */
+  pdfNumber?: string | null;
+  onUnduhPdf?: () => ActionResult;
   onReviewPo?: () => ActionResult;
   onApprove: () => ActionResult;
   onReject: (reason: string) => ActionResult;
@@ -95,6 +104,7 @@ export default function ApprovalMenu({
   }
 
   const hasChoice =
+    (pdfNumber !== null && Boolean(onUnduhPdf)) ||
     canReviewPo ||
     actions.approve ||
     actions.verify ||
@@ -141,6 +151,7 @@ export default function ApprovalMenu({
           onConfirm={() => run("approve", onApprove)}
           onCancel={onClose}
           showActions={actions.approve && canApprove}
+          dalamPanel={dalamPanel}
           busy={busy === "approve"}
         />
       </section>
@@ -168,11 +179,39 @@ export default function ApprovalMenu({
                   data-action="review-po"
                   onClick={() => run("review-po", onReviewPo)}
                   disabled={busy !== null}
+                  aria-busy={busy === "review-po"}
                 >
                   {busy === "review-po" ? "Memproses…" : "Review & kirim"}
                 </button>
               </li>
             )}
+            {/* Dokumen PO (permintaan pemilik 29 Okt 2026): setelah eksekusi
+                dokumennya harus bisa diambil DI SINI. Sebelumnya satu-satunya
+                tombol ada di kartu "PO keputusan ini" di Decision & Evidence,
+                sementara keputusan yang sudah dieksekusi hilang dari feed. */}
+            {pdfNumber !== null && onUnduhPdf && (
+              <li className="action-menu-item" data-action="unduh-po">
+                <div className="action-menu-text">
+                  <strong>Dokumen PO {pdfNumber}</strong>
+                  <span>
+                    PDF resmi PO ini — dasar persetujuan, rincian biaya, dan batch
+                    yang terikat. Bisa diunduh kapan saja setelah keputusan
+                    disetujui.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="button button-secondary action-menu-button"
+                  data-action="unduh-po"
+                  onClick={() => run("unduh-po", onUnduhPdf)}
+                  disabled={busy !== null}
+                  aria-busy={busy === "unduh-po"}
+                >
+                  {busy === "unduh-po" ? "Menyiapkan…" : "Unduh PDF"}
+                </button>
+              </li>
+            )}
+
             {actions.approve && canReject && (
               <li className="action-menu-item" data-action="reject">
                 <div className="action-menu-text">
@@ -186,8 +225,10 @@ export default function ApprovalMenu({
                   type="button"
                   className="button button-secondary action-menu-button"
                   data-action="reject"
+                  data-tone="danger"
                   onClick={openReject}
                   disabled={busy !== null}
+                  aria-busy={busy === "reject"}
                   aria-expanded={rejecting}
                 >
                   Tolak
@@ -235,6 +276,7 @@ export default function ApprovalMenu({
                   data-action="verify"
                   onClick={() => run("verify", onVerify)}
                   disabled={busy !== null}
+                  aria-busy={busy === "verify"}
                 >
                   {busy === "verify" ? "Memproses…" : "Verifikasi"}
                 </button>
@@ -269,6 +311,7 @@ export default function ApprovalMenu({
                   data-action="propose"
                   onClick={() => run("propose", onPropose)}
                   disabled={busy !== null}
+                  aria-busy={busy === "propose"}
                 >
                   {busy === "propose" ? "Memproses…" : "Ajukan"}
                 </button>
@@ -303,6 +346,7 @@ export default function ApprovalMenu({
                   data-action="execute"
                   onClick={() => run("execute", onExecute)}
                   disabled={busy !== null}
+                  aria-busy={busy === "execute"}
                 >
                   {busy === "execute" ? "Memproses…" : "Eksekusi"}
                 </button>
@@ -344,6 +388,7 @@ export default function ApprovalMenu({
                   data-action="repropose"
                   onClick={() => run("repropose", onRepropose)}
                   disabled={busy !== null}
+                  aria-busy={busy === "repropose"}
                 >
                   {busy === "repropose" ? "Memproses…" : "Minta re-propose"}
                 </button>
@@ -387,7 +432,8 @@ export default function ApprovalMenu({
               <div className="reject-reason-actions">
                 <button
                   type="button"
-                  className="button"
+                  className="button button-danger"
+                  data-tone="danger"
                   onClick={() => run("reject", () => onReject(reason))}
                   disabled={busy !== null}
                 >
@@ -417,16 +463,21 @@ export default function ApprovalMenu({
         </p>
       )}
 
-      <div className="approval-menu-foot">
-        <p className="approval-menu-hint">
-          {dalamPanel
-            ? "Tutup panel ini untuk kembali membaca rincian."
-            : "Tekan Esc untuk menutup jendela ini."}
-        </p>
-        <button type="button" className="button button-secondary" onClick={onClose} disabled={busy !== null}>
-          Tutup
-        </button>
-      </div>
+      {/* Di panel inline, penutup sudah ada di kepala panel ("Tutup panel").
+          Kaki ini dulu menambah tombol "Tutup" kedua plus satu kalimat yang
+          mengulang hal yang sama. Hanya mode jendela sendiri yang butuh kaki. */}
+      {dalamPanel ? null : (
+        <div className="approval-menu-foot">
+          <p className="approval-menu-hint">Tekan Esc untuk menutup jendela ini.</p>
+          {/* 29 Okt 2026: penutup berupa X bulat, sama dengan kepala popup dan
+              panel — bukan tombol teks "Tutup" yang bentuknya lain sendiri. */}
+          <TombolTutup
+            label="Tutup jendela persetujuan"
+            onClick={onClose}
+            disabled={busy !== null}
+          />
+        </div>
+      )}
     </div>
   );
 }

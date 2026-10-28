@@ -143,10 +143,7 @@ export default function IntegrityPanel({
   return (
     <section className="integrity-panel card" data-testid="integrity-panel">
       <h3>Integritas Bukti</h3>
-      <p className="integrity-sub">
-        Rantai hash append-only, alamat konten, dan tanda tangan tiap keputusan — dibaca dari
-        endpoint deterministik, bukan dikarang.
-      </p>
+      <p className="integrity-sub">Hash append-only, alamat konten, dan tanda tangan — dibaca dari API.</p>
 
       {/* Bukti kriptografis (rantai Merkle + alamat konten + tanda tangan ECDSA)
           kini bertinta TERANG seperti sisa konsol: warna di sini membawa

@@ -37,9 +37,14 @@ describe("navigasi PRD 2.4 (7 screen → konsol tab)", () => {
     expect(pageSrc).toContain("National Inspector");
   });
 
+  // Dokumen `06-agent-log.md` §2.9 (28 Okt 2026): status model tetap punya SATU
+  // rumah, tetapi dibungkus `AgentRunSummary` supaya "belum ada trace" bisa
+  // dibedakan dari "trace ada tapi tanpa langkah model". ProviderPanel kini
+  // dirender oleh komponen itu, bukan langsung oleh halaman.
   it("agent-log: trace console terpisah dari detail (AgentTraceViewer tetap ter-wire)", () => {
     expect(pageSrc).toMatch(/<AgentTraceViewer/);
-    expect(pageSrc).toMatch(/<ProviderPanel/);
+    expect(pageSrc).toMatch(/<AgentRunSummary/);
+    expect(pageSrc).not.toMatch(/<ProviderPanel/);
   });
 
   // Permintaan pemilik 21 Okt: panel "Bukti integrasi per komponen" dihapus dari

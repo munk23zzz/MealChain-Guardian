@@ -8,6 +8,7 @@ import {
   expiryState,
   filterSafetyRows,
   safetyFilterCounts,
+  safetyStatusGroups,
   hoursLabel,
   hoursLeft,
   incomingBatchId,
@@ -98,6 +99,13 @@ describe("hoursLeft / hoursLabel", () => {
 
   it("lebih dari sehari ditulis hari + jam", () => {
     expect(hoursLabel(30)).toBe("1 hari 6 jam lagi");
+  });
+
+  it("jam yang membulat ke 24 dibawa ke satuan hari", () => {
+    // 2 hari 23 jam 50 menit → "3 hari lagi", bukan "2 hari 24 jam lagi".
+    expect(hoursLabel(71.85)).toBe("3 hari lagi");
+    expect(hoursLabel(47.99)).toBe("2 hari lagi");
+    expect(hoursLabel(24)).toBe("1 hari lagi");
   });
 });
 
@@ -902,5 +910,94 @@ describe("coverageSentence — tanggal kebutuhan", () => {
   it("tanpa tanggal, kalimatnya tidak mengarang tanggal", () => {
     const teks = coverageSentence({ demandKg: 1080, supplyKg: 300, shortageKg: 780, incomingKg: null });
     expect(teks).not.toContain("perlu");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Partisi eksklusif untuk angka Ringkasan (29 Okt 2026).
+//
+// Masalah yang diselesaikan: `safetySummaryOfRows` menghitung "aman" tanpa batch
+// karantina, tetapi "gagal" TETAP menghitung batch karantina yang ujinya gagal.
+// Empat angka itu karena itu bisa berjumlah lebih/kurang dari total, dan UI lama
+// menambal selisihnya dengan bar komposisi + persentase + lipatan legenda.
+// Kontrak baru: lima kelompok eksklusif, jumlahnya SELALU = jumlah baris.
+describe("safetyStatusGroups — lima kelompok eksklusif", () => {
+  const NOW = new Date("2026-10-29T04:00:00Z");
+  const batch = (over: Record<string, unknown>) => ({
+    id: "x",
+    location: "Bandung",
+    commodity: "beras",
+    quantity_kg: 100,
+    safety_status: "pass",
+    freshness_score: 0.8,
+    usable_until: "2026-11-10T04:00:00Z",
+    ...over,
+  });
+
+  it("setiap baris masuk tepat satu kelompok dan jumlahnya = total", () => {
+    const rows = safetyRows(
+      [
+        batch({ id: "1" }),
+        batch({ id: "2", safety_status: "fail" }),
+        batch({ id: "3", safety_status: "pending" }),
+        batch({ id: "4", safety_status: "needs_verification" }),
+        batch({ id: "5", quarantine_status: "quarantined" }),
+        batch({ id: "6", safety_status: "fail", quarantine_status: "quarantined" }),
+      ],
+      NOW
+    );
+    const grup = safetyStatusGroups(rows);
+    expect(grup.reduce((total, g) => total + g.value, 0)).toBe(rows.length);
+  });
+
+  it("karantina menang atas status uji: batch gagal-yang-ditahan tidak dihitung dua kali", () => {
+    const rows = safetyRows(
+      [
+        batch({ id: "1", safety_status: "fail" }),
+        batch({ id: "2", safety_status: "fail", quarantine_status: "quarantined" }),
+      ],
+      NOW
+    );
+    const nilai = Object.fromEntries(safetyStatusGroups(rows).map((g) => [g.key, g.value]));
+    expect(nilai.gagal).toBe(1);
+    expect(nilai.ditahan).toBe(1);
+  });
+
+  it("urutan kelompok tetap: aman, gagal, perlu verifikasi, belum diuji, ditahan", () => {
+    const rows = safetyRows([batch({ id: "1" })], NOW);
+    expect(safetyStatusGroups(rows).map((g) => g.key)).toEqual([
+      "aman",
+      "gagal",
+      "verifikasi",
+      "belum",
+      "ditahan",
+    ]);
+  });
+
+  it("batch tanpa status tidak dihitung aman", () => {
+    const rows = safetyRows([batch({ id: "1", safety_status: null })], NOW);
+    const nilai = Object.fromEntries(safetyStatusGroups(rows).map((g) => [g.key, g.value]));
+    expect(nilai.aman).toBe(0);
+    expect(nilai.belum).toBe(1);
+  });
+});
+
+describe("saring \"Aman\" hanya untuk batch yang boleh dialokasikan", () => {
+  const NOW2 = new Date("2026-10-29T04:00:00Z");
+  const rows = safetyRows(
+    [
+      { id: "1", location: "Bandung", commodity: "beras", quantity_kg: 10, safety_status: "pass", freshness_score: 0.9, usable_until: "2026-11-10T04:00:00Z" },
+      { id: "2", location: "Bandung", commodity: "wortel", quantity_kg: 10, safety_status: "pass", freshness_score: 0.9, usable_until: "2026-11-10T04:00:00Z", quarantine_status: "quarantined" },
+    ],
+    NOW2
+  );
+
+  it("batch karantina tidak dihitung aman (sama dengan ringkasan)", () => {
+    expect(safetyFilterCounts(rows).aman).toBe(1);
+    expect(filterSafetyRows(rows, "aman", "")).toHaveLength(1);
+  });
+
+  it("batch karantina tetap dapat dijangkau lewat \"Perlu tindakan\"", () => {
+    expect(safetyFilterCounts(rows).tindakan).toBe(1);
   });
 });

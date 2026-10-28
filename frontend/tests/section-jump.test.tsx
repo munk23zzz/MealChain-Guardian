@@ -184,43 +184,42 @@ describe("SectionJump — penanda posisi", () => {
 });
 
 describe("daftar bagian per halaman", () => {
-  it("Decision & Evidence: lima tujuan, urutan sesuai urutan baca keputusan", () => {
+  it("Decision & Evidence: empat tujuan, urutan sesuai urutan baca keputusan", () => {
     expect(evidenceSections().map((i) => i.id)).toEqual([
       EVIDENCE_SECTION_IDS.ringkasan,
-      EVIDENCE_SECTION_IDS.rute,
       EVIDENCE_SECTION_IDS.keputusan,
       EVIDENCE_SECTION_IDS.bukti,
       EVIDENCE_SECTION_IDS.jejak,
     ]);
   });
 
-  it("Overview: lima tujuan, id sama dengan yang dipasang di halaman", () => {
-    const items = overviewSections({ isApprover: true, hasShipments: true });
-    // Urutan ini mengikuti `app/page.tsx` (Kecukupan dirender sebelum Kiriman);
+  it("Overview: empat tujuan, id sama dengan yang dipasang di halaman", () => {
+    const items = overviewSections({ isApprover: true });
+    // Urutan ini mengikuti `app/page.tsx` (Kecukupan dirender sebelum Harga);
     // sebelumnya nav menaruh Kiriman lebih dulu sehingga lompatannya melewati
     // Kecukupan. Lihat tests/overview-section-order.test.ts.
     expect(items.map((i) => i.id)).toEqual([
       OVERVIEW_SECTION_IDS.ringkas,
       OVERVIEW_SECTION_IDS.peta,
       OVERVIEW_SECTION_IDS.kecukupan,
-      OVERVIEW_SECTION_IDS.kiriman,
-      OVERVIEW_SECTION_IDS.telemetri,
+      OVERVIEW_SECTION_IDS.harga,
     ]);
   });
 
-  it("Overview: tujuan kiriman tidak dipasang saat kartunya tidak dirender", () => {
-    const items = overviewSections({ isApprover: true, hasShipments: false });
-    expect(items.map((i) => i.id)).toEqual([
-      OVERVIEW_SECTION_IDS.ringkas,
-      OVERVIEW_SECTION_IDS.peta,
-      OVERVIEW_SECTION_IDS.kecukupan,
-      OVERVIEW_SECTION_IDS.telemetri,
-    ]);
+  it("Overview: tujuan kiriman & telemetri tidak kembali diam-diam", () => {
+    // Panel harga pasar menggantikan Informasi pengiriman + Telemetri Node +
+    // Status Lokasi (28 Okt 2026). Jangkar lama harus benar-benar hilang dari
+    // daftar; kalau tidak, nav menunjuk bagian yang tidak dirender lagi.
+    const ids = overviewSections({ isApprover: true }).map((i) => i.id);
+    expect(ids).not.toContain("ov-kiriman");
+    expect(ids).not.toContain("ov-telemetri");
+    expect(ids).toContain(OVERVIEW_SECTION_IDS.harga);
+    expect(ids).toHaveLength(4);
   });
 
   it("Overview: judul bagian kecukupan mengikuti peran (SPPG vs monitor)", () => {
-    const sppg = overviewSections({ isApprover: true, hasShipments: true });
-    const monitor = overviewSections({ isApprover: false, hasShipments: true });
+    const sppg = overviewSections({ isApprover: true });
+    const monitor = overviewSections({ isApprover: false });
     expect(sppg.find((i) => i.id === OVERVIEW_SECTION_IDS.kecukupan)?.label).toBe("Kecukupan");
     expect(monitor.find((i) => i.id === OVERVIEW_SECTION_IDS.kecukupan)?.label).toBe(
       "Pasokan per lokasi"

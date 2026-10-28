@@ -1,0 +1,253 @@
+/* Isi pop-up Pasokan & permintaan (dokumen 03 §3–§4).
+   Cangkang dialog, kepala, dan tombol tutup berasal dari components/Popup.tsx
+   (`.popup-*` di app/globals.css) — berkas ini hanya menata ISI. */
+
+.panel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--danger);
+  border-left-width: 3px;
+  border-radius: var(--radius-control-sm);
+  background: #fef2f2;
+  color: var(--navy-900);
+  font-size: var(--fs-3);
+}
+
+.notice {
+  margin: 0;
+  color: var(--slate-600, #475569);
+  font-size: var(--fs-3);
+}
+
+.cards {
+  display: grid;
+  gap: 10px;
+  /* Kolom eksplisit, bukan auto-fit: auto-fit-lah yang membuat tiga kartu
+     berbagi baris dan kartu keempat sendirian di baris bawah. */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+@media (max-width: 1023px) {
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  .cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Empat angka ringkas di dalam kartu rincian (29 Okt 2026).
+   Sebelumnya: permukaan PUTIH + radius 12 + garis sendiri di dalam kartu putih
+   radius 12 — terbaca sebagai kartu di dalam kartu, dan angkanya 18 px/650
+   (bobot 650 tidak ada di skala 400/500/600/700 proyek). Sekarang memakai
+   bahasa ubin dalam-kartu yang sudah dipakai `.detail-kpi` di Decision &
+   Evidence: permukaan `--surface-sunken`, radius kontrol 8 px, label mikro
+   12 px/600 KAPITAL, nilai di huruf data 16 px/600 dengan angka tabular.
+   Nada danger/safe/unknown TETAP: di situ warnanya membawa makna. */
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface-sunken);
+  padding: 10px 12px;
+  display: grid;
+  gap: 2px;
+}
+
+.card dt {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.card dd {
+  margin: 0;
+  color: var(--navy-900);
+  font-family: var(--font-data);
+  font-size: var(--fs-4);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.card span {
+  color: var(--ink-subtle);
+  font-size: var(--fs-1);
+}
+
+.card[data-tone="danger"] {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.card[data-tone="danger"] dd {
+  color: var(--danger);
+}
+
+.card[data-tone="safe"] {
+  border-color: var(--ok-border, #a7f3d0);
+  background: var(--ok-bg, #ecfdf5);
+}
+
+.card[data-tone="safe"] dd {
+  color: var(--ok-ink, #065f46);
+}
+
+.card[data-tone="unknown"] dd {
+  color: var(--ink-muted);
+}
+
+.notes {
+  margin: 0;
+  padding: 10px 12px 10px 26px;
+  border: 1px solid var(--warn-border, #fde68a);
+  border-radius: var(--radius-control-sm);
+  background: var(--warn-bg, #fffbeb);
+  color: var(--warn-ink, #8a5a00);
+  font-size: var(--fs-2);
+  display: grid;
+  gap: 4px;
+}
+
+.batches {
+  display: grid;
+  gap: 8px;
+}
+
+/* Label sub-bagian, bukan judul kartu (29 Okt 2026). Sebelumnya 16 px dengan
+   bobot bawaan h4 (700) — terukur LEBIH BESAR daripada judul kartu induknya
+   ("Jakarta · telur", 14 px/600), sehingga hierarki kartu terbalik. Label
+   kelompok di konsol ini selalu label mikro 12 px/700 KAPITAL bertinta redup
+   (lihat `agenda-group-title` dan kepala panel Governance). */
+.batches h4 {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  font-weight: 700;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+}
+
+.batchSummary {
+  margin: 0;
+  color: var(--slate-600, #475569);
+  font-size: var(--fs-2);
+}
+
+.tableScroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-2);
+}
+
+.caption {
+  padding: 8px 10px 0;
+  text-align: left;
+  color: var(--slate-500, #64748b);
+  font-size: var(--fs-1);
+}
+
+.table th,
+.table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.table thead th {
+  color: var(--slate-600, #475569);
+  font-size: var(--fs-1);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  background: var(--surface-sunken);
+  font-weight: 600;
+}
+
+.table tbody tr:last-child th,
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table tbody th {
+  font-weight: 600;
+  color: var(--navy-900);
+  font-variant-numeric: tabular-nums;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-chip);
+  font-size: var(--fs-1);
+  font-weight: 600;
+}
+
+.badge[data-tone="ok"] {
+  border-color: var(--ok-border, #a7f3d0);
+  background: var(--ok-bg, #ecfdf5);
+  color: var(--ok-ink, #065f46);
+}
+
+.badge[data-tone="warn"] {
+  border-color: var(--warn-border, #fde68a);
+  background: var(--warn-bg, #fffbeb);
+  color: var(--warn-ink, #8a5a00);
+}
+
+.badge[data-tone="danger"] {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: var(--danger);
+}
+
+.expiry {
+  display: inline-block;
+  font-weight: 600;
+  color: var(--navy-900);
+}
+
+.expiry[data-state="expired"] {
+  color: var(--danger);
+}
+
+.expiry[data-state="urgent"] {
+  color: var(--warn-ink, #8a5a00);
+}
+
+.expiry[data-state="unknown"] {
+  color: var(--slate-500, #64748b);
+  font-weight: 500;
+}
+
+.cellNote {
+  display: block;
+  color: var(--slate-500, #64748b);
+  font-size: var(--fs-1);
+  font-weight: 400;
+}
+
+.truncated {
+  margin: 0;
+  color: var(--warn-ink, #8a5a00);
+  font-size: var(--fs-1);
+}

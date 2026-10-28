@@ -543,7 +543,15 @@ dl dd,
   font-size: var(--fs-3);
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.18s ease;
+  /* 29 Okt 2026: transisi dipersempit ke properti yang benar-benar berubah,
+     memakai token gerak. Sebelumnya hanya `background` dengan durasi mentah,
+     sehingga hover pada tombol bergaris (border-color) dan tekan (transform)
+     melompat tanpa animasi. */
+  transition: background var(--dur-2) var(--ease-standard),
+    border-color var(--dur-2) var(--ease-standard),
+    color var(--dur-2) var(--ease-standard),
+    transform var(--dur-1) var(--ease-standard),
+    filter var(--dur-1) var(--ease-standard);
 }
 
 .button:hover:not(:disabled) {
@@ -1027,6 +1035,13 @@ a:focus-visible {
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius-control-sm);
   background: var(--surface-sunken);
+  /* 29 Okt 2026: kotak ini muncul setelah "Tolak" ditekan; tanpa animasi ia
+     melompat masuk dan menggeser tombol di bawahnya seketika. */
+  animation: reject-box-in var(--dur-2) var(--ease-standard) both;
+}
+@keyframes reject-box-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: none; }
 }
 
 .reject-reason-box textarea {
@@ -2041,19 +2056,6 @@ a:focus-visible {
   color: var(--ink-muted);
 }
 
-.top-bar-notif-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  flex: none;
-  border: 1px solid var(--line-input);
-  border-radius: var(--radius-control-sm);
-  background: var(--surface);
-  color: var(--ink-muted);
-  cursor: pointer;
-}
 
 .top-bar-notif-close:hover { background: var(--surface-sunken); color: var(--ink); }
 
@@ -4083,7 +4085,6 @@ a:focus-visible {
   }
 }
 
-
 /* --- P1-P5 (paket 1-6, 2026-10-09): integritas + chaos ---
    (telemetry banner login dihapus — arah Roy 2026-10-10) */
 
@@ -4246,7 +4247,6 @@ a:focus-visible {
 /* Badge "Data Simulasi" kini duduk sebaris dengan info + ajakan (28 Okt 2026),
    jadi tidak butuh jarak atas sendiri. */
 .recommendation-card .mock-badge { margin-top: 0; }
-
 
 /* Panel review 7 agen (P5) — kartu worker + ringkasan supervisor.
    Grid mengecil sampai 1 kolom di 375 px; teks panjang boleh pecah. */
@@ -4551,14 +4551,70 @@ a:focus-visible {
 }
 .approval-modal ul { margin: 0; padding: 0 0 0 18px; font-size: var(--fs-3); line-height: 1.65; }
 .approval-modal-blockers {
+  /* 29 Okt 2026 (laporan pemilik): kotak ini terasa padat — ikon, poin daftar
+     bawaan, dan nama peran berdesakan dalam satu kalimat. Sekarang grid dua
+     kolom: ikon (14 px) + isi. Judul, sebab, peran, dan langkah berikutnya
+     berdiri sebagai baris-baris terpisah. */
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 2px var(--space-2);
   margin-top: 10px;
-  padding: 8px 10px 8px 26px;
-  background: var(--status-danger, rgba(198, 40, 40, 0.1));
-  background: rgba(198, 40, 40, 0.1);
-  border: 1px solid rgba(198, 40, 40, 0.4);
+  padding: 10px var(--space-3);
+  /* Nada mengikuti sebabnya: kuning = keadaan yang sedang berjalan, merah =
+     alasan final/kegagalan (ditolak, kedaluwarsa, gagal pemeriksaan). */
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-left: 3px solid var(--warn-ink);
   border-radius: var(--radius-control-sm);
-  color: var(--status-danger);
+  color: var(--warn-ink);
   font-size: var(--fs-2);
+}
+.approval-modal-blockers[data-tone="danger"] {
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+  border-left-color: var(--status-danger);
+  color: var(--danger-ink);
+}
+.approval-modal-blockers > .approval-blocker-icon {
+  margin-top: 3px;
+  color: currentColor;
+}
+.approval-modal-blockers-isi { min-width: 0; }
+.approval-modal-blockers-title {
+  margin: 0 0 2px;
+  font-size: var(--fs-1);
+  font-weight: 700;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+}
+/* Daftar sebab tanpa poin: ikon di kolom kiri sudah jadi penandanya, dan poin
+   tambahan membuat baris terlihat seperti dua butir sekaligus. Selektor
+   menyertakan `.approval-modal` agar menang atas `.approval-modal ul`
+   (padding 18 px) di atas. */
+.approval-modal .approval-modal-blockers-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+  font-size: var(--fs-2);
+  line-height: var(--lh-body);
+}
+.approval-modal-blockers-peran {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+.blocker-chip {
+  padding: 1px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  line-height: 1.6;
 }
 .approval-modal-actions {
   display: flex;
@@ -4576,6 +4632,25 @@ a:focus-visible {
   border: 1px solid var(--line-input);
 }
 .button-secondary:hover:not(:disabled) { background: var(--accent-soft); }
+/* Tombol tenang (29 Okt 2026). Kelas ini dipakai empat kali — "Tutup" pada
+   rincian lokasi dan tiga kontrol Demo Control — tetapi tidak pernah
+   dideklarasikan, sehingga keempat tombol itu mewarisi `.button` dan tampil
+   sebagai pil biru penuh. Akibatnya tombol PENUTUP menjadi elemen paling
+   berteriak di halaman "Pasokan & Kebutuhan", mengalahkan judul kartunya.
+   Kontraknya: permukaan putih, batas kontrol, tinta biasa, tanpa isi aksen —
+   aksen biru tetap milik satu aksi utama per layar. Dikunci
+   tests/tombol-quiet-dan-label-batch.test.ts. */
+.button-quiet {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line);
+  font-weight: 500;
+}
+.button-quiet:hover:not(:disabled) {
+  background: var(--surface-sunken);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
 .button:disabled {
   background: var(--surface-sunken);
   color: var(--ink-muted);
@@ -5303,6 +5378,49 @@ a:focus-visible {
 .filter-card .commodity-pill-active,
 .filter-card .commodity-pill-active:hover,
 .commodity-pill-active:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--ink-inverse);
+}
+
+/* ── Gugus filter "Komoditas": satu bahasa dengan chip filter Recommendations
+   (29 Okt 2026, pilihan pemilik). Sebelumnya gugus ini kartu putih sendiri
+   (`.filter-card`) berisi pil 24 px/13 px-500; blok filter di Recommendations
+   berupa chip 32 px/13 px-600 langsung di latar halaman. Terukur: kartu 947x46
+   + pil 63x24 vs chip 132x32. Sekarang gugusnya TANPA permukaan kartu dan
+   chipnya memakai geometri chip filter: 32 px, padding 5px 13px, 13 px/600.
+   Ditulis SESUDAH aturan `.filter-card .commodity-pill` supaya menang urutan,
+   dan semua selektornya bersarang di `.commodity-filters` supaya pil hitungan
+   di kartu lain (`.commodity-pill` statis) tidak ikut berubah. Target sentuh
+   44 px tetap datang dari blok `(pointer: coarse)` yang sudah ada. */
+.commodity-filters {
+  margin: 0 0 14px;
+}
+
+.commodity-filters .commodity-filters-label {
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.commodity-filters .commodity-pill {
+  min-height: 32px;
+  padding: 5px 13px;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  background: var(--surface);
+  color: var(--ink-muted);
+  border: 1px solid var(--line-input);
+}
+
+.commodity-filters .commodity-pill:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+  color: var(--accent-strong);
+}
+
+.commodity-filters .commodity-pill-active,
+.commodity-filters .commodity-pill-active:hover {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
   color: var(--ink-inverse);
@@ -6499,58 +6617,6 @@ a:focus-visible {
   accent-color: var(--accent, currentColor);
 }
 
-/* "Langkah berikutnya" di kepala kartu Ringkasan keputusan (17 Okt 2026):
-   satu kalimat tegas yang menjawab "apa yang harus saya lakukan" — sebelum ini
-   pengguna harus menyimpulkan sendiri dari belasan baris fakta. Warna mengikuti
-   nada dari lib/evidence.ts (warn/ok/danger/muted). */
-.evidence-next {
-  display: grid;
-  gap: 2px;
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-control);
-  background: var(--surface-sunken);
-}
-.evidence-next-label {
-  font-size: var(--fs-1);
-  font-weight: 600;
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-  color: var(--ink-subtle);
-}
-.evidence-next-text {
-  margin: 0;
-  font-size: var(--fs-3);
-  line-height: 1.45;
-  color: var(--ink);
-}
-.evidence-next-warn {
-  /* "warn" di sini berarti "MENUNGGU TINDAKAN", bukan bahaya: kalau strip ini
-     ikut kuning seperti blok flag di atasnya, dua zona kuning bertumpuk dan
-     mata tidak tahu mana yang perlu dibaca lebih dulu. Instruksi = biru
-     (accent); merah/kuning tetap disimpan untuk `-danger`/flag. */
-  background: var(--accent-soft);
-  border-color: var(--accent-strong);
-}
-.evidence-next-warn .evidence-next-text {
-  color: var(--ink);
-}
-.evidence-next-ok {
-  background: var(--ok-bg);
-  border-color: var(--ok-border);
-}
-.evidence-next-ok .evidence-next-text {
-  color: var(--ok-ink);
-}
-.evidence-next-danger {
-  background: var(--danger-bg);
-  border-color: var(--danger-border);
-}
-.evidence-next-danger .evidence-next-text {
-  color: var(--danger-ink);
-}
-
 /* ── Desain baru halaman bukti (17 Okt 2026) ───────────────────────────────
    Susunan "catatan keputusan": kepala keputusan (aksi + angka kunci + flag
    triase + langkah berikutnya + akibat) → jalur persetujuan → zona keputusan →
@@ -6582,10 +6648,6 @@ a:focus-visible {
 .evidence-hero-head { grid-area: head; display: grid; gap: var(--space-1); align-content: start; min-width: 0; }
 .evidence-metrics { grid-area: metrics; }
 .evidence-flags { grid-area: flags; }
-.evidence-next { grid-area: next; margin: 0; }
-.evidence-consequence { grid-area: consequence; }
-.evidence-traces { grid-area: traces; margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
-.evidence-traces .evidence-note { flex: 1 1 320px; margin: 0; }
 @media (max-width: 900px) {
   .evidence-hero {
     grid-template-columns: minmax(0, 1fr);
@@ -6616,31 +6678,6 @@ a:focus-visible {
 }
 .evidence-hero-id {
   font-family: var(--font-data);
-}
-.evidence-hero-jump {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  /* Target sentuh: tautan berdiri sendiri (bukan di dalam kalimat), jadi
-     minimal 24px (WCAG 2.2 AA 2.5.8); 44px hanya untuk pointer kasar. */
-  min-height: 24px;
-  font-size: var(--fs-2);
-  color: var(--accent-strong);
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-}
-@media (pointer: coarse) {
-  .evidence-hero-jump {
-    min-height: 44px;
-  }
-}
-.evidence-hero-jump:hover {
-  border-bottom-color: currentColor;
-}
-.evidence-hero-jump:focus-visible {
-  outline: 2px solid var(--accent-strong);
-  outline-offset: 2px;
-  border-radius: var(--radius-chip);
 }
 .evidence-hero-eyebrow {
   margin: 0;
@@ -6761,94 +6798,6 @@ a:focus-visible {
 }
 .evidence-flag-danger .evidence-flag-label,
 .evidence-flag-danger .evidence-flag-text {
-  color: var(--danger-ink);
-}
-.evidence-consequence {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px dashed var(--line);
-  border-radius: var(--radius-control);
-}
-.evidence-consequence-row {
-  display: grid;
-  grid-template-columns: 130px 1fr;
-  gap: 10px;
-  align-items: baseline;
-}
-.evidence-consequence-row dt {
-  font-size: var(--fs-1);
-  letter-spacing: var(--track-caps);
-  text-transform: uppercase;
-  color: var(--ink-subtle);
-}
-.evidence-consequence-row dd {
-  margin: 0;
-  font-size: var(--fs-3);
-  color: var(--ink);
-}
-.evidence-route-steps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--space-2);
-}
-.evidence-route-step {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 8px;
-  align-items: start;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-control);
-  background: var(--surface);
-}
-.evidence-route-mark {
-  font-family: var(--font-data);
-  font-size: var(--fs-3);
-  line-height: 1.2;
-  color: var(--ink-subtle);
-}
-.evidence-route-body {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-.evidence-route-label {
-  font-size: var(--fs-3);
-  font-weight: 600;
-  color: var(--ink);
-}
-.evidence-route-detail {
-  font-size: var(--fs-2);
-  color: var(--ink-muted);
-}
-.evidence-route-done {
-  border-color: var(--ok-border);
-  background: var(--ok-bg);
-}
-.evidence-route-done .evidence-route-mark {
-  color: var(--ok-ink);
-}
-.evidence-route-current {
-  border-color: var(--accent-strong);
-  background: var(--accent-soft);
-}
-.evidence-route-current .evidence-route-mark {
-  color: var(--accent-strong);
-}
-.evidence-route-waiting {
-  background: var(--surface-sunken);
-}
-.evidence-route-blocked {
-  border-color: var(--danger-border);
-  background: var(--danger-bg);
-}
-.evidence-route-blocked .evidence-route-mark,
-.evidence-route-blocked .evidence-route-detail {
   color: var(--danger-ink);
 }
 .evidence-decide {
@@ -7048,9 +6997,6 @@ a:focus-visible {
   align-items: center;
   gap: var(--space-2);
 }
-.evidence-hero-actions .evidence-hero-jump {
-  margin-left: 0;
-}
 .evidence-export {
   padding: 4px 10px;
   font-size: var(--fs-2);
@@ -7121,10 +7067,6 @@ a:focus-visible {
 @media (max-width: 760px) {
   .evidence-page .card .evidence-hero-title {
     font-size: var(--fs-4);
-  }
-  .evidence-consequence-row {
-    grid-template-columns: 1fr;
-    gap: 2px;
   }
 }
 
@@ -7419,7 +7361,6 @@ a:focus-visible {
 @media (max-width: 640px) {
   .kpi-grid { grid-template-columns: 1fr; }
 }
-
 
 /* --- Langkah 3: halaman "Hari Ini" (rekap operasional harian) --- */
 /* Kartu memakai pola yang sama dengan kartu lain (.card) supaya tidak ada
@@ -7937,8 +7878,6 @@ a:focus-visible {
     align-items: start;
   }
 }
-.evidence-summary-main { display: grid; gap: 12px; min-width: 0; }
-.evidence-summary-facts { min-width: 0; }
 .evidence-page .card {
   padding: 16px 18px;
   display: grid;
@@ -7955,20 +7894,6 @@ a:focus-visible {
   font-size: var(--fs-2);
   color: var(--ink-muted);
 }
-/* Tautan ke jejak agen di kartu ringkasan: tombol yang benar-benar bisa diklik
-   + keterangan singkat ke mana ia membawa. Dulu di sini hanya ada teks ajakan
-   berwarna tautan tanpa apa pun untuk diklik. */
-.evidence-traces {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  margin: 4px 0 0;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-}
-.evidence-traces .button { flex: none; }
-.evidence-traces .evidence-note { flex: 1 1 260px; }
 /* Daftar fakta label→nilai (dipakai semua kartu). */
 .fact-list {
   margin: 0;
@@ -8072,12 +7997,9 @@ a:focus-visible {
   font-size: var(--fs-2);
   color: var(--ink-muted);
 }
-/* Catatan kecil di feed Recommendations setelah detail pindah tab. */
-.feed-hint {
-  margin: 0 0 12px;
-  font-size: var(--fs-2);
-  color: var(--ink-muted);
-}
+/* Catatan `.feed-hint` DILEPAS 29 Okt 2026 bersama paragrafnya di page.tsx:
+   keterangan "Tekan Tinjau…" sekarang jadi `title` tombol Tinjau. Aturannya
+   dibuang supaya tidak ada kelas mati yang menyerupai komponen sah. */
 
 /* Toolbar feed Recommendations (14 Okt 2026): pencarian + urutan di atas chip.
    Sebelumnya tidak ada kontrol apa pun — 126 kartu hanya bisa dipindai satu
@@ -9254,6 +9176,16 @@ button:active:not(:disabled),
     height: 44px;
   }
 
+  /* 29 Okt 2026: X panel ikut naik ke 44 px di layar sentuh. Tanpa ini
+     `min-height: 44px` di bawah membuatnya 32 x 44 — lonjong, bukan bulat. */
+  .tombol-x,
+  .popup-close,
+  .top-bar-notif-close,
+  .aksi-panel-close {
+    width: 44px;
+    height: 44px;
+  }
+
   .top-bar-notif-open {
     min-height: 44px;
   }
@@ -9333,7 +9265,6 @@ button:active:not(:disabled),
     min-height: 44px;
   }
 }
-
 
 /* Gerak tekan dimatikan bila pengguna minta kurangi gerak;
    peredupan tetap sebagai umpan balik (umpan balik tanpa gerak). */
@@ -9734,24 +9665,6 @@ button:active:not(:disabled),
   letter-spacing: -0.15px;
   color: var(--ink);
 }
-.popup-close {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--line-input);
-  border-radius: var(--radius-chip);
-  background: var(--surface);
-  color: var(--navy-700);
-  cursor: pointer;
-  transition: background var(--dur-1) var(--ease-standard), color var(--dur-1) var(--ease-standard);
-}
-.popup-close:hover:not(:disabled) {
-  background: var(--surface-sunken);
-  color: var(--ink);
-}
 .popup-desc {
   margin: 0;
   padding: var(--space-3) var(--space-4) 0;
@@ -9916,12 +9829,73 @@ button:active:not(:disabled),
   border-radius: var(--radius-control-sm);
   background: var(--surface-sunken);
   min-width: 0;
+  /* Panel muncul di dalam alur (bukan overlay), jadi tinggi halaman ikut
+     berubah. Yang dianimasikan hanya opacity + 4 px geser: cukup untuk terasa
+     "datang", tanpa memicu relayout berulang di tengah transisi. */
+  animation: aksi-panel-in var(--dur-2) var(--ease-standard) both;
+}
+@keyframes aksi-panel-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
 }
 .aksi-panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+/* ── Satu rupa untuk SEMUA tombol tutup (29 Okt 2026) ────────────────────────
+   Permintaan pemilik: "untuk semua tombol keluar buat menjadi X bulat".
+   Dulu ada tiga geometri: `.popup-close` (32 px, sudut 4 px, berbingkai),
+   `.top-bar-notif-close` (32 px, sudut 4 px) dan `.aksi-panel-close` (32 px,
+   lingkaran). Sekarang satu aturan untuk semuanya: lingkaran penuh, tanpa
+   latar sampai disentuh, 44 px di layar sentuh. Kelas lama tetap dipakai di
+   markup & tes — hanya rupanya yang disatukan. */
+.tombol-x,
+.popup-close,
+.top-bar-notif-close,
+.aksi-panel-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: background var(--dur-2) var(--ease-standard),
+    color var(--dur-2) var(--ease-standard),
+    border-color var(--dur-2) var(--ease-standard),
+    transform var(--dur-1) var(--ease-standard);
+}
+/* Lingkaran terlihat saat disentuh; sebelum itu ia hanya ikon, supaya kepala
+   popup tidak dipenuhi bingkai tombol. */
+.tombol-x:hover:not(:disabled),
+.popup-close:hover:not(:disabled),
+.top-bar-notif-close:hover:not(:disabled),
+.aksi-panel-close:hover:not(:disabled) {
+  background: var(--surface-sunken);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+/* Umpan balik tekan: 6% lebih kecil, bukan 1 px turun — pada tombol ikon
+   lingkaran, dorongan vertikal terbaca sebagai salah posisi. */
+.tombol-x:active:not(:disabled),
+.popup-close:active:not(:disabled),
+.top-bar-notif-close:active:not(:disabled),
+.aksi-panel-close:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.tombol-x:focus-visible,
+.popup-close:focus-visible,
+.top-bar-notif-close:focus-visible,
+.aksi-panel-close:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 /* Padding badan popup. Kolomnya diatur aturan dua kolom di atas; media query
    sempit menurunkannya jadi satu kolom. */
@@ -10160,6 +10134,19 @@ button:active:not(:disabled),
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* Tautan keluar popup (29 Okt 2026): satu paragraf + satu tombol. Grid dengan
+   justify-items:start membuat tombol selebar isinya — tombol selebar panel
+   terbaca sebagai aksi utama, padahal aksi utama ada di atasnya. */
+.detail-tautan-lengkap {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.detail-tautan-lengkap .detail-note {
+  margin: 0;
+}
 /* Layar sempit: satu kolom, popup memakai lebar penuh (dokumen §1: "layar penuh
    di mobile") dan tombol tetap 44 px. */
 @media (max-width: 820px) {
@@ -10227,7 +10214,8 @@ button:active:not(:disabled),
   border: 1px solid var(--line);
   border-radius: var(--radius-control-sm);
   background: var(--surface-sunken);
-  transition: border-color var(--dur-1) var(--ease-standard);
+  transition: border-color var(--dur-2) var(--ease-standard),
+    background var(--dur-2) var(--ease-standard);
 }
 .action-menu-item:hover { border-color: var(--line-strong); }
 .action-menu-note { justify-content: flex-start; font-size: var(--fs-2); color: var(--ink-muted); }
@@ -10243,7 +10231,33 @@ button:active:not(:disabled),
   padding: 0 4px;
   color: var(--neutral-ink);
 }
-.action-menu-button { flex: none; }
+/* Tombol aksi dalam daftar: lebar minimum seragam supaya kolom kanan tidak
+   bergerigi (Tolak 68 px vs Verifikasi 92 px sebelumnya), dan teks terpusat
+   karena kini punya lebar tetap. */
+.action-menu-button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 112px;
+  min-height: 40px;
+}
+/* 29 Okt 2026: dua tingkat bahaya, disengaja.
+   `data-tone="danger"` = tanda bahaya TENANG untuk aksi di daftar ("Tolak"):
+   hanya tinta + batas merah, tanpa isi, supaya tidak bersaing dengan "Setuju".
+   `.button-danger` (merah penuh, blok tombol destruktif di bawah) tetap
+   dipakai untuk tombol KONFIRMASI — di situ isi merah justru benar, karena
+   satu klik di sana benar-benar menolak keputusan. */
+.action-menu-button[data-tone="danger"] {
+  color: var(--danger-ink);
+  border-color: var(--danger-border);
+  background: var(--surface);
+}
+.action-menu-button[data-tone="danger"]:hover:not(:disabled) {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+  color: var(--danger-ink);
+}
 /* MG/phase-04 poin 7: langkah verifikasi berikutnya di dalam catatan penahan.
    Dibedakan dari kalimat sebab (bukan warna status baru): tinta biasa +
    huruf tebal, supaya terbaca sebagai PERINTAH, bukan peringatan kedua.
@@ -10257,7 +10271,10 @@ button:active:not(:disabled),
   margin: var(--space-2) 0 0;
   font-size: var(--fs-2);
   line-height: var(--lh-body);
-  color: var(--danger-ink);
+  /* Warna mengikuti kotaknya (kuning/merah) — sebelumnya selalu merah, jadi
+     baris "Langkah berikutnya" berwarna bahaya di dalam kotak kuning. */
+  color: inherit;
+  font-weight: 500;
 }
 .safety-row-next {
   display: block;
@@ -10322,6 +10339,11 @@ button:active:not(:disabled),
   .popup { animation: none; }
   .popup .button:active:not(:disabled),
   .action-menu-button:active:not(:disabled) { transform: none; }
+  /* 29 Okt 2026: gerak baru (panel masuk, kotak alasan penolakan, X mengecil)
+     ikut dimatikan saat pengguna meminta gerak dikurangi. */
+  .aksi-panel,
+  .reject-reason-box { animation: none; }
+  .aksi-panel-close:active:not(:disabled) { transform: none; }
 }
 
 /* Panel "Data & rentang waktu" (Fase 5, 2026-10-15).
@@ -10691,6 +10713,17 @@ button:active:not(:disabled),
 .approval-modal ul { font-size: var(--fs-3); line-height: 1.7; }
 .approval-modal-blockers { border-radius: var(--radius-control); }
 .approval-modal-actions { gap: 10px; }
+/* 29 Okt 2026: tombol aksi berkas ini kini boleh berisi ikon + label, jadi
+   keduanya disejajarkan; tinggi minimum 40 px menyamakan tombol Setuju dengan
+   tombol aksi lain di panel (Tolak/Verifikasi). */
+.approval-modal-actions { align-items: center; }
+.approval-modal-actions .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+}
 /* Ring fokus eksplisit: approve adalah aksi berdampak, fokus keyboardnya tidak
    boleh bergantung pada gaya bawaan browser. */
 .approval-modal button:focus-visible,
@@ -12234,194 +12267,6 @@ p, li, dd { text-wrap: pretty; }
   }
 }
 
-/* Akibat keputusan kini <details>, bukan <dl> yang selalu terbuka. */
-.evidence-consequence {
-  display: block;
-  padding: 8px 12px;
-}
-.evidence-consequence-summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  font-size: var(--fs-2);
-  font-weight: 600;
-  color: var(--ink);
-  cursor: pointer;
-  list-style: none;
-}
-.evidence-consequence-summary::-webkit-details-marker {
-  display: none;
-}
-.evidence-consequence-summary::before {
-  content: "▸";
-  font-size: 12px;
-  color: var(--ink-subtle);
-}
-.evidence-consequence[open] .evidence-consequence-summary::before {
-  content: "▾";
-}
-.evidence-consequence-summary:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: var(--radius-control-sm);
-}
-.evidence-consequence-hint {
-  font-size: var(--fs-1);
-  font-weight: 400;
-  color: var(--ink-subtle);
-}
-.evidence-consequence-list {
-  display: grid;
-  gap: 6px;
-  margin: 8px 0 0;
-}
-
-/* Bar pintasan: menempel di bawah layar selama zona keputusan tidak terlihat.
-   Ruang bawah halaman diberi slack supaya bar tidak menutupi baris terakhir. */
-/* 19 Okt 2026 (keluhan pemilik: "jarak ke po kok spacenya banyak bener"):
-   slack 72 px itu DULU dipasang pada `.evidence-page`, padahal panel PO
-   dirender SESUDAHNYA sebagai saudara di `.app-body` — hasilnya 72 px + 16 px
-   margin = 88 px ruang kosong tepat di antara kartu terakhir dan panel PO.
-   Sekarang slack dipindah ke anak TERAKHIR halaman ini (panel PO bila ada,
-   `.evidence-page` bila tidak), dan jarak ke PO kembali ke irama halaman. */
-/* Slack 80 px = tinggi dock (58) + jarak bawah (16) + 6 px napas. 72 px
-   sempat dipakai saat bar masih pil 57 px; dock baru membuat baris terakhir
-   bisa tertutup 2 px. */
-.app-body:has(.evidence-actionbar) > :last-child {
-  margin-bottom: 80px;
-}
-/* Redesign 19 Okt 2026 (permintaan pemilik: "popup ke zona keputusan rada
-   kurang"). Sebelumnya pil putih 720 px ber-radius 999 dengan satu baris teks
-   abu-abu "status · hitungan" — bentuknya seperti toast, bukan pintasan
-   keputusan, dan dua informasi berbeda bobot disamakan. Sekarang: dock ramping
-   560 px, titik nada keadaan (warna + teks, jadi tidak warna saja), keadaan
-   sebagai baris utama, hitungan approval sebagai detail, CTA dengan tanda ↓
-   yang sama dengan tautan di kepala keputusan. */
-/* Posisi: TETAP di tengah layar (pemilik menegaskan "tetap dibuat rata tengah"
-   setelah sempat dicoba selebar kolom isi). Yang menentukan lebar adalah
-   `min(560px, 100vw - 24px)`, bukan lebar rail — jadi buka/tutup sidebar tidak
-   menggeser dock, dan di layar sempit ia menyusut sendiri. */
-.evidence-actionbar {
-  position: fixed;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  width: min(560px, calc(100vw - 24px));
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-dock);
-  background: var(--surface);
-  box-shadow: var(--shadow-dock);
-  animation: actionbar-in var(--dur-3) var(--ease-standard) both;
-}
-@keyframes actionbar-in {
-  from { opacity: 0; transform: translate(-50%, 10px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
-}
-.evidence-actionbar-state {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: 1;
-  min-width: 0;
-}
-/* Titik = nada keadaan. Cincin di sekeliling titik memakai latar tint yang
-   sama supaya tetap terlihat di atas putih tanpa perlu bayangan. */
-.evidence-actionbar-dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--ink-subtle);
-  box-shadow: 0 0 0 3px var(--neutral-bg);
-}
-.evidence-actionbar[data-tone="warning"] .evidence-actionbar-dot {
-  background: var(--status-warning);
-  box-shadow: 0 0 0 3px var(--warn-bg);
-}
-.evidence-actionbar[data-tone="safe"] .evidence-actionbar-dot {
-  background: var(--status-safe);
-  box-shadow: 0 0 0 3px var(--ok-bg);
-}
-.evidence-actionbar[data-tone="danger"] .evidence-actionbar-dot {
-  background: var(--status-danger);
-  box-shadow: 0 0 0 3px var(--danger-bg);
-}
-.evidence-actionbar-text {
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-  font-size: var(--fs-1);
-  color: var(--ink-muted);
-}
-.evidence-actionbar-text strong {
-  font-size: var(--fs-2);
-  font-weight: 600;
-  color: var(--ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.evidence-actionbar-text span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.evidence-actionbar-link {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 40px;
-  padding-inline: var(--space-4);
-  border-radius: var(--radius-control-sm);
-  /* Tautan bergaya tombol: garis bawah bawaan <a> membuat label putih di atas
-     biru terbaca seperti tautan teks, bukan tombol. */
-  text-decoration: none;
-}
-.evidence-actionbar-link:hover {
-  text-decoration: none;
-}
-/* iOS: bar tidak boleh menempel ke home indicator. */
-@supports (padding: env(safe-area-inset-bottom)) {
-  .evidence-actionbar {
-    bottom: calc(16px + env(safe-area-inset-bottom));
-  }
-}
-@media (max-width: 560px) {
-  .evidence-actionbar {
-    bottom: 10px;
-    padding: var(--space-2);
-    gap: var(--space-2);
-  }
-  /* Di layar sempit informasi tidak dibuang, hanya dipadatkan: keadaan tetap
-     terbaca, hitungan approval dilepas supaya CTA tidak terhimpit. */
-  .evidence-actionbar-text span {
-    display: none;
-  }
-  .evidence-actionbar-link {
-    flex: 1;
-    justify-content: center;
-  }
-}
-@media print {
-  .evidence-actionbar {
-    display: none;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .evidence-jump-link,
-  .evidence-actionbar {
-    transition: none;
-    animation: none;
-  }
-}
-
 /* Kontras: `.integrity-trust p` mewarnai semua paragraf di kartu gelap
    (#94a3b8) dan mengalahkan `.integrity-warning` — di latar #fffbeb itu
    hanya 2,47:1. Naikkan spesifisitas agar peringatan tetap terbaca
@@ -12453,7 +12298,6 @@ p, li, dd { text-wrap: pretty; }
   outline: 2px solid var(--accent-strong);
   outline-offset: 2px;
 }
-
 
 /* ===========================================================================
    POPUP "GOVERNANCE & PERSETUJUAN" — REDESIGN 19 OKT 2026
@@ -12618,41 +12462,14 @@ p, li, dd { text-wrap: pretty; }
   color: var(--ink-muted);
 }
 
-/* --- 3. Penghalang (blocking reasons) ----------------------------------- */
+/* --- 3. Penghalang (blocking reasons) -----------------------------------
+   29 Okt 2026: warna, bingkai, judul, dan daftar kini diatur satu tempat di
+   `.approval-modal-blockers` (globals, atas) memakai `data-tone`. Blok ini
+   dulu menimpanya dengan merah pekat + judul uppercase sendiri, sehingga
+   panel inline (kuning) dan popup (merah) memakai dua rupa untuk isi yang
+   sama. Yang tersisa hanya jarak khas popup. */
 .popup-governance .approval-modal-blockers {
   margin-top: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--danger-border);
-  border-left: 3px solid var(--status-danger);
-  border-radius: var(--radius-control);
-  background: var(--danger-bg);
-  color: var(--danger-ink);
-}
-.popup-governance .approval-modal-blockers-title {
-  margin: 0 0 var(--space-1);
-  font-size: var(--fs-1);
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-.popup-governance .approval-modal-blockers ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: var(--space-1);
-}
-.popup-governance .approval-modal-blockers li {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  font-size: var(--fs-2);
-  line-height: var(--lh-body);
-}
-.popup-governance .approval-blocker-icon {
-  flex: none;
-  margin-top: 3px;
-  color: var(--status-danger);
 }
 
 /* --- 4. Aksi approve di dalam ringkasan --------------------------------- */
@@ -12918,7 +12735,6 @@ p, li, dd { text-wrap: pretty; }
     transition: none;
   }
 }
-
 
 /* ── Demo Control sederhana (keputusan Roy 2026-10-19) ─────────────────────
    Tiga blok: siapkan data → jalankan agent → bukti. Menggantikan susunan lama
@@ -14729,6 +14545,24 @@ p, li, dd { text-wrap: pretty; }
 .detail-aksi--utama .detail-h {
   margin-top: 0;
 }
+/* 29 Okt 2026: saat panel Governance TERBUKA, kotak luar dan kotak panel
+   menjadi dua bingkai untuk satu isi — judul "Putuskan sekarang" berdiri
+   persis di atas judul panel "Governance & persetujuan", dan bingkai
+   accent-soft hanya menyisakan 14 px di sekeliling panel berbingkai sendiri.
+   Panel membawa X + judulnya sendiri, jadi bingkai luar dilepas saat panel ada.
+   Tanpa dukungan `:has()` tampilan tetap seperti sebelumnya — tidak ada yang
+   rusak, hanya kurang rapi. */
+.detail-aksi--utama:has(.aksi-panel) {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.detail-aksi--utama:has(.aksi-panel) > .detail-h {
+  display: none;
+}
+.detail-aksi--utama:has(.aksi-panel) .detail-setelah {
+  margin-top: 8px;
+}
 .detail-setelah {
   margin: var(--space-2) 0 0;
   font-size: var(--fs-2);
@@ -14824,6 +14658,50 @@ p, li, dd { text-wrap: pretty; }
   color: var(--ink-muted);
   white-space: nowrap;
 }
+/* Empat bagian ringkasan: 2×2 di lebar penuh panel. Dulu keempatnya
+   menumpuk (4×122 px) sehingga penyetuju menggulir satu kolom panjang
+   sebelum menemukan tombolnya. Di dalam sel, fakta kembali satu kolom
+   supaya label dan nilai tidak berdesakan. */
+.approval-isi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-4);
+}
+.approval-isi-grid .approval-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (max-width: 720px) {
+  .approval-isi-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Tombol keputusan menempel ke kanan sebagai satu baris aksi, bukan
+   mengapung di tengah kartu. */
+.approval-modal-actions {
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+}
+/* Kepala panel TIDAK menempel (29 Okt 2026). Sebelumnya `position: sticky`
+   membuat judul "Governance & persetujuan" + X melayang di puncak badan popup
+   sementara isi panelnya bergulir di bawah — kepala panel terlihat lepas dari
+   kotaknya sendiri, dan latarnya (strip solid) menutupi fakta yang lewat.
+   Sekarang kepala ikut bergulir bersama panel. Menutup tetap mungkin lewat X
+   jendela detail di kepala popup dan tombol Esc. */
+.aksi-panel-head {
+  position: relative;
+  z-index: 1;
+  /* Kepala jadi BAND di tepi atas kotak panel: menarik keluar dari padding
+     12 px panel (var(--space-3)) supaya latar + garis bawahnya menyentuh tepi,
+     bukan mengambang dengan sisa bingkai di kiri-kanan. */
+  margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-3)) 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--line);
+  border-start-start-radius: var(--radius-control-sm);
+  border-start-end-radius: var(--radius-control-sm);
+}
+
 .approval-bagian {
   display: grid;
   gap: 6px;
@@ -14877,4 +14755,46 @@ p, li, dd { text-wrap: pretty; }
     justify-items: start;
     text-align: left;
   }
+}
+
+/* --- Dokumen PO di kartu "PO keputusan ini" (29 Okt 2026) -------------------
+   Permintaan pemilik: setelah keputusan dieksekusi, PDF PO harus bisa diambil
+   di tempat dokumennya dicari. Kartu ini dibangun ulang jadi ringkasan satu PO
+   (rencana decision-evidence-rebuild §3) dan tombol unduhnya hilang; blok ini
+   mengembalikan satu baris aksi di bawah status PO tanpa mengubah irama kartu. */
+.po-keputusan-dokumen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+.po-keputusan-unduh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+}
+.po-keputusan-galat {
+  color: var(--status-danger);
+}
+
+/* Penutup popup peta (MapLibre menulis glyph × sendiri). Disamakan dengan
+   tombol tutup lain: lingkaran 32 px, tanpa latar sampai disentuh. */
+.maplibregl-popup-close-button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 18px;
+  line-height: 32px;
+  transition: background var(--dur-2) var(--ease-standard),
+    color var(--dur-2) var(--ease-standard);
+}
+.maplibregl-popup-close-button:hover {
+  background: var(--surface-sunken);
+  color: var(--ink);
 }

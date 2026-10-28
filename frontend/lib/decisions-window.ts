@@ -31,3 +31,19 @@ export function feedWindowLabel(key: FeedWindowKey): string {
 export function feedWindowHint(key: FeedWindowKey): string {
   return FEED_WINDOWS.find((w) => w.key === key)?.hint ?? "24 jam terakhir";
 }
+
+/**
+ * Petunjuk periode yang HANYA dicetak bila menambah arti di luar labelnya.
+ *
+ * Di layar, label dan petunjuk berdiri berdampingan ("Periode: [7 hari] 7 hari
+ * terakhir") — untuk dua dari tiga jendela, petunjuk itu mengulang labelnya dan
+ * terbaca seperti chip keempat tanpa fungsi. Yang menambah arti hanya "Hari
+ * ini" (24 jam bergulir, bukan hari kalender) dan "1 bulan" (bulan berjalan
+ * WIB, bukan 30 hari bergulir).
+ */
+export function feedWindowHintBilaBerbeda(key: FeedWindowKey): string | null {
+  const hint = feedWindowHint(key);
+  const label = feedWindowLabel(key);
+  const sama = hint.toLowerCase().startsWith(label.toLowerCase());
+  return sama ? null : hint;
+}

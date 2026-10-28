@@ -36,4 +36,13 @@ describe("StatusBadge", () => {
   it("status tak dikenal tampil apa adanya (tanpa garis bawah), bukan dikarang", () => {
     expect(renderToStaticMarkup(<StatusBadge status="CUSTOM_STATE" />)).toContain("CUSTOM STATE");
   });
+
+  // 29 Okt 2026 — ketemu di layar: satu kartu feed menampilkan lencana
+  // "REVIEW ONLY" (enum Inggris utuh) karena status `review_only` tidak ada di
+  // peta STATUS_ID, lalu jatuh ke fallback "REVIEW_ONLY" → "REVIEW ONLY".
+  it("temuan tinjauan tidak membocorkan enum Inggris", () => {
+    const html = renderToStaticMarkup(<StatusBadge status="review_only" />);
+    expect(html).toContain("Temuan tinjauan");
+    expect(html).not.toContain("REVIEW ONLY");
+  });
 });

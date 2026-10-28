@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 export type NavId =
   | "today"
   | "overview"
+  | "location-network"
   | "kpi-kualitas"
   | "recommendations"
   | "evidence"
@@ -38,7 +39,15 @@ const GLYPHS: Record<NavId, ReactNode> = {
       <rect x="3" y="16" width="7" height="5" rx="1" />
     </>
   ),
-  // gauge
+  // share-2 — jaringan lokasi (dokumen 03 §6.1): tiga titik yang terhubung.
+  "location-network": (
+    <>
+      <circle cx="18" cy="5" r="2.5" />
+      <circle cx="6" cy="12" r="2.5" />
+      <circle cx="18" cy="19" r="2.5" />
+      <path d="M8.4 10.9l7.2-4.2M8.4 13.1l7.2 4.2" />
+    </>
+  ),
   // gauge — tab gabungan "KPI & Kualitas Agen" (2026-10-15): satu ikon untuk
   // dua bagiannya (keduanya dulu memakai ikon gauge yang sama).
   "kpi-kualitas": (

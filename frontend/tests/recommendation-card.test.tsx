@@ -38,6 +38,18 @@ describe("RecommendationCard — label komoditas", () => {
   });
 });
 
+describe("RecommendationCard — biaya di baris meta", () => {
+  // 29 Okt 2026: "SDC" adalah singkatan internal (Safe Delivered Cost). Di
+  // kartu ia berderet dengan kg dan waktu, jadi pembaca tidak punya jalan
+  // untuk tahu artinya. Dipakai bentuk pendek "biaya aman" — diulang 10x per halaman.
+  it("menulis istilah Indonesia, bukan singkatan SDC", () => {
+    const html = renderToStaticMarkup(<RecommendationCard decision={BASE as any} />);
+    expect(html).toContain("biaya aman Rp16.206.000");
+    expect(html).toContain("Rp16.206.000");
+    expect(html).not.toContain("SDC");
+  });
+});
+
 describe("RecommendationCard — narasi", () => {
   it("alasan penolakan dicetak apa adanya", () => {
     const html = renderToStaticMarkup(

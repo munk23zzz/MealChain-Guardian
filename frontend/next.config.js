@@ -24,6 +24,13 @@ const API_ROOTS = [
   "decisions",
   "actions",
   "balance",
+  // Dokumen 03 §3 (28 Okt 2026): pop-up Pasokan & permintaan membaca
+  // `/supply/{lokasi}/{komoditas}` dan `/demand/{lokasi}/{komoditas}`. Akar ini
+  // belum pernah ada karena halaman lama tidak memanggilnya — tanpa keduanya,
+  // Next menjawab 404 HTML sendiri dan pop-up menulis "catatan tidak ada"
+  // padahal backend punya angkanya.
+  "supply",
+  "demand",
   "events",
   "price",
   "kpi",
@@ -33,6 +40,10 @@ const API_ROOTS = [
   // saat uji UI pertama.
   "procurement",
   "ledger",
+  // Dokumen 06 (28 Okt 2026): tab Agent Log membaca status supervisor dan
+  // tanya-jawab baca-saja. Tanpa akar ini Next menjawab 404 HTML sendiri dan
+  // baris status menulis "belum dimuat" padahal backend menjawab.
+  "agent",
   "demo",
   "batches",
   "supplier-exclusions",

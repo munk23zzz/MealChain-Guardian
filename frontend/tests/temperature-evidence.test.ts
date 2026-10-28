@@ -129,7 +129,7 @@ describe("evidenceRows", () => {
           evidence_state: "insufficient",
           observed_at: "2026-10-20T10:00:00Z",
           evidence_sufficient: false,
-          evidence_reasons: ["sampel terakhir 7200 menit lalu > batas 360 menit"],
+          evidence_reasons: ["sampel terakhir 7200 menit lalu, lewat batas 360 menit"],
         },
       }),
     ]);

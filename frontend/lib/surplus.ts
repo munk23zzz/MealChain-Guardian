@@ -339,3 +339,36 @@ function sumOrNull(values: number[]): number | null {
   if (!values.length) return null;
   return values.reduce((total, value) => total + value, 0);
 }
+
+/**
+ * Tiga baris limbah untuk halaman Location Network (versi ringkas).
+ *
+ * Dipisah dari `wasteFacts` karena daftar mitra bukan angka yang dibaca operator
+ * di halaman ini, dan label panjang membuat baris terlipat. Bila server belum
+ * mengirim angka, hasilnya array KOSONG: pemanggil menulis "Belum dicatat."
+ * alih-alih tiga baris "—" yang terbaca seperti pengukuran nol.
+ */
+export function wasteRingkas(
+  payload?: unknown
+): { label: string; value: string; hint: string | null }[] {
+  const data = (payload ?? {}) as WastePayload;
+  if (!data.recorded?.available) return [];
+
+  const baris = (
+    label: string,
+    sumber: { available?: boolean; kg?: number | null; events?: number } | undefined
+  ) => ({
+    label,
+    value: sumber?.available ? wasteKg(sumber?.kg) : DASH,
+    hint:
+      sumber?.available && Number.isFinite(Number(sumber?.events))
+        ? `${sumber?.events} peristiwa`
+        : null,
+  });
+
+  return [
+    baris("Tercatat", data.recorded),
+    baris("Dialihkan", data.diverted),
+    baris("Tanpa mitra", data.unassigned),
+  ];
+}

@@ -77,10 +77,44 @@ export default function TemperatureEvidenceCard({
   const segmen = segmenDari(summary);
   const tampil = urutTindakan(rows).slice(0, MAKS_BARIS);
   const adaKurang = rows.some((row) => !row.sufficient);
+  // Profil suhu hampir selalu SAMA untuk semua baris (satu profil versi untuk
+  // satu cakupan). Dulu kalimat "Profil … — simulasi, bukan standar regulasi"
+  // dicetak di keenam baris, jadi enam baris pengulangan yang sama menutupi
+  // yang berbeda antar-baris (asal log, jumlah sampel, alasan server).
+  // Sekarang dicetak SEKALI sebagai catatan kartu bila seragam; kalau tidak
+  // seragam (ada komoditas tanpa profil), tiap baris tetap menyebut miliknya.
+  const profilSeragam =
+    rows.length > 0 &&
+    rows[0].profileVersion !== null &&
+    rows.every(
+      (row) =>
+        row.profileVersion === rows[0].profileVersion &&
+        row.policyKind === rows[0].policyKind
+    );
   const ringkasAria =
     `${summary.total} batch diperiksa: ` +
     `${summary.sufficient} bukti cukup, ${summary.insufficient} bukti kurang, ` +
     `${summary.ambiguous} bukti bertentangan, ${summary.unknown} tidak tercatat.`;
+
+  /** Catatan profil per baris: komoditas tanpa profil selalu disebut (itu
+   *  keadaan khusus barisnya), sedangkan profil yang seragam untuk seluruh
+   *  kartu dipindahkan ke satu catatan di kaki kartu. */
+  function catatanProfil(row: EvidenceRow) {
+    if (!row.profileVersion) {
+      return (
+        <p className={styles.rowProfile}>
+          Komoditas ini belum punya profil suhu — tidak dinilai.
+        </p>
+      );
+    }
+    if (profilSeragam) return null;
+    return (
+      <p className={styles.rowProfile}>
+        Profil {row.profileVersion}
+        {row.policyKind === "simulated_policy" ? " — simulasi, bukan standar regulasi" : ""}
+      </p>
+    );
+  }
 
   return (
     <article className="card jump-target" id="safety-bukti-suhu">
@@ -157,27 +191,28 @@ export default function TemperatureEvidenceCard({
                     {row.sampleCount === null ? "" : `, ${row.sampleCount} sampel`}
                     {row.sourceLabel ? `, ${row.sourceLabel}` : ""}
                   </p>
-                  {row.profileVersion ? (
-                    <p className={styles.rowProfile}>
-                      Profil {row.profileVersion}
-                      {row.policyKind === "simulated_policy"
-                        ? " — simulasi, bukan standar regulasi"
-                        : ""}
-                    </p>
-                  ) : (
-                    <p className={styles.rowProfile}>
-                      Komoditas ini belum punya profil suhu — tidak dinilai.
-                    </p>
-                  )}
+                  {catatanProfil(row)}
                   {row.reasons.length > 0 ? (
                     <p className={styles.rowReason}>
-                      <span className={styles.rowReasonLabel}>Alasan server: </span>
+                      {/* "Alasan", bukan "Alasan server": kata "server" adalah
+                          nama bagian sistem, bukan informasi bagi pembaca. */}
+                      <span className={styles.rowReasonLabel}>Alasan: </span>
                       {row.reasons.join("; ")}
                     </p>
                   ) : null}
                 </li>
               ))}
             </ul>
+          ) : null}
+
+          {profilSeragam ? (
+            <p className={styles.profileNote}>
+              Profil suhu berlaku untuk semua batch di atas:{" "}
+              <strong>{rows[0].profileVersion}</strong>
+              {rows[0].policyKind === "simulated_policy"
+                ? " — simulasi, bukan standar regulasi."
+                : "."}
+            </p>
           ) : null}
 
           {rows.length > MAKS_BARIS || adaKurang ? (

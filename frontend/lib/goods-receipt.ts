@@ -1,4 +1,7 @@
 // Fase 9 MG butir 2 & 4 — tampilan status penerimaan, sepenuhnya mengikuti SERVER.
+
+import { RECEIVING_CHECKS } from "./food-safety";
+
 //
 // Aturan modul ini:
 //   1. TIDAK ada keputusan boleh/tidak di sini. `can_receive`, `can_quarantine`,
@@ -150,6 +153,109 @@ export function pendingReceipt(
 ): Record<string, any> | null {
   if (!Array.isArray(items)) return null;
   return items.find((row) => String(row?.status ?? "") === "menunggu") ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Dok 05 §8.1–§8.3 — tiga angka dan asal harganya, tanpa menghitung di klien.
+//
+// Semua angka diambil dari balasan server (`/receipts?batch_id=…`):
+//   batch_quantity_kg   — kuantitas batch yang akan masuk stok
+//   stock_kg            — kg yang BENAR-BENAR masuk stok (hanya setelah disetujui)
+//   accepted_value_idr  — nilai pembukuan (hanya setelah disetujui)
+//   estimated_value_idr — kg × harga satuan PO, dikirim server sebagai perkiraan
+//   unit_price_idr      — harga satuan invoice PO (Rp/kg)
+//   po_number           — nomor PO yang mendanai batch
+// Yang dilakukan klien hanya memilih angka mana yang ditampilkan dan menulis
+// kalimatnya; tidak ada perkalian/pembagian rupiah di peramban.
+// ---------------------------------------------------------------------------
+
+export type ReceiptFigureSource = Record<string, any> | null | undefined;
+
+export type ReceiptFigures = {
+  kuantitasKg: number | null;
+  masukStokKg: number | null;
+  nilaiIdr: number | null;
+  /** true = angka rupiah masih perkiraan (penerimaan belum disetujui). */
+  nilaiSementara: boolean;
+  /** "tersimpan" = angka pembukuan; "perkiraan"; "tidak tercatat". */
+  statusNilai: "tersimpan" | "perkiraan" | "tidak_tercatat";
+};
+
+function angka(nilai: unknown): number | null {
+  if (nilai === null || nilai === undefined || nilai === "") return null;
+  const n = Number(nilai);
+  return Number.isFinite(n) ? n : null;
+}
+
+export function receiptFigures(catatan: ReceiptFigureSource): ReceiptFigures {
+  const kuantitasKg = angka(catatan?.batch_quantity_kg);
+  const masukStokKg = angka(catatan?.stock_kg);
+  const tersimpan = angka(catatan?.accepted_value_idr);
+  const perkiraan = angka(catatan?.estimated_value_idr);
+  if (tersimpan !== null) {
+    return {
+      kuantitasKg,
+      masukStokKg,
+      nilaiIdr: tersimpan,
+      nilaiSementara: false,
+      statusNilai: "tersimpan",
+    };
+  }
+  if (perkiraan !== null) {
+    return {
+      kuantitasKg,
+      masukStokKg,
+      nilaiIdr: perkiraan,
+      nilaiSementara: true,
+      statusNilai: "perkiraan",
+    };
+  }
+  return {
+    kuantitasKg,
+    masukStokKg,
+    nilaiIdr: null,
+    nilaiSementara: false,
+    statusNilai: "tidak_tercatat",
+  };
+}
+
+/**
+ * Asal harga satuan (Dok 05 §8.3): "130 kg × Rp 26.200 per kg dari PO …".
+ * `null` bila server tidak mengirim harga — lebih baik diam daripada mengarang.
+ */
+export function valueOrigin(catatan: ReceiptFigureSource): string | null {
+  const harga = angka(catatan?.unit_price_idr);
+  const kg = angka(catatan?.batch_quantity_kg);
+  if (harga === null) return null;
+  const jumlah = kg === null ? "—" : `${kg.toLocaleString("id-ID")} kg`;
+  const po = catatan?.po_number ? `dari PO ${catatan.po_number}` : "(nomor PO tidak tercatat)";
+  return `${jumlah} × Rp ${harga.toLocaleString("id-ID")} per kg ${po}`;
+}
+
+export type CheckpointState = {
+  done: number;
+  total: number;
+  items: { id: string; label: string; checked: boolean }[];
+};
+
+/**
+ * Titik periksa yang tersimpan (Dok 05 §8.1 versi repo ini): lima titik boolean
+ * dari `RECEIVING_CHECKS`, dibaca apa adanya dari catatan petugas. Tidak ada
+ * skor yang dihitung — yang ditampilkan hanya berapa titik yang benar-benar
+ * ditandai, karena itu bukti yang tersimpan.
+ */
+export function checkpointState(catatan: ReceiptFigureSource): CheckpointState {
+  const peta = (catatan?.checked ?? {}) as Record<string, unknown>;
+  const items = RECEIVING_CHECKS.map((item) => ({
+    id: item.id,
+    label: item.label,
+    checked: peta?.[item.id] === true,
+  }));
+  return {
+    done: items.filter((i) => i.checked).length,
+    total: items.length,
+    items,
+  };
 }
 
 /**

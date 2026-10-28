@@ -8,7 +8,11 @@ const apiSrc = readFileSync("lib/api.ts", "utf8");
 const opsSrc = readFileSync("components/OpsConsole.tsx", "utf8");
 // Langkah 4 (11 Okt): detail keputusan pindah ke halaman tersendiri
 // "Decision & Evidence" — kontraknya diperiksa di komponen itu.
-const evidenceSrc = readFileSync("components/DecisionEvidence.tsx", "utf8");
+// 28 Okt 2026: isi detail dipindah lagi ke DecisionDetail.tsx (dipakai halaman
+// DAN popup), jadi kontrak dibaca dari keduanya.
+const evidenceSrc =
+  readFileSync("components/DecisionEvidence.tsx", "utf8") +
+  readFileSync("components/DecisionDetail.tsx", "utf8");
 
 describe("wiring sidebar + map di app/page.tsx (S4-06 polish)", () => {
   it("page memakai layout sidebar (side-nav) + SupplyMap", () => {

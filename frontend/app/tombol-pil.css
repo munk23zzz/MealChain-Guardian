@@ -28,12 +28,10 @@
   border-radius: 999px;
 }
 
-/* Dua tempat yang aturannya lebih spesifik di globals.css (0,1,1 / 0,1,0):
-   `.integrity-panel button` (radius-chip) dan `.evidence-actionbar-link`
-   (radius-control-sm) — keduanya harus disebut dengan spesifisitas setara
-   atau lebih tinggi, kalau tidak tombolnya tetap kotak. */
-.integrity-panel button,
-.button.evidence-actionbar-link {
+/* Satu tempat yang aturannya lebih spesifik di globals.css (0,1,1):
+   `.integrity-panel button` (radius-chip) — harus disebut dengan spesifisitas
+   setara atau lebih tinggi, kalau tidak tombolnya tetap kotak. */
+.integrity-panel button {
   border-radius: 999px;
 }
 

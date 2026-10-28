@@ -187,7 +187,12 @@ export default function RecommendationCard({
           )}
           <span className="rec-qty">{formatKg(decision.quantity_kg)}</span>
           <span className="rec-sep" aria-hidden="true">·</span>
-          <span>SDC {formatIDR(decision.safe_delivered_cost)}</span>
+          {/* 29 Okt 2026: "biaya aman", bukan "SDC". Singkatan internal (Safe
+              Delivered Cost) berderet dengan kg dan jam di satu baris, tanpa
+              jalan bagi pembaca untuk tahu artinya. Dipendekkan dari "biaya aman
+              terkirim" karena baris ini diulang di 10 kartu; istilah panjangnya
+              tetap dipakai di Decision & Evidence. */}
+          <span>biaya aman {formatIDR(decision.safe_delivered_cost)}</span>
           <span className="rec-sep" aria-hidden="true">·</span>
           <span className="rec-time">
             <ClockIcon />
@@ -203,10 +208,14 @@ export default function RecommendationCard({
                 pengguna memilih lebih dulu tanpa menambah kemampuan. Untuk
                 kartu yang boleh disetujui, popup dibuka langsung dengan panel
                 persetujuan terbuka; kartu lain dibuka di rincian. */}
+            {/* 29 Okt 2026: keterangan yang dulu berdiri sebagai paragraf dua
+                baris di atas daftar sekarang menempel di tombolnya sebagai
+                `title`. */}
             <button
               type="button"
               className="rec-act-btn rec-act-btn--utama"
               aria-label={`Tinjau: ${typeLabel}`}
+              title="Buka rincian, bukti, dan panel persetujuan. Versi lengkapnya ada di halaman Decision & Evidence."
               onClick={(event) =>
                 onBuka(tampilPersetujuan ? "persetujuan" : "rincian", event.currentTarget)
               }

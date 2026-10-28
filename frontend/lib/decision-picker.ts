@@ -52,12 +52,17 @@ export const STATUS_WORDS: Record<string, string> = {
   proposed: "diusulkan",
   pending_approval: "menunggu persetujuan",
   needs_verification: "perlu verifikasi",
-  verifier_flagged: "ditandai verifier",
+  // 29 Okt 2026: "verifikator", bukan "verifier" — lencana di kartu feed sudah
+  // menulis "Ditandai verifikator"; dua sebutan untuk satu status di satu layar
+  // membuat pembaca mengira itu dua keadaan berbeda.
+  verifier_flagged: "ditandai verifikator",
   approved: "disetujui",
   executed: "dieksekusi",
   expired: "kedaluwarsa",
   rejected: "ditolak",
-  review_only: "tinjauan (review-only)",
+  // Tanpa "(review-only)": tanda kurung itu membawa enum Inggris ke layar, dan
+  // "temuan" sudah menjelaskan bahwa ini bukan perintah eksekusi.
+  review_only: "temuan tinjauan",
 };
 
 const DASH = "—";

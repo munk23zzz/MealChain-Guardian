@@ -28,7 +28,8 @@ export function useSurplusPlan(
   const query = useQuery({
     queryKey: queryKeys.surplusPlan(commodity),
     queryFn: () => fetchSurplusAllocations(token as string, commodity, limit),
-    enabled: Boolean(token) && tab === "surplus" && Boolean(commodity),
+    enabled:
+      Boolean(token) && (tab === "surplus" || tab === "location-network") && Boolean(commodity),
     refetchInterval: false,
   });
   return {

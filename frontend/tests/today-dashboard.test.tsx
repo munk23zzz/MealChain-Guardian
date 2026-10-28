@@ -191,6 +191,15 @@ describe("kebersihan copy halaman Hari Ini", () => {
   });
 });
 
+
+// Hitung baris DI DALAM satu kartu saja: beberapa kartu memakai kelas yang sama
+// (`today-row`), jadi hitungan global akan mencampur kartu lain.
+function barisKartu(html: string, id: string): number {
+  const mulai = html.indexOf(`id="${id}"`);
+  const akhir = html.indexOf("</article>", mulai);
+  return (html.slice(mulai, akhir).match(/<li class="today-row/g) ?? []).length;
+}
+
 describe("kartu keputusan menunggu tindakan", () => {
   it("hanya menghitung yang actionable (rejected tidak ikut)", () => {
     const html = render();
@@ -226,7 +235,7 @@ describe("kartu keputusan menunggu tindakan", () => {
     expect(html).toContain("Tidak ada agenda yang belum lewat tenggat");
   });
 
-  it("daftar dipotong 6 baris, sisanya DINYATAKAN (bukan hilang diam-diam)", () => {
+  it("daftar dipotong 5 baris, sisanya DINYATAKAN (bukan hilang diam-diam)", () => {
     const many = Array.from({ length: 9 }, (_, i) => ({
       decision_id: `d${i}`,
       decision_type: "regional_balance",
@@ -236,8 +245,28 @@ describe("kartu keputusan menunggu tindakan", () => {
     }));
     const html = render({ decisions: many, onOpenAllDecisions: () => {} });
     expect(html).toContain('<span class="today-count">9</span>');
-    expect(html).toContain("+3 keputusan lain menunggu tindakan");
+    // Batas kartu "Hari Ini" = 5 baris terdekat (permintaan pemilik 29 Okt 2026).
+    expect(barisKartu(html, "today-action")).toBe(5);
+    expect(html).toContain("+4 keputusan lain menunggu tindakan");
+    expect(html).toContain("5 terdekat ditampilkan");
     expect(html).toContain("Lihat semua");
+  });
+
+  it("baris menyebut komoditas, tujuan, dan potongan id agar lima baris tidak terbaca sama", () => {
+    const html = render({
+      decisions: [
+        {
+          decision_id: "4af4e845-13b8-45df-af1d-727d5f505d59",
+          decision_type: "supplier_procurement",
+          status: "pending_approval",
+          quantity_kg: 780,
+          commodity_name: "beras",
+          target_location_name: "Jakarta",
+          expires_at: iso(2 * H),
+        },
+      ],
+    });
+    expect(html).toContain("beras · 780 kg · Jakarta · Menunggu persetujuan · #4af4e845");
   });
 
   it("tanpa keputusan: nol tertulis apa adanya, bukan karangan", () => {
@@ -276,7 +305,7 @@ describe("kartu batch", () => {
     expect(html).not.toContain("· —");
   });
 
-  it("lebih dari enam batch: sisanya DINYATAKAN, bukan hilang diam-diam", () => {
+  it("lebih dari lima batch: sisanya DINYATAKAN, bukan hilang diam-diam", () => {
     const banyak = Array.from({ length: 9 }, (_, i) => ({
       id: `b${i}`,
       location: "Bandung",
@@ -288,8 +317,23 @@ describe("kartu batch", () => {
     }));
     const html = render({ batches: banyak, onOpenBatches: () => {} });
     expect(html).toContain("<span class=\"today-count\">9</span>");
-    expect(html).toContain("+3 batch lain mendekati kedaluwarsa");
+    // Batas kartu batch juga 5 baris: kedaluwarsa dulu, lalu yang segera.
+    expect(barisKartu(html, "today-batches")).toBe(5);
+    expect(html).toContain("+4 batch lain mendekati kedaluwarsa");
+    expect(html).toContain("5 terdekat ditampilkan");
     expect(html).toContain(">Lihat semua</button>");
+  });
+
+  it("status keamanan tidak pernah dicetak sebagai kode mentah", () => {
+    const html = render({
+      batches: [
+        { id: "b-nv", location: "Bandung", commodity: "telur", quantity_kg: 100, freshness_score: 0.8, safety_status: "needs_verification", usable_until: iso(-1 * H) },
+        { id: "b-xx", location: "Bandung", commodity: "telur", quantity_kg: 100, freshness_score: 0.8, safety_status: "kode_aneh", usable_until: iso(-1 * H) },
+      ],
+    });
+    expect(html).toContain("belum diverifikasi");
+    expect(html).not.toContain("needs_verification");
+    expect(html).not.toContain("kode_aneh");
   });
 
   it("data batch belum ada: '—' dan tidak diklaim kosong", () => {

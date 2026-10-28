@@ -212,10 +212,16 @@ describe("popup pemilih tanggal — aksi", () => {
     expect(onToday).toHaveBeenCalled();
   });
 
-  it("tombol 'Tutup' menutup popup", () => {
+  it("X di kepala popup menutup popup — kaki tidak lagi punya 'Tutup' kedua", () => {
+    // 29 Okt 2026: semua penutup jadi X bulat. Tombol teks "Tutup" di kaki
+    // dialog dibuang karena popup ini sudah punya X di kepalanya; dua kontrol
+    // untuk satu hal di satu layar hanya membuat orang memilih.
     const onClose = vi.fn();
     mount({ onClose });
-    act(() => buttonByText("Tutup")!.click());
+    expect(buttonByText("Tutup")).toBeUndefined();
+    const x = document.querySelector<HTMLButtonElement>('[aria-label="Tutup jendela"]');
+    expect(x).toBeTruthy();
+    act(() => x!.click());
     expect(onClose).toHaveBeenCalled();
   });
 

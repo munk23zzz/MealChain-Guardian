@@ -49,9 +49,22 @@ describe("FoodSafetyBoard — karantina", () => {
   });
 
   it("ringkasan memisahkan batch ditahan dari gagal uji", () => {
+    // 29 Okt 2026: batch ditahan kini jadi KELOMPOK SENDIRI ("Ditahan") di
+    // deretan lima angka, bukan baris "Penanda" di samping empat angka. Yang
+    // dijaga tetap sama: ditahan tidak dilebur ke "Gagal uji", beratnya
+    // disebut, dan lima angka menjumlah ke total.
     const html = render();
-    expect(html).toContain("Ditahan (karantina)");
-    expect(html).toContain("120 kg tidak boleh dialokasikan");
+    expect(html).toContain(">Ditahan<");
+    // Berat karantina menempel pada kolom "Ditahan" sebagai catatan kecil;
+    // alasannya ada di title catatan itu.
+    expect(html).toContain("120 kg");
+    expect(html).toContain("tidak boleh dialokasikan");
+    const kartu = html.slice(
+      html.indexOf('id="safety-ringkasan"'),
+      html.indexOf("</article>", html.indexOf('id="safety-ringkasan"'))
+    );
+    const angka = Array.from(kartu.matchAll(/class="safety-count-value">(\d+)</g)).map((m) => Number(m[1]));
+    expect(angka.reduce((a, b) => a + b, 0)).toBe(3);
   });
 
   it("peran yang boleh memutuskan melihat tombol Tahan pada batch bebas", () => {

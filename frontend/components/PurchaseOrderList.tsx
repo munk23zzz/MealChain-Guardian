@@ -61,6 +61,18 @@ export type PurchaseOrderRow = {
   source?: string | null;
   /** "execution" = punya decision_id (tertaut keputusan), "demo" = baris impor tanpa keputusan. */
   origin?: string | null;
+  /**
+   * Realisasi PO (Dok 05 §9 butir 3) — dihitung SERVER dari ikatan bukti
+   * `human_inspection` → `batch_ids`, bukan dari ceklis lokal.
+   * `null` = belum ada barang tercatat untuk PO ini; `0` hanya sah bila memang
+   * ada batch bernilai 0 kg. Jangan pernah menampilkannya sebagai "Rp 0".
+   */
+  received_kg?: number | null;
+  received_value_idr?: number | null;
+  variance_idr?: number | null;
+  variance_pct?: number | null;
+  received_batch_count?: number | null;
+  received_basis?: string | null;
 };
 
 export type PurchaseOrderPayload = {
@@ -167,6 +179,44 @@ export function formatRupiah(nilai: number | null | undefined): string {
 export function formatRupiahOpsional(nilai: number | null | undefined): string {
   if (typeof nilai !== "number" || !Number.isFinite(nilai)) return "—";
   return formatRupiah(nilai);
+}
+
+const PERSEN = new Intl.NumberFormat("id-ID", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+/** Nada selisih realisasi. `belum` = tidak ada angka, bukan nol. */
+export function varianceNada(
+  selisih: number | null | undefined,
+): "lebih" | "kurang" | "pas" | "belum" {
+  if (typeof selisih !== "number" || !Number.isFinite(selisih)) return "belum";
+  if (selisih > 0) return "lebih";
+  if (selisih < 0) return "kurang";
+  return "pas";
+}
+
+/**
+ * Kalimat selisih untuk satu baris: "+Rp 8.300.000,00 (+33,33%)".
+ *
+ * Tiga keadaan dibedakan dengan KATA, bukan hanya warna: belum ada angka,
+ * sama dengan PO, dan menyimpang (dengan tanda arah). Tidak ada `Rp 0,00` untuk
+ * PO yang belum punya barang tercatat — itu klaim, bukan fakta.
+ */
+export function varianceLabel(
+  selisih: number | null | undefined,
+  persen: number | null | undefined,
+): string {
+  const nada = varianceNada(selisih);
+  if (nada === "belum") return "belum ada barang tercatat";
+  if (nada === "pas") return "sama dengan nilai PO";
+  const nilai = selisih as number;
+  const tanda = nilai > 0 ? "+" : "−";
+  const potongan =
+    typeof persen === "number" && Number.isFinite(persen)
+      ? ` (${tanda}${PERSEN.format(Math.abs(persen))}%)`
+      : "";
+  return `${tanda}${formatRupiah(Math.abs(nilai))}${potongan}`;
 }
 
 const KG = new Intl.NumberFormat("id-ID", {
@@ -378,7 +428,27 @@ export default function PurchaseOrderList({
                     {formatKg(po.ordered_quantity_kg)} · {formatRupiah(po.price_per_kg)}/kg
                   </div>
                   <div className="po-row-foot">
-                    <span className="po-value">{formatRupiah(po.total_value)}</span>
+                    {/* Dok 05 §9 butir 3: nilai PO dan nilai barang masuk
+                        berdampingan, supaya selisih pengadaan terbaca tanpa
+                        menghitung manual. Keduanya angka server. */}
+                    <span className="po-pair">
+                      <span className="po-pair-label">Nilai PO</span>
+                      <span className="po-value">
+                        {formatRupiah(po.total_value)}
+                      </span>
+                    </span>
+                    <span className="po-pair">
+                      <span className="po-pair-label">Diterima</span>
+                      <span className="po-value">
+                        {formatRupiahOpsional(po.received_value_idr)}
+                      </span>
+                    </span>
+                    <span
+                      className={`po-variance po-variance-${varianceNada(po.variance_idr)}`}
+                      data-variance={varianceNada(po.variance_idr)}
+                    >
+                      {varianceLabel(po.variance_idr, po.variance_pct)}
+                    </span>
                     {po.decision_id ? (
                       <a
                         className="po-link"

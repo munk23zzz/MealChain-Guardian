@@ -182,6 +182,41 @@ export async function fetchDecision(decisionId: string, token: string) {
  });
 }
 
+/**
+ * Blok ledger milik satu keputusan (dokumen 06-agent-log §2.4).
+ *
+ * ACT tidak selalu meninggalkan baris `agent_traces`; buktinya blok ledger
+ * `action = "execute"`. Tanpa endpoint ini, UI terpaksa menulis "belum
+ * tercatat" padahal blok ada — kesalahan fakta yang dilarang dokumen.
+ */
+/**
+ * Status supervisor (dokumen 06-agent-log §2.8). `live` boleh `null`: endpoint
+ * tidak memanggil provider, jadi ia tidak berhak mengaku hidup.
+ */
+export async function fetchSupervisorHealth(token: string) {
+  return request("/agent/supervisor/health", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+/** Tanya-jawab baca-saja (§2.9) — dijawab tool GET, `writes: false`. */
+export async function askSupervisor(question: string, token: string) {
+  return request("/agent/supervisor/ask", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ question }),
+  });
+}
+
+export async function fetchDecisionLedger(decisionId: string, token: string) {
+  return request(`/decisions/${decisionId}/ledger`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export async function fetchDecisionTraces(decisionId: string, token: string) {
   return request(`/decisions/${decisionId}/traces`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -212,7 +247,21 @@ export async function executeAction(decisionId: string, token: string) {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ decision_id: decisionId }),
- });
+  });
+}
+
+// POST /actions/purchase-orders/{po}/approve — gerbang KEDUA (dokumen
+// 02-approval-action.md §6). `/actions/execute` hanya menerbitkan PO berstatus
+// `draft`; pengiriman ke SAP terjadi saat Kepala SPPG mereview PO. Tanpa
+// pemanggil ini PO draft tidak punya jalan keluar di UI.
+export async function approvePurchaseOrder(poNumber: string, token: string) {
+  return request(`/actions/purchase-orders/${encodeURIComponent(poNumber)}/approve`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
 }
 
 export async function verifyAction(decisionId: string, token: string) {
@@ -412,6 +461,17 @@ export type ReceiptRow = {
   review_note: string | null;
   supply_record_id: string | null;
   stock_kg: number | null;
+  // ---- konteks nilai (Dok 05 §8.2–§8.3) ----
+  /** Nilai pembukuan; hanya terisi setelah penerimaan disetujui. */
+  accepted_value_idr?: number | null;
+  /** Kuantitas batch yang akan masuk stok bila disetujui. */
+  batch_quantity_kg?: number | null;
+  /** Nomor PO invoice yang mendanai batch. */
+  po_number?: string | null;
+  /** Harga satuan invoice PO (Rp/kg) — dasar kalimat "kg × Rp/kg dari PO …". */
+  unit_price_idr?: number | null;
+  /** Perkiraan nilai (kg × harga satuan) sebelum keputusan. Bukan angka pembukuan. */
+  estimated_value_idr?: number | null;
 };
 
 export async function recordReceipt(
@@ -794,6 +854,25 @@ export async function createDecision(
 
 // GET /price/quotes/{loc}/{com} — daftar quote + referensi PIHPS terkini
 // (read-only, semua role; data untuk pemilihan di panel Event 2).
+// --- Monitor harga pasar (28 Okt 2026) --------------------------------------
+//
+// GET /price/monitor — deret harga harian PIHPS Bank Indonesia (Rp/kg) untuk
+// panel Overview. Bedanya dengan /price/quotes: yang ini ACUAN PASAR harian
+// (sumber eksternal, disalin apa adanya), bukan kutipan pemasok di DB.
+export async function fetchPriceMonitor(
+  token: string,
+  params: { region?: string | null; days?: number; commodity?: string | null } = {}
+) {
+  const kueri = new URLSearchParams();
+  if (params.region) kueri.set("region", params.region);
+  if (params.days) kueri.set("days", String(params.days));
+  if (params.commodity) kueri.set("commodity", params.commodity);
+  const akhiran = kueri.toString() ? `?${kueri.toString()}` : "";
+  return request(`/price/monitor${akhiran}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export async function fetchPriceQuotes(
   location: string,
   commodity: string,
@@ -840,6 +919,23 @@ export async function fetchSurplusAllocations(
   const params = new URLSearchParams({ commodity, limit: String(limit) });
   return request(`/surplus/allocations?${params.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// Surplus per WILAYAH (Get /surplus/regions, 28 Okt 2026): pasangan grafik
+// kecukupan di Overview. `commodity` boleh berulang (empat komoditas sekaligus);
+// `exclude` membuang lokasi pengguna supaya angkanya berarti "daerah lain".
+export async function fetchSurplusRegions(
+  token: string,
+  commodities: readonly string[],
+  exclude?: string | null
+) {
+  const params = new URLSearchParams();
+  for (const nama of commodities) params.append("commodity", nama);
+  if (exclude) params.set("exclude", exclude);
+  const qs = params.toString();
+  return request(`/surplus/regions${qs ? `?${qs}` : ""}`, {
+    headers: authHeaders(token),
   });
 }
 
@@ -906,7 +1002,39 @@ export async function fetchAgenda(token: string, start: string, end: string) {
 export async function fetchBalanceMap(commodity: string, token: string) {
   return request(`/balance/map?commodity=${encodeURIComponent(commodity)}`, {
     headers: { Authorization: `Bearer ${token}` },
- });
+  });
+}
+
+// Detail satu lokasi untuk pop-up Supply & Demand (dokumen 03 §3): catatan
+// pasokan dan permintaan terakhir. Keduanya 404 bila lokasi+komoditas itu
+// memang tidak punya catatan — pemanggil WAJIB membedakan 404 dari nol.
+export async function fetchSupply(location: string, commodity: string, token: string) {
+  return request(
+    `/supply/${encodeURIComponent(location)}/${encodeURIComponent(commodity)}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+}
+
+export async function fetchDemand(location: string, commodity: string, token: string) {
+  return request(
+    `/demand/${encodeURIComponent(location)}/${encodeURIComponent(commodity)}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+}
+
+// Perkiraan kebutuhan untuk pop-up "Pasokan & permintaan" (dokumen 03 §3
+// butir 3, §4). Server hanya punya metode `statistical_fallback`; metode dan
+// keyakinannya dikirim balik apa adanya supaya kartu bisa menyatakan dasarnya.
+export async function fetchDemandForecast(
+  location: string,
+  commodity: string,
+  token: string,
+  horizonDays = 7
+) {
+  return request(
+    `/demand/forecast/${encodeURIComponent(location)}/${encodeURIComponent(commodity)}?horizon_days=${horizonDays}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
 }
 
 // GET /suppliers — daftar pemasok + profil peta (Fase 2, 2026-10-14). Dipakai

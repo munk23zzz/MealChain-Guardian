@@ -40,8 +40,11 @@ describe("humanizeBlocker — sebab tertahan dari server", () => {
   });
 
   it("menerjemahkan status dinamis lewat kosakata status yang sama", () => {
+    // 29 Okt 2026: kosakata status disatukan ke "verifikator" (lencana kartu
+    // feed sudah memakai kata itu). Kalimat turunan ini ikut berubah — dan itu
+    // yang diinginkan: satu status, satu sebutan, di mana pun ia muncul.
     expect(humanizeBlocker("status verifier_flagged tidak dapat dieksekusi")).toBe(
-      "status ditandai verifier tidak dapat dieksekusi"
+      "status ditandai verifikator tidak dapat dieksekusi"
     );
   });
 

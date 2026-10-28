@@ -78,7 +78,7 @@ import {
 import {
   FEED_WINDOWS,
   FEED_WINDOW_DEFAULT,
-  feedWindowHint,
+  feedWindowHintBilaBerbeda,
   feedWindowLabel,
   type FeedWindowKey,
 } from "../lib/decisions-window";
@@ -1160,7 +1160,10 @@ export default function Home() {
   // Angka untuk kepala tab Recommendations: HARUS sejendela dengan daftar di
   // bawahnya, kalau tidak "21 perlu tindakan" bertengger di atas daftar 27
   // baris "hari ini". Badge sidebar tetap memakai angka seluruh riwayat.
-  const perluKeputusanJendela = countActionable(feedWindowDecisions, undefined, role);
+  // 29 Okt 2026: pil "N perlu tindakan" di kepala halaman dilepas karena chip
+  // saring "Perlu tindakan N" 20 px di bawahnya menulis angka yang sama (dan
+  // chip itu juga bisa diklik). Sisa hitungan jendela = yang lewat tenggat,
+  // satu-satunya keadaan yang tidak punya chip.
   const lewatTenggatJendela = countExpiredActionable(
     feedWindowDecisions,
     undefined,
@@ -1196,7 +1199,7 @@ export default function Home() {
       title:
         role === "sppg_nutritionist"
           ? "Pasokan, kebutuhan, dan batch satu lokasi"
-          : "Siapa kekurangan, siapa berlebih, dan dari mana catatannya",
+          : "Siapa kekurangan, siapa kelebihan, apa yang dialihkan, dan apa yang terbuang",
     },
     {
       // Angka = jumlah yang PERLU DI-APPROVE, bukan seluruh keputusan yang
@@ -1574,7 +1577,7 @@ export default function Home() {
 
             {/* Filter pill komoditas di dalam kartu (acuan: kartu filter) */}
             <div
-              className="commodity-filters filter-card"
+              className="commodity-filters"
               role="group"
               aria-label="Komoditas peta"
             >
@@ -1827,12 +1830,15 @@ export default function Home() {
             <section className="feed-section">
               <PageHeader
                 title="Recommendation Feed"
-                description="Satu kartu satu keputusan agen. Yang bisa ditindaklanjuti sekarang ditaruh paling atas, setelah itu yang sudah lewat tenggat, lalu keputusan lain menurut jenis: gangguan keamanan, ketidakseimbangan, anomali harga. Urutannya bisa diganti lewat pemilih Urutkan."
+                // Satu kalimat (29 Okt 2026). Versi sebelumnya 259 karakter dan
+                // mengulang tiga hal yang sudah tertulis di kontrol di bawahnya:
+                // urutan bawaan (pemilih Urutkan), kata "tinjau" (tombol kartu),
+                // dan bahwa halaman Decision & Evidence memuat versi lengkap
+                // (tautan di dalam popup). Penjelasan panjang di atas daftar
+                // membuat 10 kartu pertama terdorong ke bawah layar.
+                description="Satu kartu satu keputusan agen; yang bisa ditindaklanjuti ada di atas."
                 meta={
                   <>
-                    <span className="commodity-pill">
-                      {perluKeputusanJendela} perlu tindakan
-                    </span>
                     {lewatTenggatJendela > 0 && (
                       <span className="commodity-pill">
                         {lewatTenggatJendela} lewat tenggat
@@ -1868,14 +1874,14 @@ export default function Home() {
 
               {decisions.length > 0 && (
                 <>
-                  {/* Petunjuk ditaruh SEBELUM daftar: dulu ada di bawah 24 kartu,
-                      jadi pembaca baru menemukannya setelah menggulung jauh. */}
-                  <p className="feed-hint">
-                    Tekan <strong>Tinjau</strong> pada kartu untuk membuka rincian
-                    keputusan, bukti, dan panel persetujuan dalam satu jendela.
-                    Halaman <strong>Decision &amp; Evidence</strong> tetap memuat
-                    versi lengkapnya.
-                  </p>
+                  {/* Petunjuk "Tekan Tinjau…" DIHAPUS 29 Okt 2026: tombolnya
+                      sudah ada di setiap kartu dengan nama yang sama, dan
+                      kalimatnya (164 karakter) mengulang isi popup — rincian,
+                      bukti, persetujuan, serta tautan ke Decision & Evidence.
+                      Keterangan yang sama sekarang menempel sebagai `title`
+                      pada tombol Tinjau, jadi tetap terbaca saat kursor
+                      berhenti di tombol tanpa memakan dua baris di atas
+                      daftar. */}
 
                   {/* Cari + urutkan: sebelumnya tidak ada sama sekali, jadi 126
                       kartu hanya bisa dipindai satu per satu. */}
@@ -1886,7 +1892,7 @@ export default function Home() {
                         id="feed-search"
                         type="search"
                         value={feedQuery}
-                        placeholder="Jenis, status, kasus, atau ID keputusan…"
+                        placeholder="Jenis, status, komoditas, atau ID keputusan…"
                         onChange={(e) => {
                           setFeedQuery(e.target.value);
                           setFeedPage(1);
@@ -1945,9 +1951,15 @@ export default function Home() {
                         </button>
                       );
                     })}
-                    <span className="feed-period-hint">
-                      {feedWindowHint(feedWindow)}
-                    </span>
+                    {/* Petunjuk hanya bila menambah arti (29 Okt 2026): untuk
+                        "7 hari" ia berbunyi "7 hari terakhir" — kalimat yang
+                        sama dua kali, dan di layar terbaca seperti chip keempat
+                        yang tidak bisa ditekan. */}
+                    {feedWindowHintBilaBerbeda(feedWindow) && (
+                      <span className="feed-period-hint">
+                        {feedWindowHintBilaBerbeda(feedWindow)}
+                      </span>
+                    )}
                   </div>
 
                   {/* Filter status: semua status punya chip + count (traceable;
@@ -1968,14 +1980,32 @@ export default function Home() {
                           setFeedPage(1);
                         }}
                       >
-                        {chip.label}
+                        {/* Huruf pertama dikapitalkan di sini, bukan di
+                            lib: `feedChips` sengaja mengembalikan label apa
+                            adanya (dipakai juga sebagai kata kunci pencarian
+                            dan diuji huruf kecil). Tanpa ini deretan chip
+                            terbaca "Perlu tindakan · menunggu persetujuan ·
+                            ditandai verifier" — satu baris dengan tiga gaya
+                            huruf awal. */}
+                        {chip.label.charAt(0).toUpperCase() + chip.label.slice(1)}
                         <span className="legend-count">{chip.count}</span>
+
                       </button>
                     ))}
                   </div>
 
                   <div className="feed-status-row">
-                    <p className="feed-status" role="status" aria-atomic="true">
+                    {/* Angka "Menampilkan 10 dari 17" hanya dicetak saat ada
+                        saringan/pencarian (29 Okt 2026). Tanpa saringan ia
+                        persis mengulang "1–10 dari 17" di pager 40 px di
+                        bawahnya, sedangkan pembaca layar tetap perlu tahu
+                        rentang yang tampil — karena itu saat tidak menyaring
+                        barisnya `sr-only`, bukan dihapus. */}
+                    <p
+                      className={`feed-status${feedFilterActive ? "" : " sr-only"}`}
+                      role="status"
+                      aria-atomic="true"
+                    >
                       {feedSummary({
                         shown: feedCards.length,
                         total: feedWindowDecisions.length,
@@ -2012,8 +2042,10 @@ export default function Home() {
                         <>
                           <p>
                             Tidak ada rekomendasi pada periode{" "}
-                            <strong>{feedWindowLabel(feedWindow).toLowerCase()}</strong>{" "}
-                            ({feedWindowHint(feedWindow)}).
+                            <strong>{feedWindowLabel(feedWindow).toLowerCase()}</strong>
+                            {feedWindowHintBilaBerbeda(feedWindow)
+                              ? ` (${feedWindowHintBilaBerbeda(feedWindow)}).`
+                              : "."}
                           </p>
                           {feedWindow !== "30d" && (
                             <button
@@ -2137,13 +2169,21 @@ export default function Home() {
             planLoading={planQuery.loading}
             planError={planQuery.error}
             waste={wasteQuery.data}
+            wasteLoading={wasteQuery.loading}
+            wasteError={wasteQuery.error}
+            batches={batches}
+            decisions={decisions}
+            now={now}
             commodities={COMMODITIES}
             onCommodityChange={setMapCommodity}
             heading={role === "sppg_nutritionist" ? "Pasokan & Kebutuhan" : "Location Network"}
+            // Kalimat kepala peran lain memakai bawaan komponen (satu sumber
+            // teks): dulu kalimat yang sama ditulis dua kali di sini dan di
+            // komponen, dan keduanya sempat berbeda.
             description={
               role === "sppg_nutritionist"
                 ? "Pasokan, kebutuhan, selisih, perkiraan, dan batch satu lokasi."
-                : "Siapa kekurangan, siapa berlebih, dan isi catatan tiap lokasi."
+                : undefined
             }
           />
           {/* Surplus & Limbah sudah menjadi blok di dalam board itu sendiri
@@ -2353,16 +2393,9 @@ export default function Home() {
         decision={selected}
         summary={approvalSummary}
         tampilanAwal={popupTampilan}
-        chain={selectedId ? chain : []}
-        traces={selectedId ? traces : []}
-        supplierContext={supplierContext}
         role={role ?? ""}
         token={token}
         now={now}
-        onSupplierCreated={(decisionId) => {
-          if (token) void decisionsQuery.refetch();
-          setSelectedId(decisionId);
-        }}
         onOpenFullPage={(decisionId) => {
           setPopupKeputusanId(null);
           setSelectedId(decisionId);

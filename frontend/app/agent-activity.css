@@ -1,0 +1,916 @@
+/* Panel "Agent Activity" — sembilan tahap pipeline sebagai strip chip
+ * (dokumen `06-agent-log.md`, 28 Okt 2026).
+ *
+ * Aturan yang dijaga:
+ * - Warna SOLID dari token; kedalaman hanya dari --shadow-1/--shadow-inset-soft.
+ * - Chip adalah target sentuh: min 44px tinggi, fokus terlihat, aria-expanded.
+ * - Penanda waktu & "lebih lambat" adalah ikon kecil, bukan teks tambahan:
+ *   strip harus terbaca dalam satu pandangan, rinciannya di panel bawah.
+ * - Banner kejujuran tidak boleh dipadatkan jadi lencana: dua baris teks utuh.
+ */
+
+.agent-activity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-dock);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  min-width: 0;
+}
+
+/* ---------- Kepala ---------- */
+
+.aa-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.aa-head h2 {
+  margin: 0;
+  font-size: var(--fs-5);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.aa-sub {
+  margin: 2px 0 0;
+  font-size: var(--fs-2);
+  line-height: 1.45;
+  color: var(--ink-muted);
+  max-width: 62ch;
+}
+
+/* Konteks keputusan sudah tercetak di pemilih keputusan; di sini hanya untuk
+   pembaca layar, supaya panel tetap bisa dipahami tanpa mengulang teks. */
+.aa-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Banner tiga keadaan trace ---------- */
+
+.aa-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3);
+  border: 1px solid var(--neutral-border);
+  border-left: 3px solid var(--neutral-border);
+  border-radius: var(--radius-control-sm);
+  background: var(--neutral-bg);
+  color: var(--neutral-ink);
+}
+
+.aa-banner-warning {
+  border-color: var(--warn-border);
+  border-left-color: var(--status-warning);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+
+.aa-banner-missing {
+  border-color: var(--warn-border);
+  border-left-color: var(--status-warning);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+
+.aa-banner-present {
+  border-color: var(--line-strong);
+  border-left-color: var(--accent-strong);
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+.aa-banner-label {
+  margin: 0;
+  font-size: var(--fs-3);
+  font-weight: 700;
+}
+
+.aa-banner-sentence {
+  margin: 0;
+  font-size: var(--fs-2);
+  line-height: 1.5;
+}
+
+.aa-link {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 4px 0;
+  margin-top: 2px;
+  align-self: flex-start;
+  font: inherit;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--accent-strong);
+  cursor: pointer;
+  border-radius: var(--radius-control-sm);
+}
+
+.aa-link:hover {
+  text-decoration: underline;
+}
+
+.aa-link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---------- Ringkasan strip ---------- */
+
+.aa-strip-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+
+.aa-summary {
+  margin: 0;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+}
+
+.aa-slow-note {
+  margin: 0;
+  font-size: var(--fs-1);
+  font-weight: 600;
+  color: var(--warn-ink);
+}
+
+/* ---------- Strip sembilan tahap ---------- */
+
+.aa-strip {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.aa-stage-item {
+  display: flex;
+  min-width: 0;
+}
+
+.aa-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface);
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background var(--dur-2) var(--ease-standard),
+    box-shadow var(--dur-2) var(--ease-standard),
+    border-color var(--dur-2) var(--ease-standard);
+}
+
+.aa-stage:hover {
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-1);
+}
+
+.aa-stage:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.aa-stage-open {
+  border-color: var(--accent-strong);
+  box-shadow: var(--shadow-1);
+}
+
+.aa-stage-no {
+  font-size: var(--fs-1);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-subtle);
+  line-height: 1.1;
+}
+
+.aa-stage-code {
+  font-size: var(--fs-2);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aa-stage-state {
+  font-size: var(--fs-1);
+  line-height: 1.2;
+  color: var(--ink-muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Nada keadaan: sisi kiri berwarna, bukan latar penuh — supaya sembilan chip
+   tidak menjadi papan lampu lalu lintas. */
+.aa-stage-safe {
+  border-left: 3px solid var(--status-safe);
+}
+
+.aa-stage-warning {
+  border-left: 3px solid var(--status-warning);
+}
+
+.aa-stage-muted {
+  border-left: 3px solid var(--line-strong);
+}
+
+.aa-stage-safe .aa-stage-state {
+  color: var(--ok-ink);
+}
+
+.aa-stage-warning .aa-stage-state {
+  color: var(--warn-ink);
+}
+
+.aa-stage-marks {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  min-height: 6px;
+}
+
+.aa-mark-time {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent-strong);
+}
+
+.aa-mark-slow {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--status-warning);
+}
+
+/* Baris ACT: satu-satunya tempat asal-usul eksekusi ditulis (dokumen §2.4). */
+.aa-act-line {
+  margin: 0;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+}
+
+.aa-act-line-ledger {
+  font-weight: 600;
+  color: var(--ok-ink);
+}
+
+/* ---------- Legenda strip ---------- */
+
+.aa-strip-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+}
+
+.aa-lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---------- Rincian tahap terpilih ---------- */
+
+.aa-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-inset-soft);
+  min-height: 64px;
+}
+
+.aa-detail-title {
+  margin: 0;
+  font-size: var(--fs-3);
+  color: var(--ink);
+}
+
+.aa-detail-note {
+  margin: 0;
+  font-size: var(--fs-2);
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+.aa-detail-meta {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+}
+
+.aa-provenance {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+}
+
+/* ---------- Layar sempit ---------- */
+
+@media (max-width: 1180px) {
+  .aa-strip {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .aa-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aa-stage {
+    transition: none;
+  }
+}
+
+/* ================================================================== *
+ * Bagian baru (dokumen `06-agent-log.md` §2.5, §2.8–2.9, §4.3)
+ * Tabel keputusan, pencarian, status supervisor, tanya-jawab, kartu agent.
+ * Semua warna solid dari token; tidak ada gradasi, tidak ada rgba mentah.
+ * ================================================================== */
+
+.aa-section-title {
+  margin: 0;
+  font-size: var(--fs-3);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ---------- Pencarian keputusan ---------- */
+
+.aa-search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-dock);
+  background: var(--surface);
+}
+
+.aa-search-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.aa-search-field {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.aa-search-field-sempit {
+  flex: 0 1 220px;
+}
+
+.aa-search-label {
+  font-size: var(--fs-1);
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.aa-search-input,
+.aa-search-select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-2);
+}
+
+.aa-search-input:focus-visible,
+.aa-search-select:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.aa-search-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.aa-search-reset {
+  margin-left: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: var(--fs-1);
+  cursor: pointer;
+}
+
+.aa-search-reset:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.aa-search-note {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+}
+
+/* ---------- Periode ---------- */
+
+.aa-period {
+  flex-wrap: wrap;
+}
+
+/* ---------- Tabel keputusan ---------- */
+
+.aa-table-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.aa-table-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+
+.aa-table-head h3 {
+  margin: 0;
+  font-size: var(--fs-3);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.aa-table-note {
+  margin: 2px 0 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.aa-table-sum {
+  margin: 0;
+  font-size: var(--fs-1);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+
+.aa-table-empty {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-control-sm);
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+}
+
+.aa-table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+}
+
+.aa-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-2);
+}
+
+.aa-table th,
+.aa-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+
+.aa-table th {
+  font-size: var(--fs-1);
+  font-weight: 600;
+  color: var(--ink-muted);
+  background: var(--surface-sunken);
+  white-space: nowrap;
+}
+
+.aa-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.aa-row-selected {
+  background: var(--neutral-bg);
+}
+
+.aa-cell-title {
+  display: block;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.aa-cell-sub {
+  display: block;
+  font-size: var(--fs-1);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-subtle);
+}
+
+.aa-col-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.aa-status {
+  display: inline-block;
+  padding: 1px var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.aa-status-executed {
+  border-color: var(--ok-ink);
+  color: var(--ok-ink);
+}
+
+.aa-status-pending_approval {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+
+.aa-status-rejected {
+  border-color: var(--status-warning);
+  color: var(--status-warning);
+}
+
+.aa-verif {
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+  white-space: nowrap;
+}
+
+.aa-verif-terverifikasi {
+  color: var(--ok-ink);
+}
+
+.aa-verif-ditolak {
+  color: var(--status-warning);
+}
+
+.aa-row-btn {
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-1);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.aa-row-btn:hover {
+  border-color: var(--accent-strong);
+}
+
+.aa-row-btn.is-active {
+  border-color: var(--accent-strong);
+  background: var(--neutral-bg);
+  font-weight: 600;
+}
+
+.aa-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.aa-pager-btn {
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-1);
+  cursor: pointer;
+}
+
+.aa-pager-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---------- Status supervisor ---------- */
+
+.aa-supervisor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-dock);
+  background: var(--surface);
+}
+
+.aa-supervisor-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--fs-2);
+  color: var(--ink);
+}
+
+.aa-supervisor-detail {
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.aa-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--neutral-ink);
+  flex: 0 0 auto;
+}
+
+.aa-tone-safe .aa-dot {
+  background: var(--status-safe);
+}
+
+.aa-tone-warning .aa-dot {
+  background: var(--status-warning);
+}
+
+.aa-tone-danger .aa-dot {
+  background: var(--status-warning);
+}
+
+.aa-tone-neutral .aa-dot {
+  background: var(--neutral-ink);
+}
+
+.aa-tone-safe strong {
+  color: var(--ok-ink);
+}
+
+.aa-tone-warning strong {
+  color: var(--warn-ink);
+}
+
+.aa-tone-danger strong {
+  color: var(--status-warning);
+}
+
+/* ---------- Tanya supervisor ---------- */
+
+.aa-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-dock);
+  background: var(--surface);
+}
+
+.aa-ask-note {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.aa-ask-form {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.aa-ask-field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.aa-ask-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-2);
+}
+
+.aa-ask-btn {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--accent-strong);
+  border-radius: var(--radius-control-sm);
+  background: var(--accent-strong);
+  color: var(--surface);
+  font: inherit;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.aa-ask-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.aa-ask-contoh {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.aa-ask-chip {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: var(--fs-1);
+  cursor: pointer;
+}
+
+.aa-ask-chip:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.aa-ask-error {
+  margin: 0;
+  font-size: var(--fs-2);
+  color: var(--status-warning);
+}
+
+.aa-ask-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface-sunken);
+}
+
+.aa-ask-text {
+  margin: 0;
+  font-size: var(--fs-2);
+  color: var(--ink);
+}
+
+.aa-ask-source {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+}
+
+/* ---------- Kartu agent ---------- */
+
+.aa-agents {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.aa-agent-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.aa-agent-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-dock);
+  background: var(--surface);
+}
+
+.aa-agent-name {
+  margin: 0;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.aa-agent-role {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.aa-agent-work {
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-2);
+  color: var(--ink);
+}
+
+.aa-agent-source {
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+}
+
+/* ---------- Ringkasan status model ---------- */
+
+.aa-run-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.aa-run-note {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.aa-stage {
+  min-height: 44px;
+}
+
+.agent-log-connector {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}

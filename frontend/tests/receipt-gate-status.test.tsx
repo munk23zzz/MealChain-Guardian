@@ -13,7 +13,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import GoodsReceiptDrawer from "../components/GoodsReceiptDrawer";
+import GoodsReceiptDrawer, { GoodsReceiptSheet } from "../components/GoodsReceiptDrawer";
 import {
   canDecideReceipt,
   pendingReceipt,
@@ -55,16 +55,44 @@ function gate(over: Record<string, unknown> = {}, batch: Record<string, unknown>
   };
 }
 
+/**
+ * Panel penerimaan kini berupa DAFTAR baris + POPUP per batch (dokumen 05 §2),
+ * jadi markup statis tidak lagi memuat tombol/keputusan. Helper ini merender
+ * panel DAN isi popup untuk satu batch sekaligus, supaya kontrak lama (tombol
+ * mengikuti server, kode mentah tidak bocor ke layar) tetap terkunci —
+ * `batchId` memilih baris yang popup-nya sedang diuji.
+ */
 function render(summary: unknown, opts: Record<string, unknown> = {}) {
-  return renderToStaticMarkup(
+  const { batchId = "b1", ...sisa } = opts as any;
+  const tampilan = receiptGateView(summary);
+  const baris = tampilan.rows.find((b) => b.batchId === batchId) ?? tampilan.rows[0] ?? null;
+  const receipts =
+    (sisa.receipts as Record<string, any[]> | undefined) ?? {
+      b1: [{ id: "r1", status: "menunggu" }],
+    };
+  const catatan = receipts?.[batchId]?.[0] ?? null;
+  const panel = renderToStaticMarkup(
     <GoodsReceiptDrawer
       summary={summary}
       token="t"
       role="sppg_head"
-      receipts={{ b1: [{ id: "r1", status: "menunggu" }] }}
-      {...(opts as any)}
+      receipts={receipts}
+      {...sisa}
     />
   );
+  const sheet = baris
+    ? renderToStaticMarkup(
+        <GoodsReceiptSheet
+          baris={baris}
+          catatan={catatan}
+          bolehPutuskan={canDecideReceipt((sisa.role as string) ?? "sppg_head")}
+          busy={false}
+          galat={null}
+          pesan={null}
+        />
+      )
+    : "";
+  return panel + sheet;
 }
 
 describe("Fase 9 butir 2 — helper status penerimaan", () => {
@@ -246,11 +274,20 @@ describe("Fase 9 butir 2 — langkah berikutnya per batch", () => {
         next_step: "selesaikan verifikasi verifier",
       },
     };
-    const html = render(summary, { receipts: {} });
-    expect(html).toContain("selesaikan verifikasi verifier");
-    expect(html).toContain("tolak batch — sudah lewat masa layak");
-    expect(html).toContain("sudah lewat masa layak");
-    expect(html).not.toContain("batch_expired");
+    // Panel boleh meringkas semua alasan; yang diuji di sini adalah ISI DRAWER
+    // tiap batch, jadi ambil bagian setelah langkah 1 dimulai.
+    const drawer = (html: string) => html.slice(html.indexOf('data-testid="receipt-step-checklist"'));
+    // Dua batch, dua drawer: masing-masing hanya memakai langkah miliknya.
+    const hold = drawer(render(summary, { receipts: {}, batchId: "b-hold" }));
+    expect(hold).toContain("Langkah berikutnya:</strong> selesaikan verifikasi verifier");
+    expect(hold).not.toContain("sudah lewat masa layak");
+
+    const expired = drawer(render(summary, { receipts: {}, batchId: "b-exp" }));
+    expect(expired).toContain("tolak batch — sudah lewat masa layak");
+    expect(expired).not.toContain("selesaikan verifikasi verifier");
+    // Kode mentah tidak boleh sampai ke layar di kedua drawer.
+    expect(hold).not.toContain("batch_expired");
+    expect(expired).not.toContain("batch_expired");
   });
 
   it("baris siap-terima tanpa langkah sendiri tidak mewarisi langkah agregat", () => {
@@ -288,23 +325,15 @@ describe("Fase 9 butir 2 — langkah berikutnya per batch", () => {
         next_step: "lepas karantina atau tolak batch",
       },
     };
-    const html = render(summary, {
-      receipts: { "b-siap": [{ id: "r1", status: "menunggu" }] },
-    });
-    // Potong per baris batch: baris memuat <ul> alasan (LI bersarang), jadi
-    // pemisah yang benar adalah penanda batch berikutnya, bukan "</li>" pertama.
-    const potong = (id: string) => {
-      const mulai = html.indexOf(`data-batch="${id}"`);
-      const sesudah = html.indexOf('data-batch="', mulai + 1);
-      return html.slice(mulai, sesudah === -1 ? undefined : sesudah);
-    };
-    // Baris siap-terima menampilkan tombolnya, bukan arahan milik baris karantina.
-    const barisSiap = potong("b-siap");
+    const receipts = { "b-siap": [{ id: "r1", status: "menunggu" }] };
+    // Drawer batch siap-terima menampilkan tombolnya, bukan arahan agregat.
+    const barisSiap = render(summary, { receipts, batchId: "b-siap" });
     expect(barisSiap).toContain('data-action="receive"');
     expect(barisSiap).not.toContain("lepas karantina atau tolak batch");
-    // Baris karantina tetap memakai langkah miliknya sendiri.
-    const barisKarantina = potong("b-karantina");
+    // Drawer batch karantina tetap memakai langkah miliknya sendiri.
+    const barisKarantina = render(summary, { receipts, batchId: "b-karantina" });
     expect(barisKarantina).toContain("lepas karantina atau tolak batch");
+    expect(barisKarantina).not.toContain('data-action="receive"');
   });
 });
 

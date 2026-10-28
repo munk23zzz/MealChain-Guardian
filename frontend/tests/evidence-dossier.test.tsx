@@ -95,24 +95,19 @@ describe("dossier keputusan — hierarki teks", () => {
   });
 });
 
-describe("dossier keputusan — jalur persetujuan sebagai stepper", () => {
-  it("empat langkah sejajar dengan garis sambung di belakang penanda", () => {
-    expect(blok(".evidence-route-steps")).toContain("repeat(4, minmax(0, 1fr))");
-    const garis = blok(".evidence-route-step::before");
-    expect(garis).toContain("position: absolute");
-    expect(garis).toContain("background: var(--line)");
-    // Penanda = bulatan; langkah selesai memakai tinta aman.
-    const tanda = blok(".evidence-route-mark");
-    expect(tanda).toContain("border-radius: 50%");
-    expect(tanda).toContain("width: 24px");
-    expect(blok(".evidence-route-done .evidence-route-mark")).toContain("var(--ok-ink)");
-    expect(blok(".evidence-route-current .evidence-route-mark")).toContain("var(--accent-strong)");
+describe("dossier keputusan — stepper 'Jalur persetujuan' sudah dilepas", () => {
+  it("tidak ada satu pun aturan stepper yang tertinggal di stylesheet", () => {
+    // 29 Okt 2026: kartu "Jalur persetujuan" dilepas dari halaman bukti
+    // (persetujuan dijalankan di popup Recommendations), jadi aturan CSS-nya
+    // ikut dicabut. Asersi KETIADAAN ini yang mencegah kelasnya kembali
+    // sebagai CSS yatim kalau komponen lain menyalinnya.
+    expect(css).not.toMatch(/\.evidence-route-(steps|step|mark|body|label|detail)\s*\{/);
+    expect(css).not.toContain(".evidence-route-step::before");
   });
 
-  it("di layar sempit stepper jadi dua kolom tanpa garis sambung", () => {
+  it("tidak ada media query yang masih menyusun stepper dua kolom", () => {
     const media = css.slice(css.indexOf("@media (max-width: 680px)"));
-    expect(media.slice(0, 400)).toMatch(/\.evidence-route-steps \{ grid-template-columns: repeat\(2/);
-    expect(media.slice(0, 400)).toContain(".evidence-route-step::before { content: none; }");
+    expect(media.slice(0, 400)).not.toContain(".evidence-route-steps");
   });
 });
 
@@ -188,9 +183,10 @@ const SELECTED = {
   expires_at: "2026-10-11T02:16:47.973521+00:00",
 };
 
-function render() {
+function render(extra: Record<string, unknown> = {}) {
   return renderToStaticMarkup(
     <DecisionEvidence
+      {...(extra as any)}
       decisions={[{ decision_id: "d1", decision_type: "regional_balance", status: "pending_approval" }] as any}
       selected={SELECTED}
       selectedId="d1"
@@ -210,15 +206,42 @@ describe("dossier keputusan — struktur", () => {
     const html = render();
     // `jump-target` = sasaran nav bagian (scroll-margin-top dari globals.css).
     expect(html).toContain('class="card evidence-hero jump-target" id="ringkasan"');
-    expect(html).toMatch(/<section class="evidence-block jump-target" id="rute">/);
-    expect(html).toMatch(/<section class="evidence-block jump-target" id="bukti">/);
+    // 29 Okt 2026: pembungkus #rute dilepas bersama kartu "Jalur persetujuan".
+    expect(html).not.toContain('id="rute"');
+    expect(html).toMatch(/<section class="evidence-block jump-target" id="bukti"[ >]/);
     expect(html).toContain('class="evidence-block-title">Bukti</h2>');
-    expect(html).toMatch(/<section class="evidence-block evidence-bottom jump-target" id="jejak">/);
+    expect(html).toMatch(/<section class="evidence-block evidence-bottom jump-target" id="jejak"[ >]/);
+  });
+
+  it("menandai empat bagian dossier dengan data-bagian, urut dari kepala ke jejak", () => {
+    const html = render();
+    const urutan = Array.from(html.matchAll(/data-bagian="([a-z]+)"/g)).map((m) => m[1]);
+    expect(urutan).toEqual(["kepala", "keputusan", "bukti", "jejak"]);
+  });
+
+
+  it("bagian jejak hanya memuat PO milik keputusan ini", () => {
+    const html = render({
+      purchaseOrders: {
+        items: [
+          { po_number: "MC-D1", status: "submitted", decision_id: "d1" },
+          { po_number: "MC-LAIN", status: "submitted", decision_id: "d9" },
+        ],
+      },
+    });
+    expect(html).toContain("MC-D1");
+    expect(html).not.toContain("MC-LAIN");
+  });
+
+  it("menulis sebab ketika keputusan ini belum punya PO", () => {
+    const html = render({ purchaseOrders: { items: [{ po_number: "MC-LAIN", decision_id: "d9" }] } });
+    expect(html).toMatch(/belum ada PO untuk keputusan ini/i);
+    expect(html).not.toContain("MC-LAIN");
   });
 
   it("tidak ada id ganda (navigasi menunjuk satu sasaran)", () => {
     const html = render();
-    for (const id of ["ringkasan", "rute", "zona-keputusan", "bukti", "jejak"]) {
+    for (const id of ["ringkasan", "zona-keputusan", "bukti", "jejak"]) {
       expect((html.match(new RegExp(`id="${id}"`, "g")) ?? []).length).toBe(1);
     }
   });

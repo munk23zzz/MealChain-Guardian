@@ -1,11 +1,7 @@
 // TopBar — header global 64px: kiri = peran + nama SPPG + jam; kanan = notifikasi + akun + logout.
 // Brand "MealChain Guardian" dipindah ke sidebar.
 import { useEffect, useRef, useState } from "react";
-import {
-  BellIcon,
-  CloseIcon,
-  RoleIcon,
-} from "./NavIcon";
+import { BellIcon, RoleIcon } from "./NavIcon";
 import {
   ALL_LOCATIONS,
   notifList,
@@ -18,6 +14,7 @@ import { formatKg } from "../lib/overview-format";
 import { formatDateTime } from "../lib/datetime";
 import { DECISION_TYPE_LABELS } from "./RecommendationCard";
 import StatusBadge from "./StatusBadge";
+import TombolTutup from "./TombolTutup";
 
 export type TopBarProps = {
   /** Peran dari JWT (display-only; otorisasi tetap di backend). */
@@ -222,18 +219,15 @@ export default function TopBar({
                       : ""}
                   </p>
                 </div>
-                <button
-                  type="button"
+                <TombolTutup
                   className="top-bar-notif-close"
+                  label="Tutup notifikasi"
+                  title="Tutup"
                   onClick={() => {
                     setNotifOpen(false);
                     bellRef.current?.focus();
                   }}
-                  aria-label="Tutup notifikasi"
-                  title="Tutup"
-                >
-                  <CloseIcon size={16} />
-                </button>
+                />
               </div>
 
               {notifikasi.total === 0 ? (

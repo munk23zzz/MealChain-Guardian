@@ -32,9 +32,11 @@ import {
   evidenceRows,
   evidenceSummary,
   expiryState,
+  FRESHNESS_OPEN,
   incomingBatchId,
   incomingKgForCommodity,
   incomingShipments,
+  lowestFreshness,
   ownLocationRows,
   receiptRows,
   receivingChecks,
@@ -47,7 +49,7 @@ import {
   safetyDecisionSummaryLine,
   safetyDecisions,
   safetyRows,
-  safetyStatusPartition,
+  safetyStatusGroups,
   safetySummaryOfRows,
   quarantineTone,
   sortByDeadline,
@@ -84,6 +86,8 @@ function waktuCatat(iso: string): string {
 import styles from "./FoodSafetyBoard.module.css";
 import { paginate } from "../lib/pagination";
 import { rowNextSteps } from "../lib/safety-gate";
+import { batchesToCsv, safetyBatchFileName, safetyExportJson } from "../lib/safety-export";
+import { downloadText } from "../lib/export";
 
 // Baris batch yang ditampilkan di kartu ringkas; dipakai di slice DAN kalimat
 // "Menampilkan N dari M" supaya keduanya tidak bisa menyimpang (audit angka
@@ -192,6 +196,13 @@ export default function FoodSafetyBoard({
   const [saring, setSaring] = useState<SafetyFilter>("semua");
   const [cari, setCari] = useState("");
   const [halaman, setHalaman] = useState(1);
+  /**
+   * Saringan komoditas untuk daftar "Keputusan keamanan lokasi ini" — diisi dari
+   * baris tabel status (dokumen `07-safety-evidence.md` §4.2 butir 1). `null` =
+   * tidak disaring. Datanya sudah dimuat klien (`GET /decisions` →
+   * `commodity_name`), jadi tidak ada endpoint baru.
+   */
+  const [komoditasKeputusan, setKomoditasKeputusan] = useState<string | null>(null);
   // Dialog alasan karantina: satu batch + satu aksi pada satu waktu.
   const [karantina, setKarantina] = useState<{
     batchId: string;
@@ -238,11 +249,6 @@ export default function FoodSafetyBoard({
       : batches,
   );
   const buktiRingkas = evidenceSummary(bukti);
-  // Sisa partisi status uji: batch yang ditahan padahal ujinya lolos tidak masuk
-  // "Aman" (tidak boleh dialokasikan) dan juga bukan gagal/perlu-verifikasi.
-  // Tanpa tile ini, empat angka tidak menjumlah ke total dan terlihat seperti
-  // data hilang.
-  const sisaStatus = safetyStatusPartition(summary).leftover;
 
   const shipments = incomingShipments(routes, clock);
   const kirimanKe = ownLocation
@@ -274,8 +280,13 @@ export default function FoodSafetyBoard({
       })
     : null;
 
-  const keamanan = safetyDecisions(decisions);
-  const kedaluwarsaJumlah = urut.filter((row) => expiryState(row.hoursLeft).key === "expired").length;
+  const keamanan = safetyDecisions(decisions, komoditasKeputusan);
+  // Komoditas yang punya keputusan keamanan — dipakai tabel status untuk
+  // memasang tautan "lihat keputusan" HANYA pada baris yang tujuannya ada.
+  const komoditasBerKeputusan = keamanan.commodities;
+  // Kesegaran: tiga terendah terbuka, sisanya di lipatan (butir 3). Tabel status
+  // di bawah tetap menampilkan SEMUA baris tanpa lipatan — tidak ada yang hilang.
+  const kesegaran = lowestFreshness(urut, FRESHNESS_OPEN);
 
   // Batch yang jadi sasaran "Penerimaan barang": SELALU milik dapur sendiri
   // (audit 20 Okt 2026 — cakupan tabel tidak boleh ikut menentukan, sebab batch
@@ -640,6 +651,39 @@ export default function FoodSafetyBoard({
     return cocok ? cocok.supplierName : "Stok sendiri";
   }
 
+  /**
+   * Lompat dari baris postur ke gerbang keputusan komoditas itu (butir 1).
+   *
+   * Tidak ada data baru yang diambil: penyaringnya bekerja pada `decisions` yang
+   * sudah dimuat. Kalau komoditas itu tidak punya keputusan keamanan, saringannya
+   * tetap dipasang dan daftar menulis apa adanya ("belum ada keputusan") — lebih
+   * jujur daripada tombol yang tidak melakukan apa pun.
+   */
+  function saringKeputusanKomoditas(komoditas: string | null) {
+    setKomoditasKeputusan(komoditas);
+    document
+      .getElementById("safety-keputusan")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  /**
+   * Ekspor baca-saja (butir 6): isinya baris yang SEDANG tampil setelah saringan
+   * bilah alat (`tersaring`), bukan seluruh batch yang dimuat — berkas harus bisa
+   * dicocokkan baris per baris dengan tabel di layar.
+   */
+  function eksporBatch(format: "csv" | "json") {
+    const nama = safetyBatchFileName(format);
+    if (format === "csv") {
+      downloadText(nama, batchesToCsv(tersaring), "text/csv;charset=utf-8");
+      return;
+    }
+    downloadText(
+      nama,
+      safetyExportJson({ rows: tersaring, summary, decisions: keamanan }),
+      "application/json;charset=utf-8"
+    );
+  }
+
   // Nav "lompat ke bagian": tujuan dibangun dari kondisi render yang SAMA dengan
   // bagiannya, supaya tidak ada tautan yang menunjuk bagian yang tidak dirender.
   // - "Penerimaan barang" hanya untuk peran dengan SPPG sendiri, dan baru muncul
@@ -660,72 +704,33 @@ export default function FoodSafetyBoard({
   const labelBand =
     nadaBand === "danger" ? "Ada batch gagal" : nadaBand === "warn" ? "Perlu verifikasi" : "Semua aman";
 
-  // Empat tile partisi status uji (menjumlah ke `summary.total`) + penanda
-  // tambahan. Bentuk ringkas 27 Okt 2026: penanda tidak lagi jadi baris tile
-  // sendiri-sendiri — satu baris chip, karena penanda bukan bagian partisi.
-  const tileUji: { key: string; label: string; value: string; tone: "ok" | "warn" | "danger" | "muted" }[] = [
-    { key: "aman", label: "Aman", value: loading && !batches ? "…" : String(summary.safe), tone: "ok" },
-    { key: "gagal", label: "Gagal uji", value: String(summary.failed), tone: summary.failed ? "danger" : "muted" },
-    {
-      key: "verifikasi",
-      label: "Perlu verifikasi",
-      value: String(summary.needsVerification),
-      tone: summary.needsVerification ? "warn" : "muted",
-    },
-    {
-      key: "belum",
-      label: "Belum diuji",
-      value: String(summary.unchecked),
-      // Netral, bukan kuning: "belum diuji" bukan peringatan yang sama dengan
-      // "perlu verifikasi". Kalau keduanya kuning, dua segmen bar yang berdampingan
-      // menyatu dan terbaca sebagai satu kategori.
-      tone: "muted",
-    },
-  ];
-  // Penanda = kondisi tambahan yang PERLU DITINDAK. Yang nilainya nol tidak
-  // ditampilkan: hintnya berbunyi "tidak boleh dialokasikan" dan terbaca sebagai
-  // tuntutan tindakan padahal tidak ada batch yang terkena.
-  const penandaSemua: { key: string; label: string; value: string; tone: string; hint: string }[] = [
-    {
-      key: "ditahan",
-      label: "Ditahan (karantina)",
-      value: String(summary.quarantined),
-      tone: summary.quarantined ? "danger" : "muted",
-      hint:
-        summary.quarantinedKg === null
-          ? "tidak boleh dialokasikan"
-          : `${formatKg(summary.quarantinedKg)} tidak boleh dialokasikan`,
-    },
-    ...(ownLocation
-      ? [
-          {
-            key: "kedaluwarsa",
-            label: "Kedaluwarsa",
-            value: String(kedaluwarsaJumlah),
-            tone: kedaluwarsaJumlah ? "warn" : "muted",
-            hint: "lewat masa layak",
-          },
-        ]
-      : []),
-    ...(sisaStatus > 0
-      ? [
-          {
-            key: "lain",
-            label: "Status lain",
-            value: String(sisaStatus),
-            tone: "warn",
-            hint: "ditahan walau uji lolos",
-          },
-        ]
-      : []),
-  ];
+  // LIMA kelompok EKSKLUSIF (aman, gagal, perlu verifikasi, belum diuji,
+  // ditahan) — jumlahnya selalu = batch yang diperiksa.
+  //
+  // Mengapa berubah (29 Okt 2026, "desain begitu masih sulit dipahami"):
+  // versi lama memakai empat angka yang TIDAK menjumlah ke total (batch
+  // karantina tidak masuk "aman" tetapi tetap dihitung "gagal" bila ujinya
+  // gagal), lalu menambal selisihnya dengan bar komposisi, persentase per
+  // angka, titik warna, dan lipatan "Cara membaca angka ini". Tiga pengkodean
+  // untuk satu himpunan data, dan tetap ada angka yang tidak cocok. Sekarang:
+  // satu angka satu kelompok, tanpa persentase, tanpa bar, tanpa legenda.
+  // `tampil` = baris sesuai CAKUPAN terpilih (lokasi sendiri / jaringan),
+  // sama dengan yang dipakai tabel status dan `summary`.
+  const grupStatus = safetyStatusGroups(tampil);
+  const tileUji = grupStatus.map((grup) => ({
+    key: grup.key,
+    label: grup.label,
+    value: loading && !batches && grup.key === "aman" ? "…" : String(grup.value),
+    // Nol tidak diberi warna: angka 0 yang merah/kuning terbaca sebagai
+    // peringatan padahal tidak ada yang perlu dikerjakan.
+    tone: grup.value > 0 ? grup.tone : ("muted" as const),
+  }));
 
-  const penanda = penandaSemua.filter((item) => Number(item.value) > 0);
-
+  // Satu kalimat keterangan untuk pembaca layar: lima angka + total.
   const ringkasUji =
     `${summary.total} batch diperiksa: ` +
-    `${summary.safe} aman, ${summary.failed} gagal uji, ` +
-    `${summary.needsVerification} perlu verifikasi, ${summary.unchecked} belum diuji.`;
+    grupStatus.map((grup) => `${grup.value} ${grup.label.toLowerCase()}`).join(", ") +
+    ".";
 
   const bagianNav = safetySections({
     ownLocation: adaPenerimaan,
@@ -785,88 +790,70 @@ export default function FoodSafetyBoard({
                   : "Tinjau batch perlu tindakan"}
               </button>
             ) : null}
-            <span className={`board-badge board-badge-${nadaBand}`}>{labelBand}</span>
           </span>
         </div>
-        {/* Fase 5: tiga keadaan yang paling sering ditanya jadi tile angka besar
-            dengan tint status; sisanya tetap daftar fakta supaya tidak ada angka
-            yang kehilangan keterangan. Fase 11: angkanya mengikuti CAKUPAN yang
-            dipilih (lokasi sendiri / jaringan), bukan campuran keduanya. */}
-        {/* Angka partisi status uji + satu bar komposisi. Bentuk ini sudah
-            melalui tiga putaran: tiga baris tile (405 px) → empat kotak ringkas
-            (289 px) → satu baris angka + bar komposisi. */}
-        {/* Susunan Swiss/minimal (putaran ketiga): empat angka duduk di satu
-            baris angka dengan pemisah rambut, lalu SATU bar komposisi yang
-            menunjukkan porsi keempatnya. Kotak per angka dibuang — empat kotak
-            bertepi untuk empat bilangan kecil hanya menambah garis tanpa
-            menambah makna. Bar komposisi memakai warna yang sama dengan meter
-            di kartu "Bukti suhu" di bawah, jadi satu bahasa data di halaman. */}
-        {/* Strip data: satu panel netral (bukan bidang berwarna) yang memuat
-            angka, bar porsi, dan penanda. Dulu ketiganya mengalir langsung di
-            kartu sehingga jarak antar-blok terasa longgar dan tidak ada titik
-            fokus; sekarang angkanya duduk di satu permukaan yang jelas. */}
-        <div className="safety-strip">
-        <div className="safety-figures" role="list">
+
+        {/* Putusan: satu titik status + satu kalimat, TANPA bidang merah selebar
+            kartu (29 Okt 2026). Bidang penuh membuat hari yang punya satu batch
+            gagal terasa seperti halaman galat, dan ia menenggelamkan lima angka
+            di bawahnya. Lencana "Ada batch gagal" juga dilepas: kalimat ini
+            sudah menyebut kejadiannya, badge hanya mengulang. */}
+        <p className={`safety-verdict is-${nadaBand}`} title={labelBand}>
+          <span className="safety-verdict-dot" aria-hidden="true" />
+          <span>
+            {summary.hasFail ? (
+              ownLocation && !jaringan ? (
+                <>
+                  Batch gagal uji di lokasi ini: {summary.failedLocations.join(", ")} — alokasi
+                  hanya boleh memakai batch berstatus aman.
+                </>
+              ) : (
+                <>
+                  Batch gagal uji: {summary.failedLocations.join(", ")} — alokasi hanya boleh
+                  memakai batch berstatus aman.
+                </>
+              )
+            ) : summaryJaringan.hasFail ? (
+              <>
+                Batch gagal uji di jaringan: {summaryJaringan.failedLocations.join(", ")} — bukan
+                stok lokasi ini, jadi tidak memengaruhi alokasi Anda.
+              </>
+            ) : (
+              <>Tidak ada batch gagal uji pada data yang termuat saat ini.</>
+            )}
+          </span>
+        </p>
+
+        {/* Lima angka, satu arti per angka. Kelompoknya eksklusif sehingga
+            jumlahnya selalu = batch diperiksa; tidak ada bar, persentase, atau
+            legenda. Pemisah vertikal menggantikan kotak per angka. */}
+        <div className="safety-counts" role="list" aria-label={ringkasUji}>
           {tileUji.map((tile) => (
-            <div key={tile.key} className={`safety-figure is-${tile.tone}`} role="listitem">
-              <span className="safety-figure-value">{tile.value}</span>
-              <span
-                className="safety-figure-label"
-                title={`${tile.label}: ${tile.value} dari ${summary.total} batch diperiksa`}
-              >
-                {tile.label}
-                {/* Persentase ikut label: panduan grafik skill menuntut tiap
-                    kategori berlabel DAN berpersentase, karena warna saja tidak
-                    cukup (Color Only). */}
-                <span className="safety-figure-pct">
-                  {summary.total > 0
-                    ? `${Math.round((Number(tile.value) / summary.total) * 100)}%`
-                    : "—"}
+            <div key={tile.key} className={`safety-count is-${tile.tone}`} role="listitem">
+              <span className="safety-count-value">{tile.value}</span>
+              <span className="safety-count-label">{tile.label}</span>
+              {tile.key === "ditahan" && summary.quarantined > 0 ? (
+                <span
+                  className="safety-count-note"
+                  title={
+                    summary.quarantinedKg === null
+                      ? "Berat tidak tercatat: tidak boleh dialokasikan"
+                      : `${formatKg(summary.quarantinedKg)} tidak boleh dialokasikan`
+                  }
+                >
+                  {summary.quarantinedKg === null
+                    ? "berat tidak tercatat"
+                    : formatKg(summary.quarantinedKg)}
                 </span>
-              </span>
+              ) : null}
             </div>
           ))}
         </div>
 
-        <div className="safety-ratio" role="img" aria-label={ringkasUji}>
-          {tileUji
-            .filter((tile) => Number(tile.value) > 0)
-            .map((tile) => (
-              <span
-                key={tile.key}
-                className="safety-ratio-part"
-                data-tone={tile.tone}
-                style={{ flexGrow: Number(tile.value) }}
-              />
-            ))}
-        </div>
-
-        {/* Penanda = kondisi tambahan, BUKAN bagian partisi di atas (satu batch
-            bisa gagal uji sekaligus ditahan). Baris ini juga menampung tautan
-            legenda di ujung kanan, sehingga tidak ada sisa ruang kosong di
-            kanan baris teks. */}
-        <div className="safety-meta-row">
-          {penanda.length ? (
-          <ul className="safety-markers">
-            <li className="safety-markers-lead">Penanda</li>
-            {penanda.map((item) => (
-              <li key={item.key} className={`safety-marker is-${item.tone}`} title={item.hint}>
-                <span className="safety-marker-dot" aria-hidden="true" />
-                <span className="safety-marker-label">
-                  {item.label} <strong className="safety-marker-value">{item.value}</strong>
-                </span>
-                <span className="safety-marker-hint">{item.hint}</span>
-              </li>
-            ))}
-          </ul>
-          ) : null}
-        </div>
-        </div>
-
-        {/* Satu baris kaki: lipatan rincian di kiri, penjelasan cara baca di
-            kanan. Dulu legenda menggantung sendirian di barisnya sendiri dengan
-            separuh baris kosong di kirinya. */}
-        <div className="safety-foot">
+        <div className="safety-counts-foot">
+          <span className="safety-counts-total">
+            {summary.total > 0 ? `dari ${summary.total} batch` : "belum ada batch"}
+          </span>
           <details className="safety-more">
             <summary>Rincian angka</summary>
             <FactList
@@ -890,37 +877,7 @@ export default function FoodSafetyBoard({
               ]}
             />
           </details>
-          <details className="safety-legend">
-            <summary>Cara membaca angka ini</summary>
-            <p className="stat-tiles-legend">
-              Angka status uji di atas menjumlah ke <strong>{summary.total} batch</strong> yang diperiksa.
-              Penanda menandai kondisi tambahan yang bisa terjadi bersamaan dengan status uji.
-            </p>
-          </details>
         </div>
-
-        {summary.hasFail ? (
-          ownLocation && !jaringan ? (
-            <p className="board-alert">
-              Batch gagal uji di lokasi ini: {summary.failedLocations.join(", ")} — alokasi hanya boleh
-              memakai batch berstatus aman.
-            </p>
-          ) : (
-            <p className="board-alert">
-              Batch gagal uji: {summary.failedLocations.join(", ")} — alokasi hanya boleh memakai batch
-              berstatus aman.
-            </p>
-          )
-        ) : summaryJaringan.hasFail ? (
-          <p className="evidence-note">
-            Batch gagal uji di jaringan: {summaryJaringan.failedLocations.join(", ")} — bukan stok lokasi ini,
-            jadi tidak memengaruhi alokasi Anda.
-          </p>
-        ) : (
-          <p className="evidence-note">
-            Tidak ada batch gagal uji pada data yang termuat saat ini.
-          </p>
-        )}
       </article>
 
       <div className="board-grid safety-grid-evidence">
@@ -956,6 +913,62 @@ export default function FoodSafetyBoard({
                   );
                 })}
             </ul>
+          )}
+        </article>
+
+        {/* Rincian kesegaran (dokumen `07-safety-evidence.md` §4.2 butir 3):
+            tiga skor terendah duduk TERBUKA, sisanya di satu lipatan. Tabel
+            "Status keamanan per batch" di bawah tetap menampilkan SEMUA baris
+            tanpa lipatan — ringkasan ini alat pindai, bukan pengganti tabel. */}
+        <article className="card" id="safety-segar">
+          <div className="board-card-head">
+            <h2>Kesegaran terendah</h2>
+            <span className="board-badge board-badge-muted">{FRESHNESS_OPEN} terendah</span>
+          </div>
+          {urut.length === 0 ? (
+            <p className="evidence-note">Belum ada batch pada cakupan Anda.</p>
+          ) : kesegaran.open.length === 0 ? (
+            <p className="evidence-note">
+              Tidak ada batch yang punya skor kesegaran pada data ini — skor kosong ditulis “—” dan
+              tidak pernah dibaca sebagai 0.
+            </p>
+          ) : (
+            <>
+              <ul className="board-list">
+                {kesegaran.open.map((row) => (
+                  <li key={`segar-${row.id ?? `${row.location}-${row.commodity}`}`}>
+                    <span className="board-list-title">
+                      {kodeWilayah(row.location)} · {row.commodity}
+                    </span>
+                    <span className="board-list-meta">
+                      Skor segar {row.freshness} · layak {row.usableUntil}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {kesegaran.rest.length > 0 ? (
+                <details className="safety-more">
+                  <summary>{kesegaran.rest.length} batch lain</summary>
+                  <ul className="board-list">
+                    {kesegaran.rest.map((row) => (
+                      <li key={`segar-sisa-${row.id ?? `${row.location}-${row.commodity}`}`}>
+                        <span className="board-list-title">
+                          {kodeWilayah(row.location)} · {row.commodity}
+                        </span>
+                        <span className="board-list-meta">
+                          Skor segar {row.freshness} · layak {row.usableUntil}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+              <p className="evidence-note">
+                Skor kosong ditulis “—” dan tidak pernah dibaca sebagai 0. Dihitung dari {urut.length}{" "}
+                batch yang termuat (server mengirim maksimum 500 baris terbaru) — bukan seluruh
+                riwayat.
+              </p>
+            </>
           )}
         </article>
       </div>
@@ -1354,6 +1367,10 @@ export default function FoodSafetyBoard({
       <article className="card jump-target" id="safety-batch">
         <div className="board-card-head">
           <h2>Status keamanan per batch</h2>
+          {/* Ekspor baca-saja (dokumen `07-safety-evidence.md` §4.2 butir 6):
+              isinya baris yang SEDANG tampil setelah saringan, memakai pola
+              `lib/export.ts` + `downloadText` yang sudah dipakai dossier.
+              Tidak ada tombol tulis di sini — safety adalah gerbang. */}
           {ownLocation ? (
             <div className="safety-scope" role="group" aria-label="Cakupan lokasi">
               <span className="commodity-filters-label">Cakupan:</span>
@@ -1375,6 +1392,14 @@ export default function FoodSafetyBoard({
               </button>
             </div>
           ) : null}
+          <span className="safety-head-right">
+            <button type="button" className="button button-secondary" onClick={() => eksporBatch("csv")}>
+              Ekspor CSV
+            </button>
+            <button type="button" className="button button-secondary" onClick={() => eksporBatch("json")}>
+              Ekspor JSON
+            </button>
+          </span>
         </div>
         <div className="safety-toolbar" id="safety-daftar">
           <div className="safety-filter" role="group" aria-label="Saring batch menurut keadaan">
@@ -1415,6 +1440,14 @@ export default function FoodSafetyBoard({
             />
           </label>
         </div>
+        {/* Keterangan cakupan (butir 5): dua kontrol berdekatan menyaring DUA
+            kumpulan data berbeda — saringan di bilah ini hanya menyentuh tabel
+            batch, sedangkan daftar keputusan keamanan punya saringannya sendiri
+            di bagian bawah. Satu baris, bukan legenda. */}
+        <p className="evidence-note">
+          Cakupan, saringan keadaan, dan pencarian hanya menyaring daftar batch di bawah; daftar
+          keputusan keamanan punya saringan komoditas sendiri di bagian bawah halaman.
+        </p>
         {tersaring.length === 0 ? (
           <p className="evidence-note">
             {loading ? (
@@ -1453,7 +1486,27 @@ export default function FoodSafetyBoard({
                         <td data-label={ownLocation && !jaringan ? "Asal" : "Lokasi"}>
                           {ownLocation && !jaringan ? asal(row) : kodeWilayah(row.location)}
                         </td>
-                        <td data-label="Komoditas">{row.commodity}</td>
+                        <td data-label="Komoditas">
+                          {/* Butir 1: komoditas yang punya keputusan keamanan
+                              menjadi tautan ke gerbang di bawah. Komoditas tanpa
+                              keputusan tetap teks biasa — tidak ada tautan yang
+                              menjanjikan tujuan kosong. */}
+                          {komoditasBerKeputusan.some(
+                            (nama) => nama.toLowerCase() === row.commodity.trim().toLowerCase()
+                          ) ? (
+                            <button
+                              type="button"
+                              className="board-link"
+                              aria-label={`Lihat keputusan keamanan ${row.commodity}`}
+                              title={`Saring keputusan keamanan ke komoditas ${row.commodity}`}
+                              onClick={() => saringKeputusanKomoditas(row.commodity)}
+                            >
+                              {row.commodity}
+                            </button>
+                          ) : (
+                            row.commodity
+                          )}
+                        </td>
                         <td className="num" data-label="Jumlah">
                           {row.kg === null ? "—" : formatKg(row.kg)}
                         </td>
@@ -1627,7 +1680,7 @@ export default function FoodSafetyBoard({
               value={alasanKarantina}
               onChange={(event) => setAlasanKarantina(event.target.value)}
               rows={3}
-              placeholder="mis. log suhu menunjukkan excursion 12 menit, menunggu cek fisik"
+              placeholder="mis. log suhu menunjukkan suhu di luar rentang 12 menit, menunggu cek fisik"
             />
           </label>
           {karantinaGalat ? <p className="board-alert">{karantinaGalat}</p> : null}
@@ -1661,9 +1714,40 @@ export default function FoodSafetyBoard({
               </button>
             ) : null}
           </div>
+          {/* Saringan komoditas gerbang (butir 1). Pilihannya dibangun dari
+              komoditas yang benar-benar ada di data keputusan, jadi tidak ada
+              tombol yang menyaring ke himpunan yang tidak pernah ada. */}
+          {keamanan.commodities.length > 0 ? (
+            <div className="safety-filter" role="group" aria-label="Saring keputusan menurut komoditas">
+              <button
+                type="button"
+                className={`commodity-pill${komoditasKeputusan === null ? " commodity-pill-active" : ""}`}
+                aria-pressed={komoditasKeputusan === null}
+                onClick={() => saringKeputusanKomoditas(null)}
+              >
+                Semua komoditas
+              </button>
+              {keamanan.commodities.map((nama) => {
+                const aktif = (keamanan.filteredCommodity ?? "").toLowerCase() === nama.toLowerCase();
+                return (
+                  <button
+                    key={nama}
+                    type="button"
+                    className={`commodity-pill${aktif ? " commodity-pill-active" : ""}`}
+                    aria-pressed={aktif}
+                    onClick={() => setKomoditasKeputusan(nama)}
+                  >
+                    {nama}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
           {keamanan.total === 0 ? (
             <p className="evidence-note">
-              Belum ada keputusan keamanan untuk lokasi ini pada data yang termuat.
+              {keamanan.filteredCommodity
+                ? `Tidak ada keputusan keamanan komoditas ${keamanan.filteredCommodity} untuk lokasi ini pada data yang termuat.`
+                : "Belum ada keputusan keamanan untuk lokasi ini pada data yang termuat."}
             </p>
           ) : (
             <>

@@ -125,10 +125,48 @@ describe("TemperatureEvidenceCard", () => {
     expect(html).not.toContain("Bukti cukup");
   });
 
-  it("meneruskan alasan server sebagai kalimat, bukan diringkas ulang", () => {
-    const html = render([baris({ reasons: ["excursion 660.000 menit >= ambang fail 30.0 menit"] })]);
-    expect(html).toContain("Alasan server:");
-    // React meng-escape `>` jadi `&gt;`; yang diuji isinya diteruskan utuh.
-    expect(html).toContain("excursion 660.000 menit &gt;= ambang fail 30.0 menit");
+  it("profil suhu yang sama untuk semua baris dicetak SEKALI, bukan diulang tiap baris", () => {
+    // Permintaan pemilik 28 Okt 2026: enam baris yang mengulang kalimat profil
+    // yang sama menutupi hal yang memang beda antar-baris (asal log, sampel,
+    // alasan server). Kontrak: kalimat sifat profil muncul tepat sekali.
+    const html = render([
+      baris({ id: "p1", commodity: "telur" }),
+      baris({ id: "p2", commodity: "ayam" }),
+    ]);
+    expect((html.match(/simulasi, bukan standar regulasi/g) ?? []).length).toBe(1);
+    expect(html).toContain("Profil suhu berlaku untuk semua batch di atas");
+  });
+
+  it("kalau profilnya TIDAK seragam, tiap baris tetap menyebut miliknya sendiri", () => {
+    const html = render([
+      baris({ id: "q1", commodity: "telur" }),
+      baris({
+        id: "q2",
+        commodity: "beras",
+        profileVersion: null,
+        policyKind: null,
+        state: "unknown",
+        stateLabel: "Tidak tercatat",
+        tone: "muted",
+        sufficient: false,
+      }),
+    ]);
+    expect(html).not.toContain("Profil suhu berlaku untuk semua batch di atas");
+    expect(html).toContain("Profil sim-2026-10-27.v1 — simulasi, bukan standar regulasi");
+    expect(html).toContain("belum punya profil suhu — tidak dinilai");
+  });
+
+  it("meneruskan alasan evaluasi sebagai kalimat, bukan diringkas ulang", () => {
+    const html = render([
+      baris({
+        reasons: ["suhu di luar rentang selama 660 menit, melewati ambang gagal 30 menit"],
+      }),
+    ]);
+    // Label kartu menyebut "Alasan", bukan "Alasan server": pembaca tidak perlu
+    // tahu bagian sistem mana yang menghitungnya.
+    expect(html).toContain("Alasan:");
+    expect(html).not.toContain("Alasan server");
+    // Kalimat server diteruskan utuh, tidak dipotong/diparafrase kartu.
+    expect(html).toContain("suhu di luar rentang selama 660 menit, melewati ambang gagal 30 menit");
   });
 });

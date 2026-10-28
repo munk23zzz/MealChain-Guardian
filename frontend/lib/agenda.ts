@@ -194,7 +194,7 @@ const STATUS_LABELS: Record<string, string> = {
   approved: "disetujui",
   executed: "dieksekusi",
   rejected: "ditolak",
-  review_only: "tinjauan (review-only)",
+  review_only: "temuan tinjauan",
   expired: "kedaluwarsa",
 };
 

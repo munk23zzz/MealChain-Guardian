@@ -7,7 +7,13 @@
 
 import type { ReactNode } from "react";
 import { formatIDR } from "../lib/auth";
-import { executionTargetLabel, roleList, safetyLabel, statusLabel } from "../lib/bahasa";
+import {
+  executionTargetLabel,
+  humanizeBlocker,
+  roleList,
+  safetyLabel,
+  statusLabel,
+} from "../lib/bahasa";
 import { batchGateView } from "../lib/safety-gate";
 
 function Show({ value }: { value: any }) {
@@ -64,12 +70,15 @@ function BlockerIcon() {
 export default function ApprovalModal({
   summary,
   onConfirm,
+  dalamPanel = false,
   onCancel,
   showActions = true,
   busy = false,
 }: {
   summary: any;
   onConfirm?: () => void;
+  /** Panel inline di popup: tidak perlu tombol "Batal" kedua. */
+  dalamPanel?: boolean;
   onCancel?: () => void;
   /** false → tanpa tombol Setuju (mis. bgn_monitor, atau status `rejected`). */
   showActions?: boolean;
@@ -87,10 +96,6 @@ export default function ApprovalModal({
   const state = summary.approval_state ?? {};
   const safety = summary.safety ?? {};
   const verdict = summary.verifier?.verdict ?? null;
-  const missingRoles = (state.missing ?? [])
-    .flat()
-    .filter((r: string, i: number, a: string[]) => a.indexOf(r) === i)
-    .join(" + ");
   // MG/phase-04 poin 7: `blocking_reasons` kini membawa KODE stabil
   // (`safety_pending`, `quarantined`, `temperature_evidence_incomplete`, …).
   // Menampilkannya mentah membuat layar berbicara bahasa API. `batchGateView`
@@ -106,7 +111,6 @@ export default function ApprovalModal({
   // keputusan yang approval-nya sudah tercatat sejak seed → 409
   // "approval sudah tercatat" yang terbaca seperti tombol rusak.
   const alreadyApproved = summary.approved_by_me === true;
-  const nextRole = missingRoles ? missingRoles : "";
   // `can_execute` dulu dihitung di sini lalu TIDAK pernah dipakai, sementara
   // tombol Eksekusi di ApprovalMenu tetap ditawarkan dan klik-nya berakhir 409.
   // Pagar eksekusi kini di komponen yang memegang tombolnya
@@ -119,6 +123,27 @@ export default function ApprovalModal({
   // (uuid, kode peran, `MOCK`, detik) diterjemahkan lebih dulu.
   const peranWajib = roleList((req.required_roles ?? []).flat());
   const peranBelum = roleList((state.missing ?? []).flat());
+  // Satu peran bisa muncul lebih dari sekali (grup syarat berbeda); di layar
+  // pengulangan itu terbaca seperti dua orang berbeda.
+  const peranBelumUnik = Array.from(new Set(peranBelum));
+  // Nada kotak penahan: merah hanya untuk alasan yang FINAL atau kegagalan.
+  // "Persetujuan belum lengkap" adalah keadaan normal yang sedang berjalan —
+  // mengecatnya merah membuat penyetuju mengira sistemnya bermasalah.
+  // Tanda kurung dibuang dulu: kode server "approval belum memenuhi requirement
+  // (missing/rejected)" memuat kata "rejected" padahal artinya BELUM lengkap,
+  // bukan ditolak.
+  // Peran yang ditunggu hanya relevan bila ANTIREANNYA persetujuan. Kalau
+  // keputusan tertahan karena safety, daftar peran di bawahnya cuma bising.
+  const tungguPeran = gate.reasons.some((alasan: string) =>
+    /approval belum memenuhi requirement/i.test(alasan)
+  );
+  const nadaPenahan = gate.reasons.some((alasan: string) =>
+    /ditolak|kedaluwarsa|expired|gagal|fail|quarantin|tidak aman/i.test(
+      alasan.replace(/\(.*?\)/g, "")
+    )
+  )
+    ? "danger"
+    : "warn";
   const sudahTercatat = Array.isArray(state.approved_roles) ? state.approved_roles.length : 0;
   const butuh = Number(req.min_approvals ?? peranWajib.length) || peranWajib.length;
   const sisaDetik = Number(summary.expiry?.seconds_remaining ?? NaN);
@@ -128,9 +153,9 @@ export default function ApprovalModal({
       ? `Masih ${durasiManusia(sisaDetik)}`
       : "Belum tercatat";
   const jalurEksekusi = administrative
-    ? "Tindakan administratif lokal - tidak menerbitkan PO"
+    ? "Tindakan administratif lokal — tidak menerbitkan PO"
     : summary.execution_target
-      ? `${executionTargetLabel(summary.execution_target)} - PO simulasi, bukan PO SAP sungguhan`
+      ? `${executionTargetLabel(summary.execution_target)} — PO simulasi, bukan PO SAP sungguhan`
       : "Belum tercatat";
   return (
     // Sejak 14 Okt 2026 komponen ini SELALU hidup di dalam Popup (yang memegang
@@ -147,6 +172,10 @@ export default function ApprovalModal({
         </p>
       </header>
 
+      {/* Empat bagian disusun 2×2 (`.approval-isi-grid`) supaya penyetuju bisa
+          memindai Isi/Pemeriksaan/Persetujuan/Setelah disetujui tanpa
+          menggulir satu kolom panjang. Isi tiap bagian tidak berubah. */}
+      <div className="approval-isi-grid">
       {/* 1. Apa yang diputuskan */}
       <section className="approval-bagian">
         <h4 className="approval-bagian-h">Isi keputusan</h4>
@@ -219,12 +248,20 @@ export default function ApprovalModal({
             <Show value={safetyLabel(safety.worst_status)} />
             {safety.blocked ? " — dikecualikan, gagal pemeriksaan" : ""}
           </Fact>
-          <Fact label="Hasil verifier">
-            {verdictManusia(verdict)}
-            {summary.verifier?.verified_by ? (
-              <span className="approval-fact-note"> · oleh agen verifier</span>
-            ) : null}
-          </Fact>
+          {/* 29 Okt 2026: baris verdict hanya dicetak bila verdict-nya berbicara.
+              "Konsisten" adalah keadaan normal setiap keputusan yang lolos
+              verifier, jadi ia mengulang hal yang sama di setiap panel dan
+              mendorong "Masa berlaku" + tombol Setuju ke bawah. Temuan
+              ("Ditandai perlu diperiksa") dan "Belum tersedia" tetap dicetak —
+              itu yang mengubah keputusan penyetuju. */}
+          {verdict !== "consistent" ? (
+            <Fact label="Hasil verifier">
+              {verdictManusia(verdict)}
+              {summary.verifier?.verified_by ? (
+                <span className="approval-fact-note"> · oleh agen verifikator</span>
+              ) : null}
+            </Fact>
+          ) : null}
           <Fact label="Masa berlaku">{berlaku}</Fact>
         </dl>
       </section>
@@ -235,7 +272,7 @@ export default function ApprovalModal({
         <dl className="approval-grid">
           <Fact label="Dibutuhkan">{butuh} persetujuan</Fact>
           <Fact label="Peran">{peranWajib.join(" + ") || "belum tercatat"}</Fact>
-          <Fact label="Sudah tercatat">
+          <Fact label="Tercatat">
             {sudahTercatat} dari {butuh}
             {/* Daftar peran hanya diulang bila sebagian sudah setuju; saat masih
                 nol, baris "Peran" di atas sudah menyebut semuanya. */}
@@ -254,25 +291,39 @@ export default function ApprovalModal({
         </dl>
       </section>
 
+      </div>{/* /approval-isi-grid */}
+
       {gate.reasons.length > 0 && (
-        <div className="approval-modal-blockers">
-          <p className="approval-modal-blockers-title">Tertahan</p>
-          <ul>
-            {gate.reasons.map((reason: string) => (
-              <li key={reason}>
-                <BlockerIcon />
-                <span>{alasanTertahan(reason)}</span>
-              </li>
-            ))}
-          </ul>
-          {/* MG/phase-04 poin 7: "tertahan" saja tidak cukup — penyetuju harus
-              tahu langkah berikutnya (uji keamanan, selesaikan verifikasi,
-              lepas karantina). Satu kalimat, dari peta kode yang sama. */}
-          {gate.nextStep ? (
-            <p className="approval-modal-blockers-next">
-              <strong>Langkah berikutnya:</strong> {gate.nextStep}
-            </p>
-          ) : null}
+        // 29 Okt 2026 (laporan pemilik): "Belum bisa dieksekusi" + satu kalimat
+        // panjang yang menumpuk nama peran di dalam tanda baca terbaca padat.
+        // Susunannya kini: ikon + judul (satu baris), sebab sebagai daftar
+        // pendek, lalu peran yang ditunggu sebagai chip yang bisa dipindai —
+        // bukan terselip di tengah kalimat.
+        <div className="approval-modal-blockers" data-tone={nadaPenahan} role="note">
+          <BlockerIcon />
+          <div className="approval-modal-blockers-isi">
+            <p className="approval-modal-blockers-title">Belum bisa dieksekusi</p>
+            <ul className="approval-modal-blockers-list">
+              {gate.reasons.map((reason: string) => (
+                <li key={reason}>{alasanTertahan(reason)}</li>
+              ))}
+            </ul>
+            {tungguPeran && peranBelumUnik.length > 0 ? (
+              <p className="approval-modal-blockers-peran">
+                <span>Menunggu</span>
+                {peranBelumUnik.map((peran) => (
+                  <span className="blocker-chip" key={peran}>
+                    {peran}
+                  </span>
+                ))}
+              </p>
+            ) : null}
+            {gate.nextStep ? (
+              <p className="approval-modal-blockers-next">
+                <strong>Langkah berikutnya:</strong> {gate.nextStep}
+              </p>
+            ) : null}
+          </div>
         </div>
       )}
 
@@ -285,34 +336,59 @@ export default function ApprovalModal({
             disabled={
               !canApprove || alreadyApproved || (administrative && !governance) || busy
             }
+            aria-busy={busy}
             title={
               alreadyApproved
-                ? "Anda sudah menyetujui keputusan ini — menunggu approval role lain"
+                ? "Persetujuan Anda sudah tercatat — menunggu peran lain"
                 : canApprove
                   ? undefined
                   : "Approve tidak tersedia: keputusan kedaluwarsa, ditolak, atau belum diverifikasi"
             }
           >
-            {alreadyApproved
-              ? "Sudah Anda setujui"
-              : busy
-                ? "Memproses…"
-                : "Setuju"}
+            {/* 29 Okt 2026: tanda centang hanya saat tombol memang bisa ditekan —
+                ikon pada tombol mati terbaca sebagai "sudah disetujui". */}
+            {alreadyApproved || busy || !canApprove ? null : (
+              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <path
+                  d="M3 8.5l3.2 3.2L13 5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
+            <span>
+              {alreadyApproved
+                ? "Sudah Anda setujui"
+                : busy
+                  ? "Memproses…"
+                  : "Setuju"}
+            </span>
           </button>
           {alreadyApproved && (
             <p className="approval-modal-note" role="status">
-              Approval Anda sudah tercatat. Keputusan ini menunggu role lain
-              {nextRole ? ` (${nextRole})` : ""} — bukan tombol yang rusak.
+              Persetujuan Anda sudah tercatat.
+              {peranBelumUnik.length
+                ? ` Keputusan ini menunggu ${daftarDan(peranBelumUnik)}.`
+                : " Menunggu peran lain yang masih kurang."}
             </p>
           )}
-          <button
-            type="button"
-            className="button-secondary button"
-            onClick={onCancel}
-            disabled={busy}
-          >
-            Batal
-          </button>
+          {/* Di panel inline tidak ada tombol batal kedua: menutup panel adalah
+              "Tutup panel" di kepala panel, bukan keputusan. Dulu "Batal" di
+              sini melakukan hal yang sama sehingga tiga kontrol menutup hal
+              yang sama. */}
+          {dalamPanel ? null : (
+            <button
+              type="button"
+              className="button-secondary button"
+              onClick={onCancel}
+              disabled={busy}
+            >
+              Batal
+            </button>
+          )}
         </div>
       )}
     </section>
@@ -359,12 +435,34 @@ function verdictManusia(verdict: unknown): string {
  * bersama, supaya permukaan lain yang sudah punya kalimatnya sendiri tidak
  * ikut berubah.
  */
+/** Daftar nama gaya Indonesia: "A", "A dan B", "A, B, dan C". */
+function daftarDan(nama: string[]): string {
+  const bersih = nama.filter(Boolean);
+  if (bersih.length === 0) return "";
+  if (bersih.length === 1) return bersih[0];
+  if (bersih.length === 2) return `${bersih[0]} dan ${bersih[1]}`;
+  return `${bersih.slice(0, -1).join(", ")}, dan ${bersih[bersih.length - 1]}`;
+}
+
+/**
+ * Sebab tertahan → kalimat penyetuju.
+ *
+ * 29 Okt 2026 (laporan pemilik): kalimat lama berbunyi "Persetujuan belum
+ * lengkap — masih ada peran yang belum menyetujui." — dua klausa dengan tanda
+ * pisah, dan klausa kedua tidak menambah apa pun padahal server SUDAH mengirim
+ * daftar peran yang kurang. Sekarang daftar itu disebut namanya.
+ *
+ * Untuk sebab lain, peta bersama `humanizeBlocker` yang dipakai (satu kosakata
+ * dengan dialog aksi), bukan terjemahan lokal yang hanya mengenal dua kode —
+ * sebelumnya "decision expired" tampil sebagai "Decision expired".
+ */
 function alasanTertahan(reason: string): string {
   if (/approval belum memenuhi requirement/i.test(reason)) {
-    return "Persetujuan belum lengkap - masih ada peran yang belum menyetujui.";
+    // Nama peran TIDAK lagi diselipkan di kalimat ini; ia tampil sebagai chip
+    // di barisnya sendiri (lihat `.approval-modal-blockers-peran`).
+    return "Persetujuan belum lengkap.";
   }
-  if (/approval.*rejected/i.test(reason)) {
-    return "Persetujuan pernah ditolak - keputusan ini tidak bisa dieksekusi.";
-  }
-  return reason.charAt(0).toUpperCase() + reason.slice(1);
+  const manusia = humanizeBlocker(reason);
+  const kalimat = manusia ?? reason;
+  return kalimat.charAt(0).toUpperCase() + kalimat.slice(1);
 }

@@ -394,8 +394,25 @@ option {
    dan oleh urutan baca, bukan oleh ukuran yang mencolok.
    ============================================================ */
 
+/* 8 px: dengan 14/15 px padding, jarak 6 px membuat kepala dan kalimat putusan
+   terasa menempel. */
 .safety-band {
-  gap: 6px;
+  gap: 8px;
+}
+
+/* Aksen tepi sesuai nada: satu garis 3 px menggantikan lencana "Ada batch
+   gagal" yang dilepas dari kepala. Status terbaca dari tepi kartu tanpa
+   menambah satu elemen teks pun. */
+.safety-band[data-tone="danger"] {
+  border-left: 3px solid var(--status-warning);
+}
+
+.safety-band[data-tone="warn"] {
+  border-left: 3px solid var(--warn-ink);
+}
+
+.safety-band[data-tone="ok"] {
+  border-left: 3px solid var(--status-safe);
 }
 
 .safety-band .safety-strip {
@@ -425,13 +442,49 @@ option {
 }
 
 .safety-band .safety-figure-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
   font-size: var(--fs-1);
   font-weight: 500;
   color: var(--ink-muted);
 }
 
+/* Titik kategori: warna yang SAMA dengan segmen bar komposisi di bawah
+   (--safe-ink-tint / --warn-ink / --danger-ink / --neutral-ink). Ini satu-
+   satunya alasan warna di bar bisa dibaca tanpa legenda terpisah. Titik duduk
+   di awal baris label, jadi tepi kiri sel tetap sejajar dengan angka di atasnya. */
+.safety-band .safety-figure-swatch {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--neutral-ink);
+}
+
+.safety-band .safety-figure.is-ok .safety-figure-swatch {
+  background: var(--safe-ink-tint);
+}
+
+.safety-band .safety-figure.is-warn .safety-figure-swatch {
+  background: var(--warn-ink);
+}
+
+.safety-band .safety-figure.is-danger .safety-figure-swatch {
+  background: var(--danger-ink);
+}
+
+/* Label boleh terpotong elipsis, bukan mendorong lebar kolom. */
+.safety-band .safety-figure-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .safety-band .safety-meta-row {
-  margin: 0;
+  margin: 4px 0 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -510,44 +563,158 @@ option {
   border-radius: var(--radius-chip);
 }
 
-.safety-band .safety-ratio {
-  height: 5px;
+/* Kalimat putusan (29 Okt 2026): dulu duduk di kaki kartu, sekarang tepat di
+   bawah kepala. Peran tipografinya "jawaban dulu", bukan catatan kaki — jadi
+   hurufnya sedikit lebih tegas daripada .evidence-note biasa, tanpa bingkai
+   kedua di dalam kartu yang sudah bertepi. */
+/* ---------- Ringkasan: putusan + lima angka (29 Okt 2026) ----------------
+   Aturan visual yang dijaga:
+   - putusan berupa SATU titik status + teks; tidak ada bidang merah selebar
+     kartu yang membuat kartu terbaca seperti halaman galat;
+   - lima angka dipisah garis rambut vertikal (bukan kotak), angka 24 px
+     sebagai titik pindai pertama;
+   - keterangan menempel pada angka yang diterangkannya (berat karantina di
+     bawah "Ditahan"), bukan melayang di kaki kartu. */
+.safety-band .safety-verdict {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--fs-2);
+  line-height: 1.5;
+  color: var(--ink);
 }
 
-/* Kaki kartu: dua lipatan sebaris (rincian | cara membaca). Menggantikan baris
-   legenda yang dulu menggantung sendiri sehingga tidak ada baris setengah kosong. */
-.safety-band .safety-foot {
+.safety-band .safety-verdict-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: var(--neutral-ink);
+}
+
+.safety-band .safety-verdict.is-danger .safety-verdict-dot {
+  background: var(--status-warning);
+}
+
+.safety-band .safety-verdict.is-warn .safety-verdict-dot {
+  background: var(--warn-ink);
+}
+
+.safety-band .safety-verdict.is-ok .safety-verdict-dot {
+  background: var(--status-safe);
+}
+
+.safety-band .safety-verdict.is-danger {
+  color: var(--ink);
+}
+
+/* auto-fit + minmax: lima kolom di lebar penuh, otomatis turun menjadi 3/2
+   kolom di layar sempit TANPA media query. Media query bergantung pada lebar
+   viewport, sedangkan kartu ini bisa lebih sempit dari viewport (sidebar,
+   panel), dan di situlah label dulu terpotong. */
+.safety-band .safety-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  margin: 0;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  /* Wadah kueri: pemisah vertikal hanya dipasang saat strip benar-benar
+     selebar lima kolom. Saat angka terlipat, garis kiri akan menggantung di
+     awal baris — persis yang terjadi ketika aturannya memakai media query
+     viewport. */
+  container-type: inline-size;
+}
+
+.safety-band .safety-count {
   display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+@container (min-width: 620px) {
+  .safety-band .safety-count {
+    padding: 0 var(--space-3);
+    border-left: 1px solid var(--line);
+  }
+
+  .safety-band .safety-count:first-child {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .safety-band .safety-count:last-child {
+    padding-right: 0;
+  }
+}
+
+.safety-band .safety-count-value {
+  font-size: var(--fs-7);
+  font-weight: 650;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* Label angka: huruf kapital kecil + jarak huruf. Tujuannya memisahkan
+   "label" dari "nilai" secara tipografis, sehingga lima angka terbaca sebagai
+   satu strip data — bukan lima paragraf pendek. */
+.safety-band .safety-count-label {
+  font-size: var(--fs-1);
+  line-height: 1.25;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+
+.safety-band .safety-count-note {
+  font-size: var(--fs-1);
+  line-height: 1.25;
+  color: var(--warn-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.safety-band .safety-count.is-danger .safety-count-value {
+  color: var(--status-warning);
+}
+
+.safety-band .safety-count.is-warn .safety-count-value {
+  color: var(--warn-ink);
+}
+
+.safety-band .safety-count.is-muted .safety-count-value {
+  color: var(--ink-subtle);
+}
+
+.safety-band .safety-counts-foot {
+  display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
-}
-
-.safety-band .safety-legend > summary {
-  display: list-item;
-  cursor: pointer;
+  gap: var(--space-1) var(--space-3);
+  padding-top: var(--space-1);
   font-size: var(--fs-1);
   color: var(--ink-subtle);
-  text-align: right;
 }
 
-.safety-band .safety-legend > summary:hover {
-  color: var(--accent);
+.safety-band .safety-counts-foot .safety-more {
+  margin: 0;
 }
 
-.safety-band .safety-legend > summary:focus-visible {
-  outline: 2px solid var(--accent-strong);
-  outline-offset: 2px;
-}
-
-.safety-band .safety-legend .stat-tiles-legend {
-  margin: 6px 0 0;
-  font-size: var(--fs-1);
+.safety-band .safety-counts-foot summary {
   color: var(--ink-muted);
+  cursor: pointer;
 }
 
-/* Bar komposisi diberi jarak dari deret angka supaya terbaca sebagai satu
-   porsi total, bukan garis bawah tiap sel. */
-.safety-band .safety-ratio {
-  margin-top: 2px;
+.safety-band .safety-counts-foot summary:hover {
+  color: var(--ink);
+}
+
+/* Di baris yang terlipat, pemisah kiri pada kolom pertama baris tidak lagi
+   memisahkan apa pun. */
+.safety-band .safety-counts {
+  row-gap: var(--space-2);
 }

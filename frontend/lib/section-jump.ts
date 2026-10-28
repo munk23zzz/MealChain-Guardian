@@ -24,20 +24,21 @@ export type JumpItem = {
 /** Jangkar halaman Decision & Evidence (dipasang di `components/DecisionEvidence.tsx`). */
 export const EVIDENCE_SECTION_IDS = {
   ringkasan: "ringkasan",
-  rute: "rute",
+  // 29 Okt 2026: "rute" dilepas bersama kartu "Jalur persetujuan" — urutan
+  // langkah sudah dibaca di dalam blok Governance, jadi satu kartu terpisah
+  // untuk kronologi yang sama hanya menambah tinggi + satu tujuan nav.
   keputusan: "zona-keputusan",
   bukti: "bukti",
   jejak: "jejak",
 } as const;
 
 /**
- * Bagian Decision & Evidence. Kelimanya selalu dirender bersamaan dengan
+ * Bagian Decision & Evidence. Keempatnya selalu dirender bersamaan dengan
  * keputusan terpilih, jadi daftarnya tetap — tidak ada tujuan yang bisa hilang.
  */
 export function evidenceSections(): JumpItem[] {
   return [
     { id: EVIDENCE_SECTION_IDS.ringkasan, label: "Ringkasan" },
-    { id: EVIDENCE_SECTION_IDS.rute, label: "Jalur persetujuan" },
     { id: EVIDENCE_SECTION_IDS.keputusan, label: "Keputusan" },
     { id: EVIDENCE_SECTION_IDS.bukti, label: "Bukti" },
     { id: EVIDENCE_SECTION_IDS.jejak, label: "Jejak & integritas" },
@@ -48,9 +49,10 @@ export function evidenceSections(): JumpItem[] {
 export const OVERVIEW_SECTION_IDS = {
   ringkas: "ov-ringkas",
   peta: "overview-map",
-  kiriman: "ov-kiriman",
   kecukupan: "ov-kecukupan",
-  telemetri: "ov-telemetri",
+  // 28 Okt 2026: "kiriman" dan "telemetri" dilepas dari Overview; panel harga
+  // pasar menggantikan keduanya. Komponen aslinya tetap ada di repo.
+  harga: "ov-harga",
 } as const;
 
 /** Jangkar halaman Keamanan Pangan (dipasang di `components/FoodSafetyBoard.tsx`). */
@@ -69,37 +71,27 @@ export const SAFETY_SECTION_IDS = {
 } as const;
 
 /**
- * Bagian Overview. Peran SPPG/gizi melihat grafik kecukupan empat komoditas;
- * BGN Monitor melihat grafik pasokan lintas lokasi. Jangkar sama, judulnya
- * mengikuti apa yang benar-benar tampil.
+ * Bagian Overview.
  *
- * `hasShipments` ikut: kartu kiriman tidak merender apa pun saat tidak ada
- * kiriman aktif (kartu kosong lebih buruk daripada tidak ada kartu), jadi
- * tujuannya hanya dipasang kalau kartunya benar-benar ada.
+ * Peran SPPG/gizi melihat grafik kecukupan empat komoditas; BGN Monitor melihat
+ * grafik pasokan lintas lokasi. Jangkar sama, judulnya mengikuti apa yang
+ * benar-benar tampil.
+ *
+ * Sejak 28 Okt 2026 daftar ini TETAP empat tujuan: Ringkasan, Peta & antrean,
+ * Kecukupan, Harga pasar. Dulu ada tujuan "Kiriman" yang muncul hanya bila ada
+ * kiriman aktif; kartunya dilepas dari Overview sehingga tujuan itu tidak
+ * dipasang lagi (nav tidak boleh menunjuk tempat yang tidak ada).
  */
-export function overviewSections({
-  isApprover,
-  hasShipments,
-}: {
-  isApprover: boolean;
-  hasShipments: boolean;
-}): JumpItem[] {
-  const items: JumpItem[] = [
+export function overviewSections({ isApprover }: { isApprover: boolean }): JumpItem[] {
+  return [
     { id: OVERVIEW_SECTION_IDS.ringkas, label: "Ringkasan" },
     { id: OVERVIEW_SECTION_IDS.peta, label: "Peta & antrean" },
+    {
+      id: OVERVIEW_SECTION_IDS.kecukupan,
+      label: isApprover ? "Kecukupan" : "Pasokan per lokasi",
+    },
+    { id: OVERVIEW_SECTION_IDS.harga, label: "Harga pasar" },
   ];
-  // Urutan HARUS sama dengan urutan render di `app/page.tsx`: Kecukupan
-  // dirender SEBELUM Kiriman. Sebelumnya nav menaruh Kiriman di atas Kecukupan,
-  // sehingga mengeklik "Kiriman" menggulir MELEWATI Kecukupan (terasa "ke-skip")
-  // dan penanda posisi melompat tidak sesuai urutan mata. Diuji oleh
-  // tests/overview-section-order.test.ts yang membaca urutan id di halaman.
-  items.push({
-    id: OVERVIEW_SECTION_IDS.kecukupan,
-    label: isApprover ? "Kecukupan" : "Pasokan per lokasi",
-  });
-  if (hasShipments) items.push({ id: OVERVIEW_SECTION_IDS.kiriman, label: "Kiriman" });
-  items.push({ id: OVERVIEW_SECTION_IDS.telemetri, label: "Telemetri" });
-  return items;
 }
 
 /**

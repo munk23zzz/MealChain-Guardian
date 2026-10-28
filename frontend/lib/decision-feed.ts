@@ -145,10 +145,20 @@ function haystack(row: FeedRow): string {
     statusWord(row.status),
     row.status,
     row.decision_id,
-    String(row.demo_case ?? "").replace(/-/g, " "),
+    // Komoditas TERCETAK di baris meta kartu sejak 29 Okt 2026, jadi ia harus
+    // bisa dicari. Sebelum ini mengetik "telur" tidak menemukan kartu yang
+    // menulis "Telur" — pencarian menjanjikan lebih sedikit daripada layar.
+    row.commodity_name,
+    // Alasan penolakan tampil sebagai narasi di bawah kartu → ikut dicari.
     row.rejection_reason,
-    row.verifier_note,
-    row.valid ? "berlaku" : "kedaluwarsa",
+    // `verifier_note` dan `demo_case` SENGAJA tidak ikut: keduanya tidak lagi
+    // dirender kartu (verdict verifier dilepas 28 Okt, badge kasus dilepas
+    // bersamaan). Dulu pencarian bisa "menemukan" baris tanpa satu kata pun
+    // yang terlihat di layar — persis yang dilarang aturan di kepala berkas.
+    //
+    // Kata untuk keadaan tenggat memakai yang TERCETAK di lencana ("Lewat
+    // tenggat"), bukan "kedaluwarsa" yang tidak pernah muncul di kartu.
+    row.valid ? "berlaku" : "lewat tenggat",
   ]
     .filter((part) => part !== null && part !== undefined && part !== "")
     .join(" ")

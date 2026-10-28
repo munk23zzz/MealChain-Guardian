@@ -25,6 +25,16 @@ function csvCell(value: unknown): string {
   return `"${safe.replace(/"/g, '""')}"`;
 }
 
+/**
+ * Tabel (kepala kolom + baris) → CSV dengan aturan sel yang SAMA dengan ekspor
+ * dossier: setiap sel dikutip, dan sel yang bisa dibaca spreadsheet sebagai
+ * formula diberi apostrof. Dipakai modul Keamanan Pangan (ekspor baca-saja).
+ */
+export function tableToCsv(header: readonly string[], rows: readonly unknown[][]): string {
+  const baris = [header.join(","), ...rows.map((row) => row.map(csvCell).join(","))];
+  return baris.join("\r\n") + "\r\n";
+}
+
 export function dossierToCsv(dossier: ComplianceDossier): string {
   const header = ["decision_id", "content_address", "signature_state", "signature", "signature_public_key", "evidence_id", "evidence_type", "status", "reading", "unit", "source", "provenance", "recorded_at", "rule", "consistency"];
   const signature = dossier.signature ?? {};
@@ -45,7 +55,7 @@ export function dossierToCsv(dossier: ComplianceDossier): string {
     row.rule,
     row.consistency,
   ]);
-  return [header.join(","), ...rows.map((row) => row.map(csvCell).join(","))].join("\r\n") + "\r\n";
+  return tableToCsv(header, rows);
 }
 
 export function downloadText(filename: string, content: string, mime = "text/plain;charset=utf-8"): void {
