@@ -146,14 +146,17 @@ def summarize_temperature_log(
     issues: list[str] = []
     sah, rusak = parse_samples(temperature_log)
     for index in rusak:
-        issues.append(f"malformed entry pada index {index}")
+        # Teks alasan tampil apa adanya di kartu "Bukti suhu", jadi ditulis
+        # sebagai kalimat Indonesia — bukan campuran istilah parser
+        # ("malformed entry … index") yang terbaca seperti log internal.
+        issues.append(f"entri log rusak pada indeks {index}")
 
     timestamps = [s.timestamp for s in sah]
     if len(timestamps) != len(set(timestamps)):
         issues.append("timestamp duplikat")
 
     if len(sah) < 2:
-        issues.append(f"sample kurang dari 2 ({len(sah)})")
+        issues.append(f"sampel sah kurang dari 2 (ada {len(sah)})")
         return TemperatureSummary(
             observed_minutes=0.0,
             outside_minutes=0.0,
@@ -231,7 +234,7 @@ def parse_temperature_log(
         observation = OBSERVATION_MISSING if not sah else OBSERVATION_MALFORMED
         evidence_state = EVIDENCE_INSUFFICIENT
         issues.append(
-            f"sampel sah {len(sah)} < minimum profil {policy.min_temperature_samples}"
+            f"sampel sah {len(sah)} dari minimum {policy.min_temperature_samples}"
         )
     elif _usang(last_sample_at, evaluation_time, policy):
         observation = OBSERVATION_STALE
@@ -243,7 +246,7 @@ def parse_temperature_log(
         )
         batas = policy.max_observation_age_minutes
         issues.append(
-            f"sampel terakhir {usia:.0f} menit lalu > batas {batas} menit"
+            f"sampel terakhir {usia:.0f} menit lalu, lewat batas {batas} menit"
             if usia is not None
             else "sampel terakhir tidak diketahui"
         )

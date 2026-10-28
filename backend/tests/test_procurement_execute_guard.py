@@ -215,8 +215,15 @@ def test_pengadaan_tanpa_lokasi_asal_bisa_dieksekusi(client):
         )
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert body["status"] == "executed"
+        # Gerbang 1: PO draft dulu; gerbang 2 (review Kepala SPPG) yang menutup
+        # keputusan menjadi `executed`.
+        assert body["status"] == "approved"
         assert body["po_number"]
+        resp = client.post(
+            f"/actions/purchase-orders/{body['po_number']}/approve", headers=headers
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["decision_status"] == "executed"
         baris = _exec(
             "SELECT (SELECT status FROM decisions WHERE id = :d), "
             "(SELECT count(*) FROM sap_mock_purchase_orders WHERE decision_id = :d) ",

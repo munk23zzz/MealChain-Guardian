@@ -284,14 +284,16 @@ async def evaluate_suppliers(
                 # `POST /actions/execute` berakhir tanpa truk (terukur 28 Okt 2026).
                 stok_reasons.append(f"batch {str(b.id)[:8]} sudah berangkat")
                 continue
-            # Fail-closed, selaras `core/safety_gate.py`: batch yang belum
-            # `pass` (mis. needs_verification) BUKAN kandidat. Dulu batch itu
-            # diloloskan, lalu `POST /actions/execute` menolaknya — keputusan
-            # bisa di-approve tetapi pasti 409 saat eksekusi.
-            if b.safety_status != "pass":
+            # Batch `fail` tidak boleh jadi kandidat. `needs_verification`
+            # TETAP boleh: kasus demo `*-coldchain-hold` justru dibangun dari
+            # batch yang menunggu verifikasi, dan gerbang eksekusi
+            # (`core/safety_gate.py`) yang menahan keputusannya — bukan pemilihan
+            # kandidat. Menolak di sini membuat kasus itu tidak punya binding
+            # sama sekali (terukur 28 Okt 2026: "safety gate memblokir karena
+            # batch acuan tidak layak" pada wortel-coldchain-hold).
+            if b.safety_status == "fail":
                 stok_reasons.append(
-                    f"batch {str(b.id)[:8]} belum lolos uji keamanan "
-                    f"({b.safety_status or 'tanpa status'})"
+                    f"batch {str(b.id)[:8]} gagal uji keamanan"
                 )
                 continue
             segar = evaluate_freshness(

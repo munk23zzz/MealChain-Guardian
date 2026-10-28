@@ -92,6 +92,8 @@ def _row(
     pemeriksa: str | None = None,
     kg: float | None = None,
     nilai: float | None = None,
+    po_number: str | None = None,
+    unit_price: float | None = None,
 ) -> dict:
     """Bentuk balasan yang stabil untuk UI (jumlah titik dihitung SERVER)."""
     dicek = receipt.checked or {}
@@ -118,6 +120,18 @@ def _row(
         "accepted_value_idr": nilai if receipt.status == "disetujui" else None,
         #: Kg yang masuk stok karena persetujuan ini (None bila belum disetujui).
         "stock_kg": kg if receipt.status == "disetujui" else None,
+        # ---- konteks nilai (Dok 05 §8.2–§8.3) ------------------------------
+        # Ketiganya dikirim juga untuk catatan 'menunggu', supaya layar bisa
+        # menampilkan tiga angka dan asal harganya SEBELUM keputusan diambil.
+        #: Kuantitas batch yang akan masuk stok bila disetujui.
+        "batch_quantity_kg": kg,
+        #: Nomor PO invoice yang mendanai batch. None = tidak ada ikatan bukti.
+        "po_number": po_number,
+        #: Harga satuan invoice (Rp/kg) — dasar kalimat "kg × Rp/kg dari PO …".
+        "unit_price_idr": unit_price,
+        #: Perkiraan nilai bila disetujui (kg × harga satuan). BUKAN nilai
+        #: tersimpan: `accepted_value_idr` tetap satu-satunya angka pembukuan.
+        "estimated_value_idr": nilai,
     }
 
 
@@ -203,7 +217,19 @@ async def create_receipt(
     db.add(receipt)
     await db.commit()
     await db.refresh(receipt)
-    return _row(receipt, nama=user.name)
+    # Dok 05 §8.2–§8.3: catatan yang baru dibuat langsung membawa konteks nilai
+    # (kg batch, harga satuan PO, perkiraan nilai) supaya layar bisa menampilkan
+    # tiga angka tanpa menunggu keputusan — dan tanpa menghitung sendiri.
+    kg_batch = float(batch.quantity_kg)
+    po_number, harga = await receipt_value.po_dan_harga(db, batch.id)
+    return _row(
+        receipt,
+        nama=user.name,
+        kg=kg_batch,
+        nilai=receipt_value.nilai_dari(kg_batch, harga),
+        po_number=po_number,
+        unit_price=float(harga) if harga is not None else None,
+    )
 
 
 @router.post("/receipts/{receipt_id}/approve")
@@ -234,12 +260,15 @@ async def approve_receipt(
     if receipt.status == "disetujui":
         nama = await _nama(db, receipt.reviewed_by)
         kg = float(batch.quantity_kg)
+        po_number, harga = await receipt_value.po_dan_harga(db, batch.id)
         return {
             **_row(
                 receipt,
                 pemeriksa=nama,
                 kg=kg,
-                nilai=await receipt_value.nilai_diterima(db, batch.id, kg),
+                nilai=receipt_value.nilai_dari(kg, harga),
+                po_number=po_number,
+                unit_price=float(harga) if harga is not None else None,
             ),
             "sudah": True,
         }
@@ -337,11 +366,15 @@ async def approve_receipt(
             detail="batch ini sudah punya penerimaan yang disetujui",
         ) from exc
     await db.refresh(receipt)
+    kg = float(batch.quantity_kg)
+    po_number, harga = await receipt_value.po_dan_harga(db, batch.id)
     return _row(
         receipt,
         pemeriksa=user.name,
-        kg=float(batch.quantity_kg),
-        nilai=await receipt_value.nilai_diterima(db, batch.id, float(batch.quantity_kg)),
+        kg=kg,
+        nilai=receipt_value.nilai_dari(kg, harga),
+        po_number=po_number,
+        unit_price=float(harga) if harga is not None else None,
     )
 
 
@@ -373,7 +406,19 @@ async def reject_receipt(
         )
     if receipt.status == "ditolak":
         nama = await _nama(db, receipt.reviewed_by)
-        return {**_row(receipt, pemeriksa=nama), "sudah": True}
+        po_number, harga = await receipt_value.po_dan_harga(db, batch.id)
+        kg = float(batch.quantity_kg)
+        return {
+            **_row(
+                receipt,
+                pemeriksa=nama,
+                kg=kg,
+                nilai=receipt_value.nilai_dari(kg, harga),
+                po_number=po_number,
+                unit_price=float(harga) if harga is not None else None,
+            ),
+            "sudah": True,
+        }
 
     receipt.status = "ditolak"
     receipt.reviewed_by = user.id
@@ -381,7 +426,18 @@ async def reject_receipt(
     receipt.review_note = catatan
     await db.commit()
     await db.refresh(receipt)
-    return _row(receipt, pemeriksa=user.name)
+    # Konteks nilai tetap dikirim pada penolakan: layar menampilkan berapa
+    # rupiah yang TIDAK masuk stok, dan dari PO mana angka itu berasal.
+    kg = float(batch.quantity_kg)
+    po_number, harga = await receipt_value.po_dan_harga(db, batch.id)
+    return _row(
+        receipt,
+        pemeriksa=user.name,
+        kg=kg,
+        nilai=receipt_value.nilai_dari(kg, harga),
+        po_number=po_number,
+        unit_price=float(harga) if harga is not None else None,
+    )
 
 
 @router.get("/receipts/menunggu")
@@ -477,10 +533,19 @@ async def list_receipts(
     ).all()
     # Satu batch per permintaan → satu kueri harga, bukan satu per baris.
     kg_batch = float(baris[0][3]) if baris else None
-    nilai = await receipt_value.nilai_diterima(db, batch_id, kg_batch)
+    po_number, harga = await receipt_value.po_dan_harga(db, batch_id)
+    nilai = receipt_value.nilai_dari(kg_batch, harga)
     return {
         "items": [
-            _row(receipt, nama=nama, pemeriksa=nama_pemeriksa, kg=float(kg), nilai=nilai)
+            _row(
+                receipt,
+                nama=nama,
+                pemeriksa=nama_pemeriksa,
+                kg=float(kg),
+                nilai=nilai,
+                po_number=po_number,
+                unit_price=float(harga) if harga is not None else None,
+            )
             for receipt, nama, nama_pemeriksa, kg in baris
         ]
     }

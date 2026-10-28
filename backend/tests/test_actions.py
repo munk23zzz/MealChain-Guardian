@@ -308,12 +308,42 @@ def test_execute_success_operasional_butuh_dua_approval_writes_mock_po(client):
         body = resp.json()
         assert body["data_source"] == "MOCK"
         assert body["po_number"].startswith("MC-")
-        # PO mock tertulis + decision executed
+        po_number = body["po_number"]
+        # Gerbang 1 (dokumen 02-approval-action.md §6, 28 Okt 2026): PO lahir
+        # DRAFT dan keputusan tetap `approved` — komitmen belum terjadi.
+        assert body["po_status"] == "draft"
+        assert body["status"] == "approved"
         engine = _db()
         with engine.begin() as conn:
             po = conn.execute(
                 text(
                     "SELECT status, decision_id FROM sap_mock_purchase_orders "
+                    "WHERE decision_id = :d"
+                ),
+                {"d": decision_id},
+            ).mappings().first()
+            assert po is not None
+            assert po["status"] == "draft"
+            status = conn.execute(
+                text("SELECT status FROM decisions WHERE id = :d"), {"d": decision_id}
+            ).scalar_one()
+            assert status == "approved"
+        # Dua gerbang: eksekusi kedua tidak menerbitkan PO kedua.
+        resp = client.post(
+            "/actions/execute", json={"decision_id": decision_id},
+            headers=_login(client, head),
+        )
+        assert resp.status_code == 409
+        # Gerbang 2: Kepala SPPG mereview PO → terkirim, keputusan executed.
+        resp = client.post(
+            f"/actions/purchase-orders/{po_number}/approve",
+            headers=_login(client, head),
+        )
+        assert resp.status_code == 200, resp.text
+        with engine.begin() as conn:
+            po = conn.execute(
+                text(
+                    "SELECT status FROM sap_mock_purchase_orders "
                     "WHERE decision_id = :d"
                 ),
                 {"d": decision_id},

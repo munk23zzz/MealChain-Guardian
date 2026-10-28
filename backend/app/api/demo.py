@@ -2024,17 +2024,17 @@ async def run_demo_agent(
         # `kosongkan_bertanda` dan hidup selamanya di database demo.
         pemilik = await sesi_demo.aktif(db)
     if pemilik is None and settings.demo_session_enforce:
-        # Jangan buntu. Dulu jalur ini membalas 409 "tekan Muat Demo dulu",
-        # sehingga setelah "Akhiri sesi" (atau sesi kedaluwarsa) tombol
-        # Jalankan Agent di Demo Control tampak rusak (terukur 28 Okt 2026:
-        # frontend mencatat POST /demo/session/end lalu setiap run 409).
-        # Sekarang sesi dibuka otomatis; `kosongkan=False` agar data yang ada
-        # tidak dihapus diam-diam, dan keputusan tetap terikat ke sesi.
-        pemilik = await sesi_demo.mulai(
-            db,
-            created_by=getattr(user, "id", None),
-            kosongkan=False,
-            mode=isi.mode or "realtime",
+        # Gerbang sesi DIPERTAHANKAN (kontrak: keputusan harus terikat sesi).
+        # Yang diperbaiki ada di klien: Demo Control memastikan sesi hidup
+        # sebelum memanggil endpoint ini, bukan membiarkan operator menekan
+        # "Jalankan Agent" lalu membaca 409.
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "sesi demo belum aktif — tekan tombol Muat Demo dulu, supaya "
+                "keputusan hasil agent terikat ke sesi dan hilang saat sesi "
+                "berakhir"
+            ),
         )
 
     diminta = (isi.commodity or "").strip()

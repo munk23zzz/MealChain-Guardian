@@ -53,11 +53,19 @@ def _latest_supply_row(conn, loc_id, com_id):
     """Baris TERBARU di DB untuk pasangan ini, memakai urutan yang sama dengan
     endpoint `/supply`: recorded_at DESC lalu presedensi source (mock_sap >
     manual > sensor). Dipakai sebagai acuan angka supaya tes tidak memaku
-    snapshot kanonik 8 Okt — ujung deret AKTUAL demo kini 4 Nov 12:00."""
+    snapshot kanonik 8 Okt — ujung deret AKTUAL demo kini 4 Nov 12:00.
+
+    BATAS WAKTU (audit 28 Okt 2026): acuan memakai `recorded_at <= now()` —
+    aturan yang sama dengan endpoint setelah `/supply`, `/demand`, dan
+    `/demand/forecast` dibatasi ke baris yang sudah terjadi. Tanpa batas ini
+    acuan justru membaca baris masa depan (4 Nov) yang kini TIDAK boleh
+    disajikan endpoint.
+    """
     return conn.execute(
         text(
             "SELECT quantity_kg, source FROM supply_records "
             "WHERE location_id = :loc AND commodity_id = :com "
+            "AND recorded_at <= now() "
             "ORDER BY recorded_at DESC, "
             "CASE source WHEN 'mock_sap' THEN 0 WHEN 'manual' THEN 1 "
             "WHEN 'sensor' THEN 2 ELSE 99 END "
@@ -92,15 +100,16 @@ def test_supply_latest_record_not_sum(client):
     """Terbaru = recorded_at maksimum, bukan penjumlahan snapshot lintas waktu."""
     engine = _db()
     try:
-        # Fase 4: cap waktu uji harus LEBIH BARU dari ujung deret AKTUAL demo
-        # (4 Nov 12:00) agar baris uji ini benar-benar 'terbaru' bagi endpoint.
+        # Audit 28 Okt 2026: baris uji harus SUDAH TERJADI (endpoint kini
+        # membatasi ke `recorded_at <= sekarang`), tetapi tetap lebih baru dari
+        # baris demo mana pun yang lampau — cukup 1 menit lalu.
         with engine.begin() as conn:
             conn.execute(
                 text(
                     "INSERT INTO supply_records (id, location_id, commodity_id, "
                     "quantity_kg, recorded_at, source) "
                     "SELECT gen_random_uuid(), l.id, c.id, 777, "
-                    "'2026-11-20T00:00:00+00'::timestamptz, 'manual' "
+                    "now() - interval '1 minute', 'manual' "
                     "FROM locations l, commodities c "
                     "WHERE l.name='Cianjur' AND c.name='telur'"
                 )
@@ -110,11 +119,12 @@ def test_supply_latest_record_not_sum(client):
         assert resp.json()["quantity_kg"] == 777.0
     finally:
         with engine.begin() as conn:
-            # Hapus HANYA baris uji ini (cap waktu + source khas tes), jangan sentuh seed/demo.
+            # Hapus HANYA baris uji ini (nilai + source khas tes), jangan sentuh seed/demo.
             conn.execute(
                 text(
                     "DELETE FROM supply_records WHERE source='manual' "
-                    "AND recorded_at='2026-11-20T00:00:00+00'::timestamptz"
+                    "AND quantity_kg=777 AND location_id="
+                    "(SELECT id FROM locations WHERE name='Cianjur')"
                 )
             )
         engine.dispose()
@@ -123,10 +133,10 @@ def test_supply_latest_record_not_sum(client):
 def test_supply_same_timestamp_source_precedence(client):
     """Mock > manual > sensor pada timestamp sama — SATU record, bukan SUM.
 
-    Fase 4: baris uji disisipkan pada cap waktu SAMA yang lebih baru dari ujung
-    deret AKTUAL demo (4 Nov 12:00) — di sini 20 Nov 12:00 — sehingga ketiga
-    baris itulah yang jadi 'terbaru' dan presedensi source yang diuji benar-benar
-    menentukan pemenangnya.
+    Audit 28 Okt 2026: ketiga baris disisipkan pada cap waktu SAMA yang SUDAH
+    TERJADI (1 menit lalu) — lebih baru dari baris demo lampau mana pun,
+    sehingga presedensi source yang diuji benar-benar menentukan pemenangnya
+    tanpa melanggar batas `recorded_at <= sekarang`.
     """
     engine = _db()
     try:
@@ -135,12 +145,13 @@ def test_supply_same_timestamp_source_precedence(client):
                 text(
                     "INSERT INTO supply_records (id, location_id, commodity_id, "
                     "quantity_kg, recorded_at, source) "
-                    "SELECT gen_random_uuid(), l.id, c.id, x.q, x.ts, x.src "
+                    "SELECT gen_random_uuid(), l.id, c.id, x.q, "
+                    "now() - interval '1 minute', x.src "
                     "FROM locations l, commodities c, "
-                    "(VALUES (1500, '2026-11-20T12:00:00+00'::timestamptz, 'mock_sap'), "
-                    "        (999, '2026-11-20T12:00:00+00'::timestamptz, 'manual'), "
-                    "        (888, '2026-11-20T12:00:00+00'::timestamptz, 'sensor')) "
-                    "AS x(q, ts, src) "
+                    "(VALUES (1500, 'mock_sap'), "
+                    "        (999, 'manual'), "
+                    "        (888, 'sensor')) "
+                    "AS x(q, src) "
                     "WHERE l.name='Cianjur' AND c.name='telur'"
                 )
             )
@@ -151,11 +162,12 @@ def test_supply_same_timestamp_source_precedence(client):
         assert body["source"] == "mock_sap"
     finally:
         with engine.begin() as conn:
-            # Hapus HANYA baris uji (cap waktu unik milik tes ini), jangan sentuh seed/demo.
+            # Hapus HANYA baris uji (nilai khas tes ini), jangan sentuh seed/demo.
             conn.execute(
                 text(
-                    "DELETE FROM supply_records "
-                    "WHERE recorded_at='2026-11-20T12:00:00+00'::timestamptz"
+                    "DELETE FROM supply_records WHERE quantity_kg IN (1500, 999, 888) "
+                    "AND location_id=(SELECT id FROM locations WHERE name='Cianjur') "
+                    "AND recorded_at > now() - interval '1 hour'"
                 )
             )
         engine.dispose()
@@ -186,12 +198,14 @@ def test_demand_happy_path(client):
     try:
         with engine.connect() as conn:
             loc_id, com_id = _ids_for(conn, "Jakarta", "telur")
-            # Acuan = baris TERBARU DB, bukan snapshot kanonik 1080: deret
-            # permintaan demo kini berjalan sampai 4 Nov (audit angka 18 Okt).
+            # Acuan = baris TERBARU DB yang SUDAH TERJADI (`recorded_at <= now()`,
+            # aturan yang sama dengan endpoint sejak audit 28 Okt 2026), bukan
+            # snapshot kanonik 1080 dan bukan baris masa depan 4 Nov.
             expected_qty = conn.execute(
                 text(
                     "SELECT quantity_kg FROM demand_records "
                     "WHERE location_id = :loc AND commodity_id = :com "
+                    "AND recorded_at <= now() "
                     "ORDER BY recorded_at DESC LIMIT 1"
                 ),
                 {"loc": loc_id, "com": com_id},
@@ -224,14 +238,17 @@ def test_forecast_horizon_respected(client):
     try:
         with engine.connect() as conn:
             loc_id, com_id = _ids_for(conn, "Jakarta", "telur")
-            # 3 observasi TERBARU (terbaru dulu), lalu dibalik jadi terlama→terbaru
-            # supaya bobot 0.2/0.3/0.5 sama dengan perhitungan endpoint.
+            # 3 observasi TERBARU yang SUDAH TERJADI (terbaru dulu), lalu dibalik
+            # jadi terlama→terbaru supaya bobot 0.2/0.3/0.5 sama dengan
+            # perhitungan endpoint. Batas `recorded_at <= now()` ikut disamakan:
+            # perkiraan tidak boleh dibentuk dari catatan masa depan.
             nilai = [
                 float(q)
                 for q in conn.execute(
                     text(
                         "SELECT quantity_kg FROM demand_records "
                         "WHERE location_id = :loc AND commodity_id = :com "
+                        "AND recorded_at <= now() "
                         "ORDER BY recorded_at DESC LIMIT 3"
                     ),
                     {"loc": loc_id, "com": com_id},

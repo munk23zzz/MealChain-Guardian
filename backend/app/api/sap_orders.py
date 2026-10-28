@@ -50,6 +50,7 @@ from app.core.scope import is_national_scope, scope_location_id
 from app.models import Decision, User
 from app.services import po_document
 from app.services.approval_summary import syarat_persetujuan
+from app.services.po_realization import realisasi_po
 
 router = APIRouter()
 
@@ -162,11 +163,26 @@ def invoice_total_of(row) -> float:
     return round(float(row["price"]) * float(qty), 2)
 
 
-def _baris(row) -> dict:
-    """Satu PO → bentuk kabel. Nilai dibaca apa adanya dari kolom."""
+def _baris(row, realisasi: dict | None = None) -> dict:
+    """Satu PO → bentuk kabel. Nilai dibaca apa adanya dari kolom.
+
+    `realisasi` = hasil `po_realization.realisasi_po` untuk halaman ini. Bila PO
+    tidak punya ikatan bukti, angka barang masuk dikirim `None` — bukan 0 — supaya
+    panel bisa menulis "belum ada barang tercatat" alih-alih "Rp 0".
+    """
     qty = float(row["ordered_quantity"])
     harga = float(row["price"])
     cost_legacy = cost_legacy_of(row)
+    total = round(harga * qty, 2)
+    masuk = (realisasi or {}).get(row["po_number"])
+    received_kg = float(masuk["received_kg"]) if masuk else None
+    received_value = round(harga * received_kg, 2) if received_kg is not None else None
+    variance = (
+        round(received_value - total, 2) if received_value is not None else None
+    )
+    variance_pct = (
+        round(variance / total * 100, 2) if (variance is not None and total) else None
+    )
     return {
         "po_number": row["po_number"],
         "status": row["status"],
@@ -200,7 +216,17 @@ def _baris(row) -> dict:
             if "decision_sdc" in row.keys() and row["decision_sdc"] is not None
             else None
         ),
-        "total_value": round(harga * qty, 2),
+        "total_value": total,
+        # ---- realisasi (Dok 05 §9 butir 3): nilai PO vs nilai barang masuk ----
+        # Dihitung server dari ikatan bukti (`human_inspection` → `batch_ids`),
+        # jalur yang sama dengan nilai penerimaan. `None` = belum ada barang
+        # tercatat untuk PO ini; `0.0` hanya sah bila memang ada batch 0 kg.
+        "received_kg": received_kg,
+        "received_value_idr": received_value,
+        "variance_idr": variance,
+        "variance_pct": variance_pct,
+        "received_batch_count": int(masuk["received_batch_count"]) if masuk else 0,
+        "received_basis": masuk["received_basis"] if masuk else None,
         "source": SUMBER,
         # Fakta turunan, bukan label seragam: hanya baris yang lahir dari
         # eksekusi keputusan punya decision_id. Baris seed (DEMO-PO-*,
@@ -243,7 +269,9 @@ async def daftar_purchase_order(
     sql += "ORDER BY po.created_at DESC, po.po_number ASC LIMIT :limit"
 
     rows = (await db.execute(text(sql), params)).mappings().all()
-    items = [_baris(r) for r in rows]
+    # Satu kueri realisasi untuk seluruh halaman (bukan per baris).
+    realisasi = await realisasi_po(db, [r["po_number"] for r in rows])
+    items = [_baris(r, realisasi) for r in rows]
     return {
         "items": items,
         "count": len(items),

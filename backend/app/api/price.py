@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import get_current_user
 from app.api.dependencies import get_db
 from app.api.supply import _resolve_commodity, _resolve_location
+from app.core.harga_monitor import baca_snapshot, jawaban_kosong, susun_monitor
 from app.core.price import price_deviation
 from app.core.scope import assert_in_scope
 from app.models import PriceSignal, Supplier, User
@@ -178,3 +179,33 @@ async def post_price_deviation(
         "classification": str(result["status"]),
         "flagged": bool(result["flagged"]),
     }
+
+
+# --- Monitoring harga pasar (28 Okt 2026) -----------------------------------
+#
+# Panel "Monitor harga komoditas" di Overview membaca salinan pakan PIHPS Bank
+# Indonesia dari snapshot JSON (`scripts/tarik_harga_pihps.py`) lewat logika
+# murni di `app/core/harga_monitor.py`. Endpoint ini read-only dan tidak
+# menyentuh DB: semua peran ter-autentikasi boleh membacanya.
+@router.get("/price/monitor")
+async def monitor_harga(
+    days: int = 30,
+    commodity: str | None = None,
+    region: str | None = None,
+    _user: User = Depends(get_current_user),
+) -> dict:
+    """Deret harga pasar harian (Rp/kg) untuk panel monitoring.
+
+    `commodity`: kode PIHPS (`com_10`) atau nama MealChain (`telur`), dipisah
+    koma. `region`: nama wilayah PIHPS apa adanya (`Kota Bandung`, `Jawa Barat`).
+
+    Sel kosong TIDAK diisi 0 — hari tanpa publikasi (Sabtu/Minggu) memang tidak
+    dikirim, dan panel menggambarnya sebagai jarak, bukan penurunan harga.
+    """
+    snap = baca_snapshot()
+    if snap is None:
+        return jawaban_kosong(
+            "Snapshot harga PIHPS belum ada. Jalankan "
+            "`python -m scripts.tarik_harga_pihps` di folder backend."
+        )
+    return susun_monitor(snap, days=days, commodity=commodity, region=region)

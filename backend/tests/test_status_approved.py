@@ -12,7 +12,10 @@ Yang dipaku di berkas ini:
 
 1. approval pertama (salah satu role) → status TETAP `pending_approval`;
 2. approval kedua (role berbeda) → status `approved`, di respons DAN di DB;
-3. `/actions/execute` menerima `approved` dan menuntaskannya ke `executed`;
+3. `/actions/execute` menerima `approved` dan menerbitkan PO **draft** (status
+   keputusan tetap `approved`), lalu `/actions/purchase-orders/{po}/approve`
+   mengirim PO ke SAP mock dan menuntaskannya ke `executed` — dua gerbang,
+   dokumen `02-approval-action.md` §6 (28 Okt 2026);
 4. blok ledger approval kedua mencatat `status: "approved"`;
 5. approve lagi oleh user yang sama → 409 (perilaku lama tidak berubah);
 6. verify setelah kuorum → 409 (approval sudah tercatat).
@@ -289,8 +292,21 @@ def test_execute_menerima_status_approved(client, akun):
             headers=_login(client, kepala),
         )
         assert resp.status_code == 200, resp.text
-        assert resp.json()["status"] == "executed"
+        # Dua gerbang (dokumen `02-approval-action.md` §6, 28 Okt 2026):
+        # eksekusi berhenti di PO `draft`; status keputusan tetap `approved`
+        # sampai Kepala SPPG mereview PO itu.
+        assert resp.json()["status"] == "approved"
+        assert resp.json()["po_status"] == "draft"
         assert resp.json()["po_number"].startswith("MC-")
+        assert _status_db(decision_id) == "approved"
+
+        # Gerbang kedua menuntaskan: PO dikirim ke SAP mock, keputusan `executed`.
+        review = client.post(
+            f"/actions/purchase-orders/{resp.json()['po_number']}/approve",
+            headers=_login(client, kepala),
+        )
+        assert review.status_code == 200, review.text
+        assert review.json()["po_status"] == "submitted"
         assert _status_db(decision_id) == "executed"
     finally:
         _cleanup(decision_id)

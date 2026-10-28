@@ -29,6 +29,7 @@ from app.models import (
     Commodity,
     Decision,
     DecisionEvidence,
+    LedgerBlock,
     Location,
     PriceSignal,
     Supplier,
@@ -312,6 +313,24 @@ async def list_decisions(
                     )
                 ).all()
             }
+        # Nama komoditas (dokumen 06-agent-log §2.5): tabel keputusan di tab
+        # Agent Log menyaring per komoditas, sedangkan feed dulu hanya membawa
+        # `commodity_id`. Satu query untuk semua baris — tanpa N+1.
+        commodity_ids = {row.commodity_id for row in rows if row.commodity_id}
+        if commodity_ids:
+            nama_komoditas = {
+                cid: nama
+                for cid, nama in (
+                    await db.execute(
+                        select(Commodity.id, Commodity.name).where(
+                            Commodity.id.in_(commodity_ids)
+                        )
+                    )
+                ).all()
+            }
+        else:
+            nama_komoditas = {}
+
         target_ids = {row.target_location_id for row in rows if row.target_location_id}
         if target_ids:
             target_nama = {
@@ -368,6 +387,9 @@ async def list_decisions(
                 "supplier_name": (nama_pemasok.get(sid) if sid else None),
                 "pengirim": pengirim,
                 "target_location_name": target_nama.get(row.target_location_id),
+                "commodity_name": (
+                    nama_komoditas.get(row.commodity_id) if row.commodity_id else None
+                ),
             }
         )
     return {
@@ -490,6 +512,54 @@ async def get_decision_traces(
         for row in rows
     ]
     return {"decision_id": str(decision_id), "steps": steps}
+
+
+@router.get("/decisions/{decision_id}/ledger")
+async def get_decision_ledger(
+    decision_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Blok ledger milik satu keputusan (dokumen 06-agent-log, §2.4).
+
+    Kenapa endpoint terpisah: ACT (eksekusi) tidak selalu meninggalkan baris di
+    `agent_traces`; buktinya ada di `ledger_blocks` dengan
+    `action = 'execute'` dan `entity_id` = id keputusan. Tanpa endpoint ini,
+    klien hanya bisa menulis "ACT belum tercatat" — padahal blok ledger ada,
+    dan itu kesalahan fakta yang dilarang dokumen.
+
+    Read-only, tanpa mutasi, tanpa panggilan provider. Cakupan baca memakai
+    aturan yang sama dengan trace (Ruling 2026-10-14).
+    """
+    decision = (
+        await db.execute(select(Decision).where(Decision.id == decision_id))
+    ).scalar_one_or_none()
+    if decision is None:
+        raise HTTPException(status_code=404, detail="decision tidak ditemukan")
+    await _assert_decision_readable(db, user, decision)
+
+    rows = (
+        (
+            await db.execute(
+                select(LedgerBlock)
+                .where(LedgerBlock.entity_id == decision_id)
+                .order_by(LedgerBlock.height.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "decision_id": str(decision_id),
+        "blocks": [
+            {
+                "height": row.height,
+                "action": row.action,
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in rows
+        ],
+    }
 
 
 @router.get("/decisions/{decision_id}/approval-summary")

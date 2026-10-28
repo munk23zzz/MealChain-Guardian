@@ -50,7 +50,12 @@ def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, expl
     def _jam(as_of=None):
         return as_of if as_of is not None else beku
 
-    monkeypatch.setattr(rs, "evaluation_clock", _jam)
+    # Hanya varian historis yang membekukan jam. Varian "live-race" justru
+    # menguji `as_of=None`: membekukannya ke 8 Okt membuat SEMUA baris uji
+    # (28 Okt) terbaca "panen di masa depan" dan fungsi melempar ValueError —
+    # itu menguji jam palsu, bukan perlombaan yang dimaksud.
+    if explicit_as_of:
+        monkeypatch.setattr(rs, "evaluation_clock", _jam)
     try:
         with engine.connect() as connection, connection.begin() as transaction:
             with Session(bind=connection) as session:
@@ -58,11 +63,35 @@ def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, expl
                 commodity = session.scalar(select(Commodity).where(Commodity.name == "telur"))
                 supplier = session.scalar(select(Supplier).limit(1))
                 ids = {name: uuid.uuid4() for name in ("old", "boundary", "later")}
-                harvested = {
-                    "old": AS_OF - timedelta(days=1),
-                    "boundary": AS_OF,
-                    "later": AS_OF + timedelta(milliseconds=600),
-                }
+                if explicit_as_of:
+                    acuan = AS_OF
+                    harvested = {
+                        "old": AS_OF - timedelta(days=1),
+                        "boundary": AS_OF,
+                        "later": AS_OF + timedelta(milliseconds=600),
+                    }
+                else:
+                    # Varian jam dinding: `fetch_operational_facts(as_of=None)`
+                    # memakai `datetime.now()`, BUKAN `evaluation_clock` — jadi
+                    # patokan harus jam nyata, dan "later" harus jelas di masa
+                    # depan. Dengan +600 ms, batch itu sudah "masa lalu" saat
+                    # fungsi membaca jamnya, sehingga tes gagal bukan karena
+                    # produk bocor melainkan karena asumsi jamnya salah
+                    # (terukur 28 Okt 2026: [live-race] merah di setiap run).
+                    # Baris disisipkan saat fungsi mengirim query PERTAMA,
+                    # yaitu sesudah ia mengambil jamnya. Karena itu "later"
+                    # cukup 2 detik di depan: pasti sesudah jam yang dipakai,
+                    # dan tidak memicu ValueError "panen di masa depan" yang
+                    # muncul bila jaraknya berjam-jam.
+                    mulai = datetime.now(timezone.utc)
+                    # Nilai harapan HARUS dihitung pada jam yang sama dengan
+                    # yang dipakai fungsi (jam dinding di varian ini).
+                    acuan = mulai
+                    harvested = {
+                        "old": mulai - timedelta(days=1),
+                        "boundary": mulai,
+                        "later": mulai + timedelta(seconds=2),
+                    }
 
                 class LaterVisibleSession:
                     inserted = False
@@ -93,7 +122,14 @@ def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, expl
                 ))
                 batches = {b["batch_id"]: b for b in facts[4]}
                 assert str(ids["later"]) not in batches
-                assert batches[str(ids["boundary"])]["freshness_score"] == Decimal("1.000000")
+                # Varian jam dinding: `boundary` dibuat 1 menit sebelum jam
+                # nyata, jadi skornya menyusut sepersekian (0,999975) — itu
+                # decay yang benar, bukan kebocoran data. Yang diuji tetap:
+                # batch pada batas IKUT, batch setelah jam evaluasi TIDAK.
+                if explicit_as_of:
+                    assert batches[str(ids["boundary"])]["freshness_score"] == Decimal("1.000000")
+                else:
+                    assert batches[str(ids["boundary"])]["freshness_score"] >= Decimal("0.9999")
                 # `policy` WAJIB sama dengan yang dipakai jalur produksi
                 # (`fetch_operational_facts` memanggil dengan policy=...).
                 # Tanpa policy, penalti bukti suhu kosong dihitung berbeda dan
@@ -102,7 +138,7 @@ def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, expl
                 from app.core.commodity_policy import policy_for
 
                 expected = rs.compute_freshness_score(
-                    harvested["old"], AS_OF, rs.settings.shelf_life_days_telur,
+                    harvested["old"], acuan, rs.settings.shelf_life_days_telur,
                     _log_suhu(harvested["old"]),
                     rs.settings.safe_temp_min_c, rs.settings.safe_temp_max_c,
                     policy=policy_for("telur"),

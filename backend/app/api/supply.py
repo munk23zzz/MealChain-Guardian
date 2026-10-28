@@ -5,6 +5,7 @@ from sqlalchemy import String, case, cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import get_current_user
+from app.api.balance import _batas_waktu
 from app.api.dependencies import get_db
 from app.core.scope import assert_in_scope
 from app.models import Commodity, Location, SupplyRecord, User
@@ -57,12 +58,18 @@ async def get_supply(
     loc = await _resolve_location(db, location)
     assert_in_scope(user, loc.id, what="lokasi")
     com = await _resolve_commodity(db, commodity)
+    # Batas waktu SAMA dengan /balance: hanya baris yang SUDAH TERJADI. Deret
+    # demo sengaja menjangkau 5 Nov, jadi tanpa batas ini pop-up menyajikan
+    # pasokan masa depan sementara kartu Selisih memakai baris hari ini —
+    # dua angka yang tidak bisa dijumlahkan di layar.
+    batas = _batas_waktu(None)
     record = (
         await db.execute(
             select(SupplyRecord)
             .where(
                 SupplyRecord.location_id == loc.id,
                 SupplyRecord.commodity_id == com.id,
+                SupplyRecord.recorded_at <= batas,
             )
             .order_by(
                 SupplyRecord.recorded_at.desc(),

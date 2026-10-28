@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.approval_matrix import APPROVER_ROLES, evaluate_approvals
@@ -299,6 +299,28 @@ async def build_approval_summary(
     valid = is_decision_valid(now, decision.expires_at)
     seconds_remaining = max(0, int((decision.expires_at - now).total_seconds()))
     safety = await _safety_view(db, decision)
+    # PO milik keputusan ini (dokumen `02-approval-action.md` §6): dua gerbang
+    # berarti "cukup approval" belum berarti "sudah dipesan". Panel butuh satu
+    # fakta jujur — PO draft menunggu review Kepala SPPG, atau sudah dikirim —
+    # dan fakta itu hanya bisa datang dari server.
+    po_row = (
+        await db.execute(
+            text(
+                "SELECT po_number, status, created_at FROM sap_mock_purchase_orders "
+                "WHERE decision_id = :d ORDER BY created_at DESC, po_number DESC LIMIT 1"
+            ),
+            {"d": decision.id},
+        )
+    ).mappings().first()
+    purchase_order = (
+        {
+            "po_number": po_row["po_number"],
+            "status": po_row["status"],
+            "created_at": po_row["created_at"].isoformat(),
+        }
+        if po_row is not None
+        else None
+    )
     supplier_governance = None
     execution_target = "MOCK" if decision.target_location_id else None
     if decision.decision_type in exclusions.ADMIN_TYPES:
@@ -365,6 +387,15 @@ async def build_approval_summary(
     # menolak selamanya. Penolakan tidak kami kunci.
     can_approve = approval_accepted and not unverified
     can_reject = approval_accepted
+    # Peran pengawas (bgn_monitor) tidak pernah boleh menyetujui/menolak.
+    # Sebelum 28 Okt 2026 predikat di atas hanya melihat KEADAAN keputusan, jadi
+    # pembaca read-only menerima `can_approve: true` — UI menahannya lewat
+    # APPROVER_ROLES, tetapi klien lain (dan panel "tiga jawaban" yang baru)
+    # membaca janji yang salah. `viewer_role=None` berarti "tidak dapat dinilai"
+    # (packet tanpa pembaca), dan itu dibiarkan apa adanya.
+    if viewer_role is not None and viewer_role not in APPROVER_ROLES:
+        can_approve = False
+        can_reject = False
     blocking: list[str] = []
     if binding_error is not None:
         blocking.append(binding_error)
@@ -426,11 +457,17 @@ async def build_approval_summary(
             "Temuan tinjauan (review-only): tidak menuntut verifikasi, approval, "
             "atau eksekusi."
         ]
+    # Dua gerbang eksekusi (dokumen `02-approval-action.md` §6): PO draft yang
+    # belum direview Kepala SPPG berarti komitmen belum terjadi, jadi eksekusi
+    # ulang BUKAN pilihan yang sah — `can_execute` mati dengan sebabnya.
+    if purchase_order is not None and purchase_order["status"] == "draft":
+        blocking.append(
+            f"purchase order {purchase_order['po_number']} menunggu review Kepala SPPG"
+        )
     can_execute = not blocking
     # Decision yang sudah executed tetap tampil executed tanpa tombol baru.
     if decision.status == "executed":
         can_execute = False
-
     # Gerbang penerimaan/karantina (Fase 9 MG poin 4). Batch acuan = batch di
     # lokasi TUJUAN; syaratnya cerminan pagar `POST /receipts/{id}/approve` dan
     # `POST /batches/{id}/quarantine`, bukan aturan baru di modul ini.
@@ -474,6 +511,9 @@ async def build_approval_summary(
             else None
         ),
         "execution_target": execution_target,
+        # Dokumen `02-approval-action.md` §6/§7.2: keadaan "cukup approval,
+        # menunggu review PO" hanya bisa ditampilkan kalau PO-nya ikut dikirim.
+        "purchase_order": purchase_order,
         "supplier_governance": supplier_governance,
         "verifier": {
             "verdict": _verdict_of(decision),

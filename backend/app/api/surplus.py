@@ -68,6 +68,232 @@ async def _resolve_commodity(db: AsyncSession, value: str) -> Commodity:
     return com
 
 
+@router.get("/surplus/regions")
+async def surplus_regions(
+    commodity: list[str] | None = Query(
+        default=None,
+        description="Komoditas (nama atau id), boleh diulang. Kosong = semua komoditas.",
+    ),
+    exclude: str | None = Query(
+        default=None,
+        description="Lokasi yang dilewati — biasanya lokasi pengguna (nama atau id).",
+    ),
+    as_of: datetime | None = Query(
+        None, description="Batas atas waktu baris (default: sekarang)"
+    ),
+    min_kg: Decimal | None = Query(
+        None,
+        ge=0,
+        description="Ambang surplus per lokasi agar dianggap layak dialihkan.",
+    ),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Surplus per WILAYAH lintas lokasi, untuk panel di samping grafik kecukupan.
+
+    LATAR (28 Okt 2026). Kartu "Kecukupan pasokan" hanya menjawab satu sisi:
+    lokasi pengguna, empat komoditas. Pertanyaan berikutnya yang wajar —
+    "jadi surplusnya ada di mana?" — tidak bisa dijawab dari `GET /balance/map`,
+    karena peta akun SPPG dibatasi cakupannya (Ruling 2026-10-14) sehingga hanya
+    memuat satu lokasi. Endpoint ini melengkapi grafik itu: agregat per
+    `Location.region` dihitung SERVER, lintas lokasi.
+
+    Kontrak:
+    - `commodity` boleh berulang (grafik kecukupan memakai empat sekaligus).
+      Tanpa parameter = semua komoditas di tabel.
+    - `exclude` membuang satu lokasi (lokasi pengguna) supaya angka di panel
+      terbaca "dari daerah LAIN"; jumlah kg yang dibuang tetap dilaporkan di
+      `totals.excluded_surplus_kg` — tidak ada angka yang menghilang diam-diam.
+    - Sumber surplus hanya lokasi yang PERMINTAANNYA tercatat (PLAN-023).
+      Lokasi yang pasokannya besar tetapi permintaannya tidak ada dihitung di
+      `totals.surplus_unmeasured_locations`, bukan dijadikan surplus.
+    - `layak_kg` = bagian surplus yang berasal dari lokasi ≥ `min_kg` (bawaan
+      150 kg, sama dengan `/surplus/allocations`).
+    - Semua peran terautentikasi boleh membaca: isinya agregat wilayah, sejalan
+      dengan `/surplus/allocations` yang sudah mengirim pasangan lintas wilayah.
+    """
+    if commodity:
+        daftar_kom = [await _resolve_commodity(db, nama) for nama in commodity]
+    else:
+        daftar_kom = list(
+            (
+                await db.execute(select(Commodity).order_by(Commodity.name.asc()))
+            )
+            .scalars()
+            .all()
+        )
+
+    ambang = min_kg if min_kg is not None else MIN_SURPLUS_KG
+    batas = as_of.astimezone(UTC) if as_of else datetime.now(UTC)
+
+    locs = (
+        (await db.execute(select(Location).order_by(Location.name.asc())))
+        .scalars()
+        .all()
+    )
+
+    # Nama lokasi yang dilewati. Nama tak dikenal TIDAK menggagalkan panel:
+    # nilai `excluded_location` dikembalikan null supaya klien tidak mengklaim
+    # sesuatu yang tidak difilter.
+    nama_dilewati: str | None = None
+    id_dilewati = None
+    if exclude:
+        cocok = next(
+            (loc for loc in locs if loc.name == exclude or str(loc.id) == exclude),
+            None,
+        )
+        if cocok is not None:
+            id_dilewati = cocok.id
+            nama_dilewati = cocok.name
+
+    kom_ids = [k.id for k in daftar_kom]
+
+    async def _terakhir_per_kunci(model) -> dict:
+        """Baris terbaru per (lokasi, komoditas) — bukan per lokasi saja."""
+        if not kom_ids:
+            return {}
+        rows = (
+            (
+                await db.execute(
+                    select(model)
+                    .where(
+                        model.commodity_id.in_(kom_ids),
+                        model.recorded_at <= batas,
+                    )
+                    .order_by(
+                        model.location_id.asc(),
+                        model.commodity_id.asc(),
+                        model.recorded_at.desc(),
+                        model.id.desc(),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        out: dict = {}
+        for row in rows:
+            out.setdefault((row.location_id, row.commodity_id), row)
+        return out
+
+    sup_by_key = await _terakhir_per_kunci(SupplyRecord)
+    dem_by_key = await _terakhir_per_kunci(DemandRecord)
+
+    wilayah: dict[str, dict] = {}
+    tanpa_permintaan = 0
+    surplus_dilewati = Decimal("0")
+
+    for loc in locs:
+        for kom in daftar_kom:
+            s_row = sup_by_key.get((loc.id, kom.id))
+            d_row = dem_by_key.get((loc.id, kom.id))
+            if s_row is None and d_row is None:
+                continue
+            gap = calculate_supply_gap(
+                Decimal(str(s_row.quantity_kg)) if s_row is not None else Decimal("0"),
+                Decimal(str(d_row.quantity_kg)) if d_row is not None else Decimal("0"),
+            )
+            if gap.surplus_kg <= 0:
+                continue
+            if d_row is None:
+                # Pasokan ada, permintaan tidak tercatat: BUKAN surplus.
+                tanpa_permintaan += 1
+                continue
+            if id_dilewati is not None and loc.id == id_dilewati:
+                surplus_dilewati += gap.surplus_kg
+                continue
+
+            kunci = (loc.region or "").strip() or "Tanpa wilayah"
+            w = wilayah.setdefault(
+                kunci,
+                {
+                    "region": kunci,
+                    "surplus_kg": Decimal("0"),
+                    "layak_kg": Decimal("0"),
+                    "by_commodity": {},
+                    "sources": {},
+                },
+            )
+            w["surplus_kg"] += gap.surplus_kg
+            if gap.surplus_kg >= ambang:
+                w["layak_kg"] += gap.surplus_kg
+            w["by_commodity"][kom.name] = (
+                w["by_commodity"].get(kom.name, Decimal("0")) + gap.surplus_kg
+            )
+            sumber = w["sources"].setdefault(
+                loc.name, {"surplus_kg": Decimal("0"), "by_commodity": {}}
+            )
+            sumber["surplus_kg"] += gap.surplus_kg
+            sumber["by_commodity"][kom.name] = gap.surplus_kg
+
+    def _pasangan(nilai: dict[str, Decimal]) -> list[dict]:
+        return [
+            {"commodity": nama, "surplus_kg": round(float(kg), 2)}
+            for nama, kg in sorted(nilai.items(), key=lambda kv: kv[1], reverse=True)
+        ]
+
+    regions = []
+    for w in wilayah.values():
+        sumber_urut = sorted(
+            w["sources"].items(), key=lambda kv: kv[1]["surplus_kg"], reverse=True
+        )
+        regions.append(
+            {
+                "region": w["region"],
+                "surplus_kg": round(float(w["surplus_kg"]), 2),
+                "layak_kg": round(float(w["layak_kg"]), 2),
+                "locations": len(sumber_urut),
+                "by_commodity": _pasangan(w["by_commodity"]),
+                # Dibatasi 8 sumber per wilayah: panel hanya memuat nama teratas,
+                # angka wilayahnya tetap utuh di `surplus_kg`.
+                "sources": [
+                    {
+                        "location": nama,
+                        "surplus_kg": round(float(isi["surplus_kg"]), 2),
+                        "by_commodity": _pasangan(isi["by_commodity"]),
+                    }
+                    for nama, isi in sumber_urut[:8]
+                ],
+            }
+        )
+    regions.sort(key=lambda r: r["surplus_kg"], reverse=True)
+
+    total_surplus = sum((r["surplus_kg"] for r in regions), start=0.0)
+    total_layak = sum((r["layak_kg"] for r in regions), start=0.0)
+    jumlah_sumber = sum(r["locations"] for r in regions)
+
+    reason = None
+    if not regions:
+        if surplus_dilewati > 0:
+            reason = "surplus_hanya_di_lokasi_ini"
+        elif tanpa_permintaan:
+            reason = "surplus_tanpa_permintaan_tercatat"
+        else:
+            reason = "tidak_ada_surplus_terukur"
+
+    return {
+        "as_of": batas.isoformat(),
+        "commodities": [k.name for k in daftar_kom],
+        "excluded_location": nama_dilewati,
+        "min_surplus_kg": float(ambang),
+        "locations_total": len(locs),
+        "available": bool(regions),
+        "reason": reason,
+        "totals": {
+            "surplus_kg": round(total_surplus, 2),
+            "layak_kg": round(total_layak, 2),
+            "source_locations": jumlah_sumber,
+            "regions": len(regions),
+            # Angka yang TIDAK masuk panel karena ia milik lokasi pengguna —
+            # ditulis supaya pembaca tahu surplus lokalnya tidak dihilangkan.
+            "excluded_surplus_kg": round(float(surplus_dilewati), 2),
+            # Lokasi bersurplus yang permintaannya belum tercatat (tidak dihitung).
+            "surplus_unmeasured_locations": tanpa_permintaan,
+        },
+        "regions": regions,
+    }
+
+
 @router.get("/surplus/allocations")
 async def surplus_allocations(
     commodity: str,

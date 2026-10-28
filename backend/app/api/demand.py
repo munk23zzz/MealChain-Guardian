@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import get_current_user
+from app.api.balance import _batas_waktu
 from app.api.dependencies import get_db
 from app.api.supply import _resolve_commodity, _resolve_location
 from app.core.forecasting_fallback import statistical_forecast
@@ -42,6 +43,10 @@ async def get_demand_forecast(
     loc = await _resolve_location(db, location)
     assert_in_scope(user, loc.id, what="lokasi")
     com = await _resolve_commodity(db, commodity)
+    # Perkiraan hanya boleh dibentuk dari catatan yang SUDAH TERJADI: baris
+    # bertanggal masa depan (deret demo menjangkau 5 Nov) bukan riwayat, dan
+    # batasnya sama dengan /balance supaya angkanya sejalan.
+    batas = _batas_waktu(None)
     rows = (
         (
             await db.execute(
@@ -49,6 +54,7 @@ async def get_demand_forecast(
                 .where(
                     DemandRecord.location_id == loc.id,
                     DemandRecord.commodity_id == com.id,
+                    DemandRecord.recorded_at <= batas,
                 )
                 .order_by(DemandRecord.recorded_at.desc())
                 .limit(3)
@@ -78,12 +84,16 @@ async def get_demand(
     loc = await _resolve_location(db, location)
     assert_in_scope(user, loc.id, what="lokasi")
     com = await _resolve_commodity(db, commodity)
+    # Batas waktu SAMA dengan /balance: kondisi "kini" tidak boleh berasal dari
+    # baris masa depan. Lihat catatan di /balance/{loc}/{com}.
+    batas = _batas_waktu(None)
     record = (
         await db.execute(
             select(DemandRecord)
             .where(
                 DemandRecord.location_id == loc.id,
                 DemandRecord.commodity_id == com.id,
+                DemandRecord.recorded_at <= batas,
             )
             .order_by(DemandRecord.recorded_at.desc())
             .limit(1)

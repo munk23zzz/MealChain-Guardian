@@ -86,12 +86,18 @@ def _act_rows(decision_id: str) -> list[tuple]:
 
 
 def _run_execute_flow(client, head) -> tuple[str, str, str]:
-    """Event 1 → propose → verify CONSISTENT → 2 approval → execute.
+    """Event 1 → propose → verify CONSISTENT → 2 approval → execute → review PO.
 
     Keputusan OPERASIONAL (transfer) wajib DUA approval dari dua role berbeda
     (matriks S3-01 `dua_role_wajib`), apa pun verdict verifier-nya. Tes ini dulu
     hanya approve sebagai `sppg_head` lalu menabrak 409 "approval belum
     memenuhi requirement" — alur tes yang ketinggalan aturan, bukan bug produk.
+
+    Sejak 28 Okt 2026 (dokumen `02-approval-action.md` §6) eksekusi punya DUA
+    gerbang: `/actions/execute` hanya menerbitkan PO `draft`, dan trace ACT —
+    definisi "committed" yang dipakai metrik Decision Time — baru ditulis saat
+    Kepala SPPG mereview PO. Karena itu alur tes ini WAJIB menutup gerbang
+    kedua; tanpa itu metrik memang belum boleh bergerak.
 
     Mengembalikan (decision_id, po_number, email ahli gizi): email itu harus
     ikut dibersihkan pemanggil bersama email head.
@@ -121,7 +127,13 @@ def _run_execute_flow(client, head) -> tuple[str, str, str]:
         "/actions/execute", json={"decision_id": decision_id}, headers=_login(client, head)
     )
     assert resp.status_code == 200, resp.text
-    return decision_id, resp.json()["po_number"], gizi["email"]
+    po_number = resp.json()["po_number"]
+    # Gerbang 2: review PO menulis ACT (commit point metrik Decision Time).
+    review = client.post(
+        f"/actions/purchase-orders/{po_number}/approve", headers=_login(client, head)
+    )
+    assert review.status_code == 200, review.text
+    return decision_id, po_number, gizi["email"]
 
 
 def _kpi_metric(client, headers, name: str) -> dict:

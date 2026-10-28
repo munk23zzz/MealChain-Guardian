@@ -506,7 +506,19 @@ def test_approval_summary_or_complete_then_execute_parity(client, binding):
         assert po[0][0] == summary["supplier"]["name"]
         assert po[0][1] == summary["material_number"]
         assert float(po[0][2]) == summary["quantity_kg"]
-        assert po[0][3] == "submitted"
+        # Gerbang 1 (dokumen 02-approval-action.md §6): PO lahir `draft`; status
+        # `submitted` baru terjadi setelah review Kepala SPPG.
+        assert po[0][3] == "draft"
+        review = client.post(
+            f"/actions/purchase-orders/{rx.json()['po_number']}/approve",
+            headers=_head_user(client),
+        )
+        assert review.status_code == 200, review.text
+        po = _db_all(
+            "SELECT p.status FROM sap_mock_purchase_orders p WHERE p.decision_id = :d",
+            {"d": did},
+        )
+        assert po[0][0] == "submitted"
     finally:
         _cleanup_decision(did)
         if batch:

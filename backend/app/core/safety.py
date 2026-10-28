@@ -24,6 +24,17 @@ from app.core.temperature import parse_samples, parse_temperature_log
 FAIL_EXCURSION_DEFAULT_MINUTES = 30.0
 
 
+def _menit(nilai: float) -> str:
+    """Angka menit untuk kalimat alasan: satu desimal, koma desimal, tanpa ",0".
+
+    Teks ini tampil apa adanya di kartu "Bukti suhu"; `{:.3f}` menghasilkan
+    "660.000" — titik ribuan yang justru terbaca sebagai enam ratus enam puluh
+    ribu bagi pembaca Indonesia.
+    """
+    teks = f"{nilai:.1f}".replace(".", ",")
+    return teks[:-2] if teks.endswith(",0") else teks
+
+
 def evaluate_safety(
     temperature_log: list[dict] | None,
     safe_min_c: float | None = None,
@@ -76,10 +87,10 @@ def evaluate_safety(
     if not profil.requires_temperature_evidence:
         return {
             "safety_status": "pass",
-            "reasons": [
-                "komoditas ambient — bukti suhu tidak diwajibkan "
-                f"(bukti: {observation.observation})",
-            ],
+            # Tanpa "(bukti: observed)": keadaan observasi sudah tercetak sebagai
+            # label baris di kartu ("Teramati"), dan nilai enum mentah di dalam
+            # kurung hanya mengulang fakta yang sama dalam bahasa mesin.
+            "reasons": ["komoditas ambient — bukti suhu tidak diwajibkan"],
             "excursion_minutes": 0.0,
             "temperature_observation": observation.observation,
             "evidence_state": observation.evidence_state,
@@ -101,14 +112,14 @@ def evaluate_safety(
 
     if observation.outside_minutes >= ambang:
         reasons.append(
-            f"excursion {observation.outside_minutes:.3f} menit "
-            f">= ambang fail {ambang} menit"
+            f"suhu di luar rentang selama {_menit(observation.outside_minutes)} menit, "
+            f"melewati ambang gagal {_menit(float(ambang))} menit"
         )
         status = "fail"
     elif observation.outside_minutes > 0:
         reasons.append(
-            f"excursion {observation.outside_minutes:.3f} menit > 0 "
-            f"dan < ambang fail {ambang} menit"
+            f"suhu di luar rentang selama {_menit(observation.outside_minutes)} menit, "
+            f"masih di bawah ambang gagal {_menit(float(ambang))} menit"
         )
         status = "needs_verification"
     else:

@@ -834,6 +834,127 @@ async def _approval_users(db: AsyncSession, approvals):
     return [by_id[a.approved_by] for a in approvals]
 
 
+#: PO terakhir milik satu keputusan. Nomor PO deterministik dari id keputusan
+#: (`core.po_number`), jadi satu keputusan hanya punya satu PO — tetapi query
+#: ini tetap memakai ORDER BY supaya data lama (sebelum audit M8) ikut terbaca.
+_PO_KEPUTUSAN = text(
+    "SELECT po_number, status, created_at FROM sap_mock_purchase_orders "
+    "WHERE decision_id = :d ORDER BY created_at DESC, po_number DESC LIMIT 1"
+)
+
+
+async def _evaluasi_approval(db: AsyncSession, decision: Decision) -> tuple[dict, dict]:
+    """Matriks approval untuk satu keputusan: seluruhnya, dan yang scoped.
+
+    Dua hasil karena dua pertanyaan berbeda: `evaluation` menjawab "apakah
+    syaratnya terpenuhi", `scoped` menjawab "apakah terpenuhi oleh approver dari
+    SPPG TUJUAN" (Ruling 2026-10-14 §3). Satu tempat untuk keduanya supaya
+    `/actions/execute` dan review PO tidak bisa menyimpang.
+    """
+    rows = (
+        (await db.execute(select(Approval).where(Approval.decision_id == decision.id)))
+        .scalars()
+        .all()
+    )
+    approvers = await _approval_users(db, rows)
+    per_user = [
+        {"role": u.role, "approved": a.approved} for a, u in zip(rows, approvers)
+    ]
+    scoped_rows = [
+        {"role": u.role, "approved": a.approved}
+        for a, u in zip(rows, approvers)
+        if u.location_id == decision.target_location_id
+    ]
+    syarat = _requirement_for(decision)
+    return (
+        evaluate_approvals(syarat, per_user),
+        evaluate_approvals(syarat, scoped_rows),
+    )
+
+
+def _harga_satuan_invoice(decision: Decision, qty: Decimal) -> Decimal:
+    """Harga satuan yang ditagihkan pada PO (bahan + transportasi + penanganan).
+
+    Fase 5 butir 2/4: harga PO = harga INVOICE, bukan `sdc / qty`. Sebelum
+    perbaikan ini `price` memuat expected_loss + penalti kesegaran + penalti
+    keamanan, sehingga dokumen yang dibayar pemasok menagihkan kerugian internal
+    yang tidak pernah ia sebabkan (terukur: 37.171,00 vs 29.421,00 pada rincian
+    uji Fase 5). Rincian lama `{"purchase": ...}` tetap dipakai apa adanya.
+    """
+    breakdown = decision.cost_breakdown if isinstance(decision.cost_breakdown, dict) else None
+    biaya = commercial_cost(qty, breakdown)
+    if biaya is not None:
+        return biaya.invoice_unit_price
+    purchase = komponen_desimal(breakdown, "purchase")
+    if purchase is not None and purchase > 0:
+        return (purchase / qty).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return Decimal("0")
+
+
+async def _commit_purchase_order(
+    db: AsyncSession,
+    decision: Decision,
+    po_number: str,
+    harga: Decimal,
+    supplier_id: uuid.UUID,
+    material_number: str,
+    user: User,
+) -> tuple[list[dict], list[dict]]:
+    """Kirim PO ke SAP mock dan tutup keputusannya (gerbang kedua).
+
+    Semua akibat "komitmen" dikumpulkan di satu tempat karena hanya boleh
+    terjadi SEKALI, saat Kepala SPPG mereview PO draft: PO menjadi `submitted`,
+    keputusan `executed`, trace ACT ditulis (itu definisi "committed" pada KPI
+    Decision Time), harga PO dicatat sebagai kutipan, batch terikat
+    diberangkatkan, dan satu blok ledger `execute` ditambahkan.
+    """
+    await db.execute(
+        text("UPDATE sap_mock_purchase_orders SET status = 'submitted' WHERE po_number = :po"),
+        {"po": po_number},
+    )
+    decision.status = "executed"
+    db.add(
+        AgentTrace(
+            decision_id=decision.id,
+            step_name="ACT",
+            tool_called="sap_mock.create_purchase_order",
+            input_summary={
+                "decision_id": str(decision.id),
+                "supplier_id": str(supplier_id),
+                "material_number": material_number,
+                "quantity_kg": str(decision.quantity_kg),
+            },
+            output_summary={
+                "po_number": po_number,
+                "status": "submitted",
+                "data_source": "MOCK",
+            },
+        )
+    )
+    await settlement.catat_po_terbit(
+        db,
+        decision=decision,
+        po_number=po_number,
+        supplier_id=supplier_id,
+        harga_per_kg=harga,
+        sekarang=_now_utc(),
+    )
+    dikirim, ditahan = await _dispatch_bound_batches(db, decision)
+    await append_block(
+        db,
+        action="execute",
+        entity_id=decision.id,
+        actor_id=user.id,
+        payload={
+            "decision_id": str(decision.id),
+            "po_number": po_number,
+            "quantity_kg": str(decision.quantity_kg or ""),
+            "status": decision.status,
+        },
+    )
+    return dikirim, ditahan
+
+
 @router.post("/actions/execute", status_code=200)
 async def execute_action(
     payload: ExecuteRequest,
@@ -872,36 +993,15 @@ async def execute_action(
             detail=f"status {decision.status} tidak dapat dieksekusi",
         )
 
-    rows = (
-        (await db.execute(select(Approval).where(Approval.decision_id == decision.id)))
-        .scalars()
-        .all()
-    )
-    approvers = await _approval_users(db, rows)
-    evaluation = evaluate_approvals(
-        _requirement_for(decision),
-        [
-            {"role": u.role, "approved": a.approved}
-            for a, u in zip(rows, approvers)
-        ],
-    )
+    # Matriks approval: satu tempat untuk keduanya (`_evaluasi_approval`), supaya
+    # gerbang eksekusi dan gerbang review PO tidak bisa menyimpang.
+    # Ruling 2026-10-14 §3: hanya approval dari lokasi TARGET yang dihitung.
+    evaluation, scoped = await _evaluasi_approval(db, decision)
     if not evaluation["satisfied"]:
         raise HTTPException(
             status_code=409,
             detail="approval belum memenuhi requirement (missing/rejected)",
         )
-    # Ruling 2026-10-14 §3: hanya approval dari lokasi TARGET yang dihitung.
-    # Filter ini dulu hanya dipakai untuk tipe administrasi, sehingga approval
-    # approver SPPG lain (mis. baris lama sebelum ruling) ikut memenuhi matriks
-    # keputusan operasional.
-    scoped = evaluate_approvals(
-        _requirement_for(decision),
-        [
-            {"role": u.role, "approved": a.approved}
-            for a, u in zip(rows, approvers)
-            if u.location_id == decision.target_location_id
-        ],
-    )
     if not scoped["satisfied"]:
         raise HTTPException(409, "approval scope tidak memenuhi requirement")
 
@@ -960,6 +1060,25 @@ async def execute_action(
             ),
         )
 
+    # ── Gerbang 1: terbitkan PO DRAFT, belum mengirim apa pun ────────────────
+    # Dokumen `02-approval-action.md` §6 (keputusan pemilik 28 Okt 2026):
+    # "Disetujui" bukan keadaan akhir. Sebelum ini satu klik menyelesaikan
+    # approval, penerbitan dokumen, DAN pengiriman ke SAP; akibatnya langkah
+    # review PO tidak punya tempat, dan keadaan "menunggu review PO" tidak
+    # pernah bisa terjadi. Sekarang eksekusi berhenti di dokumen `draft`;
+    # pengiriman terjadi di gerbang 2 (endpoint review di bawah).
+    sudah_ada = (await db.execute(_PO_KEPUTUSAN, {"d": decision.id})).mappings().first()
+    if sudah_ada is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"purchase order {sudah_ada['po_number']} masih draft — "
+                "menunggu review Kepala SPPG"
+                if sudah_ada["status"] == "draft"
+                else f"purchase order {sudah_ada['po_number']} sudah dikirim ke SAP"
+            ),
+        )
+
     # Snapshot utk PO
     commodity = (
         await db.execute(select(Commodity).where(Commodity.id == decision.commodity_id))
@@ -970,25 +1089,8 @@ async def execute_action(
     if qty <= 0:
         raise HTTPException(status_code=422, detail="quantity decision tidak valid")
     # Fase 5 butir 2/4: harga PO = harga INVOICE (bahan + transportasi +
-    # penanganan), bukan `sdc / qty`. Sebelum perbaikan ini `price` memuat
-    # expected_loss + penalti kesegaran + penalti keamanan, sehingga dokumen
-    # yang dibayar pemasok menagihkan kerugian internal yang tidak pernah ia
-    # sebabkan (terukur: 37.171,00 vs 29.421,00 pada rincian uji Fase 5).
-    breakdown = decision.cost_breakdown if isinstance(decision.cost_breakdown, dict) else None
-    biaya = commercial_cost(qty, breakdown)
-    if biaya is not None:
-        unit_price = biaya.invoice_unit_price
-    else:
-        # Rincian belum lengkap (bentuk data lama `{"purchase": ...}`): PO tetap
-        # terbit dari komponen yang TERCATAT — harga bahan apa adanya — dan
-        # barisnya ditandai `legacy_unmigrated` saat dibaca. Tidak ada komponen
-        # yang dikarang, dan tidak ada penalti yang ditagihkan.
-        purchase = komponen_desimal(breakdown, "purchase")
-        unit_price = (
-            (purchase / qty).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            if purchase is not None and purchase > 0
-            else Decimal("0")
-        )
+    # penanganan), bukan `sdc / qty` — lihat `_harga_satuan_invoice`.
+    unit_price = _harga_satuan_invoice(decision, qty)
     if unit_price <= 0:
         raise HTTPException(status_code=422, detail="unit price decision tidak valid")
 
@@ -1001,7 +1103,7 @@ async def execute_action(
             "INSERT INTO sap_mock_purchase_orders "
             "(po_number, supplier_id, material_number, ordered_quantity, "
             "price, decision_id, status, demo_session_id) "
-            "VALUES (:po, :sup, :mat, :qty, :price, :dec, 'submitted', :sesi)"
+            "VALUES (:po, :sup, :mat, :qty, :price, :dec, 'draft', :sesi)"
         ),
         {
             "po": po_number,
@@ -1018,60 +1120,22 @@ async def execute_action(
             "sesi": decision.demo_session_id,
         },
     )
-    decision.status = "executed"
-    # Trace langkah ACT (rantai PRD DETECT→…→DECIDE→ACT→LEARN). Sebelum
-    # 16 Okt 2026 TIDAK ADA penulis ACT di repo ini — whitelist trace, CHECK
-    # `agent_traces_step_name_check`, Schema.md, PRD, dan prompt supervisor
-    # semuanya memuat ACT, tetapi satu-satunya penyebutannya di kode adalah
-    # PEMBACA di `services/kpi_service.py` (metrik Decision Time) sehingga
-    # kartu KPI itu `no_data` permanen. Eksekusi = saat PO benar-benar terbit,
-    # dan itulah definisi "committed" yang dipakai metriknya: ACT ditulis di
-    # sini, bukan saat approval (approval belum berarti komitmen ke SAP).
-    # Jalur administratif (eksklusi pemasok) tidak menerbitkan PO → sengaja
-    # tidak menulis ACT.
-    db.add(
-        AgentTrace(
-            decision_id=decision.id,
-            step_name="ACT",
-            tool_called="sap_mock.create_purchase_order",
-            input_summary={
-                "decision_id": str(decision.id),
-                "supplier_id": str(supplier_id),
-                "material_number": _material_number_for(commodity),
-                "quantity_kg": str(qty),
-            },
-            output_summary={
-                "po_number": po_number,
-                "status": "submitted",
-                "data_source": "MOCK",
-            },
-        )
-    )
-    # Penulis KPI (migrasi 029): PO yang baru terbit menjadi kutipan harga
-    # pemasok, sehingga Procurement Price Deviation bergerak dari aksi nyata.
-    # Idempoten lewat `source_ref=po:<nomor>`; harga diambil dari PO apa adanya.
-    await settlement.catat_po_terbit(
-        db,
-        decision=decision,
-        po_number=po_number,
-        supplier_id=supplier_id,
-        harga_per_kg=unit_price.quantize(Decimal("0.01")),
-        sekarang=_now_utc(),
-    )
-    # Eksekusi = barang berangkat: batch terikat diberi `dispatched_at` supaya
-    # peta menampilkan truk yang benar-benar jalan setelah disetujui.
-    dikirim, ditahan = await _dispatch_bound_batches(db, decision)
-    # P1 Merkle ledger: eksekusi = block append-only (bukti PO terbit).
+    # Keputusan tetap `approved`: approval memang sudah cukup, tetapi komitmen
+    # (PO terkirim, barang berangkat) belum terjadi. Menulis `executed` di sini
+    # akan membuat layar mengklaim pembelian yang belum disetujui siapa pun.
+    decision.status = "approved"
+    # P1 Merkle ledger: penerbitan dokumen = blok append-only tersendiri.
     await append_block(
         db,
-        action="execute",
+        action="po_draft",
         entity_id=decision.id,
         actor_id=user.id,
         payload={
             "decision_id": str(decision.id),
             "po_number": po_number,
             "quantity_kg": str(qty),
-            "status": decision.status,
+            "status": "draft",
+            "awaiting": "po_review",
         },
     )
     await db.commit()
@@ -1079,15 +1143,135 @@ async def execute_action(
         "decision_id": str(decision.id),
         "po_number": po_number,
         "data_source": "MOCK",
-        "status": "executed",
-        "executed_by": str(user.id),
-        "executed_at": _now_utc().isoformat(),
+        # `status` tetap berarti status KEPUTUSAN (kontrak lama), dan kini
+        # nilainya `approved` — bukan `executed`.
+        "status": decision.status,
+        "decision_status": decision.status,
+        "po_status": "draft",
+        "awaiting": "po_review",
+        "issued_by": str(user.id),
+        "issued_at": _now_utc().isoformat(),
+        # Belum ada barang yang berangkat di gerbang ini.
+        "dikirim": [],
+        "ditahan": [],
+    }
+
+
+@router.post("/actions/purchase-orders/{po_number}/approve", status_code=200)
+async def review_purchase_order(
+    po_number: str,
+    user: User = Depends(require_roles(*PROPOSER_ROLES)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Gerbang 2 — Kepala SPPG mereview PO draft, lalu PO dikirim ke SAP mock.
+
+    Hanya Kepala SPPG (`PROPOSER_ROLES`), hanya dari SPPG TUJUAN (Ruling
+    2026-10-14 §3), hanya untuk PO yang masih `draft`. Semua pagar yang dulu
+    diperiksa saat `/actions/execute` diperiksa ULANG di sini, karena di sinilah
+    komitmen benar-benar terjadi: verifikasi, kedaluwarsa, kuorum approval,
+    binding pemasok, safety batch sumber, dan sidik bukti sejak disetujui.
+    """
+    row = (
+        await db.execute(
+            text(
+                "SELECT po_number, status, decision_id, price, material_number "
+                "FROM sap_mock_purchase_orders WHERE po_number = :po FOR UPDATE"
+            ),
+            {"po": po_number},
+        )
+    ).mappings().first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="purchase order tidak ditemukan")
+    if row["decision_id"] is None:
+        raise HTTPException(
+            status_code=409,
+            detail="purchase order tanpa keputusan — tidak ada approval yang bisa direview",
+        )
+    if row["status"] != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"purchase order {po_number} berstatus {row['status']} — "
+                "tidak ada review yang tertunda"
+            ),
+        )
+
+    decision = await _load_decision(db, row["decision_id"])
+    _require_decision_scope(user, decision)
+    if decision.status == "review_only":
+        raise HTTPException(
+            status_code=409,
+            detail="decision tinjauan (review-only) — tidak untuk dieksekusi",
+        )
+    if decision.status == "rejected":
+        raise HTTPException(status_code=409, detail="decision ditolak")
+    if not is_decision_valid(_now_utc(), decision.expires_at):
+        raise HTTPException(status_code=409, detail="decision expired")
+    if decision.status != "approved":
+        raise HTTPException(
+            status_code=409,
+            detail=f"status {decision.status} tidak dapat direview",
+        )
+    if _verifier_unverified(decision):
+        raise HTTPException(status_code=409, detail="decision belum terverifikasi")
+    evaluation, scoped = await _evaluasi_approval(db, decision)
+    if not evaluation["satisfied"]:
+        raise HTTPException(
+            status_code=409,
+            detail="approval belum memenuhi requirement (missing/rejected)",
+        )
+    if not scoped["satisfied"]:
+        raise HTTPException(status_code=409, detail="approval scope tidak memenuhi requirement")
+
+    from app.services.supplier_eligibility import PESAN_BLOKIR, revalidate_transfer
+
+    supplier_id = await revalidate_transfer(db, decision)
+    alasan_safety = await _source_batches_block_reason(db, decision)
+    if alasan_safety is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "safety revalidation gagal: "
+                f"{PESAN_BLOKIR.get(alasan_safety, alasan_safety)}"
+                " — decision tidak dapat dieksekusi"
+            ),
+        )
+    alasan_sidik = await _sidik_berubah(db, decision)
+    if alasan_sidik is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"bukti berubah sejak disetujui ({alasan_sidik}) — "
+                "ajukan ulang agar disetujui atas bukti yang sekarang"
+            ),
+        )
+
+    harga = Decimal(str(row["price"] or 0))
+    dikirim, ditahan = await _commit_purchase_order(
+        db,
+        decision,
+        po_number,
+        harga,
+        supplier_id,
+        str(row["material_number"] or ""),
+        user,
+    )
+    await db.commit()
+    return {
+        "po_number": po_number,
+        "po_status": "submitted",
+        "decision_id": str(decision.id),
+        "decision_status": decision.status,
+        "data_source": "MOCK",
+        "reviewed_by": str(user.id),
+        "reviewed_at": _now_utc().isoformat(),
         "dikirim": dikirim,
         # Batch terikat yang TIDAK diberangkatkan karena gagal gerbang
         # keselamatan (kedaluwarsa/karantina/status belum pass/bukti suhu
         # kurang). Ditampilkan supaya UI tidak mengaku semua barang jalan.
         "ditahan": ditahan,
     }
+
 
 
 def _material_number_for(commodity: Commodity) -> str:

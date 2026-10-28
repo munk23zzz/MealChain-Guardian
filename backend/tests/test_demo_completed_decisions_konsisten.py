@@ -518,7 +518,12 @@ async def test_sumber_hilang_tanpa_semai_ulang_tetap_diblokir() -> None:
     terikat = await _batch_terikat(target.id)
     assert terikat, f"keputusan {target.id} tidak punya allocation_binding"
 
-    asli = await _kedaluwarsakan(terikat)
+    # Kedaluwarsa HARUS dihitung terhadap jangkar keputusan. Tanpa `acuan`,
+    # helper memakai jam dinding: batch jadi "kedaluwarsa kemarin" menurut jam
+    # nyata tetapi masih berlaku pada jangkar 8 Okt, sehingga ringkasan menjawab
+    # blocked=false dan tes gagal padahal gate produknya benar (terukur 28 Okt
+    # 2026; probe dengan acuan=jangkar memberi block_code=batch_expired).
+    asli = await _kedaluwarsakan(terikat, acuan=await _jangkar_keputusan(target))
     try:
         r = await _ringkasan(target.id)
         assert r["safety"]["blocked"] is True, (

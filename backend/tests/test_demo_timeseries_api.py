@@ -259,6 +259,29 @@ def _stempel_demo_terakhir() -> str:
     return row.strftime("%Y-%m-%dT%H:%M:%S")
 
 
+def _stempel_demo_terakhir_lampau() -> str:
+    """Stempel demo terakhir yang SUDAH TERJADI, ISO tanpa zona (untuk startswith).
+
+    Deret demo menjangkau 5 Nov, jadi `max(recorded_at)` seluruh deret ada di
+    MASA DEPAN. Sejak audit 28 Okt 2026 `/supply` (dan `/demand`) hanya
+    menyajikan baris `recorded_at <= sekarang` — acuan di sini memakai batas
+    yang sama.
+    """
+    engine = create_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT max(recorded_at) FROM supply_records"
+                    " WHERE origin = 'demo' AND recorded_at <= now()"
+                )
+            ).scalar()
+    finally:
+        engine.dispose()
+    assert row is not None, "tidak ada baris demo yang sudah terjadi"
+    return row.strftime("%Y-%m-%dT%H:%M:%S")
+
+
 def _stempel_seed_pertama() -> str:
     engine = create_engine(DB_URL)
     try:
@@ -328,11 +351,13 @@ def test_membangun_deret_tidak_menggeser_jangkar(demo_state, auth_headers, monit
         "demand_records",
     }
 
-    # Jangkar sisi SUMBER: baris KANONIK Cianjur telur tetap 1.400 kg. Record TERBARU
-    # keseluruhan kini berasal dari deret demo (ujung rencana 4 Nov 12:00).
+    # Jangkar sisi SUMBER: baris KANONIK Cianjur telur tetap 1.400 kg. Record
+    # TERBARU yang disajikan `/supply` berasal dari deret demo — tetapi hanya
+    # baris yang SUDAH TERJADI (ujung rencana 4 Nov ada di masa depan, dan
+    # sejak audit 28 Okt 2026 endpoint membatasi ke `recorded_at <= sekarang`).
     sup = demo_state.get("/supply/Cianjur/telur", headers=monitor_headers)
     assert sup.status_code == 200, sup.text
-    assert sup.json()["recorded_at"].startswith(_stempel_demo_terakhir())
+    assert sup.json()["recorded_at"].startswith(_stempel_demo_terakhir_lampau())
     assert _seed_supply_terbaru()[1] == 1400.0
 
     # Jangkar peta: angka peta = baris TERBARU tiap lokasi yang SUDAH TERJADI

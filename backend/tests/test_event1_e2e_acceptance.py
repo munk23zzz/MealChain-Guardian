@@ -117,10 +117,18 @@ def test_event1_e2e_propose_approve_execute_mock_sap(client):
         body = resp.json()
         assert body["data_source"] == "MOCK"
         assert body["po_number"].startswith("MC-")
-        # PO tertulis di DB (bukan cuma response); label MOCK = kontrak API
+        # PO tertulis di DB (bukan cuma response); label MOCK = kontrak API.
+        # Gerbang 1 (dokumen 02-approval-action.md §6): PO masih DRAFT — review
+        # Kepala SPPG adalah gerbang kedua, diuji di test_po_review_flow.py.
         pos = _po_rows(decision_id)
         assert len(pos) == 1
-        assert pos[0]["status"] == "submitted"
+        assert pos[0]["status"] == "draft"
+        review = client.post(
+            f"/actions/purchase-orders/{body['po_number']}/approve",
+            headers=head_h,
+        )
+        assert review.status_code == 200, review.text
+        assert _po_rows(decision_id)[0]["status"] == "submitted"
     finally:
         _cleanup(decision_id, [head["email"], nut["email"]])
 

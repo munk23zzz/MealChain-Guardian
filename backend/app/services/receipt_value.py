@@ -28,15 +28,20 @@ from app.models.sap_mock import SapMockPurchaseOrder
 _SEN = Decimal("0.01")
 
 
-async def harga_invoice_po(db: AsyncSession, batch_id: uuid.UUID) -> Decimal | None:
-    """Harga satuan invoice PO yang mendanai `batch_id`, atau None.
+async def po_dan_harga(
+    db: AsyncSession, batch_id: uuid.UUID
+) -> tuple[str | None, Decimal | None]:
+    """Nomor PO + harga satuan invoice yang mendanai `batch_id`.
 
-    Bila satu batch muncul di beberapa bukti (keputusan lama dan penggantinya),
-    yang dipakai bukti TERBARU — itu alokasi yang masih berlaku.
+    Dipisah dari `harga_invoice_po` supaya layar penerimaan bisa MENJELASKAN
+    asal nilai ("130 kg × Rp 26.200 per kg dari PO …") tanpa membagi nilai
+    dengan jumlah kg di peramban. Aturan atribusinya sama persis — satu jalur,
+    bukti `human_inspection` terbaru — jadi harga yang tampil tidak bisa
+    berbeda dari harga yang dipakai menghitung nilai.
     """
-    return (
+    baris = (
         await db.execute(
-            select(SapMockPurchaseOrder.price)
+            select(SapMockPurchaseOrder.po_number, SapMockPurchaseOrder.price)
             .join(Decision, Decision.id == SapMockPurchaseOrder.decision_id)
             .join(DecisionEvidence, DecisionEvidence.decision_id == Decision.id)
             .where(
@@ -48,7 +53,27 @@ async def harga_invoice_po(db: AsyncSession, batch_id: uuid.UUID) -> Decimal | N
             .order_by(Decision.created_at.desc(), SapMockPurchaseOrder.created_at.desc())
             .limit(1)
         )
-    ).scalar_one_or_none()
+    ).first()
+    if baris is None:
+        return None, None
+    return baris[0], baris[1]
+
+
+async def harga_invoice_po(db: AsyncSession, batch_id: uuid.UUID) -> Decimal | None:
+    """Harga satuan invoice PO yang mendanai `batch_id`, atau None.
+
+    Bila satu batch muncul di beberapa bukti (keputusan lama dan penggantinya),
+    yang dipakai bukti TERBARU — itu alokasi yang masih berlaku.
+    """
+    _nomor, harga = await po_dan_harga(db, batch_id)
+    return harga
+
+
+def nilai_dari(kg: float | None, harga: Decimal | None) -> float | None:
+    """Nilai rupiah dari kg × harga satuan — satu tempat, tanpa duplikasi."""
+    if kg is None or harga is None:
+        return None
+    return float((Decimal(str(kg)) * Decimal(harga)).quantize(_SEN, rounding=ROUND_HALF_UP))
 
 
 async def nilai_diterima(
@@ -57,7 +82,4 @@ async def nilai_diterima(
     """Nilai rupiah barang yang diterima, dibulatkan ke sen."""
     if kg is None:
         return None
-    harga = await harga_invoice_po(db, batch_id)
-    if harga is None:
-        return None
-    return float((Decimal(str(kg)) * Decimal(harga)).quantize(_SEN, rounding=ROUND_HALF_UP))
+    return nilai_dari(kg, await harga_invoice_po(db, batch_id))

@@ -72,6 +72,16 @@ FIELDS = {
     # Asal baris: PO yang lahir dari eksekusi keputusan vs baris seed demo.
     # Dipakai panel untuk berhenti menyebut semua baris "terbit dari eksekusi".
     "origin",
+    # Dok 05 §9 butir 3: nilai PO dan nilai barang yang masuk berdampingan.
+    # Server menghitung sisi "masuk" dari ikatan bukti `human_inspection`
+    # (`payload->'batch_ids'`), jalur yang sama dengan nilai penerimaan.
+    # `None` = belum ada barang tercatat — BUKAN 0 kg dan BUKAN Rp 0.
+    "received_kg",
+    "received_value_idr",
+    "variance_idr",
+    "variance_pct",
+    "received_batch_count",
+    "received_basis",
 }
 
 
@@ -99,6 +109,36 @@ def _po_rows(location: str | None) -> list[dict]:
                 text(sql), {"loc": location} if location else {}
             ).mappings().all()
             return [dict(r) for r in rows]
+    finally:
+        engine.dispose()
+
+
+def _realisasi_ground_truth() -> dict[str, float]:
+    """kg terikat per PO, dihitung ulang dari DB (bukan angka mati).
+
+    Dedupe `DISTINCT` penting: satu batch bisa tercatat di beberapa bukti untuk
+    keputusan yang sama, dan tanpa dedupe jumlahnya akan berlipat.
+    """
+    engine = create_engine(DB_URL)
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "WITH ikatan AS ("
+                    " SELECT DISTINCT po.po_number, b.id AS batch_id, b.quantity_kg"
+                    " FROM sap_mock_purchase_orders po"
+                    " JOIN decisions d ON d.id = po.decision_id"
+                    " JOIN decision_evidence e ON e.decision_id = d.id"
+                    "  AND e.evidence_type = 'human_inspection'"
+                    " CROSS JOIN LATERAL jsonb_array_elements_text("
+                    "  CASE WHEN jsonb_typeof(e.payload->'batch_ids') = 'array'"
+                    "   THEN e.payload->'batch_ids' ELSE '[]'::jsonb END) AS t(batch_id)"
+                    " JOIN batches b ON b.id::text = t.batch_id)"
+                    " SELECT po_number, SUM(quantity_kg) AS kg FROM ikatan"
+                    " GROUP BY po_number"
+                )
+            ).mappings().all()
+            return {str(r["po_number"]): float(r["kg"]) for r in rows}
     finally:
         engine.dispose()
 
@@ -369,3 +409,48 @@ def test_asal_po_mengikuti_ada_tidaknya_keputusan(client, monitor_headers):
     for row in body["items"]:
         harapan = "execution" if row["decision_id"] else "demo"
         assert row["origin"] == harapan, f"{row['po_number']}: {row['origin']} != {harapan}"
+
+
+def test_realisasi_po_cocok_dengan_db(client, auth_headers):
+    """Nilai barang masuk = harga satuan × kg terikat, dihitung dari DB.
+
+    Angkanya dibandingkan dengan kueri pembanding saat tes berjalan: kalau
+    agregasi server menggandakan batch atau salah harga, tes ini gagal.
+    """
+    rows = _get(client, auth_headers).json()["items"]
+    truth = _realisasi_ground_truth()
+    berangka = [r for r in rows if r["po_number"] in truth]
+    assert berangka, "tidak ada PO berikatan bukti di cakupan ini"
+
+    for r in berangka:
+        kg = truth[r["po_number"]]
+        assert r["received_kg"] == pytest.approx(kg), r["po_number"]
+        assert r["received_value_idr"] == pytest.approx(
+            round(r["price_per_kg"] * kg, 2)
+        ), r["po_number"]
+        assert r["variance_idr"] == pytest.approx(
+            round(r["received_value_idr"] - r["total_value"], 2)
+        ), r["po_number"]
+        assert r["received_batch_count"] >= 1, r["po_number"]
+        assert r["received_basis"] == "inspection_binding"
+
+
+def test_po_tanpa_ikatan_none_bukan_nol(client, auth_headers):
+    """PO tanpa bukti penerimaan tidak boleh tampil sebagai "Rp 0".
+
+    0 adalah klaim ("tidak ada barang masuk"); None adalah fakta ("belum ada
+    catatan"). Panel menampilkan keduanya dengan kalimat berbeda, jadi kontrak
+    ini dipaku di API.
+    """
+    rows = _get(client, auth_headers).json()["items"]
+    truth = _realisasi_ground_truth()
+    kosong = [r for r in rows if r["po_number"] not in truth]
+    assert kosong, "cakupan ini tidak punya PO tanpa ikatan — tes tidak bermakna"
+
+    for r in kosong:
+        assert r["received_kg"] is None, r["po_number"]
+        assert r["received_value_idr"] is None, r["po_number"]
+        assert r["variance_idr"] is None, r["po_number"]
+        assert r["variance_pct"] is None, r["po_number"]
+        assert r["received_batch_count"] == 0, r["po_number"]
+        assert r["received_basis"] is None, r["po_number"]

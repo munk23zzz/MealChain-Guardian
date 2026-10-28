@@ -27,6 +27,7 @@ from app.api.evidence import router as evidence_router
 from app.api.freshness import router as freshness_router
 from app.api.integrations import router as integrations_router
 from app.api.kpi import router as kpi_router
+from app.api.agent import router as agent_router
 from app.api.ledger import router as ledger_router
 from app.api.logistics import router as logistics_router
 from app.api.price import router as price_router
@@ -164,12 +165,6 @@ _JALUR_TANPA_SESI = frozenset(
         "/demo/session/start",
         "/demo/session/extend",
         "/demo/session/end",
-        # Menjalankan agent DARI Demo Control boleh membuka sesi sendiri:
-        # tanpanya, setelah "Akhiri sesi"/sesi kedaluwarsa setiap klik
-        # "Jalankan Agent" dijawab 409 oleh middleware ini dan panel tampak
-        # rusak (terukur 28 Okt 2026). Handler `/demo/agent/run` membuka sesi
-        # realtime dengan `kosongkan=False`, jadi keputusan tetap terikat.
-        "/demo/agent/run",
     }
 )
 _METODE_MUTASI = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -277,6 +272,8 @@ app.include_router(waste_router)
 app.include_router(surplus_router)
 app.include_router(agenda_router)
 app.include_router(ledger_router)
+# Dokumen 06-agent-log: status supervisor + tanya-jawab baca-saja (tool GET).
+app.include_router(agent_router)
 app.include_router(dossier_router)
 app.include_router(compliance_router)
 
