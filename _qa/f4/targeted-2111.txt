@@ -1,0 +1,103 @@
+........................................................................ [ 51%]
+.....FF..FF............s..................................s.........     [100%]
+=================================== FAILURES ===================================
+_____________ test_catat_penerimaan_tersimpan_dan_terbaca_kembali ______________
+
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMWRhNjcyNi1mMDJlLTRjNTItOGNkMC01NjY0NTc5ZTg...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTEwNDI1LCJleHAiOjE3OTMxNTM2MjV9.UxJrnSIsiKo42QwYMu8CLGoptIB2yfQCX_pQsPm6-EU'}
+
+    def test_catat_penerimaan_tersimpan_dan_terbaca_kembali(auth_headers):
+        batch_id = _batch_jakarta_id()
+        dibuat: list[str] = []
+        try:
+            with _client() as c:
+                resp = c.post(
+                    "/receipts",
+                    headers=auth_headers,
+                    json={
+                        "batch_id": batch_id,
+                        "checked": {"kemasan": True, "suhu": True, "warna": False},
+                        "other_note": "  Karung lapis kedua basah, isi masih kering.  ",
+                    },
+                )
+>               assert resp.status_code == 201, resp.text
+E               AssertionError: {"detail":"barang sudah kedaluwarsa — tidak boleh masuk stok; tolak penerimaan (kode: batch_expired, safety_fail, freshness_fail)"}
+E               assert 409 == 201
+E                +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_receipts_api.py:104: AssertionError
+__________________ test_catatan_kosong_disimpan_sebagai_null ___________________
+
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3Yjk0YTI1YS05YWQ1LTQxNDUtYjlhNS1hYmUxZGY3ZDY...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTEwNDI4LCJleHAiOjE3OTMxNTM2Mjh9.v2_qnD_LlcUUtNAfoUv-AkN8j4SfHM9YKrj2tMPLxT4'}
+
+    def test_catatan_kosong_disimpan_sebagai_null(auth_headers):
+        """Menulis spasi ≠ menulis catatan; UI harus bisa membedakannya."""
+        batch_id = _batch_jakarta_id()
+        dibuat: list[str] = []
+        try:
+            with _client() as c:
+                resp = c.post(
+                    "/receipts",
+                    headers=auth_headers,
+                    json={"batch_id": batch_id, "checked": {}, "other_note": "   "},
+                )
+>               assert resp.status_code == 201, resp.text
+E               AssertionError: {"detail":"barang sudah kedaluwarsa — tidak boleh masuk stok; tolak penerimaan (kode: batch_expired, safety_fail, freshness_fail)"}
+E               assert 409 == 201
+E                +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_receipts_api.py:135: AssertionError
+___________________ test_monitor_nasional_hanya_bisa_membaca ___________________
+
+monitor_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4MDI1ZWU5Yi00ZDc2LTQyOTMtYTU1Mi04MDQ4MTBhZjN...21vbml0b3IiLCJsb2MiOm51bGwsImlhdCI6MTc5MzExMDQzMCwiZXhwIjoxNzkzMTUzNjMwfQ.ZSeW34gtT5afAYnPKdFEHI1TkLfb3ZhEvCFodauR6Uw'}
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZGFhYzE2Ni1jYTFlLTQyZjAtOTk2Yy0wM2IxNzY5OGQ...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTEwNDMxLCJleHAiOjE3OTMxNTM2MzF9.wSD64ZVtkGz2ai95QM4T1vecQksWBryQIHud7MePiNM'}
+
+    def test_monitor_nasional_hanya_bisa_membaca(monitor_headers, auth_headers):
+        batch_id = _batch_jakarta_id()
+        dibuat: list[str] = []
+        try:
+            with _client() as c:
+                catat = c.post(
+                    "/receipts",
+                    headers=auth_headers,
+                    json={"batch_id": batch_id, "checked": {"kemasan": True}},
+                )
+>               assert catat.status_code == 201, catat.text
+E               AssertionError: {"detail":"barang sudah kedaluwarsa — tidak boleh masuk stok; tolak penerimaan (kode: batch_expired, safety_fail, freshness_fail)"}
+E               assert 409 == 201
+E                +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_receipts_api.py:175: AssertionError
+___________________ test_urutan_terbaru_dulu_dan_batas_limit ___________________
+
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkNzFjZTQzYy0xNWFlLTQwYzUtOWI0OS0zNjU2MjAwMGN...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTEwNDMyLCJleHAiOjE3OTMxNTM2MzJ9.0oNefSKEup3mHsu6nHO9bcTb6qJhpvIHcXz33M_eEPA'}
+
+    def test_urutan_terbaru_dulu_dan_batas_limit(auth_headers):
+        batch_id = _batch_jakarta_id()
+        dibuat: list[str] = []
+        try:
+            with _client() as c:
+                pertama = c.post(
+                    "/receipts",
+                    headers=auth_headers,
+                    json={
+                        "batch_id": batch_id,
+                        "checked": {"kemasan": True},
+                        "other_note": "catatan satu",
+                    },
+                ).json()
+>               dibuat.append(pertama["id"])
+E               KeyError: 'id'
+
+tests/test_receipts_api.py:207: KeyError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_receipts_api.py::test_catat_penerimaan_tersimpan_dan_terbaca_kembali
+FAILED tests/test_receipts_api.py::test_catatan_kosong_disimpan_sebagai_null
+FAILED tests/test_receipts_api.py::test_monitor_nasional_hanya_bisa_membaca
+FAILED tests/test_receipts_api.py::test_urutan_terbaru_dulu_dan_batas_limit
+4 failed, 134 passed, 2 skipped, 1 warning in 190.33s (0:03:10)

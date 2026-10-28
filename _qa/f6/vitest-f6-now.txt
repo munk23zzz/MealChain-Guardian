@@ -1,0 +1,13 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v2.1.9 /app
+
+ ✓ tests/decision-loop.test.tsx (11 tests) 9ms
+ ✓ tests/decision-evidence-boundary.test.tsx (17 tests) 40ms
+ ✓ tests/evidence-dossier.test.tsx (18 tests) 85ms
+
+ Test Files  3 passed (3)
+      Tests  46 passed (46)
+   Start at  16:01:52
+   Duration  3.82s (transform 4.36s, setup 0ms, collect 7.63s, tests 134ms, environment 1ms, prepare 275ms)
+

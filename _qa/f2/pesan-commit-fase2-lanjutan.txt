@@ -1,0 +1,42 @@
+fix(sesi): mode pada analisis + kepemilikan penerimaan dari batch (Fase 2 butir 6 & 8)
+
+Melengkapi sisa Fase 2 (MG/phase-02-session-time.md) yang sebelumnya baru
+sebagian. Rencana: MG/phase-02-session-time.md.
+
+Yang ditambahkan:
+
+1. `POST /demo/agent/run` menerima `mode` (butir 8). Mode dibandingkan dengan
+   mode sesi pemilik lewat `demo_ownership.sesi_pemilik(mode=…)`; bertentangan
+   dijawab 422 dengan kalimat yang menyebut kedua mode, bukan diam-diam dipakai.
+   Tanpa ini klien yang mengira sedang realtime bisa menulis ke sesi replay.
+2. `POST /receipts` menuliskan `demo_session_id` dari BATCH induknya (butir 6),
+   bukan dari sesi yang kebetulan aktif. Penerimaan atas barang sesi pertama
+   tidak lagi berpindah pemilik saat operator membuka sesi kedua, dan reset
+   sesi pertama tetap menemukan catatannya sendiri.
+3. `runDemoAgent` (frontend) mengirim `mode` bersama `demo_session`; panel
+   meneruskan mode sesi yang sedang dipilih.
+
+Bukti (DB klon `mealchain_gate`, DB demo tidak disentuh):
+
+- RED lebih dulu: `test_agent_run_mode_bertentangan_ditolak_422` gagal karena
+  orkestrator tetap dijalankan (assert 422), dan
+  `test_penerimaan_mewarisi_sesi_batch_bukan_sesi_aktif` gagal dengan
+  `assert None == UUID(...)` — penerimaan tidak punya pemilik sama sekali.
+  Frontend RED: 1 gagal dari 12 (`mode` belum ada di payload).
+- GREEN: `pytest tests/test_session_modes.py` → **23 passed** (sebelumnya 20;
+  3 tes baru). `vitest tests/demo-mode-switch.test.tsx` → **12 passed**.
+  `ruff check` bersih pada 3 berkas backend yang diubah.
+- `test_run_event1_menurunkan_sesi_pemilik_ke_keputusan` disesuaikan ke seam
+  yang baru: orkestrator fase lain kini memanggil mesin rekomendasi dengan
+  `as_of=`, jadi fake-nya menerima `**_kw`. Tesnya tetap menguji propagasi sesi,
+  bukan kebijakan kelayakan kandidat.
+
+Batas commit ini: hanya berkas Fase 2. Hunk fase lain di berkas yang sama
+(`/decisions/{id}/packet`, `/decisions/{id}/review`, `/procurement/summary` di
+`lib/api.ts`; revalidasi kelayakan Fase 4 di `api/receipts.py`; dua tombol
+"demo mode" Fase 10 di `DemoControlPanel.tsx`) TIDAK ikut — dipisah per hunk
+lewat `scripts/stage_phase2_hunks.py`.
+
+Butir 10 (OpenAPI): artefak di pohon kerja kini hasil regenerasi penuh sesi
+lain (81 path, drift lulus); delta Fase 2 yang sudah commit tetap benar untuk
+commit itu (drift lulus saat diuji di worktree commit).

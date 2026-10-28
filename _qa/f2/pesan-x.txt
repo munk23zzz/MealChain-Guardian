@@ -1,0 +1,9 @@
+test(decision): gerbang karantina tidak bergantung akun demo bersama (Fase 9 poin 4)
+
+test_bgn_monitor_tidak_mendapat_kedua_tombol memakai akun bgn_monitor demo
+yang password-nya dirotasi tests/test_admin_api.py, sehingga merah hanya di
+suite penuh (lulus saat berdiri sendiri). Monitor sekarang dibuat di fixture
+sendiri dan dihapus pada teardown.
+
+Bukti: tests/test_admin_api.py + tests/test_admin_jejak_audit.py +
+tests/test_approval_summary_receipt_gate.py = 24 passed.

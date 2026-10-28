@@ -1,0 +1,79 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v2.1.9 /app
+
+ ❯ tests/demo-mode-switch.test.tsx (11 tests | 2 failed) 61ms
+   × runDemoAgent meneruskan sesi > menyertakan demo_session di body 36ms
+     → expected 'export async function runDemoAgent(\r…' to contain 'payload.demo_session = opsi.demoSessi…'
+   × startDemoSession meneruskan mode > mengirim mode eksplisit pada POST /demo/session/start 6ms
+     → expected 'export async function startDemoSessio…' to contain 'payload.mode = opsi.mode'
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/demo-mode-switch.test.tsx > runDemoAgent meneruskan sesi > menyertakan demo_session di body
+AssertionError: expected 'export async function runDemoAgent(\r…' to contain 'payload.demo_session = opsi.demoSessi…'
+
+- Expected
++ Received
+
+- payload.demo_session = opsi.demoSession
++ export async function runDemoAgent(
++   token: string,
++   { commodity, ttlMinutes }: { commodity?: string; ttlMinutes?: number } = {}
++ ) {
++   const payload: Record<string, unknown> = {};
++   if (commodity) payload.commodity = commodity;
++   if (ttlMinutes) payload.ttl_minutes = ttlMinutes;
++   return request("/demo/agent/run", {
++     method: "POST",
++     headers: { "Content-Type": "application/json", ...authHeaders(token) },
++     body: JSON.stringify(payload),
++  });
++ }
++ 
++ /** `GET /demo/agent/commodities` — pilihan dropdown: nama yang ADA di database. */
++
+
+ ❯ tests/demo-mode-switch.test.tsx:91:19
+     89|     // yang dijalankan atas sesi tertentu bisa mendarat di sesi lain.
+     90|     const badan = badanFungsi("runDemoAgent");
+     91|     expect(badan).toContain("payload.demo_session = opsi.demoSession");
+       |                   ^
+     92|     expect(badan).toContain('request("/demo/agent/run"');
+     93|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/demo-mode-switch.test.tsx > startDemoSession meneruskan mode > mengirim mode eksplisit pada POST /demo/session/start
+AssertionError: expected 'export async function startDemoSessio…' to contain 'payload.mode = opsi.mode'
+
+- Expected
++ Received
+
+- payload.mode = opsi.mode
++ export async function startDemoSession(token: string, menit?: number) {
++   return request("/demo/session/start", {
++     method: "POST",
++     headers: { "Content-Type": "application/json", ...authHeaders(token) },
++     body: JSON.stringify(menit ? { menit } : {}),
++   });
++ }
++ 
++ /** `POST /demo/session/extend` — tambah waktu; sesi & data tidak diganti. */
++
+
+ ❯ tests/demo-mode-switch.test.tsx:110:19
+    108|     expect(awal).toBeGreaterThan(-1);
+    109|     const badan = sumber.slice(awal, sumber.indexOf("export async func…
+    110|     expect(badan).toContain("payload.mode = opsi.mode");
+       |                   ^
+    111|     expect(badan).toMatch(/"replay"\s*\|\s*"realtime"/);
+    112|     expect(badan).toContain('request("/demo/session/start"');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 9 passed (11)
+   Start at  12:30:19
+   Duration  1.11s (transform 340ms, setup 0ms, collect 377ms, tests 61ms, environment 0ms, prepare 155ms)
+

@@ -1,0 +1,75 @@
+FFF.FFF                                                                  [100%]
+=================================== FAILURES ===================================
+__________ test_needed_by_jauh_kandidat_lolos_dan_jendela_dilaporkan ___________
+
+    def test_needed_by_jauh_kandidat_lolos_dan_jendela_dilaporkan():
+        out = _run(_facts(AS_OF + timedelta(hours=12)))
+        assert len(out["recommendations"]) == 1
+>       jendela = out["recommendations"][0]["delivery_window"]
+E       KeyError: 'delivery_window'
+
+tests/test_delivery_window_wiring.py:80: KeyError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+__________________ test_needed_by_sudah_lewat_kandidat_gugur ___________________
+
+    def test_needed_by_sudah_lewat_kandidat_gugur():
+        out = _run(_facts(AS_OF - timedelta(hours=1)))
+>       assert out["recommendations"] == []
+E       AssertionError: assert [{'candidate'...': True, ...}] == []
+E         
+E         Left contains one more item: {'candidate': {'batch_ids': ['b-1'], 'commodity': 'telur', 'demand_fit': '0.8571428571428571428571428571', 'destinatio...: '314400.00', 'freshness_risk': '0.00', 'handling': '150000.00', 'logistics': '21600.00', ...}, 'eligible': True, ...}
+E         Use -v to get more diff
+
+tests/test_delivery_window_wiring.py:89: AssertionError
+___________ test_anggaran_waktu_kurang_dari_estimasi_kandidat_gugur ____________
+
+    def test_anggaran_waktu_kurang_dari_estimasi_kandidat_gugur():
+        # 100 menit anggaran untuk perjalanan 150 menit → tidak mungkin tiba.
+        out = _run(_facts(AS_OF + timedelta(minutes=100)))
+>       assert out["recommendations"] == []
+E       AssertionError: assert [{'candidate'...': True, ...}] == []
+E         
+E         Left contains one more item: {'candidate': {'batch_ids': ['b-1'], 'commodity': 'telur', 'demand_fit': '0.8571428571428571428571428571', 'destinatio...: '314400.00', 'freshness_risk': '0.00', 'handling': '150000.00', 'logistics': '21600.00', ...}, 'eligible': True, ...}
+E         Use -v to get more diff
+
+tests/test_delivery_window_wiring.py:98: AssertionError
+_______________ test_usable_until_habis_di_jalan_kandidat_gugur ________________
+
+    def test_usable_until_habis_di_jalan_kandidat_gugur():
+        # needed_by masih lama, tetapi barang kedaluwarsa sebelum kendaraan tiba.
+        out = _run(
+            _facts(AS_OF + timedelta(hours=12), usable_until=AS_OF + timedelta(minutes=60))
+        )
+>       assert out["recommendations"] == []
+E       AssertionError: assert [{'candidate'...': True, ...}] == []
+E         
+E         Left contains one more item: {'candidate': {'batch_ids': ['b-1'], 'commodity': 'telur', 'demand_fit': '0.8571428571428571428571428571', 'destinatio...: '314400.00', 'freshness_risk': '0.00', 'handling': '150000.00', 'logistics': '21600.00', ...}, 'eligible': True, ...}
+E         Use -v to get more diff
+
+tests/test_delivery_window_wiring.py:113: AssertionError
+_________________ test_tanpa_needed_by_tidak_diklaim_terpenuhi _________________
+
+    def test_tanpa_needed_by_tidak_diklaim_terpenuhi():
+        out = _run(_facts(None))
+        assert len(out["recommendations"]) == 1
+>       jendela = out["recommendations"][0]["delivery_window"]
+E       KeyError: 'delivery_window'
+
+tests/test_delivery_window_wiring.py:120: KeyError
+_________ test_kandidat_gugur_tidak_dihitung_dalam_jumlah_rekomendasi __________
+
+    def test_kandidat_gugur_tidak_dihitung_dalam_jumlah_rekomendasi():
+        out = _run(_facts(AS_OF - timedelta(minutes=1)))
+>       assert out["count"] == 0
+E       KeyError: 'count'
+
+tests/test_delivery_window_wiring.py:128: KeyError
+=========================== short test summary info ============================
+FAILED tests/test_delivery_window_wiring.py::test_needed_by_jauh_kandidat_lolos_dan_jendela_dilaporkan
+FAILED tests/test_delivery_window_wiring.py::test_needed_by_sudah_lewat_kandidat_gugur
+FAILED tests/test_delivery_window_wiring.py::test_anggaran_waktu_kurang_dari_estimasi_kandidat_gugur
+FAILED tests/test_delivery_window_wiring.py::test_usable_until_habis_di_jalan_kandidat_gugur
+FAILED tests/test_delivery_window_wiring.py::test_tanpa_needed_by_tidak_diklaim_terpenuhi
+FAILED tests/test_delivery_window_wiring.py::test_kandidat_gugur_tidak_dihitung_dalam_jumlah_rekomendasi
+6 failed, 1 passed in 3.31s

@@ -1,0 +1,645 @@
+FFFFFFFFF                                                                [100%]
+=================================== FAILURES ===================================
+______________ test_event1_unverified_full_flow_persists_proposed ______________
+
+client = <starlette.testclient.TestClient object at 0x7d3e01b454c0>
+
+    def test_event1_unverified_full_flow_persists_proposed(client):
+        from app.services.event1_orchestrator import run_event1
+    
+>       outcome = run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_event1_supervisor_flow.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = await _jam_evaluasi(session, demo_session_id)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+            out = await rs.build_recommendations(_fetch, as_of=as_of)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:189: ValueError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+_________ test_event1_unverified_persists_agent_traces_with_real_steps _________
+
+client = <starlette.testclient.TestClient object at 0x7d3e01b45250>
+
+    def test_event1_unverified_persists_agent_traces_with_real_steps(client):
+        from app.services.event1_orchestrator import run_event1
+    
+>       outcome = run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_event1_supervisor_flow.py:148: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = await _jam_evaluasi(session, demo_session_id)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+            out = await rs.build_recommendations(_fetch, as_of=as_of)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:189: ValueError
+______________________ test_event1_expiry_enforced_later _______________________
+
+client = <starlette.testclient.TestClient object at 0x7d3df9148f20>
+
+    def test_event1_expiry_enforced_later(client):
+        """Decision Event 1 harus punya expires_at yang nanti dipakai guard."""
+        from app.services.event1_orchestrator import run_event1
+    
+>       outcome = run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_event1_supervisor_flow.py:175: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = await _jam_evaluasi(session, demo_session_id)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+            out = await rs.build_recommendations(_fetch, as_of=as_of)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:189: ValueError
+___________ test_event1_consistent_verdict_records_verifier_attempt ____________
+
+client = <starlette.testclient.TestClient object at 0x7d3df961a030>
+
+    def test_event1_consistent_verdict_records_verifier_attempt(client):
+        from app.services.event1_orchestrator import run_event1
+    
+        def bedrock_ok(prompt):
+            return '{"verdict": "CONSISTENT", "reason": "evidence konsisten"}'
+    
+>       outcome = run_event1(
+            commodity="telur",
+            target_location="Jakarta",
+            verifier_bedrock=bedrock_ok,
+        )
+
+tests/test_event1_supervisor_flow.py:200: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = await _jam_evaluasi(session, demo_session_id)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+            out = await rs.build_recommendations(_fetch, as_of=as_of)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:189: ValueError
+___________________ test_event1_safety_fail_never_consistent ___________________
+
+client = <starlette.testclient.TestClient object at 0x7d3df95f2450>
+
+    def test_event1_safety_fail_never_consistent(client):
+        """Guard: safety FAIL core tidak bisa diangkat model (S3-06 dipakai ulang)."""
+        from app.services.event1_orchestrator import run_event1
+    
+        def stubborn_model(prompt):
+            return '{"verdict": "CONSISTENT"}'
+    
+>       outcome = run_event1(
+            commodity="telur",
+            target_location="Jakarta",
+            verifier_bedrock=stubborn_model,
+            safety_status_override="FAIL",
+        )
+
+tests/test_event1_supervisor_flow.py:229: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = await _jam_evaluasi(session, demo_session_id)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+            out = await rs.build_recommendations(_fetch, as_of=as_of)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:189: ValueError
+________________________ test_event1_no_auto_execution _________________________
+
+client = <starlette.testclient.TestClient object at 0x7d3df91f44a0>
+
+    def test_event1_no_auto_execution(client):
+        """Tidak ada eksekusi otomatis: tidak ada PO mock, status bukan executed."""
+        from app.services.event1_orchestrator import run_event1
+    
+>       outcome = run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_event1_supervisor_flow.py:251: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = await _jam_evaluasi(session, demo_session_id)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+            out = await rs.build_recommendations(_fetch, as_of=as_of)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:189: ValueError
+_________________ test_event1_kpi_traceable_to_backend_outputs _________________
+
+client = <starlette.testclient.TestClient object at 0x7d3df91f51c0>
+
+    def test_event1_kpi_traceable_to_backend_outputs(client):
+        """Semua angka di KPI/outcome harus bersumber output tools."""
+        from app.services.event1_orchestrator import run_event1
+    
+>       outcome = run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_event1_supervisor_flow.py:273: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = await _jam_evaluasi(session, demo_session_id)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+            out = await rs.build_recommendations(_fetch, as_of=as_of)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:189: ValueError
+_______________ test_memory_gagal_tidak_mengubah_angka_keputusan _______________
+
+client = <starlette.testclient.TestClient object at 0x7d3dff5d6600>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d3dff5d5610>
+
+    def test_memory_gagal_tidak_mengubah_angka_keputusan(client, monkeypatch):
+        """Fase 11 butir 6: Memory gagal → keputusan & angka IDENTIK.
+    
+        `catat_learn` diganti versi yang melaporkan `unavailable` (persis seperti
+        hasil AccessDenied AWS). Yang diuji: verdict, pilihan kandidat, dan angka
+        tidak berubah; langkah LEARN tetap tercatat dengan status jujur.
+        """
+        from app.services import event1_orchestrator as eo
+    
+        monkeypatch.setenv("AGENT_MEMORY_WRITE", "1")
+        monkeypatch.setattr(
+            eo,
+            "catat_learn",
+            lambda *a, **k: {
+                "provider": "agentcore",
+                "status": "unavailable",
+                "detail": "AccessDeniedException: no identity-based policy allows "
+                "bedrock-agentcore:CreateEvent",
+            },
+        )
+    
+>       outcome = eo.run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_event1_supervisor_flow.py:315: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = await _jam_evaluasi(session, demo_session_id)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+            out = await rs.build_recommendations(_fetch, as_of=as_of)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:189: ValueError
+________________ test_memory_mati_tidak_menambah_langkah_learn _________________
+
+client = <starlette.testclient.TestClient object at 0x7d3df94226f0>
+
+    def test_memory_mati_tidak_menambah_langkah_learn(client):
+        """Default (tanpa AGENT_MEMORY_WRITE) tidak memanggil Memory sama sekali."""
+        from app.services.event1_orchestrator import run_event1
+    
+>       outcome = run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_event1_supervisor_flow.py:340: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = await _jam_evaluasi(session, demo_session_id)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+            out = await rs.build_recommendations(_fetch, as_of=as_of)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:189: ValueError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_event1_supervisor_flow.py::test_event1_unverified_full_flow_persists_proposed
+FAILED tests/test_event1_supervisor_flow.py::test_event1_unverified_persists_agent_traces_with_real_steps
+FAILED tests/test_event1_supervisor_flow.py::test_event1_expiry_enforced_later
+FAILED tests/test_event1_supervisor_flow.py::test_event1_consistent_verdict_records_verifier_attempt
+FAILED tests/test_event1_supervisor_flow.py::test_event1_safety_fail_never_consistent
+FAILED tests/test_event1_supervisor_flow.py::test_event1_no_auto_execution - ...
+FAILED tests/test_event1_supervisor_flow.py::test_event1_kpi_traceable_to_backend_outputs
+FAILED tests/test_event1_supervisor_flow.py::test_memory_gagal_tidak_mengubah_angka_keputusan
+FAILED tests/test_event1_supervisor_flow.py::test_memory_mati_tidak_menambah_langkah_learn
+9 failed, 1 warning in 8.44s

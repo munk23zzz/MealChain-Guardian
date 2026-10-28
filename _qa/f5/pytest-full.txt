@@ -1,0 +1,1080 @@
+FFFFFFF................................................................. [  3%]
+.................................................ss..................... [  7%]
+........................................................................ [ 10%]
+........................................................................ [ 14%]
+....................................s.FF................................ [ 17%]
+....................s................................................... [ 21%]
+............................................................F........... [ 24%]
+........................................................................ [ 28%]
+...........................................s............................ [ 31%]
+............F.F......................................................... [ 35%]
+.....................................FFF................................ [ 38%]
+........................F...F....sss.ssssssssssss....................... [ 42%]
+............sss......................................................... [ 45%]
+........................................................................ [ 49%]
+........................................................................ [ 52%]
+......F................................................................. [ 56%]
+........................................................................ [ 59%]
+........................................................................ [ 63%]
+.....................................................s.................. [ 66%]
+..........................................................ssF..........F [ 70%]
+F....................................................................... [ 73%]
+........................................................................ [ 77%]
+..............sss....................................................... [ 80%]
+........................................................................ [ 84%]
+...............................F........................................ [ 87%]
+.....................................................s.................. [ 91%]
+........................................................................ [ 94%]
+........................................................................ [ 98%]
+.......................................                                  [100%]
+=================================== FAILURES ===================================
+_________ test_actions_verify_writes_verifier_note_and_flagged_status __________
+
+client = <starlette.testclient.TestClient object at 0x77fd1d811af0>
+
+    def test_actions_verify_writes_verifier_note_and_flagged_status(client):
+        """Verify endpoint HARUS menulis verdict ke verifier_note (gap nyata).
+    
+        Kontrak O-SEC-3: verdict diturunkan server (chain override FLAGGED),
+        request body tidak membawa verdict.
+        """
+        head = _mk_user("sppg_head", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_action_boundary_e2e.py:95: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:499: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = None
+            if demo_session_id is not None:
+                baris = (
+                    await session.execute(
+                        select(DemoSession).where(DemoSession.id == demo_session_id)
+                    )
+                ).scalar_one_or_none()
+                as_of = getattr(baris, "evaluation_anchor", None)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+            out = await rs.build_recommendations(_fetch, as_of=as_of)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:153: ValueError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+_________________ test_actions_verify_rejects_unknown_verdict __________________
+
+client = <starlette.testclient.TestClient object at 0x77fd15242690>
+
+    def test_actions_verify_rejects_unknown_verdict(client):
+        """Verdict tak dikenal tidak bisa masuk lewat jalur mana pun: request
+        body ditolak 422 (extra="forbid"); provider yang mengembalikan output
+        tak terbaca diturunkan UNAVAILABLE oleh run_verifier (konservatif)."""
+        head = _mk_user("sppg_head", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_action_boundary_e2e.py:137: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:499: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = None
+            if demo_session_id is not None:
+                baris = (
+                    await session.execute(
+                        select(DemoSession).where(DemoSession.id == demo_session_id)
+                    )
+                ).scalar_one_or_none()
+                as_of = getattr(baris, "evaluation_anchor", None)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+            out = await rs.build_recommendations(_fetch, as_of=as_of)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:153: ValueError
+___________ test_e2e_event1_to_mock_sap_dua_approval_untuk_transfer ____________
+
+client = <starlette.testclient.TestClient object at 0x77fd15800dd0>
+
+    def test_e2e_event1_to_mock_sap_dua_approval_untuk_transfer(client):
+        """Transfer operasional: dua approval (Head lalu Nutritionist) wajib → PO mock."""
+        head = _mk_user("sppg_head", "Jakarta")
+        nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_action_boundary_e2e.py:172: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:499: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = None
+            if demo_session_id is not None:
+                baris = (
+                    await session.execute(
+                        select(DemoSession).where(DemoSession.id == demo_session_id)
+                    )
+                ).scalar_one_or_none()
+                as_of = getattr(baris, "evaluation_anchor", None)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+            out = await rs.build_recommendations(_fetch, as_of=as_of)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:153: ValueError
+___________________ test_e2e_flagged_requires_both_approvers ___________________
+
+client = <starlette.testclient.TestClient object at 0x77fd15d52f30>
+
+    def test_e2e_flagged_requires_both_approvers(client):
+        """FLAGGED (verdict hasil audit): dua approval (head DAN nutritionist) wajib.
+    
+        Sejak audit M1 (18 Okt 2026) UNAVAILABLE tidak dicatat sebagai verifikasi,
+        jadi approve akan 409 lebih dulu — yang bisa mengukur pagar dua-approver
+        adalah verdict yang benar-benar tercatat.
+        """
+        head = _mk_user("sppg_head", "Jakarta")
+        # Ruling 2026-10-14 §3: approver kedua wajib satu SPPG dengan target
+        # (dulu "Bogor" — lolos hanya karena jalur tulis belum ber-cakupan).
+        nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_action_boundary_e2e.py:248: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:499: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = None
+            if demo_session_id is not None:
+                baris = (
+                    await session.execute(
+                        select(DemoSession).where(DemoSession.id == demo_session_id)
+                    )
+                ).scalar_one_or_none()
+                as_of = getattr(baris, "evaluation_anchor", None)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+            out = await rs.build_recommendations(_fetch, as_of=as_of)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:153: ValueError
+______________________ test_e2e_rejected_decision_blocked ______________________
+
+client = <starlette.testclient.TestClient object at 0x77fd0ff0d2b0>
+
+    def test_e2e_rejected_decision_blocked(client):
+        head = _mk_user("sppg_head", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_action_boundary_e2e.py:293: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:499: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = None
+            if demo_session_id is not None:
+                baris = (
+                    await session.execute(
+                        select(DemoSession).where(DemoSession.id == demo_session_id)
+                    )
+                ).scalar_one_or_none()
+                as_of = getattr(baris, "evaluation_anchor", None)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+            out = await rs.build_recommendations(_fetch, as_of=as_of)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:153: ValueError
+______________________ test_e2e_expired_decision_blocked _______________________
+
+client = <starlette.testclient.TestClient object at 0x77fd0fde0290>
+
+    def test_e2e_expired_decision_blocked(client):
+        head = _mk_user("sppg_head", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_action_boundary_e2e.py:327: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:499: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = None
+            if demo_session_id is not None:
+                baris = (
+                    await session.execute(
+                        select(DemoSession).where(DemoSession.id == demo_session_id)
+                    )
+                ).scalar_one_or_none()
+                as_of = getattr(baris, "evaluation_anchor", None)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+            out = await rs.build_recommendations(_fetch, as_of=as_of)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:153: ValueError
+_________________ test_e2e_bgn_monitor_cannot_touch_lifecycle __________________
+
+client = <starlette.testclient.TestClient object at 0x77fd0f93e8a0>
+
+    def test_e2e_bgn_monitor_cannot_touch_lifecycle(client):
+        monitor = _mk_user("bgn_monitor")
+        head = _mk_user("sppg_head", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_action_boundary_e2e.py:344: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:499: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = None
+            if demo_session_id is not None:
+                baris = (
+                    await session.execute(
+                        select(DemoSession).where(DemoSession.id == demo_session_id)
+                    )
+                ).scalar_one_or_none()
+                as_of = getattr(baris, "evaluation_anchor", None)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+            out = await rs.build_recommendations(_fetch, as_of=as_of)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:153: ValueError
+___________________ test_recommend_endpoint_ranks_candidates ___________________
+
+client = <starlette.testclient.TestClient object at 0x77fd0ff94f20>
+
+    def test_recommend_endpoint_ranks_candidates(client):
+        resp = client.post("/balance/recommend", json={})
+        assert resp.status_code == 200, resp.text
+        items = resp.json()["recommendations"]
+        assert items, "seed wajib menghasilkan kandidat"
+        ranks = [r["rank"] for r in items]
+        assert ranks == sorted(ranks)
+        telur = [r for r in items
+                 if r["candidate"]["source_location"] == "Cianjur"
+                 and r["candidate"]["destination_location"] == "Jakarta"]
+>       assert telur, "Cianjur→Jakarta telur wajib ada"
+E       AssertionError: Cianjur→Jakarta telur wajib ada
+E       assert []
+
+tests/test_api_decision_intelligence.py:180: AssertionError
+___________________ test_decisions_persist_and_get_validity ____________________
+
+client = <starlette.testclient.TestClient object at 0x77fd0ef55100>
+
+    def test_decisions_persist_and_get_validity(client):
+        rec = client.post("/balance/recommend", json={}).json()
+        # Keputusan hanya boleh menyasar lokasi milik SPPG pengguna (Jakarta), jadi
+        # pilih kandidat TERATAS yang tujuannya Jakarta — bukan rank 1 global, yang
+        # bisa saja menuju kota lain dan memang ditolak 403 oleh aturan scope.
+        items = rec["recommendations"]
+        top = next(
+            (r for r in items if r["candidate"]["destination_location"] == "Jakarta"),
+            None,
+        )
+>       assert top is not None, "seed wajib punya kandidat menuju Jakarta"
+E       AssertionError: seed wajib punya kandidat menuju Jakarta
+E       assert None is not None
+
+tests/test_api_decision_intelligence.py:193: AssertionError
+______________ test_kasus_skrip_punya_bukti_termasuk_yang_ditolak ______________
+
+    @pytest.mark.skipif(text is None, reason="app/sqlalchemy tidak tersedia")
+    async def test_kasus_skrip_punya_bukti_termasuk_yang_ditolak():
+        eng = create_engine(_url())
+        async with eng.connect() as conn:
+            baris = (
+                await conn.execute(
+                    text(
+                        """
+                        SELECT left(d.id::text, 8) AS id, d.decision_type, d.status, d.demo_case
+                        FROM decisions d
+                        WHERE d.demo_case IS NOT NULL
+                          AND d.created_at > now() - interval '2 days'
+                          AND NOT EXISTS (
+                            SELECT 1 FROM decision_evidence e WHERE e.decision_id = d.id
+                          )
+                        ORDER BY d.created_at DESC
+                        LIMIT 10
+                        """
+                    )
+                )
+            ).fetchall()
+        await eng.dispose()
+>       assert baris == [], f"kasus skrip tanpa bukti: {baris}"
+E       AssertionError: kasus skrip tanpa bukti: [('d801c730', 'supplier_procurement', 'pending_approval', 'rejection-loop-kuota')]
+E       assert [('d801c730',...-loop-kuota')] == []
+E         
+E         Left contains one more item: ('d801c730', 'supplier_procurement', 'pending_approval', 'rejection-loop-kuota')
+E         Use -v to get more diff
+
+tests/test_bukti_dan_draf_demo.py:58: AssertionError
+_______ test_paket_menyatakan_pengiriman_tidak_layak_bila_tenggat_lewat ________
+
+klien = <starlette.testclient.TestClient object at 0x77fd0ea44e60>
+aktor = {'email': 'bgn_monitor-6edf236b@uji-f6-packet.local', 'id': '838389d6-c6e0-494a-af92-a14ee01a8321', 'password': 'TestPass#2026', 'role': 'bgn_monitor'}
+
+    def test_paket_menyatakan_pengiriman_tidak_layak_bila_tenggat_lewat(klien, aktor) -> None:
+        batch = _buat_batch()
+        decision_id = _buat_keputusan(batch, breakdown=RINCIAN_LENGKAP)
+        demand_id = _buat_demand("Jakarta", datetime.now(UTC) - timedelta(hours=2))
+        try:
+            h = _login(klien, aktor)
+            paket = klien.get(f"/decisions/{decision_id}/packet", headers=h).json()
+>           assert paket["delivery"]["feasible"] is False
+E           assert True is False
+
+tests/test_decision_packet.py:319: AssertionError
+____________ test_get_decision_traces_returns_ordered_actual_steps _____________
+
+client = <starlette.testclient.TestClient object at 0x77fd0ea0a480>
+
+    def test_get_decision_traces_returns_ordered_actual_steps(client):
+        """Trace timeline: urutan langkah asli dari DB (bukan teks karangan)."""
+        from app.services.event1_orchestrator import run_event1
+    
+>       outcome = run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_decision_read_endpoints.py:117: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:499: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = None
+            if demo_session_id is not None:
+                baris = (
+                    await session.execute(
+                        select(DemoSession).where(DemoSession.id == demo_session_id)
+                    )
+                ).scalar_one_or_none()
+                as_of = getattr(baris, "evaluation_anchor", None)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+            out = await rs.build_recommendations(_fetch, as_of=as_of)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:153: ValueError
+_____________ test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan _____________
+
+kasus = [{'batches': [], 'binding_supplier': None, 'demo_case': 'rejection-loop-kuota', 'id': UUID('64bfe515-1fa2-4252-b880-09...4be9-90e7-6b8278d8fbcc', 'demo_case': 'rejection-loop-kuota', 'id': UUID('534ff408-681f-4146-a7b2-5ccae0284fa5'), ...}]
+
+    def test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan(kasus):
+        """Batch acuan harus di lokasi TUJUAN, bukan lokasi asal (semantik pengadaan)."""
+        for k in kasus:
+>           assert k["batches"], (
+                f"{k['demo_case']} {str(k['id'])[:8]}: pengadaan tanpa binding batch — "
+                "layar akan menampilkan 'pemasok tidak dikenal'"
+            )
+E           AssertionError: rejection-loop-kuota 64bfe515: pengadaan tanpa binding batch — layar akan menampilkan 'pemasok tidak dikenal'
+E           assert []
+
+tests/test_demo_cases_procurement_binding.py:158: AssertionError
+_______________ test_binding_pengadaan_memakai_pemasok_keputusan _______________
+
+kasus = [{'batches': [], 'binding_supplier': None, 'demo_case': 'rejection-loop-kuota', 'id': UUID('64bfe515-1fa2-4252-b880-09...4be9-90e7-6b8278d8fbcc', 'demo_case': 'rejection-loop-kuota', 'id': UUID('534ff408-681f-4146-a7b2-5ccae0284fa5'), ...}]
+
+    def test_binding_pengadaan_memakai_pemasok_keputusan(kasus):
+        """Pemasok di binding = `decisions.supplier_id`, jadi PO = pemasok di layar."""
+        for k in kasus:
+>           assert k["binding_supplier"] == str(k["supplier"]), (
+                f"{k['demo_case']} {str(k['id'])[:8]}: binding menunjuk pemasok "
+                f"{k['binding_supplier']}, kolom keputusan {k['supplier']}"
+            )
+E           AssertionError: rejection-loop-kuota 64bfe515: binding menunjuk pemasok None, kolom keputusan 6fbf0a04-4499-4d95-91e6-b420eec639b9
+E           assert None == '6fbf0a04-4499-4d95-91e6-b420eec639b9'
+E            +  where '6fbf0a04-4499-4d95-91e6-b420eec639b9' = str(UUID('6fbf0a04-4499-4d95-91e6-b420eec639b9'))
+
+tests/test_demo_cases_procurement_binding.py:172: AssertionError
+____________ test_kasus_pengadaan_lolos_resolve_binding_dan_safety _____________
+
+kasus = [{'batches': [], 'binding_supplier': None, 'demo_case': 'rejection-loop-kuota', 'id': UUID('64bfe515-1fa2-4252-b880-09...4be9-90e7-6b8278d8fbcc', 'demo_case': 'rejection-loop-kuota', 'id': UUID('534ff408-681f-4146-a7b2-5ccae0284fa5'), ...}]
+
+    def test_kasus_pengadaan_lolos_resolve_binding_dan_safety(kasus):
+        """Tidak boleh ada kasus demo pengadaan yang pasti ditolak guard eksekusi."""
+        for k in kasus:
+            try:
+                hasil = _resolve(k["id"], k["supplier"])
+            except HTTPException as exc:  # pragma: no cover - pesan kegagalan
+                raise AssertionError(
+                    f"{k['demo_case']} {str(k['id'])[:8]} ditolak guard: "
+                    f"{exc.status_code} {exc.detail}"
+                ) from exc
+            assert hasil["batches"], f"{str(k['id'])[:8]}: resolve tanpa batch"
+>           assert hasil["blocked"] is False, (
+                f"{k['demo_case']} {str(k['id'])[:8]}: safety gate memblokir karena "
+                "batch acuan tidak layak — kasus demo tidak bisa dieksekusi"
+            )
+E           AssertionError: rejection-loop-kuota 64bfe515: safety gate memblokir karena batch acuan tidak layak — kasus demo tidak bisa dieksekusi
+E           assert True is False
+
+tests/test_demo_cases_procurement_binding.py:189: AssertionError
+_______________________ test_seed_idempotent_dan_lengkap _______________________
+
+    def test_seed_idempotent_dan_lengkap():
+        engine = _db()
+        try:
+            with TestClient(app) as c:
+                # Login user SPPG existing dari seed_data (punya location).
+                email = "sppg.head@demo.local"
+                with engine.begin() as conn:
+                    row = conn.execute(
+                        text("SELECT count(*) FROM users WHERE email = :e"),
+                        {"e": email},
+                    ).scalar()
+                if row:
+                    tok = c.post(
+                        "/auth/login",
+                        json={"email": email, "password": "Demo#SPPG2026"},
+                    ).json()["access_token"]
+                else:
+                    tok = None
+                auth_headers = {"Authorization": f"Bearer {tok}"} if tok else {}
+    
+                # Reset dulu (force) supaya test deterministik.
+                r1 = c.post("/demo/seed", json={"force": True}, headers=auth_headers)
+                assert r1.status_code == 200, r1.text
+                assert r1.json()["seeded"] is True
+                assert r1.json()["decisions"] == 7
+    
+                # Idempotent: seed ulang tanpa force → skip.
+                r2 = c.post("/demo/seed", json={}, headers=auth_headers)
+                assert r2.json()["seeded"] is False
+    
+                # Kasus lengkap + shape timeline benar.
+                with engine.begin() as conn:
+                    per_case = dict(
+                        conn.execute(
+                            text(
+                                "SELECT d.demo_case, count(*) FROM decisions d "
+                                "JOIN locations l ON l.id = d.target_location_id "
+                                "WHERE d.demo_case IS NOT NULL AND l.name = 'Jakarta' "
+                                "GROUP BY d.demo_case"
+                            )
+                        ).all()
+                    )
+                # Kasus skrip harus ada (boleh ada kasus tambahan dari seed lain,
+                # mis. "bukti-hari-ini" milik tombol "Siapkan data demo").
+                assert CASES <= set(per_case)
+>               assert per_case["rejection-loop-kuota"] == 3
+E               assert 6 == 3
+
+tests/test_demo_seed.py:68: AssertionError
+_________________________ test_seed_idempoten_per_kota _________________________
+
+client = <starlette.testclient.TestClient object at 0x77fd0e4f7f20>
+
+    def test_seed_idempoten_per_kota(client):
+        kepala = _mk_user("sppg_head", "Bandung")
+        try:
+            headers = _login(client, kepala)
+            client.post("/demo/seed", json={"force": True}, headers=headers)
+            jumlah = len(_demo_rows("Bandung"))
+            resp = client.post("/demo/seed", json={"force": False}, headers=headers)
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            assert body["seeded"] is False
+>           assert body["already"] == jumlah
+E           assert 7 == 14
+
+tests/test_demo_seed_per_kota.py:185: AssertionError
+_________________ test_decision_time_tersedia_setelah_eksekusi _________________
+
+client = <starlette.testclient.TestClient object at 0x77fd0cb5b4d0>
+monitor_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmZDZhZmVhMC1kOTA3LTQ5ZjEtYjg5OS0wZjE3ZDllYjN...21vbml0b3IiLCJsb2MiOm51bGwsImlhdCI6MTc5MzEwOTA1MSwiZXhwIjoxNzkzMTUyMjUxfQ.bX3b8hu-OgsUqStinSHnclaN3C_2ZiffyZe2_GPm43E'}
+
+    def test_decision_time_tersedia_setelah_eksekusi(client, monitor_headers):
+        """Kartu Decision Time berhenti jadi `no_data` setelah satu eksekusi nyata.
+    
+        Metrik hanya menghitung keputusan ber-`demo_case IS NULL` yang sudah
+        committed (PO ada) — keputusan Event 1 memenuhi keduanya setelah eksekusi.
+        """
+        head = _mk_user("sppg_head", "Jakarta")
+        restore = _force_server_verdict("CONSISTENT")
+        decision_id: str | None = None
+        gizi_email: str | None = None
+        try:
+            before = _kpi_metric(client, monitor_headers, "Decision Time")
+            # JANGAN mengandaikan DB kosong. DB kerja adalah DB DEMO yang dipakai
+            # bersama: keputusan nyata yang sudah dieksekusi (beserta PO-nya) bisa
+            # sudah ada di jendela metrik, sehingga keadaannya `available` sebelum
+            # tes ini jalan. Yang diuji adalah TRANSISI: keputusan yang baru
+            # dieksekusi ikut terhitung.
+            sebelum_sampel = int(before.get("sample_count") or 0)
+            decision_id, _po, gizi_email = _run_execute_flow(client, head)
+            after = _kpi_metric(client, monitor_headers, "Decision Time")
+            assert after["state"] == "available", after
+            assert after["value"] is not None
+>           assert int(after["sample_count"]) == sebelum_sampel + 1, after
+E           AssertionError: {'coverage': '0.13', 'name': 'Decision Time', 'previous_value': None, 'provenance': {'baseline': {'kind': 'no_baseline... Tanpa PO, ACT tidak dihitung dan bagiannya dilaporkan lewat `coverage`.', 'evidence_kind': 'recorded_fact', ...}, ...}
+E           assert 1 == (7 + 1)
+E            +  where 1 = int(1)
+
+tests/test_kpi_act_trace.py:209: AssertionError
+__________ test_permintaan_dan_pasokan_tidak_memakai_baris_masa_depan __________
+
+    def test_permintaan_dan_pasokan_tidak_memakai_baris_masa_depan():
+        sekarang = datetime.now(UTC)
+        fakta = _facts(None)
+        supply, demand = fakta[0], fakta[1]
+    
+        pasokan_batas = _baris_terbaru("supply_records", "quantity_kg", sekarang, "Jakarta", "telur")
+        minta_batas = _baris_terbaru("demand_records", "quantity_kg", sekarang, "Jakarta", "telur")
+>       assert supply[("Jakarta", "telur")] == pasokan_batas
+E       AssertionError: assert Decimal('300.00') == Decimal('289.43')
+
+tests/test_recommendation_as_of.py:75: AssertionError
+____ test_fetch_excludes_later_harvests_without_advancing_as_of[live-race] _____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x77fd0ea2e720>
+explicit_as_of = False
+
+    @pytest.mark.parametrize("explicit_as_of", [False, True], ids=["live-race", "historical"])
+    def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, explicit_as_of):
+        engine = create_engine(
+            DSN_SYNC
+        )
+    
+        class FrozenClock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return AS_OF + timedelta(days=1) if explicit_as_of else AS_OF
+    
+>       monkeypatch.setattr(rs, "datetime", FrozenClock)
+E       AttributeError: <module 'app.services.recommendation_service' from '/app/app/services/recommendation_service.py'> has no attribute 'datetime'
+
+tests/test_recommendation_snapshot.py:50: AttributeError
+____ test_fetch_excludes_later_harvests_without_advancing_as_of[historical] ____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x77fcfbf5f230>
+explicit_as_of = True
+
+    @pytest.mark.parametrize("explicit_as_of", [False, True], ids=["live-race", "historical"])
+    def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, explicit_as_of):
+        engine = create_engine(
+            DSN_SYNC
+        )
+    
+        class FrozenClock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return AS_OF + timedelta(days=1) if explicit_as_of else AS_OF
+    
+>       monkeypatch.setattr(rs, "datetime", FrozenClock)
+E       AttributeError: <module 'app.services.recommendation_service' from '/app/app/services/recommendation_service.py'> has no attribute 'datetime'
+
+tests/test_recommendation_snapshot.py:50: AttributeError
+_____________ test_run_event1_menurunkan_sesi_pemilik_ke_keputusan _____________
+
+tanpa_sesi_aktif = None
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x77fd0c313350>
+
+    def test_run_event1_menurunkan_sesi_pemilik_ke_keputusan(tanpa_sesi_aktif, monkeypatch):
+        """`run_event1` menerima `demo_session_id` dan MENURUNKANNYA ke Decision.
+    
+        Tanpa ini, keputusan hasil analisis agent tidak punya pemilik eksplisit:
+        kolom `decisions.demo_session_id` hanya terisi bila penjaga `before_flush`
+        kebetulan menstempelnya dari sesi AKTIF — bukan dari sesi yang meminta
+        analisis (rencana Fase 2 butir 5).
+    
+        Masukan engine rekomendasi DIGANTI (satu kandidat terkendali) supaya tes ini
+        menguji PROPAGASI sesi, bukan kebijakan kelayakan kandidat yang sedang
+        berubah di fase lain. Seluruh jalur tulis (Decision, trace, commit) tetap
+        yang asli.
+        """
+        sid = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
+        from app.services import event1_orchestrator as orch
+    
+        async def _rekomendasi_terkendali(_fetch):
+            return {
+                "recommendations": [
+                    {
+                        "rank": 1,
+                        "eligible": True,
+                        "candidate_id": str(uuid.uuid4()),
+                        "score": 0.9,
+                        "safe_delivered_cost": "1000000",
+                        "cost_breakdown": None,
+                        "evidence": None,
+                        "candidate": {
+                            "commodity": "telur",
+                            "source_location": "Cianjur",
+                            "destination_location": "Jakarta",
+                            "quantity_kg": "100",
+                            "safety_status": "pass",
+                            "freshness_score": "0.90",
+                            "logistics_distance_km": 60.0,
+                            "logistics_time_min": 90,
+                            "logistics_feasible": True,
+                            "supplier_id": None,
+                        },
+                    }
+                ]
+            }
+    
+        monkeypatch.setattr(orch.rs, "build_recommendations", _rekomendasi_terkendali)
+        try:
+>           outcome = orch.run_event1(
+                commodity="telur", target_location="Jakarta", demo_session_id=sid
+            )
+
+tests/test_session_modes.py:699: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:499: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+        memori: dict | None = None
+    
+        async with maker() as session:
+            # Jam evaluasi mengikuti SESI bila ada: dataset replay berjangkar
+            # kanon (2026-10-08 12:00), jadi menilai dengan jam dinding membuat
+            # bukti suhu yang sah terbaca "basi" dan seluruh kandidat tertahan.
+            # Tanpa sesi, perilaku lama (jam dinding) dipertahankan.
+            as_of = None
+            if demo_session_id is not None:
+                baris = (
+                    await session.execute(
+                        select(DemoSession).where(DemoSession.id == demo_session_id)
+                    )
+                ).scalar_one_or_none()
+                as_of = getattr(baris, "evaluation_anchor", None)
+    
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, as_of)
+    
+>           out = await rs.build_recommendations(_fetch, as_of=as_of)
+E           TypeError: test_run_event1_menurunkan_sesi_pemilik_ke_keputusan.<locals>._rekomendasi_terkendali() got an unexpected keyword argument 'as_of'
+
+app/services/event1_orchestrator.py:142: TypeError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+tests/test_human_verification.py::test_review_sah_mencatat_decision_evidence_dan_mengubah_status
+tests/test_human_verification.py::test_review_sah_mencatat_decision_evidence_dan_mengubah_status
+  /usr/local/lib/python3.12/site-packages/pydantic/main.py:1114: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.9/migration/
+    warnings.warn('The `dict` method is deprecated; use `model_dump` instead.', category=PydanticDeprecatedSince20)
+
+tests/test_s4_agentcore_adapter.py::test_agentcore_arn_tanpa_env_kosong_membuat_caller_nyata
+  sys:1: SAWarning: The garbage collector is trying to clean up non-checked-in connection <AdaptedConnection <asyncpg.connection.Connection object at 0x77fd0c6dd7c0>>, which will be terminated.  Please ensure that SQLAlchemy pooled connections are returned to the pool explicitly, either by calling ``close()`` or by using appropriate context managers to manage their lifecycle.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_semai_demo_script.py:31: scripts/semai-demo.sh tidak ada di gambar ini; jalankan tes di host
+SKIPPED [1] tests/test_agent_memory_live.py:43: tes live AWS: set RUN_LIVE_AGENTCORE=1 (memanggil AgentCore Memory nyata)
+SKIPPED [1] tests/test_agent_memory_live.py:73: tes live AWS: set RUN_LIVE_AGENTCORE=1 (memanggil AgentCore Memory nyata)
+SKIPPED [1] tests/test_api_decision_intelligence.py:146: semua lokasi×komoditas punya baris demand; kasus ini mustahil
+SKIPPED [1] tests/test_approval_summary.py:425: semua lokasi×komoditas punya batch; kasus supplier_unknown mustahil dibentuk
+SKIPPED [1] tests/test_decision_commercial_cost_api.py:147: tidak ada rincian biaya bolong pada dataset ini
+SKIPPED [1] tests/test_demo_sesi_batas_dan_enforcement.py:236: ada sesi demo aktif — tes tidak menutupnya
+SKIPPED [1] tests/test_demo_sesi_batas_dan_enforcement.py:100: ada sesi demo aktif — tes tidak menutupnya
+SKIPPED [1] tests/test_demo_sesi_batas_dan_enforcement.py:174: ada sesi demo aktif — tes tidak menutupnya
+SKIPPED [1] tests/test_demo_session.py:180: tes sesi mengosongkan tabel operasional — butuh opt-in eksplisit DEMO_SESSION_TESTS_ENFORCE=1 (dan disarankan TEST_DATABASE_URL menunjuk DB sekali-pakai)
+SKIPPED [1] tests/test_demo_session.py:193: tes sesi mengosongkan tabel operasional — butuh opt-in eksplisit DEMO_SESSION_TESTS_ENFORCE=1 (dan disarankan TEST_DATABASE_URL menunjuk DB sekali-pakai)
+SKIPPED [1] tests/test_demo_session.py:217: tes sesi mengosongkan tabel operasional — butuh opt-in eksplisit DEMO_SESSION_TESTS_ENFORCE=1 (dan disarankan TEST_DATABASE_URL menunjuk DB sekali-pakai)
+SKIPPED [1] tests/test_demo_session.py:235: tes sesi mengosongkan tabel operasional — butuh opt-in eksplisit DEMO_SESSION_TESTS_ENFORCE=1 (dan disarankan TEST_DATABASE_URL menunjuk DB sekali-pakai)
+SKIPPED [1] tests/test_demo_session.py:288: tes sesi mengosongkan tabel operasional — butuh opt-in eksplisit DEMO_SESSION_TESTS_ENFORCE=1 (dan disarankan TEST_DATABASE_URL menunjuk DB sekali-pakai)
+SKIPPED [1] tests/test_demo_session.py:316: tes sesi mengosongkan tabel operasional — butuh opt-in eksplisit DEMO_SESSION_TESTS_ENFORCE=1 (dan disarankan TEST_DATABASE_URL menunjuk DB sekali-pakai)
+SKIPPED [1] tests/test_demo_session.py:345: tes sesi mengosongkan tabel operasional — butuh opt-in eksplisit DEMO_SESSION_TESTS_ENFORCE=1 (dan disarankan TEST_DATABASE_URL menunjuk DB sekali-pakai)
+SKIPPED [1] tests/test_demo_session.py:387: tes sesi mengosongkan tabel operasional — butuh opt-in eksplisit DEMO_SESSION_TESTS_ENFORCE=1 (dan disarankan TEST_DATABASE_URL menunjuk DB sekali-pakai)
+SKIPPED [1] tests/test_demo_session.py:417: tes sesi mengosongkan tabel operasional — butuh opt-in eksplisit DEMO_SESSION_TESTS_ENFORCE=1 (dan disarankan TEST_DATABASE_URL menunjuk DB sekali-pakai)
+SKIPPED [1] tests/test_demo_session.py:424: tes sesi mengosongkan tabel operasional — butuh opt-in eksplisit DEMO_SESSION_TESTS_ENFORCE=1 (dan disarankan TEST_DATABASE_URL menunjuk DB sekali-pakai)
+SKIPPED [1] tests/test_demo_session.py:479: tes sesi mengosongkan tabel operasional — butuh opt-in eksplisit DEMO_SESSION_TESTS_ENFORCE=1 (dan disarankan TEST_DATABASE_URL menunjuk DB sekali-pakai)
+SKIPPED [1] tests/test_demo_session.py:533: tes sesi mengosongkan tabel operasional — butuh opt-in eksplisit DEMO_SESSION_TESTS_ENFORCE=1 (dan disarankan TEST_DATABASE_URL menunjuk DB sekali-pakai)
+SKIPPED [1] tests/test_demo_template_reset_laporan.py:50: build sungguhan: set MCG_BUILD_IT=1 dan DATABASE_URL ke DB terpisah
+SKIPPED [1] tests/test_demo_template_reset_laporan.py:73: build sungguhan: set MCG_BUILD_IT=1 dan DATABASE_URL ke DB terpisah
+SKIPPED [1] tests/test_demo_template_reset_laporan.py:92: build sungguhan: set MCG_BUILD_IT=1 dan DATABASE_URL ke DB terpisah
+SKIPPED [1] E:\hackathon\HackathonAWS\mealchain-guardian\backend\tests\test_proxy_trust_config.py:31: docker-compose.prod.yml tidak ada di pohon ini (hanya di repo host, bukan di image backend)
+SKIPPED [1] tests/test_receipts_safety_gate.py:76: tidak ada batch ('needs_verification',) di data demo
+SKIPPED [1] tests/test_receipts_safety_gate.py:76: tidak ada batch ('pending',) di data demo
+SKIPPED [3] tests/test_sap_ai_core_live.py: live probe: jalankan dengan -m live
+SKIPPED [1] tests/test_supplier_procurement_eval.py:167: seed tidak memuat pemasok ayam Jakarta yang dikecualikan
+22 failed, 2003 passed, 31 skipped, 4 warnings in 916.81s (0:15:16)
+EXIT=1

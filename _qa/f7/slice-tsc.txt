@@ -1,0 +1,6 @@
+app/page.tsx(1996,13): error TS2322: Type '{ kpi: any; kpiLoading: boolean; kpiError: string | null; onRetryKpi: () => undefined; windowKey: KpiWindowKey; onWindowChange: Dispatch<SetStateAction<KpiWindowKey>>; ... 9 more ...; onOpenDecision: (decisionId: string) => void; }' is not assignable to type 'IntrinsicAttributes & { kpi: any; kpiLoading?: boolean | undefined; kpiError?: string | null | undefined; onRetryKpi?: (() => void) | undefined; windowKey?: KpiWindowKey | undefined; ... 7 more ...; onOpenDecision?: ((decisionId: string) => void) | undefined; }'.
+  Property 'scope' does not exist on type 'IntrinsicAttributes & { kpi: any; kpiLoading?: boolean | undefined; kpiError?: string | null | undefined; onRetryKpi?: (() => void) | undefined; windowKey?: KpiWindowKey | undefined; ... 7 more ...; onOpenDecision?: ((decisionId: string) => void) | undefined; }'.
+components/FoodSafetyBoard.tsx(86,30): error TS2307: Cannot find module '../lib/safety-gate' or its corresponding type declarations.
+tests/review-refresh-chain.test.ts(17,10): error TS2305: Module '"../lib/api"' has no exported member 'reviewDecision'.
+tests/review-refresh-chain.test.ts(20,45): error TS2307: Cannot find module '../lib/review-gate' or its corresponding type declarations.
+TSC_EXIT=2

@@ -1,0 +1,2 @@
+Rute jalan (OSRM): 51 diambil, 0 sudah ada, 0 gagal — hanya kiriman aktif.
+Seed selesai (idempoten). Row baru: {'locations': 10, 'commodities': 4, 'suppliers': 60, 'sap_mock_material_stock': 40, 'sap_mock_purchase_orders': 12, 'delivery_events': 70, 'disposal_events': 20, 'supply_records': 40, 'demand_records': 280, 'price_signals': 100, 'menu_plans': 70, 'commodity_policies': 4}

@@ -1,0 +1,8 @@
+=== pytest Fase 2 di commit 5153373 ===
+ERROR tests/test_session_modes.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 warning, 1 error in 6.56s
+=== drift di commit 5153373 ===
+ERROR tests/test_openapi_artifact_drift.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 4.56s

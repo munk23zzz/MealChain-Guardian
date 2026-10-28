@@ -1,0 +1,18 @@
+..........FF..F..........F.........                                      [100%]
+=================================== FAILURES ===================================
+/app/tests/test_recommendation_snapshot.py:95: AssertionError: assert '4f4f2023-71c4-4b50-8742-641f051474e1' not in {'00faea27-95bd-43bb-aa52-6ada399433a3': {'batch_id': '00faea27-95bd-43bb-aa52-6ada399433a3', 'commodity': 'telur', 'e...194c16f48144', 'commodity': 'telur', 'evidence_state': 'insufficient', 'excluded_destinations': ['Jakarta'], ...}, ...}
+/app/tests/test_recommendation_snapshot.py:102: AssertionError: assert Decimal('0.664286') == Decimal('0.964286')
+/app/tests/test_demo_template_provenance_ledger.py:204: AssertionError: prasyarat: keputusan berblok harus ikut terhapus oleh `_seed_demo_cases(force=True)` — kalau tidak, generasi memang tidak akan naik
+/app/tests/test_demo_cases_procurement_binding.py:189: AssertionError: rejection-loop-kuota b28f18ca: safety gate memblokir karena batch acuan tidak layak — kasus demo tidak bisa dieksekusi
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[live-race]
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[historical]
+FAILED tests/test_demo_template_provenance_ledger.py::test_hapus_kasus_demo_menaikkan_generasi_ledger
+FAILED tests/test_demo_cases_procurement_binding.py::test_kasus_pengadaan_lolos_resolve_binding_dan_safety
+4 failed, 31 passed, 1 warning in 21.88s

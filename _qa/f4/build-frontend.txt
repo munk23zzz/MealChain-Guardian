@@ -1,0 +1,43 @@
+
+> mealchain-guardian-frontend@0.1.0 build
+> node -r ./scripts/exfat-readlink-patch.cjs ./node_modules/next/dist/bin/next build
+
+  ▲ Next.js 14.2.14
+  - Experiments (use with caution):
+    · proxyTimeout
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+unhandledRejection Error: Cannot find module './161.js'
+Require stack:
+- /app/.next/server/webpack-runtime.js
+- /app/.next/server/pages/_document.js
+- /app/node_modules/next/dist/server/require.js
+- /app/node_modules/next/dist/server/load-components.js
+- /app/node_modules/next/dist/build/utils.js
+- /app/node_modules/next/dist/build/worker.js
+- /app/node_modules/next/dist/compiled/jest-worker/processChild.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at /app/node_modules/next/dist/server/require-hook.js:55:36
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Module.require (node:internal/modules/cjs/loader:1289:19)
+    at mod.require (/app/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:182:18)
+    at __webpack_require__.f.require (/app/.next/server/webpack-runtime.js:198:28)
+    at /app/.next/server/webpack-runtime.js:111:40
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (/app/.next/server/webpack-runtime.js:110:67) {
+  type: 'Error',
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/app/.next/server/webpack-runtime.js',
+    '/app/.next/server/pages/_document.js',
+    '/app/node_modules/next/dist/server/require.js',
+    '/app/node_modules/next/dist/server/load-components.js',
+    '/app/node_modules/next/dist/build/utils.js',
+    '/app/node_modules/next/dist/build/worker.js',
+    '/app/node_modules/next/dist/compiled/jest-worker/processChild.js'
+  ]
+}

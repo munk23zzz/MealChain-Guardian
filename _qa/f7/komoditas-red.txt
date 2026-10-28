@@ -1,0 +1,16 @@
+klon mealchain_f7v2: 120 batch, alembic 043_least_privilege_app
+bentuk data: demo,5200 seed,40 
+sesi: replay,19 realtime,1 
+== pytest
+PYTEST_EXIT=1
+FAILED tests/test_commodity_expansion.py::test_setiap_kasus_komoditas_punya_rantai_data_lengkap
+FAILED tests/test_commodity_expansion.py::test_wortel_punya_batch_dan_suhu_sejak_fase_7
+FAILED tests/test_commodity_expansion.py::test_wortel_sah_memenuhi_policy_rantai_dingin
+FAILED tests/test_commodity_expansion.py::test_wortel_bukti_kurang_menghasilkan_verifikasi_bukan_error
+FAILED tests/test_commodity_expansion.py::test_beras_ambient_tidak_dinilai_dengan_rentang_rantai_dingin
+FAILED tests/test_commodity_expansion.py::test_wortel_sah_memenuhi_policy_rantai_dingin
+FAILED tests/test_commodity_expansion.py::test_wortel_bukti_kurang_menghasilkan_verifikasi_bukan_error
+FAILED tests/test_commodity_expansion.py::test_beras_ambient_tidak_dinilai_dengan_rentang_rantai_dingin
+5 failed, 2 passed, 2 skipped, 3 deselected in 6.35s
+
+log: _qa/f7/pytest.txt

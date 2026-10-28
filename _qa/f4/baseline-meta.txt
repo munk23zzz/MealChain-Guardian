@@ -1,0 +1,21 @@
+# Fase 4 — baseline (langkah 1)
+tanggal=2026-10-27 19:20-19:30 WIB
+head=814c49a  branch=feature/db-modes-demo-coverage
+worktree=kotor (53 berkas; pekerjaan sesi paralel fase 2/3/5/9 belum commit)
+klon_db=mealchain_f4base (dari mealchain_fase4, 163 batch, lalu alembic upgrade head -> 041)
+
+pytest_targeted: 4 failed / 109 passed / 1 skipped  (90.12s, EXIT=1)
+  FAILED tests/test_actions.py::test_execute_success_operasional_butuh_dua_approval_writes_mock_po
+  FAILED tests/test_actions.py::test_execute_flagged_requires_both_roles
+  FAILED tests/test_approval_summary.py::test_approval_summary_or_complete_then_execute_parity[explicit]
+  FAILED tests/test_approval_summary.py::test_approval_summary_safety_revalidation_block
+  akar 1 (2 tes): NameError: name 'commercial_cost' is not defined — app/api/actions.py:832
+                  (hunk belum-commit Fase 5; semua jalur execute mati)
+  akar 2 (2 tes): approval_summary menandai safety blocked utk batch safety_status=pass
+                  tanpa log suhu -> evaluator Fase 4 (require_temperature_log=True) memblokir
+
+gate invariants.spec.json: VERDICT FAIL (PASS 44 / FAIL 16 / SKIP 1) EXIT=1  -> TIDAK SAH
+  sebab tunggal: semua endpoint 500. DB demo `mealchain` masih alembic 039;
+  model di worktree sudah punya kolom demo_sessions.mode/evaluation_anchor (migrasi 040
+  belum dijalankan di DB demo) dan tabel commodity_policies (041) belum ada.
+  Terukur: psql `select demo_sessions."mode" from demo_sessions` -> ERROR: column mode does not exist

@@ -1,0 +1,170 @@
+FFFF..FFFFFF.F                                                           [100%]
+=================================== FAILURES ===================================
+________________ test_batch_sehat_menghasilkan_kandidat_usable _________________
+
+    def test_batch_sehat_menghasilkan_kandidat_usable() -> None:
+        hasil = generate_candidates(**_kwargs(), evaluation_time=SEKARANG)
+        assert len(hasil) == 1
+>       assert hasil[0].eligibility_status == "usable"
+E       AttributeError: 'BalancingCandidate' object has no attribute 'eligibility_status'
+
+tests/test_dispatch_safety_gate.py:77: AttributeError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+______________ test_batch_pending_dilaporkan_on_hold_bukan_usable ______________
+
+    def test_batch_pending_dilaporkan_on_hold_bukan_usable() -> None:
+        """`pending` boleh muncul (untuk verifikasi) tetapi bukan kandidat usable."""
+        hasil = generate_candidates(
+            **_kwargs(batches=[_batch(safety_status="pending")]), evaluation_time=SEKARANG
+        )
+>       assert len(hasil) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_dispatch_safety_gate.py:86: AssertionError
+____________________ test_batch_needs_verification_on_hold _____________________
+
+    def test_batch_needs_verification_on_hold() -> None:
+        hasil = generate_candidates(
+            **_kwargs(batches=[_batch(safety_status="needs_verification")]),
+            evaluation_time=SEKARANG,
+        )
+>       assert hasil[0].eligibility_status == "on_hold"
+E       IndexError: list index out of range
+
+tests/test_dispatch_safety_gate.py:96: IndexError
+___________________ test_log_suhu_kurang_on_hold_bukan_pass ____________________
+
+    def test_log_suhu_kurang_on_hold_bukan_pass() -> None:
+        satu = [_batch()["temperature_log"][0]]
+        hasil = generate_candidates(
+            **_kwargs(batches=[_batch(temperature_log=satu)]), evaluation_time=SEKARANG
+        )
+>       assert hasil[0].eligibility_status == "on_hold"
+E       IndexError: list index out of range
+
+tests/test_dispatch_safety_gate.py:105: IndexError
+_______ test_barang_kedaluwarsa_sebelum_tiba_tidak_menghasilkan_kandidat _______
+
+    def test_barang_kedaluwarsa_sebelum_tiba_tidak_menghasilkan_kandidat() -> None:
+        """Umur barang diuji terhadap WAKTU TIBA hasil logistik, bukan hari ini."""
+>       hasil = generate_candidates(
+            **_kwargs(batches=[_batch(usable_until=SEKARANG + timedelta(days=1))]),
+            evaluation_time=SEKARANG,
+            arrival=(SEKARANG + timedelta(days=2)),
+        )
+E       TypeError: generate_candidates() got an unexpected keyword argument 'arrival'
+
+tests/test_dispatch_safety_gate.py:125: TypeError
+________ test_kandidat_tanpa_fakta_kelayakan_tetap_dinilai_aturan_lama _________
+
+    def test_kandidat_tanpa_fakta_kelayakan_tetap_dinilai_aturan_lama() -> None:
+        """Kontrak kompatibilitas: fixture lama yang tidak membawa `usable_until`.
+    
+        Dict batch tanpa kunci `usable_until` berasal dari pemanggil lama yang tidak
+        menyuplai fakta kelayakan; ia dinilai aturan lama supaya kontrak 6-tuple
+        Task 9 tetap sah. Begitu kuncinya ADA (termasuk bernilai None), evaluator
+        berlaku — lihat tes `usable_until_kosong` di atas.
+        """
+        tanpa_fakta = _batch()
+        tanpa_fakta.pop("usable_until")
+        tanpa_fakta.pop("temperature_log")
+        tanpa_fakta.pop("quarantine_status")
+        hasil = generate_candidates(
+            **_kwargs(batches=[tanpa_fakta]), evaluation_time=SEKARANG
+        )
+>       assert len(hasil) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_dispatch_safety_gate.py:148: AssertionError
+_________ test_needed_by_yang_sudah_lewat_tidak_menghasilkan_kandidat __________
+
+    def test_needed_by_yang_sudah_lewat_tidak_menghasilkan_kandidat() -> None:
+        out = _run(
+            rs.build_recommendations(
+                lambda: _facts(SEKARANG - timedelta(hours=1)),
+                as_of=SEKARANG,
+            )
+        )
+>       assert out["recommendations"] == []
+E       AssertionError: assert [{'candidate'...': True, ...}] == []
+E         
+E         Left contains one more item: {'candidate': {'batch_ids': ['b-1'], 'commodity': 'telur', 'demand_fit': '0.8571428571428571428571428571', 'destinatio...: '318000.00', 'freshness_risk': '0.00', 'handling': '150000.00', 'logistics': '21600.00', ...}, 'eligible': True, ...}
+E         Use -v to get more diff
+
+tests/test_dispatch_safety_gate.py:187: AssertionError
+____ test_needed_by_yang_masih_lapang_menghasilkan_kandidat_dengan_jendela _____
+
+    def test_needed_by_yang_masih_lapang_menghasilkan_kandidat_dengan_jendela() -> None:
+        out = _run(
+            rs.build_recommendations(
+                lambda: _facts(SEKARANG + timedelta(hours=12)),
+                as_of=SEKARANG,
+            )
+        )
+        assert out["recommendations"], "jadwal lapang seharusnya masih bisa dikirim"
+>       jendela = out["recommendations"][0]["delivery_window"]
+E       KeyError: 'delivery_window'
+
+tests/test_dispatch_safety_gate.py:198: KeyError
+__________ test_estimasi_melebihi_jendela_tidak_menghasilkan_kandidat __________
+
+    def test_estimasi_melebihi_jendela_tidak_menghasilkan_kandidat() -> None:
+        """Perjalanan 150 menit + persiapan tidak muat dalam 2 jam tersisa."""
+        out = _run(
+            rs.build_recommendations(
+                lambda: _facts(SEKARANG + timedelta(minutes=100)),
+                as_of=SEKARANG,
+            )
+        )
+>       assert out["recommendations"] == []
+E       AssertionError: assert [{'candidate'...': True, ...}] == []
+E         
+E         Left contains one more item: {'candidate': {'batch_ids': ['b-1'], 'commodity': 'telur', 'demand_fit': '0.8571428571428571428571428571', 'destinatio...: '318000.00', 'freshness_risk': '0.00', 'handling': '150000.00', 'logistics': '21600.00', ...}, 'eligible': True, ...}
+E         Use -v to get more diff
+
+tests/test_dispatch_safety_gate.py:211: AssertionError
+_________ test_tanpa_baris_permintaan_jendela_ditandai_tidak_tercatat __________
+
+    def test_tanpa_baris_permintaan_jendela_ditandai_tidak_tercatat() -> None:
+        facts = _facts(SEKARANG + timedelta(hours=12))
+        # Baris ke-9 diganti peta kosong: tidak ada needed_by untuk pasangan ini.
+        facts = facts[:8] + ({},)
+        out = _run(rs.build_recommendations(lambda: facts, as_of=SEKARANG))
+        assert out["recommendations"], "tanpa batas, kandidat lama tetap muncul"
+>       assert out["recommendations"][0]["delivery_window"]["state"] == "tidak_tercatat"
+E       KeyError: 'delivery_window'
+
+tests/test_dispatch_safety_gate.py:220: KeyError
+______________ test_payload_kandidat_on_hold_tidak_ditandai_lolos ______________
+
+    def test_payload_kandidat_on_hold_tidak_ditandai_lolos() -> None:
+        out = _run(
+            rs.build_recommendations(
+                lambda: _facts(
+                    SEKARANG + timedelta(hours=12),
+                    batches=[_batch(safety_status="pending")],
+                ),
+                as_of=SEKARANG,
+            )
+        )
+>       assert out["recommendations"], "on_hold tetap dilaporkan untuk verifikasi"
+E       AssertionError: on_hold tetap dilaporkan untuk verifikasi
+E       assert []
+
+tests/test_dispatch_safety_gate.py:246: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_dispatch_safety_gate.py::test_batch_sehat_menghasilkan_kandidat_usable
+FAILED tests/test_dispatch_safety_gate.py::test_batch_pending_dilaporkan_on_hold_bukan_usable
+FAILED tests/test_dispatch_safety_gate.py::test_batch_needs_verification_on_hold
+FAILED tests/test_dispatch_safety_gate.py::test_log_suhu_kurang_on_hold_bukan_pass
+FAILED tests/test_dispatch_safety_gate.py::test_barang_kedaluwarsa_sebelum_tiba_tidak_menghasilkan_kandidat
+FAILED tests/test_dispatch_safety_gate.py::test_kandidat_tanpa_fakta_kelayakan_tetap_dinilai_aturan_lama
+FAILED tests/test_dispatch_safety_gate.py::test_needed_by_yang_sudah_lewat_tidak_menghasilkan_kandidat
+FAILED tests/test_dispatch_safety_gate.py::test_needed_by_yang_masih_lapang_menghasilkan_kandidat_dengan_jendela
+FAILED tests/test_dispatch_safety_gate.py::test_estimasi_melebihi_jendela_tidak_menghasilkan_kandidat
+FAILED tests/test_dispatch_safety_gate.py::test_tanpa_baris_permintaan_jendela_ditandai_tidak_tercatat
+FAILED tests/test_dispatch_safety_gate.py::test_payload_kandidat_on_hold_tidak_ditandai_lolos
+11 failed, 3 passed in 4.31s

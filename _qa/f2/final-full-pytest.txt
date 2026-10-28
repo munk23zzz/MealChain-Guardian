@@ -1,0 +1,3716 @@
+FFFFFFF................................................................. [  3%]
+........................................................................ [  7%]
+........................................................................ [ 10%]
+........................................................................ [ 14%]
+................................s.FF.................................... [ 18%]
+...............Fs..F...............F.................................... [ 21%]
+........................................................................ [ 25%]
+....FFF.F..F..FF.FFF.................................................... [ 28%]
+..................................s.....F.........F.F................... [ 32%]
+..............................................................F......... [ 36%]
+............................................................ssssssssssss [ 39%]
+...................................sss..........................FFFFFFFF [ 43%]
+FFF............FFF....F.FF...................F..F....................... [ 46%]
+........................................................................ [ 50%]
+.........................FFF............................................ [ 54%]
+.F...................................................................... [ 57%]
+........FFF.F....................F...................................... [ 61%]
+..................................................................s..... [ 64%]
+.......F.FFF...........................................................s [ 68%]
+s...FF.FFF..FF.......................................................... [ 72%]
+...........FFF.............FFFFF........................................ [ 75%]
+...........................sss.......................................... [ 79%]
+........................................................................ [ 82%]
+........................................................................ [ 86%]
+F.F.F............FFFF...................F.............FFFFFFF.....s..... [ 90%]
+........................................................................ [ 93%]
+.......................................................................F [ 97%]
+F................................................s..                     [100%]
+=================================== FAILURES ===================================
+_________ test_actions_verify_writes_verifier_note_and_flagged_status __________
+
+client = <starlette.testclient.TestClient object at 0x70a346219370>
+
+    def test_actions_verify_writes_verifier_note_and_flagged_status(client):
+        """Verify endpoint HARUS menulis verdict ke verifier_note (gap nyata).
+    
+        Kontrak O-SEC-3: verdict diturunkan server (chain override FLAGGED),
+        request body tidak membawa verdict.
+        """
+        head = _mk_user("sppg_head", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_action_boundary_e2e.py:95: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+_________________ test_actions_verify_rejects_unknown_verdict __________________
+
+client = <starlette.testclient.TestClient object at 0x70a33e9efad0>
+
+    def test_actions_verify_rejects_unknown_verdict(client):
+        """Verdict tak dikenal tidak bisa masuk lewat jalur mana pun: request
+        body ditolak 422 (extra="forbid"); provider yang mengembalikan output
+        tak terbaca diturunkan UNAVAILABLE oleh run_verifier (konservatif)."""
+        head = _mk_user("sppg_head", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_action_boundary_e2e.py:137: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+___________ test_e2e_event1_to_mock_sap_dua_approval_untuk_transfer ____________
+
+client = <starlette.testclient.TestClient object at 0x70a33c29ae70>
+
+    def test_e2e_event1_to_mock_sap_dua_approval_untuk_transfer(client):
+        """Transfer operasional: dua approval (Head lalu Nutritionist) wajib → PO mock."""
+        head = _mk_user("sppg_head", "Jakarta")
+        nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_action_boundary_e2e.py:172: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+___________________ test_e2e_flagged_requires_both_approvers ___________________
+
+client = <starlette.testclient.TestClient object at 0x70a33c1036b0>
+
+    def test_e2e_flagged_requires_both_approvers(client):
+        """FLAGGED (verdict hasil audit): dua approval (head DAN nutritionist) wajib.
+    
+        Sejak audit M1 (18 Okt 2026) UNAVAILABLE tidak dicatat sebagai verifikasi,
+        jadi approve akan 409 lebih dulu — yang bisa mengukur pagar dua-approver
+        adalah verdict yang benar-benar tercatat.
+        """
+        head = _mk_user("sppg_head", "Jakarta")
+        # Ruling 2026-10-14 §3: approver kedua wajib satu SPPG dengan target
+        # (dulu "Bogor" — lolos hanya karena jalur tulis belum ber-cakupan).
+        nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_action_boundary_e2e.py:248: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+______________________ test_e2e_rejected_decision_blocked ______________________
+
+client = <starlette.testclient.TestClient object at 0x70a33c55d1f0>
+
+    def test_e2e_rejected_decision_blocked(client):
+        head = _mk_user("sppg_head", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_action_boundary_e2e.py:293: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+______________________ test_e2e_expired_decision_blocked _______________________
+
+client = <starlette.testclient.TestClient object at 0x70a33e94ad80>
+
+    def test_e2e_expired_decision_blocked(client):
+        head = _mk_user("sppg_head", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_action_boundary_e2e.py:327: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+_________________ test_e2e_bgn_monitor_cannot_touch_lifecycle __________________
+
+client = <starlette.testclient.TestClient object at 0x70a33f519730>
+
+    def test_e2e_bgn_monitor_cannot_touch_lifecycle(client):
+        monitor = _mk_user("bgn_monitor")
+        head = _mk_user("sppg_head", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_action_boundary_e2e.py:344: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+___________________ test_recommend_endpoint_ranks_candidates ___________________
+
+client = <starlette.testclient.TestClient object at 0x70a33c354680>
+
+    def test_recommend_endpoint_ranks_candidates(client):
+        resp = client.post("/balance/recommend", json={})
+        assert resp.status_code == 200, resp.text
+        items = resp.json()["recommendations"]
+>       assert items, "seed wajib menghasilkan kandidat"
+E       AssertionError: seed wajib menghasilkan kandidat
+E       assert []
+
+tests/test_api_decision_intelligence.py:174: AssertionError
+___________________ test_decisions_persist_and_get_validity ____________________
+
+client = <starlette.testclient.TestClient object at 0x70a33615fc80>
+
+    def test_decisions_persist_and_get_validity(client):
+        rec = client.post("/balance/recommend", json={}).json()
+        # Keputusan hanya boleh menyasar lokasi milik SPPG pengguna (Jakarta), jadi
+        # pilih kandidat TERATAS yang tujuannya Jakarta — bukan rank 1 global, yang
+        # bisa saja menuju kota lain dan memang ditolak 403 oleh aturan scope.
+        items = rec["recommendations"]
+        top = next(
+            (r for r in items if r["candidate"]["destination_location"] == "Jakarta"),
+            None,
+        )
+>       assert top is not None, "seed wajib punya kandidat menuju Jakarta"
+E       AssertionError: seed wajib punya kandidat menuju Jakarta
+E       assert None is not None
+
+tests/test_api_decision_intelligence.py:193: AssertionError
+_______ test_approval_summary_or_complete_then_execute_parity[explicit] ________
+
+client = <starlette.testclient.TestClient object at 0x70a33c5a7f20>
+binding = 'explicit'
+
+    @pytest.mark.parametrize("binding", ["explicit", "missing"])
+    def test_approval_summary_or_complete_then_execute_parity(client, binding):
+        """Only a bound transfer promises a supplier and can execute."""
+        batch = _mk_batch(_bogor_id(), fail=False) if binding == "explicit" else None
+        # Kasus "missing" menuntut lokasi+komoditas yang TIDAK punya satu pun batch,
+        # supaya pemasok tidak bisa disimpulkan. Dulu dipaku ke `ayam` + Jakarta;
+        # seed bertambah, jadi pasangannya DICARI saat tes berjalan.
+        pasangan = None if batch else _pasangan_tanpa_batch(_jakarta_id())
+        if not batch and pasangan is None:
+            # Premis kasus ini (pasangan lokasi×komoditas TANPA batch) bisa hilang
+            # ketika seed bertambah — generator aktivitas demo mengisi seluruh
+            # pasangan 10 lokasi × 3 komoditas. Itu bukan regresi produk, jadi
+            # dilewati dengan alasan jujur, bukan digagalkan.
+            pytest.skip(
+                "semua lokasi×komoditas punya batch; kasus supplier_unknown mustahil dibentuk"
+            )
+        if batch:
+            did = _mk_decision(_bogor_id(), _jakarta_id())
+        else:
+            assert pasangan is not None  # dijamin skip di atas; ini hanya untuk tipe
+            sumber, komoditas = pasangan
+            did = _mk_decision(sumber, _jakarta_id(), commodity=komoditas)
+        try:
+            if batch:
+                _bind_decision(did, batch)
+            # Verifikasi + verdict konsisten (fixture DB level, server verdict).
+            client.post(
+                "/actions/verify", headers=_head_user(client), json={"decision_id": did}
+            )
+            _db_exec(
+                "UPDATE decisions SET verifier_note='consistent', verified_by="
+                "(SELECT id FROM users WHERE role='sppg_head' LIMIT 1) WHERE id=:d",
+                {"d": did},
+            )
+            # Approval Head saja TIDAK cukup: transfer operasional butuh dua role
+            # (PLAN.md §13.3) meski verdict verifier CONSISTENT.
+            ra = client.post(
+                "/actions/approve",
+                headers=_head_user(client),
+                json={"decision_id": did, "approved": True},
+            )
+            assert ra.status_code == 200, ra.text
+    
+            summary = client.get(
+                f"/decisions/{did}/approval-summary", headers=_head_user(client)
+            ).json()
+            assert summary["approval_state"]["satisfied"] is False
+            # Approval kedua: Nutritionist (user berbeda).
+            rn = client.post(
+                "/actions/approve",
+                headers=_nut_user(client),
+                json={"decision_id": did, "approved": True},
+            )
+            assert rn.status_code == 200, rn.text
+            summary = client.get(
+                f"/decisions/{did}/approval-summary", headers=_head_user(client)
+            ).json()
+            assert summary["approval_state"]["satisfied"] is True
+            if binding == "missing":
+                rx = client.post(
+                    "/actions/execute", headers=_head_user(client), json={"decision_id": did}
+                )
+                assert rx.status_code == 409, rx.text
+                assert "supplier_unknown" in rx.json()["detail"]
+                assert summary["can_execute"] is False
+                assert summary["supplier"] is None
+                assert rx.json()["detail"] in summary["blocking_reasons"]
+                assert not _db_all(
+                    "SELECT id FROM sap_mock_purchase_orders WHERE decision_id=:d", {"d": did}
+                )
+                return
+            assert summary["supplier"]["id"] == batch["supplier_id"]
+>           assert summary["can_execute"] is True
+E           assert False is True
+
+tests/test_approval_summary.py:470: AssertionError
+_______________ test_approval_summary_safety_revalidation_block ________________
+
+client = <starlette.testclient.TestClient object at 0x70a33c8bdfd0>
+
+    def test_approval_summary_safety_revalidation_block(client):
+        """Batch sumber kini FAIL → summary menandai safety block + can_execute
+        false — sejajar dengan revalidation hook execute (O-EVENT-2)."""
+        suffix = uuid.uuid4().hex[:8]
+        loc_id = str(_db_exec_returning(
+            "INSERT INTO locations (name, region, latitude, longitude) "
+            "VALUES (:n, 'Test', -6.9, 107.6) RETURNING id",
+            {"n": f"SUM-src-{suffix}"},
+        ))
+        b = _mk_batch(loc_id, fail=False)
+        did = _mk_decision(loc_id, _jakarta_id())
+        try:
+            _db_exec(
+                "UPDATE decisions SET verifier_note='consistent', verified_by="
+                "(SELECT id FROM users WHERE role='sppg_head' LIMIT 1) WHERE id=:d",
+                {"d": did},
+            )
+            users = _db_all(
+                "SELECT id FROM users WHERE role='sppg_head' ORDER BY id LIMIT 1"
+            )
+            _db_exec(
+                "INSERT INTO approvals (decision_id, approved_by, approved) "
+                "VALUES (:d, :u, True)",
+                {"d": did, "u": str(users[0][0])},
+            )
+            # Summary saat batch masih aman → tidak ada safety block.
+            s1 = client.get(
+                f"/decisions/{did}/approval-summary", headers=_head_user(client)
+            ).json()
+>           assert s1["safety"]["blocked"] is False
+E           assert True is False
+
+tests/test_approval_summary.py:605: AssertionError
+_________________ test_bgn_monitor_tidak_mendapat_kedua_tombol _________________
+
+client = <starlette.testclient.TestClient object at 0x70a33c35ef00>
+panggung = {'akhiran': 'ceb3bc1c', 'batch_id': 'cf61d9a7-0faf-4280-a521-a3af79ab3c42', 'decision_id': '546fb64a-3fe0-44cb-95f6-bea8136417d2', 'gizi': 'f9.sppg_nutritionist-ceb3bc1c@uji-f9.local', ...}
+
+    def test_bgn_monitor_tidak_mendapat_kedua_tombol(client, panggung):
+        email = _db_one("SELECT email FROM users WHERE role='bgn_monitor' LIMIT 1")
+        assert email, "butuh akun bgn_monitor demo untuk tes ini"
+>       headers = _login(client, str(email), "Demo#BGN2026")
+
+tests/test_approval_summary_receipt_gate.py:328: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x70a33c35ef00>
+email = 'bgn_monitor-00abb025@test.local', password = 'Demo#BGN2026'
+
+    def _login(client: TestClient, email: str, password: str = PW) -> dict:
+        resp = client.post("/auth/login", json={"email": email, "password": password})
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"email atau password salah"}
+E       assert 401 == 200
+E        +  where 401 = <Response [401 Unauthorized]>.status_code
+
+tests/test_approval_summary_receipt_gate.py:76: AssertionError
+________________ test_cianjur_to_jakarta_telur_locked_scenario _________________
+
+    def test_cianjur_to_jakarta_telur_locked_scenario():
+        s, d, b, lg, p = _inputs()
+        out = generate_candidates(s, d, b, lg, prices=p, commodity="telur")
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_candidate_generation.py:83: AssertionError
+__________________ test_quantity_capped_by_batch_availability __________________
+
+    def test_quantity_capped_by_batch_availability():
+        s, d, b, lg, p = _inputs(batches=[_batch(quantity_kg=Decimal("450"))])
+        out = generate_candidates(s, d, b, lg, prices=p)
+>       assert out[0].quantity_kg == Decimal("450")
+E       IndexError: list index out of range
+
+tests/test_candidate_generation.py:99: IndexError
+_________________ test_quantity_capped_by_surplus_not_shortage _________________
+
+    def test_quantity_capped_by_surplus_not_shortage():
+        s, d, b, lg, p = _inputs(
+            source_records={("Cianjur", "telur"): Decimal("1000"),
+                            ("Jakarta", "telur"): Decimal("300")},
+        )
+        # surplus Cianjur = 1000-500 = 500 < shortage 700; batch 600
+        out = generate_candidates(s, d, b, lg, prices=p)
+>       assert out[0].quantity_kg == Decimal("500")
+E       IndexError: list index out of range
+
+tests/test_candidate_generation.py:109: IndexError
+________ test_batch_kuantitas_nol_diabaikan_yang_positif_tetap_dihitung ________
+
+    def test_batch_kuantitas_nol_diabaikan_yang_positif_tetap_dihitung():
+        """Batch nol dilewati; agregat dihitung dari batch yang benar-benar dikirim."""
+        s, d, b, lg, p = _inputs(
+            batches=[
+                _batch(quantity_kg=Decimal("0")),
+                _batch(quantity_kg=Decimal("300")),
+            ]
+        )
+        out = generate_candidates(s, d, b, lg, prices=p)
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_candidate_generation.py:134: AssertionError
+___________________ test_commodity_filter_excludes_mismatch ____________________
+
+    def test_commodity_filter_excludes_mismatch():
+        s, d, b, lg, p = _inputs(
+            batches=[
+                _batch(commodity="wortel", quantity_kg=Decimal("900")),
+                _batch(commodity="telur"),
+            ]
+        )
+        out = generate_candidates(s, d, b, lg, prices=p, commodity="telur")
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_candidate_generation.py:164: AssertionError
+__________________ test_needs_verification_allowed_and_marked __________________
+
+    def test_needs_verification_allowed_and_marked():
+        s, d, b, lg, p = _inputs(
+            batches=[_batch(freshness_status="needs_verification")]
+        )
+        out = generate_candidates(s, d, b, lg, prices=p)
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_candidate_generation.py:187: AssertionError
+________ test_mixed_batches_weighted_freshness_and_conservative_status _________
+
+    def test_mixed_batches_weighted_freshness_and_conservative_status():
+        s, d, b, lg, p = _inputs(
+            batches=[
+                _batch(quantity_kg=Decimal("300"), freshness_score=Decimal("0.95"),
+                       freshness_status="pass"),
+                _batch(quantity_kg=Decimal("300"), freshness_score=Decimal("0.70"),
+                       freshness_status="needs_verification"),
+            ]
+        )
+        out = generate_candidates(s, d, b, lg, prices=p)
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_candidate_generation.py:202: AssertionError
+____________________ test_exact_capacity_boundary_feasible _____________________
+
+    def test_exact_capacity_boundary_feasible():
+        """Batas persis: waktu estimasi == window → feasible, kandidat ada."""
+        s, d, b, lg, p = _inputs(
+            logistics_by_pair={
+                ("Cianjur", "Jakarta"): _logistics(time_min=150.0)
+            }
+        )
+        out = generate_candidates(s, d, b, lg, prices=p)
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_candidate_generation.py:225: AssertionError
+______________________ test_missing_logistics_pair_raises ______________________
+
+    def test_missing_logistics_pair_raises():
+        s, d, b, lg, p = _inputs(logistics_by_pair={})
+>       with pytest.raises(ValueError, match="logistik"):
+E       Failed: DID NOT RAISE <class 'ValueError'>
+
+tests/test_candidate_generation.py:231: Failed
+__________________________ test_missing_price_raises ___________________________
+
+    def test_missing_price_raises():
+        s, d, b, lg, p = _inputs(prices={})
+>       with pytest.raises(ValueError, match="harga"):
+E       Failed: DID NOT RAISE <class 'ValueError'>
+
+tests/test_candidate_generation.py:237: Failed
+_____________ test_context_integration_with_real_service_emission ______________
+
+    def test_context_integration_with_real_service_emission():
+        """Builder menerima emisi service Task 9 apa adanya."""
+        from datetime import datetime, timezone
+        from decimal import Decimal
+    
+        from app.services import recommendation_service as rs
+    
+        supply = {("Cianjur", "telur"): Decimal("1400"),
+                  ("Jakarta", "telur"): Decimal("300")}
+        demand = {("Cianjur", "telur"): Decimal("500"),
+                  ("Jakarta", "telur"): Decimal("1000")}
+        refs = {("Cianjur", "telur"): Decimal("26500"),
+                ("Jakarta", "telur"): Decimal("30500")}
+        quotes = {("Cianjur", "telur"): (
+            Decimal("26200"), "11111111-1111-1111-1111-111111111111")}
+        batches = [{
+            "batch_id": "b-1",
+            "location": "Cianjur",
+            "commodity": "telur",
+            "quantity_kg": Decimal("600"),
+            "freshness_score": Decimal("0.90"),
+            "freshness_status": "pass",
+            "safety_status": "pass",
+        }]
+        reliability = {
+            "11111111-1111-1111-1111-111111111111": Decimal("0.80")
+        }
+        logi = {("Cianjur", "Jakarta"): {
+            "distance_km": 120, "estimated_time_min": 150.0, "feasible": True}}
+        as_of = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+        import asyncio
+    
+        out = asyncio.run(rs.build_recommendations(
+            lambda: (supply, demand, refs, quotes, batches, reliability),
+            as_of=as_of,
+            logistics_by_pair=logi,
+        ))
+        ctx = build_supervisor_context(out)
+>       c = ctx["candidates"][0]
+E       IndexError: list index out of range
+
+tests/test_decision_context.py:149: IndexError
+_______ test_paket_menyatakan_pengiriman_tidak_layak_bila_tenggat_lewat ________
+
+klien = <starlette.testclient.TestClient object at 0x70a33c821550>
+aktor = {'email': 'bgn_monitor-e617860f@uji-f6-packet.local', 'id': '383daa1c-9ce9-4c88-b181-f55413ec5fd0', 'password': 'TestPass#2026', 'role': 'bgn_monitor'}
+
+    def test_paket_menyatakan_pengiriman_tidak_layak_bila_tenggat_lewat(klien, aktor) -> None:
+        batch = _buat_batch()
+        decision_id = _buat_keputusan(batch, breakdown=RINCIAN_LENGKAP)
+        demand_id = _buat_demand("Jakarta", datetime.now(UTC) - timedelta(hours=2))
+        try:
+            h = _login(klien, aktor)
+            paket = klien.get(f"/decisions/{decision_id}/packet", headers=h).json()
+>           assert paket["delivery"]["feasible"] is False
+E           assert True is False
+
+tests/test_decision_packet.py:319: AssertionError
+____________ test_get_decision_traces_returns_ordered_actual_steps _____________
+
+client = <starlette.testclient.TestClient object at 0x70a33e964b30>
+
+    def test_get_decision_traces_returns_ordered_actual_steps(client):
+        """Trace timeline: urutan langkah asli dari DB (bukan teks karangan)."""
+        from app.services.event1_orchestrator import run_event1
+    
+>       outcome = run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_decision_read_endpoints.py:117: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+____________ test_kasus_pengadaan_lolos_resolve_binding_dan_safety _____________
+
+kasus = [{'batches': [(UUID('b72fa492-f54c-50ce-b771-4b46530cad34'), UUID('275d1be7-5bb8-5a37-8004-a2d40a51eb7e'), UUID('80145...455e-bf98-4aecc78daed4', 'demo_case': 'rejection-loop-kuota', 'id': UUID('9554a450-261f-4e6c-84d5-60cc497d0258'), ...}]
+
+    def test_kasus_pengadaan_lolos_resolve_binding_dan_safety(kasus):
+        """Tidak boleh ada kasus demo pengadaan yang pasti ditolak guard eksekusi."""
+        for k in kasus:
+            try:
+                hasil = _resolve(k["id"], k["supplier"])
+            except HTTPException as exc:  # pragma: no cover - pesan kegagalan
+                raise AssertionError(
+                    f"{k['demo_case']} {str(k['id'])[:8]} ditolak guard: "
+                    f"{exc.status_code} {exc.detail}"
+                ) from exc
+            assert hasil["batches"], f"{str(k['id'])[:8]}: resolve tanpa batch"
+>           assert hasil["blocked"] is False, (
+                f"{k['demo_case']} {str(k['id'])[:8]}: safety gate memblokir karena "
+                "batch acuan tidak layak — kasus demo tidak bisa dieksekusi"
+            )
+E           AssertionError: rejection-loop-kuota fadbb755: safety gate memblokir karena batch acuan tidak layak — kasus demo tidak bisa dieksekusi
+E           assert True is False
+
+tests/test_demo_cases_procurement_binding.py:189: AssertionError
+_______________ test_event1_e2e_propose_approve_execute_mock_sap _______________
+
+client = <starlette.testclient.TestClient object at 0x70a335be0ef0>
+
+    def test_event1_e2e_propose_approve_execute_mock_sap(client):
+        """Full hop aktual: supervisor→decision→propose→dual approve→execute→PO mock."""
+        head = _mk_user("sppg_head", "Jakarta")
+        nut = _mk_user("sppg_nutritionist", "Jakarta")
+>       decision_id, outcome = _event1_decision_id()
+
+tests/test_event1_e2e_acceptance.py:63: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_event1_e2e_acceptance.py:37: in _event1_decision_id
+    outcome = run_event1(
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+__________________ test_event1_e2e_safety_fail_guard_via_api ___________________
+
+client = <starlette.testclient.TestClient object at 0x70a33560c770>
+
+    def test_event1_e2e_safety_fail_guard_via_api(client):
+        """Safety FAIL core + model stub bandel → verdict FLAGGED (guard S3-06)."""
+    
+        def stubborn_model(prompt):
+            return '{"verdict": "CONSISTENT"}'
+    
+>       decision_id, outcome = _event1_decision_id(
+            verifier_bedrock=stubborn_model,
+            safety_status_override="fail",
+        )
+
+tests/test_event1_e2e_acceptance.py:134: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_event1_e2e_acceptance.py:37: in _event1_decision_id
+    outcome = run_event1(
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+_______________ test_event1_e2e_approval_boundary_blocked_paths ________________
+
+client = <starlette.testclient.TestClient object at 0x70a335672960>
+
+    def test_event1_e2e_approval_boundary_blocked_paths(client):
+        """bgn_monitor 403; expired → execute diblokir 409."""
+        head = _mk_user("sppg_head", "Jakarta")
+        # bgn_monitor tidak boleh punya location (check_user_role_location_scope)
+        mon = _mk_user("bgn_monitor", None)
+>       decision_id, _ = _event1_decision_id()
+
+tests/test_event1_e2e_acceptance.py:153: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_event1_e2e_acceptance.py:37: in _event1_decision_id
+    outcome = run_event1(
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+______________ test_event1_e2e_verifier_unavailable_dual_approval ______________
+
+client = <starlette.testclient.TestClient object at 0x70a3358a0320>
+
+    def test_event1_e2e_verifier_unavailable_dual_approval(client):
+        """dual AND tetap wajib: 1 approval tidak cukup (409).
+    
+        Sejak audit M1, verify UNAVAILABLE tidak membuka approval sama sekali, jadi
+        verdict dicatat lebih dulu lewat /actions/verify dengan provider uji — yang
+        diuji di sini adalah kuorum dua peran, bukan jalur verifikasi.
+        """
+        head = _mk_user("sppg_head", "Jakarta")
+        nut = _mk_user("sppg_nutritionist", "Jakarta")
+>       decision_id, _ = _event1_decision_id()
+
+tests/test_event1_e2e_acceptance.py:210: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_event1_e2e_acceptance.py:37: in _event1_decision_id
+    outcome = run_event1(
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+______________ test_event1_unverified_full_flow_persists_proposed ______________
+
+client = <starlette.testclient.TestClient object at 0x70a335ad0740>
+
+    def test_event1_unverified_full_flow_persists_proposed(client):
+        from app.services.event1_orchestrator import run_event1
+    
+>       outcome = run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_event1_supervisor_flow.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+_________ test_event1_unverified_persists_agent_traces_with_real_steps _________
+
+client = <starlette.testclient.TestClient object at 0x70a335946390>
+
+    def test_event1_unverified_persists_agent_traces_with_real_steps(client):
+        from app.services.event1_orchestrator import run_event1
+    
+>       outcome = run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_event1_supervisor_flow.py:148: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+______________________ test_event1_expiry_enforced_later _______________________
+
+client = <starlette.testclient.TestClient object at 0x70a335c8c260>
+
+    def test_event1_expiry_enforced_later(client):
+        """Decision Event 1 harus punya expires_at yang nanti dipakai guard."""
+        from app.services.event1_orchestrator import run_event1
+    
+>       outcome = run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_event1_supervisor_flow.py:175: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+___________ test_event1_consistent_verdict_records_verifier_attempt ____________
+
+client = <starlette.testclient.TestClient object at 0x70a336222180>
+
+    def test_event1_consistent_verdict_records_verifier_attempt(client):
+        from app.services.event1_orchestrator import run_event1
+    
+        def bedrock_ok(prompt):
+            return '{"verdict": "CONSISTENT", "reason": "evidence konsisten"}'
+    
+>       outcome = run_event1(
+            commodity="telur",
+            target_location="Jakarta",
+            verifier_bedrock=bedrock_ok,
+        )
+
+tests/test_event1_supervisor_flow.py:200: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+___________________ test_event1_safety_fail_never_consistent ___________________
+
+client = <starlette.testclient.TestClient object at 0x70a33c3911c0>
+
+    def test_event1_safety_fail_never_consistent(client):
+        """Guard: safety FAIL core tidak bisa diangkat model (S3-06 dipakai ulang)."""
+        from app.services.event1_orchestrator import run_event1
+    
+        def stubborn_model(prompt):
+            return '{"verdict": "CONSISTENT"}'
+    
+>       outcome = run_event1(
+            commodity="telur",
+            target_location="Jakarta",
+            verifier_bedrock=stubborn_model,
+            safety_status_override="FAIL",
+        )
+
+tests/test_event1_supervisor_flow.py:229: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+________________________ test_event1_no_auto_execution _________________________
+
+client = <starlette.testclient.TestClient object at 0x70a335e0c5c0>
+
+    def test_event1_no_auto_execution(client):
+        """Tidak ada eksekusi otomatis: tidak ada PO mock, status bukan executed."""
+        from app.services.event1_orchestrator import run_event1
+    
+>       outcome = run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_event1_supervisor_flow.py:251: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+_________________ test_event1_kpi_traceable_to_backend_outputs _________________
+
+client = <starlette.testclient.TestClient object at 0x70a33c6eb920>
+
+    def test_event1_kpi_traceable_to_backend_outputs(client):
+        """Semua angka di KPI/outcome harus bersumber output tools."""
+        from app.services.event1_orchestrator import run_event1
+    
+>       outcome = run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_event1_supervisor_flow.py:273: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+____________________ test_api_safety_happy_path_revised_201 ____________________
+
+client = <starlette.testclient.TestClient object at 0x70a33c44dac0>
+
+    def test_api_safety_happy_path_revised_201(client):
+        """FAIL → 201 revised; decision+evidence+trace terbaca dari DB."""
+        b = _mk_batch("Cianjur", fail=True)
+        try:
+            headers = _head_user(client)
+            resp = client.post(
+                "/events/safety-disruption",
+                headers=headers,
+                json={
+                    "batch_id": b["batch_id"],
+                    "target_location_id": _target_jakarta(),
+                    "operation_key": str(uuid.uuid4()),
+                },
+            )
+>           assert resp.status_code == 201, resp.text
+E           AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E           assert 409 == 201
+E            +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_event3_api.py:223: AssertionError
+__________________ test_api_safety_replay_same_key_idempotent __________________
+
+client = <starlette.testclient.TestClient object at 0x70a335abb3b0>
+
+    def test_api_safety_replay_same_key_idempotent(client):
+        """operation_key sama + batch sama → replay, satu decision saja."""
+        b = _mk_batch("Cianjur", fail=True)
+        try:
+            headers = _head_user(client)
+            payload = {
+                "batch_id": b["batch_id"],
+                "target_location_id": _target_jakarta(),
+                "operation_key": str(uuid.uuid4()),
+            }
+            r1 = client.post("/events/safety-disruption", headers=headers, json=payload)
+>           assert r1.status_code == 201, r1.text
+E           AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E           assert 409 == 201
+E            +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_event3_api.py:258: AssertionError
+______________ test_api_safety_conflict_same_key_other_batch_409 _______________
+
+client = <starlette.testclient.TestClient object at 0x70a3365150d0>
+
+    def test_api_safety_conflict_same_key_other_batch_409(client):
+        """operation_key sama + batch beda → 409."""
+        b1 = _mk_batch("Cianjur", fail=True)
+        b2 = _mk_batch("Cianjur", fail=True)
+        try:
+            headers = _head_user(client)
+            op_key = str(uuid.uuid4())
+            r1 = client.post(
+                "/events/safety-disruption",
+                headers=headers,
+                json={
+                    "batch_id": b1["batch_id"],
+                    "target_location_id": _target_jakarta(),
+                    "operation_key": op_key,
+                },
+            )
+>           assert r1.status_code == 201, r1.text
+E           AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E           assert 409 == 201
+E            +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_event3_api.py:290: AssertionError
+_________ test_service_fail_batch_excluded_bogor_alternative_persisted _________
+
+    def test_service_fail_batch_excluded_bogor_alternative_persisted():
+        """FAIL → exclude Cianjur → reoptimasi → Bogor eligible → decision baru."""
+        b = _mk_batches()
+        target_id = _target_jakarta()
+        op_key = uuid.uuid4()
+        try:
+>           outcome = asyncio.run(
+                _run_event3(
+                    b["fail_batch_id"], target_id, op_key, None,
+                    _facts_bogor_eligible(b),
+                )
+            )
+
+tests/test_event3_service.py:274: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+tests/test_event3_service.py:220: in _run_event3
+    return await svc.run_safety_disruption_event(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+batch_id = UUID('75a5673b-663c-4620-98a2-e72cb224756a')
+target_location_id = UUID('275d1be7-5bb8-5a37-8004-a2d40a51eb7e')
+operation_key = UUID('4451e084-597d-4a2b-9730-3d16cb25182f')
+previous_decision_id = None, actor_id = None
+db = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x70a33c847560>
+fetch_facts = <function _facts_bogor_eligible.<locals>._facts at 0x70a33511f380>
+
+    async def run_safety_disruption_event(
+        batch_id: uuid.UUID,
+        target_location_id: uuid.UUID,
+        operation_key: uuid.UUID,
+        previous_decision_id: uuid.UUID | None,
+        actor_id: str | None,
+        db: AsyncSession,
+        fetch_facts=None,
+    ) -> dict:
+        """Pipeline Event 3; session DI-COMMIT di sini (dua boundary).
+    
+        Commit #1: evaluasi + persist batch.safety_status (FAIL tahan bencana).
+        Commit #2: decision + evidence + trace bila ada alternatif eligible.
+        """
+        op_key = str(operation_key)
+    
+        # ---- Kunci serialisasi lintas request (pola Event 2, footnote §11).
+        await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": op_key})
+    
+        # ---- Replay: key sama → batch sama; batch beda → 409.
+        replay = await _find_replay(db, op_key)
+        if replay is not None:
+            _decision, outcome = replay
+            if outcome.get("batch_id") != str(batch_id):
+                raise Event3ConflictError("operation_key sudah dipakai untuk batch berbeda")
+            await db.rollback()
+            return outcome
+    
+        # ---- Load batch + lokasi komoditas (untuk evidence & revalidation).
+        batch = (await db.execute(select(Batch).where(Batch.id == batch_id))).scalar_one_or_none()
+        if batch is None:
+            raise LookupError("batch tidak ditemukan")
+    
+        # Commit #1 — evaluasi deterministik + persist status FAIL/otherwise.
+        raw_log = batch.temperature_log or []
+        temp_result = evaluate_safety(
+            raw_log,
+            safe_min_c=0.0,
+            safe_max_c=8.0,
+            max_excursion_minutes=30.0,
+        )
+        batch.safety_status = temp_result["safety_status"]
+        await db.commit()
+    
+        # Kondisi berhenti dini: batch ternyata aman → bukan event 3.
+        if temp_result["safety_status"] != "fail":
+            no_event = {
+                "status": "no_disruption",
+                "decision_id": None,
+                "event_type": "safety_disruption",
+                "batch_id": str(batch.id),
+                "safety_status": temp_result["safety_status"],
+                "evaluation": {
+                    "safety_status": temp_result["safety_status"],
+                    "excursion_minutes": float(temp_result["excursion_minutes"]),
+                },
+                "excursion_minutes": float(temp_result["excursion_minutes"]),
+                "excluded_batch_ids": [],
+                "previous_decision_id": (str(previous_decision_id) if previous_decision_id else None),
+                "message": "Tidak ada gangguan keamanan pangan (batch aman)",
+            }
+            await db.rollback()
+            return no_event
+    
+        # ---- Re-optimasi deterministik (reuse pipeline Event 1).
+        if fetch_facts is None:
+            from app.core.config import settings
+            from app.db import create_engine as _mk_engine
+            from app.db import create_session_maker as _mk_session
+            from app.services import recommendation_service as _rs
+    
+            _engine = _mk_engine(settings.database_url)
+            _maker = _mk_session(_engine)
+    
+            async def _default_fetch():
+                async with _maker() as _session:
+                    return await _rs.fetch_operational_facts(_session, None)
+    
+            fetch_facts = _default_fetch
+        result = await build_recommendations(fetch_facts)
+        recommendations = result.get("recommendations", [])
+    
+        target = await db.get(Location, target_location_id)
+        commodity = await db.get(Commodity, batch.commodity_id)
+        eligible = [
+            r
+            for r in recommendations
+            if r.get("eligible")
+            and r["candidate"]["destination_location"] == target.name
+            and r["candidate"]["commodity"] == commodity.name
+        ]
+        if not eligible:
+            # FAIL sudah terpersist (commit #1); tanpa decision write.
+>           raise Event3NoAlternativeError(
+                "Tidak ada alternatif eligible setelah batch fail di-exclude"
+            )
+E           app.services.event3_service.Event3NoAlternativeError: Tidak ada alternatif eligible setelah batch fail di-exclude
+
+app/services/event3_service.py:209: Event3NoAlternativeError
+_______________ test_service_key_reuse_other_batch_409_semantics _______________
+
+    def test_service_key_reuse_other_batch_409_semantics():
+        """operation_key sama + batch beda → Event3ConflictError (API → 409)."""
+        from app.services.event3_service import Event3ConflictError
+    
+        b = _mk_batches()
+        target_id = _target_jakarta()
+        op_key = uuid.uuid4()
+        try:
+>           outcome = asyncio.run(
+                _run_event3(
+                    b["fail_batch_id"], target_id, op_key, None,
+                    _facts_bogor_eligible(b),
+                )
+            )
+
+tests/test_event3_service.py:367: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+tests/test_event3_service.py:220: in _run_event3
+    return await svc.run_safety_disruption_event(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+batch_id = UUID('b430b207-62f6-42e5-bd11-afe8551c907c')
+target_location_id = UUID('275d1be7-5bb8-5a37-8004-a2d40a51eb7e')
+operation_key = UUID('a78be331-64f0-4db7-b14e-93638d98207a')
+previous_decision_id = None, actor_id = None
+db = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x70a335681d60>
+fetch_facts = <function _facts_bogor_eligible.<locals>._facts at 0x70a33666f100>
+
+    async def run_safety_disruption_event(
+        batch_id: uuid.UUID,
+        target_location_id: uuid.UUID,
+        operation_key: uuid.UUID,
+        previous_decision_id: uuid.UUID | None,
+        actor_id: str | None,
+        db: AsyncSession,
+        fetch_facts=None,
+    ) -> dict:
+        """Pipeline Event 3; session DI-COMMIT di sini (dua boundary).
+    
+        Commit #1: evaluasi + persist batch.safety_status (FAIL tahan bencana).
+        Commit #2: decision + evidence + trace bila ada alternatif eligible.
+        """
+        op_key = str(operation_key)
+    
+        # ---- Kunci serialisasi lintas request (pola Event 2, footnote §11).
+        await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": op_key})
+    
+        # ---- Replay: key sama → batch sama; batch beda → 409.
+        replay = await _find_replay(db, op_key)
+        if replay is not None:
+            _decision, outcome = replay
+            if outcome.get("batch_id") != str(batch_id):
+                raise Event3ConflictError("operation_key sudah dipakai untuk batch berbeda")
+            await db.rollback()
+            return outcome
+    
+        # ---- Load batch + lokasi komoditas (untuk evidence & revalidation).
+        batch = (await db.execute(select(Batch).where(Batch.id == batch_id))).scalar_one_or_none()
+        if batch is None:
+            raise LookupError("batch tidak ditemukan")
+    
+        # Commit #1 — evaluasi deterministik + persist status FAIL/otherwise.
+        raw_log = batch.temperature_log or []
+        temp_result = evaluate_safety(
+            raw_log,
+            safe_min_c=0.0,
+            safe_max_c=8.0,
+            max_excursion_minutes=30.0,
+        )
+        batch.safety_status = temp_result["safety_status"]
+        await db.commit()
+    
+        # Kondisi berhenti dini: batch ternyata aman → bukan event 3.
+        if temp_result["safety_status"] != "fail":
+            no_event = {
+                "status": "no_disruption",
+                "decision_id": None,
+                "event_type": "safety_disruption",
+                "batch_id": str(batch.id),
+                "safety_status": temp_result["safety_status"],
+                "evaluation": {
+                    "safety_status": temp_result["safety_status"],
+                    "excursion_minutes": float(temp_result["excursion_minutes"]),
+                },
+                "excursion_minutes": float(temp_result["excursion_minutes"]),
+                "excluded_batch_ids": [],
+                "previous_decision_id": (str(previous_decision_id) if previous_decision_id else None),
+                "message": "Tidak ada gangguan keamanan pangan (batch aman)",
+            }
+            await db.rollback()
+            return no_event
+    
+        # ---- Re-optimasi deterministik (reuse pipeline Event 1).
+        if fetch_facts is None:
+            from app.core.config import settings
+            from app.db import create_engine as _mk_engine
+            from app.db import create_session_maker as _mk_session
+            from app.services import recommendation_service as _rs
+    
+            _engine = _mk_engine(settings.database_url)
+            _maker = _mk_session(_engine)
+    
+            async def _default_fetch():
+                async with _maker() as _session:
+                    return await _rs.fetch_operational_facts(_session, None)
+    
+            fetch_facts = _default_fetch
+        result = await build_recommendations(fetch_facts)
+        recommendations = result.get("recommendations", [])
+    
+        target = await db.get(Location, target_location_id)
+        commodity = await db.get(Commodity, batch.commodity_id)
+        eligible = [
+            r
+            for r in recommendations
+            if r.get("eligible")
+            and r["candidate"]["destination_location"] == target.name
+            and r["candidate"]["commodity"] == commodity.name
+        ]
+        if not eligible:
+            # FAIL sudah terpersist (commit #1); tanpa decision write.
+>           raise Event3NoAlternativeError(
+                "Tidak ada alternatif eligible setelah batch fail di-exclude"
+            )
+E           app.services.event3_service.Event3NoAlternativeError: Tidak ada alternatif eligible setelah batch fail di-exclude
+
+app/services/event3_service.py:209: Event3NoAlternativeError
+_______________ test_service_lineage_previous_decision_recorded ________________
+
+    def test_service_lineage_previous_decision_recorded():
+        """previous_decision_id tercatat di evidence + response; old decision
+        TIDAK dimutasi (O-EVENT-2: supersedes_id tidak dipalsukan)."""
+        b = _mk_batches()
+        target_id = _target_jakarta()
+        op_key = uuid.uuid4()
+        # Old decision "unsafe" (sintetis untuk linkage test).
+        old_id = str(uuid.uuid4())
+        _db_exec(
+            "INSERT INTO decisions (id, decision_type, status, proposed_by, "
+            "source_location_id, target_location_id, commodity_id, quantity_kg, "
+            "safe_delivered_cost, expires_at, cost_breakdown) "
+            "SELECT :id, 'regional_balance', 'pending_approval', 'supervisor_agent', "
+            "ls.id, lt.id, c2.id, 499.99, 16206000.00, now() + interval '30 minutes', "
+            "'{\"purchase\": \"15720000\"}'::jsonb "
+            "FROM locations ls, locations lt, commodities c2 "
+            "WHERE ls.name='Cianjur' AND lt.name='Jakarta' AND c2.name='telur'",
+            {"id": old_id},
+        )
+        try:
+>           outcome = asyncio.run(
+                _run_event3(
+                    b["fail_batch_id"], target_id, op_key, old_id,
+                    _facts_bogor_eligible(b),
+                )
+            )
+
+tests/test_event3_service.py:405: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+tests/test_event3_service.py:220: in _run_event3
+    return await svc.run_safety_disruption_event(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+batch_id = UUID('46dbed87-dabb-465d-a1fd-05faf7334bba')
+target_location_id = UUID('275d1be7-5bb8-5a37-8004-a2d40a51eb7e')
+operation_key = UUID('efb48f67-221b-49d7-92c0-7bc045a63d35')
+previous_decision_id = UUID('b56dca27-e17d-46c5-a2ed-9f82073878f2')
+actor_id = None
+db = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x70a335682fc0>
+fetch_facts = <function _facts_bogor_eligible.<locals>._facts at 0x70a33511efc0>
+
+    async def run_safety_disruption_event(
+        batch_id: uuid.UUID,
+        target_location_id: uuid.UUID,
+        operation_key: uuid.UUID,
+        previous_decision_id: uuid.UUID | None,
+        actor_id: str | None,
+        db: AsyncSession,
+        fetch_facts=None,
+    ) -> dict:
+        """Pipeline Event 3; session DI-COMMIT di sini (dua boundary).
+    
+        Commit #1: evaluasi + persist batch.safety_status (FAIL tahan bencana).
+        Commit #2: decision + evidence + trace bila ada alternatif eligible.
+        """
+        op_key = str(operation_key)
+    
+        # ---- Kunci serialisasi lintas request (pola Event 2, footnote §11).
+        await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": op_key})
+    
+        # ---- Replay: key sama → batch sama; batch beda → 409.
+        replay = await _find_replay(db, op_key)
+        if replay is not None:
+            _decision, outcome = replay
+            if outcome.get("batch_id") != str(batch_id):
+                raise Event3ConflictError("operation_key sudah dipakai untuk batch berbeda")
+            await db.rollback()
+            return outcome
+    
+        # ---- Load batch + lokasi komoditas (untuk evidence & revalidation).
+        batch = (await db.execute(select(Batch).where(Batch.id == batch_id))).scalar_one_or_none()
+        if batch is None:
+            raise LookupError("batch tidak ditemukan")
+    
+        # Commit #1 — evaluasi deterministik + persist status FAIL/otherwise.
+        raw_log = batch.temperature_log or []
+        temp_result = evaluate_safety(
+            raw_log,
+            safe_min_c=0.0,
+            safe_max_c=8.0,
+            max_excursion_minutes=30.0,
+        )
+        batch.safety_status = temp_result["safety_status"]
+        await db.commit()
+    
+        # Kondisi berhenti dini: batch ternyata aman → bukan event 3.
+        if temp_result["safety_status"] != "fail":
+            no_event = {
+                "status": "no_disruption",
+                "decision_id": None,
+                "event_type": "safety_disruption",
+                "batch_id": str(batch.id),
+                "safety_status": temp_result["safety_status"],
+                "evaluation": {
+                    "safety_status": temp_result["safety_status"],
+                    "excursion_minutes": float(temp_result["excursion_minutes"]),
+                },
+                "excursion_minutes": float(temp_result["excursion_minutes"]),
+                "excluded_batch_ids": [],
+                "previous_decision_id": (str(previous_decision_id) if previous_decision_id else None),
+                "message": "Tidak ada gangguan keamanan pangan (batch aman)",
+            }
+            await db.rollback()
+            return no_event
+    
+        # ---- Re-optimasi deterministik (reuse pipeline Event 1).
+        if fetch_facts is None:
+            from app.core.config import settings
+            from app.db import create_engine as _mk_engine
+            from app.db import create_session_maker as _mk_session
+            from app.services import recommendation_service as _rs
+    
+            _engine = _mk_engine(settings.database_url)
+            _maker = _mk_session(_engine)
+    
+            async def _default_fetch():
+                async with _maker() as _session:
+                    return await _rs.fetch_operational_facts(_session, None)
+    
+            fetch_facts = _default_fetch
+        result = await build_recommendations(fetch_facts)
+        recommendations = result.get("recommendations", [])
+    
+        target = await db.get(Location, target_location_id)
+        commodity = await db.get(Commodity, batch.commodity_id)
+        eligible = [
+            r
+            for r in recommendations
+            if r.get("eligible")
+            and r["candidate"]["destination_location"] == target.name
+            and r["candidate"]["commodity"] == commodity.name
+        ]
+        if not eligible:
+            # FAIL sudah terpersist (commit #1); tanpa decision write.
+>           raise Event3NoAlternativeError(
+                "Tidak ada alternatif eligible setelah batch fail di-exclude"
+            )
+E           app.services.event3_service.Event3NoAlternativeError: Tidak ada alternatif eligible setelah batch fail di-exclude
+
+app/services/event3_service.py:209: Event3NoAlternativeError
+______________ test_event3_menulis_seluruh_bukti_dengan_penilaian ______________
+
+client = <starlette.testclient.TestClient object at 0x70a335c8fb90>
+
+    def test_event3_menulis_seluruh_bukti_dengan_penilaian(client):
+        """Event 3 (suhu + binding) menulis penilaian, tidak ada yang NULL."""
+        from tests.test_event3_api import _cleanup_batch, _cleanup_decision, _mk_batch
+    
+        b = _mk_batch("Cianjur", fail=True)
+        decision_id = None
+        try:
+            resp = client.post(
+                "/events/safety-disruption",
+                headers=_head_user(client),
+                json={
+                    "batch_id": b["batch_id"],
+                    "target_location_id": str(
+                        _db_all("SELECT id FROM locations WHERE name='Jakarta'")[0][0]
+                    ),
+                    "operation_key": str(uuid.uuid4()),
+                },
+            )
+>           assert resp.status_code == 201, resp.text
+E           AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E           assert 409 == 201
+E            +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_evidence_consistency_wiring.py:129: AssertionError
+____________________ test_live_evidence_batch_ids_nonempty _____________________
+
+    def test_live_evidence_batch_ids_nonempty():
+        engine = create_async_engine(_AURL)
+        session_maker = async_sessionmaker(engine, expire_on_commit=False)
+    
+        async def _run():
+            async with session_maker() as db:
+                out = await rs.build_recommendations(
+                    lambda: rs.fetch_operational_facts(db, None)
+                )
+            await engine.dispose()
+            return out
+    
+        out = asyncio.run(_run())
+        recs = out["recommendations"]
+>       assert recs, "service live wajib menghasilkan kandidat"
+E       AssertionError: service live wajib menghasilkan kandidat
+E       assert []
+
+tests/test_evidence_live.py:34: AssertionError
+_______________ test_eksekusi_menulis_trace_act_dengan_nomor_po ________________
+
+client = <starlette.testclient.TestClient object at 0x70a33626d1f0>
+
+    def test_eksekusi_menulis_trace_act_dengan_nomor_po(client):
+        """Eksekusi yang berhasil = satu baris ACT, dan PO-nya disebut di bukti."""
+        head = _mk_user("sppg_head", "Jakarta")
+        restore = _force_server_verdict("CONSISTENT")
+        decision_id: str | None = None
+        gizi_email: str | None = None
+        try:
+>           decision_id, po_number, gizi_email = _run_execute_flow(client, head)
+
+tests/test_kpi_act_trace.py:147: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_kpi_act_trace.py:99: in _run_execute_flow
+    decision_id = _event1_decision_id()
+tests/test_kpi_act_trace.py:68: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+_________________ test_eksekusi_yang_ditolak_tidak_menulis_act _________________
+
+client = <starlette.testclient.TestClient object at 0x70a33c3af590>
+
+    def test_eksekusi_yang_ditolak_tidak_menulis_act(client):
+        """Eksekusi 409 (belum di-approve) tidak boleh meninggalkan ACT palsu."""
+        head = _mk_user("sppg_head", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_kpi_act_trace.py:169: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_kpi_act_trace.py:68: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+_________________ test_decision_time_tersedia_setelah_eksekusi _________________
+
+client = <starlette.testclient.TestClient object at 0x70a340dc1e50>
+monitor_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwM2YzMjdhNC0xYTQ4LTQ0YjctYjliYS1mODU4ZGRjMDY...21vbml0b3IiLCJsb2MiOm51bGwsImlhdCI6MTc5MzEwNjI0NSwiZXhwIjoxNzkzMTQ5NDQ1fQ.yAYicCPbVBt1LG-MoPeAth9b-eob6P5KrYj2xxrBOxY'}
+
+    def test_decision_time_tersedia_setelah_eksekusi(client, monitor_headers):
+        """Kartu Decision Time berhenti jadi `no_data` setelah satu eksekusi nyata.
+    
+        Metrik hanya menghitung keputusan ber-`demo_case IS NULL` yang sudah
+        committed (PO ada) — keputusan Event 1 memenuhi keduanya setelah eksekusi.
+        """
+        head = _mk_user("sppg_head", "Jakarta")
+        restore = _force_server_verdict("CONSISTENT")
+        decision_id: str | None = None
+        gizi_email: str | None = None
+        try:
+            before = _kpi_metric(client, monitor_headers, "Decision Time")
+            # JANGAN mengandaikan DB kosong. DB kerja adalah DB DEMO yang dipakai
+            # bersama: keputusan nyata yang sudah dieksekusi (beserta PO-nya) bisa
+            # sudah ada di jendela metrik, sehingga keadaannya `available` sebelum
+            # tes ini jalan. Yang diuji adalah TRANSISI: keputusan yang baru
+            # dieksekusi ikut terhitung.
+            sebelum_sampel = int(before.get("sample_count") or 0)
+>           decision_id, _po, gizi_email = _run_execute_flow(client, head)
+
+tests/test_kpi_act_trace.py:205: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_kpi_act_trace.py:99: in _run_execute_flow
+    decision_id = _event1_decision_id()
+tests/test_kpi_act_trace.py:68: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+______________ test_safe_delivered_cost_tersedia_setelah_eksekusi ______________
+
+client = <starlette.testclient.TestClient object at 0x70a3361bbda0>
+monitor_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkNzE4ZmQ0MS1hNWM5LTRiMmMtYWIwNy04MzM4ZmY4ZjQ...21vbml0b3IiLCJsb2MiOm51bGwsImlhdCI6MTc5MzEwNjI2MywiZXhwIjoxNzkzMTQ5NDYzfQ.UrtIGGiThKVX2gCkTX7uMYkH9UzxyQZZjiJ531jLhoY'}
+
+    def test_safe_delivered_cost_tersedia_setelah_eksekusi(client, monitor_headers):
+        """Eksekusi nyata menambah satu sampel SDC di jendela metrik."""
+        from app.services.event1_orchestrator import run_event1
+    
+        head = _mk_user("sppg_head", "Jakarta")
+        # Keputusan operasional (transfer) wajib DUA approval dari dua role berbeda
+        # (matriks S3-01 `dua_role_wajib`); satu approval head menyisakan 409.
+        gizi = _mk_user("sppg_nutritionist", "Jakarta")
+        restore = _force_server_verdict()
+>       decision_id = run_event1(commodity="telur", target_location="Jakarta")["decision_id"]
+
+tests/test_kpi_safe_delivered_cost.py:88: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+_____________ test_kebutuhan_menu_membuat_destinasi_tetap_dilayani _____________
+
+    def test_kebutuhan_menu_membuat_destinasi_tetap_dilayani():
+        """Menu butuh 90 kg tetapi stok lokal 400 → tetap tanpa kandidat.
+    
+        Supaya lantai menu terlihat bekerja, menu harus melebihi stok lokal:
+        porsi 8.000 × 60 g = 480 kg > stok 400 kg → kekurangan 80 kg.
+        """
+        s, d, b, lg, p = _inputs(source=(1400, 400), demand=(500, 300))
+        out = generate_candidates(
+            s,
+            d,
+            b,
+            lg,
+            prices=p,
+            commodity="telur",
+            menu_requirements={("Jakarta", "telur"): Decimal("480")},
+        )
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_menu_hierarchy_candidates.py:83: AssertionError
+__________ test_kebutuhan_menu_tidak_menurunkan_kekurangan_permintaan __________
+
+    def test_kebutuhan_menu_tidak_menurunkan_kekurangan_permintaan():
+        s, d, b, lg, p = _inputs(source=(1400, 300), demand=(500, 1000))
+        tanpa_menu = generate_candidates(s, d, b, lg, prices=p, commodity="telur")
+        dengan_menu = generate_candidates(
+            s,
+            d,
+            b,
+            lg,
+            prices=p,
+            commodity="telur",
+            menu_requirements={("Jakarta", "telur"): Decimal("60")},
+        )
+>       assert len(tanpa_menu) == 1 and len(dengan_menu) == 1
+E       assert (0 == 1)
+E        +  where 0 = len([])
+
+tests/test_menu_hierarchy_candidates.py:100: AssertionError
+______________ test_cadangan_kontinuitas_membatasi_ekspor_sumber _______________
+
+    def test_cadangan_kontinuitas_membatasi_ekspor_sumber():
+        """Stok 1400 kg, cadangan kontinuitas 1300 kg → ekspor maksimum 100 kg."""
+        s, d, b, lg, p = _inputs(source=(1400, 300), demand=(500, 1000))
+        out = generate_candidates(
+            s,
+            d,
+            b,
+            lg,
+            prices=p,
+            commodity="telur",
+            continuity_reserve={("Cianjur", "telur"): Decimal("1300")},
+        )
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_menu_hierarchy_candidates.py:117: AssertionError
+_________ test_cadangan_kontinuitas_destinasi_tidak_dihitung_dua_kali __________
+
+    def test_cadangan_kontinuitas_destinasi_tidak_dihitung_dua_kali():
+        """Cadangan milik destinasi tidak boleh memotong pasokan yang ia terima."""
+        s, d, b, lg, p = _inputs(source=(1400, 300), demand=(500, 1000))
+        out = generate_candidates(
+            s,
+            d,
+            b,
+            lg,
+            prices=p,
+            commodity="telur",
+            continuity_reserve={("Jakarta", "telur"): Decimal("999")},
+        )
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_menu_hierarchy_candidates.py:147: AssertionError
+_______________________ test_artefak_openapi_tidak_basi ________________________
+
+    def test_artefak_openapi_tidak_basi():
+        if not BERKAS.is_file():
+            pytest.fail(f"{BERKAS.name} hilang dari repo; regenerasi atau hapus tesnya")
+    
+        artefak = json.loads(BERKAS.read_text(encoding="utf-8"))
+        nyata = app.openapi()
+    
+        kurang = _pasangan(nyata) - _pasangan(artefak)
+        lebih = _pasangan(artefak) - _pasangan(nyata)
+>       assert not kurang, f"endpoint baru belum masuk artefak: {sorted(kurang)[:5]}"
+E       AssertionError: endpoint baru belum masuk artefak: [('/decisions/{decision_id}/packet', 'get'), ('/decisions/{decision_id}/review', 'post')]
+E       assert not {('/decisions/{decision_id}/packet', 'get'), ('/decisions/{decision_id}/review', 'post')}
+
+tests/test_openapi_artifact_drift.py:40: AssertionError
+______________ test_batch_needs_verification_tetap_jadi_kandidat _______________
+
+    def test_batch_needs_verification_tetap_jadi_kandidat():
+        """Kontrol positif: tanpa karantina, batch ini memang masuk kandidat."""
+        s, d, b, lg, p = _inputs([_batch()])
+        out = generate_candidates(s, d, b, lg, prices=p, commodity="telur")
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_quarantine_candidates.py:55: AssertionError
+__________________ test_batch_dilepas_kembali_masuk_kandidat ___________________
+
+    def test_batch_dilepas_kembali_masuk_kandidat():
+        s, d, b, lg, p = _inputs([_batch(quarantine_status="released")])
+        out = generate_candidates(s, d, b, lg, prices=p, commodity="telur")
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_quarantine_candidates.py:68: AssertionError
+_________ test_hanya_batch_karantina_yang_menyisakan_pasokan_terbatas __________
+
+    def test_hanya_batch_karantina_yang_menyisakan_pasokan_terbatas():
+        """Dua batch, satu ditahan: kuantitas kandidat hanya dari yang bebas."""
+        batches = [
+            _batch(batch_id="b-1", quantity_kg=Decimal("600"), quarantine_status="quarantined"),
+            _batch(batch_id="b-2", quantity_kg=Decimal("150"), quarantine_status="none"),
+        ]
+        s, d, b, lg, p = _inputs(batches)
+        out = generate_candidates(s, d, b, lg, prices=p, commodity="telur")
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_quarantine_candidates.py:79: AssertionError
+_________ test_batch_tanpa_kunci_karantina_diperlakukan_sebagai_bebas __________
+
+    def test_batch_tanpa_kunci_karantina_diperlakukan_sebagai_bebas():
+        """Kontrak lama (7-tuple facts) tidak mengenal kolom ini — jangan pecah."""
+        batch = _batch()
+        batch.pop("quarantine_status")
+        s, d, b, lg, p = _inputs([batch])
+        out = generate_candidates(s, d, b, lg, prices=p, commodity="telur")
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_quarantine_candidates.py:90: AssertionError
+_____________________ test_cianjur_to_jakarta_telur_ranked _____________________
+
+    def test_cianjur_to_jakarta_telur_ranked():
+        out = _run(rs.build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI
+        ))
+        hits = [r for r in out["recommendations"]
+                if r["candidate"]["source_location"] == "Cianjur"
+                and r["candidate"]["destination_location"] == "Jakarta"]
+>       assert hits, "kandidat Cianjur→Jakarta wajib ada"
+E       AssertionError: kandidat Cianjur→Jakarta wajib ada
+E       assert []
+
+tests/test_recommendation_service.py:60: AssertionError
+__________________________ test_sdc_arithmetic_locked __________________________
+
+    def test_sdc_arithmetic_locked():
+        out = _run(rs.build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI
+        ))
+>       top = out["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_recommendation_service.py:70: IndexError
+__________________ test_price_anomaly_emitted_reusing_engine ___________________
+
+    def test_price_anomaly_emitted_reusing_engine():
+        out = _run(rs.build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI
+        ))
+>       top = out["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_recommendation_service.py:93: IndexError
+_________________________ test_no_quote_anomaly_marked _________________________
+
+    def test_no_quote_anomaly_marked():
+        facts = (
+            SUPPLY,
+            DEMAND,
+            REFS,
+            {("Cianjur", "telur"): (None, None)},
+            BATCHES,
+            RELIABILITY,
+        )
+        out = _run(rs.build_recommendations(
+            lambda: facts, as_of=AS_OF, logistics_by_pair=LOGI
+        ))
+>       top = out["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_recommendation_service.py:112: IndexError
+____________________________ test_evidence_emitted _____________________________
+
+    def test_evidence_emitted():
+        out = _run(rs.build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI
+        ))
+>       top = out["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_recommendation_service.py:121: IndexError
+____ test_fetch_excludes_later_harvests_without_advancing_as_of[live-race] _____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x70a335f8c920>
+explicit_as_of = False
+
+    @pytest.mark.parametrize("explicit_as_of", [False, True], ids=["live-race", "historical"])
+    def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, explicit_as_of):
+        engine = create_engine(
+            DSN_SYNC
+        )
+    
+        class FrozenClock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return AS_OF + timedelta(days=1) if explicit_as_of else AS_OF
+    
+        monkeypatch.setattr(rs, "datetime", FrozenClock)
+        try:
+            with engine.connect() as connection, connection.begin() as transaction:
+                with Session(bind=connection) as session:
+                    location = session.scalar(select(Location).where(Location.name == "Cianjur"))
+                    commodity = session.scalar(select(Commodity).where(Commodity.name == "telur"))
+                    supplier = session.scalar(select(Supplier).limit(1))
+                    ids = {name: uuid.uuid4() for name in ("old", "boundary", "later")}
+                    harvested = {
+                        "old": AS_OF - timedelta(days=1),
+                        "boundary": AS_OF,
+                        "later": AS_OF + timedelta(milliseconds=600),
+                    }
+    
+                    class LaterVisibleSession:
+                        inserted = False
+    
+                        async def execute(self, statement):
+                            if not self.inserted:
+                                self.inserted = True
+                                # Deterministic interleaving: these rows become visible only
+                                # after fetch_operational_facts has captured its clock.
+                                session.add_all([
+                                    Batch(
+                                        id=ids[name], location_id=location.id,
+                                        commodity_id=commodity.id, supplier_id=supplier.id,
+                                        quantity_kg=Decimal("10"), harvested_at=timestamp,
+                                        # Bukti suhu lengkap: sejak F-02 (25 Okt 2026) log
+                                        # kosong tidak lagi berbuah skor `pass` (0,7), dan
+                                        # tes ini menguji pemotongan `as_of`, bukan freshness.
+                                        temperature_log=_log_suhu(timestamp),
+                                        safety_status="pass",
+                                    )
+                                    for name, timestamp in harvested.items()
+                                ])
+                                session.flush()
+                            return session.execute(statement)
+    
+                    facts = asyncio.run(rs.fetch_operational_facts(
+                        LaterVisibleSession(), AS_OF if explicit_as_of else None
+                    ))
+                    batches = {b["batch_id"]: b for b in facts[4]}
+                    assert str(ids["later"]) not in batches
+                    assert batches[str(ids["boundary"])]["freshness_score"] == Decimal("1.000000")
+>                   expected = rs.compute_freshness_score(
+                        harvested["old"], AS_OF, rs.settings.shelf_life_days_telur,
+                        _log_suhu(harvested["old"]),
+                        rs.settings.safe_temp_min_c, rs.settings.safe_temp_max_c,
+                    )
+E                   AttributeError: module 'app.services.recommendation_service' has no attribute 'compute_freshness_score'
+
+tests/test_recommendation_snapshot.py:94: AttributeError
+____ test_fetch_excludes_later_harvests_without_advancing_as_of[historical] ____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x70a33c3ad280>
+explicit_as_of = True
+
+    @pytest.mark.parametrize("explicit_as_of", [False, True], ids=["live-race", "historical"])
+    def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, explicit_as_of):
+        engine = create_engine(
+            DSN_SYNC
+        )
+    
+        class FrozenClock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return AS_OF + timedelta(days=1) if explicit_as_of else AS_OF
+    
+        monkeypatch.setattr(rs, "datetime", FrozenClock)
+        try:
+            with engine.connect() as connection, connection.begin() as transaction:
+                with Session(bind=connection) as session:
+                    location = session.scalar(select(Location).where(Location.name == "Cianjur"))
+                    commodity = session.scalar(select(Commodity).where(Commodity.name == "telur"))
+                    supplier = session.scalar(select(Supplier).limit(1))
+                    ids = {name: uuid.uuid4() for name in ("old", "boundary", "later")}
+                    harvested = {
+                        "old": AS_OF - timedelta(days=1),
+                        "boundary": AS_OF,
+                        "later": AS_OF + timedelta(milliseconds=600),
+                    }
+    
+                    class LaterVisibleSession:
+                        inserted = False
+    
+                        async def execute(self, statement):
+                            if not self.inserted:
+                                self.inserted = True
+                                # Deterministic interleaving: these rows become visible only
+                                # after fetch_operational_facts has captured its clock.
+                                session.add_all([
+                                    Batch(
+                                        id=ids[name], location_id=location.id,
+                                        commodity_id=commodity.id, supplier_id=supplier.id,
+                                        quantity_kg=Decimal("10"), harvested_at=timestamp,
+                                        # Bukti suhu lengkap: sejak F-02 (25 Okt 2026) log
+                                        # kosong tidak lagi berbuah skor `pass` (0,7), dan
+                                        # tes ini menguji pemotongan `as_of`, bukan freshness.
+                                        temperature_log=_log_suhu(timestamp),
+                                        safety_status="pass",
+                                    )
+                                    for name, timestamp in harvested.items()
+                                ])
+                                session.flush()
+                            return session.execute(statement)
+    
+                    facts = asyncio.run(rs.fetch_operational_facts(
+                        LaterVisibleSession(), AS_OF if explicit_as_of else None
+                    ))
+                    batches = {b["batch_id"]: b for b in facts[4]}
+                    assert str(ids["later"]) not in batches
+                    assert batches[str(ids["boundary"])]["freshness_score"] == Decimal("1.000000")
+>                   expected = rs.compute_freshness_score(
+                        harvested["old"], AS_OF, rs.settings.shelf_life_days_telur,
+                        _log_suhu(harvested["old"]),
+                        rs.settings.safe_temp_min_c, rs.settings.safe_temp_max_c,
+                    )
+E                   AttributeError: module 'app.services.recommendation_service' has no attribute 'compute_freshness_score'
+
+tests/test_recommendation_snapshot.py:94: AttributeError
+__________________ test_ruling_b_tanpa_filter_semua_komoditas __________________
+
+client = None
+
+    def test_ruling_b_tanpa_filter_semua_komoditas(client=None):
+        """Tanpa argumen commodity: perilaku lama (global) tidak berubah."""
+        out = _run(_import_rs().build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI
+        ))
+        coms = {r["candidate"]["commodity"] for r in out["recommendations"]}
+>       assert {"telur", "ayam"} <= coms
+E       AssertionError: assert {'ayam', 'telur'} <= set()
+E         
+E         Extra items in the left set:
+E         'ayam'
+E         'telur'
+
+tests/test_s4_rulings_tdd.py:273: AssertionError
+_____________________ test_ruling_b_filter_ayam_hanya_ayam _____________________
+
+client = None
+
+    def test_ruling_b_filter_ayam_hanya_ayam(client=None):
+        """commodity='ayam' → hanya kandidat ayam (telur tersaring)."""
+        out = _run(_import_rs().build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI, commodity="ayam"
+        ))
+        recs = out["recommendations"]
+>       assert recs, "kandidat ayam wajib ada"
+E       AssertionError: kandidat ayam wajib ada
+E       assert []
+
+tests/test_s4_rulings_tdd.py:282: AssertionError
+________________ test_ruling_b_filter_ayam_kandidat_bogor_rank1 ________________
+
+client = None
+
+    def test_ruling_b_filter_ayam_kandidat_bogor_rank1(client=None):
+        """Filter ayam → rank-1 = Bogor→Jakarta (bukan kandidat telur global)."""
+        out = _run(_import_rs().build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI, commodity="ayam"
+        ))
+>       top = out["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_s4_rulings_tdd.py:291: IndexError
+___________________ test_verify_menolak_verdict_dari_client ____________________
+
+client = <starlette.testclient.TestClient object at 0x70a33c6d82c0>
+
+    def test_verify_menolak_verdict_dari_client(client):
+        head = _mk_user("sppg_head", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_s4_verifier_independence.py:72: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kiriman demo disemai ulang (batch segar untuk Event 1)
+______________ test_verify_menurunkan_unavailable_tanpa_provider _______________
+
+client = <starlette.testclient.TestClient object at 0x70a33524f710>
+
+    def test_verify_menurunkan_unavailable_tanpa_provider(client):
+        head = _mk_user("sppg_head", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_s4_verifier_independence.py:89: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+____________________ test_verify_memakai_chain_server_side _____________________
+
+client = <starlette.testclient.TestClient object at 0x70a335b4a900>
+fake_verifier = <function fake_verifier.<locals>._install at 0x70a335168180>
+
+    def test_verify_memakai_chain_server_side(client, fake_verifier):
+        head = _mk_user("sppg_head", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_s4_verifier_independence.py:108: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+_____________ test_verify_flagged_turunkan_status_verifier_flagged _____________
+
+client = <starlette.testclient.TestClient object at 0x70a334b52630>
+fake_verifier = <function fake_verifier.<locals>._install at 0x70a33516ae80>
+
+    def test_verify_flagged_turunkan_status_verifier_flagged(client, fake_verifier):
+        head = _mk_user("sppg_head", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_s4_verifier_independence.py:136: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+___________________ test_verify_ditolak_409_setelah_approved ___________________
+
+client = <starlette.testclient.TestClient object at 0x70a3357f0d40>
+fake_verifier = <function fake_verifier.<locals>._install at 0x70a3355d5940>
+
+    def test_verify_ditolak_409_setelah_approved(client, fake_verifier):
+        head = _mk_user("sppg_head", "Jakarta")
+        # Ruling 2026-10-14 §3: uji ini soal integritas jejak audit (verify setelah
+        # ada approval → 409), bukan soal cakupan. Ahli gizi wajib satu SPPG dengan
+        # target agar sampai ke penjaga 409, bukan berhenti di 403 cakupan.
+        nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
+>       decision_id = _event1_decision_id()
+
+tests/test_s4_verifier_independence.py:159: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+_______________ test_scenario_1_cianjur_surplus_jakarta_shortage _______________
+
+    def test_scenario_1_cianjur_surplus_jakarta_shortage():
+        supply, demand, *_ = _scenario_facts()
+        gap_src = calculate_supply_gap(supply[("Cianjur", "telur")],
+                                       demand[("Cianjur", "telur")])
+        gap_dst = calculate_supply_gap(supply[("Jakarta", "telur")],
+                                       demand[("Jakarta", "telur")])
+        assert gap_src.surplus_kg == Decimal("900")
+        assert gap_dst.shortage_kg == Decimal("700")
+        out = _run(_scenario_facts())
+        hits = [r for r in out["recommendations"]
+                if r["candidate"]["source_location"] == "Cianjur"
+                and r["candidate"]["destination_location"] == "Jakarta"]
+>       assert hits, "kandidat Cianjur→Jakarta telur wajib ada"
+E       AssertionError: kandidat Cianjur→Jakarta telur wajib ada
+E       assert []
+
+tests/test_sprint2_scenarios.py:104: AssertionError
+_______ test_scenario_3_safety_fail_eliminated_safe_alternative_remains ________
+
+    def test_scenario_3_safety_fail_eliminated_safe_alternative_remains():
+        out = _run(_scenario_facts(safety="fail", alternative=True))
+        unsafe = [
+            r for r in out["recommendations"]
+            if r["candidate"]["source_location"] == "Cianjur"
+        ]
+        safe = [
+            r for r in out["recommendations"]
+            if r["candidate"]["source_location"] == "Bogor"
+        ]
+        assert unsafe == [], "candidate unsafe wajib excluded sebelum cost/ranking"
+>       assert safe, "candidate aman harus tetap tersedia"
+E       AssertionError: candidate aman harus tetap tersedia
+E       assert []
+
+tests/test_sprint2_scenarios.py:124: AssertionError
+___________________ test_scenario_5_needs_verification_band ____________________
+
+    def test_scenario_5_needs_verification_band():
+        out = _run(_scenario_facts(freshness=Decimal("0.70")))
+>       top = out["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_sprint2_scenarios.py:158: IndexError
+_______________ test_supervise_step_narrates_with_honest_labels ________________
+
+client = <starlette.testclient.TestClient object at 0x70a33517c800>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x70a335f4ae40>
+
+    def test_supervise_step_narrates_with_honest_labels(client, monkeypatch):
+        from app.services.event1_orchestrator import run_event1
+    
+        monkeypatch.setattr(
+            chain_mod,
+            "build_default_callers",
+            lambda agent: _stub_chain(NARRATION_OK)
+            if agent == "supervisor"
+            else [],
+        )
+>       outcome = run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_supervisor_narration.py:93: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+__________________ test_supervise_falls_back_to_second_model ___________________
+
+client = <starlette.testclient.TestClient object at 0x70a335fe03b0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x70a3353882c0>
+
+    def test_supervise_falls_back_to_second_model(client, monkeypatch):
+        from app.services.event1_orchestrator import run_event1
+    
+        monkeypatch.setattr(
+            chain_mod,
+            "build_default_callers",
+            lambda agent: _stub_chain(RuntimeError("primary mati"), NARRATION_OK)
+            if agent == "supervisor"
+            else [],
+        )
+>       outcome = run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_supervisor_narration.py:118: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+_________________ test_supervise_unavailable_recorded_honestly _________________
+
+client = <starlette.testclient.TestClient object at 0x70a33c4db7a0>
+
+    def test_supervise_unavailable_recorded_honestly(client):
+        """Tanpa model: SUPERVISE jujur unavailable; decision tetap lahir."""
+        from app.services.event1_orchestrator import run_event1
+    
+>       outcome = run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_supervisor_narration.py:133: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+___________________ test_supervise_chain_panjang_label_jujur ___________________
+
+client = <starlette.testclient.TestClient object at 0x70a334901490>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x70a33602f9e0>
+
+    def test_supervise_chain_panjang_label_jujur(client, monkeypatch):
+        """Pemenang slot ke-4 tidak boleh dilaporkan sebagai slot pertama.
+    
+        Uji audit 2026-10-11: supervisor_client memakai peta 3 entri
+        {"primary": 0, "fallback_1": 1, "fallback_2": 2} dan `.get(..., 0)`, jadi
+        pemenang `fallback_3` dipetakan ke indeks 0 dan dilaporkan sebagai
+        "primary:bedrock" — label yang salah untuk langkah yang mengklaim
+        provider (aturan anti-fabricate). resilience.py sudah punya helper
+        `provider_slot_index` yang benar.
+        """
+        from app.services.event1_orchestrator import run_event1
+    
+        monkeypatch.setattr(
+            chain_mod,
+            "build_default_callers",
+            lambda agent: _stub_chain(
+                RuntimeError("primary mati"),
+                RuntimeError("fallback_1 mati"),
+                RuntimeError("fallback_2 mati"),
+                NARRATION_OK,
+            )
+            if agent == "supervisor"
+            else [],
+        )
+>       outcome = run_event1(commodity="telur", target_location="Jakarta")
+
+tests/test_supervisor_narration.py:171: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+_ test_supplier_identity_not_inferred_from_quote_or_location_and_local_exclusion _
+
+    def test_supplier_identity_not_inferred_from_quote_or_location_and_local_exclusion():
+        batches = [
+            dict(
+                batch_id="a",
+                supplier_id="one",
+                location="Bogor",
+                commodity="telur",
+                quantity_kg=100,
+                freshness_score=1,
+                freshness_status="pass",
+                safety_status="pass",
+                excluded_destinations=["Jakarta"],
+            ),
+            dict(
+                batch_id="b",
+                supplier_id="two",
+                location="Bogor",
+                commodity="telur",
+                quantity_kg=100,
+                freshness_score=1,
+                freshness_status="pass",
+                safety_status="pass",
+                excluded_destinations=[],
+            ),
+        ]
+        kwargs = dict(
+            source_records={("Bogor", "telur"): 200},
+            destination_records={("Jakarta", "telur"): 100, ("Bandung", "telur"): 100},
+            batches=batches,
+            logistics_by_pair={
+                ("Bogor", d): dict(feasible=True, distance_km=50, estimated_time_min=60)
+                for d in ["Jakarta", "Bandung"]
+            },
+            prices={
+                ("Bogor", d, "telur"): PriceInfo(Decimal("100"), Decimal("110"), "one")
+                for d in ["Jakarta", "Bandung"]
+            },
+        )
+        results = generate_candidates(**kwargs)
+>       assert {(r.supplier_id, r.destination_location) for r in results} == {
+            ("one", "Bandung"),
+            ("two", "Jakarta"),
+            ("two", "Bandung"),
+        }
+E       AssertionError: assert set() == {('one', 'Ban...', 'Jakarta')}
+E         
+E         Extra items in the right set:
+E         ('one', 'Bandung')
+E         ('two', 'Jakarta')
+E         ('two', 'Bandung')
+E         Use -v to get more diff
+
+tests/test_supplier_exclusion_candidates.py:46: AssertionError
+_____________________ test_transport_includes_supplier_leg _____________________
+
+    def test_transport_includes_supplier_leg():
+>       top = _top(_facts())
+
+tests/test_supplier_leg_cost.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+facts = ({('Cianjur', 'telur'): Decimal('1400'), ('Jakarta', 'telur'): Decimal('300')}, {('Cianjur', 'telur'): Decimal('500'),...e': Decimal('0.90'), 'freshness_status': 'pass', ...}], {'11111111-1111-1111-1111-111111111111': Decimal('0.80')}, ...)
+
+    def _top(facts):
+>       return _run(facts)["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_supplier_leg_cost.py:96: IndexError
+____________________ test_supplier_leg_reported_with_source ____________________
+
+    def test_supplier_leg_reported_with_source():
+>       payload = _top(_facts())["supplier_leg"]
+
+tests/test_supplier_leg_cost.py:162: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+facts = ({('Cianjur', 'telur'): Decimal('1400'), ('Jakarta', 'telur'): Decimal('300')}, {('Cianjur', 'telur'): Decimal('500'),...e': Decimal('0.90'), 'freshness_status': 'pass', ...}], {'11111111-1111-1111-1111-111111111111': Decimal('0.80')}, ...)
+
+    def _top(facts):
+>       return _run(facts)["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_supplier_leg_cost.py:96: IndexError
+___________________ test_linehaul_and_feasibility_untouched ____________________
+
+    def test_linehaul_and_feasibility_untouched():
+        """Linehaul tetap jarak SPPG↔SPPG; kelayakan delivery window tidak berubah."""
+>       cand = _top(_facts())["candidate"]
+
+tests/test_supplier_leg_cost.py:171: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+facts = ({('Cianjur', 'telur'): Decimal('1400'), ('Jakarta', 'telur'): Decimal('300')}, {('Cianjur', 'telur'): Decimal('500'),...e': Decimal('0.90'), 'freshness_status': 'pass', ...}], {'11111111-1111-1111-1111-111111111111': Decimal('0.80')}, ...)
+
+    def _top(facts):
+>       return _run(facts)["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_supplier_leg_cost.py:96: IndexError
+________________ test_legacy_six_tuple_keeps_locked_arithmetic _________________
+
+    def test_legacy_six_tuple_keeps_locked_arithmetic():
+        """Kontrak Task 9 (6-tuple) tetap sah: biaya angkut lama + label jujur."""
+>       top = _top(_facts_legacy())
+
+tests/test_supplier_leg_cost.py:183: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+facts = ({('Cianjur', 'telur'): Decimal('1400'), ('Jakarta', 'telur'): Decimal('300')}, {('Cianjur', 'telur'): Decimal('500'),..._score': Decimal('0.90'), 'freshness_status': 'pass', ...}], {'11111111-1111-1111-1111-111111111111': Decimal('0.80')})
+
+    def _top(facts):
+>       return _run(facts)["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_supplier_leg_cost.py:96: IndexError
+________________ test_missing_supplier_coordinates_not_guessed _________________
+
+    def test_missing_supplier_coordinates_not_guessed():
+        """Pemasok dikenal tetapi tanpa koordinat → 0 km + label, bukan tebakan."""
+>       top = _top(_facts(legs={}))
+
+tests/test_supplier_leg_cost.py:196: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+facts = ({('Cianjur', 'telur'): Decimal('1400'), ('Jakarta', 'telur'): Decimal('300')}, {('Cianjur', 'telur'): Decimal('500'),...e': Decimal('0.90'), 'freshness_status': 'pass', ...}], {'11111111-1111-1111-1111-111111111111': Decimal('0.80')}, ...)
+
+    def _top(facts):
+>       return _run(facts)["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_supplier_leg_cost.py:96: IndexError
+____________________ test_candidate_without_supplier_marked ____________________
+
+    def test_candidate_without_supplier_marked():
+        """Tanpa identitas pemasok sama sekali (tanpa quote) → `no_supplier`."""
+        batches = [dict(BATCHES[0])]
+        batches[0].pop("supplier_id")
+        facts = (
+            SUPPLY,
+            DEMAND,
+            REFS,
+            {("Cianjur", "telur"): (None, None)},
+            batches,
+            RELIABILITY,
+            {},
+        )
+>       top = _top(facts)
+
+tests/test_supplier_leg_cost.py:215: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+facts = ({('Cianjur', 'telur'): Decimal('1400'), ('Jakarta', 'telur'): Decimal('300')}, {('Cianjur', 'telur'): Decimal('500'),...e': Decimal('0.90'), 'freshness_status': 'pass', ...}], {'11111111-1111-1111-1111-111111111111': Decimal('0.80')}, ...)
+
+    def _top(facts):
+>       return _run(facts)["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_supplier_leg_cost.py:96: IndexError
+_________________ test_identity_from_quote_still_resolves_leg __________________
+
+    def test_identity_from_quote_still_resolves_leg():
+        """Batch tanpa supplier_id tetap dapat kaki pertama bila quote membawa id."""
+        batches = [dict(BATCHES[0])]
+        batches[0].pop("supplier_id")
+>       top = _top(_facts(batches=batches))
+
+tests/test_supplier_leg_cost.py:225: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+facts = ({('Cianjur', 'telur'): Decimal('1400'), ('Jakarta', 'telur'): Decimal('300')}, {('Cianjur', 'telur'): Decimal('500'),...e': Decimal('0.90'), 'freshness_status': 'pass', ...}], {'11111111-1111-1111-1111-111111111111': Decimal('0.80')}, ...)
+
+    def _top(facts):
+>       return _run(facts)["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_supplier_leg_cost.py:96: IndexError
+_______________ test_balance_analyze_full_pipeline_with_summary ________________
+
+client = <starlette.testclient.TestClient object at 0x70a340d8b050>
+
+    def test_balance_analyze_full_pipeline_with_summary(client):
+        resp = client.post("/balance/analyze")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert "recommendations" in body and isinstance(body["recommendations"], list)
+>       assert len(body["recommendations"]) > 0
+E       assert 0 > 0
+E        +  where 0 = len([])
+
+tests/test_tool_contracts.py:143: AssertionError
+_______________ test_evidence_fuse_assembles_from_recommendation _______________
+
+client = <starlette.testclient.TestClient object at 0x70a34117ad80>
+
+    def test_evidence_fuse_assembles_from_recommendation(client):
+>       rec = _first_recommendation(client)
+
+tests/test_tool_contracts.py:171: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x70a34117ad80>
+
+    def _first_recommendation(client) -> dict:
+        resp = client.post("/balance/recommend")
+        assert resp.status_code == 200, resp.text
+        recs = resp.json()["recommendations"]
+>       assert recs, "seed harus menghasilkan minimal 1 rekomendasi"
+E       AssertionError: seed harus menghasilkan minimal 1 rekomendasi
+E       assert []
+
+tests/test_tool_contracts.py:166: AssertionError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+tests/test_human_verification.py::test_review_sah_mencatat_decision_evidence_dan_mengubah_status
+tests/test_human_verification.py::test_review_sah_mencatat_decision_evidence_dan_mengubah_status
+  /usr/local/lib/python3.12/site-packages/pydantic/main.py:1114: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.9/migration/
+    warnings.warn('The `dict` method is deprecated; use `model_dump` instead.', category=PydanticDeprecatedSince20)
+
+tests/test_s4_rulings_tdd.py::test_ruling_a_nutritionist_baca_summary_lintas_lokasi_403
+  sys:1: SAWarning: The garbage collector is trying to clean up non-checked-in connection <AdaptedConnection <asyncpg.connection.Connection object at 0x70a33c803d40>>, which will be terminated.  Please ensure that SQLAlchemy pooled connections are returned to the pool explicitly, either by calling ``close()`` or by using appropriate context managers to manage their lifecycle.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_action_boundary_e2e.py::test_actions_verify_writes_verifier_note_and_flagged_status
+FAILED tests/test_action_boundary_e2e.py::test_actions_verify_rejects_unknown_verdict
+FAILED tests/test_action_boundary_e2e.py::test_e2e_event1_to_mock_sap_dua_approval_untuk_transfer
+FAILED tests/test_action_boundary_e2e.py::test_e2e_flagged_requires_both_approvers
+FAILED tests/test_action_boundary_e2e.py::test_e2e_rejected_decision_blocked
+FAILED tests/test_action_boundary_e2e.py::test_e2e_expired_decision_blocked
+FAILED tests/test_action_boundary_e2e.py::test_e2e_bgn_monitor_cannot_touch_lifecycle
+FAILED tests/test_api_decision_intelligence.py::test_recommend_endpoint_ranks_candidates
+FAILED tests/test_api_decision_intelligence.py::test_decisions_persist_and_get_validity
+FAILED tests/test_approval_summary.py::test_approval_summary_or_complete_then_execute_parity[explicit]
+FAILED tests/test_approval_summary.py::test_approval_summary_safety_revalidation_block
+FAILED tests/test_approval_summary_receipt_gate.py::test_bgn_monitor_tidak_mendapat_kedua_tombol
+FAILED tests/test_candidate_generation.py::test_cianjur_to_jakarta_telur_locked_scenario
+FAILED tests/test_candidate_generation.py::test_quantity_capped_by_batch_availability
+FAILED tests/test_candidate_generation.py::test_quantity_capped_by_surplus_not_shortage
+FAILED tests/test_candidate_generation.py::test_batch_kuantitas_nol_diabaikan_yang_positif_tetap_dihitung
+FAILED tests/test_candidate_generation.py::test_commodity_filter_excludes_mismatch
+FAILED tests/test_candidate_generation.py::test_needs_verification_allowed_and_marked
+FAILED tests/test_candidate_generation.py::test_mixed_batches_weighted_freshness_and_conservative_status
+FAILED tests/test_candidate_generation.py::test_exact_capacity_boundary_feasible
+FAILED tests/test_candidate_generation.py::test_missing_logistics_pair_raises
+FAILED tests/test_candidate_generation.py::test_missing_price_raises - Failed...
+FAILED tests/test_decision_context.py::test_context_integration_with_real_service_emission
+FAILED tests/test_decision_packet.py::test_paket_menyatakan_pengiriman_tidak_layak_bila_tenggat_lewat
+FAILED tests/test_decision_read_endpoints.py::test_get_decision_traces_returns_ordered_actual_steps
+FAILED tests/test_demo_cases_procurement_binding.py::test_kasus_pengadaan_lolos_resolve_binding_dan_safety
+FAILED tests/test_event1_e2e_acceptance.py::test_event1_e2e_propose_approve_execute_mock_sap
+FAILED tests/test_event1_e2e_acceptance.py::test_event1_e2e_safety_fail_guard_via_api
+FAILED tests/test_event1_e2e_acceptance.py::test_event1_e2e_approval_boundary_blocked_paths
+FAILED tests/test_event1_e2e_acceptance.py::test_event1_e2e_verifier_unavailable_dual_approval
+FAILED tests/test_event1_supervisor_flow.py::test_event1_unverified_full_flow_persists_proposed
+FAILED tests/test_event1_supervisor_flow.py::test_event1_unverified_persists_agent_traces_with_real_steps
+FAILED tests/test_event1_supervisor_flow.py::test_event1_expiry_enforced_later
+FAILED tests/test_event1_supervisor_flow.py::test_event1_consistent_verdict_records_verifier_attempt
+FAILED tests/test_event1_supervisor_flow.py::test_event1_safety_fail_never_consistent
+FAILED tests/test_event1_supervisor_flow.py::test_event1_no_auto_execution - ...
+FAILED tests/test_event1_supervisor_flow.py::test_event1_kpi_traceable_to_backend_outputs
+FAILED tests/test_event3_api.py::test_api_safety_happy_path_revised_201 - Ass...
+FAILED tests/test_event3_api.py::test_api_safety_replay_same_key_idempotent
+FAILED tests/test_event3_api.py::test_api_safety_conflict_same_key_other_batch_409
+FAILED tests/test_event3_service.py::test_service_fail_batch_excluded_bogor_alternative_persisted
+FAILED tests/test_event3_service.py::test_service_key_reuse_other_batch_409_semantics
+FAILED tests/test_event3_service.py::test_service_lineage_previous_decision_recorded
+FAILED tests/test_evidence_consistency_wiring.py::test_event3_menulis_seluruh_bukti_dengan_penilaian
+FAILED tests/test_evidence_live.py::test_live_evidence_batch_ids_nonempty - A...
+FAILED tests/test_kpi_act_trace.py::test_eksekusi_menulis_trace_act_dengan_nomor_po
+FAILED tests/test_kpi_act_trace.py::test_eksekusi_yang_ditolak_tidak_menulis_act
+FAILED tests/test_kpi_act_trace.py::test_decision_time_tersedia_setelah_eksekusi
+FAILED tests/test_kpi_safe_delivered_cost.py::test_safe_delivered_cost_tersedia_setelah_eksekusi
+FAILED tests/test_menu_hierarchy_candidates.py::test_kebutuhan_menu_membuat_destinasi_tetap_dilayani
+FAILED tests/test_menu_hierarchy_candidates.py::test_kebutuhan_menu_tidak_menurunkan_kekurangan_permintaan
+FAILED tests/test_menu_hierarchy_candidates.py::test_cadangan_kontinuitas_membatasi_ekspor_sumber
+FAILED tests/test_menu_hierarchy_candidates.py::test_cadangan_kontinuitas_destinasi_tidak_dihitung_dua_kali
+FAILED tests/test_openapi_artifact_drift.py::test_artefak_openapi_tidak_basi
+FAILED tests/test_quarantine_candidates.py::test_batch_needs_verification_tetap_jadi_kandidat
+FAILED tests/test_quarantine_candidates.py::test_batch_dilepas_kembali_masuk_kandidat
+FAILED tests/test_quarantine_candidates.py::test_hanya_batch_karantina_yang_menyisakan_pasokan_terbatas
+FAILED tests/test_quarantine_candidates.py::test_batch_tanpa_kunci_karantina_diperlakukan_sebagai_bebas
+FAILED tests/test_recommendation_service.py::test_cianjur_to_jakarta_telur_ranked
+FAILED tests/test_recommendation_service.py::test_sdc_arithmetic_locked - Ind...
+FAILED tests/test_recommendation_service.py::test_price_anomaly_emitted_reusing_engine
+FAILED tests/test_recommendation_service.py::test_no_quote_anomaly_marked - I...
+FAILED tests/test_recommendation_service.py::test_evidence_emitted - IndexErr...
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[live-race]
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[historical]
+FAILED tests/test_s4_rulings_tdd.py::test_ruling_b_tanpa_filter_semua_komoditas
+FAILED tests/test_s4_rulings_tdd.py::test_ruling_b_filter_ayam_hanya_ayam - A...
+FAILED tests/test_s4_rulings_tdd.py::test_ruling_b_filter_ayam_kandidat_bogor_rank1
+FAILED tests/test_s4_verifier_independence.py::test_verify_menolak_verdict_dari_client
+FAILED tests/test_s4_verifier_independence.py::test_verify_menurunkan_unavailable_tanpa_provider
+FAILED tests/test_s4_verifier_independence.py::test_verify_memakai_chain_server_side
+FAILED tests/test_s4_verifier_independence.py::test_verify_flagged_turunkan_status_verifier_flagged
+FAILED tests/test_s4_verifier_independence.py::test_verify_ditolak_409_setelah_approved
+FAILED tests/test_sprint2_scenarios.py::test_scenario_1_cianjur_surplus_jakarta_shortage
+FAILED tests/test_sprint2_scenarios.py::test_scenario_3_safety_fail_eliminated_safe_alternative_remains
+FAILED tests/test_sprint2_scenarios.py::test_scenario_5_needs_verification_band
+FAILED tests/test_supervisor_narration.py::test_supervise_step_narrates_with_honest_labels
+FAILED tests/test_supervisor_narration.py::test_supervise_falls_back_to_second_model
+FAILED tests/test_supervisor_narration.py::test_supervise_unavailable_recorded_honestly
+FAILED tests/test_supervisor_narration.py::test_supervise_chain_panjang_label_jujur
+FAILED tests/test_supplier_exclusion_candidates.py::test_supplier_identity_not_inferred_from_quote_or_location_and_local_exclusion
+FAILED tests/test_supplier_leg_cost.py::test_transport_includes_supplier_leg
+FAILED tests/test_supplier_leg_cost.py::test_supplier_leg_reported_with_source
+FAILED tests/test_supplier_leg_cost.py::test_linehaul_and_feasibility_untouched
+FAILED tests/test_supplier_leg_cost.py::test_legacy_six_tuple_keeps_locked_arithmetic
+FAILED tests/test_supplier_leg_cost.py::test_missing_supplier_coordinates_not_guessed
+FAILED tests/test_supplier_leg_cost.py::test_candidate_without_supplier_marked
+FAILED tests/test_supplier_leg_cost.py::test_identity_from_quote_still_resolves_leg
+FAILED tests/test_tool_contracts.py::test_balance_analyze_full_pipeline_with_summary
+FAILED tests/test_tool_contracts.py::test_evidence_fuse_assembles_from_recommendation
+90 failed, 1880 passed, 27 skipped, 4 warnings in 930.24s (0:15:30)

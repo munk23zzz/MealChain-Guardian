@@ -1,0 +1,518 @@
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+_____________ test_run_event1_menurunkan_sesi_pemilik_ke_keputusan _____________
+
+tanpa_sesi_aktif = None
+
+    def test_run_event1_menurunkan_sesi_pemilik_ke_keputusan(tanpa_sesi_aktif):
+        """`run_event1` menerima `demo_session_id` dan MENURUNKANNYA ke Decision.
+    
+        Tanpa ini, keputusan hasil analisis agent tidak punya pemilik eksplisit:
+        kolom `decisions.demo_session_id` hanya terisi bila penjaga `before_flush`
+        kebetulan menstempelnya dari sesi AKTIF — bukan dari sesi yang meminta
+        analisis (rencana Fase 2 butir 5).
+        """
+        sid = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
+        try:
+            from app.services.event1_orchestrator import run_event1
+    
+>           outcome = run_event1(
+                commodity="telur", target_location="Jakarta", demo_session_id=sid
+            )
+E           TypeError: run_event1() got an unexpected keyword argument 'demo_session_id'
+
+tests/test_session_modes.py:666: TypeError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+_____________________ test_event1_endpoint_meneruskan_sesi _____________________
+
+tanpa_sesi_aktif = None
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7a47cc5fe570>
+
+    def test_event1_endpoint_meneruskan_sesi(tanpa_sesi_aktif, monkeypatch):
+        """`POST /demo/event1` meneruskan sesi ke orkestrator, bukan membuangnya."""
+        sid = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
+        dipanggil: dict = {}
+    
+        def _fake(commodity, target_location, **kwargs):
+            dipanggil.update(
+                commodity=commodity, target_location=target_location, **kwargs
+            )
+            return {
+                "decision_id": "00000000-0000-0000-0000-0000000000f2",
+                "detect": {"commodity": commodity},
+                "verifier": {"verdict": "PASS"},
+                "forecast": {"forecast_qty_kg": None},
+                "supervisor": {"status": "fallback", "summary": "uji", "attempts": []},
+                "mode": "regional_balance",
+                "suppliers": {"candidates": [], "ranked": [], "chosen": None},
+                "decision_snapshot": {"status": "proposed", "approved": False},
+                "trace_steps": ["DETECT", "VERIFY", "TRACE", "PREDICT", "OPTIMIZE", "DECIDE"],
+            }
+    
+        monkeypatch.setattr("app.api.demo.run_event1", _fake)
+        try:
+            with TestClient(app) as client:
+                head = _login(client)
+                resp = client.post(
+                    "/demo/event1",
+                    json={
+                        "commodity": "telur",
+                        "target_location": "Jakarta",
+                        "demo_session": str(sid),
+                    },
+                    headers=head,
+                )
+            assert resp.status_code == 201, resp.text
+>           assert dipanggil.get("demo_session_id") == sid, (
+                "endpoint membuang sesi yang diminta klien"
+            )
+E           AssertionError: endpoint membuang sesi yang diminta klien
+E           assert None == UUID('031581f0-5ecd-4f0f-a863-cce95d7e66d4')
+E            +  where None = <built-in method get of dict object at 0x7a47cad16400>('demo_session_id')
+E            +    where <built-in method get of dict object at 0x7a47cad16400> = {'commodity': 'telur', 'target_location': 'Jakarta', 'ttl_minutes': 30}.get
+
+tests/test_session_modes.py:712: AssertionError
+________________________ test_agent_run_meneruskan_sesi ________________________
+
+tanpa_sesi_aktif = None
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7a47cc5ffb60>
+
+    def test_agent_run_meneruskan_sesi(tanpa_sesi_aktif, monkeypatch):
+        """`POST /demo/agent/run` meneruskan sesi ke orkestrator pengadaan.
+    
+        Endpoint ini menulis Decision lewat jalur yang berbeda (`supplier_procurement`),
+        jadi propagasi harus diuji di seam-nya sendiri — bukan diasumsikan ikut
+        terbawa dari jalur seed.
+        """
+        sid = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
+        dipanggil: dict = {}
+    
+        def _fake(commodity, target_location, **kwargs):
+            dipanggil.update(
+                commodity=commodity, target_location=target_location, **kwargs
+            )
+            return {
+                "decision_id": "00000000-0000-0000-0000-0000000000f3",
+                "detect": {"commodity": commodity},
+                "verifier": {"verdict": "PASS"},
+                "forecast": {"forecast_qty_kg": None},
+                "supervisor": {"status": "fallback", "summary": "uji", "attempts": []},
+                "mode": "supplier_procurement",
+                "suppliers": {"candidates": [], "ranked": [], "chosen": None},
+                "decision_snapshot": {"status": "proposed", "approved": False},
+                "trace_steps": ["DETECT", "VERIFY", "TRACE", "PREDICT", "OPTIMIZE",
+                                "DECIDE", "SUPERVISE"],
+            }
+    
+        monkeypatch.setattr("app.api.demo.run_supplier_procurement", _fake)
+        try:
+            with TestClient(app) as client:
+                head = _login(client)
+                resp = client.post(
+                    "/demo/agent/run",
+                    json={"demo_session": str(sid)},
+                    headers=head,
+                )
+            assert resp.status_code == 201, resp.text
+>           assert dipanggil.get("demo_session_id") == sid, (
+                "analisis demo membuang sesi yang diminta klien"
+            )
+E           AssertionError: analisis demo membuang sesi yang diminta klien
+E           assert None == UUID('13f55a15-0b5e-4bb3-8dfd-bafa15013ad8')
+E            +  where None = <built-in method get of dict object at 0x7a47cad039c0>('demo_session_id')
+E            +    where <built-in method get of dict object at 0x7a47cad039c0> = {'commodity': 'beras', 'target_location': 'Jakarta', 'ttl_minutes': 30}.get
+
+tests/test_session_modes.py:756: AssertionError
+________________ test_agent_run_sesi_tidak_dikenal_ditolak_404 _________________
+  + Exception Group Traceback (most recent call last):
+  |   File "/usr/local/lib/python3.12/site-packages/starlette/_utils.py", line 77, in collapse_excgroups
+  |     yield
+  |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 186, in __call__
+  |     async with anyio.create_task_group() as task_group:
+  |                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "/usr/local/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 847, in __aexit__
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/runner.py", line 341, in from_call
+    |     result: TResult | None = func()
+    |                              ^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/runner.py", line 242, in <lambda>
+    |     lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_caller.py", line 197, in __call__
+    |     return self._hookexec(
+    |            ^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_manager.py", line 183, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 195, in _multicall
+    |     raise exception
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/threadexception.py", line 92, in pytest_runtest_call
+    |     yield from thread_exception_runtest_hook()
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/threadexception.py", line 68, in thread_exception_runtest_hook
+    |     yield
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/unraisableexception.py", line 95, in pytest_runtest_call
+    |     yield from unraisable_exception_runtest_hook()
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/unraisableexception.py", line 70, in unraisable_exception_runtest_hook
+    |     yield
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/logging.py", line 846, in pytest_runtest_call
+    |     yield from self._runtest_for(item, "call")
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/logging.py", line 829, in _runtest_for
+    |     yield
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/capture.py", line 880, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/skipping.py", line 257, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 147, in _multicall
+    |     res = hook_impl.function(*args)
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/runner.py", line 174, in pytest_runtest_call
+    |     item.runtest()
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/python.py", line 1627, in runtest
+    |     self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_caller.py", line 197, in __call__
+    |     return self._hookexec(
+    |            ^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_manager.py", line 183, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 195, in _multicall
+    |     raise exception
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 64, in run_old_style_hookwrapper
+    |     return result.get_result()
+    |            ^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_result.py", line 103, in get_result
+    |     raise exc.with_traceback(tb)
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 49, in run_old_style_hookwrapper
+    |     res = yield
+    |           ^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 147, in _multicall
+    |     res = hook_impl.function(*args)
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/python.py", line 159, in pytest_pyfunc_call
+    |     result = testfunction(**testargs)
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/tests/test_session_modes.py", line 772, in test_agent_run_sesi_tidak_dikenal_ditolak_404
+    |     resp = client.post(
+    |            ^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/testclient.py", line 597, in post
+    |     return super().post(
+    |            ^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 1157, in post
+    |     return self.request(
+    |            ^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/testclient.py", line 488, in request
+    |     return super().request(
+    |            ^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 837, in request
+    |     return self.send(request, auth=auth, follow_redirects=follow_redirects)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 926, in send
+    |     response = self._send_handling_auth(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 954, in _send_handling_auth
+    |     response = self._send_handling_redirects(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 991, in _send_handling_redirects
+    |     response = self._send_single_request(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 1027, in _send_single_request
+    |     response = transport.handle_request(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/testclient.py", line 381, in handle_request
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/testclient.py", line 378, in handle_request
+    |     portal.call(self.app, scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/anyio/from_thread.py", line 340, in call
+    |     return cast(T_Retval, self.start_task_soon(func, *args).result())
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/concurrent/futures/_base.py", line 456, in result
+    |     return self.__get_result()
+    |            ^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    |     raise self._exception
+    |   File "/usr/local/lib/python3.12/site-packages/anyio/from_thread.py", line 265, in _call_func
+    |     retval = await retval_or_awaitable
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/fastapi/applications.py", line 1054, in __call__
+    |     await super().__call__(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/applications.py", line 113, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py", line 187, in __call__
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py", line 165, in __call__
+    |     await self.app(scope, receive, _send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 185, in __call__
+    |     with collapse_excgroups():
+    |          ^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/contextlib.py", line 158, in __exit__
+    |     self.gen.throw(value)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_utils.py", line 83, in collapse_excgroups
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 187, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/main.py", line 179, in _konteks_sesi_demo
+    |     return await call_next(request)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 163, in call_next
+    |     raise app_exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 149, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 185, in __call__
+    |     with collapse_excgroups():
+    |          ^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/contextlib.py", line 158, in __exit__
+    |     self.gen.throw(value)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_utils.py", line 83, in collapse_excgroups
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 187, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/main.py", line 128, in _header_keamanan
+    |     resp = await call_next(request)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 163, in call_next
+    |     raise app_exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 149, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 185, in __call__
+    |     with collapse_excgroups():
+    |          ^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/contextlib.py", line 158, in __exit__
+    |     self.gen.throw(value)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_utils.py", line 83, in collapse_excgroups
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 187, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/main.py", line 119, in _kunci_dokumen
+    |     return await call_next(request)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 163, in call_next
+    |     raise app_exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 149, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/cors.py", line 85, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 62, in __call__
+    |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 62, in wrapped_app
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 51, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 715, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 735, in app
+    |     await route.handle(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 288, in handle
+    |     await self.app(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 76, in app
+    |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 62, in wrapped_app
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 51, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 73, in app
+    |     response = await f(request)
+    |                ^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/fastapi/routing.py", line 301, in app
+    |     raw_response = await run_endpoint_function(
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/fastapi/routing.py", line 212, in run_endpoint_function
+    |     return await dependant.call(**values)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/api/demo.py", line 1421, in run_demo_agent
+    |     outcome = await run_in_threadpool(
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/concurrency.py", line 39, in run_in_threadpool
+    |     return await anyio.to_thread.run_sync(func, *args)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/anyio/to_thread.py", line 65, in run_sync
+    |     return await get_async_backend().run_sync_in_worker_thread(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 2706, in run_sync_in_worker_thread
+    |     return await future
+    |            ^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 1100, in run
+    |     result = context.run(func, *args)
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/tests/test_session_modes.py", line 767, in _fake
+    |     raise AssertionError("orkestrator dipanggil padahal sesinya tidak ada")
+    | AssertionError: orkestrator dipanggil padahal sesinya tidak ada
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+tanpa_sesi_aktif = None
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7a47cad277a0>
+
+    def test_agent_run_sesi_tidak_dikenal_ditolak_404(tanpa_sesi_aktif, monkeypatch):
+        """Sesi yang tidak ada dijawab 404 — bukan diam-diam memakai sesi aktif."""
+    
+        def _fake(*_a, **_kw):  # pragma: no cover - tidak boleh terpanggil
+            raise AssertionError("orkestrator dipanggil padahal sesinya tidak ada")
+    
+        monkeypatch.setattr("app.api.demo.run_supplier_procurement", _fake)
+        with TestClient(app) as client:
+            head = _login(client)
+>           resp = client.post(
+                "/demo/agent/run",
+                json={"demo_session": str(uuid.uuid4())},
+                headers=head,
+            )
+
+tests/test_session_modes.py:772: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:597: in post
+    return super().post(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1157: in post
+    return self.request(
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:488: in request
+    return super().request(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:837: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:926: in send
+    response = self._send_handling_auth(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:954: in _send_handling_auth
+    response = self._send_handling_redirects(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:991: in _send_handling_redirects
+    response = self._send_single_request(request)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1027: in _send_single_request
+    response = transport.handle_request(request)
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:381: in handle_request
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:378: in handle_request
+    portal.call(self.app, scope, receive, send)
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:340: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+/usr/local/lib/python3.12/concurrent/futures/_base.py:456: in result
+    return self.__get_result()
+/usr/local/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+/usr/local/lib/python3.12/site-packages/fastapi/applications.py:1054: in __call__
+    await super().__call__(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/applications.py:113: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:187: in __call__
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:165: in __call__
+    await self.app(scope, receive, _send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:179: in _konteks_sesi_demo
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:128: in _header_keamanan
+    resp = await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:119: in _kunci_dokumen
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/cors.py:85: in __call__
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py:62: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:715: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:735: in app
+    await route.handle(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:288: in handle
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:76: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:73: in app
+    response = await f(request)
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:301: in app
+    raw_response = await run_endpoint_function(
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:212: in run_endpoint_function
+    return await dependant.call(**values)
+app/api/demo.py:1421: in run_demo_agent
+    outcome = await run_in_threadpool(
+/usr/local/lib/python3.12/site-packages/starlette/concurrency.py:39: in run_in_threadpool
+    return await anyio.to_thread.run_sync(func, *args)
+/usr/local/lib/python3.12/site-packages/anyio/to_thread.py:65: in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+/usr/local/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:2706: in run_sync_in_worker_thread
+    return await future
+/usr/local/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:1100: in run
+    result = context.run(func, *args)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+_a = ('beras', 'Jakarta'), _kw = {'ttl_minutes': 30}
+
+    def _fake(*_a, **_kw):  # pragma: no cover - tidak boleh terpanggil
+>       raise AssertionError("orkestrator dipanggil padahal sesinya tidak ada")
+E       AssertionError: orkestrator dipanggil padahal sesinya tidak ada
+
+tests/test_session_modes.py:767: AssertionError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_session_modes.py::test_run_event1_menurunkan_sesi_pemilik_ke_keputusan
+FAILED tests/test_session_modes.py::test_event1_endpoint_meneruskan_sesi - As...
+FAILED tests/test_session_modes.py::test_agent_run_meneruskan_sesi - Assertio...
+FAILED tests/test_session_modes.py::test_agent_run_sesi_tidak_dikenal_ditolak_404
+4 failed, 16 deselected, 1 warning in 5.86s

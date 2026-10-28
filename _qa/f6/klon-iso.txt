@@ -1,0 +1,5 @@
+NOTICE:  database "mealchain_f6_iso" does not exist, skipping
+clone=mealchain_f6_iso decisions=36
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+ALEMBIC=0

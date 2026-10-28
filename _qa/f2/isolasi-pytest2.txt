@@ -1,0 +1,74 @@
+..........................F.                                             [100%]
+=================================== FAILURES ===================================
+________ test_kasus_demo_punya_binding_pemasok_yang_cocok_dengan_batch _________
+
+    def test_kasus_demo_punya_binding_pemasok_yang_cocok_dengan_batch() -> None:
+        engine = _db()
+        try:
+            with TestClient(app) as c:
+                tok = c.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+                assert tok.status_code == 200, tok.text
+                headers = {"Authorization": f"Bearer {tok.json()['access_token']}"}
+    
+                seed = c.post("/demo/seed", json={"force": True}, headers=headers)
+                assert seed.status_code == 200, seed.text
+                assert seed.json()["seeded"] is True
+    
+                with engine.begin() as conn:
+                    kasus = conn.execute(
+                        text(
+                            "SELECT d.id, d.demo_case, d.status, d.source_location_id, "
+                            "       d.commodity_id "
+                            "FROM decisions d JOIN locations l ON l.id = d.target_location_id "
+                            "WHERE d.demo_case IS NOT NULL AND l.name = 'Jakarta' "
+                            "AND d.status = ANY(:aktif) "
+                            # Hanya empat kasus SKRIP: kasus tambahan seperti
+                            # "bukti-hari-ini" adalah pemindahan antar-SPPG tanpa
+                            # pemasok, jadi memang tidak punya allocation_binding.
+                            "AND d.demo_case = ANY(:kasus)"
+                        ),
+                        {
+                            "aktif": list(AKTIF),
+                            "kasus": [
+                                "shortage-darurat",
+                                "gangguan-logistik",
+                                "rejection-loop-kuota",
+                                "supplier-janggal",
+                            ],
+                        },
+                    ).all()
+                assert kasus, "seed demo tidak membuat keputusan yang bisa ditindaklanjuti"
+    
+                for decision_id, case, status, sumber, komoditas in kasus:
+                    with engine.begin() as conn:
+                        binding = _bindings(conn, str(decision_id))
+                    assert len(binding) == 1, (
+                        f"{case} ({status}) punya {len(binding)} binding; harus tepat 1 "
+                        "supaya resolve_binding tidak menebak"
+                    )
+                    payload = binding[0]
+                    batch_ids = payload["batch_ids"]
+                    assert batch_ids, f"{case}: binding tanpa batch"
+                    with engine.begin() as conn:
+                        batch = conn.execute(
+                            text(
+                                "SELECT supplier_id, location_id, commodity_id "
+                                "FROM batches WHERE id = :b"
+                            ),
+                            {"b": batch_ids[0]},
+                        ).one()
+                    assert str(batch[0]) == payload["supplier_id"], f"{case}: supplier tidak cocok"
+>                   assert batch[1] == sumber, f"{case}: batch bukan dari lokasi asal keputusan"
+E                   AssertionError: rejection-loop-kuota: batch bukan dari lokasi asal keputusan
+E                   assert UUID('275d1be7-5bb8-5a37-8004-a2d40a51eb7e') == UUID('68634dcf-05d2-5bda-8d56-9cf045ba76e7')
+
+tests/test_demo_seed_binding.py:106: AssertionError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_demo_seed_binding.py::test_kasus_demo_punya_binding_pemasok_yang_cocok_dengan_batch
+1 failed, 27 passed, 1 warning in 27.04s

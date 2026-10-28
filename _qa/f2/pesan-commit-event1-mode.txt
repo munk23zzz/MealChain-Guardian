@@ -1,0 +1,16 @@
+fix(sesi): tutup lubang mode yang sama di `/demo/event1`
+
+`POST /demo/agent/run` sudah menolak mode yang bertentangan dengan sesi
+pemilik (commit sebelumnya), tetapi `/demo/event1` masih menerimanya. Lubangnya
+hanya berpindah: klien yang mengaku realtime tetap bisa menulis keputusan
+berjangkar replay lewat Event 1.
+
+Perubahan:
+- `Event1Request.mode` (opsional) diteruskan ke `_sesi_pemilik_analisis(mode=…)`,
+  sehingga `demo_ownership.sesi_pemilik` menolak 422 dengan menyebut kedua mode.
+- Tes baru `test_event1_mode_bertentangan_ditolak_422`: fake orkestrator yang
+  melempar `AssertionError` bila dipanggil — membuktikan penolakan terjadi
+  SEBELUM pipeline jalan, bukan sesudahnya.
+
+Bukti: `pytest tests/test_session_modes.py tests/test_openapi_artifact_drift.py`
+→ **25 passed** (24 tes Fase 2 + drift OpenAPI). `ruff check` bersih.

@@ -1,0 +1,29 @@
+=== RUFF
+All checks passed!
+=== ALEMBIC CHECK
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+No new upgrade operations detected.
+=== OPENAPI DRIFT
+.                                                                        [100%]
+1 passed in 4.98s
+=== BRIDGE TESTS
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+192 passed, 14 skipped, 1 warning in 1.87s
+=== TSC
+=== LINT
+./components/HumanReviewPanel.tsx
+221:62  Error: `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`.  react/no-unescaped-entities
+221:67  Error: `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`.  react/no-unescaped-entities
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+
+=== LINT (ulang setelah perbaikan HumanReviewPanel.tsx:221)
+> next lint
+
+✔ No ESLint warnings or errors
+=== CATATAN
+Blok LINT di atas (sebelum perbaikan) menampilkan 2 error react/no-unescaped-entities;
+sudah diperbaiki pada fase ini dan dijalankan ulang: bersih.
+DONE

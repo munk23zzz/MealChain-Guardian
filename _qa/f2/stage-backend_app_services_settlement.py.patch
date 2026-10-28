@@ -1,0 +1,16 @@
+diff --git a/backend/app/services/settlement.py b/backend/app/services/settlement.py
+index 7732fe3..534d0f5 100644
+--- a/backend/app/services/settlement.py
++++ b/backend/app/services/settlement.py
+@@ -196,6 +186,11 @@ async def catat_po_terbit(
+             price_per_kg=Decimal(str(harga_per_kg)).quantize(Decimal("0.01")),
+             source="supplier_quote",
+             origin=_asal(),
++            # Fase 2 MG: fakta mewarisi sesi dari KEPUTUSAN INDUKNYA. Memakai
++            # `sesi_sekarang()` (sesi aktif) berarti menstempel fakta dengan
++            # sesi yang kebetulan sedang berjalan — begitu ada dua sesi, angka
++            # satu sesi masuk ke sesi lain dan reset per sesi salah sasaran.
++            demo_session_id=decision.demo_session_id,
+             generated_at=sekarang,
+             recorded_at=sekarang,
+             source_ref=ref,

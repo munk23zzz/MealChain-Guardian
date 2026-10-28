@@ -1,0 +1,27 @@
+
+==================================== ERRORS ====================================
+____________ ERROR collecting tests/test_commodity_evidence_api.py _____________
+ImportError while importing test module '/app/tests/test_commodity_evidence_api.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tests/test_commodity_evidence_api.py:34: in <module>
+    from app.main import app
+app/main.py:16: in <module>
+    from app.api.compliance import router as compliance_router
+app/api/compliance.py:14: in <module>
+    from app.api.decisions import _assert_decision_readable
+app/api/decisions.py:38: in <module>
+    from app.services.commercial_cost import commercial_cost_payload
+E   ModuleNotFoundError: No module named 'app.services.commercial_cost'
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR tests/test_commodity_evidence_api.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 warning, 1 error in 13.78s

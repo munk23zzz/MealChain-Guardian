@@ -1,0 +1,2045 @@
+........................................................................ [  3%]
+.................................................ss..................... [  6%]
+........................................................................ [ 10%]
+........................................................................ [ 13%]
+....................................s................................... [ 17%]
+....................s....................F.............................. [ 20%]
+.............................................................F.......... [ 24%]
+............................................FFF.F....................... [ 27%]
+.................................................s...................... [ 31%]
+..................F..................................................... [ 34%]
+...........................................FFF................F......... [ 38%]
+..............................F...F....sss.ssssssssssss................. [ 41%]
+..................sss................................................... [ 45%]
+..FFF...........................F..F.................................... [ 48%]
+........................................................................ [ 52%]
+..............F..........................................F.............. [ 55%]
+F....................................................................... [ 59%]
+........................................................................ [ 62%]
+.................................................................s...... [ 66%]
+......................................................................ss [ 69%]
+...........FF........................................................... [ 73%]
+........................................................................ [ 76%]
+..........................sss........................................... [ 80%]
+........................................................................ [ 83%]
+........................................................................ [ 86%]
+....................................................................s... [ 90%]
+........................................................................ [ 93%]
+........................................................................ [ 97%]
+.FF................................................s..                   [100%]
+=================================== FAILURES ===================================
+______________ test_langkah_berikutnya_milik_batch_masing_masing _______________
+
+client = <starlette.testclient.TestClient object at 0x7c52273480b0>
+panggung = {'akhiran': 'bb3cad13', 'batch_id': '36bfdd62-5e40-497b-b480-3f656db7040f', 'decision_id': 'd57f4791-651a-4077-8266-e832a820a278', 'gizi': 'f9.sppg_nutritionist-bb3cad13@uji-f9.local', ...}
+
+    def test_langkah_berikutnya_milik_batch_masing_masing(client, panggung):
+        """Satu keputusan bisa memuat batch kedaluwarsa DAN batch yang menunggu
+        catatan. Menyuruh "selesaikan verifikasi" untuk barang yang sudah lewat masa
+        layak adalah arahan yang salah — terukur di verifikasi browser 27 Okt 2026.
+        """
+        kedaluwarsa = str(
+            _db_one(
+                "INSERT INTO batches (commodity_id, location_id, supplier_id, quantity_kg, "
+                "harvested_at, temperature_log, freshness_score, safety_status, usable_until) "
+                "SELECT c.id, :l, :s, 70.00, now() - interval '30 hours', '[]'::jsonb, "
+                "0.90, 'pass', now() - interval '1 hour' FROM commodities c "
+                "WHERE c.name='telur' RETURNING id",
+                {"l": panggung["location_id"], "s": panggung["supplier_id"]},
+            )
+        )
+        try:
+            _db_exec("DELETE FROM batch_receipts WHERE batch_id = :b", {"b": panggung["batch_id"]})
+            body = _ringkasan(client, panggung, _login(client, panggung["kepala"]))
+            per_batch = {b["batch_id"]: b for b in body["receipt_gate"]["batches"]}
+            assert set(per_batch) == {panggung["batch_id"], kedaluwarsa}, per_batch.keys()
+    
+            langkah_layak = per_batch[panggung["batch_id"]]["next_step"]
+            assert langkah_layak == "catat hasil terima petugas lalu setujui penerimaan", langkah_layak
+    
+            baris_kedaluwarsa = per_batch[kedaluwarsa]
+            assert baris_kedaluwarsa["status"] == "rejected", baris_kedaluwarsa
+            assert "batch_expired" in baris_kedaluwarsa["receive_reasons"], baris_kedaluwarsa
+            assert baris_kedaluwarsa["next_step"] != langkah_layak, baris_kedaluwarsa
+            assert "masa layak" in baris_kedaluwarsa["next_step"], baris_kedaluwarsa
+    
+            # Agregat = langkah batch yang masih tertahan, bukan selalu batch pertama.
+>           assert body["receipt_gate"]["next_step"] == baris_kedaluwarsa["next_step"]
+E           AssertionError: assert 'catat hasil ...ui penerimaan' == 'tolak batch ...at masa layak'
+E             
+E             - tolak batch — sudah lewat masa layak
+E             + catat hasil terima petugas lalu setujui penerimaan
+
+tests/test_approval_summary_receipt_gate.py:400: AssertionError
+______________ test_kasus_skrip_punya_bukti_termasuk_yang_ditolak ______________
+
+    @pytest.mark.skipif(text is None, reason="app/sqlalchemy tidak tersedia")
+    async def test_kasus_skrip_punya_bukti_termasuk_yang_ditolak():
+        eng = create_engine(_url())
+        async with eng.connect() as conn:
+            baris = (
+                await conn.execute(
+                    text(
+                        """
+                        SELECT left(d.id::text, 8) AS id, d.decision_type, d.status, d.demo_case
+                        FROM decisions d
+                        WHERE d.demo_case IS NOT NULL
+                          AND d.created_at > now() - interval '2 days'
+                          AND NOT EXISTS (
+                            SELECT 1 FROM decision_evidence e WHERE e.decision_id = d.id
+                          )
+                        ORDER BY d.created_at DESC
+                        LIMIT 10
+                        """
+                    )
+                )
+            ).fetchall()
+        await eng.dispose()
+>       assert baris == [], f"kasus skrip tanpa bukti: {baris}"
+E       AssertionError: kasus skrip tanpa bukti: [('d801c730', 'supplier_procurement', 'pending_approval', 'rejection-loop-kuota')]
+E       assert [('d801c730',...-loop-kuota')] == []
+E         
+E         Left contains one more item: ('d801c730', 'supplier_procurement', 'pending_approval', 'rejection-loop-kuota')
+E         Use -v to get more diff
+
+tests/test_bukti_dan_draf_demo.py:58: AssertionError
+___________ test_campuran_batch_log_kosong_menahan_seluruh_kandidat ____________
+
+    def test_campuran_batch_log_kosong_menahan_seluruh_kandidat():
+        """Skor rata-rata tinggi tidak boleh mengalahkan bukti yang tidak ada.
+    
+        Batch 300 kg bersuhu sah + 300 kg tanpa log: rata-rata kesegaran 0,825
+        (tinggi), tetapi 300 kg itu TIDAK punya bukti suhu sama sekali. Kandidat
+        tidak boleh lolos seolah seluruh 600 kg terverifikasi.
+        """
+        held: list = []
+        out = _generate(
+            [
+                _batch(batch_id="b-sah", quantity_kg="300"),
+                _batch(batch_id="b-kosong", quantity_kg="300", temperature_log=LOG_KOSONG),
+            ],
+            held=held,
+        )
+>       assert out == [], "kandidat lolos padahal separuh batch tanpa bukti suhu"
+E       AssertionError: kandidat lolos padahal separuh batch tanpa bukti suhu
+E       assert [BalancingCan...s=('b-sah',))] == []
+E         
+E         Left contains one more item: BalancingCandidate(source_location='Cianjur', destination_location='Jakarta', commodity='telur', quantity_kg=Decimal('...pplier_id='sup-1'), transport_cost=Decimal('0'), handling_cost=Decimal('0'), supplier_id='sup-1', batch_ids=('b-sah',))
+E         Use -v to get more diff
+
+tests/test_commodity_evidence_aggregation.py:112: AssertionError
+________________ test_dua_batch_sah_tetap_menghasilkan_kandidat ________________
+
+    def test_dua_batch_sah_tetap_menghasilkan_kandidat():
+        """Regresi: gerbang bukti tidak boleh menghukum rantai dingin yang benar."""
+        out = _generate(
+            [
+                _batch(batch_id="b-1", quantity_kg="300"),
+                _batch(batch_id="b-2", quantity_kg="300"),
+            ]
+        )
+        assert len(out) == 1
+>       assert out[0].quantity_kg == Decimal("600")
+E       AssertionError: assert Decimal('500') == Decimal('600')
+E        +  where Decimal('500') = BalancingCandidate(source_location='Cianjur', destination_location='Jakarta', commodity='telur', quantity_kg=Decimal('...er_id='sup-1'), transport_cost=Decimal('0'), handling_cost=Decimal('0'), supplier_id='sup-1', batch_ids=('b-1', 'b-2')).quantity_kg
+E        +  and   Decimal('600') = Decimal('600')
+
+tests/test_commodity_evidence_aggregation.py:127: AssertionError
+______________ test_log_lama_menahan_kandidat_seperti_log_kosong _______________
+
+    def test_log_lama_menahan_kandidat_seperti_log_kosong():
+        """Sampel lima hari lalu bukan observasi real-time."""
+        held: list = []
+        out = _generate([_batch(batch_id="b-lama", temperature_log=LOG_LAMA)], held=held)
+>       assert out == []
+E       AssertionError: assert [BalancingCan...=('b-lama',))] == []
+E         
+E         Left contains one more item: BalancingCandidate(source_location='Cianjur', destination_location='Jakarta', commodity='telur', quantity_kg=Decimal('...plier_id='sup-1'), transport_cost=Decimal('0'), handling_cost=Decimal('0'), supplier_id='sup-1', batch_ids=('b-lama',))
+E         Use -v to get more diff
+
+tests/test_commodity_evidence_aggregation.py:134: AssertionError
+____________ test_kandidat_lolos_membawa_label_observasi_dan_waktu _____________
+
+    def test_kandidat_lolos_membawa_label_observasi_dan_waktu():
+        """Joule butuh label + waktu; menghitung ulang di sana = dua definisi."""
+        out = _generate([_batch(batch_id="b-1", quantity_kg="450")])
+        assert len(out) == 1
+        payload = out[0].to_dict() if hasattr(out[0], "to_dict") else None
+        assert payload is not None
+>       assert payload.get("evidence"), "payload kandidat wajib membawa blok bukti"
+E       AssertionError: payload kandidat wajib membawa blok bukti
+E       assert None
+E        +  where None = <built-in method get of dict object at 0x7c52262437c0>('evidence')
+E        +    where <built-in method get of dict object at 0x7c52262437c0> = {'batch_ids': ['b-1'], 'commodity': 'telur', 'demand_fit': '0.9', 'destination_location': 'Jakarta', ...}.get
+
+tests/test_commodity_evidence_aggregation.py:168: AssertionError
+_______ test_paket_menyatakan_pengiriman_tidak_layak_bila_tenggat_lewat ________
+
+klien = <starlette.testclient.TestClient object at 0x7c522610b140>
+aktor = {'email': 'bgn_monitor-e4d6bbd4@uji-f6-packet.local', 'id': 'a8eb61ec-941b-45b3-a167-a41d721d9f57', 'password': 'TestPass#2026', 'role': 'bgn_monitor'}
+
+    def test_paket_menyatakan_pengiriman_tidak_layak_bila_tenggat_lewat(klien, aktor) -> None:
+        batch = _buat_batch()
+        decision_id = _buat_keputusan(batch, breakdown=RINCIAN_LENGKAP)
+        demand_id = _buat_demand("Jakarta", datetime.now(UTC) - timedelta(hours=2))
+        try:
+            h = _login(klien, aktor)
+            paket = klien.get(f"/decisions/{decision_id}/packet", headers=h).json()
+>           assert paket["delivery"]["feasible"] is False
+E           assert True is False
+
+tests/test_decision_packet.py:319: AssertionError
+_____________ test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan _____________
+
+kasus = [{'batches': [], 'binding_supplier': None, 'demo_case': 'rejection-loop-kuota', 'id': UUID('1d493d4d-73af-4ca7-b7d6-e8...4be9-90e7-6b8278d8fbcc', 'demo_case': 'rejection-loop-kuota', 'id': UUID('e230c0aa-27b0-4b13-8020-3097e5adf00c'), ...}]
+
+    def test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan(kasus):
+        """Batch acuan harus di lokasi TUJUAN, bukan lokasi asal (semantik pengadaan)."""
+        for k in kasus:
+>           assert k["batches"], (
+                f"{k['demo_case']} {str(k['id'])[:8]}: pengadaan tanpa binding batch — "
+                "layar akan menampilkan 'pemasok tidak dikenal'"
+            )
+E           AssertionError: rejection-loop-kuota 1d493d4d: pengadaan tanpa binding batch — layar akan menampilkan 'pemasok tidak dikenal'
+E           assert []
+
+tests/test_demo_cases_procurement_binding.py:158: AssertionError
+_______________ test_binding_pengadaan_memakai_pemasok_keputusan _______________
+
+kasus = [{'batches': [], 'binding_supplier': None, 'demo_case': 'rejection-loop-kuota', 'id': UUID('1d493d4d-73af-4ca7-b7d6-e8...4be9-90e7-6b8278d8fbcc', 'demo_case': 'rejection-loop-kuota', 'id': UUID('e230c0aa-27b0-4b13-8020-3097e5adf00c'), ...}]
+
+    def test_binding_pengadaan_memakai_pemasok_keputusan(kasus):
+        """Pemasok di binding = `decisions.supplier_id`, jadi PO = pemasok di layar."""
+        for k in kasus:
+>           assert k["binding_supplier"] == str(k["supplier"]), (
+                f"{k['demo_case']} {str(k['id'])[:8]}: binding menunjuk pemasok "
+                f"{k['binding_supplier']}, kolom keputusan {k['supplier']}"
+            )
+E           AssertionError: rejection-loop-kuota 1d493d4d: binding menunjuk pemasok None, kolom keputusan 6fbf0a04-4499-4d95-91e6-b420eec639b9
+E           assert None == '6fbf0a04-4499-4d95-91e6-b420eec639b9'
+E            +  where '6fbf0a04-4499-4d95-91e6-b420eec639b9' = str(UUID('6fbf0a04-4499-4d95-91e6-b420eec639b9'))
+
+tests/test_demo_cases_procurement_binding.py:172: AssertionError
+____________ test_kasus_pengadaan_lolos_resolve_binding_dan_safety _____________
+
+kasus = [{'batches': [], 'binding_supplier': None, 'demo_case': 'rejection-loop-kuota', 'id': UUID('1d493d4d-73af-4ca7-b7d6-e8...4be9-90e7-6b8278d8fbcc', 'demo_case': 'rejection-loop-kuota', 'id': UUID('e230c0aa-27b0-4b13-8020-3097e5adf00c'), ...}]
+
+    def test_kasus_pengadaan_lolos_resolve_binding_dan_safety(kasus):
+        """Tidak boleh ada kasus demo pengadaan yang pasti ditolak guard eksekusi."""
+        for k in kasus:
+            try:
+                hasil = _resolve(k["id"], k["supplier"])
+            except HTTPException as exc:  # pragma: no cover - pesan kegagalan
+                raise AssertionError(
+                    f"{k['demo_case']} {str(k['id'])[:8]} ditolak guard: "
+                    f"{exc.status_code} {exc.detail}"
+                ) from exc
+            assert hasil["batches"], f"{str(k['id'])[:8]}: resolve tanpa batch"
+>           assert hasil["blocked"] is False, (
+                f"{k['demo_case']} {str(k['id'])[:8]}: safety gate memblokir karena "
+                "batch acuan tidak layak — kasus demo tidak bisa dieksekusi"
+            )
+E           AssertionError: rejection-loop-kuota 1d493d4d: safety gate memblokir karena batch acuan tidak layak — kasus demo tidak bisa dieksekusi
+E           assert True is False
+
+tests/test_demo_cases_procurement_binding.py:189: AssertionError
+____________________ test_analyze_tanpa_sesi_tetap_berjalan ____________________
+  + Exception Group Traceback (most recent call last):
+  |   File "/usr/local/lib/python3.12/site-packages/starlette/_utils.py", line 77, in collapse_excgroups
+  |     yield
+  |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 186, in __call__
+  |     async with anyio.create_task_group() as task_group:
+  |                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "/usr/local/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 847, in __aexit__
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/runner.py", line 341, in from_call
+    |     result: TResult | None = func()
+    |                              ^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/runner.py", line 242, in <lambda>
+    |     lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_caller.py", line 197, in __call__
+    |     return self._hookexec(
+    |            ^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_manager.py", line 183, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 195, in _multicall
+    |     raise exception
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/threadexception.py", line 92, in pytest_runtest_call
+    |     yield from thread_exception_runtest_hook()
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/threadexception.py", line 68, in thread_exception_runtest_hook
+    |     yield
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/unraisableexception.py", line 95, in pytest_runtest_call
+    |     yield from unraisable_exception_runtest_hook()
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/unraisableexception.py", line 70, in unraisable_exception_runtest_hook
+    |     yield
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/logging.py", line 846, in pytest_runtest_call
+    |     yield from self._runtest_for(item, "call")
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/logging.py", line 829, in _runtest_for
+    |     yield
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/capture.py", line 880, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/skipping.py", line 257, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 147, in _multicall
+    |     res = hook_impl.function(*args)
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/runner.py", line 174, in pytest_runtest_call
+    |     item.runtest()
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/python.py", line 1627, in runtest
+    |     self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_caller.py", line 197, in __call__
+    |     return self._hookexec(
+    |            ^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_manager.py", line 183, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 195, in _multicall
+    |     raise exception
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 64, in run_old_style_hookwrapper
+    |     return result.get_result()
+    |            ^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_result.py", line 103, in get_result
+    |     raise exc.with_traceback(tb)
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 49, in run_old_style_hookwrapper
+    |     res = yield
+    |           ^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 147, in _multicall
+    |     res = hook_impl.function(*args)
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/python.py", line 159, in pytest_pyfunc_call
+    |     result = testfunction(**testargs)
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/tests/test_demo_control_modes.py", line 375, in test_analyze_tanpa_sesi_tetap_berjalan
+    |     resp = klien.post("/balance/analyze", json={"commodity": "beras"}, headers=headers)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/testclient.py", line 597, in post
+    |     return super().post(
+    |            ^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 1157, in post
+    |     return self.request(
+    |            ^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/testclient.py", line 488, in request
+    |     return super().request(
+    |            ^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 837, in request
+    |     return self.send(request, auth=auth, follow_redirects=follow_redirects)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 926, in send
+    |     response = self._send_handling_auth(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 954, in _send_handling_auth
+    |     response = self._send_handling_redirects(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 991, in _send_handling_redirects
+    |     response = self._send_single_request(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 1027, in _send_single_request
+    |     response = transport.handle_request(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/testclient.py", line 381, in handle_request
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/testclient.py", line 378, in handle_request
+    |     portal.call(self.app, scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/anyio/from_thread.py", line 340, in call
+    |     return cast(T_Retval, self.start_task_soon(func, *args).result())
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/concurrent/futures/_base.py", line 456, in result
+    |     return self.__get_result()
+    |            ^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    |     raise self._exception
+    |   File "/usr/local/lib/python3.12/site-packages/anyio/from_thread.py", line 265, in _call_func
+    |     retval = await retval_or_awaitable
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/fastapi/applications.py", line 1054, in __call__
+    |     await super().__call__(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/applications.py", line 113, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py", line 187, in __call__
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py", line 165, in __call__
+    |     await self.app(scope, receive, _send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 185, in __call__
+    |     with collapse_excgroups():
+    |          ^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/contextlib.py", line 158, in __exit__
+    |     self.gen.throw(value)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_utils.py", line 83, in collapse_excgroups
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 187, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/main.py", line 179, in _konteks_sesi_demo
+    |     return await call_next(request)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 163, in call_next
+    |     raise app_exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 149, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 185, in __call__
+    |     with collapse_excgroups():
+    |          ^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/contextlib.py", line 158, in __exit__
+    |     self.gen.throw(value)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_utils.py", line 83, in collapse_excgroups
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 187, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/main.py", line 128, in _header_keamanan
+    |     resp = await call_next(request)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 163, in call_next
+    |     raise app_exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 149, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 185, in __call__
+    |     with collapse_excgroups():
+    |          ^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/contextlib.py", line 158, in __exit__
+    |     self.gen.throw(value)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_utils.py", line 83, in collapse_excgroups
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 187, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/main.py", line 119, in _kunci_dokumen
+    |     return await call_next(request)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 163, in call_next
+    |     raise app_exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 149, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/cors.py", line 85, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 62, in __call__
+    |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 62, in wrapped_app
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 51, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 715, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 735, in app
+    |     await route.handle(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 288, in handle
+    |     await self.app(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 76, in app
+    |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 62, in wrapped_app
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 51, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 73, in app
+    |     response = await f(request)
+    |                ^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/fastapi/routing.py", line 301, in app
+    |     raw_response = await run_endpoint_function(
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/fastapi/routing.py", line 212, in run_endpoint_function
+    |     return await dependant.call(**values)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/api/balance.py", line 394, in post_analyze
+    |     as_of = await _jam_sesi_aktif(db)
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/api/balance.py", line 218, in _jam_sesi_aktif
+    |     if bool(settings.demo_mode):
+    |             ^^^^^^^^
+    | NameError: name 'settings' is not defined
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+klien = <starlette.testclient.TestClient object at 0x7c52275187a0>
+sesi_bersih = []
+
+    def test_analyze_tanpa_sesi_tetap_berjalan(klien, sesi_bersih):
+        headers = _login(klien)
+>       resp = klien.post("/balance/analyze", json={"commodity": "beras"}, headers=headers)
+
+tests/test_demo_control_modes.py:375: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:597: in post
+    return super().post(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1157: in post
+    return self.request(
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:488: in request
+    return super().request(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:837: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:926: in send
+    response = self._send_handling_auth(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:954: in _send_handling_auth
+    response = self._send_handling_redirects(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:991: in _send_handling_redirects
+    response = self._send_single_request(request)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1027: in _send_single_request
+    response = transport.handle_request(request)
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:381: in handle_request
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:378: in handle_request
+    portal.call(self.app, scope, receive, send)
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:340: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+/usr/local/lib/python3.12/concurrent/futures/_base.py:456: in result
+    return self.__get_result()
+/usr/local/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+/usr/local/lib/python3.12/site-packages/fastapi/applications.py:1054: in __call__
+    await super().__call__(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/applications.py:113: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:187: in __call__
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:165: in __call__
+    await self.app(scope, receive, _send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:179: in _konteks_sesi_demo
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:128: in _header_keamanan
+    resp = await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:119: in _kunci_dokumen
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/cors.py:85: in __call__
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py:62: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:715: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:735: in app
+    await route.handle(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:288: in handle
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:76: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:73: in app
+    response = await f(request)
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:301: in app
+    raw_response = await run_endpoint_function(
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:212: in run_endpoint_function
+    return await dependant.call(**values)
+app/api/balance.py:394: in post_analyze
+    as_of = await _jam_sesi_aktif(db)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7c5226f2ffe0>
+
+    async def _jam_sesi_aktif(db) -> datetime | None:
+        """Jangkar sesi demo yang sedang aktif, atau `None` (jam dinding)."""
+        from app.models import DemoSession
+    
+        try:
+            baris = (
+                await db.execute(
+                    select(DemoSession)
+                    .where(DemoSession.status == "active")
+                    .order_by(DemoSession.started_at.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+        except Exception:  # noqa: BLE001 - jam evaluasi tidak boleh menggagalkan analisis
+            return None
+        anchor = getattr(baris, "evaluation_anchor", None)
+        if anchor is not None:
+            return anchor
+        # Tanpa sesi aktif di mode demo: dataset replay berjangkar kanon.
+>       if bool(settings.demo_mode):
+E       NameError: name 'settings' is not defined
+
+app/api/balance.py:218: NameError
+_______________________ test_seed_idempotent_dan_lengkap _______________________
+
+    def test_seed_idempotent_dan_lengkap():
+        engine = _db()
+        try:
+            with TestClient(app) as c:
+                # Login user SPPG existing dari seed_data (punya location).
+                email = "sppg.head@demo.local"
+                with engine.begin() as conn:
+                    row = conn.execute(
+                        text("SELECT count(*) FROM users WHERE email = :e"),
+                        {"e": email},
+                    ).scalar()
+                if row:
+                    tok = c.post(
+                        "/auth/login",
+                        json={"email": email, "password": "Demo#SPPG2026"},
+                    ).json()["access_token"]
+                else:
+                    tok = None
+                auth_headers = {"Authorization": f"Bearer {tok}"} if tok else {}
+    
+                # Reset dulu (force) supaya test deterministik.
+                r1 = c.post("/demo/seed", json={"force": True}, headers=auth_headers)
+                assert r1.status_code == 200, r1.text
+                assert r1.json()["seeded"] is True
+                assert r1.json()["decisions"] == 7
+    
+                # Idempotent: seed ulang tanpa force → skip.
+                r2 = c.post("/demo/seed", json={}, headers=auth_headers)
+                assert r2.json()["seeded"] is False
+    
+                # Kasus lengkap + shape timeline benar.
+                with engine.begin() as conn:
+                    per_case = dict(
+                        conn.execute(
+                            text(
+                                "SELECT d.demo_case, count(*) FROM decisions d "
+                                "JOIN locations l ON l.id = d.target_location_id "
+                                "WHERE d.demo_case IS NOT NULL AND l.name = 'Jakarta' "
+                                "GROUP BY d.demo_case"
+                            )
+                        ).all()
+                    )
+                # Kasus skrip harus ada (boleh ada kasus tambahan dari seed lain,
+                # mis. "bukti-hari-ini" milik tombol "Siapkan data demo").
+                assert CASES <= set(per_case)
+>               assert per_case["rejection-loop-kuota"] == 3
+E               assert 6 == 3
+
+tests/test_demo_seed.py:68: AssertionError
+_________________________ test_seed_idempoten_per_kota _________________________
+
+client = <starlette.testclient.TestClient object at 0x7c5224b23e90>
+
+    def test_seed_idempoten_per_kota(client):
+        kepala = _mk_user("sppg_head", "Bandung")
+        try:
+            headers = _login(client, kepala)
+            client.post("/demo/seed", json={"force": True}, headers=headers)
+            jumlah = len(_demo_rows("Bandung"))
+            resp = client.post("/demo/seed", json={"force": False}, headers=headers)
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            assert body["seeded"] is False
+>           assert body["already"] == jumlah
+E           assert 7 == 14
+
+tests/test_demo_seed_per_kota.py:185: AssertionError
+____________________ test_api_safety_happy_path_revised_201 ____________________
+
+client = <starlette.testclient.TestClient object at 0x7c522613fa10>
+
+    def test_api_safety_happy_path_revised_201(client):
+        """FAIL → 201 revised; decision+evidence+trace terbaca dari DB."""
+        b = _mk_batch("Cianjur", fail=True)
+        try:
+            headers = _head_user(client)
+            resp = client.post(
+                "/events/safety-disruption",
+                headers=headers,
+                json={
+                    "batch_id": b["batch_id"],
+                    "target_location_id": _target_jakarta(),
+                    "operation_key": str(uuid.uuid4()),
+                },
+            )
+>           assert resp.status_code == 201, resp.text
+E           AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E           assert 409 == 201
+E            +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_event3_api.py:223: AssertionError
+__________________ test_api_safety_replay_same_key_idempotent __________________
+
+client = <starlette.testclient.TestClient object at 0x7c5225e41580>
+
+    def test_api_safety_replay_same_key_idempotent(client):
+        """operation_key sama + batch sama → replay, satu decision saja."""
+        b = _mk_batch("Cianjur", fail=True)
+        try:
+            headers = _head_user(client)
+            payload = {
+                "batch_id": b["batch_id"],
+                "target_location_id": _target_jakarta(),
+                "operation_key": str(uuid.uuid4()),
+            }
+            r1 = client.post("/events/safety-disruption", headers=headers, json=payload)
+>           assert r1.status_code == 201, r1.text
+E           AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E           assert 409 == 201
+E            +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_event3_api.py:258: AssertionError
+______________ test_api_safety_conflict_same_key_other_batch_409 _______________
+
+client = <starlette.testclient.TestClient object at 0x7c52275a1580>
+
+    def test_api_safety_conflict_same_key_other_batch_409(client):
+        """operation_key sama + batch beda → 409."""
+        b1 = _mk_batch("Cianjur", fail=True)
+        b2 = _mk_batch("Cianjur", fail=True)
+        try:
+            headers = _head_user(client)
+            op_key = str(uuid.uuid4())
+            r1 = client.post(
+                "/events/safety-disruption",
+                headers=headers,
+                json={
+                    "batch_id": b1["batch_id"],
+                    "target_location_id": _target_jakarta(),
+                    "operation_key": op_key,
+                },
+            )
+>           assert r1.status_code == 201, r1.text
+E           AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E           assert 409 == 201
+E            +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_event3_api.py:290: AssertionError
+______________ test_event3_menulis_seluruh_bukti_dengan_penilaian ______________
+
+client = <starlette.testclient.TestClient object at 0x7c522dfcaba0>
+
+    def test_event3_menulis_seluruh_bukti_dengan_penilaian(client):
+        """Event 3 (suhu + binding) menulis penilaian, tidak ada yang NULL."""
+        from tests.test_event3_api import _cleanup_batch, _cleanup_decision, _mk_batch
+    
+        b = _mk_batch("Cianjur", fail=True)
+        decision_id = None
+        try:
+            resp = client.post(
+                "/events/safety-disruption",
+                headers=_head_user(client),
+                json={
+                    "batch_id": b["batch_id"],
+                    "target_location_id": str(
+                        _db_all("SELECT id FROM locations WHERE name='Jakarta'")[0][0]
+                    ),
+                    "operation_key": str(uuid.uuid4()),
+                },
+            )
+>           assert resp.status_code == 201, resp.text
+E           AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E           assert 409 == 201
+E            +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_evidence_consistency_wiring.py:129: AssertionError
+____________________ test_live_evidence_batch_ids_nonempty _____________________
+
+    def test_live_evidence_batch_ids_nonempty():
+        engine = create_async_engine(_AURL)
+        session_maker = async_sessionmaker(engine, expire_on_commit=False)
+    
+        async def _run():
+            async with session_maker() as db:
+                out = await rs.build_recommendations(
+                    lambda: rs.fetch_operational_facts(db, None)
+                )
+            await engine.dispose()
+            return out
+    
+        out = asyncio.run(_run())
+        recs = out["recommendations"]
+        assert recs, "service live wajib menghasilkan kandidat"
+    
+        def _find(src, dst, com):
+            return next(
+                r
+                for r in recs
+                if r["candidate"]["source_location"] == src
+                and r["candidate"]["destination_location"] == dst
+                and r["candidate"]["commodity"] == com
+            )
+    
+>       top = _find("Cianjur", "Jakarta", "telur")
+
+tests/test_evidence_live.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+src = 'Cianjur', dst = 'Jakarta', com = 'telur'
+
+    def _find(src, dst, com):
+>       return next(
+            r
+            for r in recs
+            if r["candidate"]["source_location"] == src
+            and r["candidate"]["destination_location"] == dst
+            and r["candidate"]["commodity"] == com
+        )
+E       StopIteration
+
+tests/test_evidence_live.py:37: StopIteration
+_________________ test_decision_time_tersedia_setelah_eksekusi _________________
+
+client = <starlette.testclient.TestClient object at 0x7c5224268f80>
+monitor_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkMmEwMmJjZC1mNWE2LTQ5NzUtYWJkNC00MzQ0OTQ1ZDB...21vbml0b3IiLCJsb2MiOm51bGwsImlhdCI6MTc5MzExMTEyNCwiZXhwIjoxNzkzMTU0MzI0fQ.r1p7JW30vEtl_g5adE7AD6bPvvPuHV7EmRrTaei5jHI'}
+
+    def test_decision_time_tersedia_setelah_eksekusi(client, monitor_headers):
+        """Kartu Decision Time berhenti jadi `no_data` setelah satu eksekusi nyata.
+    
+        Metrik hanya menghitung keputusan ber-`demo_case IS NULL` yang sudah
+        committed (PO ada) — keputusan Event 1 memenuhi keduanya setelah eksekusi.
+        """
+        head = _mk_user("sppg_head", "Jakarta")
+        restore = _force_server_verdict("CONSISTENT")
+        decision_id: str | None = None
+        gizi_email: str | None = None
+        try:
+            before = _kpi_metric(client, monitor_headers, "Decision Time")
+            # JANGAN mengandaikan DB kosong. DB kerja adalah DB DEMO yang dipakai
+            # bersama: keputusan nyata yang sudah dieksekusi (beserta PO-nya) bisa
+            # sudah ada di jendela metrik, sehingga keadaannya `available` sebelum
+            # tes ini jalan. Yang diuji adalah TRANSISI: keputusan yang baru
+            # dieksekusi ikut terhitung.
+            sebelum_sampel = int(before.get("sample_count") or 0)
+            decision_id, _po, gizi_email = _run_execute_flow(client, head)
+            after = _kpi_metric(client, monitor_headers, "Decision Time")
+            assert after["state"] == "available", after
+            assert after["value"] is not None
+>           assert int(after["sample_count"]) == sebelum_sampel + 1, after
+E           AssertionError: {'coverage': '0.13', 'name': 'Decision Time', 'previous_value': None, 'provenance': {'baseline': {'kind': 'no_baseline...': None}, 'classification': {'historical_seed': 5, 'live': 6}, 'coverage': '0.13', 'data_basis': 'campuran', ...}, ...}
+E           assert 1 == (7 + 1)
+E            +  where 1 = int(1)
+
+tests/test_kpi_act_trace.py:209: AssertionError
+______________ test_penerimaan_bahan_tidak_menulis_porsi_tersaji _______________
+
+    def test_penerimaan_bahan_tidak_menulis_porsi_tersaji():
+        """Bahan diterima ≠ makanan tersaji: penerimaan hanya memberi proyeksi."""
+    
+        async def _skenario(db):
+            lokasi, komoditas = await _lokasi_komoditas(db)
+            rencana = await db.execute(
+                text(
+                    "SELECT id, planned_portions FROM menu_plans WHERE planned_portions > 0 LIMIT 1"
+                )
+            )
+            baris = rencana.first()
+            if baris is None:
+                pytest.skip("DB uji tanpa menu plan berisi porsi")
+            batch = SimpleNamespace(
+                location_id=lokasi, commodity_id=komoditas, quantity_kg=Decimal("30.00")
+            )
+            receipt = SimpleNamespace(id=uuid.uuid4())
+            hasil = await settlement.catat_penerimaan(
+                db, batch=batch, receipt=receipt, sekarang=datetime.now(timezone.utc)
+            )
+            await db.flush()
+            jumlah = (
+                await db.execute(
+                    text(
+                        "SELECT count(*) FROM delivery_events WHERE source_ref = :r"
+                    ),
+                    {"r": f"receipt:{receipt.id}"},
+                )
+            ).scalar()
+            await db.rollback()
+            return hasil, int(jumlah or 0)
+    
+        hasil, jumlah_delivery = _jalankan(_skenario)
+        assert jumlah_delivery == 0, "penerimaan tidak boleh menulis baris porsi tersaji"
+        assert hasil["ditulis"] is False
+        assert "proyeksi" in str(hasil.get("alasan", "")).lower(), hasil
+        # Proyeksi tetap dihitung (bukan dibuang), hanya TIDAK disimpan sebagai fakta.
+        if hasil.get("proyeksi_porsi") is not None:
+>           assert hasil["proyeksi_porsi"] > 0
+E           assert 0 > 0
+
+tests/test_kpi_provenance.py:265: AssertionError
+___________ test_akun_aplikasi_bisa_membaca_dan_menulis_tabel_kerja ____________
+
+self = <sqlalchemy.engine.base.Connection object at 0x7c52249cee40>
+dialect = <sqlalchemy.dialects.postgresql.psycopg.PGDialect_psycopg object at 0x7c5224a42750>
+context = <sqlalchemy.dialects.postgresql.psycopg.PGExecutionContext_psycopg object at 0x7c5217af0cb0>
+statement = <sqlalchemy.dialects.postgresql.psycopg.PGCompiler_psycopg object at 0x7c52275a1790>
+parameters = [{}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7c5225ef1fd0>
+query = 'SELECT count(*) FROM decisions', params = {}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.InsufficientPrivilege: permission denied for table decisions
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: InsufficientPrivilege
+
+The above exception was the direct cause of the following exception:
+
+akun_app = {'dsn': 'postgresql+psycopg://app_uji_9c47dad8:Uji#286af3867751@postgres:5432/mealchain_f4b', 'dsn_async': 'postgresql+asyncpg://app_uji_9c47dad8:Uji#286af3867751@postgres:5432/mealchain_f4b', 'nama': 'app_uji_9c47dad8'}
+
+    def test_akun_aplikasi_bisa_membaca_dan_menulis_tabel_kerja(akun_app):
+        with _tx(akun_app["dsn"]) as conn:
+>           jumlah = conn.execute(text("SELECT count(*) FROM decisions")).scalar_one()
+
+tests/test_least_privilege_app_role.py:110: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7c5225ef1fd0>
+query = 'SELECT count(*) FROM decisions', params = {}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           sqlalchemy.exc.ProgrammingError: (psycopg.errors.InsufficientPrivilege) permission denied for table decisions
+E           [SQL: SELECT count(*) FROM decisions]
+E           (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: ProgrammingError
+____ test_fetch_excludes_later_harvests_without_advancing_as_of[live-race] _____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c52275e9a60>
+explicit_as_of = False
+
+    @pytest.mark.parametrize("explicit_as_of", [False, True], ids=["live-race", "historical"])
+    def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, explicit_as_of):
+        engine = create_engine(
+            DSN_SYNC
+        )
+    
+        class FrozenClock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return AS_OF + timedelta(days=1) if explicit_as_of else AS_OF
+    
+        monkeypatch.setattr(rs, "datetime", FrozenClock)
+        try:
+            with engine.connect() as connection, connection.begin() as transaction:
+                with Session(bind=connection) as session:
+                    location = session.scalar(select(Location).where(Location.name == "Cianjur"))
+                    commodity = session.scalar(select(Commodity).where(Commodity.name == "telur"))
+                    supplier = session.scalar(select(Supplier).limit(1))
+                    ids = {name: uuid.uuid4() for name in ("old", "boundary", "later")}
+                    harvested = {
+                        "old": AS_OF - timedelta(days=1),
+                        "boundary": AS_OF,
+                        "later": AS_OF + timedelta(milliseconds=600),
+                    }
+    
+                    class LaterVisibleSession:
+                        inserted = False
+    
+                        async def execute(self, statement):
+                            if not self.inserted:
+                                self.inserted = True
+                                # Deterministic interleaving: these rows become visible only
+                                # after fetch_operational_facts has captured its clock.
+                                session.add_all([
+                                    Batch(
+                                        id=ids[name], location_id=location.id,
+                                        commodity_id=commodity.id, supplier_id=supplier.id,
+                                        quantity_kg=Decimal("10"), harvested_at=timestamp,
+                                        # Bukti suhu lengkap: sejak F-02 (25 Okt 2026) log
+                                        # kosong tidak lagi berbuah skor `pass` (0,7), dan
+                                        # tes ini menguji pemotongan `as_of`, bukan freshness.
+                                        temperature_log=_log_suhu(timestamp),
+                                        safety_status="pass",
+                                    )
+                                    for name, timestamp in harvested.items()
+                                ])
+                                session.flush()
+                            return session.execute(statement)
+    
+                    facts = asyncio.run(rs.fetch_operational_facts(
+                        LaterVisibleSession(), AS_OF if explicit_as_of else None
+                    ))
+                    batches = {b["batch_id"]: b for b in facts[4]}
+                    assert str(ids["later"]) not in batches
+                    assert batches[str(ids["boundary"])]["freshness_score"] == Decimal("1.000000")
+                    expected = rs.compute_freshness_score(
+                        harvested["old"], AS_OF, rs.settings.shelf_life_days_telur,
+                        _log_suhu(harvested["old"]),
+                        rs.settings.safe_temp_min_c, rs.settings.safe_temp_max_c,
+                    )
+>                   assert batches[str(ids["old"])]["freshness_score"] == rs._score(
+                        Decimal(str(expected))
+                    )
+E                   AssertionError: assert Decimal('0.664286') == Decimal('0.964286')
+E                    +  where Decimal('0.964286') = <function _score at 0x7c5231447100>(Decimal('0.9642857142857143'))
+E                    +    where <function _score at 0x7c5231447100> = rs._score
+E                    +    and   Decimal('0.9642857142857143') = Decimal('0.9642857142857143')
+E                    +      where '0.9642857142857143' = str(0.9642857142857143)
+
+tests/test_recommendation_snapshot.py:99: AssertionError
+____ test_fetch_excludes_later_harvests_without_advancing_as_of[historical] ____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c522754fc50>
+explicit_as_of = True
+
+    @pytest.mark.parametrize("explicit_as_of", [False, True], ids=["live-race", "historical"])
+    def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, explicit_as_of):
+        engine = create_engine(
+            DSN_SYNC
+        )
+    
+        class FrozenClock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return AS_OF + timedelta(days=1) if explicit_as_of else AS_OF
+    
+        monkeypatch.setattr(rs, "datetime", FrozenClock)
+        try:
+            with engine.connect() as connection, connection.begin() as transaction:
+                with Session(bind=connection) as session:
+                    location = session.scalar(select(Location).where(Location.name == "Cianjur"))
+                    commodity = session.scalar(select(Commodity).where(Commodity.name == "telur"))
+                    supplier = session.scalar(select(Supplier).limit(1))
+                    ids = {name: uuid.uuid4() for name in ("old", "boundary", "later")}
+                    harvested = {
+                        "old": AS_OF - timedelta(days=1),
+                        "boundary": AS_OF,
+                        "later": AS_OF + timedelta(milliseconds=600),
+                    }
+    
+                    class LaterVisibleSession:
+                        inserted = False
+    
+                        async def execute(self, statement):
+                            if not self.inserted:
+                                self.inserted = True
+                                # Deterministic interleaving: these rows become visible only
+                                # after fetch_operational_facts has captured its clock.
+                                session.add_all([
+                                    Batch(
+                                        id=ids[name], location_id=location.id,
+                                        commodity_id=commodity.id, supplier_id=supplier.id,
+                                        quantity_kg=Decimal("10"), harvested_at=timestamp,
+                                        # Bukti suhu lengkap: sejak F-02 (25 Okt 2026) log
+                                        # kosong tidak lagi berbuah skor `pass` (0,7), dan
+                                        # tes ini menguji pemotongan `as_of`, bukan freshness.
+                                        temperature_log=_log_suhu(timestamp),
+                                        safety_status="pass",
+                                    )
+                                    for name, timestamp in harvested.items()
+                                ])
+                                session.flush()
+                            return session.execute(statement)
+    
+                    facts = asyncio.run(rs.fetch_operational_facts(
+                        LaterVisibleSession(), AS_OF if explicit_as_of else None
+                    ))
+                    batches = {b["batch_id"]: b for b in facts[4]}
+                    assert str(ids["later"]) not in batches
+                    assert batches[str(ids["boundary"])]["freshness_score"] == Decimal("1.000000")
+                    expected = rs.compute_freshness_score(
+                        harvested["old"], AS_OF, rs.settings.shelf_life_days_telur,
+                        _log_suhu(harvested["old"]),
+                        rs.settings.safe_temp_min_c, rs.settings.safe_temp_max_c,
+                    )
+>                   assert batches[str(ids["old"])]["freshness_score"] == rs._score(
+                        Decimal(str(expected))
+                    )
+E                   AssertionError: assert Decimal('0.664286') == Decimal('0.964286')
+E                    +  where Decimal('0.964286') = <function _score at 0x7c5231447100>(Decimal('0.9642857142857143'))
+E                    +    where <function _score at 0x7c5231447100> = rs._score
+E                    +    and   Decimal('0.9642857142857143') = Decimal('0.9642857142857143')
+E                    +      where '0.9642857142857143' = str(0.9642857142857143)
+
+tests/test_recommendation_snapshot.py:99: AssertionError
+_______________ test_balance_analyze_full_pipeline_with_summary ________________
+  + Exception Group Traceback (most recent call last):
+  |   File "/usr/local/lib/python3.12/site-packages/starlette/_utils.py", line 77, in collapse_excgroups
+  |     yield
+  |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 186, in __call__
+  |     async with anyio.create_task_group() as task_group:
+  |                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "/usr/local/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 847, in __aexit__
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/runner.py", line 341, in from_call
+    |     result: TResult | None = func()
+    |                              ^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/runner.py", line 242, in <lambda>
+    |     lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_caller.py", line 197, in __call__
+    |     return self._hookexec(
+    |            ^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_manager.py", line 183, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 195, in _multicall
+    |     raise exception
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/threadexception.py", line 92, in pytest_runtest_call
+    |     yield from thread_exception_runtest_hook()
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/threadexception.py", line 68, in thread_exception_runtest_hook
+    |     yield
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/unraisableexception.py", line 95, in pytest_runtest_call
+    |     yield from unraisable_exception_runtest_hook()
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/unraisableexception.py", line 70, in unraisable_exception_runtest_hook
+    |     yield
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/logging.py", line 846, in pytest_runtest_call
+    |     yield from self._runtest_for(item, "call")
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/logging.py", line 829, in _runtest_for
+    |     yield
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/capture.py", line 880, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/skipping.py", line 257, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 147, in _multicall
+    |     res = hook_impl.function(*args)
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/runner.py", line 174, in pytest_runtest_call
+    |     item.runtest()
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/python.py", line 1627, in runtest
+    |     self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_caller.py", line 197, in __call__
+    |     return self._hookexec(
+    |            ^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_manager.py", line 183, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 195, in _multicall
+    |     raise exception
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 64, in run_old_style_hookwrapper
+    |     return result.get_result()
+    |            ^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_result.py", line 103, in get_result
+    |     raise exc.with_traceback(tb)
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 49, in run_old_style_hookwrapper
+    |     res = yield
+    |           ^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 147, in _multicall
+    |     res = hook_impl.function(*args)
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/python.py", line 159, in pytest_pyfunc_call
+    |     result = testfunction(**testargs)
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/tests/test_tool_contracts.py", line 139, in test_balance_analyze_full_pipeline_with_summary
+    |     resp = client.post("/balance/analyze")
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/testclient.py", line 597, in post
+    |     return super().post(
+    |            ^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 1157, in post
+    |     return self.request(
+    |            ^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/testclient.py", line 488, in request
+    |     return super().request(
+    |            ^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 837, in request
+    |     return self.send(request, auth=auth, follow_redirects=follow_redirects)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 926, in send
+    |     response = self._send_handling_auth(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 954, in _send_handling_auth
+    |     response = self._send_handling_redirects(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 991, in _send_handling_redirects
+    |     response = self._send_single_request(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 1027, in _send_single_request
+    |     response = transport.handle_request(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/testclient.py", line 381, in handle_request
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/testclient.py", line 378, in handle_request
+    |     portal.call(self.app, scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/anyio/from_thread.py", line 340, in call
+    |     return cast(T_Retval, self.start_task_soon(func, *args).result())
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/concurrent/futures/_base.py", line 456, in result
+    |     return self.__get_result()
+    |            ^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    |     raise self._exception
+    |   File "/usr/local/lib/python3.12/site-packages/anyio/from_thread.py", line 265, in _call_func
+    |     retval = await retval_or_awaitable
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/fastapi/applications.py", line 1054, in __call__
+    |     await super().__call__(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/applications.py", line 113, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py", line 187, in __call__
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py", line 165, in __call__
+    |     await self.app(scope, receive, _send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 185, in __call__
+    |     with collapse_excgroups():
+    |          ^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/contextlib.py", line 158, in __exit__
+    |     self.gen.throw(value)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_utils.py", line 83, in collapse_excgroups
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 187, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/main.py", line 179, in _konteks_sesi_demo
+    |     return await call_next(request)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 163, in call_next
+    |     raise app_exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 149, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 185, in __call__
+    |     with collapse_excgroups():
+    |          ^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/contextlib.py", line 158, in __exit__
+    |     self.gen.throw(value)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_utils.py", line 83, in collapse_excgroups
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 187, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/main.py", line 128, in _header_keamanan
+    |     resp = await call_next(request)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 163, in call_next
+    |     raise app_exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 149, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 185, in __call__
+    |     with collapse_excgroups():
+    |          ^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/contextlib.py", line 158, in __exit__
+    |     self.gen.throw(value)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_utils.py", line 83, in collapse_excgroups
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 187, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/main.py", line 119, in _kunci_dokumen
+    |     return await call_next(request)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 163, in call_next
+    |     raise app_exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 149, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/cors.py", line 85, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 62, in __call__
+    |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 62, in wrapped_app
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 51, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 715, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 735, in app
+    |     await route.handle(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 288, in handle
+    |     await self.app(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 76, in app
+    |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 62, in wrapped_app
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 51, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 73, in app
+    |     response = await f(request)
+    |                ^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/fastapi/routing.py", line 301, in app
+    |     raw_response = await run_endpoint_function(
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/fastapi/routing.py", line 212, in run_endpoint_function
+    |     return await dependant.call(**values)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/api/balance.py", line 394, in post_analyze
+    |     as_of = await _jam_sesi_aktif(db)
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/api/balance.py", line 218, in _jam_sesi_aktif
+    |     if bool(settings.demo_mode):
+    |             ^^^^^^^^
+    | NameError: name 'settings' is not defined
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+client = <starlette.testclient.TestClient object at 0x7c5217f37ec0>
+
+    def test_balance_analyze_full_pipeline_with_summary(client):
+>       resp = client.post("/balance/analyze")
+
+tests/test_tool_contracts.py:139: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:597: in post
+    return super().post(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1157: in post
+    return self.request(
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:488: in request
+    return super().request(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:837: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:926: in send
+    response = self._send_handling_auth(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:954: in _send_handling_auth
+    response = self._send_handling_redirects(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:991: in _send_handling_redirects
+    response = self._send_single_request(request)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1027: in _send_single_request
+    response = transport.handle_request(request)
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:381: in handle_request
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:378: in handle_request
+    portal.call(self.app, scope, receive, send)
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:340: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+/usr/local/lib/python3.12/concurrent/futures/_base.py:456: in result
+    return self.__get_result()
+/usr/local/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+/usr/local/lib/python3.12/site-packages/fastapi/applications.py:1054: in __call__
+    await super().__call__(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/applications.py:113: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:187: in __call__
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:165: in __call__
+    await self.app(scope, receive, _send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:179: in _konteks_sesi_demo
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:128: in _header_keamanan
+    resp = await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:119: in _kunci_dokumen
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/cors.py:85: in __call__
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py:62: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:715: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:735: in app
+    await route.handle(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:288: in handle
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:76: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:73: in app
+    response = await f(request)
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:301: in app
+    raw_response = await run_endpoint_function(
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:212: in run_endpoint_function
+    return await dependant.call(**values)
+app/api/balance.py:394: in post_analyze
+    as_of = await _jam_sesi_aktif(db)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7c52264baf30>
+
+    async def _jam_sesi_aktif(db) -> datetime | None:
+        """Jangkar sesi demo yang sedang aktif, atau `None` (jam dinding)."""
+        from app.models import DemoSession
+    
+        try:
+            baris = (
+                await db.execute(
+                    select(DemoSession)
+                    .where(DemoSession.status == "active")
+                    .order_by(DemoSession.started_at.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+        except Exception:  # noqa: BLE001 - jam evaluasi tidak boleh menggagalkan analisis
+            return None
+        anchor = getattr(baris, "evaluation_anchor", None)
+        if anchor is not None:
+            return anchor
+        # Tanpa sesi aktif di mode demo: dataset replay berjangkar kanon.
+>       if bool(settings.demo_mode):
+E       NameError: name 'settings' is not defined
+
+app/api/balance.py:218: NameError
+_______________ test_evidence_fuse_assembles_from_recommendation _______________
+  + Exception Group Traceback (most recent call last):
+  |   File "/usr/local/lib/python3.12/site-packages/starlette/_utils.py", line 77, in collapse_excgroups
+  |     yield
+  |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 186, in __call__
+  |     async with anyio.create_task_group() as task_group:
+  |                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "/usr/local/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 847, in __aexit__
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/runner.py", line 341, in from_call
+    |     result: TResult | None = func()
+    |                              ^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/runner.py", line 242, in <lambda>
+    |     lambda: runtest_hook(item=item, **kwds), when=when, reraise=reraise
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_caller.py", line 197, in __call__
+    |     return self._hookexec(
+    |            ^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_manager.py", line 183, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 195, in _multicall
+    |     raise exception
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/threadexception.py", line 92, in pytest_runtest_call
+    |     yield from thread_exception_runtest_hook()
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/threadexception.py", line 68, in thread_exception_runtest_hook
+    |     yield
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/unraisableexception.py", line 95, in pytest_runtest_call
+    |     yield from unraisable_exception_runtest_hook()
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/unraisableexception.py", line 70, in unraisable_exception_runtest_hook
+    |     yield
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/logging.py", line 846, in pytest_runtest_call
+    |     yield from self._runtest_for(item, "call")
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/logging.py", line 829, in _runtest_for
+    |     yield
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/capture.py", line 880, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/skipping.py", line 257, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 147, in _multicall
+    |     res = hook_impl.function(*args)
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/runner.py", line 174, in pytest_runtest_call
+    |     item.runtest()
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/python.py", line 1627, in runtest
+    |     self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_caller.py", line 197, in __call__
+    |     return self._hookexec(
+    |            ^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_manager.py", line 183, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 195, in _multicall
+    |     raise exception
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 167, in _multicall
+    |     teardown.throw(exception)
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 64, in run_old_style_hookwrapper
+    |     return result.get_result()
+    |            ^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_result.py", line 103, in get_result
+    |     raise exc.with_traceback(tb)
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 49, in run_old_style_hookwrapper
+    |     res = yield
+    |           ^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/pluggy/_execution.py", line 147, in _multicall
+    |     res = hook_impl.function(*args)
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/_pytest/python.py", line 159, in pytest_pyfunc_call
+    |     result = testfunction(**testargs)
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/tests/test_tool_contracts.py", line 171, in test_evidence_fuse_assembles_from_recommendation
+    |     rec = _first_recommendation(client)
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/tests/test_tool_contracts.py", line 163, in _first_recommendation
+    |     resp = client.post("/balance/recommend")
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/testclient.py", line 597, in post
+    |     return super().post(
+    |            ^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 1157, in post
+    |     return self.request(
+    |            ^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/testclient.py", line 488, in request
+    |     return super().request(
+    |            ^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 837, in request
+    |     return self.send(request, auth=auth, follow_redirects=follow_redirects)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 926, in send
+    |     response = self._send_handling_auth(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 954, in _send_handling_auth
+    |     response = self._send_handling_redirects(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 991, in _send_handling_redirects
+    |     response = self._send_single_request(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 1027, in _send_single_request
+    |     response = transport.handle_request(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/testclient.py", line 381, in handle_request
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/testclient.py", line 378, in handle_request
+    |     portal.call(self.app, scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/anyio/from_thread.py", line 340, in call
+    |     return cast(T_Retval, self.start_task_soon(func, *args).result())
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/concurrent/futures/_base.py", line 456, in result
+    |     return self.__get_result()
+    |            ^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    |     raise self._exception
+    |   File "/usr/local/lib/python3.12/site-packages/anyio/from_thread.py", line 265, in _call_func
+    |     retval = await retval_or_awaitable
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/fastapi/applications.py", line 1054, in __call__
+    |     await super().__call__(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/applications.py", line 113, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py", line 187, in __call__
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py", line 165, in __call__
+    |     await self.app(scope, receive, _send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 185, in __call__
+    |     with collapse_excgroups():
+    |          ^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/contextlib.py", line 158, in __exit__
+    |     self.gen.throw(value)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_utils.py", line 83, in collapse_excgroups
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 187, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/main.py", line 179, in _konteks_sesi_demo
+    |     return await call_next(request)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 163, in call_next
+    |     raise app_exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 149, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 185, in __call__
+    |     with collapse_excgroups():
+    |          ^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/contextlib.py", line 158, in __exit__
+    |     self.gen.throw(value)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_utils.py", line 83, in collapse_excgroups
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 187, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/main.py", line 128, in _header_keamanan
+    |     resp = await call_next(request)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 163, in call_next
+    |     raise app_exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 149, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 185, in __call__
+    |     with collapse_excgroups():
+    |          ^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/contextlib.py", line 158, in __exit__
+    |     self.gen.throw(value)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_utils.py", line 83, in collapse_excgroups
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 187, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/main.py", line 119, in _kunci_dokumen
+    |     return await call_next(request)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 163, in call_next
+    |     raise app_exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py", line 149, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/cors.py", line 85, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 62, in __call__
+    |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 62, in wrapped_app
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 51, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 715, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 735, in app
+    |     await route.handle(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 288, in handle
+    |     await self.app(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 76, in app
+    |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 62, in wrapped_app
+    |     raise exc
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 51, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 73, in app
+    |     response = await f(request)
+    |                ^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/fastapi/routing.py", line 301, in app
+    |     raw_response = await run_endpoint_function(
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/local/lib/python3.12/site-packages/fastapi/routing.py", line 212, in run_endpoint_function
+    |     return await dependant.call(**values)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/api/balance.py", line 230, in post_recommend
+    |     as_of = await _jam_sesi_aktif(db)
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/app/app/api/balance.py", line 218, in _jam_sesi_aktif
+    |     if bool(settings.demo_mode):
+    |             ^^^^^^^^
+    | NameError: name 'settings' is not defined
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+client = <starlette.testclient.TestClient object at 0x7c5217dbdbb0>
+
+    def test_evidence_fuse_assembles_from_recommendation(client):
+>       rec = _first_recommendation(client)
+
+tests/test_tool_contracts.py:171: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_tool_contracts.py:163: in _first_recommendation
+    resp = client.post("/balance/recommend")
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:597: in post
+    return super().post(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1157: in post
+    return self.request(
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:488: in request
+    return super().request(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:837: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:926: in send
+    response = self._send_handling_auth(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:954: in _send_handling_auth
+    response = self._send_handling_redirects(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:991: in _send_handling_redirects
+    response = self._send_single_request(request)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1027: in _send_single_request
+    response = transport.handle_request(request)
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:381: in handle_request
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:378: in handle_request
+    portal.call(self.app, scope, receive, send)
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:340: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+/usr/local/lib/python3.12/concurrent/futures/_base.py:456: in result
+    return self.__get_result()
+/usr/local/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+/usr/local/lib/python3.12/site-packages/fastapi/applications.py:1054: in __call__
+    await super().__call__(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/applications.py:113: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:187: in __call__
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:165: in __call__
+    await self.app(scope, receive, _send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:179: in _konteks_sesi_demo
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:128: in _header_keamanan
+    resp = await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:119: in _kunci_dokumen
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/cors.py:85: in __call__
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py:62: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:715: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:735: in app
+    await route.handle(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:288: in handle
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:76: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:73: in app
+    response = await f(request)
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:301: in app
+    raw_response = await run_endpoint_function(
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:212: in run_endpoint_function
+    return await dependant.call(**values)
+app/api/balance.py:230: in post_recommend
+    as_of = await _jam_sesi_aktif(db)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7c522db07bf0>
+
+    async def _jam_sesi_aktif(db) -> datetime | None:
+        """Jangkar sesi demo yang sedang aktif, atau `None` (jam dinding)."""
+        from app.models import DemoSession
+    
+        try:
+            baris = (
+                await db.execute(
+                    select(DemoSession)
+                    .where(DemoSession.status == "active")
+                    .order_by(DemoSession.started_at.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+        except Exception:  # noqa: BLE001 - jam evaluasi tidak boleh menggagalkan analisis
+            return None
+        anchor = getattr(baris, "evaluation_anchor", None)
+        if anchor is not None:
+            return anchor
+        # Tanpa sesi aktif di mode demo: dataset replay berjangkar kanon.
+>       if bool(settings.demo_mode):
+E       NameError: name 'settings' is not defined
+
+app/api/balance.py:218: NameError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+tests/test_human_verification.py::test_review_sah_mencatat_decision_evidence_dan_mengubah_status
+tests/test_human_verification.py::test_review_sah_mencatat_decision_evidence_dan_mengubah_status
+  /usr/local/lib/python3.12/site-packages/pydantic/main.py:1114: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.9/migration/
+    warnings.warn('The `dict` method is deprecated; use `model_dump` instead.', category=PydanticDeprecatedSince20)
+
+tests/test_s4_rulings_tdd.py::test_ruling_a_nutritionist_baca_summary_lintas_lokasi_403
+  sys:1: SAWarning: The garbage collector is trying to clean up non-checked-in connection <AdaptedConnection <asyncpg.connection.Connection object at 0x7c522c3d86e0>>, which will be terminated.  Please ensure that SQLAlchemy pooled connections are returned to the pool explicitly, either by calling ``close()`` or by using appropriate context managers to manage their lifecycle.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_approval_summary_receipt_gate.py::test_langkah_berikutnya_milik_batch_masing_masing
+FAILED tests/test_bukti_dan_draf_demo.py::test_kasus_skrip_punya_bukti_termasuk_yang_ditolak
+FAILED tests/test_commodity_evidence_aggregation.py::test_campuran_batch_log_kosong_menahan_seluruh_kandidat
+FAILED tests/test_commodity_evidence_aggregation.py::test_dua_batch_sah_tetap_menghasilkan_kandidat
+FAILED tests/test_commodity_evidence_aggregation.py::test_log_lama_menahan_kandidat_seperti_log_kosong
+FAILED tests/test_commodity_evidence_aggregation.py::test_kandidat_lolos_membawa_label_observasi_dan_waktu
+FAILED tests/test_decision_packet.py::test_paket_menyatakan_pengiriman_tidak_layak_bila_tenggat_lewat
+FAILED tests/test_demo_cases_procurement_binding.py::test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan
+FAILED tests/test_demo_cases_procurement_binding.py::test_binding_pengadaan_memakai_pemasok_keputusan
+FAILED tests/test_demo_cases_procurement_binding.py::test_kasus_pengadaan_lolos_resolve_binding_dan_safety
+FAILED tests/test_demo_control_modes.py::test_analyze_tanpa_sesi_tetap_berjalan
+FAILED tests/test_demo_seed.py::test_seed_idempotent_dan_lengkap - assert 6 == 3
+FAILED tests/test_demo_seed_per_kota.py::test_seed_idempoten_per_kota - asser...
+FAILED tests/test_event3_api.py::test_api_safety_happy_path_revised_201 - Ass...
+FAILED tests/test_event3_api.py::test_api_safety_replay_same_key_idempotent
+FAILED tests/test_event3_api.py::test_api_safety_conflict_same_key_other_batch_409
+FAILED tests/test_evidence_consistency_wiring.py::test_event3_menulis_seluruh_bukti_dengan_penilaian
+FAILED tests/test_evidence_live.py::test_live_evidence_batch_ids_nonempty - S...
+FAILED tests/test_kpi_act_trace.py::test_decision_time_tersedia_setelah_eksekusi
+FAILED tests/test_kpi_provenance.py::test_penerimaan_bahan_tidak_menulis_porsi_tersaji
+FAILED tests/test_least_privilege_app_role.py::test_akun_aplikasi_bisa_membaca_dan_menulis_tabel_kerja
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[live-race]
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[historical]
+FAILED tests/test_tool_contracts.py::test_balance_analyze_full_pipeline_with_summary
+FAILED tests/test_tool_contracts.py::test_evidence_fuse_assembles_from_recommendation
+25 failed, 2014 passed, 32 skipped, 4 warnings in 1248.87s (0:20:48)

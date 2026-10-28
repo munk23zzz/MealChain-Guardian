@@ -1,0 +1,18 @@
+== DB kosong mealchain_f3_e2e
+== migrasi ke head
+UPGRADE_EXIT=0
+commodity_policies setelah MIGRASI: 0
+== seed kanonik (REF jangkar 2026-10-08T12:00:00+00:00)
+SEED_EXIT=0
+Rute jalan (OSRM): 51 diambil, 0 sudah ada, 0 gagal — hanya kiriman aktif.
+Seed selesai (idempoten). Row baru: {'locations': 10, 'commodities': 4, 'suppliers': 60, 'sap_mock_material_stock': 40, 'sap_mock_purchase_orders': 12, 'delivery_events': 70, 'disposal_events': 20, 'supply_records': 40, 'demand_records': 280, 'price_signals': 100, 'menu_plans': 70, 'commodity_policies': 4}
+commodity_policies setelah SEED: 4
+per komoditas:
+  name  | cold_chain_required | safe_temp_min_c | safe_temp_max_c | shelf_life_days | min_temperature_samples | max_observation_age_minutes |   policy_kind    
+--------+---------------------+-----------------+-----------------+-----------------+-------------------------+-----------------------------+------------------
+ ayam   | t                   |            0.00 |            8.00 |            5.00 |                       2 |                         360 | simulated_policy
+ beras  | f                   |                 |                 |          180.00 |                       0 |                             | simulated_policy
+ telur  | t                   |            0.00 |            8.00 |           28.00 |                       2 |                         360 | simulated_policy
+ wortel | t                   |            0.00 |            8.00 |           21.00 |                       2 |                         360 | simulated_policy
+(4 rows)
+

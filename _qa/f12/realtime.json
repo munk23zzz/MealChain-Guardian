@@ -1,0 +1,419 @@
+{
+  "mode": "realtime",
+  "duration_s": 69.9,
+  "catatan": [
+    "F12-SESI-1: keputusan/batch/receipt dataset template dimiliki sesi sentinel ce7a0000-0000-4000-8000-000000000001, bukan sesi operator. Akibatnya KPI cakupan demo (demo_session_id=<sesi operator>) menjawab no_data, dan perbandingan `demo_session_id` di Joule harus memakai id sentinel itu."
+  ],
+  "steps": [
+    {
+      "step": "1. Muat Demo realtime (POST /demo/session/start, replace=true)",
+      "ok": true,
+      "at": "2026-10-27T15:36:20.305770+00:00",
+      "detail": {
+        "status": 200,
+        "session_id": "6e07c2bd-7be3-43e3-8fee-333e8fe11560",
+        "mode": "realtime",
+        "anchor": "2026-10-27T15:33:10.393046+00:00",
+        "dataset_version": "realtime-20261027T153310Z",
+        "created": false,
+        "durasi_bangun_s": 0.1,
+        "kasus_per_kota": {}
+      }
+    },
+    {
+      "step": "2. anchor realtime = jam sesi, bukan kanon",
+      "ok": true,
+      "at": "2026-10-27T15:36:20.306303+00:00",
+      "detail": {
+        "selisih_detik_dari_sekarang": 189.9,
+        "anchor": "2026-10-27T15:33:10.393046+00:00"
+      }
+    },
+    {
+      "step": "3. GET /demo/session membaca sesi yang sama (refresh tidak menghilangkan sesi)",
+      "ok": true,
+      "at": "2026-10-27T15:36:20.370026+00:00",
+      "detail": {
+        "session_id": "6e07c2bd-7be3-43e3-8fee-333e8fe11560",
+        "mode": "realtime",
+        "anchor": "2026-10-27T15:33:10.393046+00:00"
+      }
+    },
+    {
+      "step": "4. tidak ada timestamp masa depan pada keputusan",
+      "ok": true,
+      "at": "2026-10-27T15:36:20.987992+00:00",
+      "detail": {
+        "keputusan_masa_depan": "0",
+        "data_status_http": 200
+      }
+    },
+    {
+      "step": "5. POST /balance/analyze dijalankan saat defisit masih terbuka",
+      "ok": true,
+      "at": "2026-10-27T15:36:22.789090+00:00",
+      "detail": {
+        "status": 200,
+        "keputusan_terbuka_saat_analisis": "33",
+        "summary": {
+          "candidates_total": 12,
+          "eligible": 12,
+          "review_required": 0,
+          "held_total": 12,
+          "flagged_price": 0
+        }
+      }
+    },
+    {
+      "step": "6. keputusan pending_approval dengan batch usable ditemukan",
+      "ok": true,
+      "at": "2026-10-27T15:36:23.735196+00:00",
+      "detail": {
+        "decision_id": "bf6fccbd-abc9-50c9-ad49-55755bf19250",
+        "case": "wortel-coldchain-hold",
+        "batch": "8cc58ad3-2a1f-55b0-92e1-c706cdaf047b",
+        "kg": 380.0,
+        "supplier": "UD Puncak Sayur Asri"
+      }
+    },
+    {
+      "step": "7. POST /actions/propose memindahkan verifier_flagged \u2192 pending_approval",
+      "ok": true,
+      "at": "2026-10-27T15:36:23.770525+00:00",
+      "detail": {
+        "status": 201,
+        "status_sebelum": "verifier_flagged",
+        "status_sesudah": "pending_approval"
+      }
+    },
+    {
+      "step": "8. approval peran-1 lalu execute DITOLAK (butuh dua peran)",
+      "ok": true,
+      "at": "2026-10-27T15:36:23.860010+00:00",
+      "detail": {
+        "approve_status": 200,
+        "can_execute_setelah_1_approval": false,
+        "requirement": {
+          "verdict": "consistent",
+          "min_approvals": 2,
+          "required_roles": [
+            [
+              "sppg_head"
+            ],
+            [
+              "sppg_nutritionist"
+            ]
+          ]
+        },
+        "execute_status": 409,
+        "execute_detail": "approval belum memenuhi requirement (missing/rejected)"
+      }
+    },
+    {
+      "step": "9. approval peran-2 \u2192 can_execute true",
+      "ok": true,
+      "at": "2026-10-27T15:36:23.919351+00:00",
+      "detail": {
+        "approve_status": 200,
+        "can_execute": true,
+        "approvals": 2
+      }
+    },
+    {
+      "step": "10. execute \u2192 keputusan executed + PO terbit",
+      "ok": true,
+      "at": "2026-10-27T15:36:24.042486+00:00",
+      "detail": {
+        "status": 200,
+        "po": "MC-BF6FCCBDABC9",
+        "decision_status": "executed"
+      }
+    },
+    {
+      "step": "11. invoice = purchase+transport+handling; SDC = invoice + 3 penalti",
+      "ok": true,
+      "at": "2026-10-27T15:36:24.042486+00:00",
+      "detail": {
+        "invoice_total": "7413044.96",
+        "sdc_total": "7674235.70",
+        "selisih": "261190.74",
+        "risk_method": {
+          "kind": "simulated_policy",
+          "source": "app/core/safe_delivered_cost.py:bobot_demo",
+          "version": "sdc-policy-1",
+          "period": null,
+          "baseline": null
+        },
+        "sdc_unit_price": "20195.36",
+        "invoice_unit_price": "19508.01"
+      }
+    },
+    {
+      "step": "12. PO: status submitted, tertaut keputusan, sesi PO = sesi keputusan, tanpa penalti",
+      "ok": true,
+      "at": "2026-10-27T15:36:24.502363+00:00",
+      "detail": {
+        "status_http": 200,
+        "po": "MC-BF6FCCBDABC9",
+        "status_po": "submitted",
+        "sesi_po": "ce7a0000-0000-4000-8000-000000000001",
+        "sesi_keputusan": "ce7a0000-0000-4000-8000-000000000001",
+        "sesi_sentinel_cetakan": "ce7a0000-0000-4000-8000-000000000001",
+        "kunci_po": [
+          "commodity_name",
+          "cost_legacy",
+          "cost_legacy_label",
+          "created_at",
+          "decision_id",
+          "decision_status",
+          "invoice_total",
+          "invoice_unit_price",
+          "location_id",
+          "location_name",
+          "material_number",
+          "ordered_quantity_kg",
+          "origin",
+          "po_number",
+          "price_per_kg",
+          "sdc_total",
+          "source",
+          "status",
+          "supplier_id",
+          "supplier_name",
+          "total_value"
+        ],
+        "invoice_total_po": 7413043.8
+      }
+    },
+    {
+      "step": "13. kiriman: ada batch berstatus 'di jalan' dengan ETA dari server",
+      "ok": true,
+      "at": "2026-10-27T15:36:24.620488+00:00",
+      "detail": {
+        "status": 200,
+        "jumlah_rute": 12,
+        "di_jalan": 5,
+        "contoh": {
+          "state": "di_jalan",
+          "state_label": "Di jalan",
+          "eta_at": "2026-10-27T15:48:38.593058+00:00",
+          "dispatched_at": "2026-10-27T15:24:50.593058+00:00",
+          "travel_min": 23.8,
+          "remaining_min": 12.2
+        },
+        "batch_keputusan_punya_rute": false
+      }
+    },
+    {
+      "step": "14. ceklis + penerimaan batch usable \u2192 pasokan lokasi bergerak",
+      "ok": true,
+      "at": "2026-10-27T15:36:25.502818+00:00",
+      "detail": {
+        "batch": "5972ffe0-383a-5c41-8d9d-2a5072618716",
+        "kg": 420.0,
+        "receipt_http": 201,
+        "approve_http": 200,
+        "status_penerimaan": "disetujui",
+        "pasokan_sebelum": "46142.64",
+        "pasokan_sesudah": "46922.64",
+        "stock_kg": 420.0
+      }
+    },
+    {
+      "step": "15. KPI operasional: 7 metrik, tiap metrik punya state + provenance + baseline",
+      "ok": true,
+      "at": "2026-10-27T15:36:25.781430+00:00",
+      "detail": {
+        "data_mode": "operational",
+        "metrics": [
+          {
+            "nama": "Meal Continuity Rate",
+            "state": "available",
+            "evidence_kind": "derived",
+            "baseline": "no_baseline",
+            "value": "100.00"
+          },
+          {
+            "nama": "Avoidable Food Loss",
+            "state": "available",
+            "evidence_kind": "recorded_fact",
+            "baseline": "no_baseline",
+            "value": "0.56"
+          },
+          {
+            "nama": "Regional Imbalance Resolution Rate",
+            "state": "available",
+            "evidence_kind": "derived",
+            "baseline": "no_baseline",
+            "value": "33.33"
+          },
+          {
+            "nama": "Safe Delivered Cost",
+            "state": "no_data",
+            "evidence_kind": "derived",
+            "baseline": "no_baseline",
+            "value": null
+          },
+          {
+            "nama": "Procurement Price Deviation",
+            "state": "available",
+            "evidence_kind": "derived",
+            "baseline": "no_baseline",
+            "value": "3.21"
+          },
+          {
+            "nama": "Decision Time",
+            "state": "no_data",
+            "evidence_kind": "recorded_fact",
+            "baseline": "no_baseline",
+            "value": null
+          },
+          {
+            "nama": "Evidence Completeness",
+            "state": "available",
+            "evidence_kind": "derived",
+            "baseline": "no_baseline",
+            "value": "0.00"
+          }
+        ]
+      }
+    },
+    {
+      "step": "16. KPI cakupan demo (sesi operator): state eksplisit, bukan angka karangan",
+      "ok": true,
+      "at": "2026-10-27T15:36:25.781430+00:00",
+      "detail": {
+        "data_mode": "demo",
+        "demo_session_id": "6e07c2bd-7be3-43e3-8fee-333e8fe11560",
+        "metrics": [
+          {
+            "nama": "Meal Continuity Rate",
+            "state": "no_data",
+            "evidence_kind": "derived",
+            "baseline": "no_baseline",
+            "value": null
+          },
+          {
+            "nama": "Avoidable Food Loss",
+            "state": "no_data",
+            "evidence_kind": "recorded_fact",
+            "baseline": "no_baseline",
+            "value": null
+          },
+          {
+            "nama": "Regional Imbalance Resolution Rate",
+            "state": "no_data",
+            "evidence_kind": "derived",
+            "baseline": "no_baseline",
+            "value": null
+          },
+          {
+            "nama": "Safe Delivered Cost",
+            "state": "no_data",
+            "evidence_kind": "derived",
+            "baseline": "no_baseline",
+            "value": null
+          },
+          {
+            "nama": "Procurement Price Deviation",
+            "state": "no_data",
+            "evidence_kind": "derived",
+            "baseline": "no_baseline",
+            "value": null
+          },
+          {
+            "nama": "Decision Time",
+            "state": "no_data",
+            "evidence_kind": "recorded_fact",
+            "baseline": "no_baseline",
+            "value": null
+          },
+          {
+            "nama": "Evidence Completeness",
+            "state": "no_data",
+            "evidence_kind": "derived",
+            "baseline": "no_baseline",
+            "value": null
+          }
+        ],
+        "catatan": "Seluruh metrik `no_data` karena baris dataset template dimiliki sesi sentinel ce7a0000-0000-4000-8000-000000000001, bukan sesi operator 6e07c2bd-7be3-43e3-8fee-333e8fe11560 \u2014 temuan F12-KPI-1."
+      }
+    },
+    {
+      "step": "N1. batch on_hold (bukti suhu kurang): ceklis boleh dicatat, PENERIMAAN ditolak",
+      "ok": false,
+      "at": "2026-10-27T15:36:26.762852+00:00",
+      "detail": {
+        "batch": "aed05610-4f3c-5902-98e5-2f505370735c",
+        "alasan_evaluator": [
+          "safety_needs_verification",
+          "temperature_evidence_incomplete"
+        ],
+        "receipt_http": 403,
+        "approve_http": 0,
+        "approve_detail": null
+      }
+    },
+    {
+      "step": "N2. bukti suhu tidak lengkap/basi \u2192 safety TIDAK 'pass'",
+      "ok": true,
+      "at": "2026-10-27T15:36:26.780212+00:00",
+      "detail": {
+        "batch": "aed05610-4f3c-5902-98e5-2f505370735c",
+        "safety": "NEEDS_VERIFICATION",
+        "reasons": [
+          "malformed entry pada index 1",
+          "malformed entry pada index 2",
+          "sample kurang dari 2 (1)",
+          "2 entri log tidak terbaca"
+        ]
+      }
+    },
+    {
+      "step": "N3. batch kedaluwarsa tidak bisa diterima",
+      "ok": true,
+      "at": "2026-10-27T15:36:26.796689+00:00",
+      "detail": {
+        "batch": "45268526-1af2-5879-806f-2d62bd77f583",
+        "usable_until": "2026-10-27T14:33:10.393058+00:00",
+        "alasan_evaluator": [
+          "batch_expired",
+          "safety_fail",
+          "freshness_fail"
+        ],
+        "receipt_http": 409,
+        "approve_http": 0,
+        "detail": null
+      }
+    },
+    {
+      "step": "N4. batch on_hold + dua approval \u2192 execute tetap ditolak",
+      "ok": true,
+      "at": "2026-10-27T15:36:27.613139+00:00",
+      "detail": {
+        "decision_id": "61628b3d-27c3-5953-9661-0a294e8acadb",
+        "can_execute": false,
+        "blocking_reasons": [
+          "supplier_unknown: keputusan lama perlu binding batch eksplisit",
+          "safety revalidation gagal: batch sumber kini FAIL"
+        ],
+        "http": 409,
+        "detail": "supplier_unknown: keputusan lama perlu binding batch eksplisit"
+      }
+    },
+    {
+      "step": "N5. ganti mode: sesi lama ditutup, sesi baru dibuat, mode berbeda",
+      "ok": true,
+      "at": "2026-10-27T15:37:28.679553+00:00",
+      "detail": {
+        "sesi_lama": "6e07c2bd-7be3-43e3-8fee-333e8fe11560",
+        "mode_sesi_lama": "realtime",
+        "status_sesi_lama": "expired",
+        "sesi_baru": "ab31e9fe-fa5a-4c48-936b-d118aae2551f",
+        "mode_sesi_baru": "replay",
+        "keputusan_milik_sesi_lama_sebelum": "0",
+        "catatan": "Tombol Muat Demo = bangun ulang dataset template; baris template dimiliki sesi sentinel `cetakan`, jadi isolasi antar-sesi dibuktikan oleh backend/tests/test_session_modes.py (butir 4), bukan oleh tombol ini."
+      }
+    }
+  ]
+}

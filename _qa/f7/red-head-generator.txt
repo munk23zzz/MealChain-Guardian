@@ -1,0 +1,47 @@
+
+==================================== ERRORS ====================================
+______________ ERROR collecting tests/test_scenario_generator.py _______________
+ImportError while importing test module '/app/tests/test_scenario_generator.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tests/test_scenario_generator.py:29: in <module>
+    from app.services import scenario_generator as gen
+E   ImportError: cannot import name 'scenario_generator' from 'app.services' (unknown location)
+______________ ERROR collecting tests/test_realtime_demo_flow.py _______________
+ImportError while importing test module '/app/tests/test_realtime_demo_flow.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tests/test_realtime_demo_flow.py:33: in <module>
+    from app.api.demo import DEMO_CASES, _seed_demo_cases
+app/api/demo.py:72: in <module>
+    from app.services.event1_orchestrator import run_event1
+app/services/event1_orchestrator.py:31: in <module>
+    from app.services import recommendation_service as rs
+app/services/recommendation_service.py:79: in <module>
+    from app.services.decision_time import evaluation_clock
+E   ImportError: cannot import name 'evaluation_clock' from 'app.services.decision_time' (/app/app/services/decision_time.py)
+______________ ERROR collecting tests/test_commodity_expansion.py ______________
+ImportError while importing test module '/app/tests/test_commodity_expansion.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tests/test_commodity_expansion.py:39: in <module>
+    from app.api.demo import _seed_demo_cases
+app/api/demo.py:72: in <module>
+    from app.services.event1_orchestrator import run_event1
+app/services/event1_orchestrator.py:31: in <module>
+    from app.services import recommendation_service as rs
+app/services/recommendation_service.py:79: in <module>
+    from app.services.decision_time import evaluation_clock
+E   ImportError: cannot import name 'evaluation_clock' from 'app.services.decision_time' (/app/app/services/decision_time.py)
+=========================== short test summary info ============================
+ERROR tests/test_scenario_generator.py
+ERROR tests/test_realtime_demo_flow.py
+ERROR tests/test_commodity_expansion.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 3 errors during collection !!!!!!!!!!!!!!!!!!!!
+3 errors in 6.84s

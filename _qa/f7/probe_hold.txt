@@ -1,0 +1,21 @@
+ Container mealchain-guardian-backend-run-2017306d6a83 Creating 
+ Container mealchain-guardian-backend-run-2017306d6a83 Created 
+seed: mode=replay anchor=2026-10-08T12:00:00+00:00 kasus=7 sumber_suhu=simulated_replay
+
+[wortel-coldchain-sah] outcome=usable status=pending_approval
+  can_approve=True can_execute=False valid=True sisa=28799s
+  safety={'worst_status': 'pass', 'blocked': False, 'batches_checked': 1, 'reason': None, 'batch_ids': ['8cc58ad3-2a1f-55b0-92e1-c706cdaf047b']}
+  blocking=['approval belum memenuhi requirement (missing/rejected)']
+  supplier=CV Puncak Sayur Sejahtera sdc=8209887.79
+
+[wortel-coldchain-hold] outcome=on_hold status=pending_approval
+  can_approve=True can_execute=False valid=True sisa=28799s
+  safety={'worst_status': 'pass', 'blocked': False, 'batches_checked': 1, 'reason': None, 'batch_ids': ['8cc58ad3-2a1f-55b0-92e1-c706cdaf047b']}
+  blocking=['approval belum memenuhi requirement (missing/rejected)']
+  supplier=CV Puncak Sayur Sejahtera sdc=7442279.44
+
+[beras-ambient] outcome=usable status=pending_approval
+  can_approve=True can_execute=False valid=True sisa=28799s
+  safety={'worst_status': 'pass', 'blocked': False, 'batches_checked': 1, 'reason': None, 'batch_ids': ['2906512c-e0c1-5d1c-b3f9-6ff2c6abe4c7']}
+  blocking=['approval belum memenuhi requirement (missing/rejected)']
+  supplier=CV Beras Sari Bogor sdc=7693390.49

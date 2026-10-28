@@ -1,0 +1,570 @@
+FFFFFFF.....FFF.FFF.FFFFFFF.                                             [100%]
+=================================== FAILURES ===================================
+_______________________ test_mode_tidak_sah_ditolak_422 ________________________
+
+tanpa_sesi_aktif = None
+
+    def test_mode_tidak_sah_ditolak_422(tanpa_sesi_aktif):
+        with TestClient(app) as client:
+>           head = _login(client)
+
+tests/test_session_modes.py:224: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1bf5f86ba0>
+
+    def _login(client) -> dict:
+        resp = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_session_modes.py:66: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+[conftest] menyegarkan aktivitas demo di awal sesi
+_________________ test_demo_session_tidak_dikenal_ditolak_404 __________________
+
+tanpa_sesi_aktif = None
+
+    def test_demo_session_tidak_dikenal_ditolak_404(tanpa_sesi_aktif):
+        with TestClient(app) as client:
+>           head = _login(client)
+
+tests/test_session_modes.py:239: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1bf0186fc0>
+
+    def _login(client) -> dict:
+        resp = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_session_modes.py:66: AssertionError
+____________________ test_seed_replay_memakai_jangkar_kanon ____________________
+
+tanpa_sesi_aktif = None
+
+    def test_seed_replay_memakai_jangkar_kanon(tanpa_sesi_aktif):
+        sid = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
+        try:
+            with TestClient(app) as client:
+>               head = _login(client)
+
+tests/test_session_modes.py:255: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1bf0187fb0>
+
+    def _login(client) -> dict:
+        resp = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_session_modes.py:66: AssertionError
+_________ test_seed_realtime_membawa_anchor_dan_versi_dataset_sendiri __________
+
+tanpa_sesi_aktif = None
+
+    def test_seed_realtime_membawa_anchor_dan_versi_dataset_sendiri(tanpa_sesi_aktif):
+        anchor = datetime.now(UTC).replace(microsecond=0)
+        sid = _buat_sesi(
+            mode="realtime",
+            anchor=anchor,
+            dataset_version=decision_time.dataset_version_untuk("realtime", anchor),
+        )
+        try:
+            with TestClient(app) as client:
+>               head = _login(client)
+
+tests/test_session_modes.py:281: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1bf0186420>
+
+    def _login(client) -> dict:
+        resp = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_session_modes.py:66: AssertionError
+__________________ test_mode_sesi_harus_cocok_dengan_payload ___________________
+
+tanpa_sesi_aktif = None
+
+    def test_mode_sesi_harus_cocok_dengan_payload(tanpa_sesi_aktif):
+        sid = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
+        try:
+            with TestClient(app) as client:
+>               head = _login(client)
+
+tests/test_session_modes.py:309: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1bf19f2090>
+
+    def _login(client) -> dict:
+        resp = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_session_modes.py:66: AssertionError
+____________ test_sesi_kedua_tidak_menimpa_kepemilikan_sesi_pertama ____________
+
+tanpa_sesi_aktif = None
+
+    def test_sesi_kedua_tidak_menimpa_kepemilikan_sesi_pertama(tanpa_sesi_aktif):
+        sid_a = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
+        sid_b: uuid.UUID | None = None
+        try:
+            with TestClient(app) as client:
+>               head = _login(client)
+
+tests/test_session_modes.py:330: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1bf151d340>
+
+    def _login(client) -> dict:
+        resp = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_session_modes.py:66: AssertionError
+___________ test_reset_sesi_pertama_tidak_menghapus_data_sesi_kedua ____________
+
+tanpa_sesi_aktif = None
+
+    def test_reset_sesi_pertama_tidak_menghapus_data_sesi_kedua(tanpa_sesi_aktif):
+        sid_a = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
+        sid_b: uuid.UUID | None = None
+        try:
+            with TestClient(app) as client:
+>               head = _login(client)
+
+tests/test_session_modes.py:371: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1bf016e810>
+
+    def _login(client) -> dict:
+        resp = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_session_modes.py:66: AssertionError
+______________ test_purge_session_hanya_menghapus_milik_sesi_itu _______________
+
+tanpa_sesi_aktif = None
+
+    def test_purge_session_hanya_menghapus_milik_sesi_itu(tanpa_sesi_aktif):
+        sid_a = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
+        sid_b: uuid.UUID | None = None
+        try:
+            with TestClient(app) as client:
+>               head = _login(client)
+
+tests/test_session_modes.py:488: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1bf016ecf0>
+
+    def _login(client) -> dict:
+        resp = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_session_modes.py:66: AssertionError
+________________ test_get_session_memuat_mode_anchor_dan_versi _________________
+
+tanpa_sesi_aktif = None
+
+    def test_get_session_memuat_mode_anchor_dan_versi(tanpa_sesi_aktif):
+        anchor = datetime.now(UTC).replace(microsecond=0)
+        sid = _buat_sesi(
+            mode="realtime",
+            anchor=anchor,
+            dataset_version=decision_time.dataset_version_untuk("realtime", anchor),
+            status="active",
+        )
+        try:
+            with TestClient(app) as client:
+>               head = _login(client)
+
+tests/test_session_modes.py:544: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1bf19f39e0>
+
+    def _login(client) -> dict:
+        resp = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_session_modes.py:66: AssertionError
+___________________ test_fakta_settlement_membawa_sesi_induk ___________________
+
+tanpa_sesi_aktif = None
+
+    def test_fakta_settlement_membawa_sesi_induk(tanpa_sesi_aktif):
+        """PO + fakta KPI mewarisi `demo_session_id` dari induknya, bukan sesi aktif."""
+        sid = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
+        try:
+            with TestClient(app) as client:
+>               head = _login(client)
+
+tests/test_session_modes.py:565: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1bf0184a10>
+
+    def _login(client) -> dict:
+        resp = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_session_modes.py:66: AssertionError
+_____________________ test_event1_endpoint_meneruskan_sesi _____________________
+
+tanpa_sesi_aktif = None
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7b1bf19f11f0>
+
+    def test_event1_endpoint_meneruskan_sesi(tanpa_sesi_aktif, monkeypatch):
+        """`POST /demo/event1` meneruskan sesi ke orkestrator, bukan membuangnya."""
+        sid = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
+        dipanggil: dict = {}
+    
+        def _fake(commodity, target_location, **kwargs):
+            dipanggil.update(
+                commodity=commodity, target_location=target_location, **kwargs
+            )
+            return {
+                "decision_id": "00000000-0000-0000-0000-0000000000f2",
+                "detect": {"commodity": commodity},
+                "verifier": {"verdict": "PASS"},
+                "forecast": {"forecast_qty_kg": None},
+                "supervisor": {"status": "fallback", "summary": "uji", "attempts": []},
+                "mode": "regional_balance",
+                "suppliers": {"candidates": [], "ranked": [], "chosen": None},
+                "decision_snapshot": {"status": "proposed", "approved": False},
+                "trace_steps": ["DETECT", "VERIFY", "TRACE", "PREDICT", "OPTIMIZE", "DECIDE"],
+            }
+    
+        monkeypatch.setattr("app.api.demo.run_event1", _fake)
+        try:
+            with TestClient(app) as client:
+>               head = _login(client)
+
+tests/test_session_modes.py:734: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1bf01fb860>
+
+    def _login(client) -> dict:
+        resp = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_session_modes.py:66: AssertionError
+________________________ test_agent_run_meneruskan_sesi ________________________
+
+tanpa_sesi_aktif = None
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7b1bf01a2390>
+
+    def test_agent_run_meneruskan_sesi(tanpa_sesi_aktif, monkeypatch):
+        """`POST /demo/agent/run` meneruskan sesi ke orkestrator pengadaan.
+    
+        Endpoint ini menulis Decision lewat jalur yang berbeda (`supplier_procurement`),
+        jadi propagasi harus diuji di seam-nya sendiri — bukan diasumsikan ikut
+        terbawa dari jalur seed.
+        """
+        sid = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
+        dipanggil: dict = {}
+    
+        def _fake(commodity, target_location, **kwargs):
+            dipanggil.update(
+                commodity=commodity, target_location=target_location, **kwargs
+            )
+            return {
+                "decision_id": "00000000-0000-0000-0000-0000000000f3",
+                "detect": {"commodity": commodity},
+                "verifier": {"verdict": "PASS"},
+                "forecast": {"forecast_qty_kg": None},
+                "supervisor": {"status": "fallback", "summary": "uji", "attempts": []},
+                "mode": "supplier_procurement",
+                "suppliers": {"candidates": [], "ranked": [], "chosen": None},
+                "decision_snapshot": {"status": "proposed", "approved": False},
+                "trace_steps": ["DETECT", "VERIFY", "TRACE", "PREDICT", "OPTIMIZE",
+                                "DECIDE", "SUPERVISE"],
+            }
+    
+        monkeypatch.setattr("app.api.demo.run_supplier_procurement", _fake)
+        try:
+            with TestClient(app) as client:
+>               head = _login(client)
+
+tests/test_session_modes.py:782: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1bf01a3350>
+
+    def _login(client) -> dict:
+        resp = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_session_modes.py:66: AssertionError
+________________ test_agent_run_sesi_tidak_dikenal_ditolak_404 _________________
+
+tanpa_sesi_aktif = None
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7b1beb75ba70>
+
+    def test_agent_run_sesi_tidak_dikenal_ditolak_404(tanpa_sesi_aktif, monkeypatch):
+        """Sesi yang tidak ada dijawab 404 — bukan diam-diam memakai sesi aktif."""
+    
+        def _fake(*_a, **_kw):  # pragma: no cover - tidak boleh terpanggil
+            raise AssertionError("orkestrator dipanggil padahal sesinya tidak ada")
+    
+        monkeypatch.setattr("app.api.demo.run_supplier_procurement", _fake)
+        with TestClient(app) as client:
+>           head = _login(client)
+
+tests/test_session_modes.py:804: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1beb75b770>
+
+    def _login(client) -> dict:
+        resp = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_session_modes.py:66: AssertionError
+_______________________ test_seed_idempotent_dan_lengkap _______________________
+
+    def test_seed_idempotent_dan_lengkap():
+        engine = _db()
+        try:
+            with TestClient(app) as c:
+                # Login user SPPG existing dari seed_data (punya location).
+                email = "sppg.head@demo.local"
+                with engine.begin() as conn:
+                    row = conn.execute(
+                        text("SELECT count(*) FROM users WHERE email = :e"),
+                        {"e": email},
+                    ).scalar()
+                if row:
+>                   tok = c.post(
+                        "/auth/login",
+                        json={"email": email, "password": "Demo#SPPG2026"},
+                    ).json()["access_token"]
+E                   KeyError: 'access_token'
+
+tests/test_demo_seed.py:35: KeyError
+__________________ test_seed_dari_bandung_menargetkan_bandung __________________
+
+client = <starlette.testclient.TestClient object at 0x7b1beb73e540>
+
+    def test_seed_dari_bandung_menargetkan_bandung(client):
+        kepala = _mk_user("sppg_head", "Bandung")
+        try:
+            resp = client.post(
+>               "/demo/seed", json={"force": True}, headers=_login(client, kepala)
+            )
+
+tests/test_demo_seed_per_kota.py:123: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1beb73e540>
+user = {'email': 'sppg_head-9bd8acee@seed-kota.local', 'password': 'TestPass#2026'}
+
+    def _login(client: TestClient, user: dict) -> dict:
+        resp = client.post(
+            "/auth/login", json={"email": user["email"], "password": user["password"]}
+        )
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_demo_seed_per_kota.py:79: AssertionError
+____________________ test_keputusan_ditolak_punya_pencatat _____________________
+
+client = <starlette.testclient.TestClient object at 0x7b1beb75b2c0>
+
+    def test_keputusan_ditolak_punya_pencatat(client):
+        """Kasus `rejected` hasil semai wajib punya baris `approvals(approved=false)`.
+    
+        Regresi 27 Okt 2026: penyemai menulis `rejection_reason` + bukti tetapi tidak
+        menulis baris approval negatif, sehingga invarian "keputusan ditolak tanpa
+        pencatat" gagal (12 baris) dan jejak penolakan tidak bisa diaudit.
+        """
+        kepala = _mk_user("sppg_head", "Bandung")
+        try:
+            resp = client.post(
+>               "/demo/seed", json={"force": True}, headers=_login(client, kepala)
+            )
+
+tests/test_demo_seed_per_kota.py:145: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1beb75b2c0>
+user = {'email': 'sppg_head-f1e741fb@seed-kota.local', 'password': 'TestPass#2026'}
+
+    def _login(client: TestClient, user: dict) -> dict:
+        resp = client.post(
+            "/auth/login", json={"email": user["email"], "password": user["password"]}
+        )
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_demo_seed_per_kota.py:79: AssertionError
+_________________________ test_seed_idempoten_per_kota _________________________
+
+client = <starlette.testclient.TestClient object at 0x7b1beb78ed50>
+
+    def test_seed_idempoten_per_kota(client):
+        kepala = _mk_user("sppg_head", "Bandung")
+        try:
+>           headers = _login(client, kepala)
+
+tests/test_demo_seed_per_kota.py:178: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1beb78ed50>
+user = {'email': 'sppg_head-14413689@seed-kota.local', 'password': 'TestPass#2026'}
+
+    def _login(client: TestClient, user: dict) -> dict:
+        resp = client.post(
+            "/auth/login", json={"email": user["email"], "password": user["password"]}
+        )
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_demo_seed_per_kota.py:79: AssertionError
+_______________ test_force_bandung_tidak_menghapus_kasus_jakarta _______________
+
+client = <starlette.testclient.TestClient object at 0x7b1beb78ea50>
+
+    def test_force_bandung_tidak_menghapus_kasus_jakarta(client):
+        jakarta = _mk_user("sppg_head", "Jakarta")
+        bandung = _mk_user("sppg_head", "Bandung")
+        try:
+            # Pastikan Jakarta punya kasus dulu — jangan bergantung pada sisa run lain.
+>           client.post("/demo/seed", json={"force": True}, headers=_login(client, jakarta))
+
+tests/test_demo_seed_per_kota.py:196: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1beb78ea50>
+user = {'email': 'sppg_head-3402a462@seed-kota.local', 'password': 'TestPass#2026'}
+
+    def _login(client: TestClient, user: dict) -> dict:
+        resp = client.post(
+            "/auth/login", json={"email": user["email"], "password": user["password"]}
+        )
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_demo_seed_per_kota.py:79: AssertionError
+______________________ test_ahli_gizi_kota_boleh_menyemai ______________________
+
+client = <starlette.testclient.TestClient object at 0x7b1beb704fe0>
+
+    def test_ahli_gizi_kota_boleh_menyemai(client):
+        # Panel Demo Control memang untuk dua peran SPPG.
+        gizi = _mk_user("sppg_nutritionist", "Surabaya")
+        try:
+            resp = client.post(
+>               "/demo/seed", json={"force": True}, headers=_login(client, gizi)
+            )
+
+tests/test_demo_seed_per_kota.py:216: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7b1beb704fe0>
+user = {'email': 'sppg_nutritionist-24fd6fe8@seed-kota.local', 'password': 'TestPass#2026'}
+
+    def _login(client: TestClient, user: dict) -> dict:
+        resp = client.post(
+            "/auth/login", json={"email": user["email"], "password": user["password"]}
+        )
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_demo_seed_per_kota.py:79: AssertionError
+________ test_kasus_demo_punya_binding_pemasok_yang_cocok_dengan_batch _________
+
+    def test_kasus_demo_punya_binding_pemasok_yang_cocok_dengan_batch() -> None:
+        engine = _db()
+        try:
+            with TestClient(app) as c:
+                tok = c.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+>               assert tok.status_code == 200, tok.text
+E               AssertionError: {"detail":"JWT_SECRET belum diset"}
+E               assert 503 == 200
+E                +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_demo_seed_binding.py:55: AssertionError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_session_modes.py::test_mode_tidak_sah_ditolak_422 - Asserti...
+FAILED tests/test_session_modes.py::test_demo_session_tidak_dikenal_ditolak_404
+FAILED tests/test_session_modes.py::test_seed_replay_memakai_jangkar_kanon - ...
+FAILED tests/test_session_modes.py::test_seed_realtime_membawa_anchor_dan_versi_dataset_sendiri
+FAILED tests/test_session_modes.py::test_mode_sesi_harus_cocok_dengan_payload
+FAILED tests/test_session_modes.py::test_sesi_kedua_tidak_menimpa_kepemilikan_sesi_pertama
+FAILED tests/test_session_modes.py::test_reset_sesi_pertama_tidak_menghapus_data_sesi_kedua
+FAILED tests/test_session_modes.py::test_purge_session_hanya_menghapus_milik_sesi_itu
+FAILED tests/test_session_modes.py::test_get_session_memuat_mode_anchor_dan_versi
+FAILED tests/test_session_modes.py::test_fakta_settlement_membawa_sesi_induk
+FAILED tests/test_session_modes.py::test_event1_endpoint_meneruskan_sesi - As...
+FAILED tests/test_session_modes.py::test_agent_run_meneruskan_sesi - Assertio...
+FAILED tests/test_session_modes.py::test_agent_run_sesi_tidak_dikenal_ditolak_404
+FAILED tests/test_demo_seed.py::test_seed_idempotent_dan_lengkap - KeyError: ...
+FAILED tests/test_demo_seed_per_kota.py::test_seed_dari_bandung_menargetkan_bandung
+FAILED tests/test_demo_seed_per_kota.py::test_keputusan_ditolak_punya_pencatat
+FAILED tests/test_demo_seed_per_kota.py::test_seed_idempoten_per_kota - Asser...
+FAILED tests/test_demo_seed_per_kota.py::test_force_bandung_tidak_menghapus_kasus_jakarta
+FAILED tests/test_demo_seed_per_kota.py::test_ahli_gizi_kota_boleh_menyemai
+FAILED tests/test_demo_seed_binding.py::test_kasus_demo_punya_binding_pemasok_yang_cocok_dengan_batch
+20 failed, 8 passed, 1 warning in 28.79s

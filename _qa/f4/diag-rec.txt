@@ -1,0 +1,68 @@
+F..FF....                                                                [100%]
+=================================== FAILURES ===================================
+__________ test_permintaan_dan_pasokan_tidak_memakai_baris_masa_depan __________
+
+    def test_permintaan_dan_pasokan_tidak_memakai_baris_masa_depan():
+        sekarang = datetime.now(UTC)
+        fakta = _facts(None)
+        supply, demand = fakta[0], fakta[1]
+    
+        pasokan_batas = _baris_terbaru("supply_records", "quantity_kg", sekarang, "Jakarta", "telur")
+        minta_batas = _baris_terbaru("demand_records", "quantity_kg", sekarang, "Jakarta", "telur")
+>       assert supply[("Jakarta", "telur")] == pasokan_batas
+E       AssertionError: assert Decimal('300.00') == Decimal('289.43')
+
+tests/test_recommendation_as_of.py:75: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+____ test_fetch_excludes_later_harvests_without_advancing_as_of[live-race] _____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d16cb5b1820>
+explicit_as_of = False
+
+    @pytest.mark.parametrize("explicit_as_of", [False, True], ids=["live-race", "historical"])
+    def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, explicit_as_of):
+        engine = create_engine(
+            DSN_SYNC
+        )
+    
+        class FrozenClock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return AS_OF + timedelta(days=1) if explicit_as_of else AS_OF
+    
+>       monkeypatch.setattr(rs, "datetime", FrozenClock)
+E       AttributeError: <module 'app.services.recommendation_service' from '/app/app/services/recommendation_service.py'> has no attribute 'datetime'
+
+tests/test_recommendation_snapshot.py:50: AttributeError
+____ test_fetch_excludes_later_harvests_without_advancing_as_of[historical] ____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7d16c54cf1a0>
+explicit_as_of = True
+
+    @pytest.mark.parametrize("explicit_as_of", [False, True], ids=["live-race", "historical"])
+    def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, explicit_as_of):
+        engine = create_engine(
+            DSN_SYNC
+        )
+    
+        class FrozenClock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return AS_OF + timedelta(days=1) if explicit_as_of else AS_OF
+    
+>       monkeypatch.setattr(rs, "datetime", FrozenClock)
+E       AttributeError: <module 'app.services.recommendation_service' from '/app/app/services/recommendation_service.py'> has no attribute 'datetime'
+
+tests/test_recommendation_snapshot.py:50: AttributeError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_recommendation_as_of.py::test_permintaan_dan_pasokan_tidak_memakai_baris_masa_depan
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[live-race]
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[historical]
+3 failed, 6 passed, 1 warning in 20.71s

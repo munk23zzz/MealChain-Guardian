@@ -1,0 +1,751 @@
+........................................................................ [  3%]
+.................................................ss..................... [  6%]
+........................................................................ [ 10%]
+........................................................................ [ 13%]
+.......................................ss.................s.FF.......... [ 16%]
+..........................................s............................. [ 20%]
+........................................................................ [ 23%]
+...........F............................................................ [ 26%]
+........................................................................ [ 30%]
+..................s..................................................... [ 33%]
+........................................................................ [ 36%]
+............FFF......................................................... [ 40%]
+...............ssssssssssss...........................F.F.....sss....... [ 43%]
+.......................FFFFFFFFFFFFF............FFF..................... [ 46%]
+..............F..F...................................................... [ 50%]
+...................................................................FFF.. [ 53%]
+........................................F........F.....F..F............. [ 56%]
+....F................................................................... [ 60%]
+....................................................................F... [ 63%]
+...................................................s.................... [ 66%]
+.........................F.F......................................ss.... [ 70%]
+.......FF............................................................... [ 73%]
+......................FFFFF............................................. [ 76%]
+......................sss............................................... [ 80%]
+........................................................................ [ 83%]
+........................................................................ [ 86%]
+..................................FFFF.................................. [ 90%]
+...........s............................................................ [ 93%]
+........................................................................ [ 96%]
+..................................................................s..    [100%]
+=================================== FAILURES ===================================
+___________________ test_recommend_endpoint_ranks_candidates ___________________
+tests/test_api_decision_intelligence.py:180: in test_recommend_endpoint_ranks_candidates
+    assert telur, "Cianjur→Jakarta telur wajib ada"
+E   AssertionError: Cianjur→Jakarta telur wajib ada
+E   assert []
+___________________ test_decisions_persist_and_get_validity ____________________
+tests/test_api_decision_intelligence.py:193: in test_decisions_persist_and_get_validity
+    assert top is not None, "seed wajib punya kandidat menuju Jakarta"
+E   AssertionError: seed wajib punya kandidat menuju Jakarta
+E   assert None is not None
+______________ test_kasus_skrip_punya_bukti_termasuk_yang_ditolak ______________
+tests/test_bukti_dan_draf_demo.py:58: in test_kasus_skrip_punya_bukti_termasuk_yang_ditolak
+    assert baris == [], f"kasus skrip tanpa bukti: {baris}"
+E   AssertionError: kasus skrip tanpa bukti: [('d801c730', 'supplier_procurement', 'pending_approval', 'rejection-loop-kuota')]
+E   assert [('d801c730',...-loop-kuota')] == []
+E     
+E     Left contains one more item: ('d801c730', 'supplier_procurement', 'pending_approval', 'rejection-loop-kuota')
+E     Use -v to get more diff
+_____________ test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan _____________
+tests/test_demo_cases_procurement_binding.py:158: in test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan
+    assert k["batches"], (
+E   AssertionError: rejection-loop-kuota b28f18ca: pengadaan tanpa binding batch — layar akan menampilkan 'pemasok tidak dikenal'
+E   assert []
+_______________ test_binding_pengadaan_memakai_pemasok_keputusan _______________
+tests/test_demo_cases_procurement_binding.py:172: in test_binding_pengadaan_memakai_pemasok_keputusan
+    assert k["binding_supplier"] == str(k["supplier"]), (
+E   AssertionError: rejection-loop-kuota b28f18ca: binding menunjuk pemasok None, kolom keputusan 6fbf0a04-4499-4d95-91e6-b420eec639b9
+E   assert None == '6fbf0a04-4499-4d95-91e6-b420eec639b9'
+E    +  where '6fbf0a04-4499-4d95-91e6-b420eec639b9' = str(UUID('6fbf0a04-4499-4d95-91e6-b420eec639b9'))
+____________ test_kasus_pengadaan_lolos_resolve_binding_dan_safety _____________
+tests/test_demo_cases_procurement_binding.py:189: in test_kasus_pengadaan_lolos_resolve_binding_dan_safety
+    assert hasil["blocked"] is False, (
+E   AssertionError: rejection-loop-kuota b28f18ca: safety gate memblokir karena batch acuan tidak layak — kasus demo tidak bisa dieksekusi
+E   assert True is False
+_______________ test_hapus_kasus_demo_menaikkan_generasi_ledger ________________
+tests/test_demo_template_provenance_ledger.py:218: in test_hapus_kasus_demo_menaikkan_generasi_ledger
+    _jalankan(_hapus)
+tests/test_demo_template_provenance_ledger.py:38: in _jalankan
+    return asyncio.run(_main())
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+tests/test_demo_template_provenance_ledger.py:34: in _main
+    return await fn(db)
+tests/test_demo_template_provenance_ledger.py:204: in _hapus
+    assert tersisa is None, (
+E   AssertionError: prasyarat: keputusan berblok harus ikut terhapus oleh `_seed_demo_cases(force=True)` — kalau tidak, generasi memang tidak akan naik
+E   assert UUID('19d82b83-0e4d-5d52-9df7-edb5e33a7795') is None
+________________ test_memanggil_penyemai_dengan_opsi_yang_benar ________________
+tests/test_demo_template_reset.py:118: in test_memanggil_penyemai_dengan_opsi_yang_benar
+    hasil = asyncio.run(skenario())
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+tests/test_demo_template_reset.py:116: in skenario
+    return await reset.bangun_ulang(DbPalsu())  # type: ignore[arg-type]
+app/services/demo_template_reset.py:87: in bangun_ulang
+    sesi_aktif = await sesi_layanan.aktif(db)
+app/services/demo_session.py:279: in aktif
+    sesi = await _sesi_aktif_terakhir(db)
+app/services/demo_session.py:214: in _sesi_aktif_terakhir
+    hasil = await db.execute(
+E   AttributeError: 'DbPalsu' object has no attribute 'execute'
+_______________ test_event1_e2e_propose_approve_execute_mock_sap _______________
+tests/test_event1_e2e_acceptance.py:63: in test_event1_e2e_propose_approve_execute_mock_sap
+    decision_id, outcome = _event1_decision_id()
+tests/test_event1_e2e_acceptance.py:37: in _event1_decision_id
+    outcome = run_event1(
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+__________________ test_event1_e2e_safety_fail_guard_via_api ___________________
+tests/test_event1_e2e_acceptance.py:134: in test_event1_e2e_safety_fail_guard_via_api
+    decision_id, outcome = _event1_decision_id(
+tests/test_event1_e2e_acceptance.py:37: in _event1_decision_id
+    outcome = run_event1(
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+_______________ test_event1_e2e_approval_boundary_blocked_paths ________________
+tests/test_event1_e2e_acceptance.py:153: in test_event1_e2e_approval_boundary_blocked_paths
+    decision_id, _ = _event1_decision_id()
+tests/test_event1_e2e_acceptance.py:37: in _event1_decision_id
+    outcome = run_event1(
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+______________ test_event1_e2e_verifier_unavailable_dual_approval ______________
+tests/test_event1_e2e_acceptance.py:210: in test_event1_e2e_verifier_unavailable_dual_approval
+    decision_id, _ = _event1_decision_id()
+tests/test_event1_e2e_acceptance.py:37: in _event1_decision_id
+    outcome = run_event1(
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+______________ test_event1_unverified_full_flow_persists_proposed ______________
+tests/test_event1_supervisor_flow.py:92: in test_event1_unverified_full_flow_persists_proposed
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+_________ test_event1_unverified_persists_agent_traces_with_real_steps _________
+tests/test_event1_supervisor_flow.py:148: in test_event1_unverified_persists_agent_traces_with_real_steps
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+______________________ test_event1_expiry_enforced_later _______________________
+tests/test_event1_supervisor_flow.py:175: in test_event1_expiry_enforced_later
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+___________ test_event1_consistent_verdict_records_verifier_attempt ____________
+tests/test_event1_supervisor_flow.py:200: in test_event1_consistent_verdict_records_verifier_attempt
+    outcome = run_event1(
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+___________________ test_event1_safety_fail_never_consistent ___________________
+tests/test_event1_supervisor_flow.py:229: in test_event1_safety_fail_never_consistent
+    outcome = run_event1(
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+________________________ test_event1_no_auto_execution _________________________
+tests/test_event1_supervisor_flow.py:251: in test_event1_no_auto_execution
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+_________________ test_event1_kpi_traceable_to_backend_outputs _________________
+tests/test_event1_supervisor_flow.py:273: in test_event1_kpi_traceable_to_backend_outputs
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+_______________ test_memory_gagal_tidak_mengubah_angka_keputusan _______________
+tests/test_event1_supervisor_flow.py:315: in test_memory_gagal_tidak_mengubah_angka_keputusan
+    outcome = eo.run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+________________ test_memory_mati_tidak_menambah_langkah_learn _________________
+tests/test_event1_supervisor_flow.py:340: in test_memory_mati_tidak_menambah_langkah_learn
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+____________________ test_api_safety_happy_path_revised_201 ____________________
+tests/test_event3_api.py:223: in test_api_safety_happy_path_revised_201
+    assert resp.status_code == 201, resp.text
+E   AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E   assert 409 == 201
+E    +  where 409 = <Response [409 Conflict]>.status_code
+__________________ test_api_safety_replay_same_key_idempotent __________________
+tests/test_event3_api.py:258: in test_api_safety_replay_same_key_idempotent
+    assert r1.status_code == 201, r1.text
+E   AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E   assert 409 == 201
+E    +  where 409 = <Response [409 Conflict]>.status_code
+______________ test_api_safety_conflict_same_key_other_batch_409 _______________
+tests/test_event3_api.py:290: in test_api_safety_conflict_same_key_other_batch_409
+    assert r1.status_code == 201, r1.text
+E   AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E   assert 409 == 201
+E    +  where 409 = <Response [409 Conflict]>.status_code
+______________ test_event3_menulis_seluruh_bukti_dengan_penilaian ______________
+tests/test_evidence_consistency_wiring.py:129: in test_event3_menulis_seluruh_bukti_dengan_penilaian
+    assert resp.status_code == 201, resp.text
+E   AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E   assert 409 == 201
+E    +  where 409 = <Response [409 Conflict]>.status_code
+____________________ test_live_evidence_batch_ids_nonempty _____________________
+tests/test_evidence_live.py:45: in test_live_evidence_batch_ids_nonempty
+    top = _find("Cianjur", "Jakarta", "telur")
+tests/test_evidence_live.py:37: in _find
+    return next(
+E   StopIteration
+_______________ test_eksekusi_menulis_trace_act_dengan_nomor_po ________________
+tests/test_kpi_act_trace.py:147: in test_eksekusi_menulis_trace_act_dengan_nomor_po
+    decision_id, po_number, gizi_email = _run_execute_flow(client, head)
+tests/test_kpi_act_trace.py:99: in _run_execute_flow
+    decision_id = _event1_decision_id()
+tests/test_kpi_act_trace.py:68: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+_________________ test_eksekusi_yang_ditolak_tidak_menulis_act _________________
+tests/test_kpi_act_trace.py:169: in test_eksekusi_yang_ditolak_tidak_menulis_act
+    decision_id = _event1_decision_id()
+tests/test_kpi_act_trace.py:68: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+_________________ test_decision_time_tersedia_setelah_eksekusi _________________
+tests/test_kpi_act_trace.py:205: in test_decision_time_tersedia_setelah_eksekusi
+    decision_id, _po, gizi_email = _run_execute_flow(client, head)
+tests/test_kpi_act_trace.py:99: in _run_execute_flow
+    decision_id = _event1_decision_id()
+tests/test_kpi_act_trace.py:68: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+______________ test_penerimaan_bahan_tidak_menulis_porsi_tersaji _______________
+tests/test_kpi_provenance.py:265: in test_penerimaan_bahan_tidak_menulis_porsi_tersaji
+    assert hasil["proyeksi_porsi"] > 0
+E   assert 0 > 0
+______________ test_safe_delivered_cost_tersedia_setelah_eksekusi ______________
+tests/test_kpi_safe_delivered_cost.py:88: in test_safe_delivered_cost_tersedia_setelah_eksekusi
+    decision_id = run_event1(commodity="telur", target_location="Jakarta")["decision_id"]
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+___________ test_akun_aplikasi_bisa_membaca_dan_menulis_tabel_kerja ____________
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: in execute
+    raise ex.with_traceback(None)
+E   psycopg.errors.InsufficientPrivilege: permission denied for table decisions
+
+The above exception was the direct cause of the following exception:
+tests/test_least_privilege_app_role.py:110: in test_akun_aplikasi_bisa_membaca_dan_menulis_tabel_kerja
+    jumlah = conn.execute(text("SELECT count(*) FROM decisions")).scalar_one()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: in execute
+    raise ex.with_traceback(None)
+E   sqlalchemy.exc.ProgrammingError: (psycopg.errors.InsufficientPrivilege) permission denied for table decisions
+E   [SQL: SELECT count(*) FROM decisions]
+E   (Background on this error at: https://sqlalche.me/e/20/f405)
+_____________ test_akun_aplikasi_bisa_menambah_blok_lewat_service ______________
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:538: in _prepare_and_execute
+    self._rows = deque(await prepared_stmt.fetch(*parameters))
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:176: in fetch
+    data = await self.__bind_execute(args, 0, timeout)
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:241: in __bind_execute
+    data, status, _ = await self.__do_execute(
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:230: in __do_execute
+    return await executor(protocol)
+asyncpg/protocol/protocol.pyx:207: in bind_execute
+    ???
+E   asyncpg.exceptions.InsufficientPrivilegeError: permission denied for table ledger_blocks
+
+The above exception was the direct cause of the following exception:
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: in _handle_exception
+    raise translated_error from error
+E   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.InsufficientPrivilegeError'>: permission denied for table ledger_blocks
+
+The above exception was the direct cause of the following exception:
+tests/test_least_privilege_app_role.py:163: in test_akun_aplikasi_bisa_menambah_blok_lewat_service
+    hasil = asyncio.run(_main())
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+tests/test_least_privilege_app_role.py:151: in _main
+    hasil = await append_block(
+app/services/ledger_service.py:264: in append_block
+    await db.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py:461: in execute
+    result = await greenlet_spawn(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2362: in execute
+    return self._execute_internal(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2256: in _execute_internal
+    result = conn.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: in _handle_exception
+    raise translated_error from error
+E   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.InsufficientPrivilegeError'>: permission denied for table ledger_blocks
+E   [SQL: SELECT height, payload_hash FROM ledger_blocks ORDER BY height DESC LIMIT 1]
+E   (Background on this error at: https://sqlalche.me/e/20/f405)
+__________________ test_role_aplikasi_hanya_insert_dan_select __________________
+tests/test_ledger_immutability.py:142: in test_role_aplikasi_hanya_insert_dan_select
+    assert hak["SELECT"] is True, hak
+E   AssertionError: {'DELETE': False, 'INSERT': False, 'SELECT': False, 'TRUNCATE': False, ...}
+E   assert False is True
+_________ test_daftar_po_menyebut_invoice_unit_price_secara_eksplisit __________
+tests/test_po_invoice_commercial.py:471: in test_daftar_po_menyebut_invoice_unit_price_secara_eksplisit
+    assert row["invoice_total"] == pytest.approx(
+E   assert 12189503.34 == 14100000.0 ± 1.4e+01
+E     
+E     comparison failed
+E     Obtained: 12189503.34
+E     Expected: 14100000.0 ± 1.4e+01
+_________________ test_nilai_diterima_memakai_harga_invoice_po _________________
+tests/test_receipt_accepted_value.py:111: in test_nilai_diterima_memakai_harga_invoice_po
+    batch_id, _loc, _com, kg, price = _batch_terikat()
+tests/test_receipt_accepted_value.py:60: in _batch_terikat
+    ).one()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/result.py:1520: in one
+    return self._only_one_row(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/result.py:752: in _only_one_row
+    raise exc.NoResultFound(
+E   sqlalchemy.exc.NoResultFound: No row was found when one was required
+_______________ test_antrean_menunggu_membawa_kunci_nilai_kosong _______________
+tests/test_receipt_accepted_value.py:150: in test_antrean_menunggu_membawa_kunci_nilai_kosong
+    batch_id, _loc, _com, _kg, _harga = _batch_terikat()
+tests/test_receipt_accepted_value.py:60: in _batch_terikat
+    ).one()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/result.py:1520: in one
+    return self._only_one_row(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/result.py:752: in _only_one_row
+    raise exc.NoResultFound(
+E   sqlalchemy.exc.NoResultFound: No row was found when one was required
+____ test_fetch_excludes_later_harvests_without_advancing_as_of[live-race] _____
+tests/test_recommendation_snapshot.py:95: in test_fetch_excludes_later_harvests_without_advancing_as_of
+    assert str(ids["later"]) not in batches
+E   AssertionError: assert 'd17b0d9f-9656-4838-a394-f1c1a4a70064' not in {'0a15e6bb-f03d-5690-abe0-6caee290adf3': {'batch_id': '0a15e6bb-f03d-5690-abe0-6caee290adf3', 'commodity': 'wortel', '...80-becc-526b6134d9cf', 'commodity': 'wortel', 'evidence_state': 'insufficient', 'excluded_destinations': [], ...}, ...}
+E    +  where 'd17b0d9f-9656-4838-a394-f1c1a4a70064' = str(UUID('d17b0d9f-9656-4838-a394-f1c1a4a70064'))
+____ test_fetch_excludes_later_harvests_without_advancing_as_of[historical] ____
+tests/test_recommendation_snapshot.py:102: in test_fetch_excludes_later_harvests_without_advancing_as_of
+    assert batches[str(ids["old"])]["freshness_score"] == rs._score(
+E   AssertionError: assert Decimal('0.664286') == Decimal('0.964286')
+E    +  where Decimal('0.964286') = <function _score at 0x7a36877232e0>(Decimal('0.9642857142857143'))
+E    +    where <function _score at 0x7a36877232e0> = rs._score
+E    +    and   Decimal('0.9642857142857143') = Decimal('0.9642857142857143')
+E    +      where '0.9642857142857143' = str(0.9642857142857143)
+___________________ test_verify_menolak_verdict_dari_client ____________________
+tests/test_s4_verifier_independence.py:72: in test_verify_menolak_verdict_dari_client
+    decision_id = _event1_decision_id()
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kiriman demo disemai ulang (batch segar untuk Event 1)
+______________ test_verify_menurunkan_unavailable_tanpa_provider _______________
+tests/test_s4_verifier_independence.py:89: in test_verify_menurunkan_unavailable_tanpa_provider
+    decision_id = _event1_decision_id()
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+____________________ test_verify_memakai_chain_server_side _____________________
+tests/test_s4_verifier_independence.py:108: in test_verify_memakai_chain_server_side
+    decision_id = _event1_decision_id()
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+_____________ test_verify_flagged_turunkan_status_verifier_flagged _____________
+tests/test_s4_verifier_independence.py:136: in test_verify_flagged_turunkan_status_verifier_flagged
+    decision_id = _event1_decision_id()
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+___________________ test_verify_ditolak_409_setelah_approved ___________________
+tests/test_s4_verifier_independence.py:159: in test_verify_ditolak_409_setelah_approved
+    decision_id = _event1_decision_id()
+tests/test_action_boundary_e2e.py:55: in _event1_decision_id
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+_______________ test_supervise_step_narrates_with_honest_labels ________________
+tests/test_supervisor_narration.py:93: in test_supervise_step_narrates_with_honest_labels
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+__________________ test_supervise_falls_back_to_second_model ___________________
+tests/test_supervisor_narration.py:118: in test_supervise_falls_back_to_second_model
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+_________________ test_supervise_unavailable_recorded_honestly _________________
+tests/test_supervisor_narration.py:133: in test_supervise_unavailable_recorded_honestly
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+___________________ test_supervise_chain_panjang_label_jujur ___________________
+tests/test_supervisor_narration.py:171: in test_supervise_chain_panjang_label_jujur
+    outcome = run_event1(commodity="telur", target_location="Jakarta")
+app/services/event1_orchestrator.py:535: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+app/services/event1_orchestrator.py:189: in _run_event1
+    raise ValueError(
+E   ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+tests/test_road_route_sync.py::test_baris_batch_memuat_koordinat_dua_ujung[True]
+  sys:1: SAWarning: The garbage collector is trying to clean up non-checked-in connection <AdaptedConnection <asyncpg.connection.Connection object at 0x7a3681b9c7d0>>, which will be terminated.  Please ensure that SQLAlchemy pooled connections are returned to the pool explicitly, either by calling ``close()`` or by using appropriate context managers to manage their lifecycle.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_api_decision_intelligence.py::test_recommend_endpoint_ranks_candidates
+FAILED tests/test_api_decision_intelligence.py::test_decisions_persist_and_get_validity
+FAILED tests/test_bukti_dan_draf_demo.py::test_kasus_skrip_punya_bukti_termasuk_yang_ditolak
+FAILED tests/test_demo_cases_procurement_binding.py::test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan
+FAILED tests/test_demo_cases_procurement_binding.py::test_binding_pengadaan_memakai_pemasok_keputusan
+FAILED tests/test_demo_cases_procurement_binding.py::test_kasus_pengadaan_lolos_resolve_binding_dan_safety
+FAILED tests/test_demo_template_provenance_ledger.py::test_hapus_kasus_demo_menaikkan_generasi_ledger
+FAILED tests/test_demo_template_reset.py::test_memanggil_penyemai_dengan_opsi_yang_benar
+FAILED tests/test_event1_e2e_acceptance.py::test_event1_e2e_propose_approve_execute_mock_sap
+FAILED tests/test_event1_e2e_acceptance.py::test_event1_e2e_safety_fail_guard_via_api
+FAILED tests/test_event1_e2e_acceptance.py::test_event1_e2e_approval_boundary_blocked_paths
+FAILED tests/test_event1_e2e_acceptance.py::test_event1_e2e_verifier_unavailable_dual_approval
+FAILED tests/test_event1_supervisor_flow.py::test_event1_unverified_full_flow_persists_proposed
+FAILED tests/test_event1_supervisor_flow.py::test_event1_unverified_persists_agent_traces_with_real_steps
+FAILED tests/test_event1_supervisor_flow.py::test_event1_expiry_enforced_later
+FAILED tests/test_event1_supervisor_flow.py::test_event1_consistent_verdict_records_verifier_attempt
+FAILED tests/test_event1_supervisor_flow.py::test_event1_safety_fail_never_consistent
+FAILED tests/test_event1_supervisor_flow.py::test_event1_no_auto_execution - ...
+FAILED tests/test_event1_supervisor_flow.py::test_event1_kpi_traceable_to_backend_outputs
+FAILED tests/test_event1_supervisor_flow.py::test_memory_gagal_tidak_mengubah_angka_keputusan
+FAILED tests/test_event1_supervisor_flow.py::test_memory_mati_tidak_menambah_langkah_learn
+FAILED tests/test_event3_api.py::test_api_safety_happy_path_revised_201 - Ass...
+FAILED tests/test_event3_api.py::test_api_safety_replay_same_key_idempotent
+FAILED tests/test_event3_api.py::test_api_safety_conflict_same_key_other_batch_409
+FAILED tests/test_evidence_consistency_wiring.py::test_event3_menulis_seluruh_bukti_dengan_penilaian
+FAILED tests/test_evidence_live.py::test_live_evidence_batch_ids_nonempty - S...
+FAILED tests/test_kpi_act_trace.py::test_eksekusi_menulis_trace_act_dengan_nomor_po
+FAILED tests/test_kpi_act_trace.py::test_eksekusi_yang_ditolak_tidak_menulis_act
+FAILED tests/test_kpi_act_trace.py::test_decision_time_tersedia_setelah_eksekusi
+FAILED tests/test_kpi_provenance.py::test_penerimaan_bahan_tidak_menulis_porsi_tersaji
+FAILED tests/test_kpi_safe_delivered_cost.py::test_safe_delivered_cost_tersedia_setelah_eksekusi
+FAILED tests/test_least_privilege_app_role.py::test_akun_aplikasi_bisa_membaca_dan_menulis_tabel_kerja
+FAILED tests/test_least_privilege_app_role.py::test_akun_aplikasi_bisa_menambah_blok_lewat_service
+FAILED tests/test_ledger_immutability.py::test_role_aplikasi_hanya_insert_dan_select
+FAILED tests/test_po_invoice_commercial.py::test_daftar_po_menyebut_invoice_unit_price_secara_eksplisit
+FAILED tests/test_receipt_accepted_value.py::test_nilai_diterima_memakai_harga_invoice_po
+FAILED tests/test_receipt_accepted_value.py::test_antrean_menunggu_membawa_kunci_nilai_kosong
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[live-race]
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[historical]
+FAILED tests/test_s4_verifier_independence.py::test_verify_menolak_verdict_dari_client
+FAILED tests/test_s4_verifier_independence.py::test_verify_menurunkan_unavailable_tanpa_provider
+FAILED tests/test_s4_verifier_independence.py::test_verify_memakai_chain_server_side
+FAILED tests/test_s4_verifier_independence.py::test_verify_flagged_turunkan_status_verifier_flagged
+FAILED tests/test_s4_verifier_independence.py::test_verify_ditolak_409_setelah_approved
+FAILED tests/test_supervisor_narration.py::test_supervise_step_narrates_with_honest_labels
+FAILED tests/test_supervisor_narration.py::test_supervise_falls_back_to_second_model
+FAILED tests/test_supervisor_narration.py::test_supervise_unavailable_recorded_honestly
+FAILED tests/test_supervisor_narration.py::test_supervise_chain_panjang_label_jujur
+48 failed, 2079 passed, 31 skipped, 2 warnings in 806.84s (0:13:26)
+FULL_EXIT=1

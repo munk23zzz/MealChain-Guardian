@@ -1,0 +1,66 @@
+=== spec: verify/invariants.spec.json =======================
+[PASS] process service postgres reachable on :15432 — external (not started by the gate)
+[PASS] process service backend reachable on :8000 — external (not started by the gate)
+[PASS] process health endpoint backend — HTTP 200 from http://127.0.0.1:8000/health
+[PASS] process container mealchain-backend (awal) — status=running health=healthy exit=0 restartCount=0 oom=false finished=2026-10-27T12:22:10.79207884Z
+[PASS] process container mealchain-postgres (awal) — status=running health=healthy exit=0 restartCount=0 oom=false finished=2026-10-27T12:22:10.791695002Z
+[PASS] be      login default (sppg_head (Jakarta)) — token 273 chars
+[FAIL] be      tanpa token GET /decisions -> 401 — status 500 != [401]
+[FAIL] be      tanpa token GET /batches -> 401 — status 500 != [401]
+[FAIL] be      tanpa token GET /ledger/verify -> 401 — status 500 != [401]
+[FAIL] be      kepala SPPG GET /admin/users -> 403 (bukan admin) — status 500 != [403]
+[FAIL] be      GET /batches total — status 500 != [200]; body is not JSON
+[FAIL] be      GET /decisions jumlah item — status 500 != [200]; body is not JSON
+[FAIL] be      GET /demo/session bentuk jawaban — status 500 != [200]; body is not JSON
+[FAIL] be      GET /ledger/verify rantai valid — status 500 != [200]; body is not JSON
+[FAIL] be      chain untuk id yang tidak ada -> 404 — status 500 != [404]
+[FAIL] be      chain dengan id bukan UUID -> 422 — status 500 != [422]
+[FAIL] be      batch yang tidak ada -> 404 — status 500 != [404]
+[PASS] be      health backend — HTTP 200 in 11 ms
+[FAIL] be      batches: limit dipotong, ada total — status 500 != [200]; body is not JSON
+[FAIL] be      batches limit=0 ditolak 422 — status 500 != [422]
+[FAIL] be      batches limit=1000 ditolak 422 — status 500 != [422]
+[PASS] db      connect command — postgres:15432/mealchain
+[PASS] db      migrasi alembic head — '039_agent_trace_parent_run_id'
+[PASS] db      kolom agent_traces.parent_run_id ada (migrasi 039) — '1'
+[PASS] db      jumlah batch di DB → db_batches — stored '118'
+[PASS] db      jumlah keputusan untuk Jakarta di DB (scope peran kepala SPPG) → db_decisions — stored '17'
+[PASS] db      batch dengan kuantitas negatif — '0'
+[PASS] db      batch diberangkatkan sebelum dipanen — '0'
+[PASS] db      baris kanonik batch ikut berstempel sesi (regresi 21 Okt) — '0'
+[PASS] db      baris kanonik keputusan ikut berstempel sesi — '0'
+[PASS] db      baris kanonik pasokan ikut berstempel sesi — '0'
+[PASS] db      langkah LEARN pada status di luar rejected/proposed — '0'
+[PASS] db      langkah ACT pada keputusan yang tidak executed — '0'
+[PASS] db      jejak agent yatim (decision tidak ada) — '0'
+[PASS] db      keputusan tanpa satu pun jejak langkah (temuan 21 Okt: 2 baris) — '0'
+[PASS] db      lebih dari satu PO untuk satu keputusan — '0'
+[PASS] db      jejak dengan step_at kosong — '0'
+[PASS] db      persetujuan yatim (keputusan tidak ada) — '0'
+[PASS] db      keputusan executed tanpa persetujuan (temuan 21 Okt: 1 baris) — '0'
+[PASS] db      fakta pasokan melewati horizon 31 hari — '0'
+[PASS] db      fakta permintaan melewati horizon 31 hari — '0'
+[PASS] db      horizon pasokan tercatat (max recorded_at <= 31 hari) — '0'
+[PASS] db      PO tanpa berat (ordered_quantity <= 0) — audit data 26 Okt 2026 — '0'
+[PASS] db      PO bermaterial generik MAT-UMUM — '0'
+[PASS] db      keputusan ditolak tanpa pencatat (baris approvals approved=false) — '0'
+[PASS] db      jejak agent berisi teks template ('template status demo') — '0'
+[PASS] db      sdc di jejak DECIDE sama dengan SDC keputusan (±1 rupiah) — '0'
+[PASS] db      SDC != jumlah komponen cost_breakdown — '0'
+[PASS] db      blok ledger generasi aktif menunjuk entitas terhapus (yatim) — '0'
+[PASS] db      keputusan ber-origin demo (provenance tidak boleh vakum) → db_decisions_demo — stored '30'
+[PASS] db      keputusan demo_case ber-origin seed (provenance hilang) — '0'
+[PASS] db      PO ber-decision_id (rantai keputusan->PO tidak vakum) — '4'
+[PASS] db      PO menunjuk keputusan yang tidak ada — '0'
+[PASS] db      PO tanpa decision_id yang bukan baris impor SAP — '0'
+[SKIP] fe      browser checks — no ui section in spec
+[FAIL] compare jumlah batch: API /batches.total == DB — missing stored value(s): ['api_batches']
+[FAIL] compare jumlah keputusan: API /decisions == DB — missing stored value(s): ['api_decisions']
+[PASS] process log clean: backend — no error/traceback lines
+[PASS] process container mealchain-backend (akhir) — status=running health=healthy exit=0 restartCount=0 oom=false finished=2026-10-27T12:22:10.79207884Z
+[PASS] process container mealchain-postgres (akhir) — status=running health=healthy exit=0 restartCount=0 oom=false finished=2026-10-27T12:22:10.791695002Z
+[PASS] process tidak ada container mati dengan exit != 0 — 128 baris events direkam di logs/docker-events.log
+----------------------------------------------------------------------
+VERDICT: FAIL  (PASS 44 / FAIL 16 / SKIP 1)
+report: E:\hackathon\HackathonAWS\mealchain-guardian\verify\verify-out-invariants\report-20261027-192645.md
+GATE_EXIT=1

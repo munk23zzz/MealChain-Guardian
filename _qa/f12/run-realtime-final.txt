@@ -1,0 +1,41 @@
+
+=== rehearsal mode=realtime (http://127.0.0.1:18100) ===
+  [OK   ] 0. login kepala SPPG + nutritionist
+  [OK   ] 1. Muat Demo realtime (POST /demo/session/start replace=true)
+  [OK   ] 2. anchor realtime = jam sesi (bukan kanon), selisih < 10 menit
+  [OK   ] 3. GET /demo/session membaca sesi yang sama (tahan refresh)
+  [OK   ] 4. POST /balance/analyze dijalankan pada keadaan awal sesi
+  [OK   ] 5. daftar keputusan terbaca dari backend
+  [OK   ] 6. kasus replay/realtime tersedia: satu aman, satu bukti kurang
+  [OK   ] 7. approval-summary: butuh dua peran, eksekusi belum boleh
+  [OK   ] 8. approval peran-1 lalu execute DITOLAK (butuh dua peran)
+  [OK   ] 9. approval peran-2 → can_execute true
+  [OK   ] 10. execute → keputusan executed + PO terbit
+  [OK   ] 11. invoice (purchase+transport+handling) terpisah dari SDC (+3 komponen risiko)
+  [OK   ] 12. PO ada di backend dan tertaut keputusan
+  [OK   ] 13. kiriman: ada batch 'di jalan' dengan ETA dihitung server
+  [OK   ] 14. ceklis + penerimaan batch usable diterima, pasokan lokasi bergerak
+  [OK   ] 15. KPI: state + provenance per metrik; cakupan tanpa bukti = no_data
+  [OK   ] N1. batch bukti kurang: PENERIMAAN tidak pernah lolos (ceklis tercatat atau ditolak lebih awal)
+  [OK   ] N2. bukti suhu tidak lengkap → safety bukan 'pass'
+  [OK   ] N2b. log cold chain kosong/rusak → evidence_sufficient=false (tidak pernah 'pass')
+  [OK   ] N3. batch kedaluwarsa ditolak (batch_expired)
+  [OK   ] N4. bukti kurang + dua approval → execute tetap ditolak
+  [OK   ] N5. PO tanpa penalti risiko; invoice = purchase+transport+handling
+
+  22 lulus · 0 gagal  →  out/realtime.json
+
+=== Joule mode=realtime bridge=http://127.0.0.1:18091 backend=http://127.0.0.1:18100 ===
+  [OK   ] 1. GET /health jembatan hidup, backend reachable, TIDAK ada /ready
+  [OK   ] 2. backend sesi aktif terbaca (mode + jangkar) dan daftar PO tersedia
+  [OK   ] 3.pasokan jembatan menjawab dari backend
+  [OK   ] 3.kpi jembatan menjawab dari backend
+  [OK   ] 3.antrean jembatan menjawab dari backend
+  [OK   ] 3.po jembatan menjawab dari backend
+  [OK   ] 3.kiriman jembatan menjawab dari backend
+  [OK   ] 4. nomor PO yang disebut Joule ada di backend (tanpa nomor karangan)
+  [OK   ] 5. jawaban KPI menyebut sumber + tingkat bukti + konteks sesi (mode, jangkar, id sesi)
+  [OK   ] 6. permintaan approval DITOLAK jembatan dan diarahkan ke cockpit (status tidak berubah)
+
+  10 lulus · 0 gagal  →  out/joule-realtime.json
+DONE

@@ -1,0 +1,88 @@
+diff --git a/frontend/components/DemoControlPanel.tsx b/frontend/components/DemoControlPanel.tsx
+index ef6a21d..5f00947 100644
+--- a/frontend/components/DemoControlPanel.tsx
++++ b/frontend/components/DemoControlPanel.tsx
+@@ -449,6 +456,54 @@ export default function DemoControlPanel({
+     }
+   }
+ 
++  /**
++   * Tombol "Muat Demo …": memuat dataset dengan MODE yang diminta operator.
++   *
++   * `replace: true` karena arti tombol ini memang "pakai dataset ini" — sesi
++   * bermode lain ditutup server lalu dibangun ulang. Tombol lama ("Siapkan
++   * data demo") sengaja TIDAK memakai `replace`, supaya menekannya saat demo
++   * real-time berjalan tidak diam-diam mengganti pilihan operator.
++   */
++  async function muatMode(mode: "replay" | "realtime") {
++    if (!token || !bolehJalankan || busy !== null) return;
++    setBusy("data");
++    setPesan(null);
++    setHasilData(null);
++    try {
++      const r = await startDemoSession(token, undefined, {
++        mode: mode,
++        replace: true,
++      });
++      setSesi(r as StatusSesiDemo);
++      setTickSesi(0);
++      const konflik = (r as { conflict?: { requested_mode?: string; active_mode?: string } })
++        ?.conflict;
++      if (konflik) {
++        // Server menolak mengganti sesi: katakan apa adanya, jangan menampilkan
++        // mode yang diminta seolah-olah sudah aktif.
++        setPesan(
++          `Sesi ${konflik.active_mode ?? "lain"} sedang berjalan — permintaan ${konflik.requested_mode ?? mode} tidak menggantikannya.`
++        );
++        await muatStatus();
++        return;
++      }
++      if (r?.created) {
++        // Dataset baru tumbuh di bawah sesi ini: muat ulang supaya SEMUA tab
++        // membaca sesi yang baru, bukan sisa render lama.
++        window.location.reload();
++        return;
++      }
++      setHasilData(`Dataset ${mode} sudah aktif — data tidak dibangun ulang.`);
++      await muatStatus();
++      await muatBukti();
++    } catch (e: any) {
++      const detail = e instanceof ApiError && e.detail ? e.detail : null;
++      setPesan(detail ?? String(e?.message ?? e));
++    } finally {
++      setBusy(null);
++    }
++  }
++
+   async function onPerpanjang() {
+     if (!token || busySesi !== null) return;
+     setBusySesi("tambah");
+@@ -579,6 +667,28 @@ export default function DemoControlPanel({
+           detik={detik}
+           onRebuild={onBangunUlang}
+         />
++        {/* Fase 10 MG: dua jalur demo. Keduanya memuat DATASET, jadi mode
++            dikirim eksplisit dan sesi bermode lain diganti (`replace`). */}
++        <div className="dc-mode-actions" role="group" aria-label="Muat dataset demo">
++          <button
++            type="button"
++            className="button button-primary"
++            onClick={() => muatMode("replay")}
++            disabled={!token || !bolehJalankan || busy !== null}
++            title="Muat dataset kanon 8 Oktober 2026 — dapat diulang dengan hasil sama"
++          >
++            {busy === "data" ? "Memuat…" : "Muat Demo Utama"}
++          </button>
++          <button
++            type="button"
++            className="button button-secondary"
++            onClick={() => muatMode("realtime")}
++            disabled={!token || !bolehJalankan || busy !== null}
++            title="Muat dataset baru berjangkar waktu sekarang (bukan kanon)"
++          >
++            {busy === "data" ? "Memuat…" : "Muat Demo Real-time"}
++          </button>
++        </div>
+         <div className="dc-actions">
+           <button
+             type="button"

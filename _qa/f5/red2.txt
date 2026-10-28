@@ -1,0 +1,71 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+_____________ test_eksekusi_menulis_harga_invoice_bukan_sdc_per_kg _____________
+
+client = <starlette.testclient.TestClient object at 0x7a11a230b770>
+
+    def test_eksekusi_menulis_harga_invoice_bukan_sdc_per_kg(client):
+        """Ini RED yang diminta rencana: `price` dulu `sdc / qty` (37.171,00)."""
+        head = _mk_user("sppg_head", "Jakarta")
+        nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
+        decision_id = None
+        try:
+            headers = _login(client, head)
+            decision_id = _mk_decision(client, headers)
+            _ikat_binding(decision_id)
+            assert client.post(
+                "/actions/propose", json={"decision_id": decision_id}, headers=headers
+            ).status_code == 201
+            for akun in (head, nutritionist):
+                resp = client.post(
+                    "/actions/approve",
+                    json={"decision_id": decision_id, "approved": True},
+                    headers=_login(client, akun),
+                )
+>               assert resp.status_code == 200, resp.text
+E               AssertionError: {"detail":"keputusan belum diverifikasi — catat hasil verifier dulu sebelum meminta persetujuan"}
+E               assert 409 == 200
+E                +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_po_invoice_commercial.py:271: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+______________ test_eksekusi_tidak_menagihkan_penalti_ke_pemasok _______________
+
+client = <starlette.testclient.TestClient object at 0x7a11a7575100>
+
+    def test_eksekusi_tidak_menagihkan_penalti_ke_pemasok(client):
+        """Selisih total PO terhadap SDC harus PERSIS penalti internal."""
+        head = _mk_user("sppg_head", "Jakarta")
+        nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
+        decision_id = None
+        try:
+            headers = _login(client, head)
+            decision_id = _mk_decision(client, headers)
+            _ikat_binding(decision_id)
+            client.post("/actions/propose", json={"decision_id": decision_id}, headers=headers)
+            for akun in (head, nutritionist):
+                client.post(
+                    "/actions/approve",
+                    json={"decision_id": decision_id, "approved": True},
+                    headers=_login(client, akun),
+                )
+            resp = client.post(
+                "/actions/execute", json={"decision_id": decision_id}, headers=headers
+            )
+>           assert resp.status_code == 200, resp.text
+E           AssertionError: {"detail":"decision belum terverifikasi"}
+E           assert 409 == 200
+E            +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_po_invoice_commercial.py:327: AssertionError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_po_invoice_commercial.py::test_eksekusi_menulis_harga_invoice_bukan_sdc_per_kg
+FAILED tests/test_po_invoice_commercial.py::test_eksekusi_tidak_menagihkan_penalti_ke_pemasok
+2 failed, 6 deselected, 1 warning in 13.74s

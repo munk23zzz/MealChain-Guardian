@@ -1,0 +1,21 @@
+ Container mealchain-guardian-backend-run-c1bc74574793 Creating 
+ Container mealchain-guardian-backend-run-c1bc74574793 Created 
+seed: mode=replay anchor=2026-10-08T12:00:00+00:00 kasus=7 sumber_suhu=simulated_replay
+
+[wortel-coldchain-sah] outcome=usable status=pending_approval
+  can_approve=True can_execute=False valid=True sisa=28799s
+  safety={'worst_status': 'pass', 'blocked': False, 'block_code': None, 'batches_checked': 1, 'reason': None, 'batch_ids': ['0ff8f2b1-f217-5e1e-bb06-63912491a1cb']}
+  blocking=['binding batch/supplier berubah', 'approval belum memenuhi requirement (missing/rejected)']
+  supplier=None sdc=8209887.79
+
+[wortel-coldchain-hold] outcome=on_hold status=pending_approval
+  can_approve=True can_execute=False valid=True sisa=28799s
+  safety={'worst_status': 'needs_verification', 'blocked': True, 'block_code': 'batch_expired', 'batches_checked': 1, 'reason': 'safety revalidation gagal: batch sumber kedaluwarsa', 'batch_ids': ['7dcbeb5f-db25-5959-a0ff-62b900d293a5']}
+  blocking=['binding batch/supplier berubah', 'approval belum memenuhi requirement (missing/rejected)', 'safety revalidation gagal: batch sumber kedaluwarsa']
+  supplier=None sdc=7442279.44
+
+[beras-ambient] outcome=usable status=pending_approval
+  can_approve=True can_execute=False valid=True sisa=28799s
+  safety={'worst_status': 'pass', 'blocked': False, 'block_code': None, 'batches_checked': 1, 'reason': None, 'batch_ids': ['af8fecf5-488b-50c1-8c71-96d413d76b3c']}
+  blocking=['binding batch/supplier berubah', 'approval belum memenuhi requirement (missing/rejected)']
+  supplier=None sdc=7693390.49

@@ -1,0 +1,85 @@
+{
+  "mode": "gerbang",
+  "duration_s": 73.1,
+  "catatan": [
+    "F12-SESI-1: keputusan/batch/receipt dataset template dimiliki sesi sentinel ce7a0000-0000-4000-8000-000000000001, bukan sesi operator. Akibatnya KPI cakupan demo (demo_session_id=<sesi operator>) menjawab no_data, dan perbandingan `demo_session_id` di Joule harus memakai id sentinel itu."
+  ],
+  "steps": [
+    {
+      "step": "N1. batch on_hold (bukti suhu kurang): ceklis boleh dicatat, PENERIMAAN ditolak",
+      "ok": true,
+      "at": "2026-10-27T15:37:45.155898+00:00",
+      "detail": {
+        "batch": "7dcbeb5f-db25-5959-a0ff-62b900d293a5",
+        "alasan_evaluator": [
+          "safety_needs_verification",
+          "temperature_evidence_incomplete"
+        ],
+        "receipt_http": 201,
+        "approve_http": 409,
+        "approve_detail": "barang menunggu verifikasi keamanan pangan \u2014 belum terbukti aman; selesaikan verifikasi verifier sebelum disetujui (kode: safety_needs_verification, temperature_evidence_incomplete)"
+      }
+    },
+    {
+      "step": "N2. bukti suhu tidak lengkap/basi \u2192 safety TIDAK 'pass'",
+      "ok": true,
+      "at": "2026-10-27T15:37:45.197104+00:00",
+      "detail": {
+        "batch": "7dcbeb5f-db25-5959-a0ff-62b900d293a5",
+        "safety": "NEEDS_VERIFICATION",
+        "reasons": [
+          "malformed entry pada index 1",
+          "malformed entry pada index 2",
+          "sample kurang dari 2 (1)",
+          "2 entri log tidak terbaca"
+        ]
+      }
+    },
+    {
+      "step": "N3. batch kedaluwarsa tidak bisa diterima",
+      "ok": true,
+      "at": "2026-10-27T15:37:45.246601+00:00",
+      "detail": {
+        "batch": "45268526-1af2-5879-806f-2d62bd77f583",
+        "usable_until": "2026-10-27T14:36:28.008373+00:00",
+        "alasan_evaluator": [
+          "batch_expired",
+          "safety_fail",
+          "freshness_fail"
+        ],
+        "receipt_http": 409,
+        "approve_http": 0,
+        "detail": null
+      }
+    },
+    {
+      "step": "N4. batch on_hold + dua approval \u2192 execute tetap ditolak",
+      "ok": true,
+      "at": "2026-10-27T15:37:48.352309+00:00",
+      "detail": {
+        "decision_id": "61628b3d-27c3-5953-9661-0a294e8acadb",
+        "can_execute": false,
+        "blocking_reasons": [
+          "supplier_unknown: keputusan lama perlu binding batch eksplisit",
+          "safety revalidation gagal: batch sumber kini FAIL"
+        ],
+        "http": 409,
+        "detail": "supplier_unknown: keputusan lama perlu binding batch eksplisit"
+      }
+    },
+    {
+      "step": "N5. ganti mode: sesi lama ditutup, sesi baru dibuat, mode berbeda",
+      "ok": true,
+      "at": "2026-10-27T15:38:56.445789+00:00",
+      "detail": {
+        "sesi_lama": "ab31e9fe-fa5a-4c48-936b-d118aae2551f",
+        "mode_sesi_lama": "replay",
+        "status_sesi_lama": "expired",
+        "sesi_baru": "044e161e-5bab-49ce-be14-92a0f316f5b1",
+        "mode_sesi_baru": "realtime",
+        "keputusan_milik_sesi_lama_sebelum": "0",
+        "catatan": "Tombol Muat Demo = bangun ulang dataset template; baris template dimiliki sesi sentinel `cetakan`, jadi isolasi antar-sesi dibuktikan oleh backend/tests/test_session_modes.py (butir 4), bukan oleh tombol ini."
+      }
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 040_session_modes_and_ownership -> 041_commodity_policies, Profil komoditas berversi + bukti suhu (Fase 3 MG, migrasi 041).
+INFO  [alembic.runtime.migration] Running upgrade 041_commodity_policies -> 042_ledger_append_only, Ledger append-only ditegakkan DATABASE, bukan konvensi (Fase 11 MG).
+INFO  [alembic.runtime.migration] Running upgrade 042_ledger_append_only -> 043_least_privilege_app, Least privilege untuk role aplikasi, tanpa memutus backup/restore (Fase 11 butir 3).

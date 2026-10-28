@@ -1,0 +1,19 @@
+.s.FF.......F..F...................                                      [100%]
+=================================== FAILURES ===================================
+/app/tests/test_api_decision_intelligence.py:180: AssertionError: Cianjur→Jakarta telur wajib ada
+/app/tests/test_api_decision_intelligence.py:193: AssertionError: seed wajib punya kandidat menuju Jakarta
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: sqlalchemy.exc.ProgrammingError: (psycopg.errors.InsufficientPrivilege) permission denied for table decisions
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.InsufficientPrivilegeError'>: permission denied for table ledger_blocks
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_api_decision_intelligence.py::test_recommend_endpoint_ranks_candidates
+FAILED tests/test_api_decision_intelligence.py::test_decisions_persist_and_get_validity
+FAILED tests/test_least_privilege_app_role.py::test_akun_aplikasi_bisa_membaca_dan_menulis_tabel_kerja
+FAILED tests/test_least_privilege_app_role.py::test_akun_aplikasi_bisa_menambah_blok_lewat_service
+4 failed, 30 passed, 1 skipped, 1 warning in 43.76s
+ISO_EXIT=1

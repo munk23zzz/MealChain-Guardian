@@ -1,0 +1,43 @@
+feat(sesi): mode replay/realtime & kepemilikan sesi pada baris hasil analisis (Fase 2 MG)
+
+Rencana: MG/phase-02-session-time.md.
+
+Isi:
+- migrasi 040: kolom mode/anchor pada demo_sessions + demo_session_id pada
+  decisions, procurement_orders, receipts, supply_records.
+- layanan baru: decision_time (jam keputusan mengikuti mode sesi),
+  demo_ownership (resolusi sesi pemilik), demo_purge (hapus per sesi).
+- propagasi kepemilikan: run_event1 & run_supplier_procurement menerima
+  demo_session_id dan menurunkannya ke Decision / ProcurementOrder; settlement
+  dan POST /actions/po menuliskan sesi dari keputusan, bukan dari "sesi aktif".
+- API: SeedRequest/MulaiRequest/Event1Request/AgentRunRequest menerima
+  demo_session (MulaiRequest juga mode/replace); sesi tak dikenal -> 404.
+- frontend: startDemoSession mengirim mode/replace, runDemoAgent mengirim
+  demo_session, panel memakai sesi aktif saat menganalisis.
+
+Bukti (DB klon sekali-pakai mealchain_gate, DB demo tidak disentuh):
+- alembic upgrade head dari kosong: 033..042 exit 0; downgrade 039 lalu
+  upgrade head sukses; `alembic check`: "No new upgrade operations detected".
+- pytest test_session_modes + test_demo_seed{,_per_kota,_binding}: 27 passed.
+- RED lebih dulu: 4 tes backend gagal (kolom demo_session_id belum ada / sesi
+  dibuang / orkestrator dipanggil tanpa sesi), 2 tes frontend gagal (payload
+  tanpa mode/demo_session).
+- ruff bersih pada berkas Fase 2; `npx tsc --noEmit` exit 0.
+- verify/invariants.spec.json: 60 PASS / 0 FAIL / 1 SKIP (pin head 039 -> 042).
+
+Batas commit ini (disengaja, tree dipakai beberapa sesi sekaligus):
+- Tidak memuat hunk fase lain yang menyentuh berkas sama, walaupun sempat ikut
+  di commit pertama lalu dibuang lewat amandemen: `mode` pada
+  `mulai_dengan_template` + dua tombol "Muat Demo …" & fungsi `muatMode`
+  (Fase 10), `runEvent1`/`runAnalysis` yang memakai `demoSessionId` (Fase 10 &
+  7), blok tulis AgentCore Memory + `_memory_write_aktif` (Fase 11),
+  `/procurement/summary` (Fase 8), `/decisions/{id}/packet|review` +
+  `ReviewRequest`/`TemperatureSampleIn` (Fase 6), `eligibility` pada
+  GET /batches/{id} (Fase 4). Skrip `scripts/stage_phase2_hunks.py` dan
+  `_qa/f2/buang_hunk_asing.py` merekam cara pemisahannya.
+- Satu hunk `POST /demo/agent/run` masih menyertakan blok `session` (Fase 10)
+  karena berada di hunk yang sama; tidak bisa dipisah per-hunk.
+- openapi.json masuk sebagai DELTA MINIMAL dari artefak HEAD: hanya 4 komponen
+  skema + deskripsi POST /demo/seed milik fase ini. Regenerasi penuh menunggu
+  fase lain, karena aplikasi saat ini memuat 3 rute dan 2 skema yang belum
+  ter-commit (drift test karenanya tetap merah oleh berkas fase lain).

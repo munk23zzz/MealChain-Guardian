@@ -1,0 +1,200 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v2.1.9 /app
+
+ ✓ tests/map-view.test.ts (12 tests) 90ms
+ ✓ tests/validated-field.test.tsx (6 tests) 120ms
+ ✓ tests/section-jump.test.tsx (13 tests) 185ms
+ ✓ tests/today-summary-strip.test.tsx (8 tests) 318ms
+ ✓ tests/kpi-provenance.test.tsx (23 tests) 775ms
+ ✓ tests/decision-picker.test.tsx (7 tests) 353ms
+ ✓ tests/agenda-date-picker.test.tsx (15 tests) 1033ms
+ ✓ tests/side-nav.test.tsx (7 tests) 119ms
+ ✓ tests/supplier-exclusion-panel.test.tsx (12 tests) 426ms
+stderr | tests/route-focus-collapse.test.tsx > jumlahBaris / perluTombolTutup > menghitung baris dari offsetTop dan hanya melipat bila > 1 baris
+Warning: The current testing environment is not configured to support act(...)
+
+stderr | tests/route-focus-collapse.test.tsx > RouteFocusPicker — lipat buka > satu baris: tidak ada segitiga, semua pil tampil
+Warning: The current testing environment is not configured to support act(...)
+Warning: The current testing environment is not configured to support act(...)
+
+stderr | tests/route-focus-collapse.test.tsx > RouteFocusPicker — lipat buka > lebih dari satu baris: ada segitiga, daftar terlipat, dan bisa dibuka
+Warning: The current testing environment is not configured to support act(...)
+Warning: The current testing environment is not configured to support act(...)
+Warning: The current testing environment is not configured to support act(...)
+    at RouteFocusPicker (/app/components/RouteFocusPicker.tsx:11:3)
+Warning: The current testing environment is not configured to support act(...)
+Warning: The current testing environment is not configured to support act(...)
+
+ ✓ tests/route-focus-collapse.test.tsx (3 tests) 115ms
+ ✓ tests/pager.test.tsx (7 tests) 173ms
+ ✓ tests/map-pin-glyphs.test.ts (3 tests) 36ms
+ ✓ tests/scroll-hint-component.test.tsx (4 tests) 130ms
+ ✓ tests/supplier-routes.test.ts (45 tests) 107ms
+ ✓ tests/pagination-wiring.test.tsx (5 tests) 621ms
+ ✓ tests/supplier-search-ui.test.tsx (7 tests) 800ms
+ ✓ tests/supplier-pins.test.ts (37 tests) 51ms
+ ✓ tests/food-safety.test.ts (84 tests) 99ms
+ ✓ tests/topbar-lib.test.ts (28 tests) 24ms
+ ✓ tests/purchase-order-decision-link.test.tsx (3 tests) 117ms
+ ✓ tests/supply-map-layer.test.tsx (64 tests) 2563ms
+ ✓ tests/suppliers-board.test.ts (23 tests) 27ms
+ ✓ tests/shipment-card.test.ts (38 tests) 56ms
+ ✓ tests/demo-agent.test.ts (35 tests) 27ms
+ ✓ tests/evidence-summary.test.ts (78 tests) 111ms
+ ✓ tests/shipment-board.test.ts (21 tests) 34ms
+ ✓ tests/decision-feed.test.ts (25 tests) 20ms
+ ✓ tests/approval-menu.test.tsx (20 tests) 93ms
+ ✓ tests/agent-flow.test.tsx (21 tests) 43ms
+ ✓ tests/demo-data.test.ts (23 tests) 44ms
+ ✓ tests/agent-swarm.test.ts (15 tests) 62ms
+ ✓ tests/top-bar.test.tsx (18 tests) 126ms
+ ✓ tests/supplier-board.test.tsx (21 tests) 177ms
+ ✓ tests/receipt-quarantine.test.tsx (16 tests) 144ms
+ ✓ tests/demo-control-panel.test.tsx (17 tests) 185ms
+ ✓ tests/food-safety-board.test.tsx (27 tests) 342ms
+ ✓ tests/today.test.ts (22 tests) 36ms
+ ✓ tests/today-dashboard.test.tsx (43 tests) 361ms
+ ✓ tests/agent-quality.test.ts (17 tests) 29ms
+ ✓ tests/today-summary.test.ts (14 tests) 31ms
+ ✓ tests/evidence-dossier.test.tsx (18 tests) 156ms
+ ✓ tests/purchase-orders.test.tsx (17 tests) 85ms
+ ✓ tests/decision-evidence.test.tsx (38 tests) 686ms
+ ✓ tests/kpi-dashboard.test.tsx (16 tests) 171ms
+ ✓ tests/demo-session.test.ts (20 tests) 16ms
+ ✓ tests/supply-adequacy.test.ts (12 tests) 20ms
+ ✓ tests/decision-picker.test.ts (18 tests) 76ms
+ ✓ tests/map-controls-css.test.ts (9 tests) 25ms
+ ✓ tests/kpi.test.ts (21 tests) 61ms
+ ✓ tests/design-tokens-kontrak.test.ts (9 tests) 14ms
+ ✓ tests/balance-data-state.test.ts (12 tests) 29ms
+ ✓ tests/bahasa.test.ts (19 tests) 18ms
+ ✓ tests/shipment-timeline.test.ts (14 tests) 47ms
+ ✓ tests/map-cluster.test.ts (22 tests) 18ms
+ ✓ tests/shipment-card-component.test.tsx (9 tests) 108ms
+ ✓ tests/route-flow.test.ts (13 tests) 18ms
+ ✓ tests/agenda.test.ts (13 tests) 25ms
+ ✓ tests/today-agenda-calendar.test.tsx (13 tests) 45ms
+ ✓ tests/ops-console.test.tsx (12 tests) 71ms
+ ✓ tests/evidence-rapi.test.tsx (12 tests) 47ms
+ ✓ tests/overview-bento.test.ts (21 tests) 41ms
+ ✓ tests/route-focus.test.ts (12 tests) 22ms
+ ✓ tests/po-pdf-download.test.tsx (7 tests) 31ms
+ ✓ tests/agenda-wiring.test.ts (16 tests) 14ms
+ ✓ tests/agent-quality-board.test.tsx (13 tests) 120ms
+ ✓ tests/overview-procurement-today.test.tsx (8 tests) 56ms
+ ✓ tests/supply-adequacy-chart.test.tsx (8 tests) 69ms
+ ✓ tests/approval-summary.test.tsx (8 tests) 95ms
+ ✓ tests/map-console.test.ts (9 tests) 16ms
+ ✓ tests/map-popup.test.ts (8 tests) 28ms
+ ✓ tests/route-line-split.test.ts (16 tests) 26ms
+ ✓ tests/surplus.test.ts (12 tests) 58ms
+ ✓ tests/sidebar-wiring.test.tsx (8 tests) 37ms
+ ✓ tests/governance-status.test.ts (10 tests) 15ms
+ ✓ tests/ops-console-event1.test.tsx (7 tests) 101ms
+ ✓ tests/overview-format.test.ts (10 tests) 9ms
+ ✓ tests/map-legend-compact.test.ts (9 tests) 23ms
+ ✓ tests/decision-economics.test.ts (10 tests) 42ms
+ ✓ tests/popup-backdrop.test.ts (5 tests) 8ms
+ ✓ tests/shipment-board-component.test.tsx (6 tests) 46ms
+ ✓ tests/integration-status.test.tsx (7 tests) 66ms
+ ✓ tests/approval-modal.test.tsx (10 tests) 32ms
+ ✓ tests/surplus-plan-server.test.ts (9 tests) 10ms
+ ✓ tests/demo-mode-switch.test.tsx (8 tests) 10ms
+ ✓ tests/evidence-layout-css.test.ts (7 tests) 10ms
+ ✓ tests/supply-map.test.tsx (10 tests) 45ms
+ ✓ tests/supply-map-suppliers.test.tsx (5 tests) 38ms
+ ✓ tests/demo-accounts.test.ts (6 tests) 75ms
+ ✓ tests/location-balance.test.ts (5 tests) 19ms
+ ✓ tests/recommendation-card.test.tsx (14 tests) 58ms
+ ✓ tests/decision-loop.test.tsx (11 tests) 10ms
+ ✓ tests/chaos-telemetry.test.tsx (4 tests) 149ms
+ ✓ tests/agenda-day-step.test.ts (5 tests) 14ms
+ ✓ tests/demo-data-panel.test.tsx (9 tests) 30ms
+ ✓ tests/decision-economics-render.test.tsx (7 tests) 53ms
+ ✓ tests/route-focus-picker.test.tsx (5 tests) 21ms
+ ✓ tests/agent-trace.test.ts (11 tests) 34ms
+ ✓ tests/route-focus-line.test.ts (6 tests) 21ms
+ ✓ tests/decision-evidence-actions-ux.test.tsx (5 tests) 80ms
+ ✓ tests/agent-swarm-panel.test.tsx (3 tests) 74ms
+ ✓ tests/provider-panel.test.tsx (6 tests) 24ms
+ ✓ tests/surplus-board.test.tsx (9 tests) 65ms
+ ✓ tests/kpi-quality-board.test.tsx (7 tests) 86ms
+ ✓ tests/datetime.test.ts (15 tests) 66ms
+ ✓ tests/pagination.test.ts (11 tests) 19ms
+ ✓ tests/prd-nav.test.tsx (7 tests) 12ms
+ ✓ tests/supplier-search.test.ts (8 tests) 19ms
+ ✓ tests/kpi-wiring.test.tsx (6 tests) 12ms
+ ✓ tests/kpi-bullet.test.ts (8 tests) 13ms
+ ✓ tests/map-legend-break.test.ts (5 tests) 13ms
+ ✓ tests/event2-panel.test.tsx (4 tests) 83ms
+ ✓ tests/overview-kpi.test.ts (9 tests) 12ms
+ ✓ tests/token-bayangan.test.ts (4 tests) 68ms
+ ✓ tests/api-error.test.ts (4 tests) 69ms
+ ✓ tests/map-a11y.test.ts (7 tests) 26ms
+ ✓ tests/decision-actions-trigger-label.test.tsx (4 tests) 24ms
+ ✓ tests/demo-rebuild.test.tsx (7 tests) 45ms
+ ✓ tests/food-safety-quarantine.test.ts (8 tests) 15ms
+ ✓ tests/location-balance-chart.test.tsx (4 tests) 46ms
+ ✓ tests/evidence-dedup.test.ts (6 tests) 34ms
+ ✓ tests/radius-scale-css.test.ts (4 tests) 193ms
+ ✓ tests/truck-progress.test.ts (7 tests) 8ms
+ ✓ tests/scope-ui-lock.test.tsx (6 tests) 32ms
+ ✓ tests/supplier-governance-ui.test.tsx (4 tests) 34ms
+ ✓ tests/map-pin-class.test.ts (8 tests) 27ms
+ ✓ tests/proxy-roots.test.ts (2 tests) 58ms
+ ✓ tests/decision-link.test.ts (9 tests) 14ms
+ ✓ tests/query.test.ts (7 tests) 14ms
+ ✓ tests/token-warna-komponen.test.ts (4 tests) 46ms
+ ✓ tests/decision-picker-filter.test.ts (8 tests) 16ms
+ ✓ tests/label-ringkas-geometri.test.ts (3 tests) 9ms
+ ✓ tests/feed-window-wiring.test.ts (6 tests) 12ms
+ ✓ tests/token-alias-css.test.ts (6 tests) 18ms
+ ✓ tests/overview-section-order.test.ts (3 tests) 62ms
+ ✓ tests/summary-wiring.test.tsx (4 tests) 107ms
+ ✓ tests/overview-section-jump.test.tsx (5 tests) 24ms
+ ✓ tests/integrity-panel.test.tsx (3 tests) 16ms
+ ✓ tests/map-truck-poll.test.ts (4 tests) 9ms
+ ✓ tests/chaos-scope.test.ts (7 tests) 6ms
+ ✓ tests/board-scroll-hint.test.ts (3 tests) 16ms
+ ✓ tests/demo-agent-meta-css.test.ts (4 tests) 13ms
+ ✓ tests/settings.test.ts (9 tests) 12ms
+ ✓ tests/compliance-evidence.test.ts (4 tests) 9ms
+ ✓ tests/food-safety-board-quarantine.test.tsx (6 tests) 72ms
+ ✓ tests/recommendations.test.ts (5 tests) 11ms
+ ✓ tests/supply-map-marker-line.test.tsx (3 tests) 57ms
+ ✓ tests/sisa-audit-desain.test.ts (3 tests) 8ms
+ ✓ tests/refresh-setelah-tulis.test.ts (5 tests) 13ms
+ ✓ tests/balance-data-state-render.test.tsx (3 tests) 25ms
+ ✓ tests/decision-picker-collapsed.test.ts (3 tests) 16ms
+ ✓ tests/agent-log-default.test.ts (6 tests) 12ms
+ ✓ tests/evidence-flags-css.test.ts (4 tests) 9ms
+ ✓ tests/jam.test.ts (6 tests) 56ms
+ ✓ tests/feed-pagination.test.ts (4 tests) 12ms
+ ✓ tests/map-popup-css.test.ts (3 tests) 10ms
+ ✓ tests/recommendation-route.test.ts (5 tests) 7ms
+ ✓ tests/map-sorot.test.ts (4 tests) 12ms
+ ✓ tests/ledger-coverage.test.ts (4 tests) 11ms
+ ✓ tests/safety-disruption-payload.test.ts (1 test) 76ms
+ ✓ tests/export.test.ts (3 tests) 8ms
+ ✓ tests/exclusion-refresh.test.ts (3 tests) 61ms
+ ✓ tests/status-badge.test.tsx (4 tests) 15ms
+ ✓ tests/agent-swarm-grid-css.test.ts (2 tests) 6ms
+ ✓ tests/balance-url.test.ts (3 tests) 7ms
+ ✓ tests/wilayah.test.ts (4 tests) 9ms
+ ✓ tests/decisions-window.test.ts (4 tests) 15ms
+ ✓ tests/stock-chart.test.tsx (3 tests) 23ms
+ ✓ tests/scroll-hint.test.ts (4 tests) 8ms
+ ✓ tests/agent-trace-viewer.test.tsx (3 tests) 32ms
+ ✓ tests/fetch-batches-limit.test.ts (1 test) 8ms
+ ✓ tests/supplier-exclusions.test.ts (3 tests) 4ms
+ ✓ tests/today-motion.test.ts (2 tests) 10ms
+ ✓ tests/fact-list-fold.test.ts (2 tests) 5ms
+ ✓ tests/smoke.test.tsx (1 test) 24ms
+ ✓ tests/login.test.tsx (6 tests) 4ms
+
+ Test Files  175 passed (175)
+      Tests  1926 passed (1926)
+   Start at  12:06:24
+   Duration  37.02s (transform 70.48s, setup 0ms, collect 207.00s, tests 15.80s, environment 58.46s, prepare 26.77s)
+

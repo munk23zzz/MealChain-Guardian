@@ -1,0 +1,16 @@
+== DB kosong mealchain_f3_e2e
+NOTICE:  database "mealchain_f3_e2e" does not exist, skipping
+== migrasi ke head
+UPGRADE_EXIT=0
+commodity_policies setelah MIGRASI: 0
+== seed kanonik
+SEED_EXIT=2
+usage: seed_data.py [-h] --reference-time REFERENCE_TIME [--with-demo-users]
+                    [--with-demo-suppliers] [--skip-routes]
+seed_data.py: error: the following arguments are required: --reference-time
+commodity_policies setelah SEED: 0
+per komoditas:
+ name | cold_chain_required | safe_temp_min_c | safe_temp_max_c | shelf_life_days | min_temperature_samples | max_observation_age_minutes | policy_kind 
+------+---------------------+-----------------+-----------------+-----------------+-------------------------+-----------------------------+-------------
+(0 rows)
+

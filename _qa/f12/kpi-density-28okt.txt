@@ -1,0 +1,10 @@
+=== KEPADATAN TAB KPI ===
+ | sebelum | sesudah
+karakter teks terlihat | 2065 | 988
+kata terlihat | 324 | 160
+blok teks terlihat | 50 | 22
+karakter termasuk lipatan | 4095 | 4009
+penurunan teks terlihat | 52% | —
+penurunan blok terlihat | 56% | —
+
+ ✓ tests/_tmp-kpi-density.test.tsx (1 test) 152ms

@@ -1,0 +1,10 @@
+klon mealchain_f7v2: 120 batch, alembic 043_least_privilege_app
+bentuk data: demo,5200 seed,40 
+sesi: replay,19 realtime,1 
+== pytest
+PYTEST_EXIT=0
+ Container mealchain-guardian-backend-run-2b349094c665 Creating 
+ Container mealchain-guardian-backend-run-2b349094c665 Created 
+................                                                         [100%]
+16 passed in 5.92s
+log: _qa/f7/pytest.txt

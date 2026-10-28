@@ -1,0 +1,168 @@
+........................................................................ [ 51%]
+......................F..................................Fs..F......     [100%]
+=================================== FAILURES ===================================
+_______ test_approve_ditolak_untuk_batch_belum_pass[needs-verification] ________
+
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyNGFmNDlkOS03MzZiLTRkYWQtYmRmMS02NzI1MzE2OTQ...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTA2MjUwLCJleHAiOjE3OTMxNDk0NTB9.RG5pEvRKqtxk-Mr8cMpQFNoP15lJODvYNDBJLIePqKw'}
+statuses = ('needs_verification',)
+
+    @pytest.mark.parametrize(
+        "statuses",
+        [
+            ("needs_verification",),
+            ("pending",),
+        ],
+        ids=["needs-verification", "pending"],
+    )
+    def test_approve_ditolak_untuk_batch_belum_pass(auth_headers, statuses):
+        batch_id = _batch_status(statuses)
+        if batch_id is None:
+            pytest.skip(f"tidak ada batch {statuses} di data demo")
+    
+        dibuat: list[str] = []
+        try:
+            with _client() as c:
+                catat = c.post(
+                    "/receipts",
+                    headers=auth_headers,
+                    json={
+                        "batch_id": batch_id,
+                        "checked": {"kemasan": True},
+                        "other_note": "uji gate keselamatan",
+                    },
+                )
+>               assert catat.status_code == 201, catat.text
+E               AssertionError: {"detail":"barang masih berstatus karantina — tidak boleh masuk stok; tunggu keputusan pelepasan atau penolakan (kode: quarantined, safety_needs_verification)"}
+E               assert 409 == 201
+E                +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_receipts_safety_gate.py:84: AssertionError
+_______ test_approval_summary_or_complete_then_execute_parity[explicit] ________
+
+client = <starlette.testclient.TestClient object at 0x70778071d8e0>
+binding = 'explicit'
+
+    @pytest.mark.parametrize("binding", ["explicit", "missing"])
+    def test_approval_summary_or_complete_then_execute_parity(client, binding):
+        """Only a bound transfer promises a supplier and can execute."""
+        batch = _mk_batch(_bogor_id(), fail=False) if binding == "explicit" else None
+        # Kasus "missing" menuntut lokasi+komoditas yang TIDAK punya satu pun batch,
+        # supaya pemasok tidak bisa disimpulkan. Dulu dipaku ke `ayam` + Jakarta;
+        # seed bertambah, jadi pasangannya DICARI saat tes berjalan.
+        pasangan = None if batch else _pasangan_tanpa_batch(_jakarta_id())
+        if not batch and pasangan is None:
+            # Premis kasus ini (pasangan lokasi×komoditas TANPA batch) bisa hilang
+            # ketika seed bertambah — generator aktivitas demo mengisi seluruh
+            # pasangan 10 lokasi × 3 komoditas. Itu bukan regresi produk, jadi
+            # dilewati dengan alasan jujur, bukan digagalkan.
+            pytest.skip(
+                "semua lokasi×komoditas punya batch; kasus supplier_unknown mustahil dibentuk"
+            )
+        if batch:
+            did = _mk_decision(_bogor_id(), _jakarta_id())
+        else:
+            assert pasangan is not None  # dijamin skip di atas; ini hanya untuk tipe
+            sumber, komoditas = pasangan
+            did = _mk_decision(sumber, _jakarta_id(), commodity=komoditas)
+        try:
+            if batch:
+                _bind_decision(did, batch)
+            # Verifikasi + verdict konsisten (fixture DB level, server verdict).
+            client.post(
+                "/actions/verify", headers=_head_user(client), json={"decision_id": did}
+            )
+            _db_exec(
+                "UPDATE decisions SET verifier_note='consistent', verified_by="
+                "(SELECT id FROM users WHERE role='sppg_head' LIMIT 1) WHERE id=:d",
+                {"d": did},
+            )
+            # Approval Head saja TIDAK cukup: transfer operasional butuh dua role
+            # (PLAN.md §13.3) meski verdict verifier CONSISTENT.
+            ra = client.post(
+                "/actions/approve",
+                headers=_head_user(client),
+                json={"decision_id": did, "approved": True},
+            )
+            assert ra.status_code == 200, ra.text
+    
+            summary = client.get(
+                f"/decisions/{did}/approval-summary", headers=_head_user(client)
+            ).json()
+            assert summary["approval_state"]["satisfied"] is False
+            # Approval kedua: Nutritionist (user berbeda).
+            rn = client.post(
+                "/actions/approve",
+                headers=_nut_user(client),
+                json={"decision_id": did, "approved": True},
+            )
+            assert rn.status_code == 200, rn.text
+            summary = client.get(
+                f"/decisions/{did}/approval-summary", headers=_head_user(client)
+            ).json()
+            assert summary["approval_state"]["satisfied"] is True
+            if binding == "missing":
+                rx = client.post(
+                    "/actions/execute", headers=_head_user(client), json={"decision_id": did}
+                )
+                assert rx.status_code == 409, rx.text
+                assert "supplier_unknown" in rx.json()["detail"]
+                assert summary["can_execute"] is False
+                assert summary["supplier"] is None
+                assert rx.json()["detail"] in summary["blocking_reasons"]
+                assert not _db_all(
+                    "SELECT id FROM sap_mock_purchase_orders WHERE decision_id=:d", {"d": did}
+                )
+                return
+            assert summary["supplier"]["id"] == batch["supplier_id"]
+>           assert summary["can_execute"] is True
+E           assert False is True
+
+tests/test_approval_summary.py:470: AssertionError
+_______________ test_approval_summary_safety_revalidation_block ________________
+
+client = <starlette.testclient.TestClient object at 0x7077827df230>
+
+    def test_approval_summary_safety_revalidation_block(client):
+        """Batch sumber kini FAIL → summary menandai safety block + can_execute
+        false — sejajar dengan revalidation hook execute (O-EVENT-2)."""
+        suffix = uuid.uuid4().hex[:8]
+        loc_id = str(_db_exec_returning(
+            "INSERT INTO locations (name, region, latitude, longitude) "
+            "VALUES (:n, 'Test', -6.9, 107.6) RETURNING id",
+            {"n": f"SUM-src-{suffix}"},
+        ))
+        b = _mk_batch(loc_id, fail=False)
+        did = _mk_decision(loc_id, _jakarta_id())
+        try:
+            _db_exec(
+                "UPDATE decisions SET verifier_note='consistent', verified_by="
+                "(SELECT id FROM users WHERE role='sppg_head' LIMIT 1) WHERE id=:d",
+                {"d": did},
+            )
+            users = _db_all(
+                "SELECT id FROM users WHERE role='sppg_head' ORDER BY id LIMIT 1"
+            )
+            _db_exec(
+                "INSERT INTO approvals (decision_id, approved_by, approved) "
+                "VALUES (:d, :u, True)",
+                {"d": did, "u": str(users[0][0])},
+            )
+            # Summary saat batch masih aman → tidak ada safety block.
+            s1 = client.get(
+                f"/decisions/{did}/approval-summary", headers=_head_user(client)
+            ).json()
+>           assert s1["safety"]["blocked"] is False
+E           assert True is False
+
+tests/test_approval_summary.py:605: AssertionError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_receipts_safety_gate.py::test_approve_ditolak_untuk_batch_belum_pass[needs-verification]
+FAILED tests/test_approval_summary.py::test_approval_summary_or_complete_then_execute_parity[explicit]
+FAILED tests/test_approval_summary.py::test_approval_summary_safety_revalidation_block
+3 failed, 136 passed, 1 skipped, 1 warning in 126.14s (0:02:06)

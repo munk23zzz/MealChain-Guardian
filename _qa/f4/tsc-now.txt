@@ -1,0 +1,2 @@
+components/FoodSafetyBoard.tsx(700,12): error TS2304: Cannot find name 'sisaStatus'.
+components/FoodSafetyBoard.tsx(703,59): error TS2304: Cannot find name 'sisaStatus'.

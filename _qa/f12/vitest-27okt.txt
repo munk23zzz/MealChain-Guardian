@@ -1,0 +1,214 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mE:/hackathon/HackathonAWS/mealchain-guardian/frontend[39m
+
+ [32m✓[39m tests/validated-field.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[90m 83[2mms[22m[39m
+ [32m✓[39m tests/section-jump.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[90m 186[2mms[22m[39m
+ [32m✓[39m tests/today-summary-strip.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[90m 146[2mms[22m[39m
+ [32m✓[39m tests/decision-picker.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[90m 221[2mms[22m[39m
+ [32m✓[39m tests/agenda-date-picker.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 646[2mms[22m[39m
+[90mstderr[2m | tests/demo-control-interaction.test.tsx[2m > [22m[2mklik dua tombol memuat dataset[2m > [22m[2mMuat Demo Real-time mengirim mode=realtime + replace, lalu sesi server masuk state
+[22m[39mWarning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ [32m✓[39m tests/supplier-exclusion-panel.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 353[2mms[22m[39m
+ [32m✓[39m tests/demo-control-interaction.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 450[2mms[22m[39m
+ [32m✓[39m tests/kpi-provenance.test.tsx [2m([22m[2m28 tests[22m[2m)[22m[33m 635[2mms[22m[39m
+ [32m✓[39m tests/pagination-wiring.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 576[2mms[22m[39m
+ [32m✓[39m tests/supplier-search-ui.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 766[2mms[22m[39m
+ [32m✓[39m tests/supply-map-layer.test.tsx [2m([22m[2m64 tests[22m[2m)[22m[33m 2162[2mms[22m[39m
+ [32m✓[39m tests/food-safety.test.ts [2m([22m[2m84 tests[22m[2m)[22m[90m 53[2mms[22m[39m
+ [32m✓[39m tests/evidence-summary.test.ts [2m([22m[2m78 tests[22m[2m)[22m[90m 46[2mms[22m[39m
+ [32m✓[39m tests/supplier-routes.test.ts [2m([22m[2m45 tests[22m[2m)[22m[90m 34[2mms[22m[39m
+ [32m✓[39m tests/supplier-pins.test.ts [2m([22m[2m37 tests[22m[2m)[22m[90m 26[2mms[22m[39m
+ [32m✓[39m tests/map-view.test.ts [2m([22m[2m12 tests[22m[2m)[22m[90m 38[2mms[22m[39m
+ [32m✓[39m tests/side-nav.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[90m 103[2mms[22m[39m
+[90mstderr[2m | tests/route-focus-collapse.test.tsx[2m > [22m[2mjumlahBaris / perluTombolTutup[2m > [22m[2mmenghitung baris dari offsetTop dan hanya melipat bila > 1 baris
+[22m[39mWarning: The current testing environment is not configured to support act(...)
+
+[90mstderr[2m | tests/route-focus-collapse.test.tsx[2m > [22m[2mRouteFocusPicker — lipat buka[2m > [22m[2msatu baris: tidak ada segitiga, semua pil tampil
+[22m[39mWarning: The current testing environment is not configured to support act(...)
+Warning: The current testing environment is not configured to support act(...)
+
+[90mstderr[2m | tests/route-focus-collapse.test.tsx[2m > [22m[2mRouteFocusPicker — lipat buka[2m > [22m[2mlebih dari satu baris: ada segitiga, daftar terlipat, dan bisa dibuka
+[22m[39mWarning: The current testing environment is not configured to support act(...)
+Warning: The current testing environment is not configured to support act(...)
+Warning: The current testing environment is not configured to support act(...)
+    at RouteFocusPicker (E:\hackathon\HackathonAWS\mealchain-guardian\frontend\components\RouteFocusPicker.tsx:11:3)
+Warning: The current testing environment is not configured to support act(...)
+Warning: The current testing environment is not configured to support act(...)
+
+ [32m✓[39m tests/route-focus-collapse.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[90m 136[2mms[22m[39m
+ [32m✓[39m tests/demo-agent.test.ts [2m([22m[2m35 tests[22m[2m)[22m[90m 18[2mms[22m[39m
+ [32m✓[39m tests/pager.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[90m 167[2mms[22m[39m
+ [32m✓[39m tests/today-dashboard.test.tsx [2m([22m[2m43 tests[22m[2m)[22m[90m 209[2mms[22m[39m
+ [32m✓[39m tests/food-safety-board.test.tsx [2m([22m[2m29 tests[22m[2m)[22m[90m 240[2mms[22m[39m
+ [32m✓[39m tests/purchase-order-decision-link.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[90m 94[2mms[22m[39m
+ [32m✓[39m tests/scroll-hint-component.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[90m 57[2mms[22m[39m
+ [32m✓[39m tests/shipment-card.test.ts [2m([22m[2m38 tests[22m[2m)[22m[90m 35[2mms[22m[39m
+ [32m✓[39m tests/suppliers-board.test.ts [2m([22m[2m23 tests[22m[2m)[22m[90m 25[2mms[22m[39m
+ [32m✓[39m tests/map-pin-glyphs.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 23[2mms[22m[39m
+ [32m✓[39m tests/topbar-lib.test.ts [2m([22m[2m28 tests[22m[2m)[22m[90m 20[2mms[22m[39m
+ [32m✓[39m tests/human-review-null-packet.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 75[2mms[22m[39m
+ [32m✓[39m tests/decision-evidence.test.tsx [2m([22m[2m38 tests[22m[2m)[22m[33m 545[2mms[22m[39m
+ [32m✓[39m tests/receipt-gate-status.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[90m 24[2mms[22m[39m
+ [32m✓[39m tests/shipment-board.test.ts [2m([22m[2m21 tests[22m[2m)[22m[90m 21[2mms[22m[39m
+ [32m✓[39m tests/supplier-board.test.tsx [2m([22m[2m21 tests[22m[2m)[22m[90m 104[2mms[22m[39m
+ [32m✓[39m tests/receipt-quarantine.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[90m 97[2mms[22m[39m
+ [32m✓[39m tests/approval-menu.test.tsx [2m([22m[2m20 tests[22m[2m)[22m[90m 51[2mms[22m[39m
+ [32m✓[39m tests/decision-feed.test.ts [2m([22m[2m25 tests[22m[2m)[22m[90m 15[2mms[22m[39m
+ [32m✓[39m tests/agent-flow.test.tsx [2m([22m[2m21 tests[22m[2m)[22m[90m 36[2mms[22m[39m
+ [32m✓[39m tests/top-bar.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[90m 33[2mms[22m[39m
+ [32m✓[39m tests/demo-data.test.ts [2m([22m[2m23 tests[22m[2m)[22m[90m 36[2mms[22m[39m
+ [32m✓[39m tests/agent-swarm.test.ts [2m([22m[2m15 tests[22m[2m)[22m[90m 37[2mms[22m[39m
+ [32m✓[39m tests/demo-control-panel.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[90m 184[2mms[22m[39m
+ [32m✓[39m tests/evidence-dossier.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[90m 72[2mms[22m[39m
+ [32m✓[39m tests/purchase-orders.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[90m 30[2mms[22m[39m
+ [32m✓[39m tests/realtime-demo-control.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[90m 59[2mms[22m[39m
+ [32m✓[39m tests/today.test.ts [2m([22m[2m22 tests[22m[2m)[22m[90m 23[2mms[22m[39m
+ [32m✓[39m tests/temperature-evidence.test.ts [2m([22m[2m15 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m tests/decision-picker.test.ts [2m([22m[2m18 tests[22m[2m)[22m[90m 29[2mms[22m[39m
+ [32m✓[39m tests/agent-quality.test.ts [2m([22m[2m17 tests[22m[2m)[22m[90m 15[2mms[22m[39m
+ [32m✓[39m tests/today-summary.test.ts [2m([22m[2m14 tests[22m[2m)[22m[90m 22[2mms[22m[39m
+ [32m✓[39m tests/kpi-dashboard.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[90m 79[2mms[22m[39m
+ [32m✓[39m tests/ops-console.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[90m 54[2mms[22m[39m
+ [32m✓[39m tests/demo-session.test.ts [2m([22m[2m20 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m tests/decision-evidence-boundary.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[90m 31[2mms[22m[39m
+ [32m✓[39m tests/bahasa.test.ts [2m([22m[2m19 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m tests/supply-adequacy.test.ts [2m([22m[2m12 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m tests/evidence-rapi.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[90m 48[2mms[22m[39m
+ [32m✓[39m tests/balance-data-state.test.ts [2m([22m[2m12 tests[22m[2m)[22m[90m 18[2mms[22m[39m
+ [32m✓[39m tests/map-controls-css.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m tests/design-tokens-kontrak.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 16[2mms[22m[39m
+ [32m✓[39m tests/kpi.test.ts [2m([22m[2m21 tests[22m[2m)[22m[90m 58[2mms[22m[39m
+ [32m✓[39m tests/shipment-card-component.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[90m 49[2mms[22m[39m
+ [32m✓[39m tests/shipment-timeline.test.ts [2m([22m[2m14 tests[22m[2m)[22m[90m 27[2mms[22m[39m
+ [32m✓[39m tests/map-cluster.test.ts [2m([22m[2m22 tests[22m[2m)[22m[90m 15[2mms[22m[39m
+ [32m✓[39m tests/po-pdf-download.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[90m 24[2mms[22m[39m
+ [32m✓[39m tests/route-flow.test.ts [2m([22m[2m13 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m tests/today-agenda-calendar.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[90m 38[2mms[22m[39m
+ [32m✓[39m tests/demo-mode-switch.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m tests/agenda.test.ts [2m([22m[2m13 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m tests/route-focus.test.ts [2m([22m[2m12 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m tests/overview-bento.test.ts [2m([22m[2m21 tests[22m[2m)[22m[90m 30[2mms[22m[39m
+ [32m✓[39m tests/agent-quality-board.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[90m 56[2mms[22m[39m
+ [32m✓[39m tests/approval-summary.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[90m 33[2mms[22m[39m
+ [32m✓[39m tests/overview-procurement-today.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[90m 79[2mms[22m[39m
+ [32m✓[39m tests/agenda-wiring.test.ts [2m([22m[2m16 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m tests/decision-economics.test.ts [2m([22m[2m11 tests[22m[2m)[22m[90m 34[2mms[22m[39m
+ [32m✓[39m tests/supply-adequacy-chart.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[90m 41[2mms[22m[39m
+ [32m✓[39m tests/ops-console-event1.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[90m 28[2mms[22m[39m
+ [32m✓[39m tests/map-popup.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 18[2mms[22m[39m
+ [32m✓[39m tests/map-console.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32m✓[39m tests/governance-status.test.ts [2m([22m[2m10 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m tests/surplus.test.ts [2m([22m[2m12 tests[22m[2m)[22m[90m 34[2mms[22m[39m
+ [32m✓[39m tests/shipment-board-component.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[90m 33[2mms[22m[39m
+ [32m✓[39m tests/route-line-split.test.ts [2m([22m[2m16 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32m✓[39m tests/sidebar-wiring.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m tests/supply-map-suppliers.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[90m 34[2mms[22m[39m
+ [32m✓[39m tests/supply-map.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[90m 47[2mms[22m[39m
+ [32m✓[39m tests/integration-status.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[90m 43[2mms[22m[39m
+ [32m✓[39m tests/approval-modal.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[90m 29[2mms[22m[39m
+ [32m✓[39m tests/map-legend-compact.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m tests/popup-backdrop.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m tests/review-refresh-chain.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 18[2mms[22m[39m
+ [32m✓[39m tests/overview-format.test.ts [2m([22m[2m10 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m tests/location-balance.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32m✓[39m tests/decision-loop.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m tests/demo-accounts.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 19[2mms[22m[39m
+ [32m✓[39m tests/recommendation-card.test.tsx [2m([22m[2m14 tests[22m[2m)[22m[90m 34[2mms[22m[39m
+ [32m✓[39m tests/surplus-plan-server.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m tests/decision-evidence-actions-ux.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[90m 82[2mms[22m[39m
+ [32m✓[39m tests/evidence-layout-css.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m tests/chaos-telemetry.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m tests/decision-evidence-cost-block.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[90m 61[2mms[22m[39m
+ [32m✓[39m tests/demo-data-panel.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[90m 20[2mms[22m[39m
+ [32m✓[39m tests/surplus-board.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[90m 40[2mms[22m[39m
+ [32m✓[39m tests/route-focus-picker.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[90m 18[2mms[22m[39m
+ [32m✓[39m tests/decision-economics-render.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[90m 41[2mms[22m[39m
+ [32m✓[39m tests/agenda-day-step.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m tests/provider-panel.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[90m 16[2mms[22m[39m
+ [32m✓[39m tests/agent-trace.test.ts [2m([22m[2m11 tests[22m[2m)[22m[90m 32[2mms[22m[39m
+ [32m✓[39m tests/route-focus-line.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 10[2mms[22m[39m
+ [32m✓[39m tests/kpi-quality-board.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[90m 51[2mms[22m[39m
+ [32m✓[39m tests/agent-swarm-panel.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[90m 47[2mms[22m[39m
+ [32m✓[39m tests/kpi-wiring.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m tests/datetime.test.ts [2m([22m[2m15 tests[22m[2m)[22m[90m 39[2mms[22m[39m
+ [32m✓[39m tests/event2-panel.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[90m 32[2mms[22m[39m
+ [32m✓[39m tests/decision-actions-trigger-label.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m tests/supplier-search.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 10[2mms[22m[39m
+ [32m✓[39m tests/pagination.test.ts [2m([22m[2m11 tests[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m tests/prd-nav.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m tests/kpi-bullet.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m tests/map-legend-break.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m tests/overview-kpi.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m tests/location-balance-chart.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[90m 30[2mms[22m[39m
+ [32m✓[39m tests/decision-detail-cost.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m tests/supplier-governance-ui.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[90m 17[2mms[22m[39m
+ [32m✓[39m tests/demo-rebuild.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[90m 36[2mms[22m[39m
+ [32m✓[39m tests/token-bayangan.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 22[2mms[22m[39m
+ [32m✓[39m tests/api-error.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 16[2mms[22m[39m
+ [32m✓[39m tests/evidence-dedup.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 15[2mms[22m[39m
+ [32m✓[39m tests/map-a11y.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32m✓[39m tests/scope-ui-lock.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[90m 17[2mms[22m[39m
+ [32m✓[39m tests/radius-scale-css.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 20[2mms[22m[39m
+ [32m✓[39m tests/food-safety-quarantine.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m tests/proxy-roots.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m tests/truck-progress.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m tests/decision-link.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m tests/decision-picker-filter.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m tests/map-pin-class.test.ts [2m([22m[2m8 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m tests/token-warna-komponen.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 10[2mms[22m[39m
+ [32m✓[39m tests/feed-window-wiring.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m tests/label-ringkas-geometri.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m tests/query.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 14[2mms[22m[39m
+ [32m✓[39m tests/summary-wiring.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[90m 27[2mms[22m[39m
+ [32m✓[39m tests/chaos-scope.test.ts [2m([22m[2m7 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m tests/overview-section-order.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m tests/food-safety-board-quarantine.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[90m 48[2mms[22m[39m
+ [32m✓[39m tests/token-alias-css.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m tests/compliance-evidence.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m tests/supply-map-marker-line.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[90m 22[2mms[22m[39m
+ [32m✓[39m tests/overview-section-jump.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m tests/integrity-panel.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m tests/balance-data-state-render.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[90m 22[2mms[22m[39m
+ [32m✓[39m tests/demo-agent-meta-css.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m tests/map-truck-poll.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m tests/settings.test.ts [2m([22m[2m9 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m tests/board-scroll-hint.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m tests/recommendations.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m tests/sisa-audit-desain.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m tests/refresh-setelah-tulis.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m tests/decision-picker-collapsed.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m tests/agent-log-default.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m tests/evidence-flags-css.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m tests/feed-pagination.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m tests/jam.test.ts [2m([22m[2m6 tests[22m[2m)[22m[90m 32[2mms[22m[39m
+ [32m✓[39m tests/ledger-anchor.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m tests/recommendation-route.test.ts [2m([22m[2m5 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m tests/export.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m tests/map-sorot.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m tests/map-popup-css.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m tests/ledger-coverage.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m tests/safety-disruption-payload.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 11[2mms[22m[39m
+ [32m✓[39m tests/status-badge.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[90m 9[2mms[22m[39m
+ [32m✓[39m tests/exclusion-refresh.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m tests/decisions-window.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m tests/agent-swarm-grid-css.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m tests/agent-trace-viewer.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m tests/balance-url.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m tests/wilayah.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 5[2mms[22m[39m
+ [32m✓[39m tests/scroll-hint.test.ts [2m([22m[2m4 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m tests/login.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m tests/fetch-batches-limit.test.ts [2m([22m[2m1 test[22m[2m)[22m[90m 6[2mms[22m[39m
+ [32m✓[39m tests/fact-list-fold.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m tests/supplier-exclusions.test.ts [2m([22m[2m3 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m tests/today-motion.test.ts [2m([22m[2m2 tests[22m[2m)[22m[90m 4[2mms[22m[39m
+ [32m✓[39m tests/smoke.test.tsx [2m([22m[2m1 test[22m[2m)[22m[90m 26[2mms[22m[39m
+ [32m✓[39m tests/stock-chart.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[90m 20[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m185 passed[39m[22m[90m (185)[39m
+[2m      Tests [22m [1m[32m2027 passed[39m[22m[90m (2027)[39m
+[2m   Start at [22m 23:47:58
+[2m   Duration [22m 65.11s[2m (transform 22.16s, setup 0ms, collect 81.71s, tests 11.66s, environment 271.94s, prepare 110.31s)[22m
+
+EXIT=0

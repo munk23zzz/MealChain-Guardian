@@ -1,0 +1,14 @@
+
+=== Joule mode=realtime bridge=http://127.0.0.1:18091 backend=http://127.0.0.1:18100 ===
+  [OK   ] 1. GET /health jembatan hidup, backend reachable, TIDAK ada /ready
+  [OK   ] 2. backend sesi aktif terbaca (mode + jangkar) dan daftar PO tersedia
+  [OK   ] 3.pasokan jembatan menjawab dari backend
+  [OK   ] 3.kpi jembatan menjawab dari backend
+  [OK   ] 3.antrean jembatan menjawab dari backend
+  [OK   ] 3.po jembatan menjawab dari backend
+  [OK   ] 3.kiriman jembatan menjawab dari backend
+  [OK   ] 4. nomor PO yang disebut Joule ada di backend (tanpa nomor karangan)
+  [OK   ] 5. jawaban KPI menyebut sumber + tingkat bukti + konteks sesi (mode, jangkar, id sesi)
+  [OK   ] 6. permintaan approval DITOLAK jembatan dan diarahkan ke cockpit (status tidak berubah)
+
+  10 lulus · 0 gagal  →  out/joule-realtime.json

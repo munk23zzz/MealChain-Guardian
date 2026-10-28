@@ -1,0 +1,74 @@
+........................................................................ [  3%]
+.................................................ss..................... [  6%]
+........................................................................ [ 10%]
+........................................................................ [ 13%]
+....................................s.FF..F............................. [ 17%]
+....................s....................F.............................. [ 20%]
+........................................................................ [ 24%]
+............................................FFF.F....................... [ 27%]
+........................................................................ [ 31%]
+........................................................................ [ 34%]
+...........................................FFF...FF..F........F......... [ 38%]
+...........................................ssssssssssss................. [ 41%]
+..................sss.....................FF............................ [ 45%]
+..FFF...........................F..F.................................... [ 48%]
+........................................................................ [ 52%]
+.........................................................F.............. [ 55%]
+F....................................................................... [ 59%]
+........................................................................ [ 62%]
+.................................................................s...... [ 66%]
+......................................................................ss [ 69%]
+...........FF........................................................... [ 73%]
+........................................................................ [ 76%]
+..........................sss........................................... [ 80%]
+........................................................................ [ 83%]
+........................................................................ [ 86%]
+....................................................................s... [ 90%]
+........................................................................ [ 93%]
+........................................................................ [ 97%]
+.FF................................................s..                   [100%]
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+tests/test_human_verification.py::test_review_sah_mencatat_decision_evidence_dan_mengubah_status
+tests/test_human_verification.py::test_review_sah_mencatat_decision_evidence_dan_mengubah_status
+  /usr/local/lib/python3.12/site-packages/pydantic/main.py:1114: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.9/migration/
+    warnings.warn('The `dict` method is deprecated; use `model_dump` instead.', category=PydanticDeprecatedSince20)
+
+tests/test_road_route_sync.py::test_baris_batch_memuat_koordinat_dua_ujung[False]
+  sys:1: SAWarning: The garbage collector is trying to clean up non-checked-in connection <AdaptedConnection <asyncpg.connection.Connection object at 0x706d062a4b90>>, which will be terminated.  Please ensure that SQLAlchemy pooled connections are returned to the pool explicitly, either by calling ``close()`` or by using appropriate context managers to manage their lifecycle.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_api_decision_intelligence.py::test_recommend_endpoint_ranks_candidates
+FAILED tests/test_api_decision_intelligence.py::test_decisions_persist_and_get_validity
+FAILED tests/test_api_decision_intelligence.py::test_recommend_deterministic
+FAILED tests/test_approval_summary_receipt_gate.py::test_langkah_berikutnya_milik_batch_masing_masing
+FAILED tests/test_commodity_evidence_aggregation.py::test_campuran_batch_log_kosong_menahan_seluruh_kandidat
+FAILED tests/test_commodity_evidence_aggregation.py::test_dua_batch_sah_tetap_menghasilkan_kandidat
+FAILED tests/test_commodity_evidence_aggregation.py::test_log_lama_menahan_kandidat_seperti_log_kosong
+FAILED tests/test_commodity_evidence_aggregation.py::test_kandidat_lolos_membawa_label_observasi_dan_waktu
+FAILED tests/test_demo_cases_procurement_binding.py::test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan
+FAILED tests/test_demo_cases_procurement_binding.py::test_binding_pengadaan_memakai_pemasok_keputusan
+FAILED tests/test_demo_cases_procurement_binding.py::test_kasus_pengadaan_lolos_resolve_binding_dan_safety
+FAILED tests/test_demo_completed_decisions_konsisten.py::test_menyemai_ulang_menyembuhkan_binding_yang_menunjuk_batch_hilang
+FAILED tests/test_demo_completed_decisions_konsisten.py::test_menyemai_ulang_menyembuhkan_sumber_yang_sudah_kedaluwarsa
+FAILED tests/test_demo_completed_decisions_konsisten.py::test_ringkasan_hanya_menyisakan_alasan_yang_nyata
+FAILED tests/test_demo_control_modes.py::test_analyze_tanpa_sesi_tetap_berjalan
+FAILED tests/test_dispatch_safety_gate.py::test_execute_ditolak_bila_batch_sumber_belum_pass
+FAILED tests/test_dispatch_safety_gate.py::test_execute_ditolak_untuk_batch_butuh_verifikasi
+FAILED tests/test_event3_api.py::test_api_safety_happy_path_revised_201 - Ass...
+FAILED tests/test_event3_api.py::test_api_safety_replay_same_key_idempotent
+FAILED tests/test_event3_api.py::test_api_safety_conflict_same_key_other_batch_409
+FAILED tests/test_evidence_consistency_wiring.py::test_event3_menulis_seluruh_bukti_dengan_penilaian
+FAILED tests/test_evidence_live.py::test_live_evidence_batch_ids_nonempty - S...
+FAILED tests/test_kpi_provenance.py::test_penerimaan_bahan_tidak_menulis_porsi_tersaji
+FAILED tests/test_least_privilege_app_role.py::test_akun_aplikasi_bisa_membaca_dan_menulis_tabel_kerja
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[live-race]
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[historical]
+FAILED tests/test_tool_contracts.py::test_balance_analyze_full_pipeline_with_summary
+FAILED tests/test_tool_contracts.py::test_evidence_fuse_assembles_from_recommendation
+28 failed, 2015 passed, 28 skipped, 4 warnings in 1180.20s (0:19:40)
+DONE exit=1

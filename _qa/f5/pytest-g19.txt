@@ -1,0 +1,24 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______________________ test_artefak_openapi_tidak_basi ________________________
+
+    def test_artefak_openapi_tidak_basi():
+        if not BERKAS.is_file():
+            pytest.fail(f"{BERKAS.name} hilang dari repo; regenerasi atau hapus tesnya")
+    
+        artefak = json.loads(BERKAS.read_text(encoding="utf-8"))
+        nyata = app.openapi()
+    
+        kurang = _pasangan(nyata) - _pasangan(artefak)
+        lebih = _pasangan(artefak) - _pasangan(nyata)
+>       assert not kurang, f"endpoint baru belum masuk artefak: {sorted(kurang)[:5]}"
+E       AssertionError: endpoint baru belum masuk artefak: [('/decisions/{decision_id}/packet', 'get'), ('/decisions/{decision_id}/review', 'post')]
+E       assert not {('/decisions/{decision_id}/packet', 'get'), ('/decisions/{decision_id}/review', 'post')}
+
+tests/test_openapi_artifact_drift.py:40: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+=========================== short test summary info ============================
+FAILED tests/test_openapi_artifact_drift.py::test_artefak_openapi_tidak_basi
+1 failed in 5.44s
+EXIT=1

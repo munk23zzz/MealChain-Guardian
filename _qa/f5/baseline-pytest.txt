@@ -1,0 +1,3178 @@
+........................................................................ [  3%]
+........................................................................ [  7%]
+........................................................................ [ 11%]
+........................................................................ [ 15%]
+................................s....................................... [ 19%]
+................s....................................................... [ 23%]
+..........................F............................................. [ 27%]
+........................................................................ [ 31%]
+.................................FFF.................................... [ 35%]
+....................ssFFssssssssssssFF..FF...................FF........s [ 39%]
+ss...................................................................... [ 43%]
+........................................................................ [ 47%]
+.........F.............................................................. [ 51%]
+........................................................................ [ 55%]
+....................................F................................... [ 59%]
+.............................................................s.......... [ 63%]
+.............................................ss......................... [ 67%]
+........................................................................ [ 71%]
+........................................................................ [ 75%]
+sss..................................................................... [ 79%]
+........................................................................ [ 83%]
+........................................................................ [ 87%]
+...................s.................................................... [ 91%]
+........................................................................ [ 95%]
+........................................................................ [ 99%]
+.....                                                                    [100%]
+=================================== FAILURES ===================================
+______________ test_kasus_skrip_punya_bukti_termasuk_yang_ditolak ______________
+
+    @pytest.mark.skipif(text is None, reason="app/sqlalchemy tidak tersedia")
+    async def test_kasus_skrip_punya_bukti_termasuk_yang_ditolak():
+        eng = create_engine(_url())
+        async with eng.connect() as conn:
+            baris = (
+                await conn.execute(
+                    text(
+                        """
+                        SELECT left(d.id::text, 8) AS id, d.decision_type, d.status, d.demo_case
+                        FROM decisions d
+                        WHERE d.demo_case IS NOT NULL
+                          AND d.created_at > now() - interval '2 days'
+                          AND NOT EXISTS (
+                            SELECT 1 FROM decision_evidence e WHERE e.decision_id = d.id
+                          )
+                        ORDER BY d.created_at DESC
+                        LIMIT 10
+                        """
+                    )
+                )
+            ).fetchall()
+        await eng.dispose()
+>       assert baris == [], f"kasus skrip tanpa bukti: {baris}"
+E       AssertionError: kasus skrip tanpa bukti: [('0bccb708', 'supplier_procurement', 'pending_approval', 'rejection-loop-kuota')]
+E       assert [('0bccb708',...-loop-kuota')] == []
+E         
+E         Left contains one more item: ('0bccb708', 'supplier_procurement', 'pending_approval', 'rejection-loop-kuota')
+E         Use -v to get more diff
+
+tests/test_bukti_dan_draf_demo.py:58: AssertionError
+_____________ test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan _____________
+
+kasus = [{'batches': [], 'binding_supplier': None, 'demo_case': 'extra:supplier_procurement', 'id': UUID('4a36cbd3-b714-56fa-a...42bf-a472-7ce946aa75a8', 'demo_case': 'rejection-loop-kuota', 'id': UUID('30be595c-f2e9-43dc-9715-475216fa892d'), ...}]
+
+    def test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan(kasus):
+        """Batch acuan harus di lokasi TUJUAN, bukan lokasi asal (semantik pengadaan)."""
+        for k in kasus:
+>           assert k["batches"], (
+                f"{k['demo_case']} {str(k['id'])[:8]}: pengadaan tanpa binding batch — "
+                "layar akan menampilkan 'pemasok tidak dikenal'"
+            )
+E           AssertionError: extra:supplier_procurement 4a36cbd3: pengadaan tanpa binding batch — layar akan menampilkan 'pemasok tidak dikenal'
+E           assert []
+
+tests/test_demo_cases_procurement_binding.py:158: AssertionError
+_______________ test_binding_pengadaan_memakai_pemasok_keputusan _______________
+
+kasus = [{'batches': [], 'binding_supplier': None, 'demo_case': 'extra:supplier_procurement', 'id': UUID('4a36cbd3-b714-56fa-a...42bf-a472-7ce946aa75a8', 'demo_case': 'rejection-loop-kuota', 'id': UUID('30be595c-f2e9-43dc-9715-475216fa892d'), ...}]
+
+    def test_binding_pengadaan_memakai_pemasok_keputusan(kasus):
+        """Pemasok di binding = `decisions.supplier_id`, jadi PO = pemasok di layar."""
+        for k in kasus:
+>           assert k["binding_supplier"] == str(k["supplier"]), (
+                f"{k['demo_case']} {str(k['id'])[:8]}: binding menunjuk pemasok "
+                f"{k['binding_supplier']}, kolom keputusan {k['supplier']}"
+            )
+E           AssertionError: extra:supplier_procurement 4a36cbd3: binding menunjuk pemasok None, kolom keputusan 326e7edc-b754-42bf-a472-7ce946aa75a8
+E           assert None == '326e7edc-b754-42bf-a472-7ce946aa75a8'
+E            +  where '326e7edc-b754-42bf-a472-7ce946aa75a8' = str(UUID('326e7edc-b754-42bf-a472-7ce946aa75a8'))
+
+tests/test_demo_cases_procurement_binding.py:172: AssertionError
+____________ test_kasus_pengadaan_lolos_resolve_binding_dan_safety _____________
+
+kasus = [{'batches': [], 'binding_supplier': None, 'demo_case': 'extra:supplier_procurement', 'id': UUID('4a36cbd3-b714-56fa-a...42bf-a472-7ce946aa75a8', 'demo_case': 'rejection-loop-kuota', 'id': UUID('30be595c-f2e9-43dc-9715-475216fa892d'), ...}]
+
+    def test_kasus_pengadaan_lolos_resolve_binding_dan_safety(kasus):
+        """Tidak boleh ada kasus demo pengadaan yang pasti ditolak guard eksekusi."""
+        for k in kasus:
+            try:
+>               hasil = _resolve(k["id"], k["supplier"])
+
+tests/test_demo_cases_procurement_binding.py:182: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_demo_cases_procurement_binding.py:144: in _resolve
+    return _jalankan(_cek)
+tests/test_demo_cases_procurement_binding.py:46: in _jalankan
+    return asyncio.run(_bungkus())
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+tests/test_demo_cases_procurement_binding.py:42: in _bungkus
+    return await fn(session)
+tests/test_demo_cases_procurement_binding.py:137: in _cek
+    supplier, batches = await resolve_binding(db, d)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x75fc8d956210>
+decision = <app.models.decisions.Decision object at 0x75fc8dadbf50>
+
+    async def resolve_binding(db: AsyncSession, decision: Decision) -> tuple[uuid.UUID, list[Batch]]:
+        """Legacy tanpa snapshot: hanya FK batch dengan satu supplier tidak ambigu."""
+        evidence = (
+            (
+                await db.execute(
+                    select(DecisionEvidence).where(DecisionEvidence.decision_id == decision.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        bindings = [e.payload for e in evidence if e.payload.get("allocation_binding") is True]
+        acuan = lokasi_batch_acuan(decision)
+        query = select(Batch)
+        if bindings:
+            if len(bindings) != 1:
+                raise HTTPException(409, "binding ambigu; ajukan keputusan baru")
+            binding = bindings[0]
+            try:
+                ids = {uuid.UUID(str(v)) for v in binding["batch_ids"]}
+                supplier_id = uuid.UUID(binding["supplier_id"])
+            except (ValueError, KeyError, TypeError) as exc:
+                raise HTTPException(409, "binding tidak valid") from exc
+            batches = (await db.execute(query.where(Batch.id.in_(ids)))).scalars().all()
+            if (
+                len(batches) != len(ids)
+                or not ids
+                or any(
+                    b.supplier_id != supplier_id
+                    or b.location_id != acuan
+                    or b.commodity_id != decision.commodity_id
+                    for b in batches
+                )
+            ):
+                raise HTTPException(409, "binding batch/supplier berubah")
+        elif decision.decision_type == "supplier_procurement":
+            # Pengadaan tanpa snapshot binding: pemasok datang dari kolom keputusan,
+            # batch-nya di SPPG TUJUAN (lihat `lokasi_batch_acuan`).
+            if decision.supplier_id is None or acuan is None:
+                raise HTTPException(
+                    409, "supplier_unknown: keputusan pengadaan tanpa pemasok/batch tujuan"
+                )
+            supplier_id = decision.supplier_id
+            batches = list(
+                (await db.execute(query.where(
+                    Batch.location_id == acuan,
+                    Batch.supplier_id == supplier_id,
+                    Batch.commodity_id == decision.commodity_id,
+                ))).scalars().all()
+            )
+            if not batches:
+>               raise HTTPException(409, "supplier_unknown: tidak ada batch pemasok di SPPG tujuan")
+E               fastapi.exceptions.HTTPException: 409: supplier_unknown: tidak ada batch pemasok di SPPG tujuan
+
+app/services/supplier_eligibility.py:166: HTTPException
+
+The above exception was the direct cause of the following exception:
+
+kasus = [{'batches': [], 'binding_supplier': None, 'demo_case': 'extra:supplier_procurement', 'id': UUID('4a36cbd3-b714-56fa-a...42bf-a472-7ce946aa75a8', 'demo_case': 'rejection-loop-kuota', 'id': UUID('30be595c-f2e9-43dc-9715-475216fa892d'), ...}]
+
+    def test_kasus_pengadaan_lolos_resolve_binding_dan_safety(kasus):
+        """Tidak boleh ada kasus demo pengadaan yang pasti ditolak guard eksekusi."""
+        for k in kasus:
+            try:
+                hasil = _resolve(k["id"], k["supplier"])
+            except HTTPException as exc:  # pragma: no cover - pesan kegagalan
+>               raise AssertionError(
+                    f"{k['demo_case']} {str(k['id'])[:8]} ditolak guard: "
+                    f"{exc.status_code} {exc.detail}"
+                ) from exc
+E               AssertionError: extra:supplier_procurement 4a36cbd3 ditolak guard: 409 supplier_unknown: tidak ada batch pemasok di SPPG tujuan
+
+tests/test_demo_cases_procurement_binding.py:184: AssertionError
+___________________ test_mutasi_ditolak_saat_tidak_ada_sesi ____________________
+
+self = <sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x75fc8da332e0>
+operation = 'SELECT demo_sessions.id, demo_sessions.status, demo_sessions.started_at, demo_sessions.expires_at, demo_sessions.anch...M demo_sessions \nWHERE demo_sessions.status = $1::VARCHAR ORDER BY demo_sessions.started_at DESC \n LIMIT $2::INTEGER'
+parameters = ('active', 1)
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+>               prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:514: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:760: in _prepare
+    prepared_stmt = await self._connection.prepare(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:636: in prepare
+    return await self._prepare(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:654: in _prepare
+    stmt = await self._get_statement(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:433: in _get_statement
+    statement = await self._protocol.prepare(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.WrongObjectTypeError: WITHIN GROUP is required for ordered-set aggregate mode
+
+asyncpg/protocol/protocol.pyx:166: WrongObjectTypeError
+
+The above exception was the direct cause of the following exception:
+
+self = <sqlalchemy.engine.base.Connection object at 0x75fc8e41ecc0>
+dialect = <sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x75fc8d442420>
+context = <sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x75fc8e41faa0>
+statement = <sqlalchemy.dialects.postgresql.asyncpg.PGCompiler_asyncpg object at 0x75fc8dae4680>
+parameters = [('active', 1)]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75fc8f4e1b80>>
+error = WrongObjectTypeError('WITHIN GROUP is required for ordered-set aggregate mode')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.WrongObjectTypeError'>: WITHIN GROUP is required for ordered-set aggregate mode
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: ProgrammingError
+
+The above exception was the direct cause of the following exception:
+
+akun_sppg = {'loc': UUID('275d1be7-5bb8-5a37-8004-a2d40a51eb7e'), 'token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzYzZjM...eHAiOjE3OTMxMDAyNDl9.7hEMm4yJsz72b23fFFIEqLz3O0ECVMUW9Au7sEk4tYc', 'uid': UUID('3c6c3778-053c-454e-9960-a472b2fcdac7')}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x75fc8d92a8a0>
+
+    def test_mutasi_ditolak_saat_tidak_ada_sesi(akun_sppg, monkeypatch):
+        """Tanpa sesi aktif + enforce menyala → 409, bukan diproses."""
+        monkeypatch.setattr(settings, "demo_session_enforce", True)
+        h = {"Authorization": f"Bearer {akun_sppg['token']}"}
+        with TestClient(app) as client:
+            # pastikan tidak ada sesi aktif (endpoint ini juga memicu sapuan demo)
+>           r0 = client.get("/demo/session", headers=h)
+
+tests/test_demo_sesi_batas_dan_enforcement.py:169: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:518: in get
+    return super().get(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1066: in get
+    return self.request(
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:488: in request
+    return super().request(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:837: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:926: in send
+    response = self._send_handling_auth(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:954: in _send_handling_auth
+    response = self._send_handling_redirects(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:991: in _send_handling_redirects
+    response = self._send_single_request(request)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1027: in _send_single_request
+    response = transport.handle_request(request)
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:381: in handle_request
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:378: in handle_request
+    portal.call(self.app, scope, receive, send)
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:340: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+/usr/local/lib/python3.12/concurrent/futures/_base.py:456: in result
+    return self.__get_result()
+/usr/local/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+/usr/local/lib/python3.12/site-packages/fastapi/applications.py:1054: in __call__
+    await super().__call__(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/applications.py:113: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:187: in __call__
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:165: in __call__
+    await self.app(scope, receive, _send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:187: in _konteks_sesi_demo
+    aktif = await _sesi.aktif(db)
+app/services/demo_session.py:266: in aktif
+    ???
+app/services/demo_session.py:201: in _sesi_aktif_terakhir
+    "expires_at": sesi.expires_at.isoformat(),
+/usr/local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py:461: in execute
+    result = await greenlet_spawn(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2362: in execute
+    return self._execute_internal(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2247: in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/context.py:305: in orm_execute_statement
+    result = conn.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75fc8f4e1b80>>
+error = WrongObjectTypeError('WITHIN GROUP is required for ordered-set aggregate mode')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.WrongObjectTypeError'>: WITHIN GROUP is required for ordered-set aggregate mode
+E                   [SQL: SELECT demo_sessions.id, demo_sessions.status, demo_sessions.started_at, demo_sessions.expires_at, demo_sessions.anchor_now, demo_sessions.ended_at, demo_sessions.mode, demo_sessions.evaluation_anchor, demo_sessions.dataset_version, demo_sessions.template_version, demo_sessions.created_by 
+E                   FROM demo_sessions 
+E                   WHERE demo_sessions.status = $1::VARCHAR ORDER BY demo_sessions.started_at DESC 
+E                    LIMIT $2::INTEGER]
+E                   [parameters: ('active', 1)]
+E                   (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: ProgrammingError
+------------------------------ Captured log call -------------------------------
+WARNING  app.api.dependencies:dependencies.py:58 pembersihan data demo saat boot gagal
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 514, in _prepare_and_execute
+    prepared_stmt, attributes = await adapt_connection._prepare(
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 760, in _prepare
+    prepared_stmt = await self._connection.prepare(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/asyncpg/connection.py", line 636, in prepare
+    return await self._prepare(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/asyncpg/connection.py", line 654, in _prepare
+    stmt = await self._get_statement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/asyncpg/connection.py", line 433, in _get_statement
+    statement = await self._protocol.prepare(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "asyncpg/protocol/protocol.pyx", line 166, in prepare
+asyncpg.exceptions.WrongObjectTypeError: WITHIN GROUP is required for ordered-set aggregate mode
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 941, in do_execute
+    cursor.execute(statement, parameters)
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 572, in execute
+    self._adapt_connection.await_(
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 550, in _prepare_and_execute
+    self._handle_exception(error)
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 501, in _handle_exception
+    self._adapt_connection._handle_exception(error)
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 784, in _handle_exception
+    raise translated_error from error
+sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.WrongObjectTypeError'>: WITHIN GROUP is required for ordered-set aggregate mode
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/app/app/api/dependencies.py", line 54, in _bersihkan
+    await fn(db)
+  File "/app/app/api/dependencies.py", line 82, in _tanpa_stempel
+    if await ds.aktif(db) is None:
+       ^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/demo_session.py", line 266, in aktif
+  File "/app/app/services/demo_session.py", line 201, in _sesi_aktif_terakhir
+    "expires_at": sesi.expires_at.isoformat(),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 461, in execute
+    result = await greenlet_spawn(
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2362, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2247, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/context.py", line 305, in orm_execute_statement
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1418, in execute
+    return meth(
+           ^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py", line 515, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1640, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 941, in do_execute
+    cursor.execute(statement, parameters)
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 572, in execute
+    self._adapt_connection.await_(
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 550, in _prepare_and_execute
+    self._handle_exception(error)
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 501, in _handle_exception
+    self._adapt_connection._handle_exception(error)
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 784, in _handle_exception
+    raise translated_error from error
+sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.WrongObjectTypeError'>: WITHIN GROUP is required for ordered-set aggregate mode
+[SQL: SELECT demo_sessions.id, demo_sessions.status, demo_sessions.started_at, demo_sessions.expires_at, demo_sessions.anchor_now, demo_sessions.ended_at, demo_sessions.mode, demo_sessions.evaluation_anchor, demo_sessions.dataset_version, demo_sessions.template_version, demo_sessions.created_by 
+FROM demo_sessions 
+WHERE demo_sessions.status = $1::VARCHAR ORDER BY demo_sessions.started_at DESC 
+ LIMIT $2::INTEGER]
+[parameters: ('active', 1)]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+_______________________ test_baca_tetap_boleh_tanpa_sesi _______________________
+
+self = <sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x75fc8cc59ba0>
+operation = 'SELECT demo_sessions.id, demo_sessions.status, demo_sessions.started_at, demo_sessions.expires_at, demo_sessions.anch...M demo_sessions \nWHERE demo_sessions.status = $1::VARCHAR ORDER BY demo_sessions.started_at DESC \n LIMIT $2::INTEGER'
+parameters = ('active', 1)
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+>               prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:514: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:760: in _prepare
+    prepared_stmt = await self._connection.prepare(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:636: in prepare
+    return await self._prepare(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:654: in _prepare
+    stmt = await self._get_statement(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:433: in _get_statement
+    statement = await self._protocol.prepare(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.WrongObjectTypeError: WITHIN GROUP is required for ordered-set aggregate mode
+
+asyncpg/protocol/protocol.pyx:166: WrongObjectTypeError
+
+The above exception was the direct cause of the following exception:
+
+self = <sqlalchemy.engine.base.Connection object at 0x75fc8d9c0320>
+dialect = <sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x75fc8da39550>
+context = <sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x75fc8d9c2750>
+statement = <sqlalchemy.dialects.postgresql.asyncpg.PGCompiler_asyncpg object at 0x75fc8d12f8f0>
+parameters = [('active', 1)]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75fc8f4bf890>>
+error = WrongObjectTypeError('WITHIN GROUP is required for ordered-set aggregate mode')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.WrongObjectTypeError'>: WITHIN GROUP is required for ordered-set aggregate mode
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: ProgrammingError
+
+The above exception was the direct cause of the following exception:
+
+akun_sppg = {'loc': UUID('275d1be7-5bb8-5a37-8004-a2d40a51eb7e'), 'token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4MTBjN...eHAiOjE3OTMxMDAyNTB9.6uCKwnrkwrbK9aiLUuJUMgTYU4yJl8KsryqXOzzrnTg', 'uid': UUID('810c69b3-eba2-44f7-9197-12b313005f60')}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x75fc8d6ae5d0>
+
+    def test_baca_tetap_boleh_tanpa_sesi(akun_sppg, monkeypatch):
+        """Pembacaan tidak diblokir: KPI tetap bisa dilihat walau sesi kosong."""
+        monkeypatch.setattr(settings, "demo_session_enforce", True)
+        h = {"Authorization": f"Bearer {akun_sppg['token']}"}
+        with TestClient(app) as client:
+>           client.get("/demo/session", headers=h)
+
+tests/test_demo_sesi_batas_dan_enforcement.py:189: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:518: in get
+    return super().get(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1066: in get
+    return self.request(
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:488: in request
+    return super().request(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:837: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:926: in send
+    response = self._send_handling_auth(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:954: in _send_handling_auth
+    response = self._send_handling_redirects(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:991: in _send_handling_redirects
+    response = self._send_single_request(request)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1027: in _send_single_request
+    response = transport.handle_request(request)
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:381: in handle_request
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:378: in handle_request
+    portal.call(self.app, scope, receive, send)
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:340: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+/usr/local/lib/python3.12/concurrent/futures/_base.py:456: in result
+    return self.__get_result()
+/usr/local/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+/usr/local/lib/python3.12/site-packages/fastapi/applications.py:1054: in __call__
+    await super().__call__(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/applications.py:113: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:187: in __call__
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:165: in __call__
+    await self.app(scope, receive, _send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:187: in _konteks_sesi_demo
+    aktif = await _sesi.aktif(db)
+app/services/demo_session.py:266: in aktif
+    ???
+app/services/demo_session.py:201: in _sesi_aktif_terakhir
+    "expires_at": sesi.expires_at.isoformat(),
+/usr/local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py:461: in execute
+    result = await greenlet_spawn(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2362: in execute
+    return self._execute_internal(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2247: in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/context.py:305: in orm_execute_statement
+    result = conn.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75fc8f4bf890>>
+error = WrongObjectTypeError('WITHIN GROUP is required for ordered-set aggregate mode')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.WrongObjectTypeError'>: WITHIN GROUP is required for ordered-set aggregate mode
+E                   [SQL: SELECT demo_sessions.id, demo_sessions.status, demo_sessions.started_at, demo_sessions.expires_at, demo_sessions.anchor_now, demo_sessions.ended_at, demo_sessions.mode, demo_sessions.evaluation_anchor, demo_sessions.dataset_version, demo_sessions.template_version, demo_sessions.created_by 
+E                   FROM demo_sessions 
+E                   WHERE demo_sessions.status = $1::VARCHAR ORDER BY demo_sessions.started_at DESC 
+E                    LIMIT $2::INTEGER]
+E                   [parameters: ('active', 1)]
+E                   (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: ProgrammingError
+------------------------------ Captured log call -------------------------------
+WARNING  app.api.dependencies:dependencies.py:58 pembersihan data demo saat boot gagal
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 514, in _prepare_and_execute
+    prepared_stmt, attributes = await adapt_connection._prepare(
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 760, in _prepare
+    prepared_stmt = await self._connection.prepare(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/asyncpg/connection.py", line 636, in prepare
+    return await self._prepare(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/asyncpg/connection.py", line 654, in _prepare
+    stmt = await self._get_statement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/asyncpg/connection.py", line 433, in _get_statement
+    statement = await self._protocol.prepare(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "asyncpg/protocol/protocol.pyx", line 166, in prepare
+asyncpg.exceptions.WrongObjectTypeError: WITHIN GROUP is required for ordered-set aggregate mode
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 941, in do_execute
+    cursor.execute(statement, parameters)
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 572, in execute
+    self._adapt_connection.await_(
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 550, in _prepare_and_execute
+    self._handle_exception(error)
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 501, in _handle_exception
+    self._adapt_connection._handle_exception(error)
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 784, in _handle_exception
+    raise translated_error from error
+sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.WrongObjectTypeError'>: WITHIN GROUP is required for ordered-set aggregate mode
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/app/app/api/dependencies.py", line 54, in _bersihkan
+    await fn(db)
+  File "/app/app/api/dependencies.py", line 82, in _tanpa_stempel
+    if await ds.aktif(db) is None:
+       ^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/demo_session.py", line 266, in aktif
+  File "/app/app/services/demo_session.py", line 201, in _sesi_aktif_terakhir
+    "expires_at": sesi.expires_at.isoformat(),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 461, in execute
+    result = await greenlet_spawn(
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2362, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2247, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/context.py", line 305, in orm_execute_statement
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1418, in execute
+    return meth(
+           ^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py", line 515, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1640, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 941, in do_execute
+    cursor.execute(statement, parameters)
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 572, in execute
+    self._adapt_connection.await_(
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 550, in _prepare_and_execute
+    self._handle_exception(error)
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 501, in _handle_exception
+    self._adapt_connection._handle_exception(error)
+  File "/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 784, in _handle_exception
+    raise translated_error from error
+sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.WrongObjectTypeError'>: WITHIN GROUP is required for ordered-set aggregate mode
+[SQL: SELECT demo_sessions.id, demo_sessions.status, demo_sessions.started_at, demo_sessions.expires_at, demo_sessions.anchor_now, demo_sessions.ended_at, demo_sessions.mode, demo_sessions.evaluation_anchor, demo_sessions.dataset_version, demo_sessions.template_version, demo_sessions.created_by 
+FROM demo_sessions 
+WHERE demo_sessions.status = $1::VARCHAR ORDER BY demo_sessions.started_at DESC 
+ LIMIT $2::INTEGER]
+[parameters: ('active', 1)]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+________________ test_build_gagal_tidak_meninggalkan_sesi_aktif ________________
+
+self = <sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x75fc95197e80>
+operation = 'SELECT demo_sessions.id, demo_sessions.status, demo_sessions.started_at, demo_sessions.expires_at, demo_sessions.anch...M demo_sessions \nWHERE demo_sessions.status = $1::VARCHAR ORDER BY demo_sessions.started_at DESC \n LIMIT $2::INTEGER'
+parameters = ('active', 1)
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+>               prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:514: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:760: in _prepare
+    prepared_stmt = await self._connection.prepare(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:636: in prepare
+    return await self._prepare(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:654: in _prepare
+    stmt = await self._get_statement(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:433: in _get_statement
+    statement = await self._protocol.prepare(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.WrongObjectTypeError: WITHIN GROUP is required for ordered-set aggregate mode
+
+asyncpg/protocol/protocol.pyx:166: WrongObjectTypeError
+
+The above exception was the direct cause of the following exception:
+
+self = <sqlalchemy.engine.base.Connection object at 0x75fc8da3d2b0>
+dialect = <sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x75fc8d95f500>
+context = <sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x75fc8d9903e0>
+statement = <sqlalchemy.dialects.postgresql.asyncpg.PGCompiler_asyncpg object at 0x75fc8d1f4aa0>
+parameters = [('active', 1)]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75fc8f4bf3e0>>
+error = WrongObjectTypeError('WITHIN GROUP is required for ordered-set aggregate mode')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.WrongObjectTypeError'>: WITHIN GROUP is required for ordered-set aggregate mode
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: ProgrammingError
+
+The above exception was the direct cause of the following exception:
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x75fc98353e00>
+
+    def test_build_gagal_tidak_meninggalkan_sesi_aktif(monkeypatch):
+        """Build gagal → tidak ada sesi aktif, baris lama utuh, galat diteruskan."""
+    
+        async def skenario():
+            async with _db() as db:
+                # Yang diukur: baris TANPA stempel sesi (data kerja/kanonik). Baris
+                # ber-stempel milik sesi aktif lama memang dihapus oleh kontrak
+                # `akhiri()` — itu langkah "tutup sesi sebelumnya", bukan efek build
+                # yang gagal. Menghitung total mentah membuat tes ini merah hanya
+                # karena DB kebetulan punya sesi aktif (terukur 27 Okt 2026: merah
+                # saat sendirian maupun di suite penuh), padahal atomisitas build
+                # tidak dilanggar.
+                sebelum = {
+                    t: await _hitung_baris(db, t, tanpa_stempel=True)
+                    for t in ("batches", "decisions", "supply_records")
+                }
+                # Sesi milik fixture/tes lain boleh ada; yang dikunci adalah TIDAK ADA
+                # sesi BARU yang tertinggal setelah build gagal.
+                aktif_awal = set(await _sesi_aktif(db))
+    
+                async def build_gagal(*_args, **_kwargs):
+                    raise RuntimeError("build template sengaja gagal (tes)")
+    
+                monkeypatch.setattr("app.seed.demo_template.build_into", build_gagal)
+    
+                with pytest.raises(RuntimeError):
+                    await sesi.mulai_dengan_template(db, menit=5, created_by=None)
+    
+                sisa = set(await _sesi_aktif(db)) - aktif_awal
+                assert sisa == set(), f"sesi aktif baru tertinggal setelah build gagal: {sisa}"
+                for t, n in sebelum.items():
+                    sesudah = await _hitung_baris(db, t, tanpa_stempel=True)
+                    assert sesudah == n, (
+                        f"{t} tanpa stempel berubah padahal build gagal: {n} -> {sesudah}"
+                    )
+    
+>       asyncio.run(skenario())
+
+tests/test_demo_session_mulai_atomik.py:98: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+tests/test_demo_session_mulai_atomik.py:88: in skenario
+    await sesi.mulai_dengan_template(db, menit=5, created_by=None)
+app/services/demo_session.py:332: in mulai_dengan_template
+    return sesi
+app/services/demo_session.py:201: in _sesi_aktif_terakhir
+    "expires_at": sesi.expires_at.isoformat(),
+/usr/local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py:461: in execute
+    result = await greenlet_spawn(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2362: in execute
+    return self._execute_internal(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2247: in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/context.py:305: in orm_execute_statement
+    result = conn.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75fc8f4bf3e0>>
+error = WrongObjectTypeError('WITHIN GROUP is required for ordered-set aggregate mode')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.WrongObjectTypeError'>: WITHIN GROUP is required for ordered-set aggregate mode
+E                   [SQL: SELECT demo_sessions.id, demo_sessions.status, demo_sessions.started_at, demo_sessions.expires_at, demo_sessions.anchor_now, demo_sessions.ended_at, demo_sessions.mode, demo_sessions.evaluation_anchor, demo_sessions.dataset_version, demo_sessions.template_version, demo_sessions.created_by 
+E                   FROM demo_sessions 
+E                   WHERE demo_sessions.status = $1::VARCHAR ORDER BY demo_sessions.started_at DESC 
+E                    LIMIT $2::INTEGER]
+E                   [parameters: ('active', 1)]
+E                   (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: ProgrammingError
+_______________ test_build_sukses_membuat_tepat_satu_sesi_aktif ________________
+
+self = <sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x75fc951969e0>
+operation = 'SELECT demo_sessions.id, demo_sessions.status, demo_sessions.started_at, demo_sessions.expires_at, demo_sessions.anch...M demo_sessions \nWHERE demo_sessions.status = $1::VARCHAR ORDER BY demo_sessions.started_at DESC \n LIMIT $2::INTEGER'
+parameters = ('active', 1)
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+>               prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:514: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:760: in _prepare
+    prepared_stmt = await self._connection.prepare(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:636: in prepare
+    return await self._prepare(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:654: in _prepare
+    stmt = await self._get_statement(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:433: in _get_statement
+    statement = await self._protocol.prepare(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.WrongObjectTypeError: WITHIN GROUP is required for ordered-set aggregate mode
+
+asyncpg/protocol/protocol.pyx:166: WrongObjectTypeError
+
+The above exception was the direct cause of the following exception:
+
+self = <sqlalchemy.engine.base.Connection object at 0x75fc8d92bcb0>
+dialect = <sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x75fc8d92af60>
+context = <sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x75fc8dad8920>
+statement = <sqlalchemy.dialects.postgresql.asyncpg.PGCompiler_asyncpg object at 0x75fc8dad99a0>
+parameters = [('active', 1)]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75fc8f4e3200>>
+error = WrongObjectTypeError('WITHIN GROUP is required for ordered-set aggregate mode')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.WrongObjectTypeError'>: WITHIN GROUP is required for ordered-set aggregate mode
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: ProgrammingError
+
+The above exception was the direct cause of the following exception:
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x75fc8d92aff0>
+
+    def test_build_sukses_membuat_tepat_satu_sesi_aktif(monkeypatch):
+        """Build sukses → sesi aktif tunggal dan laporan build dikembalikan."""
+    
+        async def skenario():
+            async with _db() as db:
+                sid = uuid.uuid4()
+    
+                async def build_ok(*_args, **_kwargs):
+                    return {"inti": {"seed": {"batches": 0}}, "kasus": {}, "_sid": str(sid)}
+    
+                monkeypatch.setattr("app.seed.demo_template.build_into", build_ok)
+                baru, laporan = await sesi.mulai_dengan_template(db, menit=5, created_by=None)
+                try:
+                    assert laporan["inti"]["seed"] == {"batches": 0}
+                    aktif = await _sesi_aktif(db)
+                    assert baru.id in aktif
+                finally:
+                    await db.execute(
+                        text("DELETE FROM demo_sessions WHERE id = :i"), {"i": str(baru.id)}
+                    )
+                    await db.commit()
+    
+>       asyncio.run(skenario())
+
+tests/test_demo_session_mulai_atomik.py:123: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+tests/test_demo_session_mulai_atomik.py:112: in skenario
+    baru, laporan = await sesi.mulai_dengan_template(db, menit=5, created_by=None)
+app/services/demo_session.py:332: in mulai_dengan_template
+    return sesi
+app/services/demo_session.py:201: in _sesi_aktif_terakhir
+    "expires_at": sesi.expires_at.isoformat(),
+/usr/local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py:461: in execute
+    result = await greenlet_spawn(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2362: in execute
+    return self._execute_internal(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2247: in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/context.py:305: in orm_execute_statement
+    result = conn.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75fc8f4e3200>>
+error = WrongObjectTypeError('WITHIN GROUP is required for ordered-set aggregate mode')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.WrongObjectTypeError'>: WITHIN GROUP is required for ordered-set aggregate mode
+E                   [SQL: SELECT demo_sessions.id, demo_sessions.status, demo_sessions.started_at, demo_sessions.expires_at, demo_sessions.anchor_now, demo_sessions.ended_at, demo_sessions.mode, demo_sessions.evaluation_anchor, demo_sessions.dataset_version, demo_sessions.template_version, demo_sessions.created_by 
+E                   FROM demo_sessions 
+E                   WHERE demo_sessions.status = $1::VARCHAR ORDER BY demo_sessions.started_at DESC 
+E                    LIMIT $2::INTEGER]
+E                   [parameters: ('active', 1)]
+E                   (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: ProgrammingError
+______________ test_penjaga_flush_tidak_menstempel_baris_kanonik _______________
+
+self = <sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x75fc94370760>
+operation = 'INSERT INTO demo_sessions (id, status, started_at, expires_at, anchor_now, ended_at, dataset_version, template_versio...TAMP WITH TIME ZONE, $7::VARCHAR, $8::VARCHAR, $9::UUID) RETURNING demo_sessions.mode, demo_sessions.evaluation_anchor'
+parameters = (UUID('cfce5652-855b-419e-8d67-af2715e9057b'), 'active', datetime.datetime(2026, 10, 27, 11, 9, 11, 880396, tzinfo=dat...fo=datetime.timezone.utc), datetime.datetime(2026, 10, 27, 11, 9, 11, 880396, tzinfo=datetime.timezone.utc), None, ...)
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+>               prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:514: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:760: in _prepare
+    prepared_stmt = await self._connection.prepare(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:636: in prepare
+    return await self._prepare(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:654: in _prepare
+    stmt = await self._get_statement(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:433: in _get_statement
+    statement = await self._protocol.prepare(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.UndefinedColumnError: column "dataset_version" of relation "demo_sessions" does not exist
+
+asyncpg/protocol/protocol.pyx:166: UndefinedColumnError
+
+The above exception was the direct cause of the following exception:
+
+self = <sqlalchemy.engine.base.Connection object at 0x75fc8d42e930>
+dialect = <sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x75fc8dad8710>
+context = <sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x75fc8da380e0>
+statement = <sqlalchemy.dialects.postgresql.asyncpg.PGCompiler_asyncpg object at 0x75fc8dbeba40>
+parameters = [(UUID('cfce5652-855b-419e-8d67-af2715e9057b'), 'active', datetime.datetime(2026, 10, 27, 11, 9, 11, 880396, tzinfo=da...o=datetime.timezone.utc), datetime.datetime(2026, 10, 27, 11, 9, 11, 880396, tzinfo=datetime.timezone.utc), None, ...)]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75fc9434ab70>>
+error = UndefinedColumnError('column "dataset_version" of relation "demo_sessions" does not exist')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.UndefinedColumnError'>: column "dataset_version" of relation "demo_sessions" does not exist
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: ProgrammingError
+
+The above exception was the direct cause of the following exception:
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x75fc8dad8b90>
+
+    def test_penjaga_flush_tidak_menstempel_baris_kanonik(monkeypatch):
+        """Baris `origin='seed'` yang lahir saat sesi aktif tetap tanpa stempel."""
+        monkeypatch.setattr(settings, "demo_session_enforce", True)
+        sid = uuid.uuid4()
+    
+        async def _skenario() -> None:
+            async with _db() as db:
+                lok, kom, sup = await _referensi(db)
+                semu = await _sesi_sementara(db, commit=False)
+                sid_nyata = semu.id
+                sesi.set_sesi(sid_nyata)
+                kanonik = _batch(lok, kom, sup, origin="seed")
+                bawaan = _batch(lok, kom, sup, origin=None)
+                demo = _batch(lok, kom, sup, origin="demo")
+                db.add_all([kanonik, bawaan, demo])
+                try:
+                    await db.flush()
+                    assert kanonik.demo_session_id is None, "baris seed berstempel sesi"
+                    assert bawaan.demo_session_id is None, "baris default-seed berstempel sesi"
+                    assert demo.demo_session_id == sid_nyata, "baris demo tidak distempel"
+                finally:
+                    # Tidak pernah commit: tidak ada baris uji yang tertinggal.
+                    await db.rollback()
+    
+        sesi.set_sesi(sid)
+        try:
+>           asyncio.run(_skenario())
+
+tests/test_demo_session_stempel_kanonik.py:143: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+tests/test_demo_session_stempel_kanonik.py:125: in _skenario
+    semu = await _sesi_sementara(db, commit=False)
+tests/test_demo_session_stempel_kanonik.py:111: in _sesi_sementara
+    await db.flush()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py:800: in flush
+    await greenlet_spawn(self.sync_session.flush, objects=objects)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:203: in greenlet_spawn
+    result = context.switch(value)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4352: in flush
+    self._flush(objects)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4487: in _flush
+    with util.safe_reraise():
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4448: in _flush
+    flush_context.execute()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:466: in execute
+    rec.execute(self)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:93: in save_obj
+    _emit_insert_statements(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75fc9434ab70>>
+error = UndefinedColumnError('column "dataset_version" of relation "demo_sessions" does not exist')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedColumnError'>: column "dataset_version" of relation "demo_sessions" does not exist
+E                   [SQL: INSERT INTO demo_sessions (id, status, started_at, expires_at, anchor_now, ended_at, dataset_version, template_version, created_by) VALUES ($1::UUID, $2::VARCHAR, $3::TIMESTAMP WITH TIME ZONE, $4::TIMESTAMP WITH TIME ZONE, $5::TIMESTAMP WITH TIME ZONE, $6::TIMESTAMP WITH TIME ZONE, $7::VARCHAR, $8::VARCHAR, $9::UUID) RETURNING demo_sessions.mode, demo_sessions.evaluation_anchor]
+E                   [parameters: (UUID('cfce5652-855b-419e-8d67-af2715e9057b'), 'active', datetime.datetime(2026, 10, 27, 11, 9, 11, 880396, tzinfo=datetime.timezone.utc), datetime.datetime(2026, 10, 27, 12, 9, 11, 880396, tzinfo=datetime.timezone.utc), datetime.datetime(2026, 10, 27, 11, 9, 11, 880396, tzinfo=datetime.timezone.utc), None, None, 'uji-stempel', None)]
+E                   (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: ProgrammingError
+_____________________ test_bekukan_melepas_stempel_kanonik _____________________
+
+self = <sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x75fc8d9744c0>
+operation = 'INSERT INTO demo_sessions (id, status, started_at, expires_at, anchor_now, ended_at, dataset_version, template_versio...TAMP WITH TIME ZONE, $7::VARCHAR, $8::VARCHAR, $9::UUID) RETURNING demo_sessions.mode, demo_sessions.evaluation_anchor'
+parameters = (UUID('d3e10cdc-e5c1-4271-bdeb-990203d75b73'), 'active', datetime.datetime(2026, 10, 27, 11, 9, 12, 296722, tzinfo=dat...fo=datetime.timezone.utc), datetime.datetime(2026, 10, 27, 11, 9, 12, 296722, tzinfo=datetime.timezone.utc), None, ...)
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+>               prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:514: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:760: in _prepare
+    prepared_stmt = await self._connection.prepare(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:636: in prepare
+    return await self._prepare(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:654: in _prepare
+    stmt = await self._get_statement(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:433: in _get_statement
+    statement = await self._protocol.prepare(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.UndefinedColumnError: column "dataset_version" of relation "demo_sessions" does not exist
+
+asyncpg/protocol/protocol.pyx:166: UndefinedColumnError
+
+The above exception was the direct cause of the following exception:
+
+self = <sqlalchemy.engine.base.Connection object at 0x75fc8db1bda0>
+dialect = <sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x75fc8db187d0>
+context = <sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x75fc8d9e51c0>
+statement = <sqlalchemy.dialects.postgresql.asyncpg.PGCompiler_asyncpg object at 0x75fc8d9e5730>
+parameters = [(UUID('d3e10cdc-e5c1-4271-bdeb-990203d75b73'), 'active', datetime.datetime(2026, 10, 27, 11, 9, 12, 296722, tzinfo=da...o=datetime.timezone.utc), datetime.datetime(2026, 10, 27, 11, 9, 12, 296722, tzinfo=datetime.timezone.utc), None, ...)]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75fc8f4f3e30>>
+error = UndefinedColumnError('column "dataset_version" of relation "demo_sessions" does not exist')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.UndefinedColumnError'>: column "dataset_version" of relation "demo_sessions" does not exist
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: ProgrammingError
+
+The above exception was the direct cause of the following exception:
+
+    def test_bekukan_melepas_stempel_kanonik():
+        """Data lama: stempel pada baris non-demo dilepas pada level query."""
+        from app.seed import demo_template as dt
+    
+        bid = uuid.uuid4()
+    
+        async def _jalankan():
+            async with _db() as db:
+                lok, kom, sup = await _referensi(db)
+                semu = await _sesi_sementara(db, commit=True)
+                try:
+                    db.add(
+                        Batch(
+                            id=bid,
+                            commodity_id=kom,
+                            location_id=lok,
+                            supplier_id=sup,
+                            quantity_kg=10,
+                            harvested_at=datetime.now(UTC) - timedelta(hours=2),
+                            origin="seed",
+                            demo_session_id=semu.id,  # stempel yang seharusnya tidak ada
+                        )
+                    )
+                    await db.commit()
+                    laporan = await dt._bekukan(db)
+                    bersih = (
+                        await db.execute(
+                            text("SELECT demo_session_id FROM batches WHERE id = :i"),
+                            {"i": bid},
+                        )
+                    ).scalar_one()
+                    asal = (
+                        await db.execute(
+                            text("SELECT origin FROM batches WHERE id = :i"), {"i": bid}
+                        )
+                    ).scalar_one()
+                    return laporan, bersih, asal
+                finally:
+                    await db.execute(text("DELETE FROM batches WHERE id = :i"), {"i": bid})
+                    await db.execute(
+                        text("DELETE FROM demo_sessions WHERE id = :i"), {"i": semu.id}
+                    )
+                    await db.commit()
+    
+>       laporan, bersih, asal = asyncio.run(_jalankan())
+
+tests/test_demo_session_stempel_kanonik.py:195: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+tests/test_demo_session_stempel_kanonik.py:160: in _jalankan
+    semu = await _sesi_sementara(db, commit=True)
+tests/test_demo_session_stempel_kanonik.py:111: in _sesi_sementara
+    await db.flush()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py:800: in flush
+    await greenlet_spawn(self.sync_session.flush, objects=objects)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:203: in greenlet_spawn
+    result = context.switch(value)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4352: in flush
+    self._flush(objects)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4487: in _flush
+    with util.safe_reraise():
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4448: in _flush
+    flush_context.execute()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:466: in execute
+    rec.execute(self)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:93: in save_obj
+    _emit_insert_statements(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75fc8f4f3e30>>
+error = UndefinedColumnError('column "dataset_version" of relation "demo_sessions" does not exist')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedColumnError'>: column "dataset_version" of relation "demo_sessions" does not exist
+E                   [SQL: INSERT INTO demo_sessions (id, status, started_at, expires_at, anchor_now, ended_at, dataset_version, template_version, created_by) VALUES ($1::UUID, $2::VARCHAR, $3::TIMESTAMP WITH TIME ZONE, $4::TIMESTAMP WITH TIME ZONE, $5::TIMESTAMP WITH TIME ZONE, $6::TIMESTAMP WITH TIME ZONE, $7::VARCHAR, $8::VARCHAR, $9::UUID) RETURNING demo_sessions.mode, demo_sessions.evaluation_anchor]
+E                   [parameters: (UUID('d3e10cdc-e5c1-4271-bdeb-990203d75b73'), 'active', datetime.datetime(2026, 10, 27, 11, 9, 12, 296722, tzinfo=datetime.timezone.utc), datetime.datetime(2026, 10, 27, 12, 9, 12, 296722, tzinfo=datetime.timezone.utc), datetime.datetime(2026, 10, 27, 11, 9, 12, 296722, tzinfo=datetime.timezone.utc), None, None, 'uji-stempel', None)]
+E                   (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: ProgrammingError
+___________________ test_bekukan_mempertahankan_origin_demo ____________________
+
+self = <sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x75fc8db6eec0>
+operation = 'SELECT demo_sessions.id AS demo_sessions_id, demo_sessions.status AS demo_sessions_status, demo_sessions.started_at A...version, demo_sessions.created_by AS demo_sessions_created_by \nFROM demo_sessions \nWHERE demo_sessions.id = $1::UUID'
+parameters = (UUID('ce7a0000-0000-4000-8000-000000000001'),)
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+>               prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:514: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:760: in _prepare
+    prepared_stmt = await self._connection.prepare(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:636: in prepare
+    return await self._prepare(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:654: in _prepare
+    stmt = await self._get_statement(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:433: in _get_statement
+    statement = await self._protocol.prepare(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.WrongObjectTypeError: WITHIN GROUP is required for ordered-set aggregate mode
+
+asyncpg/protocol/protocol.pyx:166: WrongObjectTypeError
+
+The above exception was the direct cause of the following exception:
+
+self = <sqlalchemy.engine.base.Connection object at 0x75fc8db8fec0>
+dialect = <sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x75fc9437ea80>
+context = <sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x75fc8d440a70>
+statement = <sqlalchemy.dialects.postgresql.asyncpg.PGCompiler_asyncpg object at 0x75fc8d443740>
+parameters = [(UUID('ce7a0000-0000-4000-8000-000000000001'),)]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75fc8f4f3200>>
+error = WrongObjectTypeError('WITHIN GROUP is required for ordered-set aggregate mode')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.WrongObjectTypeError'>: WITHIN GROUP is required for ordered-set aggregate mode
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: ProgrammingError
+
+The above exception was the direct cause of the following exception:
+
+    def test_bekukan_mempertahankan_origin_demo():
+        """`_bekukan` menstempel cetakan; `origin` TIDAK ditulis ulang."""
+        from app.seed import demo_template as dt
+    
+>       laporan = _jalankan(dt._bekukan)
+
+tests/test_demo_template_provenance_ledger.py:81: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_demo_template_provenance_ledger.py:38: in _jalankan
+    return asyncio.run(_main())
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+tests/test_demo_template_provenance_ledger.py:34: in _main
+    return await fn(db)
+app/seed/demo_template.py:1969: in _bekukan
+    penanda = await sesi.cetakan(db)
+app/services/demo_session.py:88: in cetakan
+    ada = await db.get(DemoSession, CETAKAN_ID)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py:604: in get
+    return await greenlet_spawn(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:3693: in get
+    return self._get_impl(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:3873: in _get_impl
+    return db_load_fn(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/loading.py:694: in load_on_pk_identity
+    session.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2362: in execute
+    return self._execute_internal(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2247: in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/context.py:305: in orm_execute_statement
+    result = conn.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75fc8f4f3200>>
+error = WrongObjectTypeError('WITHIN GROUP is required for ordered-set aggregate mode')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.WrongObjectTypeError'>: WITHIN GROUP is required for ordered-set aggregate mode
+E                   [SQL: SELECT demo_sessions.id AS demo_sessions_id, demo_sessions.status AS demo_sessions_status, demo_sessions.started_at AS demo_sessions_started_at, demo_sessions.expires_at AS demo_sessions_expires_at, demo_sessions.anchor_now AS demo_sessions_anchor_now, demo_sessions.ended_at AS demo_sessions_ended_at, demo_sessions.mode AS demo_sessions_mode, demo_sessions.evaluation_anchor AS demo_sessions_evaluation_anchor, demo_sessions.dataset_version AS demo_sessions_dataset_version, demo_sessions.template_version AS demo_sessions_template_version, demo_sessions.created_by AS demo_sessions_created_by 
+E                   FROM demo_sessions 
+E                   WHERE demo_sessions.id = $1::UUID]
+E                   [parameters: (UUID('ce7a0000-0000-4000-8000-000000000001'),)]
+E                   (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: ProgrammingError
+_____________________ test_cetakan_sesi_tidak_pernah_aktif _____________________
+
+self = <sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x75fc8d65bfa0>
+operation = 'SELECT demo_sessions.id AS demo_sessions_id, demo_sessions.status AS demo_sessions_status, demo_sessions.started_at A...version, demo_sessions.created_by AS demo_sessions_created_by \nFROM demo_sessions \nWHERE demo_sessions.id = $1::UUID'
+parameters = (UUID('ce7a0000-0000-4000-8000-000000000001'),)
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+>               prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:514: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:760: in _prepare
+    prepared_stmt = await self._connection.prepare(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:636: in prepare
+    return await self._prepare(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:654: in _prepare
+    stmt = await self._get_statement(
+/usr/local/lib/python3.12/site-packages/asyncpg/connection.py:433: in _get_statement
+    statement = await self._protocol.prepare(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.WrongObjectTypeError: WITHIN GROUP is required for ordered-set aggregate mode
+
+asyncpg/protocol/protocol.pyx:166: WrongObjectTypeError
+
+The above exception was the direct cause of the following exception:
+
+self = <sqlalchemy.engine.base.Connection object at 0x75fc94187680>
+dialect = <sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x75fc8dbb69c0>
+context = <sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x75fc8f768d40>
+statement = <sqlalchemy.dialects.postgresql.asyncpg.PGCompiler_asyncpg object at 0x75fc9437f7d0>
+parameters = [(UUID('ce7a0000-0000-4000-8000-000000000001'),)]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75fc8f4f1130>>
+error = WrongObjectTypeError('WITHIN GROUP is required for ordered-set aggregate mode')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.WrongObjectTypeError'>: WITHIN GROUP is required for ordered-set aggregate mode
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: ProgrammingError
+
+The above exception was the direct cause of the following exception:
+
+    def test_cetakan_sesi_tidak_pernah_aktif():
+        """Sesi sentinel tidak boleh muncul sebagai sesi aktif."""
+>       sentinel = _jalankan(lambda db: sesi.cetakan(db))
+
+tests/test_demo_template_provenance_ledger.py:124: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_demo_template_provenance_ledger.py:38: in _jalankan
+    return asyncio.run(_main())
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+tests/test_demo_template_provenance_ledger.py:34: in _main
+    return await fn(db)
+app/services/demo_session.py:88: in cetakan
+    ada = await db.get(DemoSession, CETAKAN_ID)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py:604: in get
+    return await greenlet_spawn(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:3693: in get
+    return self._get_impl(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:3873: in _get_impl
+    return db_load_fn(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/loading.py:694: in load_on_pk_identity
+    session.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2362: in execute
+    return self._execute_internal(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2247: in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/context.py:305: in orm_execute_statement
+    result = conn.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75fc8f4f1130>>
+error = WrongObjectTypeError('WITHIN GROUP is required for ordered-set aggregate mode')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.WrongObjectTypeError'>: WITHIN GROUP is required for ordered-set aggregate mode
+E                   [SQL: SELECT demo_sessions.id AS demo_sessions_id, demo_sessions.status AS demo_sessions_status, demo_sessions.started_at AS demo_sessions_started_at, demo_sessions.expires_at AS demo_sessions_expires_at, demo_sessions.anchor_now AS demo_sessions_anchor_now, demo_sessions.ended_at AS demo_sessions_ended_at, demo_sessions.mode AS demo_sessions_mode, demo_sessions.evaluation_anchor AS demo_sessions_evaluation_anchor, demo_sessions.dataset_version AS demo_sessions_dataset_version, demo_sessions.template_version AS demo_sessions_template_version, demo_sessions.created_by AS demo_sessions_created_by 
+E                   FROM demo_sessions 
+E                   WHERE demo_sessions.id = $1::UUID]
+E                   [parameters: (UUID('ce7a0000-0000-4000-8000-000000000001'),)]
+E                   (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: ProgrammingError
+_________________ test_data_masuk_akal_jarak_dan_jenis_pemasok _________________
+
+    def test_data_masuk_akal_jarak_dan_jenis_pemasok():
+        """Data demo harus masuk akal secara operasional, bukan sekadar terisi.
+    
+        Dua kesalahan nyata yang pernah muncul di layar:
+          * "Ganti pasokan 300 kg ayam: Surabaya → Jakarta" (663 km, lintas pulau
+            untuk ayam segar);
+          * "Pengadaan beras dari CV Barokah Telur Cianjur" (pemasok telur memasok
+            beras).
+        Tes ini mengunci keduanya.
+        """
+        import asyncio
+    
+        async def skenario():
+            engine = _create_engine(_settings.database_url)
+            maker = _maker(engine)
+            try:
+                async with maker() as s:
+                    jauh = (
+                        (
+                            await s.execute(
+                                _text(
+                                """
+                                SELECT c.name, sl.name, tl.name,
+                                       round((6371 * acos(least(1, greatest(-1,
+                                         sin(radians(sl.latitude)) * sin(radians(tl.latitude))
+                                         + cos(radians(sl.latitude)) * cos(radians(tl.latitude))
+                                           * cos(radians(sl.longitude - tl.longitude))))))::numeric)
+                                FROM decisions d
+                                JOIN commodities c ON c.id = d.commodity_id
+                                JOIN locations sl ON sl.id = d.source_location_id
+                                JOIN locations tl ON tl.id = d.target_location_id
+                                WHERE d.source_location_id IS NOT NULL
+                                  AND d.source_location_id <> d.target_location_id
+                                """
+                            )
+                            )
+                        ).all()
+                    )
+                    salah_komoditas = (
+                        (
+                            await s.execute(
+                                _text(
+                                """
+                                SELECT b.id, c.name, s.name, sc.name
+                                FROM batches b
+                                JOIN commodities c ON c.id = b.commodity_id
+                                JOIN suppliers s ON s.id = b.supplier_id
+                                JOIN commodities sc ON sc.id = s.commodity_id
+                                WHERE s.commodity_id <> b.commodity_id
+                                """
+                            )
+                            )
+                        ).all()
+                    )
+            finally:
+                await engine.dispose()
+    
+            terlalu_jauh = [(k, a, t, float(km)) for k, a, t, km in jauh if float(km) > 400]
+            assert not terlalu_jauh, f"rute lintas pulau untuk pasokan: {terlalu_jauh}"
+            assert not salah_komoditas, f"pemasok salah komoditas: {salah_komoditas}"
+    
+>       asyncio.run(skenario())
+
+tests/test_hari_ini.py:256: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def skenario():
+        engine = _create_engine(_settings.database_url)
+        maker = _maker(engine)
+        try:
+            async with maker() as s:
+                jauh = (
+                    (
+                        await s.execute(
+                            _text(
+                            """
+                            SELECT c.name, sl.name, tl.name,
+                                   round((6371 * acos(least(1, greatest(-1,
+                                     sin(radians(sl.latitude)) * sin(radians(tl.latitude))
+                                     + cos(radians(sl.latitude)) * cos(radians(tl.latitude))
+                                       * cos(radians(sl.longitude - tl.longitude))))))::numeric)
+                            FROM decisions d
+                            JOIN commodities c ON c.id = d.commodity_id
+                            JOIN locations sl ON sl.id = d.source_location_id
+                            JOIN locations tl ON tl.id = d.target_location_id
+                            WHERE d.source_location_id IS NOT NULL
+                              AND d.source_location_id <> d.target_location_id
+                            """
+                        )
+                        )
+                    ).all()
+                )
+                salah_komoditas = (
+                    (
+                        await s.execute(
+                            _text(
+                            """
+                            SELECT b.id, c.name, s.name, sc.name
+                            FROM batches b
+                            JOIN commodities c ON c.id = b.commodity_id
+                            JOIN suppliers s ON s.id = b.supplier_id
+                            JOIN commodities sc ON sc.id = s.commodity_id
+                            WHERE s.commodity_id <> b.commodity_id
+                            """
+                        )
+                        )
+                    ).all()
+                )
+        finally:
+            await engine.dispose()
+    
+        terlalu_jauh = [(k, a, t, float(km)) for k, a, t, km in jauh if float(km) > 400]
+>       assert not terlalu_jauh, f"rute lintas pulau untuk pasokan: {terlalu_jauh}"
+E       AssertionError: rute lintas pulau untuk pasokan: [('telur', 'Surabaya', 'Bandung', 568.0), ('ayam', 'Bandung', 'Makassar', 1321.0), ('wortel', 'Makassar', 'Palembang', 1643.0), ('beras', 'Palembang', 'Surabaya', 1003.0), ('telur', 'Medan', 'Bandung', 1534.0), ('telur', 'Bandung', 'Surabaya', 568.0), ('ayam', 'Surabaya', 'Bandung', 568.0), ('ayam', 'Surabaya', 'Jakarta', 663.0), ('telur', 'Semarang', 'Jakarta', 403.0)]
+E       assert not [('telur', 'Surabaya', 'Bandung', 568.0), ('ayam', 'Bandung', 'Makassar', 1321.0), ('wortel', 'Makassar', 'Palembang',... 'Palembang', 'Surabaya', 1003.0), ('telur', 'Medan', 'Bandung', 1534.0), ('telur', 'Bandung', 'Surabaya', 568.0), ...]
+
+tests/test_hari_ini.py:253: AssertionError
+_______________________ test_artefak_openapi_tidak_basi ________________________
+
+    def test_artefak_openapi_tidak_basi():
+        if not BERKAS.is_file():
+            pytest.fail(f"{BERKAS.name} hilang dari repo; regenerasi atau hapus tesnya")
+    
+        artefak = json.loads(BERKAS.read_text(encoding="utf-8"))
+        nyata = app.openapi()
+    
+        kurang = _pasangan(nyata) - _pasangan(artefak)
+        lebih = _pasangan(artefak) - _pasangan(nyata)
+>       assert not kurang, f"endpoint baru belum masuk artefak: {sorted(kurang)[:5]}"
+E       AssertionError: endpoint baru belum masuk artefak: [('/procurement/summary', 'get')]
+E       assert not {('/procurement/summary', 'get')}
+
+tests/test_openapi_artifact_drift.py:40: AssertionError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+tests/test_s4_rulings_tdd.py::test_ruling_a_nutritionist_baca_summary_lintas_lokasi_403
+  /usr/local/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:415: SAWarning: The garbage collector is trying to clean up non-checked-in connection <AdaptedConnection <asyncpg.connection.Connection object at 0x75fc8c7dd220>>, which will be terminated.  Please ensure that SQLAlchemy pooled connections are returned to the pool explicitly, either by calling ``close()`` or by using appropriate context managers to manage their lifecycle.
+    self._tasks: set[asyncio.Task] = set()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_bukti_dan_draf_demo.py::test_kasus_skrip_punya_bukti_termasuk_yang_ditolak
+FAILED tests/test_demo_cases_procurement_binding.py::test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan
+FAILED tests/test_demo_cases_procurement_binding.py::test_binding_pengadaan_memakai_pemasok_keputusan
+FAILED tests/test_demo_cases_procurement_binding.py::test_kasus_pengadaan_lolos_resolve_binding_dan_safety
+FAILED tests/test_demo_sesi_batas_dan_enforcement.py::test_mutasi_ditolak_saat_tidak_ada_sesi
+FAILED tests/test_demo_sesi_batas_dan_enforcement.py::test_baca_tetap_boleh_tanpa_sesi
+FAILED tests/test_demo_session_mulai_atomik.py::test_build_gagal_tidak_meninggalkan_sesi_aktif
+FAILED tests/test_demo_session_mulai_atomik.py::test_build_sukses_membuat_tepat_satu_sesi_aktif
+FAILED tests/test_demo_session_stempel_kanonik.py::test_penjaga_flush_tidak_menstempel_baris_kanonik
+FAILED tests/test_demo_session_stempel_kanonik.py::test_bekukan_melepas_stempel_kanonik
+FAILED tests/test_demo_template_provenance_ledger.py::test_bekukan_mempertahankan_origin_demo
+FAILED tests/test_demo_template_provenance_ledger.py::test_cetakan_sesi_tidak_pernah_aktif
+FAILED tests/test_hari_ini.py::test_data_masuk_akal_jarak_dan_jenis_pemasok
+FAILED tests/test_openapi_artifact_drift.py::test_artefak_openapi_tidak_basi
+14 failed, 1765 passed, 27 skipped, 2 warnings in 627.28s (0:10:27)
+EXIT=1

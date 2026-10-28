@@ -1,0 +1,70 @@
+Pushing app mealchain-joule-bridge-4sehat3trio to org SEAIO_aws-sap-hackathon-si4ykj9d / space hackathon-4sehat3trio as leonard.yosafat@binus.ac.id...
+Applying manifest file manifest.yml...
+
+Updating with these attributes...
+  ---
+  applications:
+  - name: mealchain-joule-bridge-4sehat3trio
+    disk-quota: 1024M
+    health-check-type: http
+    health-check-http-endpoint: /health
+    timeout: 180
+    instances: 1
+    memory: 512M
++   default-route: true
+    buildpacks:
+      https://github.com/cloudfoundry/python-buildpack/releases/download/v1.8.43/python-buildpack-cflinuxfs4-v1.8.43.zip
+    command: python -m uvicorn server:app --host 0.0.0.0 --port $PORT --workers 1
+    env:
+      BP_PYTHON_VERSION: 3.13.11
+      MEALCHAIN_API_URL: https://ganti-dengan-url-backend.invalid
+      MEALCHAIN_BRIDGE_CORS_ORIGINS: http://localhost:3010,http://localhost:3000
+-     MEALCHAIN_READ_PASSWORD: ***
+Manifest applied
+Packaging files to upload...
+Uploading files...
+
+ 0 B / 27.72 KiB    0.00%
+ 27.72 KiB / 27.72 KiB  100.00%
+ 27.72 KiB / 27.72 KiB  100.00%
+ 27.72 KiB / 27.72 KiB  100.00%
+ 27.72 KiB / 27.72 KiB  100.00%
+ 27.72 KiB / 27.72 KiB  100.00%
+ 27.72 KiB / 27.72 KiB  100.00%
+ 27.72 KiB / 27.72 KiB  100.00%
+ 27.72 KiB / 27.72 KiB  100.00%
+ 27.72 KiB / 27.72 KiB  100.00%
+ 27.72 KiB / 27.72 KiB  100.00% 1s
+
+Waiting for API to complete processing files...
+Stopping Application...
+Application Stopped
+
+name:              mealchain-joule-bridge-4sehat3trio
+requested state:   stopped
+routes:            mealchain-joule-bridge-4sehat3trio.cfapps.ap10.hana.ondemand.com
+last uploaded:     Mon 26 Oct 11:36:39 +07 2026
+stack:             cflinuxfs4
+buildpacks:        
+	name                                                                                                                 version   detect output   buildpack name
+	https://github.com/cloudfoundry/python-buildpack/releases/download/v1.8.43/python-buildpack-cflinuxfs4-v1.8.43.zip   1.8.43    python          python
+
+type:            web
+sidecars:        
+instances:       0/1
+memory usage:    512M
+start command:   python -m uvicorn server:app --host 0.0.0.0 --port $PORT --workers 1
+     state      since                  cpu    memory     disk       logging        cpu entitlement   details   ready
+#0   stopping   2026-10-27T10:31:26Z   0.0%   0B of 0B   0B of 0B   0B/s of 0B/s                               true
+PUSH_EXIT=0
+Setting env variable MEALCHAIN_API_URL for app mealchain-joule-bridge-4sehat3trio in org SEAIO_aws-sap-hackathon-si4ykj9d / space hackathon-4sehat3trio as leonard.yosafat@binus.ac.id...
+OK
+
+TIP: Use 'cf restage mealchain-joule-bridge-4sehat3trio' to ensure your env variable changes take effect.
+SETENV_EXIT=0
+Starting app mealchain-joule-bridge-4sehat3trio in org SEAIO_aws-sap-hackathon-si4ykj9d / space hackathon-4sehat3trio as leonard.yosafat@binus.ac.id...
+
+Staging app and tracing logs...
+Only one build can be STAGING at a time per application.
+FAILED
+START_EXIT=1

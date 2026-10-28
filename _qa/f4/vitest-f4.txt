@@ -1,0 +1,14 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v2.1.9 /app
+
+ ✓ tests/approval-summary.test.tsx (8 tests) 105ms
+ ✓ tests/decision-loop.test.tsx (11 tests) 16ms
+ ✓ tests/food-safety-board-quarantine.test.tsx (6 tests) 48ms
+ ✓ tests/receipt-quarantine.test.tsx (16 tests) 61ms
+
+ Test Files  4 passed (4)
+      Tests  41 passed (41)
+   Start at  13:10:44
+   Duration  2.48s (transform 3.24s, setup 0ms, collect 7.11s, tests 231ms, environment 1ms, prepare 396ms)
+

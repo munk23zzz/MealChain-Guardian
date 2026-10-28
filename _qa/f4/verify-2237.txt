@@ -1,0 +1,1118 @@
+........................................................................ [ 44%]
+...........s..............................EE..EE............s........... [ 88%]
+..................                                                       [100%]
+==================================== ERRORS ====================================
+____ ERROR at setup of test_catat_penerimaan_tersimpan_dan_terbaca_kembali _____
+
+self = <sqlalchemy.engine.base.Connection object at 0x7bb6297b69c0>
+dialect = <sqlalchemy.dialects.postgresql.psycopg.PGDialect_psycopg object at 0x7bb6297b4a10>
+context = <sqlalchemy.dialects.postgresql.psycopg.PGExecutionContext_psycopg object at 0x7bb6297b6ba0>
+statement = <sqlalchemy.dialects.postgresql.psycopg.PGCompiler_psycopg object at 0x7bb6297b6bd0>
+parameters = [{'id': '370e7205-0f44-4b57-8d6b-6c772a40b765', 'komoditas': 'f4116309-88d5-52ff-bec4-a780ef0e93a1', 'layak': datetime....325604+00:00", "temperature_c": 4.5}, {"timestamp": "2026-10-27T15:39:43.325604+00:00", "temperature_c": 5.0}]', ...}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7bb62e241cd0>
+query = "INSERT INTO batches (id, commodity_id, location_id, supplier_id, quantity_kg, harvested_at, temperature_log, certific...S %(id)s, %(komoditas)s, %(lokasi)s, %(pemasok)s, 120, %(panen)s, %(log)s, 'hygiene', 0.95, 'pass', %(layak)s, 'demo')"
+params = {'id': '370e7205-0f44-4b57-8d6b-6c772a40b765', 'komoditas': 'f4116309-88d5-52ff-bec4-a780ef0e93a1', 'layak': datetime....3.325604+00:00", "temperature_c": 4.5}, {"timestamp": "2026-10-27T15:39:43.325604+00:00", "temperature_c": 5.0}]', ...}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.SyntaxError: syntax error at or near "$1"
+E           LINE 1: ...core, safety_status, usable_until, origin) VALUES $1, $2, $3...
+E                                                                        ^
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: SyntaxError
+
+The above exception was the direct cause of the following exception:
+
+    @pytest.fixture()
+    def batch_siap_terima():
+        """Batch baru di Jakarta yang LOLOS evaluator kelayakan Fase 4.
+    
+        Sebelum Fase 4, tes pencatatan penerimaan memakai batch demo terbaru
+        (`_batch_jakarta_id`). Gerbang kelayakan membuat batch demo yang masa
+        layaknya sudah lewat ditolak 409 `batch_expired` — benar sebagai perilaku,
+        tetapi membuat tes endpoint bergantung pada umur data demo (merah hanya
+        karena kalender). Fixture ini menyemai batch sendiri: safety `pass`,
+        `usable_until` di depan, dan log suhu dua sampel bersih. Batch dihapus
+        setelah tes, jadi tidak ada residu di DB tes.
+        """
+        from sqlalchemy import create_engine, text
+    
+        bid = str(uuid.uuid4())
+        sekarang = datetime.now(UTC)
+        log = [
+            {
+                "timestamp": (sekarang - timedelta(hours=4)).isoformat(),
+                "temperature_c": 4.0,
+            },
+            {
+                "timestamp": (sekarang - timedelta(hours=2)).isoformat(),
+                "temperature_c": 4.5,
+            },
+            {"timestamp": sekarang.isoformat(), "temperature_c": 5.0},
+        ]
+        engine = create_engine(DSN_SYNC)
+        try:
+            with engine.begin() as conn:
+                lokasi = conn.execute(
+                    text("SELECT id FROM locations WHERE name = 'Jakarta'")
+                ).scalar_one()
+                komoditas = conn.execute(
+                    text("SELECT id FROM commodities WHERE name = 'telur'")
+                ).scalar_one()
+                pemasok = conn.execute(
+                    text(
+                        "SELECT supplier_id FROM batches b JOIN locations l ON l.id = b.location_id "
+                        "WHERE l.name = 'Jakarta' LIMIT 1"
+                    )
+                ).scalar_one()
+>               conn.execute(
+                    text(
+                        "INSERT INTO batches (id, commodity_id, location_id, supplier_id, "
+                        "quantity_kg, harvested_at, temperature_log, certification_status, "
+                        "freshness_score, safety_status, usable_until, origin) VALUES "
+                        ":id, :komoditas, :lokasi, :pemasok, 120, :panen, :log, 'hygiene', "
+                        "0.95, 'pass', :layak, 'demo')"
+                    ),
+                    {
+                        "id": bid,
+                        "komoditas": str(komoditas),
+                        "lokasi": str(lokasi),
+                        "pemasok": str(pemasok),
+                        "panen": sekarang - timedelta(hours=6),
+                        "log": json.dumps(log),
+                        "layak": sekarang + timedelta(days=3),
+                    },
+                )
+
+tests/test_receipts_api.py:65: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7bb62e241cd0>
+query = "INSERT INTO batches (id, commodity_id, location_id, supplier_id, quantity_kg, harvested_at, temperature_log, certific...S %(id)s, %(komoditas)s, %(lokasi)s, %(pemasok)s, 120, %(panen)s, %(log)s, 'hygiene', 0.95, 'pass', %(layak)s, 'demo')"
+params = {'id': '370e7205-0f44-4b57-8d6b-6c772a40b765', 'komoditas': 'f4116309-88d5-52ff-bec4-a780ef0e93a1', 'layak': datetime....3.325604+00:00", "temperature_c": 4.5}, {"timestamp": "2026-10-27T15:39:43.325604+00:00", "temperature_c": 5.0}]', ...}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           sqlalchemy.exc.ProgrammingError: (psycopg.errors.SyntaxError) syntax error at or near "$1"
+E           LINE 1: ...core, safety_status, usable_until, origin) VALUES $1, $2, $3...
+E                                                                        ^
+E           [SQL: INSERT INTO batches (id, commodity_id, location_id, supplier_id, quantity_kg, harvested_at, temperature_log, certification_status, freshness_score, safety_status, usable_until, origin) VALUES %(id)s, %(komoditas)s, %(lokasi)s, %(pemasok)s, 120, %(panen)s, %(log)s, 'hygiene', 0.95, 'pass', %(layak)s, 'demo')]
+E           [parameters: {'id': '370e7205-0f44-4b57-8d6b-6c772a40b765', 'komoditas': 'f4116309-88d5-52ff-bec4-a780ef0e93a1', 'lokasi': '275d1be7-5bb8-5a37-8004-a2d40a51eb7e', 'pemasok': '8911ee34-b955-497f-8dda-b74279227092', 'panen': datetime.datetime(2026, 10, 27, 9, 39, 43, 325604, tzinfo=datetime.timezone.utc), 'log': '[{"timestamp": "2026-10-27T11:39:43.325604+00:00", "temperature_c": 4.0}, {"timestamp": "2026-10-27T13:39:43.325604+00:00", "temperature_c": 4.5}, {"timestamp": "2026-10-27T15:39:43.325604+00:00", "temperature_c": 5.0}]', 'layak': datetime.datetime(2026, 10, 30, 15, 39, 43, 325604, tzinfo=datetime.timezone.utc)}]
+E           (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: ProgrammingError
+_________ ERROR at setup of test_catatan_kosong_disimpan_sebagai_null __________
+
+self = <sqlalchemy.engine.base.Connection object at 0x7bb6293a2510>
+dialect = <sqlalchemy.dialects.postgresql.psycopg.PGDialect_psycopg object at 0x7bb6293a2870>
+context = <sqlalchemy.dialects.postgresql.psycopg.PGExecutionContext_psycopg object at 0x7bb62e2c5ca0>
+statement = <sqlalchemy.dialects.postgresql.psycopg.PGCompiler_psycopg object at 0x7bb62e2c6210>
+parameters = [{'id': 'b13bc44e-01fe-4375-b382-5d6a44822666', 'komoditas': 'f4116309-88d5-52ff-bec4-a780ef0e93a1', 'layak': datetime....431058+00:00", "temperature_c": 4.5}, {"timestamp": "2026-10-27T15:39:45.431058+00:00", "temperature_c": 5.0}]', ...}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7bb629b0b890>
+query = "INSERT INTO batches (id, commodity_id, location_id, supplier_id, quantity_kg, harvested_at, temperature_log, certific...S %(id)s, %(komoditas)s, %(lokasi)s, %(pemasok)s, 120, %(panen)s, %(log)s, 'hygiene', 0.95, 'pass', %(layak)s, 'demo')"
+params = {'id': 'b13bc44e-01fe-4375-b382-5d6a44822666', 'komoditas': 'f4116309-88d5-52ff-bec4-a780ef0e93a1', 'layak': datetime....5.431058+00:00", "temperature_c": 4.5}, {"timestamp": "2026-10-27T15:39:45.431058+00:00", "temperature_c": 5.0}]', ...}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.SyntaxError: syntax error at or near "$1"
+E           LINE 1: ...core, safety_status, usable_until, origin) VALUES $1, $2, $3...
+E                                                                        ^
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: SyntaxError
+
+The above exception was the direct cause of the following exception:
+
+    @pytest.fixture()
+    def batch_siap_terima():
+        """Batch baru di Jakarta yang LOLOS evaluator kelayakan Fase 4.
+    
+        Sebelum Fase 4, tes pencatatan penerimaan memakai batch demo terbaru
+        (`_batch_jakarta_id`). Gerbang kelayakan membuat batch demo yang masa
+        layaknya sudah lewat ditolak 409 `batch_expired` — benar sebagai perilaku,
+        tetapi membuat tes endpoint bergantung pada umur data demo (merah hanya
+        karena kalender). Fixture ini menyemai batch sendiri: safety `pass`,
+        `usable_until` di depan, dan log suhu dua sampel bersih. Batch dihapus
+        setelah tes, jadi tidak ada residu di DB tes.
+        """
+        from sqlalchemy import create_engine, text
+    
+        bid = str(uuid.uuid4())
+        sekarang = datetime.now(UTC)
+        log = [
+            {
+                "timestamp": (sekarang - timedelta(hours=4)).isoformat(),
+                "temperature_c": 4.0,
+            },
+            {
+                "timestamp": (sekarang - timedelta(hours=2)).isoformat(),
+                "temperature_c": 4.5,
+            },
+            {"timestamp": sekarang.isoformat(), "temperature_c": 5.0},
+        ]
+        engine = create_engine(DSN_SYNC)
+        try:
+            with engine.begin() as conn:
+                lokasi = conn.execute(
+                    text("SELECT id FROM locations WHERE name = 'Jakarta'")
+                ).scalar_one()
+                komoditas = conn.execute(
+                    text("SELECT id FROM commodities WHERE name = 'telur'")
+                ).scalar_one()
+                pemasok = conn.execute(
+                    text(
+                        "SELECT supplier_id FROM batches b JOIN locations l ON l.id = b.location_id "
+                        "WHERE l.name = 'Jakarta' LIMIT 1"
+                    )
+                ).scalar_one()
+>               conn.execute(
+                    text(
+                        "INSERT INTO batches (id, commodity_id, location_id, supplier_id, "
+                        "quantity_kg, harvested_at, temperature_log, certification_status, "
+                        "freshness_score, safety_status, usable_until, origin) VALUES "
+                        ":id, :komoditas, :lokasi, :pemasok, 120, :panen, :log, 'hygiene', "
+                        "0.95, 'pass', :layak, 'demo')"
+                    ),
+                    {
+                        "id": bid,
+                        "komoditas": str(komoditas),
+                        "lokasi": str(lokasi),
+                        "pemasok": str(pemasok),
+                        "panen": sekarang - timedelta(hours=6),
+                        "log": json.dumps(log),
+                        "layak": sekarang + timedelta(days=3),
+                    },
+                )
+
+tests/test_receipts_api.py:65: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7bb629b0b890>
+query = "INSERT INTO batches (id, commodity_id, location_id, supplier_id, quantity_kg, harvested_at, temperature_log, certific...S %(id)s, %(komoditas)s, %(lokasi)s, %(pemasok)s, 120, %(panen)s, %(log)s, 'hygiene', 0.95, 'pass', %(layak)s, 'demo')"
+params = {'id': 'b13bc44e-01fe-4375-b382-5d6a44822666', 'komoditas': 'f4116309-88d5-52ff-bec4-a780ef0e93a1', 'layak': datetime....5.431058+00:00", "temperature_c": 4.5}, {"timestamp": "2026-10-27T15:39:45.431058+00:00", "temperature_c": 5.0}]', ...}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           sqlalchemy.exc.ProgrammingError: (psycopg.errors.SyntaxError) syntax error at or near "$1"
+E           LINE 1: ...core, safety_status, usable_until, origin) VALUES $1, $2, $3...
+E                                                                        ^
+E           [SQL: INSERT INTO batches (id, commodity_id, location_id, supplier_id, quantity_kg, harvested_at, temperature_log, certification_status, freshness_score, safety_status, usable_until, origin) VALUES %(id)s, %(komoditas)s, %(lokasi)s, %(pemasok)s, 120, %(panen)s, %(log)s, 'hygiene', 0.95, 'pass', %(layak)s, 'demo')]
+E           [parameters: {'id': 'b13bc44e-01fe-4375-b382-5d6a44822666', 'komoditas': 'f4116309-88d5-52ff-bec4-a780ef0e93a1', 'lokasi': '275d1be7-5bb8-5a37-8004-a2d40a51eb7e', 'pemasok': '8911ee34-b955-497f-8dda-b74279227092', 'panen': datetime.datetime(2026, 10, 27, 9, 39, 45, 431058, tzinfo=datetime.timezone.utc), 'log': '[{"timestamp": "2026-10-27T11:39:45.431058+00:00", "temperature_c": 4.0}, {"timestamp": "2026-10-27T13:39:45.431058+00:00", "temperature_c": 4.5}, {"timestamp": "2026-10-27T15:39:45.431058+00:00", "temperature_c": 5.0}]', 'layak': datetime.datetime(2026, 10, 30, 15, 39, 45, 431058, tzinfo=datetime.timezone.utc)}]
+E           (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: ProgrammingError
+__________ ERROR at setup of test_monitor_nasional_hanya_bisa_membaca __________
+
+self = <sqlalchemy.engine.base.Connection object at 0x7bb6293361e0>
+dialect = <sqlalchemy.dialects.postgresql.psycopg.PGDialect_psycopg object at 0x7bb629337710>
+context = <sqlalchemy.dialects.postgresql.psycopg.PGExecutionContext_psycopg object at 0x7bb6287b27e0>
+statement = <sqlalchemy.dialects.postgresql.psycopg.PGCompiler_psycopg object at 0x7bb6287b3380>
+parameters = [{'id': '1606e84f-9294-4154-b476-eb1a699fffd4', 'komoditas': 'f4116309-88d5-52ff-bec4-a780ef0e93a1', 'layak': datetime....717940+00:00", "temperature_c": 4.5}, {"timestamp": "2026-10-27T15:39:48.717940+00:00", "temperature_c": 5.0}]', ...}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7bb62872e090>
+query = "INSERT INTO batches (id, commodity_id, location_id, supplier_id, quantity_kg, harvested_at, temperature_log, certific...S %(id)s, %(komoditas)s, %(lokasi)s, %(pemasok)s, 120, %(panen)s, %(log)s, 'hygiene', 0.95, 'pass', %(layak)s, 'demo')"
+params = {'id': '1606e84f-9294-4154-b476-eb1a699fffd4', 'komoditas': 'f4116309-88d5-52ff-bec4-a780ef0e93a1', 'layak': datetime....8.717940+00:00", "temperature_c": 4.5}, {"timestamp": "2026-10-27T15:39:48.717940+00:00", "temperature_c": 5.0}]', ...}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.SyntaxError: syntax error at or near "$1"
+E           LINE 1: ...core, safety_status, usable_until, origin) VALUES $1, $2, $3...
+E                                                                        ^
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: SyntaxError
+
+The above exception was the direct cause of the following exception:
+
+    @pytest.fixture()
+    def batch_siap_terima():
+        """Batch baru di Jakarta yang LOLOS evaluator kelayakan Fase 4.
+    
+        Sebelum Fase 4, tes pencatatan penerimaan memakai batch demo terbaru
+        (`_batch_jakarta_id`). Gerbang kelayakan membuat batch demo yang masa
+        layaknya sudah lewat ditolak 409 `batch_expired` — benar sebagai perilaku,
+        tetapi membuat tes endpoint bergantung pada umur data demo (merah hanya
+        karena kalender). Fixture ini menyemai batch sendiri: safety `pass`,
+        `usable_until` di depan, dan log suhu dua sampel bersih. Batch dihapus
+        setelah tes, jadi tidak ada residu di DB tes.
+        """
+        from sqlalchemy import create_engine, text
+    
+        bid = str(uuid.uuid4())
+        sekarang = datetime.now(UTC)
+        log = [
+            {
+                "timestamp": (sekarang - timedelta(hours=4)).isoformat(),
+                "temperature_c": 4.0,
+            },
+            {
+                "timestamp": (sekarang - timedelta(hours=2)).isoformat(),
+                "temperature_c": 4.5,
+            },
+            {"timestamp": sekarang.isoformat(), "temperature_c": 5.0},
+        ]
+        engine = create_engine(DSN_SYNC)
+        try:
+            with engine.begin() as conn:
+                lokasi = conn.execute(
+                    text("SELECT id FROM locations WHERE name = 'Jakarta'")
+                ).scalar_one()
+                komoditas = conn.execute(
+                    text("SELECT id FROM commodities WHERE name = 'telur'")
+                ).scalar_one()
+                pemasok = conn.execute(
+                    text(
+                        "SELECT supplier_id FROM batches b JOIN locations l ON l.id = b.location_id "
+                        "WHERE l.name = 'Jakarta' LIMIT 1"
+                    )
+                ).scalar_one()
+>               conn.execute(
+                    text(
+                        "INSERT INTO batches (id, commodity_id, location_id, supplier_id, "
+                        "quantity_kg, harvested_at, temperature_log, certification_status, "
+                        "freshness_score, safety_status, usable_until, origin) VALUES "
+                        ":id, :komoditas, :lokasi, :pemasok, 120, :panen, :log, 'hygiene', "
+                        "0.95, 'pass', :layak, 'demo')"
+                    ),
+                    {
+                        "id": bid,
+                        "komoditas": str(komoditas),
+                        "lokasi": str(lokasi),
+                        "pemasok": str(pemasok),
+                        "panen": sekarang - timedelta(hours=6),
+                        "log": json.dumps(log),
+                        "layak": sekarang + timedelta(days=3),
+                    },
+                )
+
+tests/test_receipts_api.py:65: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7bb62872e090>
+query = "INSERT INTO batches (id, commodity_id, location_id, supplier_id, quantity_kg, harvested_at, temperature_log, certific...S %(id)s, %(komoditas)s, %(lokasi)s, %(pemasok)s, 120, %(panen)s, %(log)s, 'hygiene', 0.95, 'pass', %(layak)s, 'demo')"
+params = {'id': '1606e84f-9294-4154-b476-eb1a699fffd4', 'komoditas': 'f4116309-88d5-52ff-bec4-a780ef0e93a1', 'layak': datetime....8.717940+00:00", "temperature_c": 4.5}, {"timestamp": "2026-10-27T15:39:48.717940+00:00", "temperature_c": 5.0}]', ...}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           sqlalchemy.exc.ProgrammingError: (psycopg.errors.SyntaxError) syntax error at or near "$1"
+E           LINE 1: ...core, safety_status, usable_until, origin) VALUES $1, $2, $3...
+E                                                                        ^
+E           [SQL: INSERT INTO batches (id, commodity_id, location_id, supplier_id, quantity_kg, harvested_at, temperature_log, certification_status, freshness_score, safety_status, usable_until, origin) VALUES %(id)s, %(komoditas)s, %(lokasi)s, %(pemasok)s, 120, %(panen)s, %(log)s, 'hygiene', 0.95, 'pass', %(layak)s, 'demo')]
+E           [parameters: {'id': '1606e84f-9294-4154-b476-eb1a699fffd4', 'komoditas': 'f4116309-88d5-52ff-bec4-a780ef0e93a1', 'lokasi': '275d1be7-5bb8-5a37-8004-a2d40a51eb7e', 'pemasok': '8911ee34-b955-497f-8dda-b74279227092', 'panen': datetime.datetime(2026, 10, 27, 9, 39, 48, 717940, tzinfo=datetime.timezone.utc), 'log': '[{"timestamp": "2026-10-27T11:39:48.717940+00:00", "temperature_c": 4.0}, {"timestamp": "2026-10-27T13:39:48.717940+00:00", "temperature_c": 4.5}, {"timestamp": "2026-10-27T15:39:48.717940+00:00", "temperature_c": 5.0}]', 'layak': datetime.datetime(2026, 10, 30, 15, 39, 48, 717940, tzinfo=datetime.timezone.utc)}]
+E           (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: ProgrammingError
+__________ ERROR at setup of test_urutan_terbaru_dulu_dan_batas_limit __________
+
+self = <sqlalchemy.engine.base.Connection object at 0x7bb62a3ada00>
+dialect = <sqlalchemy.dialects.postgresql.psycopg.PGDialect_psycopg object at 0x7bb629b42630>
+context = <sqlalchemy.dialects.postgresql.psycopg.PGExecutionContext_psycopg object at 0x7bb6297b7980>
+statement = <sqlalchemy.dialects.postgresql.psycopg.PGCompiler_psycopg object at 0x7bb6297b4b30>
+parameters = [{'id': '234de522-0ff1-48c2-9364-7f0bbb8262bd', 'komoditas': 'f4116309-88d5-52ff-bec4-a780ef0e93a1', 'layak': datetime....686516+00:00", "temperature_c": 4.5}, {"timestamp": "2026-10-27T15:39:49.686516+00:00", "temperature_c": 5.0}]', ...}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7bb62872ee10>
+query = "INSERT INTO batches (id, commodity_id, location_id, supplier_id, quantity_kg, harvested_at, temperature_log, certific...S %(id)s, %(komoditas)s, %(lokasi)s, %(pemasok)s, 120, %(panen)s, %(log)s, 'hygiene', 0.95, 'pass', %(layak)s, 'demo')"
+params = {'id': '234de522-0ff1-48c2-9364-7f0bbb8262bd', 'komoditas': 'f4116309-88d5-52ff-bec4-a780ef0e93a1', 'layak': datetime....9.686516+00:00", "temperature_c": 4.5}, {"timestamp": "2026-10-27T15:39:49.686516+00:00", "temperature_c": 5.0}]', ...}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.SyntaxError: syntax error at or near "$1"
+E           LINE 1: ...core, safety_status, usable_until, origin) VALUES $1, $2, $3...
+E                                                                        ^
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: SyntaxError
+
+The above exception was the direct cause of the following exception:
+
+    @pytest.fixture()
+    def batch_siap_terima():
+        """Batch baru di Jakarta yang LOLOS evaluator kelayakan Fase 4.
+    
+        Sebelum Fase 4, tes pencatatan penerimaan memakai batch demo terbaru
+        (`_batch_jakarta_id`). Gerbang kelayakan membuat batch demo yang masa
+        layaknya sudah lewat ditolak 409 `batch_expired` — benar sebagai perilaku,
+        tetapi membuat tes endpoint bergantung pada umur data demo (merah hanya
+        karena kalender). Fixture ini menyemai batch sendiri: safety `pass`,
+        `usable_until` di depan, dan log suhu dua sampel bersih. Batch dihapus
+        setelah tes, jadi tidak ada residu di DB tes.
+        """
+        from sqlalchemy import create_engine, text
+    
+        bid = str(uuid.uuid4())
+        sekarang = datetime.now(UTC)
+        log = [
+            {
+                "timestamp": (sekarang - timedelta(hours=4)).isoformat(),
+                "temperature_c": 4.0,
+            },
+            {
+                "timestamp": (sekarang - timedelta(hours=2)).isoformat(),
+                "temperature_c": 4.5,
+            },
+            {"timestamp": sekarang.isoformat(), "temperature_c": 5.0},
+        ]
+        engine = create_engine(DSN_SYNC)
+        try:
+            with engine.begin() as conn:
+                lokasi = conn.execute(
+                    text("SELECT id FROM locations WHERE name = 'Jakarta'")
+                ).scalar_one()
+                komoditas = conn.execute(
+                    text("SELECT id FROM commodities WHERE name = 'telur'")
+                ).scalar_one()
+                pemasok = conn.execute(
+                    text(
+                        "SELECT supplier_id FROM batches b JOIN locations l ON l.id = b.location_id "
+                        "WHERE l.name = 'Jakarta' LIMIT 1"
+                    )
+                ).scalar_one()
+>               conn.execute(
+                    text(
+                        "INSERT INTO batches (id, commodity_id, location_id, supplier_id, "
+                        "quantity_kg, harvested_at, temperature_log, certification_status, "
+                        "freshness_score, safety_status, usable_until, origin) VALUES "
+                        ":id, :komoditas, :lokasi, :pemasok, 120, :panen, :log, 'hygiene', "
+                        "0.95, 'pass', :layak, 'demo')"
+                    ),
+                    {
+                        "id": bid,
+                        "komoditas": str(komoditas),
+                        "lokasi": str(lokasi),
+                        "pemasok": str(pemasok),
+                        "panen": sekarang - timedelta(hours=6),
+                        "log": json.dumps(log),
+                        "layak": sekarang + timedelta(days=3),
+                    },
+                )
+
+tests/test_receipts_api.py:65: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7bb62872ee10>
+query = "INSERT INTO batches (id, commodity_id, location_id, supplier_id, quantity_kg, harvested_at, temperature_log, certific...S %(id)s, %(komoditas)s, %(lokasi)s, %(pemasok)s, 120, %(panen)s, %(log)s, 'hygiene', 0.95, 'pass', %(layak)s, 'demo')"
+params = {'id': '234de522-0ff1-48c2-9364-7f0bbb8262bd', 'komoditas': 'f4116309-88d5-52ff-bec4-a780ef0e93a1', 'layak': datetime....9.686516+00:00", "temperature_c": 4.5}, {"timestamp": "2026-10-27T15:39:49.686516+00:00", "temperature_c": 5.0}]', ...}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           sqlalchemy.exc.ProgrammingError: (psycopg.errors.SyntaxError) syntax error at or near "$1"
+E           LINE 1: ...core, safety_status, usable_until, origin) VALUES $1, $2, $3...
+E                                                                        ^
+E           [SQL: INSERT INTO batches (id, commodity_id, location_id, supplier_id, quantity_kg, harvested_at, temperature_log, certification_status, freshness_score, safety_status, usable_until, origin) VALUES %(id)s, %(komoditas)s, %(lokasi)s, %(pemasok)s, 120, %(panen)s, %(log)s, 'hygiene', 0.95, 'pass', %(layak)s, 'demo')]
+E           [parameters: {'id': '234de522-0ff1-48c2-9364-7f0bbb8262bd', 'komoditas': 'f4116309-88d5-52ff-bec4-a780ef0e93a1', 'lokasi': '275d1be7-5bb8-5a37-8004-a2d40a51eb7e', 'pemasok': '8911ee34-b955-497f-8dda-b74279227092', 'panen': datetime.datetime(2026, 10, 27, 9, 39, 49, 686516, tzinfo=datetime.timezone.utc), 'log': '[{"timestamp": "2026-10-27T11:39:49.686516+00:00", "temperature_c": 4.0}, {"timestamp": "2026-10-27T13:39:49.686516+00:00", "temperature_c": 4.5}, {"timestamp": "2026-10-27T15:39:49.686516+00:00", "temperature_c": 5.0}]', 'layak': datetime.datetime(2026, 10, 30, 15, 39, 49, 686516, tzinfo=datetime.timezone.utc)}]
+E           (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: ProgrammingError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_approval_summary.py:425: semua lokasi×komoditas punya batch; kasus supplier_unknown mustahil dibentuk
+SKIPPED [1] tests/test_receipts_safety_gate.py:76: tidak ada batch ('pending',) di data demo
+156 passed, 2 skipped, 1 warning, 4 errors in 154.65s (0:02:34)

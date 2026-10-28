@@ -1,0 +1,24 @@
+.........FFF......F...F...FF                                             [100%]
+=================================== FAILURES ===================================
+/app/tests/test_demo_cases_procurement_binding.py:158: AssertionError: rejection-loop-kuota b28f18ca: pengadaan tanpa binding batch — layar akan menampilkan 'pemasok tidak dikenal'
+/app/tests/test_demo_cases_procurement_binding.py:172: AssertionError: rejection-loop-kuota b28f18ca: binding menunjuk pemasok None, kolom keputusan a9f45633-fc64-4b90-95e1-41a5e1dd9039
+/app/tests/test_demo_cases_procurement_binding.py:189: AssertionError: rejection-loop-kuota b28f18ca: safety gate memblokir karena batch acuan tidak layak — kasus demo tidak bisa dieksekusi
+/app/tests/test_demo_completed_decisions_konsisten.py:524: AssertionError: gate dilonggarkan: batch sumber kedaluwarsa tidak lagi memblokir
+/app/tests/test_demo_template_provenance_ledger.py:204: AssertionError: prasyarat: keputusan berblok harus ikut terhapus oleh `_seed_demo_cases(force=True)` — kalau tidak, generasi memang tidak akan naik
+/app/tests/test_recommendation_snapshot.py:95: AssertionError: assert 'eb83b67a-7160-4757-9542-d57c89cb4ee2' not in {'050ec2d7-e4d6-574e-b7a4-52e32511c4e8': {'batch_id': '050ec2d7-e4d6-574e-b7a4-52e32511c4e8', 'commodity': 'ayam', 'ev...-5f16-ad32-30b3873742df', 'commodity': 'beras', 'evidence_state': 'sufficient', 'excluded_destinations': [], ...}, ...}
+/app/tests/test_recommendation_snapshot.py:102: AssertionError: assert Decimal('0.664286') == Decimal('0.964286')
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_demo_cases_procurement_binding.py::test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan
+FAILED tests/test_demo_cases_procurement_binding.py::test_binding_pengadaan_memakai_pemasok_keputusan
+FAILED tests/test_demo_cases_procurement_binding.py::test_kasus_pengadaan_lolos_resolve_binding_dan_safety
+FAILED tests/test_demo_completed_decisions_konsisten.py::test_sumber_hilang_tanpa_semai_ulang_tetap_diblokir
+FAILED tests/test_demo_template_provenance_ledger.py::test_hapus_kasus_demo_menaikkan_generasi_ledger
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[live-race]
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[historical]
+7 failed, 21 passed, 1 warning in 24.79s

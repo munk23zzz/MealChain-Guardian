@@ -1,0 +1,84 @@
+{
+  "langkah": [
+    {
+      "langkah": "1. GET /health jembatan hidup dan menunjuk backend rehearsal",
+      "ok": false,
+      "detail": {
+        "status": 200,
+        "service": "mealchain-joule-bridge",
+        "backend": {
+          "reachable": true,
+          "status": "healthy",
+          "service": "mealchain-backend"
+        }
+      }
+    },
+    {
+      "langkah": "2.pasokan jembatan menjawab dari backend (1461 karakter)",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "potongan": "Pasokan dan kebutuhan wortel di Jakarta  **Jakarta \u00b7 wortel** \u2014 pasokan 360 kg dari kebutuhan 158 kg: lebih 202 kg (LEBIH).  | SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | St"
+      }
+    },
+    {
+      "langkah": "2.KPI jembatan menjawab dari backend (788 karakter)",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "potongan": "Indikator kinerja MealChain Guardian (7 indikator):  | Indikator | Nilai | |---|---| | Keberlanjutan menu | 100% | | Kehilangan pangan yang bisa dicegah | 0,56% | | Penyelesaian ke"
+      }
+    },
+    {
+      "langkah": "2.antrean jembatan menjawab dari backend (1474 karakter)",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "potongan": "Antrean usulan keputusan MealChain Guardian (17 usulan terbuka, 12 teratas ditampilkan):  | ID | Jenis | Asal \u2192 tujuan | Komoditas | Jumlah | Status | |---|---|---|---|---|---| | 0"
+      }
+    },
+    {
+      "langkah": "2.PO jembatan menjawab dari backend (492 karakter)",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "potongan": "Purchase order MealChain Guardian (2 PO terbaca):  | Nomor PO | Status | Lokasi tujuan | Bahan | Jumlah | Total | Keputusan | |---|---|---|---|---|---|---| | MC-661695B2C685 | diko"
+      }
+    },
+    {
+      "langkah": "2.kiriman jembatan menjawab dari backend (2881 karakter)",
+      "ok": true,
+      "detail": {
+        "status": 200,
+        "potongan": "Keseimbangan pasokan per SPPG (4 pasangan SPPG\u2013komoditas: 3 kurang \u00b7 1 lebih)  | SPPG | Komoditas | Pasokan | Kebutuhan | Selisih | Status | |---|---|---|---|---|---| | Jakarta | a"
+      }
+    },
+    {
+      "langkah": "3. nomor PO di jawaban = nomor PO di backend",
+      "ok": false,
+      "detail": {
+        "po_backend": "",
+        "disebut_jembatan": true
+      }
+    },
+    {
+      "langkah": "4. permintaan approval DITOLAK dan diarahkan ke cockpit",
+      "ok": false,
+      "detail": {
+        "status": 200,
+        "potongan": "Purchase order MealChain Guardian (2 PO terbaca):  | Nomor PO | Status | Lokasi tujuan | Bahan | Jumlah | Total | Keputusan | |---|---|---|---|---|---|---| | MC-661695B2C685 | dikonfirmasi | Jakarta | beras | 600 kg | Rp7.980.000 | dieksekusi | | MC-B54D0F110D"
+      }
+    },
+    {
+      "langkah": "5. id sesi yang disebut jembatan ada di backend",
+      "ok": true,
+      "detail": {
+        "sesi_disebut": null,
+        "sesi_aktif_backend": "044e161e-5bab-49ce-be14-92a0f316f5b1"
+      }
+    }
+  ],
+  "catatan": [
+    "Tenant SAP/Joule (deploy CF, `joule list`, destination) TIDAK diuji di sini: sesi CF kedaluwarsa sejak 18 Okt 2026 \u2014 status INCONCLUSIVE, lihat testing.md."
+  ]
+}

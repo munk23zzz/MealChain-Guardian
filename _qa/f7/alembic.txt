@@ -1,0 +1,4 @@
+ Container mealchain-guardian-backend-run-2540b3d98451 Creating 
+ Container mealchain-guardian-backend-run-2540b3d98451 Created 
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.

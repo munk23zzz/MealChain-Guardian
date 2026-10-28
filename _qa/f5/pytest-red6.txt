@@ -1,0 +1,94 @@
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+_________________ test_nilai_diterima_memakai_harga_invoice_po _________________
+
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkNzAwNmFmNS0yZWRkLTQ3MTMtOGVjOC0wMjg0NjI2M2Y...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTExNzM3LCJleHAiOjE3OTMxNTQ5Mzd9.250elF7JH5mZpMtapN_HJ969Oh_Ry-90QWFM-vtPgxM'}
+
+    def test_nilai_diterima_memakai_harga_invoice_po(auth_headers):
+        batch_id, _loc, _com, kg, price = _batch_terikat()
+        receipt_ids: list[str] = []
+        supply_ids: list[str] = []
+        try:
+            with _client() as c:
+>               badan = _catat(c, auth_headers, batch_id)
+
+tests/test_receipt_accepted_value.py:116: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x789ae4902d80>
+headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkNzAwNmFmNS0yZWRkLTQ3MTMtOGVjOC0wMjg0NjI2M2Y...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTExNzM3LCJleHAiOjE3OTMxNTQ5Mzd9.250elF7JH5mZpMtapN_HJ969Oh_Ry-90QWFM-vtPgxM'}
+batch_id = '3bc81364-d1cb-58f8-813e-bc1ec4ed5970'
+
+    def _catat(client, headers, batch_id: str) -> dict:
+        resp = client.post(
+            "/receipts",
+            headers=headers,
+            json={"batch_id": batch_id, "checked": {"kemasan": True}, "other_note": "uji nilai"},
+        )
+>       assert resp.status_code == 201, resp.text
+E       AssertionError: {"detail":"lokasi batch di cakupan lokasi di luar SPPG Anda"}
+E       assert 403 == 201
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests/test_receipt_accepted_value.py:106: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+_________________ test_tanpa_ikatan_bukti_nilai_null_bukan_nol _________________
+
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMmRmZTgwYy01NDdkLTQ2YmYtOWY3Zi1hMTJlOTE0YzI...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTExNzQzLCJleHAiOjE3OTMxNTQ5NDN9.Sq3I9QJdTeU18vNECw7o4c3rCl7L-h8RGcCGeujBBU0'}
+
+    def test_tanpa_ikatan_bukti_nilai_null_bukan_nol(auth_headers):
+        batch_id, _loc, _com, _kg = _batch_tanpa_ikatan()
+        receipt_ids: list[str] = []
+        supply_ids: list[str] = []
+        try:
+            with _client() as c:
+                badan = _catat(c, auth_headers, batch_id)
+                receipt_ids.append(badan["id"])
+                setuju = c.post(f"/receipts/{badan['id']}/approve", headers=auth_headers)
+                assert setuju.status_code == 200, setuju.text
+                hasil = setuju.json()
+                supply_ids.append(hasil["supply_record_id"])
+>               assert hasil["accepted_value_idr"] is None
+E               KeyError: 'accepted_value_idr'
+
+tests/test_receipt_accepted_value.py:143: KeyError
+_______________ test_antrean_menunggu_membawa_kunci_nilai_kosong _______________
+
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NDY1NDM1Yi1jZWE3LTQyMmQtOThmMS1jZTNlMjBiZTd...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTExNzQ1LCJleHAiOjE3OTMxNTQ5NDV9.eV6P45QTRSSUd2BTlorgJDsANlTIc9GkHB2uVQQF2q4'}
+
+    def test_antrean_menunggu_membawa_kunci_nilai_kosong(auth_headers):
+        """Kunci harus SELALU ada supaya UI tidak membedakan dua bentuk payload."""
+        batch_id, _loc, _com, _kg, _harga = _batch_terikat()
+        receipt_ids: list[str] = []
+        try:
+            with _client() as c:
+>               badan = _catat(c, auth_headers, batch_id)
+
+tests/test_receipt_accepted_value.py:154: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x789adaddb4d0>
+headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NDY1NDM1Yi1jZWE3LTQyMmQtOThmMS1jZTNlMjBiZTd...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTExNzQ1LCJleHAiOjE3OTMxNTQ5NDV9.eV6P45QTRSSUd2BTlorgJDsANlTIc9GkHB2uVQQF2q4'}
+batch_id = '3bc81364-d1cb-58f8-813e-bc1ec4ed5970'
+
+    def _catat(client, headers, batch_id: str) -> dict:
+        resp = client.post(
+            "/receipts",
+            headers=headers,
+            json={"batch_id": batch_id, "checked": {"kemasan": True}, "other_note": "uji nilai"},
+        )
+>       assert resp.status_code == 201, resp.text
+E       AssertionError: {"detail":"lokasi batch di cakupan lokasi di luar SPPG Anda"}
+E       assert 403 == 201
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests/test_receipt_accepted_value.py:106: AssertionError
+=============================== warnings summary ===============================
+tests/test_receipt_accepted_value.py::test_nilai_diterima_memakai_harga_invoice_po
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+3 failed, 1 warning in 23.15s
+EXIT=1

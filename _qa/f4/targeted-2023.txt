@@ -1,0 +1,2675 @@
+......................................................................FF [ 51%]
+F...F.................s..................................Fs........F     [100%]
+=================================== FAILURES ===================================
+______ test_execute_success_operasional_butuh_dua_approval_writes_mock_po ______
+
+self = <sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x75072d840820>
+operation = 'INSERT INTO decision_evidence (decision_id, evidence_type, payload, is_consistent) VALUES ($1::UUID, $2::VARCHAR, $3::JSONB, $4::BOOLEAN) RETURNING decision_evidence.id, decision_evidence.recorded_at'
+parameters = (UUID('dc70f5e1-f53a-4547-ba99-d66cb0a83398'), 'approval_binding', '{"fingerprint": "sha256:dc5ee2ce0c131355c95fc8c0d0...ing_reasons": [], "batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "policy_version": "sim-2026-10-27.v1"}', True)
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+                prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+    
+                if attributes:
+                    self.description = [
+                        (
+                            attr.name,
+                            attr.type.oid,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                        )
+                        for attr in attributes
+                    ]
+                else:
+                    self.description = None
+    
+                if self.server_side:
+                    self._cursor = await prepared_stmt.cursor(*parameters)
+                    self.rowcount = -1
+                else:
+>                   self._rows = deque(await prepared_stmt.fetch(*parameters))
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:538: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:176: in fetch
+    data = await self.__bind_execute(args, 0, timeout)
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:241: in __bind_execute
+    data, status, _ = await self.__do_execute(
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:230: in __do_execute
+    return await executor(protocol)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.CheckViolationError: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E   DETAIL:  Failing row contains (9701f4d3-0eab-4572-b7b5-3fef6c89fda6, dc70f5e1-f53a-4547-ba99-d66cb0a83398, approval_binding, {"batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "fingerp..., t, 2026-10-27 13:24:39.979653+00).
+
+asyncpg/protocol/protocol.pyx:207: CheckViolationError
+
+The above exception was the direct cause of the following exception:
+
+self = <sqlalchemy.engine.base.Connection object at 0x75072f987500>
+dialect = <sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x75072f508b60>
+context = <sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x75072d9c6cc0>
+statement = <sqlalchemy.dialects.postgresql.asyncpg.PGCompiler_asyncpg object at 0x75072d807fb0>
+parameters = [(UUID('dc70f5e1-f53a-4547-ba99-d66cb0a83398'), 'approval_binding', '{"fingerprint": "sha256:dc5ee2ce0c131355c95fc8c0d...ng_reasons": [], "batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "policy_version": "sim-2026-10-27.v1"}', True)]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75072d9f8140>>
+error = CheckViolationError('new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.IntegrityError: <class 'asyncpg.exceptions.CheckViolationError'>: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E                   DETAIL:  Failing row contains (9701f4d3-0eab-4572-b7b5-3fef6c89fda6, dc70f5e1-f53a-4547-ba99-d66cb0a83398, approval_binding, {"batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "fingerp..., t, 2026-10-27 13:24:39.979653+00).
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: IntegrityError
+
+The above exception was the direct cause of the following exception:
+
+client = <starlette.testclient.TestClient object at 0x750734193530>
+
+    def test_execute_success_operasional_butuh_dua_approval_writes_mock_po(client):
+        head = _mk_user("sppg_head", "Jakarta")
+        nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
+        decision_id = _mk_decision(client)
+        try:
+            client.post(
+                "/actions/propose",
+                json={"decision_id": decision_id, "material_number": "MAT-TELUR-JKT"},
+                headers=_login(client, head),
+            )
+            _verify_decision(decision_id, "consistent")
+            # Belum ada approval → execute ditolak
+            resp = client.post(
+                "/actions/execute", json={"decision_id": decision_id},
+                headers=_login(client, head),
+            )
+            assert resp.status_code == 409
+            # PLAN.md §13.3: transfer butuh DUA approval (Head lalu Nutritionist),
+            # meski verdict verifier CONSISTENT.
+>           resp = client.post(
+                "/actions/approve",
+                json={"decision_id": decision_id, "approved": True},
+                headers=_login(client, head),
+            )
+
+tests/test_actions.py:286: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:597: in post
+    return super().post(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1157: in post
+    return self.request(
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:488: in request
+    return super().request(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:837: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:926: in send
+    response = self._send_handling_auth(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:954: in _send_handling_auth
+    response = self._send_handling_redirects(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:991: in _send_handling_redirects
+    response = self._send_single_request(request)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1027: in _send_single_request
+    response = transport.handle_request(request)
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:381: in handle_request
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:378: in handle_request
+    portal.call(self.app, scope, receive, send)
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:340: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+/usr/local/lib/python3.12/concurrent/futures/_base.py:456: in result
+    return self.__get_result()
+/usr/local/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+/usr/local/lib/python3.12/site-packages/fastapi/applications.py:1054: in __call__
+    await super().__call__(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/applications.py:113: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:187: in __call__
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:165: in __call__
+    await self.app(scope, receive, _send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:179: in _konteks_sesi_demo
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:128: in _header_keamanan
+    resp = await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:119: in _kunci_dokumen
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/cors.py:85: in __call__
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py:62: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:715: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:735: in app
+    await route.handle(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:288: in handle
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:76: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:73: in app
+    response = await f(request)
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:301: in app
+    raw_response = await run_endpoint_function(
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:212: in run_endpoint_function
+    return await dependant.call(**values)
+app/api/actions.py:741: in approve_action
+    await db.flush()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py:800: in flush
+    await greenlet_spawn(self.sync_session.flush, objects=objects)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:203: in greenlet_spawn
+    result = context.switch(value)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4352: in flush
+    self._flush(objects)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4487: in _flush
+    with util.safe_reraise():
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4448: in _flush
+    flush_context.execute()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:466: in execute
+    rec.execute(self)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:93: in save_obj
+    _emit_insert_statements(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75072d9f8140>>
+error = CheckViolationError('new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.exc.IntegrityError: (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.CheckViolationError'>: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E                   DETAIL:  Failing row contains (9701f4d3-0eab-4572-b7b5-3fef6c89fda6, dc70f5e1-f53a-4547-ba99-d66cb0a83398, approval_binding, {"batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "fingerp..., t, 2026-10-27 13:24:39.979653+00).
+E                   [SQL: INSERT INTO decision_evidence (decision_id, evidence_type, payload, is_consistent) VALUES ($1::UUID, $2::VARCHAR, $3::JSONB, $4::BOOLEAN) RETURNING decision_evidence.id, decision_evidence.recorded_at]
+E                   [parameters: (UUID('dc70f5e1-f53a-4547-ba99-d66cb0a83398'), 'approval_binding', '{"fingerprint": "sha256:dc5ee2ce0c131355c95fc8c0d0fb9080292c4d9e216c4389f7aa0b8a15a08002", "evaluation_status": "usable", "blocking_reasons": [], "batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "policy_version": "sim-2026-10-27.v1"}', True)]
+E                   (Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: IntegrityError
+___________________ test_execute_flagged_requires_both_roles ___________________
+
+self = <sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x75072d9d9300>
+operation = 'INSERT INTO decision_evidence (decision_id, evidence_type, payload, is_consistent) VALUES ($1::UUID, $2::VARCHAR, $3::JSONB, $4::BOOLEAN) RETURNING decision_evidence.id, decision_evidence.recorded_at'
+parameters = (UUID('c8faefba-917b-4aba-9cf3-bf440ed96a00'), 'approval_binding', '{"fingerprint": "sha256:7d4be966cb39860cef089de4ba...ing_reasons": [], "batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "policy_version": "sim-2026-10-27.v1"}', True)
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+                prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+    
+                if attributes:
+                    self.description = [
+                        (
+                            attr.name,
+                            attr.type.oid,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                        )
+                        for attr in attributes
+                    ]
+                else:
+                    self.description = None
+    
+                if self.server_side:
+                    self._cursor = await prepared_stmt.cursor(*parameters)
+                    self.rowcount = -1
+                else:
+>                   self._rows = deque(await prepared_stmt.fetch(*parameters))
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:538: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:176: in fetch
+    data = await self.__bind_execute(args, 0, timeout)
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:241: in __bind_execute
+    data, status, _ = await self.__do_execute(
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:230: in __do_execute
+    return await executor(protocol)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.CheckViolationError: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E   DETAIL:  Failing row contains (262d2e95-2725-407a-80b6-5d6be2264549, c8faefba-917b-4aba-9cf3-bf440ed96a00, approval_binding, {"batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "fingerp..., t, 2026-10-27 13:24:49.044321+00).
+
+asyncpg/protocol/protocol.pyx:207: CheckViolationError
+
+The above exception was the direct cause of the following exception:
+
+self = <sqlalchemy.engine.base.Connection object at 0x75072f9a6c90>
+dialect = <sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x75072d88c2f0>
+context = <sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x75072f963f80>
+statement = <sqlalchemy.dialects.postgresql.asyncpg.PGCompiler_asyncpg object at 0x75072f961dc0>
+parameters = [(UUID('c8faefba-917b-4aba-9cf3-bf440ed96a00'), 'approval_binding', '{"fingerprint": "sha256:7d4be966cb39860cef089de4b...ng_reasons": [], "batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "policy_version": "sim-2026-10-27.v1"}', True)]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75072f5957c0>>
+error = CheckViolationError('new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.IntegrityError: <class 'asyncpg.exceptions.CheckViolationError'>: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E                   DETAIL:  Failing row contains (262d2e95-2725-407a-80b6-5d6be2264549, c8faefba-917b-4aba-9cf3-bf440ed96a00, approval_binding, {"batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "fingerp..., t, 2026-10-27 13:24:49.044321+00).
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: IntegrityError
+
+The above exception was the direct cause of the following exception:
+
+client = <starlette.testclient.TestClient object at 0x75072d920050>
+
+    def test_execute_flagged_requires_both_roles(client):
+        head = _mk_user("sppg_head", "Jakarta")
+        # Ruling 2026-10-14 §3: approver kedua wajib berasal dari SPPG yang SAMA
+        # dengan lokasi target. Ahli gizi di Bogor tidak lagi boleh menyetujui
+        # keputusan yang menyasar Jakarta — aturan itu baru ditegakkan di jalur
+        # tulis /actions/* pada 2026-10-17, jadi fixture di sini (dulu Bogor)
+        # dipindah ke Jakarta supaya yang diuji tetap "dua role", bukan cakupan.
+        nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
+        decision_id = _mk_decision(client)
+        try:
+            client.post(
+                "/actions/propose",
+                json={"decision_id": decision_id, "material_number": "MAT-TELUR-JKT"},
+                headers=_login(client, head),
+            )
+            _verify_decision(decision_id, "flagged")
+>           client.post(
+                "/actions/approve",
+                json={"decision_id": decision_id, "approved": True},
+                headers=_login(client, head),
+            )
+
+tests/test_actions.py:354: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:597: in post
+    return super().post(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1157: in post
+    return self.request(
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:488: in request
+    return super().request(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:837: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:926: in send
+    response = self._send_handling_auth(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:954: in _send_handling_auth
+    response = self._send_handling_redirects(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:991: in _send_handling_redirects
+    response = self._send_single_request(request)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1027: in _send_single_request
+    response = transport.handle_request(request)
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:381: in handle_request
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:378: in handle_request
+    portal.call(self.app, scope, receive, send)
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:340: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+/usr/local/lib/python3.12/concurrent/futures/_base.py:456: in result
+    return self.__get_result()
+/usr/local/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+/usr/local/lib/python3.12/site-packages/fastapi/applications.py:1054: in __call__
+    await super().__call__(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/applications.py:113: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:187: in __call__
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:165: in __call__
+    await self.app(scope, receive, _send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:179: in _konteks_sesi_demo
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:128: in _header_keamanan
+    resp = await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:119: in _kunci_dokumen
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/cors.py:85: in __call__
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py:62: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:715: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:735: in app
+    await route.handle(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:288: in handle
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:76: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:73: in app
+    response = await f(request)
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:301: in app
+    raw_response = await run_endpoint_function(
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:212: in run_endpoint_function
+    return await dependant.call(**values)
+app/api/actions.py:741: in approve_action
+    await db.flush()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py:800: in flush
+    await greenlet_spawn(self.sync_session.flush, objects=objects)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:203: in greenlet_spawn
+    result = context.switch(value)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4352: in flush
+    self._flush(objects)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4487: in _flush
+    with util.safe_reraise():
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4448: in _flush
+    flush_context.execute()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:466: in execute
+    rec.execute(self)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:93: in save_obj
+    _emit_insert_statements(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75072f5957c0>>
+error = CheckViolationError('new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.exc.IntegrityError: (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.CheckViolationError'>: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E                   DETAIL:  Failing row contains (262d2e95-2725-407a-80b6-5d6be2264549, c8faefba-917b-4aba-9cf3-bf440ed96a00, approval_binding, {"batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "fingerp..., t, 2026-10-27 13:24:49.044321+00).
+E                   [SQL: INSERT INTO decision_evidence (decision_id, evidence_type, payload, is_consistent) VALUES ($1::UUID, $2::VARCHAR, $3::JSONB, $4::BOOLEAN) RETURNING decision_evidence.id, decision_evidence.recorded_at]
+E                   [parameters: (UUID('c8faefba-917b-4aba-9cf3-bf440ed96a00'), 'approval_binding', '{"fingerprint": "sha256:7d4be966cb39860cef089de4ba477da9eb7b4b795e58e85b7bf04d7495746a71", "evaluation_status": "usable", "blocking_reasons": [], "batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "policy_version": "sim-2026-10-27.v1"}', True)]
+E                   (Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: IntegrityError
+____________________ test_execute_expired_decision_rejected ____________________
+
+self = <sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x75072f957ac0>
+operation = 'INSERT INTO decision_evidence (decision_id, evidence_type, payload, is_consistent) VALUES ($1::UUID, $2::VARCHAR, $3::JSONB, $4::BOOLEAN) RETURNING decision_evidence.id, decision_evidence.recorded_at'
+parameters = (UUID('b39f5b0c-8843-40f2-b350-4ebdeda22721'), 'approval_binding', '{"fingerprint": "sha256:671a8a399e49df7757eba01846...ing_reasons": [], "batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "policy_version": "sim-2026-10-27.v1"}', True)
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+                prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+    
+                if attributes:
+                    self.description = [
+                        (
+                            attr.name,
+                            attr.type.oid,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                        )
+                        for attr in attributes
+                    ]
+                else:
+                    self.description = None
+    
+                if self.server_side:
+                    self._cursor = await prepared_stmt.cursor(*parameters)
+                    self.rowcount = -1
+                else:
+>                   self._rows = deque(await prepared_stmt.fetch(*parameters))
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:538: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:176: in fetch
+    data = await self.__bind_execute(args, 0, timeout)
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:241: in __bind_execute
+    data, status, _ = await self.__do_execute(
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:230: in __do_execute
+    return await executor(protocol)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.CheckViolationError: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E   DETAIL:  Failing row contains (b19cf4c3-78a8-41df-9b76-8656afc9fded, b39f5b0c-8843-40f2-b350-4ebdeda22721, approval_binding, {"batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "fingerp..., t, 2026-10-27 13:24:53.370866+00).
+
+asyncpg/protocol/protocol.pyx:207: CheckViolationError
+
+The above exception was the direct cause of the following exception:
+
+self = <sqlalchemy.engine.base.Connection object at 0x75072f9eade0>
+dialect = <sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x75072f9870e0>
+context = <sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x7507341dc380>
+statement = <sqlalchemy.dialects.postgresql.asyncpg.PGCompiler_asyncpg object at 0x7507341dfaa0>
+parameters = [(UUID('b39f5b0c-8843-40f2-b350-4ebdeda22721'), 'approval_binding', '{"fingerprint": "sha256:671a8a399e49df7757eba0184...ng_reasons": [], "batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "policy_version": "sim-2026-10-27.v1"}', True)]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75073417a4e0>>
+error = CheckViolationError('new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.IntegrityError: <class 'asyncpg.exceptions.CheckViolationError'>: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E                   DETAIL:  Failing row contains (b19cf4c3-78a8-41df-9b76-8656afc9fded, b39f5b0c-8843-40f2-b350-4ebdeda22721, approval_binding, {"batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "fingerp..., t, 2026-10-27 13:24:53.370866+00).
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: IntegrityError
+
+The above exception was the direct cause of the following exception:
+
+client = <starlette.testclient.TestClient object at 0x75072d83f050>
+
+    def test_execute_expired_decision_rejected(client):
+        head = _mk_user("sppg_head", "Jakarta")
+        decision_id = _mk_decision(client)
+        try:
+            client.post(
+                "/actions/propose",
+                json={"decision_id": decision_id, "material_number": "MAT-TELUR-JKT"},
+                headers=_login(client, head),
+            )
+            _verify_decision(decision_id, "consistent")
+>           client.post(
+                "/actions/approve",
+                json={"decision_id": decision_id, "approved": True},
+                headers=_login(client, head),
+            )
+
+tests/test_actions.py:389: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:597: in post
+    return super().post(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1157: in post
+    return self.request(
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:488: in request
+    return super().request(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:837: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:926: in send
+    response = self._send_handling_auth(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:954: in _send_handling_auth
+    response = self._send_handling_redirects(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:991: in _send_handling_redirects
+    response = self._send_single_request(request)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1027: in _send_single_request
+    response = transport.handle_request(request)
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:381: in handle_request
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:378: in handle_request
+    portal.call(self.app, scope, receive, send)
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:340: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+/usr/local/lib/python3.12/concurrent/futures/_base.py:456: in result
+    return self.__get_result()
+/usr/local/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+/usr/local/lib/python3.12/site-packages/fastapi/applications.py:1054: in __call__
+    await super().__call__(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/applications.py:113: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:187: in __call__
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:165: in __call__
+    await self.app(scope, receive, _send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:179: in _konteks_sesi_demo
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:128: in _header_keamanan
+    resp = await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:119: in _kunci_dokumen
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/cors.py:85: in __call__
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py:62: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:715: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:735: in app
+    await route.handle(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:288: in handle
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:76: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:73: in app
+    response = await f(request)
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:301: in app
+    raw_response = await run_endpoint_function(
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:212: in run_endpoint_function
+    return await dependant.call(**values)
+app/api/actions.py:741: in approve_action
+    await db.flush()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py:800: in flush
+    await greenlet_spawn(self.sync_session.flush, objects=objects)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:203: in greenlet_spawn
+    result = context.switch(value)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4352: in flush
+    self._flush(objects)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4487: in _flush
+    with util.safe_reraise():
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4448: in _flush
+    flush_context.execute()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:466: in execute
+    rec.execute(self)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:93: in save_obj
+    _emit_insert_statements(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75073417a4e0>>
+error = CheckViolationError('new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.exc.IntegrityError: (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.CheckViolationError'>: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E                   DETAIL:  Failing row contains (b19cf4c3-78a8-41df-9b76-8656afc9fded, b39f5b0c-8843-40f2-b350-4ebdeda22721, approval_binding, {"batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "fingerp..., t, 2026-10-27 13:24:53.370866+00).
+E                   [SQL: INSERT INTO decision_evidence (decision_id, evidence_type, payload, is_consistent) VALUES ($1::UUID, $2::VARCHAR, $3::JSONB, $4::BOOLEAN) RETURNING decision_evidence.id, decision_evidence.recorded_at]
+E                   [parameters: (UUID('b39f5b0c-8843-40f2-b350-4ebdeda22721'), 'approval_binding', '{"fingerprint": "sha256:671a8a399e49df7757eba01846a0af5c49c46e643c302f09fae6425203dbee85", "evaluation_status": "usable", "blocking_reasons": [], "batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "policy_version": "sim-2026-10-27.v1"}', True)]
+E                   (Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: IntegrityError
+_______________ test_approve_expired_ordinary_decision_accepted ________________
+
+self = <sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x75072d98e6e0>
+operation = 'INSERT INTO decision_evidence (decision_id, evidence_type, payload, is_consistent) VALUES ($1::UUID, $2::VARCHAR, $3::JSONB, $4::BOOLEAN) RETURNING decision_evidence.id, decision_evidence.recorded_at'
+parameters = (UUID('057c9cfc-e09c-46b5-babb-2135d4a63e49'), 'approval_binding', '{"fingerprint": "sha256:cf5cb412ab76ec62997735ca63...ing_reasons": [], "batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "policy_version": "sim-2026-10-27.v1"}', True)
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+                prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+    
+                if attributes:
+                    self.description = [
+                        (
+                            attr.name,
+                            attr.type.oid,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                        )
+                        for attr in attributes
+                    ]
+                else:
+                    self.description = None
+    
+                if self.server_side:
+                    self._cursor = await prepared_stmt.cursor(*parameters)
+                    self.rowcount = -1
+                else:
+>                   self._rows = deque(await prepared_stmt.fetch(*parameters))
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:538: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:176: in fetch
+    data = await self.__bind_execute(args, 0, timeout)
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:241: in __bind_execute
+    data, status, _ = await self.__do_execute(
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:230: in __do_execute
+    return await executor(protocol)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.CheckViolationError: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E   DETAIL:  Failing row contains (adb111d8-79cb-4f7a-8920-893b45222a26, 057c9cfc-e09c-46b5-babb-2135d4a63e49, approval_binding, {"batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "fingerp..., t, 2026-10-27 13:25:06.186487+00).
+
+asyncpg/protocol/protocol.pyx:207: CheckViolationError
+
+The above exception was the direct cause of the following exception:
+
+self = <sqlalchemy.engine.base.Connection object at 0x75072f50b8f0>
+dialect = <sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x75072d922300>
+context = <sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x75072d8ae0c0>
+statement = <sqlalchemy.dialects.postgresql.asyncpg.PGCompiler_asyncpg object at 0x75072d8ace00>
+parameters = [(UUID('057c9cfc-e09c-46b5-babb-2135d4a63e49'), 'approval_binding', '{"fingerprint": "sha256:cf5cb412ab76ec62997735ca6...ng_reasons": [], "batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "policy_version": "sim-2026-10-27.v1"}', True)]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75072d9f8140>>
+error = CheckViolationError('new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.IntegrityError: <class 'asyncpg.exceptions.CheckViolationError'>: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E                   DETAIL:  Failing row contains (adb111d8-79cb-4f7a-8920-893b45222a26, 057c9cfc-e09c-46b5-babb-2135d4a63e49, approval_binding, {"batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "fingerp..., t, 2026-10-27 13:25:06.186487+00).
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: IntegrityError
+
+The above exception was the direct cause of the following exception:
+
+client = <starlette.testclient.TestClient object at 0x75072d8af0e0>
+
+    def test_approve_expired_ordinary_decision_accepted(client):
+        """Keputusan 1b: read model sekarang mengikuti ENDPOINT, dan endpoint hanya
+        menjaga kedaluwarsa untuk jenis administratif. Jadi approval pada keputusan
+        kedaluwarsa jenis biasa memang diterima — sengaja, bukan kelalaian.
+    
+        Batasnya diuji juga: eksekusinya TETAP ditolak, karena /actions/execute
+        memeriksa kedaluwarsa tanpa syarat. Artinya keputusan ini bisa disetujui tapi
+        tidak bisa dijalankan, dan itu memang keadaan yang dipilih owner."""
+        head = _mk_user("sppg_head", "Jakarta")
+        decision_id = _mk_decision(client)
+        try:
+            client.post(
+                "/actions/propose",
+                json={"decision_id": decision_id, "material_number": "MAT-TELUR-JKT"},
+                headers=_login(client, head),
+            )
+            _verify_decision(decision_id, "consistent")
+            _expire(decision_id)
+>           resp = client.post(
+                "/actions/approve",
+                json={"decision_id": decision_id, "approved": True},
+                headers=_login(client, head),
+            )
+
+tests/test_actions.py:527: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:597: in post
+    return super().post(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1157: in post
+    return self.request(
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:488: in request
+    return super().request(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:837: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:926: in send
+    response = self._send_handling_auth(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:954: in _send_handling_auth
+    response = self._send_handling_redirects(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:991: in _send_handling_redirects
+    response = self._send_single_request(request)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1027: in _send_single_request
+    response = transport.handle_request(request)
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:381: in handle_request
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:378: in handle_request
+    portal.call(self.app, scope, receive, send)
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:340: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+/usr/local/lib/python3.12/concurrent/futures/_base.py:456: in result
+    return self.__get_result()
+/usr/local/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+/usr/local/lib/python3.12/site-packages/fastapi/applications.py:1054: in __call__
+    await super().__call__(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/applications.py:113: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:187: in __call__
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:165: in __call__
+    await self.app(scope, receive, _send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:179: in _konteks_sesi_demo
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:128: in _header_keamanan
+    resp = await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:119: in _kunci_dokumen
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/cors.py:85: in __call__
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py:62: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:715: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:735: in app
+    await route.handle(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:288: in handle
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:76: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:73: in app
+    response = await f(request)
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:301: in app
+    raw_response = await run_endpoint_function(
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:212: in run_endpoint_function
+    return await dependant.call(**values)
+app/api/actions.py:741: in approve_action
+    await db.flush()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py:800: in flush
+    await greenlet_spawn(self.sync_session.flush, objects=objects)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:203: in greenlet_spawn
+    result = context.switch(value)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4352: in flush
+    self._flush(objects)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4487: in _flush
+    with util.safe_reraise():
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4448: in _flush
+    flush_context.execute()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:466: in execute
+    rec.execute(self)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:93: in save_obj
+    _emit_insert_statements(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75072d9f8140>>
+error = CheckViolationError('new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.exc.IntegrityError: (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.CheckViolationError'>: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E                   DETAIL:  Failing row contains (adb111d8-79cb-4f7a-8920-893b45222a26, 057c9cfc-e09c-46b5-babb-2135d4a63e49, approval_binding, {"batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "fingerp..., t, 2026-10-27 13:25:06.186487+00).
+E                   [SQL: INSERT INTO decision_evidence (decision_id, evidence_type, payload, is_consistent) VALUES ($1::UUID, $2::VARCHAR, $3::JSONB, $4::BOOLEAN) RETURNING decision_evidence.id, decision_evidence.recorded_at]
+E                   [parameters: (UUID('057c9cfc-e09c-46b5-babb-2135d4a63e49'), 'approval_binding', '{"fingerprint": "sha256:cf5cb412ab76ec62997735ca63703bc7f9ebdcca270477d8583ddb51d66965af", "evaluation_status": "usable", "blocking_reasons": [], "batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "policy_version": "sim-2026-10-27.v1"}', True)]
+E                   (Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: IntegrityError
+_______ test_approval_summary_or_complete_then_execute_parity[explicit] ________
+
+self = <sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x75071f964820>
+operation = 'INSERT INTO decision_evidence (decision_id, evidence_type, payload, is_consistent) VALUES ($1::UUID, $2::VARCHAR, $3::JSONB, $4::BOOLEAN) RETURNING decision_evidence.id, decision_evidence.recorded_at'
+parameters = (UUID('c6f85922-fe65-48f5-b2d5-8ea0c8147b87'), 'approval_binding', '{"fingerprint": "sha256:f19f8707d163d0a2fb7e35c1e4...ing_reasons": [], "batch_ids": ["e396a291-17f6-47e5-b354-5830854d2ada"], "policy_version": "sim-2026-10-27.v1"}', True)
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+                prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+    
+                if attributes:
+                    self.description = [
+                        (
+                            attr.name,
+                            attr.type.oid,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                        )
+                        for attr in attributes
+                    ]
+                else:
+                    self.description = None
+    
+                if self.server_side:
+                    self._cursor = await prepared_stmt.cursor(*parameters)
+                    self.rowcount = -1
+                else:
+>                   self._rows = deque(await prepared_stmt.fetch(*parameters))
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:538: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:176: in fetch
+    data = await self.__bind_execute(args, 0, timeout)
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:241: in __bind_execute
+    data, status, _ = await self.__do_execute(
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:230: in __do_execute
+    return await executor(protocol)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.CheckViolationError: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E   DETAIL:  Failing row contains (0ee40689-06bc-4f54-bbf6-fa3734a0ae8b, c6f85922-fe65-48f5-b2d5-8ea0c8147b87, approval_binding, {"batch_ids": ["e396a291-17f6-47e5-b354-5830854d2ada"], "fingerp..., t, 2026-10-27 13:25:50.233623+00).
+
+asyncpg/protocol/protocol.pyx:207: CheckViolationError
+
+The above exception was the direct cause of the following exception:
+
+self = <sqlalchemy.engine.base.Connection object at 0x75072d219a60>
+dialect = <sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x75071f922ea0>
+context = <sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x75071f91c710>
+statement = <sqlalchemy.dialects.postgresql.asyncpg.PGCompiler_asyncpg object at 0x75071f91efc0>
+parameters = [(UUID('c6f85922-fe65-48f5-b2d5-8ea0c8147b87'), 'approval_binding', '{"fingerprint": "sha256:f19f8707d163d0a2fb7e35c1e...ng_reasons": [], "batch_ids": ["e396a291-17f6-47e5-b354-5830854d2ada"], "policy_version": "sim-2026-10-27.v1"}', True)]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75072d2fbb60>>
+error = CheckViolationError('new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.IntegrityError: <class 'asyncpg.exceptions.CheckViolationError'>: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E                   DETAIL:  Failing row contains (0ee40689-06bc-4f54-bbf6-fa3734a0ae8b, c6f85922-fe65-48f5-b2d5-8ea0c8147b87, approval_binding, {"batch_ids": ["e396a291-17f6-47e5-b354-5830854d2ada"], "fingerp..., t, 2026-10-27 13:25:50.233623+00).
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: IntegrityError
+
+The above exception was the direct cause of the following exception:
+
+client = <starlette.testclient.TestClient object at 0x75071fd5cf80>
+binding = 'explicit'
+
+    @pytest.mark.parametrize("binding", ["explicit", "missing"])
+    def test_approval_summary_or_complete_then_execute_parity(client, binding):
+        """Only a bound transfer promises a supplier and can execute."""
+        batch = (
+            _mk_batch(_bogor_id(), fail=False, safety="pass")
+            if binding == "explicit"
+            else None
+        )
+        # Kasus "missing" menuntut lokasi+komoditas yang TIDAK punya satu pun batch,
+        # supaya pemasok tidak bisa disimpulkan. Dulu dipaku ke `ayam` + Jakarta;
+        # seed bertambah, jadi pasangannya DICARI saat tes berjalan.
+        pasangan = None if batch else _pasangan_tanpa_batch(_jakarta_id())
+        if not batch and pasangan is None:
+            # Premis kasus ini (pasangan lokasi×komoditas TANPA batch) bisa hilang
+            # ketika seed bertambah — generator aktivitas demo mengisi seluruh
+            # pasangan 10 lokasi × 3 komoditas. Itu bukan regresi produk, jadi
+            # dilewati dengan alasan jujur, bukan digagalkan.
+            pytest.skip(
+                "semua lokasi×komoditas punya batch; kasus supplier_unknown mustahil dibentuk"
+            )
+        if batch:
+            did = _mk_decision(_bogor_id(), _jakarta_id())
+        else:
+            assert pasangan is not None  # dijamin skip di atas; ini hanya untuk tipe
+            sumber, komoditas = pasangan
+            did = _mk_decision(sumber, _jakarta_id(), commodity=komoditas)
+        try:
+            if batch:
+                _bind_decision(did, batch)
+            # Verifikasi + verdict konsisten (fixture DB level, server verdict).
+            client.post(
+                "/actions/verify", headers=_head_user(client), json={"decision_id": did}
+            )
+            _db_exec(
+                "UPDATE decisions SET verifier_note='consistent', verified_by="
+                "(SELECT id FROM users WHERE role='sppg_head' LIMIT 1) WHERE id=:d",
+                {"d": did},
+            )
+            # Approval Head saja TIDAK cukup: transfer operasional butuh dua role
+            # (PLAN.md §13.3) meski verdict verifier CONSISTENT.
+>           ra = client.post(
+                "/actions/approve",
+                headers=_head_user(client),
+                json={"decision_id": did, "approved": True},
+            )
+
+tests/test_approval_summary.py:448: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:597: in post
+    return super().post(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1157: in post
+    return self.request(
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:488: in request
+    return super().request(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:837: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:926: in send
+    response = self._send_handling_auth(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:954: in _send_handling_auth
+    response = self._send_handling_redirects(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:991: in _send_handling_redirects
+    response = self._send_single_request(request)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1027: in _send_single_request
+    response = transport.handle_request(request)
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:381: in handle_request
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:378: in handle_request
+    portal.call(self.app, scope, receive, send)
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:340: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+/usr/local/lib/python3.12/concurrent/futures/_base.py:456: in result
+    return self.__get_result()
+/usr/local/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+/usr/local/lib/python3.12/site-packages/fastapi/applications.py:1054: in __call__
+    await super().__call__(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/applications.py:113: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:187: in __call__
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:165: in __call__
+    await self.app(scope, receive, _send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:179: in _konteks_sesi_demo
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:128: in _header_keamanan
+    resp = await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:119: in _kunci_dokumen
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/cors.py:85: in __call__
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py:62: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:715: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:735: in app
+    await route.handle(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:288: in handle
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:76: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:73: in app
+    response = await f(request)
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:301: in app
+    raw_response = await run_endpoint_function(
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:212: in run_endpoint_function
+    return await dependant.call(**values)
+app/api/actions.py:741: in approve_action
+    await db.flush()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py:800: in flush
+    await greenlet_spawn(self.sync_session.flush, objects=objects)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:203: in greenlet_spawn
+    result = context.switch(value)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4352: in flush
+    self._flush(objects)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4487: in _flush
+    with util.safe_reraise():
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4448: in _flush
+    flush_context.execute()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:466: in execute
+    rec.execute(self)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:93: in save_obj
+    _emit_insert_statements(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75072d2fbb60>>
+error = CheckViolationError('new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.exc.IntegrityError: (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.CheckViolationError'>: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E                   DETAIL:  Failing row contains (0ee40689-06bc-4f54-bbf6-fa3734a0ae8b, c6f85922-fe65-48f5-b2d5-8ea0c8147b87, approval_binding, {"batch_ids": ["e396a291-17f6-47e5-b354-5830854d2ada"], "fingerp..., t, 2026-10-27 13:25:50.233623+00).
+E                   [SQL: INSERT INTO decision_evidence (decision_id, evidence_type, payload, is_consistent) VALUES ($1::UUID, $2::VARCHAR, $3::JSONB, $4::BOOLEAN) RETURNING decision_evidence.id, decision_evidence.recorded_at]
+E                   [parameters: (UUID('c6f85922-fe65-48f5-b2d5-8ea0c8147b87'), 'approval_binding', '{"fingerprint": "sha256:f19f8707d163d0a2fb7e35c1e48e30cfff5e142b276ce73e83df1800df175191", "evaluation_status": "usable", "blocking_reasons": [], "batch_ids": ["e396a291-17f6-47e5-b354-5830854d2ada"], "policy_version": "sim-2026-10-27.v1"}', True)]
+E                   (Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: IntegrityError
+______ test_summary_approved_by_me_hanya_untuk_user_yang_sudah_menyetujui ______
+
+self = <sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_cursor object at 0x75072d81c3a0>
+operation = 'INSERT INTO decision_evidence (decision_id, evidence_type, payload, is_consistent) VALUES ($1::UUID, $2::VARCHAR, $3::JSONB, $4::BOOLEAN) RETURNING decision_evidence.id, decision_evidence.recorded_at'
+parameters = (UUID('e799f1ae-c5e9-4511-8fc2-2d903095df52'), 'approval_binding', '{"fingerprint": "sha256:0f1f595c73476bfcead7cefaa2...9-1f0f-57f5-a0ef-8d2610710907", "efd43f0a-0b9f-5a4b-ad6d-a1a77fef80d9"], "policy_version": "sim-2026-10-27.v1"}', True)
+
+    async def _prepare_and_execute(self, operation, parameters):
+        adapt_connection = self._adapt_connection
+    
+        async with adapt_connection._execute_mutex:
+            if not adapt_connection._started:
+                await adapt_connection._start_transaction()
+    
+            if parameters is None:
+                parameters = ()
+    
+            try:
+                prepared_stmt, attributes = await adapt_connection._prepare(
+                    operation, self._invalidate_schema_cache_asof
+                )
+    
+                if attributes:
+                    self.description = [
+                        (
+                            attr.name,
+                            attr.type.oid,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                        )
+                        for attr in attributes
+                    ]
+                else:
+                    self.description = None
+    
+                if self.server_side:
+                    self._cursor = await prepared_stmt.cursor(*parameters)
+                    self.rowcount = -1
+                else:
+>                   self._rows = deque(await prepared_stmt.fetch(*parameters))
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:538: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:176: in fetch
+    data = await self.__bind_execute(args, 0, timeout)
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:241: in __bind_execute
+    data, status, _ = await self.__do_execute(
+/usr/local/lib/python3.12/site-packages/asyncpg/prepared_stmt.py:230: in __do_execute
+    return await executor(protocol)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions.CheckViolationError: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E   DETAIL:  Failing row contains (7f359008-5b7a-4a89-9eb3-3e859b6eaf18, e799f1ae-c5e9-4511-8fc2-2d903095df52, approval_binding, {"batch_ids": ["b72fa492-f54c-50ce-b771-4b46530cad34", "eb6ac8e9..., t, 2026-10-27 13:26:04.169441+00).
+
+asyncpg/protocol/protocol.pyx:207: CheckViolationError
+
+The above exception was the direct cause of the following exception:
+
+self = <sqlalchemy.engine.base.Connection object at 0x75072d8aa990>
+dialect = <sqlalchemy.dialects.postgresql.asyncpg.PGDialect_asyncpg object at 0x75072d8ec2f0>
+context = <sqlalchemy.dialects.postgresql.asyncpg.PGExecutionContext_asyncpg object at 0x75072f5c40b0>
+statement = <sqlalchemy.dialects.postgresql.asyncpg.PGCompiler_asyncpg object at 0x75072f5c79b0>
+parameters = [(UUID('e799f1ae-c5e9-4511-8fc2-2d903095df52'), 'approval_binding', '{"fingerprint": "sha256:0f1f595c73476bfcead7cefaa...-1f0f-57f5-a0ef-8d2610710907", "efd43f0a-0b9f-5a4b-ad6d-a1a77fef80d9"], "policy_version": "sim-2026-10-27.v1"}', True)]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75072ccab4d0>>
+error = CheckViolationError('new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.IntegrityError: <class 'asyncpg.exceptions.CheckViolationError'>: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E                   DETAIL:  Failing row contains (7f359008-5b7a-4a89-9eb3-3e859b6eaf18, e799f1ae-c5e9-4511-8fc2-2d903095df52, approval_binding, {"batch_ids": ["b72fa492-f54c-50ce-b771-4b46530cad34", "eb6ac8e9..., t, 2026-10-27 13:26:04.169441+00).
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: IntegrityError
+
+The above exception was the direct cause of the following exception:
+
+client = <starlette.testclient.TestClient object at 0x75072d8e0050>
+
+    def test_summary_approved_by_me_hanya_untuk_user_yang_sudah_menyetujui(client):
+        """`approved_by_me` = user INI sudah punya baris approval (bukan role-nya).
+    
+        Keputusan owner 17 Okt: penyebab "approve tidak bisa" yang dilaporkan adalah
+        kepala SPPG menekan "Setuju" pada keputusan yang approval kepala-nya SUDAH
+        tercatat (data seed), lalu menerima 409 "approval sudah tercatat" yang
+        terbaca seperti tombol rusak. Read model kini menyatakan hal itu lebih dulu
+        (`approved_by_me`) supaya UI bisa menampilkan "sudah Anda setujui" alih-alih
+        menawarkan tombol yang pasti ditolak.
+    
+        Kontrak lama TIDAK berubah: `can_approve` tetap True untuk kedua pembaca —
+        penjaga 409 ada di endpoint, bukan di read model.
+        """
+        did = _mk_decision(_jakarta_id(), _jakarta_id())
+        try:
+            head = _head_user(client)
+            nut = _nut_user(client)
+            # Fase 0 butir 2: approve mensyaratkan verifikasi tercatat.
+            _db_exec(
+                "UPDATE decisions SET verifier_note='consistent', verified_by="
+                "(SELECT id FROM users WHERE role='sppg_head' LIMIT 1) "
+                "WHERE id=:d",
+                {"d": did},
+            )
+>           ok = client.post(
+                "/actions/approve", json={"decision_id": did, "approved": True}, headers=head
+            )
+
+tests/test_approval_summary.py:909: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:597: in post
+    return super().post(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1157: in post
+    return self.request(
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:488: in request
+    return super().request(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:837: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:926: in send
+    response = self._send_handling_auth(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:954: in _send_handling_auth
+    response = self._send_handling_redirects(
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:991: in _send_handling_redirects
+    response = self._send_single_request(request)
+/usr/local/lib/python3.12/site-packages/httpx/_client.py:1027: in _send_single_request
+    response = transport.handle_request(request)
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:381: in handle_request
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/testclient.py:378: in handle_request
+    portal.call(self.app, scope, receive, send)
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:340: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+/usr/local/lib/python3.12/concurrent/futures/_base.py:456: in result
+    return self.__get_result()
+/usr/local/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/usr/local/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+/usr/local/lib/python3.12/site-packages/fastapi/applications.py:1054: in __call__
+    await super().__call__(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/applications.py:113: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:187: in __call__
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py:165: in __call__
+    await self.app(scope, receive, _send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:179: in _konteks_sesi_demo
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:128: in _header_keamanan
+    resp = await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:185: in __call__
+    with collapse_excgroups():
+/usr/local/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+/usr/local/lib/python3.12/site-packages/starlette/_utils.py:83: in collapse_excgroups
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:187: in __call__
+    response = await self.dispatch_func(request, call_next)
+app/main.py:119: in _kunci_dokumen
+    return await call_next(request)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:163: in call_next
+    raise app_exc
+/usr/local/lib/python3.12/site-packages/starlette/middleware/base.py:149: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/cors.py:85: in __call__
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py:62: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:715: in __call__
+    await self.middleware_stack(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:735: in app
+    await route.handle(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:288: in handle
+    await self.app(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:76: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:62: in wrapped_app
+    raise exc
+/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+/usr/local/lib/python3.12/site-packages/starlette/routing.py:73: in app
+    response = await f(request)
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:301: in app
+    raw_response = await run_endpoint_function(
+/usr/local/lib/python3.12/site-packages/fastapi/routing.py:212: in run_endpoint_function
+    return await dependant.call(**values)
+app/api/actions.py:741: in approve_action
+    await db.flush()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py:800: in flush
+    await greenlet_spawn(self.sync_session.flush, objects=objects)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:203: in greenlet_spawn
+    result = context.switch(value)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4352: in flush
+    self._flush(objects)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4487: in _flush
+    with util.safe_reraise():
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/session.py:4448: in _flush
+    flush_context.execute()
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:466: in execute
+    rec.execute(self)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:93: in save_obj
+    _emit_insert_statements(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:572: in execute
+    self._adapt_connection.await_(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+/usr/local/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:550: in _prepare_and_execute
+    self._handle_exception(error)
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:501: in _handle_exception
+    self._adapt_connection._handle_exception(error)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <AdaptedConnection <asyncpg.connection.Connection object at 0x75072ccab4d0>>
+error = CheckViolationError('new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"')
+
+    def _handle_exception(self, error):
+        if self._connection.is_closed():
+            self._transaction = None
+            self._started = False
+    
+        if not isinstance(error, AsyncAdapt_asyncpg_dbapi.Error):
+            exception_mapping = self.dbapi._asyncpg_error_translate
+    
+            for super_ in type(error).__mro__:
+                if super_ in exception_mapping:
+                    translated_error = exception_mapping[super_](
+                        "%s: %s" % (type(error), error)
+                    )
+                    translated_error.pgcode = translated_error.sqlstate = (
+                        getattr(error, "sqlstate", None)
+                    )
+>                   raise translated_error from error
+E                   sqlalchemy.exc.IntegrityError: (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.CheckViolationError'>: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E                   DETAIL:  Failing row contains (7f359008-5b7a-4a89-9eb3-3e859b6eaf18, e799f1ae-c5e9-4511-8fc2-2d903095df52, approval_binding, {"batch_ids": ["b72fa492-f54c-50ce-b771-4b46530cad34", "eb6ac8e9..., t, 2026-10-27 13:26:04.169441+00).
+E                   [SQL: INSERT INTO decision_evidence (decision_id, evidence_type, payload, is_consistent) VALUES ($1::UUID, $2::VARCHAR, $3::JSONB, $4::BOOLEAN) RETURNING decision_evidence.id, decision_evidence.recorded_at]
+E                   [parameters: (UUID('e799f1ae-c5e9-4511-8fc2-2d903095df52'), 'approval_binding', '{"fingerprint": "sha256:0f1f595c73476bfcead7cefaa29b1f81c030052370562162d2773128cec1904a", "evaluation_status": "usable", "blocking_reasons": [], "ba ... (21 characters truncated) ... f54c-50ce-b771-4b46530cad34", "eb6ac8e9-1f0f-57f5-a0ef-8d2610710907", "efd43f0a-0b9f-5a4b-ad6d-a1a77fef80d9"], "policy_version": "sim-2026-10-27.v1"}', True)]
+E                   (Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:784: IntegrityError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_actions.py::test_execute_success_operasional_butuh_dua_approval_writes_mock_po
+FAILED tests/test_actions.py::test_execute_flagged_requires_both_roles - sqla...
+FAILED tests/test_actions.py::test_execute_expired_decision_rejected - sqlalc...
+FAILED tests/test_actions.py::test_approve_expired_ordinary_decision_accepted
+FAILED tests/test_approval_summary.py::test_approval_summary_or_complete_then_execute_parity[explicit]
+FAILED tests/test_approval_summary.py::test_summary_approved_by_me_hanya_untuk_user_yang_sudah_menyetujui
+6 failed, 132 passed, 2 skipped, 1 warning in 145.81s (0:02:25)

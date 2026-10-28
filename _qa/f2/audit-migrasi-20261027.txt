@@ -1,0 +1,75 @@
+=== 2026-10-27 23:27:49 HEAD=07e7285 DB=mealchain_f2_audit ===
+--- [1] upgrade head dari DB KOSONG ---
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 001_master_data, Master data tables — 3 role final (Schema.md §1)
+INFO  [alembic.runtime.migration] Running upgrade 001_master_data -> 002_operational_data, Tabel operasional Sprint 1 — Schema.md §2/§4/§5
+INFO  [alembic.runtime.migration] Running upgrade 002_operational_data -> 004_supplier_quote_design, price_signals: kolom supplier_id + kontrak source dua nilai (revisi kedua Roy).
+INFO  [alembic.runtime.migration] Running upgrade 004_supplier_quote_design -> 005_reconcile_sprint1_schema, Rekonsiliasi kontrak Sprint 1 (Task 0 Sprint 2).
+INFO  [alembic.runtime.migration] Running upgrade 005_reconcile_sprint1_schema -> 006_decision_persistence, Decision persistence schema (Task 8 Sprint 2).
+INFO  [alembic.runtime.migration] Running upgrade 006_decision_persistence -> 007_supervise_step, SUPERVISE step diwhitelist di agent_traces (permintaan Roy).
+INFO  [alembic.runtime.migration] Running upgrade 007_supervise_step -> 008_rejection_loop, Rejection loop (permintaan Roy 2026-10-07): alasan wajib + iterasi.
+INFO  [alembic.runtime.migration] Running upgrade 008_rejection_loop -> 009_kpi_facts_tables, P6 (pakai keputusan Roy 2026-10-09): tabel facts KPI Meal Continuity
+& Avoidable Food Loss — sebelumnya `unavailable` karena schema tak punya
+facts-nya (ruling O-KPI: jujur, tanpa proxy). Sekarang facts-nya dibuat:
+INFO  [alembic.runtime.migration] Running upgrade 009_kpi_facts_tables -> 010_ledger_blocks, P1 (paket 1-6, keputusan Roy 2026-10-09): ledger_blocks — Merkle
+append-only. Setiap aksi mutasi keputusan (approve/reject/execute)
+menambah block: payload_hash = sha256(prev_hash + canonical payload),
+prev_hash block pertama = 64 karakter '0' (genesis). Rantai diverifikasi
+GET /ledger/verify; manipulasi payload/payload_hash memutus rantai.
+INFO  [alembic.runtime.migration] Running upgrade 010_ledger_blocks -> 011_supplier_exclusions, Supplier exclusion history and administrative decision types.
+INFO  [alembic.runtime.migration] Running upgrade 011_supplier_exclusions -> 012_supplier_profile, Profil pemasok: koordinat + fokus komoditas + kapasitas + sertifikasi.
+INFO  [alembic.runtime.migration] Running upgrade 012_supplier_profile -> 013_origin_generated_at, Penanda asal data (`origin`) + `generated_at` + kunci upsert deret waktu.
+INFO  [alembic.runtime.migration] Running upgrade 013_origin_generated_at -> 014_road_routes, Cache rute JALAN (OSRM) untuk garis pemasok → tujuan di peta.
+INFO  [alembic.runtime.migration] Running upgrade 014_road_routes -> 015_batch_dispatch, Jam berangkat kiriman (`batches.dispatched_at`) — dasar estimasi tiba.
+INFO  [alembic.runtime.migration] Running upgrade 015_batch_dispatch -> 016_batch_receipts, Catatan penerimaan barang (`batch_receipts`) — rumah jujur untuk isian manual.
+INFO  [alembic.runtime.migration] Running upgrade 016_batch_receipts -> 017_event_origin, Penanda asal (`origin`/`generated_at`) untuk kiriman & limbah (migrasi 017).
+INFO  [alembic.runtime.migration] Running upgrade 017_event_origin -> 018_agent_trace_worker_fields, Metadata worker pada jejak agen (migrasi 018).
+INFO  [alembic.runtime.migration] Running upgrade 018_agent_trace_worker_fields -> 019_batch_quarantine, Status karantina batch (migrasi 019).
+INFO  [alembic.runtime.migration] Running upgrade 019_batch_quarantine -> 020_review_only_status, Status terminal `review_only` untuk temuan (price anomaly).
+INFO  [alembic.runtime.migration] Running upgrade 020_review_only_status -> 021_po_number_seragam, Seragamkan nomor PO yang lahir dari keputusan (audit M8, 18 Okt 2026).
+INFO  [alembic.runtime.migration] Running upgrade 021_po_number_seragam -> 022_disposal_partner, Mitra pengolahan limbah pada `disposal_events` (18 Okt 2026).
+INFO  [alembic.runtime.migration] Running upgrade 022_disposal_partner -> 023_supplier_procurement, Pengadaan pemasok: `decisions.supplier_id` + tipe `supplier_procurement`
+(19 Okt 2026).
+INFO  [alembic.runtime.migration] Running upgrade 023_supplier_procurement -> 024_demo_sessions, Sesi demo: tabel `demo_sessions` + stempel `batches.demo_session_id`
+(20 Okt 2026).
+INFO  [alembic.runtime.migration] Running upgrade 024_demo_sessions -> 025_demo_session_columns, Stempel sesi demo untuk tabel operasional (lanjutan 024, 20 Okt 2026).
+INFO  [alembic.runtime.migration] Running upgrade 025_demo_session_columns -> 026_receipt_approval, Persetujuan penerimaan barang → stok masuk (20 Okt 2026).
+INFO  [alembic.runtime.migration] Running upgrade 026_receipt_approval -> 027_po_decision_cascade, PO ikut terhapus bersama keputusannya (21 Okt 2026).
+INFO  [alembic.runtime.migration] Running upgrade 027_po_decision_cascade -> 028_demo_marker_indexes, Penanda data demo pada PO + index kolom pencarian Joule (22 Okt 2026).
+INFO  [alembic.runtime.migration] Running upgrade 028_demo_marker_indexes -> 029_kpi_writeback_ref, Kunci idempotensi penulis KPI (23 Okt 2026).
+INFO  [alembic.runtime.migration] Running upgrade 029_kpi_writeback_ref -> 030_approval_four_eyes_unique, Four-eyes ditegakkan database pada `approvals` (23 Okt 2026).
+INFO  [alembic.runtime.migration] Running upgrade 030_approval_four_eyes_unique -> 031_ledger_generation, Generasi ledger: blok lama diarsipkan saat data demo direset (N3, 24 Okt 2026).
+INFO  [alembic.runtime.migration] Running upgrade 031_ledger_generation -> 032_satu_sesi_aktif, Satu sesi demo aktif — dijamin database, bukan hanya kunci satu proses.
+INFO  [alembic.runtime.migration] Running upgrade 032_satu_sesi_aktif -> 033_indeks_fk_hilang, Indeks untuk 22 kolom FK yang belum punya indeks pendukung.
+INFO  [alembic.runtime.migration] Running upgrade 033_indeks_fk_hilang -> 039_agent_trace_parent_run_id, Run induk pada jejak agen — verifier sebagai run anak (migrasi 039).
+INFO  [alembic.runtime.migration] Running upgrade 039_agent_trace_parent_run_id -> 040_session_modes_and_ownership, Mode sesi demo + jangkar evaluasi (Fase 2 MG, migrasi 040).
+INFO  [alembic.runtime.migration] Running upgrade 040_session_modes_and_ownership -> 041_commodity_policies, Profil komoditas berversi + bukti suhu (Fase 3 MG, migrasi 041).
+INFO  [alembic.runtime.migration] Running upgrade 041_commodity_policies -> 042_ledger_append_only, Ledger append-only ditegakkan DATABASE, bukan konvensi (Fase 11 MG).
+INFO  [alembic.runtime.migration] Running upgrade 042_ledger_append_only -> 043_least_privilege_app, Least privilege untuk role aplikasi, tanpa memutus backup/restore (Fase 11 butir 3).
+UPGRADE_EXIT=0
+--- [2] alembic check ---
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+No new upgrade operations detected.
+CHECK_EXIT=0
+--- [3] versi head + posisi 040 ---
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+043_least_privilege_app (head)
+041_commodity_policies -> 042_ledger_append_only, Ledger append-only ditegakkan DATABASE, bukan konvensi (Fase 11 MG).
+040_session_modes_and_ownership -> 041_commodity_policies, Profil komoditas berversi + bukti suhu (Fase 3 MG, migrasi 041).
+039_agent_trace_parent_run_id -> 040_session_modes_and_ownership, Mode sesi demo + jangkar evaluasi (Fase 2 MG, migrasi 040).
+033_indeks_fk_hilang -> 039_agent_trace_parent_run_id, Run induk pada jejak agen — verifier sebagai run anak (migrasi 039).
+--- [4] downgrade 040 -> 039 lalu upgrade lagi ---
+INFO  [alembic.runtime.migration] Running downgrade 042_ledger_append_only -> 041_commodity_policies, Ledger append-only ditegakkan DATABASE, bukan konvensi (Fase 11 MG).
+INFO  [alembic.runtime.migration] Running downgrade 041_commodity_policies -> 040_session_modes_and_ownership, Profil komoditas berversi + bukti suhu (Fase 3 MG, migrasi 041).
+INFO  [alembic.runtime.migration] Running downgrade 040_session_modes_and_ownership -> 039_agent_trace_parent_run_id, Mode sesi demo + jangkar evaluasi (Fase 2 MG, migrasi 040).
+DOWNGRADE_EXIT=0
+kolom_mode_sesudah_downgrade=0
+INFO  [alembic.runtime.migration] Running upgrade 040_session_modes_and_ownership -> 041_commodity_policies, Profil komoditas berversi + bukti suhu (Fase 3 MG, migrasi 041).
+INFO  [alembic.runtime.migration] Running upgrade 041_commodity_policies -> 042_ledger_append_only, Ledger append-only ditegakkan DATABASE, bukan konvensi (Fase 11 MG).
+INFO  [alembic.runtime.migration] Running upgrade 042_ledger_append_only -> 043_least_privilege_app, Least privilege untuk role aplikasi, tanpa memutus backup/restore (Fase 11 butir 3).
+REUPGRADE_EXIT=0
+kolom_mode_sesudah_upgrade=3
+--- [5] bersihkan klon ---
+DROPPED mealchain_f2_audit

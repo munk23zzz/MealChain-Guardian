@@ -1,0 +1,277 @@
+alembic/versions/041_commodity_policies.py:29:1: I001 [*] Import block is un-sorted or un-formatted
+   |
+27 |   """
+28 |   
+29 | / from typing import Sequence, Union
+30 | | 
+31 | | import sqlalchemy as sa
+32 | | from alembic import op
+33 | | 
+34 | | revision: str = "041_commodity_policies"
+   | |_^ I001
+35 |   down_revision: Union[str, None] = "040_session_modes_and_ownership"
+36 |   branch_labels: Union[str, Sequence[str]] = None
+   |
+   = help: Organize imports
+
+app/api/balance.py:3:1: I001 [*] Import block is un-sorted or un-formatted
+   |
+ 1 |   """Router balance (Task 10 Sprint 2) — tipis: validasi + delegasi service."""
+ 2 |   
+ 3 | / from datetime import datetime, timezone
+ 4 | | from decimal import Decimal
+ 5 | | import uuid
+ 6 | | 
+ 7 | | from fastapi import APIRouter, Depends, HTTPException, Query
+ 8 | | from pydantic import BaseModel, ConfigDict
+ 9 | | from sqlalchemy import String, select
+10 | | from sqlalchemy.ext.asyncio import AsyncSession
+11 | | 
+12 | | from app.api.auth import MUTATING_ROLES, get_current_user, require_roles
+13 | | from app.api.dependencies import get_db
+14 | | from app.core.scope import apply_location_scope, assert_in_scope
+15 | | from app.models import (
+16 | |     Commodity,
+17 | |     DemandRecord,
+18 | |     Location,
+19 | |     SupplyRecord,
+20 | |     User,
+21 | | )
+22 | | from app.services import recommendation_service as rs
+23 | | 
+24 | | router = APIRouter()
+   | |_^ I001
+   |
+   = help: Organize imports
+
+app/core/batch_eligibility.py:120:7: N818 Exception name `BatchNotEligible` should be named with an Error suffix
+    |
+120 | class BatchNotEligible(Exception):
+    |       ^^^^^^^^^^^^^^^^ N818
+121 |     """Kegagalan kelayakan dengan kode stabil; dipetakan ke 409 di API."""
+    |
+
+app/services/agent_memory.py:93:101: E501 Line too long (111 > 100)
+   |
+91 |         self._memory_id = memory_id
+92 |         self._runtime_endpoint = (runtime_endpoint or "").strip()
+93 |         self._actor_id = (actor_id or os.environ.get("AGENTCORE_MEMORY_ACTOR") or "mealchain-guardian").strip()
+   |                                                                                                     ^^^^^^^^^^^ E501
+94 |         self._region = (region or os.environ.get("AWS_REGION") or "us-west-2").strip()
+95 |         self._client = None
+   |
+
+app/services/batch_eligibility_service.py:23:1: I001 [*] Import block is un-sorted or un-formatted
+   |
+21 |   """
+22 |   
+23 | / from __future__ import annotations
+24 | | 
+25 | | from datetime import UTC, datetime
+26 | | from typing import Any
+27 | | 
+28 | | from app.core.batch_eligibility import (
+29 | |     BATCH_EXPIRED,
+30 | |     DELIVERY_WINDOW_EXCEEDED,
+31 | |     EVIDENCE_MISSING,
+32 | |     EXPIRED_BEFORE_ARRIVAL,
+33 | |     EXPIRY_UNKNOWN,
+34 | |     FRESHNESS_FAIL,
+35 | |     ON_HOLD,
+36 | |     POLICY_BAWAAN,
+37 | |     QUARANTINED,
+38 | |     QUARANTINE_BLOCK,
+39 | |     REJECTED,
+40 | |     SAFETY_FAIL,
+41 | |     SAFETY_NEEDS_VERIFICATION,
+42 | |     SAFETY_PENDING,
+43 | |     SAFETY_STATUS_UNKNOWN,
+44 | |     TEMPERATURE_INCOMPLETE,
+45 | |     USABLE,
+46 | |     BatchEvaluation,
+47 | |     evaluate_batch,
+48 | | )
+49 | | from app.core.freshness import classify_freshness
+50 | | 
+51 | | __all__ = [
+   | |_^ I001
+52 |       "NEXT_STEP",
+53 |       "PESAN_TOLAK",
+   |
+   = help: Organize imports
+
+app/services/decision_packet.py:27:1: I001 [*] Import block is un-sorted or un-formatted
+   |
+25 |   """
+26 |   
+27 | / from __future__ import annotations
+28 | | 
+29 | | from datetime import datetime, timezone
+30 | | 
+31 | | from sqlalchemy import select
+32 | | from sqlalchemy.ext.asyncio import AsyncSession
+33 | | 
+34 | | from app.core.batch_eligibility import batch_policy_from, evaluate_batch
+35 | | from app.core.commercial_cost import commercial_cost_payload
+36 | | from app.core.logistics import estimate_logistics
+37 | | from app.core.policy_store import profil_untuk_komoditas
+38 | | from app.core.temperature import parse_temperature_log
+39 | | from app.models import Commodity, Decision, DecisionEvidence, DemandRecord, Location
+40 | | from app.services.approval_summary import build_approval_summary, syarat_persetujuan
+41 | | from app.services.batch_eligibility_service import fakta_batch, next_step
+42 | | from app.services.supplier_eligibility import batch_sumber_transfer
+43 | | from app.services import supplier_exclusion_service as exclusions
+44 | | 
+45 | | __all__ = ["build_decision_packet"]
+   | |_^ I001
+46 |   
+47 |   #: Bukti yang punya `review_reason` adalah hasil review MANUSIA (Fase 6 butir 3);
+   |
+   = help: Organize imports
+
+app/services/decision_packet.py:185:101: E501 Line too long (104 > 100)
+    |
+183 |     """
+184 |     if decision.target_location_id is None or decision.commodity_id is None:
+185 |         return {"due_at": None, "needed_by": None, "feasible": None, "reason": "tanpa tujuan/komoditas"}
+    |                                                                                                     ^^^^ E501
+186 |     row = (
+187 |         await db.execute(
+    |
+
+app/services/recommendation_service.py:27:1: I001 [*] Import block is un-sorted or un-formatted
+   |
+25 |   """
+26 |   
+27 | / import inspect
+28 | | from dataclasses import replace
+29 | | from datetime import datetime, timezone
+30 | | from decimal import ROUND_HALF_UP, Decimal
+31 | | 
+32 | | from sqlalchemy import select
+33 | | 
+34 | | from app.core.candidate import PriceInfo
+35 | | from app.core.candidate_generation import generate_candidates
+36 | | from app.core.config import settings
+37 | | from app.core.commodity_policy import policy_for
+38 | | from app.core.freshness import classify_freshness, evaluate_freshness
+39 | | from app.core.policy_store import baca_semua_profil
+40 | | from app.core.logistics import estimate_logistics
+41 | | from app.core.menu_hierarchy import cadangan_kontinuitas_kg, kebutuhan_menu_kg
+42 | | from app.core.price import price_deviation
+43 | | from app.core.ranking import ScoredCandidate, rank_candidates
+44 | | from app.core.safe_delivered_cost import (
+45 | |     SafeDeliveredCostInputs,
+46 | |     calculate_safe_delivered_cost,
+47 | | )
+48 | | from app.core.scoring import CandidateScoreFactors, calculate_candidate_score
+49 | | from app.core.supplier_leg import (
+50 | |     LEG_REFERENCE_COORDINATES,
+51 | |     LEG_REFERENCE_MISSING,
+52 | |     LEG_REFERENCE_NO_SUPPLIER,
+53 | |     supplier_leg_map,
+54 | | )
+55 | | from app.models import (
+56 | |     Batch,
+57 | |     Commodity,
+58 | |     DemandRecord,
+59 | |     Location,
+60 | |     MenuPlan,
+61 | |     PriceSignal,
+62 | |     Supplier,
+63 | |     SupplierExclusion,
+64 | |     SupplyRecord,
+65 | | )
+66 | | 
+67 | | __all__ = ["build_recommendations", "fetch_operational_facts"]
+   | |_^ I001
+68 |   
+69 |   TRANSPORT_RATE = Decimal("300")  # Rp per km per ton
+   |
+   = help: Organize imports
+
+app/services/recommendation_service.py:38:32: F401 [*] `app.core.freshness.classify_freshness` imported but unused
+   |
+36 | from app.core.config import settings
+37 | from app.core.commodity_policy import policy_for
+38 | from app.core.freshness import classify_freshness, evaluate_freshness
+   |                                ^^^^^^^^^^^^^^^^^^ F401
+39 | from app.core.policy_store import baca_semua_profil
+40 | from app.core.logistics import estimate_logistics
+   |
+   = help: Remove unused import: `app.core.freshness.classify_freshness`
+
+tests/test_commodity_policies.py:23:1: I001 [*] Import block is un-sorted or un-formatted
+   |
+21 |   """
+22 |   
+23 | / from __future__ import annotations
+24 | | 
+25 | | from datetime import UTC, datetime, timedelta
+26 | | 
+27 | | import pytest
+28 | | 
+29 | | from app.core.commodity_limits import policy_for, safe_temp_for
+30 | | from app.core.freshness import classify_freshness, compute_freshness_score
+31 | | from app.core.safety import evaluate_safety
+32 | | from app.core.temperature import (
+33 | |     EVIDENCE_AMBIGUOUS,
+34 | |     EVIDENCE_INSUFFICIENT,
+35 | |     EVIDENCE_SUFFICIENT,
+36 | |     OBSERVED,
+37 | |     OBSERVATION_MALFORMED,
+38 | |     OBSERVATION_MISSING,
+39 | |     OBSERVATION_STALE,
+40 | |     parse_temperature_log,
+41 | | )
+42 | | 
+43 | | AS_OF = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
+   | |_^ I001
+44 |   
+45 |   EGG = policy_for("telur")
+   |
+   = help: Organize imports
+
+tests/test_decision_hierarchy.py:25:8: F401 [*] `pytest` imported but unused
+   |
+23 | from decimal import Decimal
+24 | 
+25 | import pytest
+   |        ^^^^^^ F401
+26 | 
+27 | from app.core import batch_eligibility as be
+   |
+   = help: Remove unused import: `pytest`
+
+tests/test_decision_hierarchy.py:99:101: E501 Line too long (103 > 100)
+    |
+ 97 |     kandidat = generate_candidates(
+ 98 |         source_records={("Bandung", "telur"): Decimal("500"), ("Jakarta", "telur"): Decimal("0")},
+ 99 |         destination_records={("Jakarta", "telur"): Decimal("300"), ("Bandung", "telur"): Decimal("0")},
+    |                                                                                                     ^^^ E501
+100 |         batches=[
+101 |             batch("b-kosong", lokasi="Bandung", temperature_log=[]),
+    |
+
+tests/test_decision_hierarchy.py:123:101: E501 Line too long (103 > 100)
+    |
+121 |     kandidat = generate_candidates(
+122 |         source_records={("Bandung", "telur"): Decimal("500"), ("Jakarta", "telur"): Decimal("0")},
+123 |         destination_records={("Jakarta", "telur"): Decimal("300"), ("Bandung", "telur"): Decimal("0")},
+    |                                                                                                     ^^^ E501
+124 |         batches=[batch("b-pending", lokasi="Bandung", safety_status="pending")],
+125 |         logistics_by_pair={("Bandung", "Jakarta"): logistik()},
+    |
+
+tests/test_decision_hierarchy.py:143:101: E501 Line too long (103 > 100)
+    |
+141 |     kandidat = generate_candidates(
+142 |         source_records={("Bandung", "telur"): Decimal("500"), ("Jakarta", "telur"): Decimal("0")},
+143 |         destination_records={("Jakarta", "telur"): Decimal("300"), ("Bandung", "telur"): Decimal("0")},
+    |                                                                                                     ^^^ E501
+144 |         batches=[batch("b-tanpa-uu", lokasi="Bandung", usable_until=None)],
+145 |         logistics_by_pair={("Bandung", "Jakarta"): logistik()},
+    |
+
+Found 14 errors.
+[*] 8 fixable with the `--fix` option.

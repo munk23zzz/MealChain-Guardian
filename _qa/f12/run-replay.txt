@@ -1,0 +1,30 @@
+
+=== rehearsal mode=replay (http://127.0.0.1:18100) ===
+  [OK   ] 0. login kepala SPPG + nutritionist
+  [OK   ] 1. Muat Demo replay (POST /demo/session/start replace=true)
+  [OK   ] 1b. template dibangun ulang (dataset bersih untuk putaran ini)
+  [OK   ] 2. anchor replay = kanon 8 Okt 2026 12.00 UTC
+  [OK   ] 3. GET /demo/session membaca sesi yang sama (tahan refresh)
+  [OK   ] 4. POST /balance/analyze dijalankan pada keadaan awal sesi
+  [OK   ] 5. daftar keputusan terbaca dari backend
+  [OK   ] 6. kasus replay/realtime tersedia: satu aman, satu bukti kurang
+  [OK   ] 7. approval-summary: butuh dua peran, eksekusi belum boleh
+  [OK   ] 8. approval peran-1 lalu execute DITOLAK (butuh dua peran)
+  [GAGAL] 9. approval peran-2 → can_execute true
+          {"approve_http": 200, "can_execute": false, "blocking": ["safety revalidation gagal: tidak ada batch sumber"], "approvals": 2}
+  [GAGAL] 10. execute → keputusan executed + PO terbit
+          {"http": 409, "po_number": null, "status": null, "kunci": ["detail"]}
+  [OK   ] 11. invoice (purchase+transport+handling) terpisah dari SDC (+3 komponen risiko)
+  [GAGAL] 12. PO ada di backend dan tertaut keputusan
+          {"http": 200, "jumlah_po": 4, "po": null}
+  [OK   ] 13. kiriman: ada batch 'di jalan' dengan ETA dihitung server
+  [OK   ] 14. ceklis + penerimaan batch usable diterima, pasokan lokasi bergerak
+  [OK   ] 15. KPI: state + provenance per metrik; cakupan tanpa bukti = no_data
+  [OK   ] N1. batch bukti kurang: ceklis tercatat, PENERIMAAN ditolak
+  [OK   ] N2. bukti suhu tidak lengkap → safety bukan 'pass'
+  [OK   ] N2b. log cold chain kosong/rusak → evidence_sufficient=false (tidak pernah 'pass')
+  [OK   ] N4. bukti kurang + dua approval → execute tetap ditolak
+  [GAGAL] N5. PO tanpa penalti risiko; invoice = purchase+transport+handling
+          {"po_number": null, "ada_penalti_di_po": false, "jumlah_komponen": 7930112.0, "invoice_total": 7930112.0, "cocok_angka": true, "kunci_po": null}
+
+  18 lulus · 4 gagal  →  out/replay.json

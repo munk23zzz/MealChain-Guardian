@@ -1,0 +1,2 @@
+DB = postgres:5432/mealchain_f6_base
+................................EXIT=137

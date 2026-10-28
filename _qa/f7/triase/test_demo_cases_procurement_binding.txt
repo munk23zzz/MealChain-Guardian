@@ -1,0 +1,65 @@
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+_____________ test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan _____________
+
+kasus = [{'batches': [], 'binding_supplier': None, 'demo_case': 'rejection-loop-kuota', 'id': UUID('b28f18ca-1e57-5ab6-b867-6e...ab92-7ef24c880cc0', 'demo_case': 'wortel-coldchain-sah', 'id': UUID('ec95cc65-c505-5adc-9863-2c71fa041287'), ...}, ...]
+
+    def test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan(kasus):
+        """Batch acuan harus di lokasi TUJUAN, bukan lokasi asal (semantik pengadaan)."""
+        for k in kasus:
+>           assert k["batches"], (
+                f"{k['demo_case']} {str(k['id'])[:8]}: pengadaan tanpa binding batch — "
+                "layar akan menampilkan 'pemasok tidak dikenal'"
+            )
+E           AssertionError: rejection-loop-kuota b28f18ca: pengadaan tanpa binding batch — layar akan menampilkan 'pemasok tidak dikenal'
+E           assert []
+
+tests/test_demo_cases_procurement_binding.py:158: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+[conftest] menyegarkan aktivitas demo di awal sesi (batch hari ini / bukti suhu segar belum ada)
+_______________ test_binding_pengadaan_memakai_pemasok_keputusan _______________
+
+kasus = [{'batches': [], 'binding_supplier': None, 'demo_case': 'rejection-loop-kuota', 'id': UUID('b28f18ca-1e57-5ab6-b867-6e...ab92-7ef24c880cc0', 'demo_case': 'wortel-coldchain-sah', 'id': UUID('ec95cc65-c505-5adc-9863-2c71fa041287'), ...}, ...]
+
+    def test_binding_pengadaan_memakai_pemasok_keputusan(kasus):
+        """Pemasok di binding = `decisions.supplier_id`, jadi PO = pemasok di layar."""
+        for k in kasus:
+>           assert k["binding_supplier"] == str(k["supplier"]), (
+                f"{k['demo_case']} {str(k['id'])[:8]}: binding menunjuk pemasok "
+                f"{k['binding_supplier']}, kolom keputusan {k['supplier']}"
+            )
+E           AssertionError: rejection-loop-kuota b28f18ca: binding menunjuk pemasok None, kolom keputusan 6fbf0a04-4499-4d95-91e6-b420eec639b9
+E           assert None == '6fbf0a04-4499-4d95-91e6-b420eec639b9'
+E            +  where '6fbf0a04-4499-4d95-91e6-b420eec639b9' = str(UUID('6fbf0a04-4499-4d95-91e6-b420eec639b9'))
+
+tests/test_demo_cases_procurement_binding.py:172: AssertionError
+____________ test_kasus_pengadaan_lolos_resolve_binding_dan_safety _____________
+
+kasus = [{'batches': [], 'binding_supplier': None, 'demo_case': 'rejection-loop-kuota', 'id': UUID('b28f18ca-1e57-5ab6-b867-6e...ab92-7ef24c880cc0', 'demo_case': 'wortel-coldchain-sah', 'id': UUID('ec95cc65-c505-5adc-9863-2c71fa041287'), ...}, ...]
+
+    def test_kasus_pengadaan_lolos_resolve_binding_dan_safety(kasus):
+        """Tidak boleh ada kasus demo pengadaan yang pasti ditolak guard eksekusi."""
+        for k in kasus:
+            try:
+                hasil = _resolve(k["id"], k["supplier"])
+            except HTTPException as exc:  # pragma: no cover - pesan kegagalan
+                raise AssertionError(
+                    f"{k['demo_case']} {str(k['id'])[:8]} ditolak guard: "
+                    f"{exc.status_code} {exc.detail}"
+                ) from exc
+            assert hasil["batches"], f"{str(k['id'])[:8]}: resolve tanpa batch"
+>           assert hasil["blocked"] is False, (
+                f"{k['demo_case']} {str(k['id'])[:8]}: safety gate memblokir karena "
+                "batch acuan tidak layak — kasus demo tidak bisa dieksekusi"
+            )
+E           AssertionError: rejection-loop-kuota b28f18ca: safety gate memblokir karena batch acuan tidak layak — kasus demo tidak bisa dieksekusi
+E           assert True is False
+
+tests/test_demo_cases_procurement_binding.py:189: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_demo_cases_procurement_binding.py::test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan
+FAILED tests/test_demo_cases_procurement_binding.py::test_binding_pengadaan_memakai_pemasok_keputusan
+FAILED tests/test_demo_cases_procurement_binding.py::test_kasus_pengadaan_lolos_resolve_binding_dan_safety
+3 failed in 6.19s
+EXIT=1

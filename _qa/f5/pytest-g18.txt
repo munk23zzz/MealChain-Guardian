@@ -1,0 +1,79 @@
+F..                                                                      [100%]
+=================================== FAILURES ===================================
+______________ test_safe_delivered_cost_tersedia_setelah_eksekusi ______________
+
+client = <starlette.testclient.TestClient object at 0x7e13f05e1940>
+monitor_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMzJiMGIwYS03NzU4LTQwOTQtODUyZS1hYzQ4ZTJlZDF...21vbml0b3IiLCJsb2MiOm51bGwsImlhdCI6MTc5MzEwNTkxNSwiZXhwIjoxNzkzMTQ5MTE1fQ.ptLs8BcWG85iH7XuZZGsV13cQk1nrW94uyHNd_baRVM'}
+
+    def test_safe_delivered_cost_tersedia_setelah_eksekusi(client, monitor_headers):
+        """Eksekusi nyata menambah satu sampel SDC di jendela metrik."""
+        from app.services.event1_orchestrator import run_event1
+    
+        head = _mk_user("sppg_head", "Jakarta")
+        # Keputusan operasional (transfer) wajib DUA approval dari dua role berbeda
+        # (matriks S3-01 `dua_role_wajib`); satu approval head menyisakan 409.
+        gizi = _mk_user("sppg_nutritionist", "Jakarta")
+        restore = _force_server_verdict()
+>       decision_id = run_event1(commodity="telur", target_location="Jakarta")["decision_id"]
+
+tests/test_kpi_safe_delivered_cost.py:88: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/event1_orchestrator.py:428: in run_event1
+    return asyncio.run(
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def _run_event1(
+        *,
+        commodity: str,
+        target_location: str,
+        verifier_bedrock,
+        safety_status_override: str | None,
+        ttl_minutes: int,
+        demo_session_id: uuid.UUID | None = None,
+    ) -> dict:
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        traces: list[_TraceStep] = []
+    
+        async with maker() as session:
+            # OPTIMIZE input = pipeline rekomendasi deterministik (tool sama
+            # dengan POST /balance/recommend).
+            async def _fetch():
+                return await rs.fetch_operational_facts(session, None)
+    
+            out = await rs.build_recommendations(_fetch)
+            recommendations: list[dict] = out["recommendations"]
+    
+            pool = [
+                r
+                for r in recommendations
+                if r["candidate"]["commodity"] == commodity
+                and r["candidate"]["destination_location"] == target_location
+            ]
+            eligible_pool = [r for r in pool if r["eligible"]]
+            if not eligible_pool:
+>               raise ValueError(
+                    "tidak ada kandidat eligible untuk Event 1 "
+                    f"({commodity} -> {target_location}); decision tidak dibuat"
+                )
+E               ValueError: tidak ada kandidat eligible untuk Event 1 (telur -> Jakarta); decision tidak dibuat
+
+app/services/event1_orchestrator.py:121: ValueError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_kpi_safe_delivered_cost.py::test_safe_delivered_cost_tersedia_setelah_eksekusi
+1 failed, 2 passed, 1 warning in 8.24s
+EXIT=1

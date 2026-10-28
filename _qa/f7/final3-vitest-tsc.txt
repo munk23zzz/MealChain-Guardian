@@ -1,0 +1,7 @@
+
+ Test Files  2 passed (2)
+      Tests  30 passed (30)
+   Start at  16:52:58
+   Duration  1.90s (transform 1.27s, setup 0ms, collect 2.36s, tests 167ms, environment 1ms, prepare 598ms)
+
+TSC_EXIT=0

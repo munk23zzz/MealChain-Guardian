@@ -1,0 +1,39 @@
+== persiapan Fase 12 (28 Okt 2026) ==
+Wed, Oct 28, 2026 12:37:23 AM
+
+-- empat service --
+mcg-f12-frontend	Up 2 hours (healthy)	127.0.0.1:13110->3000/tcp
+mcg-f12-backend	Up 2 hours (healthy)	127.0.0.1:18100->8000/tcp
+mcg-f12-mock-sap	Up 2 hours (healthy)	127.0.0.1:18101->8001/tcp
+mealchain-postgres	Up 2 hours (healthy)	0.0.0.0:15432->5432/tcp, [::]:15432->5432/tcp
+
+-- alembic head (DB rehearsal r12) --
+043_least_privilege_app (head)
+
+-- frontend direcreate (StartedAt) --
+/mcg-f12-frontend 2026-10-27T16:04:45.295578033Z
+/mcg-f12-backend 2026-10-27T16:04:39.315839867Z
+/mcg-f12-mock-sap 2026-10-27T16:04:39.314316444Z
+
+-- isi DB mealchain_r12 --
+ERROR:  relation "receipts" does not exist
+LINE 1: ...rom batches)||' receipts='||(select count(*) from receipts)|...
+                                                             ^
+
+-- bridge di CF --
+requested state:   started
+last uploaded:     Wed 28 Oct 00:33:00 +07 2026
+instances:      1/1
+health: {"status":"ok","service":"mealchain-joule-bridge","backend":{"reachable":true,"status":"healthy","service":"mealchain-backend"}}
+ready: 404
+
+-- kredensial tidak dicetak (cek artefak 28 Okt) --
+tidak ada sandi pada artefak 28 Okt
+
+-- isi DB mealchain_r12 (nama tabel benar) --
+decisions=48 batches=127 batch_receipts=3 po=17
+
+-- bridge: kode terbaru vs git --
+cf last uploaded: 00 +07 2026
+sap-joule HEAD: 480b639 28 Oct 00:19
+MEALCHAIN_API_URL: https://eliminate-phd-eagles-fiction.trycloudflare.com

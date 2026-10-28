@@ -1,0 +1,154 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+____ test_fetch_excludes_later_harvests_without_advancing_as_of[live-race] _____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7231f5d2d340>
+explicit_as_of = False
+
+    @pytest.mark.parametrize("explicit_as_of", [False, True], ids=["live-race", "historical"])
+    def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, explicit_as_of):
+        engine = create_engine(
+            DSN_SYNC
+        )
+    
+        # Pipeline kini mengambil jam dari `evaluation_clock()` (refactor jam sesi
+        # lain), bukan `datetime.now()`. Membekukan `rs.datetime` tidak lagi
+        # berpengaruh; yang dibekukan adalah jam evaluasinya.
+        beku = AS_OF + timedelta(days=1) if explicit_as_of else AS_OF
+    
+        def _jam(as_of=None):
+            return as_of if as_of is not None else beku
+    
+        monkeypatch.setattr(rs, "evaluation_clock", _jam)
+        try:
+            with engine.connect() as connection, connection.begin() as transaction:
+                with Session(bind=connection) as session:
+                    location = session.scalar(select(Location).where(Location.name == "Cianjur"))
+                    commodity = session.scalar(select(Commodity).where(Commodity.name == "telur"))
+                    supplier = session.scalar(select(Supplier).limit(1))
+                    ids = {name: uuid.uuid4() for name in ("old", "boundary", "later")}
+                    harvested = {
+                        "old": AS_OF - timedelta(days=1),
+                        "boundary": AS_OF,
+                        "later": AS_OF + timedelta(milliseconds=600),
+                    }
+    
+                    class LaterVisibleSession:
+                        inserted = False
+    
+                        async def execute(self, statement):
+                            if not self.inserted:
+                                self.inserted = True
+                                # Deterministic interleaving: these rows become visible only
+                                # after fetch_operational_facts has captured its clock.
+                                session.add_all([
+                                    Batch(
+                                        id=ids[name], location_id=location.id,
+                                        commodity_id=commodity.id, supplier_id=supplier.id,
+                                        quantity_kg=Decimal("10"), harvested_at=timestamp,
+                                        # Bukti suhu lengkap: sejak F-02 (25 Okt 2026) log
+                                        # kosong tidak lagi berbuah skor `pass` (0,7), dan
+                                        # tes ini menguji pemotongan `as_of`, bukan freshness.
+                                        temperature_log=_log_suhu(timestamp),
+                                        safety_status="pass",
+                                    )
+                                    for name, timestamp in harvested.items()
+                                ])
+                                session.flush()
+                            return session.execute(statement)
+    
+                    facts = asyncio.run(rs.fetch_operational_facts(
+                        LaterVisibleSession(), AS_OF if explicit_as_of else None
+                    ))
+                    batches = {b["batch_id"]: b for b in facts[4]}
+>                   assert str(ids["later"]) not in batches
+E                   AssertionError: assert 'b9d31623-2c74-4378-8ec5-01af5cd4abcf' not in {'050ec2d7-e4d6-574e-b7a4-52e32511c4e8': {'batch_id': '050ec2d7-e4d6-574e-b7a4-52e32511c4e8', 'commodity': 'ayam', 'ev...5fc-b366-e2daab9a2a55', 'commodity': 'telur', 'evidence_state': 'insufficient', 'excluded_destinations': [], ...}, ...}
+E                    +  where 'b9d31623-2c74-4378-8ec5-01af5cd4abcf' = str(UUID('b9d31623-2c74-4378-8ec5-01af5cd4abcf'))
+
+tests/test_recommendation_snapshot.py:95: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+[conftest] menyegarkan aktivitas demo di awal sesi (batch hari ini / bukti suhu segar belum ada)
+____ test_fetch_excludes_later_harvests_without_advancing_as_of[historical] ____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7231f25e9610>
+explicit_as_of = True
+
+    @pytest.mark.parametrize("explicit_as_of", [False, True], ids=["live-race", "historical"])
+    def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, explicit_as_of):
+        engine = create_engine(
+            DSN_SYNC
+        )
+    
+        # Pipeline kini mengambil jam dari `evaluation_clock()` (refactor jam sesi
+        # lain), bukan `datetime.now()`. Membekukan `rs.datetime` tidak lagi
+        # berpengaruh; yang dibekukan adalah jam evaluasinya.
+        beku = AS_OF + timedelta(days=1) if explicit_as_of else AS_OF
+    
+        def _jam(as_of=None):
+            return as_of if as_of is not None else beku
+    
+        monkeypatch.setattr(rs, "evaluation_clock", _jam)
+        try:
+            with engine.connect() as connection, connection.begin() as transaction:
+                with Session(bind=connection) as session:
+                    location = session.scalar(select(Location).where(Location.name == "Cianjur"))
+                    commodity = session.scalar(select(Commodity).where(Commodity.name == "telur"))
+                    supplier = session.scalar(select(Supplier).limit(1))
+                    ids = {name: uuid.uuid4() for name in ("old", "boundary", "later")}
+                    harvested = {
+                        "old": AS_OF - timedelta(days=1),
+                        "boundary": AS_OF,
+                        "later": AS_OF + timedelta(milliseconds=600),
+                    }
+    
+                    class LaterVisibleSession:
+                        inserted = False
+    
+                        async def execute(self, statement):
+                            if not self.inserted:
+                                self.inserted = True
+                                # Deterministic interleaving: these rows become visible only
+                                # after fetch_operational_facts has captured its clock.
+                                session.add_all([
+                                    Batch(
+                                        id=ids[name], location_id=location.id,
+                                        commodity_id=commodity.id, supplier_id=supplier.id,
+                                        quantity_kg=Decimal("10"), harvested_at=timestamp,
+                                        # Bukti suhu lengkap: sejak F-02 (25 Okt 2026) log
+                                        # kosong tidak lagi berbuah skor `pass` (0,7), dan
+                                        # tes ini menguji pemotongan `as_of`, bukan freshness.
+                                        temperature_log=_log_suhu(timestamp),
+                                        safety_status="pass",
+                                    )
+                                    for name, timestamp in harvested.items()
+                                ])
+                                session.flush()
+                            return session.execute(statement)
+    
+                    facts = asyncio.run(rs.fetch_operational_facts(
+                        LaterVisibleSession(), AS_OF if explicit_as_of else None
+                    ))
+                    batches = {b["batch_id"]: b for b in facts[4]}
+                    assert str(ids["later"]) not in batches
+                    assert batches[str(ids["boundary"])]["freshness_score"] == Decimal("1.000000")
+                    expected = rs.compute_freshness_score(
+                        harvested["old"], AS_OF, rs.settings.shelf_life_days_telur,
+                        _log_suhu(harvested["old"]),
+                        rs.settings.safe_temp_min_c, rs.settings.safe_temp_max_c,
+                    )
+>                   assert batches[str(ids["old"])]["freshness_score"] == rs._score(
+                        Decimal(str(expected))
+                    )
+E                   AssertionError: assert Decimal('0.664286') == Decimal('0.964286')
+E                    +  where Decimal('0.964286') = <function _score at 0x7231f5fa0f40>(Decimal('0.9642857142857143'))
+E                    +    where <function _score at 0x7231f5fa0f40> = rs._score
+E                    +    and   Decimal('0.9642857142857143') = Decimal('0.9642857142857143')
+E                    +      where '0.9642857142857143' = str(0.9642857142857143)
+
+tests/test_recommendation_snapshot.py:102: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[live-race]
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[historical]
+2 failed in 4.57s
+EXIT=1

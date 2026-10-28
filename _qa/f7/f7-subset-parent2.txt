@@ -1,0 +1,20 @@
+.s.FF...F.FF                                                             [100%]
+=================================== FAILURES ===================================
+/app/tests/test_api_decision_intelligence.py:180: AssertionError: Cianjur→Jakarta telur wajib ada
+/app/tests/test_api_decision_intelligence.py:193: AssertionError: seed wajib punya kandidat menuju Jakarta
+/app/tests/test_kredensial_db_tidak_di_kode.py:80: AssertionError: DSN berkredensial tertulis di kode (pindahkan ke env; jangan cetak nilainya): scripts/ledger_anchor.py:20
+/app/tests/test_recommendation_snapshot.py:95: AssertionError: assert '0dfd344b-e23e-48c5-a05a-fbd5e22ba821' not in {'050ec2d7-e4d6-574e-b7a4-52e32511c4e8': {'batch_id': '050ec2d7-e4d6-574e-b7a4-52e32511c4e8', 'commodity': 'ayam', 'ev...-5f16-ad32-30b3873742df', 'commodity': 'beras', 'evidence_state': 'sufficient', 'excluded_destinations': [], ...}, ...}
+/app/tests/test_recommendation_snapshot.py:102: AssertionError: assert Decimal('0.664286') == Decimal('0.964286')
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_api_decision_intelligence.py::test_recommend_endpoint_ranks_candidates
+FAILED tests/test_api_decision_intelligence.py::test_decisions_persist_and_get_validity
+FAILED tests/test_kredensial_db_tidak_di_kode.py::test_tidak_ada_dsn_berkredensial_di_kode
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[live-race]
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[historical]
+5 failed, 6 passed, 1 skipped, 1 warning in 16.90s

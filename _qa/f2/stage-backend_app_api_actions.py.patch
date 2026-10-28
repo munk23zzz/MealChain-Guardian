@@ -1,0 +1,28 @@
+diff --git a/backend/app/api/actions.py b/backend/app/api/actions.py
+index 118b802..da60c10 100644
+--- a/backend/app/api/actions.py
++++ b/backend/app/api/actions.py
+@@ -831,8 +855,8 @@ async def execute_action(
+         text(
+             "INSERT INTO sap_mock_purchase_orders "
+             "(po_number, supplier_id, material_number, ordered_quantity, "
+-            "price, decision_id, status) "
+-            "VALUES (:po, :sup, :mat, :qty, :price, :dec, 'submitted')"
++            "price, decision_id, status, demo_session_id) "
++            "VALUES (:po, :sup, :mat, :qty, :price, :dec, 'submitted', :sesi)"
+         ),
+         {
+             "po": po_number,
+@@ -841,6 +865,12 @@ async def execute_action(
+             "qty": qty,
+             "price": unit_price.quantize(Decimal("0.01")),
+             "dec": decision.id,
++            # Fase 2 MG: PO mewarisi sesi dari KEPUTUSANNYA, bukan dari "sesi
++            # yang kebetulan aktif". `sap_mock_purchase_orders.decision_id`
++            # ber-`ON DELETE SET NULL`, jadi tanpa kolom ini pemilik PO hilang
++            # begitu keputusan induknya dihapus — dan reset per sesi tidak bisa
++            # lagi membedakan PO milik sesi mana.
++            "sesi": decision.demo_session_id,
+         },
+     )
+     decision.status = "executed"

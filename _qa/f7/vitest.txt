@@ -1,0 +1,17 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v2.1.9 /app
+
+ ✓ tests/demo-control-panel.test.tsx (17 tests) 264ms
+ ✓ tests/realtime-demo-control.test.tsx (13 tests) 1006ms
+stderr | tests/demo-control-interaction.test.tsx > klik dua tombol memuat dataset > Muat Demo Real-time mengirim mode=realtime + replace, lalu sesi server masuk state
+Warning: `ReactDOMTestUtils.act` is deprecated in favor of `React.act`. Import `act` from `react` instead of `react-dom/test-utils`. See https://react.dev/warnings/react-dom-test-utils for more info.
+
+ ✓ tests/demo-control-interaction.test.tsx (7 tests) 805ms
+   ✓ klik dua tombol memuat dataset > Muat Demo Real-time mengirim mode=realtime + replace, lalu sesi server masuk state 356ms
+
+ Test Files  3 passed (3)
+      Tests  37 passed (37)
+   Start at  15:25:08
+   Duration  6.35s (transform 4.80s, setup 0ms, collect 9.23s, tests 2.08s, environment 2.56s, prepare 658ms)
+

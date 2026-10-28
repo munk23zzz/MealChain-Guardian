@@ -1,0 +1,104 @@
+........................................................................ [ 44%]
+...........s..............................FF..FF............s........... [ 88%]
+..................                                                       [100%]
+=================================== FAILURES ===================================
+_____________ test_catat_penerimaan_tersimpan_dan_terbaca_kembali ______________
+
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxM2M4ODAxZi1iZWVkLTQzNDUtOWU0Yi1lNzE5NWVkMGJ...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTE0NDE2LCJleHAiOjE3OTMxNTc2MTZ9.UL7_DBSxs7P7rDu5V6gM3tvWq-SOV5p0VgxJaJoYhhY'}
+
+    def test_catat_penerimaan_tersimpan_dan_terbaca_kembali(auth_headers):
+        batch_id = _batch_jakarta_id()
+        dibuat: list[str] = []
+        try:
+            with _client() as c:
+                resp = c.post(
+                    "/receipts",
+                    headers=auth_headers,
+                    json={
+                        "batch_id": batch_id,
+                        "checked": {"kemasan": True, "suhu": True, "warna": False},
+                        "other_note": "  Karung lapis kedua basah, isi masih kering.  ",
+                    },
+                )
+>               assert resp.status_code == 201, resp.text
+E               AssertionError: {"detail":"barang sudah kedaluwarsa — tidak boleh masuk stok; tolak penerimaan (kode: batch_expired, safety_fail, freshness_fail)"}
+E               assert 409 == 201
+E                +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_receipts_api.py:104: AssertionError
+__________________ test_catatan_kosong_disimpan_sebagai_null ___________________
+
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxNDhkMDUyNy0wYWI5LTQwZTEtYTFjYy1lNTY1OTYwNWZ...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTE0NDIwLCJleHAiOjE3OTMxNTc2MjB9.47Bf_cUqzXfPTe6PJzl7FhqXpW9LjL7E0ryATYnJs74'}
+
+    def test_catatan_kosong_disimpan_sebagai_null(auth_headers):
+        """Menulis spasi ≠ menulis catatan; UI harus bisa membedakannya."""
+        batch_id = _batch_jakarta_id()
+        dibuat: list[str] = []
+        try:
+            with _client() as c:
+                resp = c.post(
+                    "/receipts",
+                    headers=auth_headers,
+                    json={"batch_id": batch_id, "checked": {}, "other_note": "   "},
+                )
+>               assert resp.status_code == 201, resp.text
+E               AssertionError: {"detail":"barang sudah kedaluwarsa — tidak boleh masuk stok; tolak penerimaan (kode: batch_expired, safety_fail, freshness_fail)"}
+E               assert 409 == 201
+E                +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_receipts_api.py:135: AssertionError
+___________________ test_monitor_nasional_hanya_bisa_membaca ___________________
+
+monitor_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2OWIyYTQ3OS1hNTJiLTRmYWQtOGMwYS1hNjM4ZjhlNWI...21vbml0b3IiLCJsb2MiOm51bGwsImlhdCI6MTc5MzExNDQyMywiZXhwIjoxNzkzMTU3NjIzfQ.6GdGbDXHVo8jHhxP5fb535pjcUkgZR5eFnixcPqMew0'}
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhNzY2MzIzYy0zMTMwLTQwYmItOWQ2ZS01ODEwOWEwOTI...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTE0NDI0LCJleHAiOjE3OTMxNTc2MjR9.At4GvcW6Gd1uL77wGLPBTqWFITBq2gHtp4KXMYV_ObQ'}
+
+    def test_monitor_nasional_hanya_bisa_membaca(monitor_headers, auth_headers):
+        batch_id = _batch_jakarta_id()
+        dibuat: list[str] = []
+        try:
+            with _client() as c:
+                catat = c.post(
+                    "/receipts",
+                    headers=auth_headers,
+                    json={"batch_id": batch_id, "checked": {"kemasan": True}},
+                )
+>               assert catat.status_code == 201, catat.text
+E               AssertionError: {"detail":"barang sudah kedaluwarsa — tidak boleh masuk stok; tolak penerimaan (kode: batch_expired, safety_fail, freshness_fail)"}
+E               assert 409 == 201
+E                +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_receipts_api.py:175: AssertionError
+___________________ test_urutan_terbaru_dulu_dan_batas_limit ___________________
+
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4Mzc5MTM0MS1kN2NhLTQwZTQtOGQ3Ny01ZWFkYTFmZmQ...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTE0NDI1LCJleHAiOjE3OTMxNTc2MjV9.bUHrpHseRLMomH1_YrGUb7bHQd_9oOCu-3obYFqZzP4'}
+
+    def test_urutan_terbaru_dulu_dan_batas_limit(auth_headers):
+        batch_id = _batch_jakarta_id()
+        dibuat: list[str] = []
+        try:
+            with _client() as c:
+                pertama = c.post(
+                    "/receipts",
+                    headers=auth_headers,
+                    json={
+                        "batch_id": batch_id,
+                        "checked": {"kemasan": True},
+                        "other_note": "catatan satu",
+                    },
+                ).json()
+>               dibuat.append(pertama["id"])
+E               KeyError: 'id'
+
+tests/test_receipts_api.py:207: KeyError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_receipts_api.py::test_catat_penerimaan_tersimpan_dan_terbaca_kembali
+FAILED tests/test_receipts_api.py::test_catatan_kosong_disimpan_sebagai_null
+FAILED tests/test_receipts_api.py::test_monitor_nasional_hanya_bisa_membaca
+FAILED tests/test_receipts_api.py::test_urutan_terbaru_dulu_dan_batas_limit
+4 failed, 156 passed, 2 skipped, 1 warning in 187.56s (0:03:07)

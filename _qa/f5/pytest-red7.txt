@@ -1,0 +1,68 @@
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+_________________ test_nilai_diterima_memakai_harga_invoice_po _________________
+
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MGRiNzQ5My1lMzAxLTQ5YTktOTQ2Zi02YzIyZTdjYTU...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTExODIxLCJleHAiOjE3OTMxNTUwMjF9._Fy9_EoZZuF20acXPgWPmQ43XIWm6qIkxTdxykdAK_4'}
+
+    def test_nilai_diterima_memakai_harga_invoice_po(auth_headers):
+        batch_id, _loc, _com, kg, price = _batch_terikat()
+        receipt_ids: list[str] = []
+        supply_ids: list[str] = []
+        try:
+            with _client() as c:
+                badan = _catat(c, auth_headers, batch_id)
+                receipt_ids.append(badan["id"])
+>               assert badan["accepted_value_idr"] is None, "belum disetujui = belum ada nilai"
+E               KeyError: 'accepted_value_idr'
+
+tests/test_receipt_accepted_value.py:118: KeyError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+_________________ test_tanpa_ikatan_bukti_nilai_null_bukan_nol _________________
+
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ZGJhZDE2Zi1iYmFlLTQyZDctYjBkNy01OGNlMDZkMGM...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTExODI3LCJleHAiOjE3OTMxNTUwMjd9.jXC_fmgHb107N4BYO-05sRrY7dm4Nt44-FDf3ou6Qb4'}
+
+    def test_tanpa_ikatan_bukti_nilai_null_bukan_nol(auth_headers):
+        batch_id, _loc, _com, _kg = _batch_tanpa_ikatan()
+        receipt_ids: list[str] = []
+        supply_ids: list[str] = []
+        try:
+            with _client() as c:
+                badan = _catat(c, auth_headers, batch_id)
+                receipt_ids.append(badan["id"])
+                setuju = c.post(f"/receipts/{badan['id']}/approve", headers=auth_headers)
+                assert setuju.status_code == 200, setuju.text
+                hasil = setuju.json()
+                supply_ids.append(hasil["supply_record_id"])
+>               assert hasil["accepted_value_idr"] is None
+E               KeyError: 'accepted_value_idr'
+
+tests/test_receipt_accepted_value.py:143: KeyError
+_______________ test_antrean_menunggu_membawa_kunci_nilai_kosong _______________
+
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3ODc1ZGFmMC00MGQzLTQwNjUtOGExOC1jZjk2MjJiMmF...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTExODI5LCJleHAiOjE3OTMxNTUwMjl9.CavIEnIk1u6MTCKCMAV_aiC-gHYPlTn9j3qbY-bdnxo'}
+
+    def test_antrean_menunggu_membawa_kunci_nilai_kosong(auth_headers):
+        """Kunci harus SELALU ada supaya UI tidak membedakan dua bentuk payload."""
+        batch_id, _loc, _com, _kg, _harga = _batch_terikat()
+        receipt_ids: list[str] = []
+        try:
+            with _client() as c:
+                badan = _catat(c, auth_headers, batch_id)
+                receipt_ids.append(badan["id"])
+                antrean = c.get("/receipts/menunggu", headers=auth_headers)
+                assert antrean.status_code == 200, antrean.text
+                baris = [i for i in antrean.json()["items"] if i["id"] == badan["id"]]
+                assert baris, "catatan menunggu harus muncul di antrean"
+>               assert "accepted_value_idr" in baris[0]
+E               AssertionError: assert 'accepted_value_idr' in {'batch_id': '6502963a-8307-52a2-ac42-f0b125877cd5', 'checked_count': 1, 'commodity': 'ayam', 'id': 'fd32e999-980a-471e-8f95-d973040b0492', ...}
+
+tests/test_receipt_accepted_value.py:160: AssertionError
+=============================== warnings summary ===============================
+tests/test_receipt_accepted_value.py::test_nilai_diterima_memakai_harga_invoice_po
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+3 failed, 1 warning in 24.89s
+EXIT=1

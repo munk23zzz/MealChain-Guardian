@@ -1,0 +1,103 @@
+ Container mealchain-guardian-backend-run-d33f38c09702 Creating 
+ Container mealchain-guardian-backend-run-d33f38c09702 Created 
+F.FssFFF.                                                                [100%]
+=================================== FAILURES ===================================
+____________ test_setiap_kasus_komoditas_punya_rantai_data_lengkap _____________
+
+    def test_setiap_kasus_komoditas_punya_rantai_data_lengkap():
+>       assert KASUS == ("wortel-coldchain-sah", "wortel-coldchain-hold", "beras-ambient")
+E       AssertionError: assert () == ('wortel-cold...eras-ambient')
+E         
+E         Right contains 3 more items, first extra item: 'wortel-coldchain-sah'
+E         Use -v to get more diff
+
+tests/test_commodity_expansion.py:148: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+________________ test_wortel_punya_batch_dan_suhu_sejak_fase_7 _________________
+
+    def test_wortel_punya_batch_dan_suhu_sejak_fase_7():
+        """Wortel sebelumnya hanya nama: sekarang dua kasus dengan batch + log."""
+        wortel = [spec for spec in kasus_komoditas() if spec.commodity == "wortel"]
+>       assert len(wortel) == 2
+E       assert 0 == 2
+E        +  where 0 = len([])
+
+tests/test_commodity_expansion.py:194: AssertionError
+________________ test_wortel_sah_memenuhi_policy_rantai_dingin _________________
+
+    def test_wortel_sah_memenuhi_policy_rantai_dingin():
+        """Bukti kasus `usable` benar-benar sah menurut profil, bukan sekadar label."""
+>       spec = spec_untuk("wortel-coldchain-sah")
+
+tests/test_commodity_expansion.py:235: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+key = 'wortel-coldchain-sah'
+
+    def spec_untuk(key: str) -> ScenarioCaseSpec:
+        """Spec untuk satu kunci kasus; kunci asing ditolak (bukan ditebak)."""
+        try:
+            return _BY_KEY[key]
+        except KeyError:
+>           raise KeyError(
+                f"kasus skenario tidak dikenal: {key!r}; "
+                f"tersedia: {', '.join(sorted(_BY_KEY))}"
+            ) from None
+E           KeyError: "kasus skenario tidak dikenal: 'wortel-coldchain-sah'; tersedia: gangguan-logistik, rejection-loop-kuota, shortage-darurat, supplier-janggal"
+
+app/services/scenario_specs.py:351: KeyError
+_________ test_wortel_bukti_kurang_menghasilkan_verifikasi_bukan_error _________
+
+    def test_wortel_bukti_kurang_menghasilkan_verifikasi_bukan_error():
+        """`on_hold` = minta verifikasi manusia; BUKAN `fail`, BUKAN galat."""
+>       spec = spec_untuk("wortel-coldchain-hold")
+
+tests/test_commodity_expansion.py:262: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+key = 'wortel-coldchain-hold'
+
+    def spec_untuk(key: str) -> ScenarioCaseSpec:
+        """Spec untuk satu kunci kasus; kunci asing ditolak (bukan ditebak)."""
+        try:
+            return _BY_KEY[key]
+        except KeyError:
+>           raise KeyError(
+                f"kasus skenario tidak dikenal: {key!r}; "
+                f"tersedia: {', '.join(sorted(_BY_KEY))}"
+            ) from None
+E           KeyError: "kasus skenario tidak dikenal: 'wortel-coldchain-hold'; tersedia: gangguan-logistik, rejection-loop-kuota, shortage-darurat, supplier-janggal"
+
+app/services/scenario_specs.py:351: KeyError
+________ test_beras_ambient_tidak_dinilai_dengan_rentang_rantai_dingin _________
+
+    def test_beras_ambient_tidak_dinilai_dengan_rentang_rantai_dingin():
+        """Beras 26-27 °C sah: profil ambient tidak punya rentang untuk dilanggar."""
+>       spec = spec_untuk("beras-ambient")
+
+tests/test_commodity_expansion.py:287: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+key = 'beras-ambient'
+
+    def spec_untuk(key: str) -> ScenarioCaseSpec:
+        """Spec untuk satu kunci kasus; kunci asing ditolak (bukan ditebak)."""
+        try:
+            return _BY_KEY[key]
+        except KeyError:
+>           raise KeyError(
+                f"kasus skenario tidak dikenal: {key!r}; "
+                f"tersedia: {', '.join(sorted(_BY_KEY))}"
+            ) from None
+E           KeyError: "kasus skenario tidak dikenal: 'beras-ambient'; tersedia: gangguan-logistik, rejection-loop-kuota, shortage-darurat, supplier-janggal"
+
+app/services/scenario_specs.py:351: KeyError
+=========================== short test summary info ============================
+FAILED tests/test_commodity_expansion.py::test_setiap_kasus_komoditas_punya_rantai_data_lengkap
+FAILED tests/test_commodity_expansion.py::test_wortel_punya_batch_dan_suhu_sejak_fase_7
+FAILED tests/test_commodity_expansion.py::test_wortel_sah_memenuhi_policy_rantai_dingin
+FAILED tests/test_commodity_expansion.py::test_wortel_bukti_kurang_menghasilkan_verifikasi_bukan_error
+FAILED tests/test_commodity_expansion.py::test_beras_ambient_tidak_dinilai_dengan_rentang_rantai_dingin
+5 failed, 2 passed, 2 skipped, 3 deselected in 6.35s
+

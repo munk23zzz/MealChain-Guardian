@@ -38,6 +38,12 @@ services:
       SAP_PRODUCT_MASTER_MODE: mock
       # Tanpa provider: verifier harus fail-closed (UNAVAILABLE), bukan menebak.
       VERIFIER_MODEL_PRIMARY: ""
+      # Sesi demo (sejak 25 Okt 2026) menolak 409 semua mutasi tanpa sesi aktif.
+      # Stack uji ini menyemai data sendiri dan menguji pagar KEPUTUSAN, bukan
+      # gerbang sesi — sama seperti `backend/tests/conftest.py` yang mematikan
+      # enforcement secara eksplisit untuk 1.200+ tes. Gerbang sesi diuji
+      # terpisah di `backend/tests/test_demo_session.py`.
+      DEMO_SESSION_ENFORCE: "false"
     # Seed data demo butuh DEMO_MODE=true; aplikasinya sendiri tetap berjalan
     # dengan DEMO_MODE=false agar perilakunya seperti produksi (temuan D-01).
     command:
@@ -49,7 +55,9 @@ services:
         --with-demo-users --skip-routes &&
         uvicorn app.main:app --host 0.0.0.0 --port 8000
     ports:
-      - "127.0.0.1:18000:8000"
+      # Port host bisa di-override: stack uji lain (mis. proyek mg-a9) kadang
+      # masih memegang 18000, dan spec lama tetap memakai default ini.
+      - "127.0.0.1:${MUT_BACKEND_PORT:-18000}:8000"
     volumes:
       - ../backend:/app
       - ../data:/data:ro

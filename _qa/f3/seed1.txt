@@ -1,0 +1,18 @@
+== siapkan klon mealchain_f3 dari mealchain
+klon terbentuk: 120 batch, alembic 042_ledger_append_only
+== migrate ke head
+ALEMBIC_EXIT=0
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 042_ledger_append_only -> 043_least_privilege_app, Least privilege untuk role aplikasi, tanpa memutus backup/restore (Fase 11 butir 3).
+alembic sesudah: 043_least_privilege_app
+commodity_policies: 4 baris
+== pytest
+PYTEST_EXIT=1
+FAILED tests/test_commodity_policies_seed.py::test_seed_mengisi_profil_untuk_semua_komoditas
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_commodity_policies_seed.py::test_seed_mengisi_profil_untuk_semua_komoditas
+1 failed, 4 passed, 5 warnings in 5.48s
+log: _qa/f3/pytest.txt

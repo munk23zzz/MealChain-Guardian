@@ -1,0 +1,15 @@
+F.                                                                       [100%]
+=================================== FAILURES ===================================
+___________________ test_tidak_ada_dsn_berkredensial_di_kode ___________________
+
+>   ???
+E   AssertionError: DSN berkredensial tertulis di kode (pindahkan ke env; jangan cetak nilainya): scripts/f7-triase-kegagalan.sh:42, scripts/f7-ui-stack.sh:12, scripts/ledger_anchor.py:20
+E   assert not ['scripts/ledger_anchor.py:20', 'scripts/f7-triase-kegagalan.sh:42', 'scripts/f7-ui-stack.sh:12']
+
+E:\hackathon\HackathonAWS\mealchain-guardian\backend\tests\test_kredensial_db_tidak_di_kode.py:80: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+=========================== short test summary info ============================
+FAILED tests/test_kredensial_db_tidak_di_kode.py::test_tidak_ada_dsn_berkredensial_di_kode
+1 failed, 1 passed in 4.29s
+EXIT=1

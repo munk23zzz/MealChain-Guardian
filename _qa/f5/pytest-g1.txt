@@ -1,0 +1,455 @@
+..................FFFFFF.F..............E........EEEEE                   [100%]
+==================================== ERRORS ====================================
+_____ ERROR at setup of test_safe_delivered_cost_tersedia_setelah_eksekusi _____
+
+    @pytest.fixture()
+    def monitor_headers():
+        engine = create_engine(
+            DSN_SYNC
+        )
+        pw = "TestPass#2026"
+        digest = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+        try:
+            with engine.begin() as conn:
+                _hapus_user(conn, _MONITOR_EMAIL)
+                conn.execute(
+                    text(
+                        "INSERT INTO users (id, name, email, password_hash, role, location_id) "
+                        "VALUES (gen_random_uuid(), 'Test Monitor Nasional', :e, :h, "
+                        "'bgn_monitor', NULL)"
+                    ),
+                    {"e": _MONITOR_EMAIL, "h": digest},
+                )
+            from fastapi.testclient import TestClient
+    
+            from app.main import app
+    
+            with TestClient(app) as c:
+                resp = c.post(
+                    "/auth/login", json={"email": _MONITOR_EMAIL, "password": pw}
+                )
+>               assert resp.status_code == 200, resp.text
+E               AssertionError: {"detail":"JWT_SECRET belum diset"}
+E               assert 503 == 200
+E                +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/conftest.py:258: AssertionError
+________________ ERROR at setup of test_nomor_tidak_dikenal_404 ________________
+
+    @pytest.fixture()
+    def monitor_headers():
+        engine = create_engine(
+            DSN_SYNC
+        )
+        pw = "TestPass#2026"
+        digest = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+        try:
+            with engine.begin() as conn:
+                _hapus_user(conn, _MONITOR_EMAIL)
+                conn.execute(
+                    text(
+                        "INSERT INTO users (id, name, email, password_hash, role, location_id) "
+                        "VALUES (gen_random_uuid(), 'Test Monitor Nasional', :e, :h, "
+                        "'bgn_monitor', NULL)"
+                    ),
+                    {"e": _MONITOR_EMAIL, "h": digest},
+                )
+            from fastapi.testclient import TestClient
+    
+            from app.main import app
+    
+            with TestClient(app) as c:
+                resp = c.post(
+                    "/auth/login", json={"email": _MONITOR_EMAIL, "password": pw}
+                )
+>               assert resp.status_code == 200, resp.text
+E               AssertionError: {"detail":"JWT_SECRET belum diset"}
+E               assert 503 == 200
+E                +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/conftest.py:258: AssertionError
+___________ ERROR at setup of test_pdf_untuk_po_yang_sudah_disetujui ___________
+
+    @pytest.fixture()
+    def monitor_headers():
+        engine = create_engine(
+            DSN_SYNC
+        )
+        pw = "TestPass#2026"
+        digest = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+        try:
+            with engine.begin() as conn:
+                _hapus_user(conn, _MONITOR_EMAIL)
+                conn.execute(
+                    text(
+                        "INSERT INTO users (id, name, email, password_hash, role, location_id) "
+                        "VALUES (gen_random_uuid(), 'Test Monitor Nasional', :e, :h, "
+                        "'bgn_monitor', NULL)"
+                    ),
+                    {"e": _MONITOR_EMAIL, "h": digest},
+                )
+            from fastapi.testclient import TestClient
+    
+            from app.main import app
+    
+            with TestClient(app) as c:
+                resp = c.post(
+                    "/auth/login", json={"email": _MONITOR_EMAIL, "password": pw}
+                )
+>               assert resp.status_code == 200, resp.text
+E               AssertionError: {"detail":"JWT_SECRET belum diset"}
+E               assert 503 == 200
+E                +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/conftest.py:258: AssertionError
+__________ ERROR at setup of test_po_tanpa_keputusan_tidak_punya_pdf ___________
+
+    @pytest.fixture()
+    def monitor_headers():
+        engine = create_engine(
+            DSN_SYNC
+        )
+        pw = "TestPass#2026"
+        digest = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+        try:
+            with engine.begin() as conn:
+                _hapus_user(conn, _MONITOR_EMAIL)
+                conn.execute(
+                    text(
+                        "INSERT INTO users (id, name, email, password_hash, role, location_id) "
+                        "VALUES (gen_random_uuid(), 'Test Monitor Nasional', :e, :h, "
+                        "'bgn_monitor', NULL)"
+                    ),
+                    {"e": _MONITOR_EMAIL, "h": digest},
+                )
+            from fastapi.testclient import TestClient
+    
+            from app.main import app
+    
+            with TestClient(app) as c:
+                resp = c.post(
+                    "/auth/login", json={"email": _MONITOR_EMAIL, "password": pw}
+                )
+>               assert resp.status_code == 200, resp.text
+E               AssertionError: {"detail":"JWT_SECRET belum diset"}
+E               assert 503 == 200
+E                +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/conftest.py:258: AssertionError
+_______ ERROR at setup of test_po_dari_keputusan_belum_disetujui_ditolak _______
+
+    @pytest.fixture()
+    def monitor_headers():
+        engine = create_engine(
+            DSN_SYNC
+        )
+        pw = "TestPass#2026"
+        digest = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+        try:
+            with engine.begin() as conn:
+                _hapus_user(conn, _MONITOR_EMAIL)
+                conn.execute(
+                    text(
+                        "INSERT INTO users (id, name, email, password_hash, role, location_id) "
+                        "VALUES (gen_random_uuid(), 'Test Monitor Nasional', :e, :h, "
+                        "'bgn_monitor', NULL)"
+                    ),
+                    {"e": _MONITOR_EMAIL, "h": digest},
+                )
+            from fastapi.testclient import TestClient
+    
+            from app.main import app
+    
+            with TestClient(app) as c:
+                resp = c.post(
+                    "/auth/login", json={"email": _MONITOR_EMAIL, "password": pw}
+                )
+>               assert resp.status_code == 200, resp.text
+E               AssertionError: {"detail":"JWT_SECRET belum diset"}
+E               assert 503 == 200
+E                +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/conftest.py:258: AssertionError
+_____ ERROR at setup of test_cakupan_sppg_tidak_bisa_unduh_po_lokasi_lain ______
+
+    @pytest.fixture()
+    def auth_headers():
+        engine = create_engine(
+            DSN_SYNC
+        )
+        pw = "TestPass#2026"
+        digest = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+        try:
+            with engine.begin() as conn:
+                # Idempoten: bersihkan sisa run sebelumnya bila ada.
+                _hapus_user(conn, _LEGACY_RBAC_EMAIL)
+                loc_id = conn.execute(
+                    text("SELECT id FROM locations WHERE name = 'Jakarta'")
+                ).scalar_one()
+                conn.execute(
+                    text(
+                        "INSERT INTO users (id, name, email, password_hash, role, location_id) "
+                        "VALUES (gen_random_uuid(), 'Test Legacy RBAC', :e, :h, 'sppg_head', :l)"
+                    ),
+                    {"e": _LEGACY_RBAC_EMAIL, "h": digest, "l": str(loc_id)},
+                )
+            from fastapi.testclient import TestClient
+    
+            from app.main import app
+    
+            with TestClient(app) as c:
+                resp = c.post(
+                    "/auth/login", json={"email": _LEGACY_RBAC_EMAIL, "password": pw}
+                )
+>               assert resp.status_code == 200, resp.text
+E               AssertionError: {"detail":"JWT_SECRET belum diset"}
+E               assert 503 == 200
+E                +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/conftest.py:209: AssertionError
+=================================== FAILURES ===================================
+_____________ test_eksekusi_menulis_harga_invoice_bukan_sdc_per_kg _____________
+
+client = <starlette.testclient.TestClient object at 0x7dddef1af830>
+
+    def test_eksekusi_menulis_harga_invoice_bukan_sdc_per_kg(client):
+        """Ini RED yang diminta rencana: `price` dulu `sdc / qty` (37.171,00)."""
+        head = _mk_user("sppg_head", "Jakarta")
+        nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
+        decision_id = None
+        try:
+>           headers = _login(client, head)
+
+tests/test_po_invoice_commercial.py:279: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7dddef1af830>
+akun = {'email': 'sppg_head-92a65159@test.local', 'id': '3f1e7281-e86a-4ed1-bb84-e7d2bf19a620', 'password': 'TestPass#2026', 'role': 'sppg_head'}
+
+    def _login(client: TestClient, akun: dict) -> dict:
+        resp = client.post(
+            "/auth/login", json={"email": akun["email"], "password": akun["password"]}
+        )
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_po_invoice_commercial.py:129: AssertionError
+______________ test_eksekusi_tidak_menagihkan_penalti_ke_pemasok _______________
+
+client = <starlette.testclient.TestClient object at 0x7dddeed2d850>
+
+    def test_eksekusi_tidak_menagihkan_penalti_ke_pemasok(client):
+        """Selisih total PO terhadap SDC harus PERSIS penalti internal."""
+        head = _mk_user("sppg_head", "Jakarta")
+        nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
+        decision_id = None
+        try:
+>           headers = _login(client, head)
+
+tests/test_po_invoice_commercial.py:335: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7dddeed2d850>
+akun = {'email': 'sppg_head-116e5ace@test.local', 'id': '04cf96aa-20df-4c43-8f2f-df48749152e1', 'password': 'TestPass#2026', 'role': 'sppg_head'}
+
+    def _login(client: TestClient, akun: dict) -> dict:
+        resp = client.post(
+            "/auth/login", json={"email": akun["email"], "password": akun["password"]}
+        )
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_po_invoice_commercial.py:129: AssertionError
+_____ test_keputusan_tanpa_rincian_lengkap_menerbitkan_po_bertanda_legacy ______
+
+client = <starlette.testclient.TestClient object at 0x7dddeed2e420>
+
+    def test_keputusan_tanpa_rincian_lengkap_menerbitkan_po_bertanda_legacy(client):
+        """Rincian hanya `purchase` (bentuk data lama) → PO tetap terbit, harga =
+        harga BAHAN saja, dan barisnya ditandai `legacy_unmigrated`.
+    
+        Kenapa tidak menolak (422): menolak eksekusi berarti mengubah kontrak alur
+        yang dipakai ~10 berkas tes lain dan menghentikan operator pada data lama
+        yang sah. Yang dilarang rencana adalah MENAGIHKAN penalti dan MENGARANG
+        komponen — bukan menerbitkan PO dari komponen yang tercatat. Penandaan
+        itulah yang memberi tahu pembaca rinciannya belum lengkap.
+        """
+        head = _mk_user("sppg_head", "Jakarta")
+        nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
+        decision_id = None
+        try:
+>           headers = _login(client, head)
+
+tests/test_po_invoice_commercial.py:391: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7dddeed2e420>
+akun = {'email': 'sppg_head-638b24a9@test.local', 'id': 'cce76ac9-836e-47bf-9939-8b3b53712681', 'password': 'TestPass#2026', 'role': 'sppg_head'}
+
+    def _login(client: TestClient, akun: dict) -> dict:
+        resp = client.post(
+            "/auth/login", json={"email": akun["email"], "password": akun["password"]}
+        )
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_po_invoice_commercial.py:129: AssertionError
+_________ test_daftar_po_menyebut_invoice_unit_price_secara_eksplisit __________
+
+client = <starlette.testclient.TestClient object at 0x7dddeed0db80>
+
+    def test_daftar_po_menyebut_invoice_unit_price_secara_eksplisit(client):
+        """Klien tidak boleh menebak arti `price_per_kg`."""
+        monitor = _mk_user("bgn_monitor")
+        try:
+>           headers = _login(client, monitor)
+
+tests/test_po_invoice_commercial.py:461: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7dddeed0db80>
+akun = {'email': 'bgn_monitor-1073b76a@test.local', 'id': '76462f3b-baf4-4b7c-893d-673d7ae29800', 'password': 'TestPass#2026', 'role': 'bgn_monitor'}
+
+    def _login(client: TestClient, akun: dict) -> dict:
+        resp = client.post(
+            "/auth/login", json={"email": akun["email"], "password": akun["password"]}
+        )
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_po_invoice_commercial.py:129: AssertionError
+_________________ test_daftar_po_menyebut_status_label_legacy __________________
+
+client = <starlette.testclient.TestClient object at 0x7dddeed0eab0>
+
+    def test_daftar_po_menyebut_status_label_legacy(client):
+        """Butir 8: PO lama tanpa jejak invoice ditandai, bukan diklaim baru."""
+        monitor = _mk_user("bgn_monitor")
+        try:
+>           headers = _login(client, monitor)
+
+tests/test_po_invoice_commercial.py:482: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7dddeed0eab0>
+akun = {'email': 'bgn_monitor-1da1430d@test.local', 'id': '8f72d901-696a-4b09-b39c-6d5512281df7', 'password': 'TestPass#2026', 'role': 'bgn_monitor'}
+
+    def _login(client: TestClient, akun: dict) -> dict:
+        resp = client.post(
+            "/auth/login", json={"email": akun["email"], "password": akun["password"]}
+        )
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"JWT_SECRET belum diset"}
+E       assert 503 == 200
+E        +  where 503 = <Response [503 Service Unavailable]>.status_code
+
+tests/test_po_invoice_commercial.py:129: AssertionError
+__________ test_pdf_menampilkan_bahan_transport_handling_dan_total_po __________
+
+    def test_pdf_menampilkan_bahan_transport_handling_dan_total_po():
+        """Tanpa DB: PDF dari dokumen ber-rincian komersial mencetak empat angka."""
+        isi = po_document.bangun_pdf(
+            {
+                "po_number": "MC-UJI-F5",
+                "status": "submitted",
+                "created_at": datetime(2026, 10, 27, 3, 0, tzinfo=UTC),
+                "ordered_quantity": 200.0,
+                "price": 29421.0,
+                "total": 5884200.0,
+                "material_number": "MAT-TELUR",
+                "commodity_name": "Telur",
+                "location_name": "Jakarta",
+                "supplier_name": "CV Contoh",
+                "commercial_cost": {
+                    "purchase_total": "5700000.00",
+                    "transport_total": "34200.00",
+                    "handling_total": "150000.00",
+                    "invoice_total": "5884200.00",
+                    "invoice_unit_price": "29421.00",
+                    "sdc_total": "7434200.00",
+                    "sdc_unit_price": "37171.00",
+                    "expected_loss": "900000.00",
+                    "freshness_risk": "250000.00",
+                    "safety_penalty": "400000.00",
+                    "risk_method": {
+                        "kind": "simulated_policy",
+                        "source": "app/core/safe_delivered_cost.py:bobot_demo",
+                        "version": "sdc-policy-1",
+                        "period": None,
+                        "baseline": None,
+                    },
+                },
+                "keputusan": {
+                    "id": str(uuid.uuid4()),
+                    "jenis": "supplier_procurement",
+                    "status": "executed",
+                    "iteration": 1,
+                    "proposed_by": "supervisor_agent",
+                    "created_at": datetime(2026, 10, 27, 2, 0, tzinfo=UTC),
+                    "expires_at": datetime(2026, 10, 27, 8, 0, tzinfo=UTC),
+                },
+                "persetujuan": [],
+                "syarat": {},
+                "dibuat_pada": datetime(2026, 10, 27, 4, 0, tzinfo=UTC),
+            }
+        )
+        teks = _teks_pdf(isi)
+        # Empat komponen komersial, masing-masing dengan labelnya sendiri.
+        assert "Bahan" in teks
+>       assert _rupiah_tes(5700000) in teks
+E       AssertionError: assert 'Rp 5.700.000,00' in 'MealChain Guardian · SAP simulasi · MC-UJI-F5\nhalaman 1\nMEALCHAIN GUARDIAN\nPURCHASE ORDER\nDokumen dari data aplik...r\nPO, jumlah, harga, status, dan jejak persetujuan dibaca apa adanya dari basis data; total nilai = harga × jumlah.\n'
+E        +  where 'Rp 5.700.000,00' = _rupiah_tes(5700000)
+
+tests/test_po_invoice_commercial.py:548: AssertionError
+__________________ test_pdf_legacy_ditandai_belum_termigrasi ___________________
+
+    def test_pdf_legacy_ditandai_belum_termigrasi():
+        """Butir 8: label `legacy_unmigrated` terbaca pembaca dokumen."""
+        isi = po_document.bangun_pdf(
+            {
+                "po_number": "MC-UJI-LEGACY2",
+                "status": "confirmed",
+                "created_at": datetime(2026, 10, 27, 3, 0, tzinfo=UTC),
+                "ordered_quantity": 10.0,
+                "price": 20000,
+                "total": 200000.0,
+                "material_number": "MAT-BERA",
+                "commodity_name": "Beras",
+                "location_name": "Jakarta",
+                "supplier_name": "CV Contoh",
+                "cost_legacy": "legacy_unmigrated",
+                "keputusan": {
+                    "id": str(uuid.uuid4()),
+                    "jenis": "regional_balance",
+                    "status": "executed",
+                    "iteration": 1,
+                    "proposed_by": "supervisor_agent",
+                    "created_at": datetime(2026, 10, 27, 2, 0, tzinfo=UTC),
+                    "expires_at": datetime(2026, 10, 27, 8, 0, tzinfo=UTC),
+                },
+                "persetujuan": [],
+                "syarat": {},
+                "dibuat_pada": datetime(2026, 10, 27, 4, 0, tzinfo=UTC),
+            }
+        )
+        teks = _teks_pdf(isi)
+>       assert "legacy_unmigrated" in teks
+E       AssertionError: assert 'legacy_unmigrated' in 'MealChain Guardian · SAP simulasi · MC-UJI-LEGACY2\nhalaman 1\nMEALCHAIN GUARDIAN\nPURCHASE ORDER\nDokumen dari data ...r\nPO, jumlah, harga, status, dan jejak persetujuan dibaca apa adanya dari basis data; total nilai = harga × jumlah.\n'
+
+tests/test_po_invoice_commercial.py:629: AssertionError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+7 failed, 41 passed, 1 warning, 6 errors in 18.64s
+EXIT=1

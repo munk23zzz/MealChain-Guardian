@@ -1,0 +1,295 @@
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+_________________ test_nilai_diterima_memakai_harga_invoice_po _________________
+
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMTQ4YzQ2MS01MWE3LTQ5MTQtOTVhNi0yMzI4YTE1ODl...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTExNjc3LCJleHAiOjE3OTMxNTQ4Nzd9.D4V3XtpK3FW519Up-7HU09cxkswtM7t4Cpo12gzLdQg'}
+
+    def test_nilai_diterima_memakai_harga_invoice_po(auth_headers):
+        batch_id, _loc, _com, kg, price = _batch_terikat()
+        receipt_ids: list[str] = []
+        supply_ids: list[str] = []
+        try:
+            with _client() as c:
+>               badan = _catat(c, auth_headers, batch_id)
+
+tests/test_receipt_accepted_value.py:116: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7fe8de681b50>
+headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMTQ4YzQ2MS01MWE3LTQ5MTQtOTVhNi0yMzI4YTE1ODl...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTExNjc3LCJleHAiOjE3OTMxNTQ4Nzd9.D4V3XtpK3FW519Up-7HU09cxkswtM7t4Cpo12gzLdQg'}
+batch_id = '3bc81364-d1cb-58f8-813e-bc1ec4ed5970'
+
+    def _catat(client, headers, batch_id: str) -> dict:
+        resp = client.post(
+            "/receipts",
+            headers=headers,
+            json={"batch_id": batch_id, "checked": {"kemasan": True}, "other_note": "uji nilai"},
+        )
+>       assert resp.status_code == 201, resp.text
+E       AssertionError: {"detail":"lokasi batch di cakupan lokasi di luar SPPG Anda"}
+E       assert 403 == 201
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests/test_receipt_accepted_value.py:106: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+_________________ test_tanpa_ikatan_bukti_nilai_null_bukan_nol _________________
+
+self = <sqlalchemy.engine.base.Connection object at 0x7fe8d2426450>
+dialect = <sqlalchemy.dialects.postgresql.psycopg.PGDialect_psycopg object at 0x7fe8d2427bc0>
+context = <sqlalchemy.dialects.postgresql.psycopg.PGExecutionContext_psycopg object at 0x7fe8d2425ee0>
+statement = <sqlalchemy.dialects.postgresql.psycopg.PGCompiler_psycopg object at 0x7fe8d2425ac0>
+parameters = [{}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7fe8dc295310>
+query = "SELECT b.id, b.location_id, b.commodity_id, b.quantity_kg FROM batches b WHERE l.name = 'Jakarta' AND NOT EXISTS (SEL... r   WHERE r.batch_id = b.id AND r.status IN ('menunggu','disetujui')) ORDER BY b.usable_until DESC NULLS LAST LIMIT 1"
+params = {}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.UndefinedTable: missing FROM-clause entry for table "l"
+E           LINE 1: ....commodity_id, b.quantity_kg FROM batches b WHERE l.name = '...
+E                                                                        ^
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: UndefinedTable
+
+The above exception was the direct cause of the following exception:
+
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5ZjM5ZmEzZS0wZTJlLTRhNmMtYWNjYS1iMWU2NjI5ZTJ...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTExNjgwLCJleHAiOjE3OTMxNTQ4ODB9.IxEL70eYJVyd3qMNg5OFFKWT8a9xHvPLvKHNWTpqKrc'}
+
+    def test_tanpa_ikatan_bukti_nilai_null_bukan_nol(auth_headers):
+>       batch_id, _loc, _com, _kg = _batch_tanpa_ikatan()
+
+tests/test_receipt_accepted_value.py:132: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_receipt_accepted_value.py:71: in _batch_tanpa_ikatan
+    row = conn.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7fe8dc295310>
+query = "SELECT b.id, b.location_id, b.commodity_id, b.quantity_kg FROM batches b WHERE l.name = 'Jakarta' AND NOT EXISTS (SEL... r   WHERE r.batch_id = b.id AND r.status IN ('menunggu','disetujui')) ORDER BY b.usable_until DESC NULLS LAST LIMIT 1"
+params = {}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           sqlalchemy.exc.ProgrammingError: (psycopg.errors.UndefinedTable) missing FROM-clause entry for table "l"
+E           LINE 1: ....commodity_id, b.quantity_kg FROM batches b WHERE l.name = '...
+E                                                                        ^
+E           [SQL: SELECT b.id, b.location_id, b.commodity_id, b.quantity_kg FROM batches b WHERE l.name = 'Jakarta' AND NOT EXISTS (SELECT 1 FROM decision_evidence e   WHERE e.evidence_type = 'human_inspection'   AND jsonb_exists(e.payload->'batch_ids', b.id::text)) AND b.safety_status = 'pass' AND jsonb_array_length(COALESCE(b.temperature_log, '[]'::jsonb)) >= 2 AND (b.usable_until IS NULL OR b.usable_until > now()) AND NOT EXISTS (SELECT 1 FROM batch_receipts r   WHERE r.batch_id = b.id AND r.status IN ('menunggu','disetujui')) ORDER BY b.usable_until DESC NULLS LAST LIMIT 1]
+E           (Background on this error at: https://sqlalche.me/e/20/f405)
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: ProgrammingError
+_______________ test_antrean_menunggu_membawa_kunci_nilai_kosong _______________
+
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NzMzYTI1ZS0xYjE1LTQ0ZTQtYWZlMS1hMmM4ZjY3ODE...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTExNjg0LCJleHAiOjE3OTMxNTQ4ODR9.OnyYGoxmJTCooBr18i-hLjWqCU6f4VEN1DgLwqKLglw'}
+
+    def test_antrean_menunggu_membawa_kunci_nilai_kosong(auth_headers):
+        """Kunci harus SELALU ada supaya UI tidak membedakan dua bentuk payload."""
+        batch_id, _loc, _com, _kg, _harga = _batch_terikat()
+        receipt_ids: list[str] = []
+        try:
+            with _client() as c:
+>               badan = _catat(c, auth_headers, batch_id)
+
+tests/test_receipt_accepted_value.py:154: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x7fe8dc0ce150>
+headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NzMzYTI1ZS0xYjE1LTQ0ZTQtYWZlMS1hMmM4ZjY3ODE...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTExNjg0LCJleHAiOjE3OTMxNTQ4ODR9.OnyYGoxmJTCooBr18i-hLjWqCU6f4VEN1DgLwqKLglw'}
+batch_id = '3bc81364-d1cb-58f8-813e-bc1ec4ed5970'
+
+    def _catat(client, headers, batch_id: str) -> dict:
+        resp = client.post(
+            "/receipts",
+            headers=headers,
+            json={"batch_id": batch_id, "checked": {"kemasan": True}, "other_note": "uji nilai"},
+        )
+>       assert resp.status_code == 201, resp.text
+E       AssertionError: {"detail":"lokasi batch di cakupan lokasi di luar SPPG Anda"}
+E       assert 403 == 201
+E        +  where 403 = <Response [403 Forbidden]>.status_code
+
+tests/test_receipt_accepted_value.py:106: AssertionError
+=============================== warnings summary ===============================
+tests/test_receipt_accepted_value.py::test_nilai_diterima_memakai_harga_invoice_po
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+3 failed, 1 warning in 16.45s
+EXIT=1

@@ -1,0 +1,21 @@
+== DB kosong mealchain_f3_migrasi
+NOTICE:  database "mealchain_f3_migrasi" does not exist, skipping
+== upgrade head dari kosong
+UPGRADE_EXIT=0
+INFO  [alembic.runtime.migration] Running upgrade 041_commodity_policies -> 042_ledger_append_only, Ledger append-only ditegakkan DATABASE, bukan konvensi (Fase 11 MG).
+INFO  [alembic.runtime.migration] Running upgrade 042_ledger_append_only -> 043_least_privilege_app, Least privilege untuk role aplikasi, tanpa memutus backup/restore (Fase 11 butir 3).
+versi: 043_least_privilege_app
+== isi awal commodity_policies (komoditas belum ada di DB kosong → 0 baris, bukan karangan)
+baris: 0
+== alembic check (tidak boleh mengusulkan op apa pun)
+CHECK_EXIT=0
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+No new upgrade operations detected.
+== downgrade 041 → 040
+DOWNGRADE_EXIT=0
+tabel ada? 0 (harus 0)
+versi: 040_session_modes_and_ownership
+== upgrade lagi ke head
+UPGRADE2_EXIT=0
+versi: 043_least_privilege_app

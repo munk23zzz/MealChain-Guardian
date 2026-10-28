@@ -1,0 +1,26 @@
+== siapkan klon mealchain_f3 dari mealchain
+klon terbentuk: 118 batch, alembic 042_ledger_append_only
+== migrate ke head
+ALEMBIC_EXIT=0
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+alembic sesudah: 042_ledger_append_only
+commodity_policies: 4 baris
+== pytest
+PYTEST_EXIT=1
+FAILED tests/test_candidate_generation.py::test_cianjur_to_jakarta_telur_locked_scenario
+FAILED tests/test_candidate_generation.py::test_quantity_capped_by_batch_availability
+FAILED tests/test_candidate_generation.py::test_quantity_capped_by_surplus_not_shortage
+FAILED tests/test_candidate_generation.py::test_batch_kuantitas_nol_diabaikan_yang_positif_tetap_dihitung
+FAILED tests/test_candidate_generation.py::test_commodity_filter_excludes_mismatch
+FAILED tests/test_candidate_generation.py::test_needs_verification_allowed_and_marked
+FAILED tests/test_candidate_generation.py::test_mixed_batches_weighted_freshness_and_conservative_status
+FAILED tests/test_candidate_generation.py::test_exact_capacity_boundary_feasible
+FAILED tests/test_candidate_generation.py::test_missing_logistics_pair_raises
+FAILED tests/test_candidate_generation.py::test_missing_price_raises - Failed...
+FAILED tests/test_candidate_generation.py::test_mixed_batches_weighted_freshness_and_conservative_status
+FAILED tests/test_candidate_generation.py::test_exact_capacity_boundary_feasible
+FAILED tests/test_candidate_generation.py::test_missing_logistics_pair_raises
+FAILED tests/test_candidate_generation.py::test_missing_price_raises - Failed...
+10 failed, 90 passed, 1 warning in 24.55s
+log: _qa/f3/pytest.txt

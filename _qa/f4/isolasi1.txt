@@ -1,0 +1,309 @@
+.......................FF..FFF.....F...F........                         [100%]
+=================================== FAILURES ===================================
+____ test_fetch_excludes_later_harvests_without_advancing_as_of[live-race] _____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7e77d65cffe0>
+explicit_as_of = False
+
+    @pytest.mark.parametrize("explicit_as_of", [False, True], ids=["live-race", "historical"])
+    def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, explicit_as_of):
+        engine = create_engine(
+            DSN_SYNC
+        )
+    
+        # Pipeline kini mengambil jam dari `evaluation_clock()` (refactor jam sesi
+        # lain), bukan `datetime.now()`. Membekukan `rs.datetime` tidak lagi
+        # berpengaruh; yang dibekukan adalah jam evaluasinya.
+        beku = AS_OF + timedelta(days=1) if explicit_as_of else AS_OF
+    
+        def _jam(as_of=None):
+            return as_of if as_of is not None else beku
+    
+        monkeypatch.setattr(rs, "evaluation_clock", _jam)
+        try:
+            with engine.connect() as connection, connection.begin() as transaction:
+                with Session(bind=connection) as session:
+                    location = session.scalar(select(Location).where(Location.name == "Cianjur"))
+                    commodity = session.scalar(select(Commodity).where(Commodity.name == "telur"))
+                    supplier = session.scalar(select(Supplier).limit(1))
+                    ids = {name: uuid.uuid4() for name in ("old", "boundary", "later")}
+                    harvested = {
+                        "old": AS_OF - timedelta(days=1),
+                        "boundary": AS_OF,
+                        "later": AS_OF + timedelta(milliseconds=600),
+                    }
+    
+                    class LaterVisibleSession:
+                        inserted = False
+    
+                        async def execute(self, statement):
+                            if not self.inserted:
+                                self.inserted = True
+                                # Deterministic interleaving: these rows become visible only
+                                # after fetch_operational_facts has captured its clock.
+                                session.add_all([
+                                    Batch(
+                                        id=ids[name], location_id=location.id,
+                                        commodity_id=commodity.id, supplier_id=supplier.id,
+                                        quantity_kg=Decimal("10"), harvested_at=timestamp,
+                                        # Bukti suhu lengkap: sejak F-02 (25 Okt 2026) log
+                                        # kosong tidak lagi berbuah skor `pass` (0,7), dan
+                                        # tes ini menguji pemotongan `as_of`, bukan freshness.
+                                        temperature_log=_log_suhu(timestamp),
+                                        safety_status="pass",
+                                    )
+                                    for name, timestamp in harvested.items()
+                                ])
+                                session.flush()
+                            return session.execute(statement)
+    
+                    facts = asyncio.run(rs.fetch_operational_facts(
+                        LaterVisibleSession(), AS_OF if explicit_as_of else None
+                    ))
+                    batches = {b["batch_id"]: b for b in facts[4]}
+>                   assert str(ids["later"]) not in batches
+E                   AssertionError: assert '86d4374f-b2f0-4aaa-b85f-3b08f02b2f6c' not in {'0254637b-baf0-4f0f-bb9f-147aed350d87': {'batch_id': '0254637b-baf0-4f0f-bb9f-147aed350d87', 'commodity': 'telur', 'e...90-abe0-6caee290adf3', 'commodity': 'wortel', 'evidence_state': 'insufficient', 'excluded_destinations': [], ...}, ...}
+E                    +  where '86d4374f-b2f0-4aaa-b85f-3b08f02b2f6c' = str(UUID('86d4374f-b2f0-4aaa-b85f-3b08f02b2f6c'))
+
+tests/test_recommendation_snapshot.py:95: AssertionError
+____ test_fetch_excludes_later_harvests_without_advancing_as_of[historical] ____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7e77d4322e10>
+explicit_as_of = True
+
+    @pytest.mark.parametrize("explicit_as_of", [False, True], ids=["live-race", "historical"])
+    def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, explicit_as_of):
+        engine = create_engine(
+            DSN_SYNC
+        )
+    
+        # Pipeline kini mengambil jam dari `evaluation_clock()` (refactor jam sesi
+        # lain), bukan `datetime.now()`. Membekukan `rs.datetime` tidak lagi
+        # berpengaruh; yang dibekukan adalah jam evaluasinya.
+        beku = AS_OF + timedelta(days=1) if explicit_as_of else AS_OF
+    
+        def _jam(as_of=None):
+            return as_of if as_of is not None else beku
+    
+        monkeypatch.setattr(rs, "evaluation_clock", _jam)
+        try:
+            with engine.connect() as connection, connection.begin() as transaction:
+                with Session(bind=connection) as session:
+                    location = session.scalar(select(Location).where(Location.name == "Cianjur"))
+                    commodity = session.scalar(select(Commodity).where(Commodity.name == "telur"))
+                    supplier = session.scalar(select(Supplier).limit(1))
+                    ids = {name: uuid.uuid4() for name in ("old", "boundary", "later")}
+                    harvested = {
+                        "old": AS_OF - timedelta(days=1),
+                        "boundary": AS_OF,
+                        "later": AS_OF + timedelta(milliseconds=600),
+                    }
+    
+                    class LaterVisibleSession:
+                        inserted = False
+    
+                        async def execute(self, statement):
+                            if not self.inserted:
+                                self.inserted = True
+                                # Deterministic interleaving: these rows become visible only
+                                # after fetch_operational_facts has captured its clock.
+                                session.add_all([
+                                    Batch(
+                                        id=ids[name], location_id=location.id,
+                                        commodity_id=commodity.id, supplier_id=supplier.id,
+                                        quantity_kg=Decimal("10"), harvested_at=timestamp,
+                                        # Bukti suhu lengkap: sejak F-02 (25 Okt 2026) log
+                                        # kosong tidak lagi berbuah skor `pass` (0,7), dan
+                                        # tes ini menguji pemotongan `as_of`, bukan freshness.
+                                        temperature_log=_log_suhu(timestamp),
+                                        safety_status="pass",
+                                    )
+                                    for name, timestamp in harvested.items()
+                                ])
+                                session.flush()
+                            return session.execute(statement)
+    
+                    facts = asyncio.run(rs.fetch_operational_facts(
+                        LaterVisibleSession(), AS_OF if explicit_as_of else None
+                    ))
+                    batches = {b["batch_id"]: b for b in facts[4]}
+                    assert str(ids["later"]) not in batches
+                    assert batches[str(ids["boundary"])]["freshness_score"] == Decimal("1.000000")
+                    expected = rs.compute_freshness_score(
+                        harvested["old"], AS_OF, rs.settings.shelf_life_days_telur,
+                        _log_suhu(harvested["old"]),
+                        rs.settings.safe_temp_min_c, rs.settings.safe_temp_max_c,
+                    )
+>                   assert batches[str(ids["old"])]["freshness_score"] == rs._score(
+                        Decimal(str(expected))
+                    )
+E                   AssertionError: assert Decimal('0.664286') == Decimal('0.964286')
+E                    +  where Decimal('0.964286') = <function _score at 0x7e77d9709080>(Decimal('0.9642857142857143'))
+E                    +    where <function _score at 0x7e77d9709080> = rs._score
+E                    +    and   Decimal('0.9642857142857143') = Decimal('0.9642857142857143')
+E                    +      where '0.9642857142857143' = str(0.9642857142857143)
+
+tests/test_recommendation_snapshot.py:102: AssertionError
+____________________ test_api_safety_happy_path_revised_201 ____________________
+
+client = <starlette.testclient.TestClient object at 0x7e77d65204d0>
+
+    def test_api_safety_happy_path_revised_201(client):
+        """FAIL → 201 revised; decision+evidence+trace terbaca dari DB."""
+        b = _mk_batch("Cianjur", fail=True)
+        try:
+            headers = _head_user(client)
+            resp = client.post(
+                "/events/safety-disruption",
+                headers=headers,
+                json={
+                    "batch_id": b["batch_id"],
+                    "target_location_id": _target_jakarta(),
+                    "operation_key": str(uuid.uuid4()),
+                },
+            )
+>           assert resp.status_code == 201, resp.text
+E           AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E           assert 409 == 201
+E            +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_event3_api.py:223: AssertionError
+__________________ test_api_safety_replay_same_key_idempotent __________________
+
+client = <starlette.testclient.TestClient object at 0x7e77c7ffe750>
+
+    def test_api_safety_replay_same_key_idempotent(client):
+        """operation_key sama + batch sama → replay, satu decision saja."""
+        b = _mk_batch("Cianjur", fail=True)
+        try:
+            headers = _head_user(client)
+            payload = {
+                "batch_id": b["batch_id"],
+                "target_location_id": _target_jakarta(),
+                "operation_key": str(uuid.uuid4()),
+            }
+            r1 = client.post("/events/safety-disruption", headers=headers, json=payload)
+>           assert r1.status_code == 201, r1.text
+E           AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E           assert 409 == 201
+E            +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_event3_api.py:258: AssertionError
+______________ test_api_safety_conflict_same_key_other_batch_409 _______________
+
+client = <starlette.testclient.TestClient object at 0x7e77d429ba40>
+
+    def test_api_safety_conflict_same_key_other_batch_409(client):
+        """operation_key sama + batch beda → 409."""
+        b1 = _mk_batch("Cianjur", fail=True)
+        b2 = _mk_batch("Cianjur", fail=True)
+        try:
+            headers = _head_user(client)
+            op_key = str(uuid.uuid4())
+            r1 = client.post(
+                "/events/safety-disruption",
+                headers=headers,
+                json={
+                    "batch_id": b1["batch_id"],
+                    "target_location_id": _target_jakarta(),
+                    "operation_key": op_key,
+                },
+            )
+>           assert r1.status_code == 201, r1.text
+E           AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E           assert 409 == 201
+E            +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_event3_api.py:290: AssertionError
+_________________ test_decision_time_tersedia_setelah_eksekusi _________________
+
+client = <starlette.testclient.TestClient object at 0x7e77d6d2d040>
+monitor_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyODE3N2Y4OC1jMTZkLTRhMzctYWRjOC1iNzAwZTcyZjN...21vbml0b3IiLCJsb2MiOm51bGwsImlhdCI6MTc5MzExMTk5OCwiZXhwIjoxNzkzMTU1MTk4fQ.WV9wjBo8rcg-Yy0d1AvdHBxvgXtWNfrp_EYbvbAryFo'}
+
+    def test_decision_time_tersedia_setelah_eksekusi(client, monitor_headers):
+        """Kartu Decision Time berhenti jadi `no_data` setelah satu eksekusi nyata.
+    
+        Metrik hanya menghitung keputusan ber-`demo_case IS NULL` yang sudah
+        committed (PO ada) — keputusan Event 1 memenuhi keduanya setelah eksekusi.
+        """
+        head = _mk_user("sppg_head", "Jakarta")
+        restore = _force_server_verdict("CONSISTENT")
+        decision_id: str | None = None
+        gizi_email: str | None = None
+        try:
+            before = _kpi_metric(client, monitor_headers, "Decision Time")
+            # JANGAN mengandaikan DB kosong. DB kerja adalah DB DEMO yang dipakai
+            # bersama: keputusan nyata yang sudah dieksekusi (beserta PO-nya) bisa
+            # sudah ada di jendela metrik, sehingga keadaannya `available` sebelum
+            # tes ini jalan. Yang diuji adalah TRANSISI: keputusan yang baru
+            # dieksekusi ikut terhitung.
+            sebelum_sampel = int(before.get("sample_count") or 0)
+            decision_id, _po, gizi_email = _run_execute_flow(client, head)
+            after = _kpi_metric(client, monitor_headers, "Decision Time")
+            assert after["state"] == "available", after
+            assert after["value"] is not None
+>           assert int(after["sample_count"]) == sebelum_sampel + 1, after
+E           AssertionError: {'coverage': '0.11', 'name': 'Decision Time', 'previous_value': None, 'provenance': {'baseline': {'kind': 'no_baseline...': None}, 'classification': {'historical_seed': 7, 'live': 8}, 'coverage': '0.11', 'data_basis': 'campuran', ...}, ...}
+E           assert 1 == (8 + 1)
+E            +  where 1 = int(1)
+
+tests/test_kpi_act_trace.py:209: AssertionError
+______________ test_penerimaan_bahan_tidak_menulis_porsi_tersaji _______________
+
+    def test_penerimaan_bahan_tidak_menulis_porsi_tersaji():
+        """Bahan diterima ≠ makanan tersaji: penerimaan hanya memberi proyeksi."""
+    
+        async def _skenario(db):
+            lokasi, komoditas = await _lokasi_komoditas(db)
+            rencana = await db.execute(
+                text(
+                    "SELECT id, planned_portions FROM menu_plans WHERE planned_portions > 0 LIMIT 1"
+                )
+            )
+            baris = rencana.first()
+            if baris is None:
+                pytest.skip("DB uji tanpa menu plan berisi porsi")
+            batch = SimpleNamespace(
+                location_id=lokasi, commodity_id=komoditas, quantity_kg=Decimal("30.00")
+            )
+            receipt = SimpleNamespace(id=uuid.uuid4())
+            hasil = await settlement.catat_penerimaan(
+                db, batch=batch, receipt=receipt, sekarang=datetime.now(timezone.utc)
+            )
+            await db.flush()
+            jumlah = (
+                await db.execute(
+                    text(
+                        "SELECT count(*) FROM delivery_events WHERE source_ref = :r"
+                    ),
+                    {"r": f"receipt:{receipt.id}"},
+                )
+            ).scalar()
+            await db.rollback()
+            return hasil, int(jumlah or 0)
+    
+        hasil, jumlah_delivery = _jalankan(_skenario)
+        assert jumlah_delivery == 0, "penerimaan tidak boleh menulis baris porsi tersaji"
+        assert hasil["ditulis"] is False
+        assert "proyeksi" in str(hasil.get("alasan", "")).lower(), hasil
+        # Proyeksi tetap dihitung (bukan dibuang), hanya TIDAK disimpan sebagai fakta.
+        if hasil.get("proyeksi_porsi") is not None:
+>           assert hasil["proyeksi_porsi"] > 0
+E           assert 0 > 0
+
+tests/test_kpi_provenance.py:265: AssertionError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[live-race]
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[historical]
+FAILED tests/test_event3_api.py::test_api_safety_happy_path_revised_201 - Ass...
+FAILED tests/test_event3_api.py::test_api_safety_replay_same_key_idempotent
+FAILED tests/test_event3_api.py::test_api_safety_conflict_same_key_other_batch_409
+FAILED tests/test_kpi_act_trace.py::test_decision_time_tersedia_setelah_eksekusi
+FAILED tests/test_kpi_provenance.py::test_penerimaan_bahan_tidak_menulis_porsi_tersaji
+7 failed, 41 passed, 1 warning in 116.36s (0:01:56)

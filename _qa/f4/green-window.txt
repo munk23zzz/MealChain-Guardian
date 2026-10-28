@@ -1,0 +1,71 @@
+...............FF.FFF..                                                  [100%]
+=================================== FAILURES ===================================
+_____________________ test_cianjur_to_jakarta_telur_ranked _____________________
+
+    def test_cianjur_to_jakarta_telur_ranked():
+        out = _run(rs.build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI
+        ))
+        hits = [r for r in out["recommendations"]
+                if r["candidate"]["source_location"] == "Cianjur"
+                and r["candidate"]["destination_location"] == "Jakarta"]
+>       assert hits, "kandidat Cianjur→Jakarta wajib ada"
+E       AssertionError: kandidat Cianjur→Jakarta wajib ada
+E       assert []
+
+tests/test_recommendation_service.py:60: AssertionError
+__________________________ test_sdc_arithmetic_locked __________________________
+
+    def test_sdc_arithmetic_locked():
+        out = _run(rs.build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI
+        ))
+>       top = out["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_recommendation_service.py:70: IndexError
+__________________ test_price_anomaly_emitted_reusing_engine ___________________
+
+    def test_price_anomaly_emitted_reusing_engine():
+        out = _run(rs.build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI
+        ))
+>       top = out["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_recommendation_service.py:93: IndexError
+_________________________ test_no_quote_anomaly_marked _________________________
+
+    def test_no_quote_anomaly_marked():
+        facts = (
+            SUPPLY,
+            DEMAND,
+            REFS,
+            {("Cianjur", "telur"): (None, None)},
+            BATCHES,
+            RELIABILITY,
+        )
+        out = _run(rs.build_recommendations(
+            lambda: facts, as_of=AS_OF, logistics_by_pair=LOGI
+        ))
+>       top = out["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_recommendation_service.py:112: IndexError
+____________________________ test_evidence_emitted _____________________________
+
+    def test_evidence_emitted():
+        out = _run(rs.build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI
+        ))
+>       top = out["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_recommendation_service.py:121: IndexError
+=========================== short test summary info ============================
+FAILED tests/test_recommendation_service.py::test_cianjur_to_jakarta_telur_ranked
+FAILED tests/test_recommendation_service.py::test_sdc_arithmetic_locked - Ind...
+FAILED tests/test_recommendation_service.py::test_price_anomaly_emitted_reusing_engine
+FAILED tests/test_recommendation_service.py::test_no_quote_anomaly_marked - I...
+FAILED tests/test_recommendation_service.py::test_evidence_emitted - IndexErr...
+5 failed, 18 passed in 5.29s

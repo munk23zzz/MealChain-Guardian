@@ -1,0 +1,13 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v2.1.9 /app
+
+ ✓ tests/demo-control-panel.test.tsx (17 tests) 108ms
+ ✓ tests/realtime-demo-control.test.tsx (13 tests) 141ms
+
+ Test Files  2 passed (2)
+      Tests  30 passed (30)
+   Start at  16:10:12
+   Duration  1.36s (transform 825ms, setup 0ms, collect 1.50s, tests 248ms, environment 1ms, prepare 249ms)
+
+VITEST_EXIT=0

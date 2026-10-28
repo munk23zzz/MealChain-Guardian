@@ -1,0 +1,30 @@
+..F.............................                                         [100%]
+=================================== FAILURES ===================================
+_______________ test_antrean_menunggu_membawa_kunci_nilai_kosong _______________
+
+auth_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3MTcyOWI3ZS04ZGRlLTQyMjQtYjVmOC02N2RiYTU1MWM...3LTgwMDQtYTJkNDBhNTFlYjdlIiwiaWF0IjoxNzkzMTExOTc1LCJleHAiOjE3OTMxNTUxNzV9.gqFQiU0ZiQZEBTHdCibaTqzoSi0YvpaWSMCuES6z_no'}
+
+    def test_antrean_menunggu_membawa_kunci_nilai_kosong(auth_headers):
+        """Kunci harus SELALU ada supaya UI tidak membedakan dua bentuk payload."""
+        batch_id, _loc, _com, _kg, _harga = _batch_terikat()
+        receipt_ids: list[str] = []
+        try:
+            with _client() as c:
+                badan = _catat(c, auth_headers, batch_id)
+                receipt_ids.append(badan["id"])
+                antrean = c.get("/receipts/menunggu", headers=auth_headers)
+                assert antrean.status_code == 200, antrean.text
+                baris = [i for i in antrean.json()["items"] if i["id"] == badan["id"]]
+                assert baris, "catatan menunggu harus muncul di antrean"
+>               assert "accepted_value_idr" in baris[0]
+E               AssertionError: assert 'accepted_value_idr' in {'batch_id': '6502963a-8307-52a2-ac42-f0b125877cd5', 'checked_count': 1, 'commodity': 'ayam', 'id': 'b7544b71-bce8-4161-b051-5e891217d391', ...}
+
+tests/test_receipt_accepted_value.py:160: AssertionError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 failed, 31 passed, 1 warning in 62.73s (0:01:02)
+EXIT=1

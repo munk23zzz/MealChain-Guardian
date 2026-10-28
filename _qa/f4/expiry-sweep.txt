@@ -1,0 +1,1039 @@
+..................F.F.FFFF.FFF.....FFF.F.F.F.FFF.F..F..FF.FFF........... [ 63%]
+.......................FFFFFFF.F.FFF.FFF.F                               [100%]
+=================================== FAILURES ===================================
+_____________ test_context_integration_with_real_service_emission ______________
+
+    def test_context_integration_with_real_service_emission():
+        """Builder menerima emisi service Task 9 apa adanya."""
+        from datetime import datetime, timezone
+        from decimal import Decimal
+    
+        from app.services import recommendation_service as rs
+    
+        supply = {("Cianjur", "telur"): Decimal("1400"),
+                  ("Jakarta", "telur"): Decimal("300")}
+        demand = {("Cianjur", "telur"): Decimal("500"),
+                  ("Jakarta", "telur"): Decimal("1000")}
+        refs = {("Cianjur", "telur"): Decimal("26500"),
+                ("Jakarta", "telur"): Decimal("30500")}
+        quotes = {("Cianjur", "telur"): (
+            Decimal("26200"), "11111111-1111-1111-1111-111111111111")}
+        batches = [{
+            "batch_id": "b-1",
+            "location": "Cianjur",
+            "commodity": "telur",
+            "quantity_kg": Decimal("600"),
+            "freshness_score": Decimal("0.90"),
+            "freshness_status": "pass",
+            "safety_status": "pass",
+        }]
+        reliability = {
+            "11111111-1111-1111-1111-111111111111": Decimal("0.80")
+        }
+        logi = {("Cianjur", "Jakarta"): {
+            "distance_km": 120, "estimated_time_min": 150.0, "feasible": True}}
+        as_of = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+        import asyncio
+    
+        out = asyncio.run(rs.build_recommendations(
+            lambda: (supply, demand, refs, quotes, batches, reliability),
+            as_of=as_of,
+            logistics_by_pair=logi,
+        ))
+        ctx = build_supervisor_context(out)
+>       c = ctx["candidates"][0]
+E       IndexError: list index out of range
+
+tests/test_decision_context.py:149: IndexError
+_________ test_service_fail_batch_excluded_bogor_alternative_persisted _________
+
+    def test_service_fail_batch_excluded_bogor_alternative_persisted():
+        """FAIL → exclude Cianjur → reoptimasi → Bogor eligible → decision baru."""
+        b = _mk_batches()
+        target_id = _target_jakarta()
+        op_key = uuid.uuid4()
+        try:
+>           outcome = asyncio.run(
+                _run_event3(
+                    b["fail_batch_id"], target_id, op_key, None,
+                    _facts_bogor_eligible(b),
+                )
+            )
+
+tests/test_event3_service.py:274: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+tests/test_event3_service.py:220: in _run_event3
+    return await svc.run_safety_disruption_event(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+batch_id = UUID('ca023b7a-a401-4115-a5a7-c26a402df62b')
+target_location_id = UUID('275d1be7-5bb8-5a37-8004-a2d40a51eb7e')
+operation_key = UUID('d109bdd4-48f6-46a0-bb30-370ca8b44252')
+previous_decision_id = None, actor_id = None
+db = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7183bfb8fbc0>
+fetch_facts = <function _facts_bogor_eligible.<locals>._facts at 0x7183bfbe4900>
+
+    async def run_safety_disruption_event(
+        batch_id: uuid.UUID,
+        target_location_id: uuid.UUID,
+        operation_key: uuid.UUID,
+        previous_decision_id: uuid.UUID | None,
+        actor_id: str | None,
+        db: AsyncSession,
+        fetch_facts=None,
+    ) -> dict:
+        """Pipeline Event 3; session DI-COMMIT di sini (dua boundary).
+    
+        Commit #1: evaluasi + persist batch.safety_status (FAIL tahan bencana).
+        Commit #2: decision + evidence + trace bila ada alternatif eligible.
+        """
+        op_key = str(operation_key)
+    
+        # ---- Kunci serialisasi lintas request (pola Event 2, footnote §11).
+        await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": op_key})
+    
+        # ---- Replay: key sama → batch sama; batch beda → 409.
+        replay = await _find_replay(db, op_key)
+        if replay is not None:
+            _decision, outcome = replay
+            if outcome.get("batch_id") != str(batch_id):
+                raise Event3ConflictError("operation_key sudah dipakai untuk batch berbeda")
+            await db.rollback()
+            return outcome
+    
+        # ---- Load batch + lokasi komoditas (untuk evidence & revalidation).
+        batch = (await db.execute(select(Batch).where(Batch.id == batch_id))).scalar_one_or_none()
+        if batch is None:
+            raise LookupError("batch tidak ditemukan")
+    
+        # Commit #1 — evaluasi deterministik + persist status FAIL/otherwise.
+        raw_log = batch.temperature_log or []
+        temp_result = evaluate_safety(
+            raw_log,
+            safe_min_c=0.0,
+            safe_max_c=8.0,
+            max_excursion_minutes=30.0,
+        )
+        batch.safety_status = temp_result["safety_status"]
+        await db.commit()
+    
+        # Kondisi berhenti dini: batch ternyata aman → bukan event 3.
+        if temp_result["safety_status"] != "fail":
+            no_event = {
+                "status": "no_disruption",
+                "decision_id": None,
+                "event_type": "safety_disruption",
+                "batch_id": str(batch.id),
+                "safety_status": temp_result["safety_status"],
+                "evaluation": {
+                    "safety_status": temp_result["safety_status"],
+                    "excursion_minutes": float(temp_result["excursion_minutes"]),
+                },
+                "excursion_minutes": float(temp_result["excursion_minutes"]),
+                "excluded_batch_ids": [],
+                "previous_decision_id": (str(previous_decision_id) if previous_decision_id else None),
+                "message": "Tidak ada gangguan keamanan pangan (batch aman)",
+            }
+            await db.rollback()
+            return no_event
+    
+        # ---- Re-optimasi deterministik (reuse pipeline Event 1).
+        if fetch_facts is None:
+            from app.core.config import settings
+            from app.db import create_engine as _mk_engine
+            from app.db import create_session_maker as _mk_session
+            from app.services import recommendation_service as _rs
+    
+            _engine = _mk_engine(settings.database_url)
+            _maker = _mk_session(_engine)
+    
+            async def _default_fetch():
+                async with _maker() as _session:
+                    return await _rs.fetch_operational_facts(_session, None)
+    
+            fetch_facts = _default_fetch
+        result = await build_recommendations(fetch_facts)
+        recommendations = result.get("recommendations", [])
+    
+        target = await db.get(Location, target_location_id)
+        commodity = await db.get(Commodity, batch.commodity_id)
+        eligible = [
+            r
+            for r in recommendations
+            if r.get("eligible")
+            and r["candidate"]["destination_location"] == target.name
+            and r["candidate"]["commodity"] == commodity.name
+        ]
+        if not eligible:
+            # FAIL sudah terpersist (commit #1); tanpa decision write.
+>           raise Event3NoAlternativeError(
+                "Tidak ada alternatif eligible setelah batch fail di-exclude"
+            )
+E           app.services.event3_service.Event3NoAlternativeError: Tidak ada alternatif eligible setelah batch fail di-exclude
+
+app/services/event3_service.py:209: Event3NoAlternativeError
+_______________ test_service_key_reuse_other_batch_409_semantics _______________
+
+    def test_service_key_reuse_other_batch_409_semantics():
+        """operation_key sama + batch beda → Event3ConflictError (API → 409)."""
+        from app.services.event3_service import Event3ConflictError
+    
+        b = _mk_batches()
+        target_id = _target_jakarta()
+        op_key = uuid.uuid4()
+        try:
+>           outcome = asyncio.run(
+                _run_event3(
+                    b["fail_batch_id"], target_id, op_key, None,
+                    _facts_bogor_eligible(b),
+                )
+            )
+
+tests/test_event3_service.py:367: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+tests/test_event3_service.py:220: in _run_event3
+    return await svc.run_safety_disruption_event(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+batch_id = UUID('b832e5e2-c6c8-4129-b097-3ec04fa4e032')
+target_location_id = UUID('275d1be7-5bb8-5a37-8004-a2d40a51eb7e')
+operation_key = UUID('0d0b1c46-3319-4bd2-a270-b0d23498ec0a')
+previous_decision_id = None, actor_id = None
+db = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7183bfb6d880>
+fetch_facts = <function _facts_bogor_eligible.<locals>._facts at 0x7183bfb81b20>
+
+    async def run_safety_disruption_event(
+        batch_id: uuid.UUID,
+        target_location_id: uuid.UUID,
+        operation_key: uuid.UUID,
+        previous_decision_id: uuid.UUID | None,
+        actor_id: str | None,
+        db: AsyncSession,
+        fetch_facts=None,
+    ) -> dict:
+        """Pipeline Event 3; session DI-COMMIT di sini (dua boundary).
+    
+        Commit #1: evaluasi + persist batch.safety_status (FAIL tahan bencana).
+        Commit #2: decision + evidence + trace bila ada alternatif eligible.
+        """
+        op_key = str(operation_key)
+    
+        # ---- Kunci serialisasi lintas request (pola Event 2, footnote §11).
+        await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": op_key})
+    
+        # ---- Replay: key sama → batch sama; batch beda → 409.
+        replay = await _find_replay(db, op_key)
+        if replay is not None:
+            _decision, outcome = replay
+            if outcome.get("batch_id") != str(batch_id):
+                raise Event3ConflictError("operation_key sudah dipakai untuk batch berbeda")
+            await db.rollback()
+            return outcome
+    
+        # ---- Load batch + lokasi komoditas (untuk evidence & revalidation).
+        batch = (await db.execute(select(Batch).where(Batch.id == batch_id))).scalar_one_or_none()
+        if batch is None:
+            raise LookupError("batch tidak ditemukan")
+    
+        # Commit #1 — evaluasi deterministik + persist status FAIL/otherwise.
+        raw_log = batch.temperature_log or []
+        temp_result = evaluate_safety(
+            raw_log,
+            safe_min_c=0.0,
+            safe_max_c=8.0,
+            max_excursion_minutes=30.0,
+        )
+        batch.safety_status = temp_result["safety_status"]
+        await db.commit()
+    
+        # Kondisi berhenti dini: batch ternyata aman → bukan event 3.
+        if temp_result["safety_status"] != "fail":
+            no_event = {
+                "status": "no_disruption",
+                "decision_id": None,
+                "event_type": "safety_disruption",
+                "batch_id": str(batch.id),
+                "safety_status": temp_result["safety_status"],
+                "evaluation": {
+                    "safety_status": temp_result["safety_status"],
+                    "excursion_minutes": float(temp_result["excursion_minutes"]),
+                },
+                "excursion_minutes": float(temp_result["excursion_minutes"]),
+                "excluded_batch_ids": [],
+                "previous_decision_id": (str(previous_decision_id) if previous_decision_id else None),
+                "message": "Tidak ada gangguan keamanan pangan (batch aman)",
+            }
+            await db.rollback()
+            return no_event
+    
+        # ---- Re-optimasi deterministik (reuse pipeline Event 1).
+        if fetch_facts is None:
+            from app.core.config import settings
+            from app.db import create_engine as _mk_engine
+            from app.db import create_session_maker as _mk_session
+            from app.services import recommendation_service as _rs
+    
+            _engine = _mk_engine(settings.database_url)
+            _maker = _mk_session(_engine)
+    
+            async def _default_fetch():
+                async with _maker() as _session:
+                    return await _rs.fetch_operational_facts(_session, None)
+    
+            fetch_facts = _default_fetch
+        result = await build_recommendations(fetch_facts)
+        recommendations = result.get("recommendations", [])
+    
+        target = await db.get(Location, target_location_id)
+        commodity = await db.get(Commodity, batch.commodity_id)
+        eligible = [
+            r
+            for r in recommendations
+            if r.get("eligible")
+            and r["candidate"]["destination_location"] == target.name
+            and r["candidate"]["commodity"] == commodity.name
+        ]
+        if not eligible:
+            # FAIL sudah terpersist (commit #1); tanpa decision write.
+>           raise Event3NoAlternativeError(
+                "Tidak ada alternatif eligible setelah batch fail di-exclude"
+            )
+E           app.services.event3_service.Event3NoAlternativeError: Tidak ada alternatif eligible setelah batch fail di-exclude
+
+app/services/event3_service.py:209: Event3NoAlternativeError
+_______________ test_service_lineage_previous_decision_recorded ________________
+
+    def test_service_lineage_previous_decision_recorded():
+        """previous_decision_id tercatat di evidence + response; old decision
+        TIDAK dimutasi (O-EVENT-2: supersedes_id tidak dipalsukan)."""
+        b = _mk_batches()
+        target_id = _target_jakarta()
+        op_key = uuid.uuid4()
+        # Old decision "unsafe" (sintetis untuk linkage test).
+        old_id = str(uuid.uuid4())
+        _db_exec(
+            "INSERT INTO decisions (id, decision_type, status, proposed_by, "
+            "source_location_id, target_location_id, commodity_id, quantity_kg, "
+            "safe_delivered_cost, expires_at, cost_breakdown) "
+            "SELECT :id, 'regional_balance', 'pending_approval', 'supervisor_agent', "
+            "ls.id, lt.id, c2.id, 499.99, 16206000.00, now() + interval '30 minutes', "
+            "'{\"purchase\": \"15720000\"}'::jsonb "
+            "FROM locations ls, locations lt, commodities c2 "
+            "WHERE ls.name='Cianjur' AND lt.name='Jakarta' AND c2.name='telur'",
+            {"id": old_id},
+        )
+        try:
+>           outcome = asyncio.run(
+                _run_event3(
+                    b["fail_batch_id"], target_id, op_key, old_id,
+                    _facts_bogor_eligible(b),
+                )
+            )
+
+tests/test_event3_service.py:405: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+tests/test_event3_service.py:220: in _run_event3
+    return await svc.run_safety_disruption_event(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+batch_id = UUID('7d2b366f-04e4-4b29-b601-cc6f2db0ac2a')
+target_location_id = UUID('275d1be7-5bb8-5a37-8004-a2d40a51eb7e')
+operation_key = UUID('714356b6-2d61-4dca-a22f-8c1385f5be5a')
+previous_decision_id = UUID('7858cc64-87c2-4de6-b036-69ccb3903b15')
+actor_id = None
+db = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7183bfb6cfe0>
+fetch_facts = <function _facts_bogor_eligible.<locals>._facts at 0x7183bfb474c0>
+
+    async def run_safety_disruption_event(
+        batch_id: uuid.UUID,
+        target_location_id: uuid.UUID,
+        operation_key: uuid.UUID,
+        previous_decision_id: uuid.UUID | None,
+        actor_id: str | None,
+        db: AsyncSession,
+        fetch_facts=None,
+    ) -> dict:
+        """Pipeline Event 3; session DI-COMMIT di sini (dua boundary).
+    
+        Commit #1: evaluasi + persist batch.safety_status (FAIL tahan bencana).
+        Commit #2: decision + evidence + trace bila ada alternatif eligible.
+        """
+        op_key = str(operation_key)
+    
+        # ---- Kunci serialisasi lintas request (pola Event 2, footnote §11).
+        await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": op_key})
+    
+        # ---- Replay: key sama → batch sama; batch beda → 409.
+        replay = await _find_replay(db, op_key)
+        if replay is not None:
+            _decision, outcome = replay
+            if outcome.get("batch_id") != str(batch_id):
+                raise Event3ConflictError("operation_key sudah dipakai untuk batch berbeda")
+            await db.rollback()
+            return outcome
+    
+        # ---- Load batch + lokasi komoditas (untuk evidence & revalidation).
+        batch = (await db.execute(select(Batch).where(Batch.id == batch_id))).scalar_one_or_none()
+        if batch is None:
+            raise LookupError("batch tidak ditemukan")
+    
+        # Commit #1 — evaluasi deterministik + persist status FAIL/otherwise.
+        raw_log = batch.temperature_log or []
+        temp_result = evaluate_safety(
+            raw_log,
+            safe_min_c=0.0,
+            safe_max_c=8.0,
+            max_excursion_minutes=30.0,
+        )
+        batch.safety_status = temp_result["safety_status"]
+        await db.commit()
+    
+        # Kondisi berhenti dini: batch ternyata aman → bukan event 3.
+        if temp_result["safety_status"] != "fail":
+            no_event = {
+                "status": "no_disruption",
+                "decision_id": None,
+                "event_type": "safety_disruption",
+                "batch_id": str(batch.id),
+                "safety_status": temp_result["safety_status"],
+                "evaluation": {
+                    "safety_status": temp_result["safety_status"],
+                    "excursion_minutes": float(temp_result["excursion_minutes"]),
+                },
+                "excursion_minutes": float(temp_result["excursion_minutes"]),
+                "excluded_batch_ids": [],
+                "previous_decision_id": (str(previous_decision_id) if previous_decision_id else None),
+                "message": "Tidak ada gangguan keamanan pangan (batch aman)",
+            }
+            await db.rollback()
+            return no_event
+    
+        # ---- Re-optimasi deterministik (reuse pipeline Event 1).
+        if fetch_facts is None:
+            from app.core.config import settings
+            from app.db import create_engine as _mk_engine
+            from app.db import create_session_maker as _mk_session
+            from app.services import recommendation_service as _rs
+    
+            _engine = _mk_engine(settings.database_url)
+            _maker = _mk_session(_engine)
+    
+            async def _default_fetch():
+                async with _maker() as _session:
+                    return await _rs.fetch_operational_facts(_session, None)
+    
+            fetch_facts = _default_fetch
+        result = await build_recommendations(fetch_facts)
+        recommendations = result.get("recommendations", [])
+    
+        target = await db.get(Location, target_location_id)
+        commodity = await db.get(Commodity, batch.commodity_id)
+        eligible = [
+            r
+            for r in recommendations
+            if r.get("eligible")
+            and r["candidate"]["destination_location"] == target.name
+            and r["candidate"]["commodity"] == commodity.name
+        ]
+        if not eligible:
+            # FAIL sudah terpersist (commit #1); tanpa decision write.
+>           raise Event3NoAlternativeError(
+                "Tidak ada alternatif eligible setelah batch fail di-exclude"
+            )
+E           app.services.event3_service.Event3NoAlternativeError: Tidak ada alternatif eligible setelah batch fail di-exclude
+
+app/services/event3_service.py:209: Event3NoAlternativeError
+_____________________ test_cianjur_to_jakarta_telur_ranked _____________________
+
+    def test_cianjur_to_jakarta_telur_ranked():
+        out = _run(rs.build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI
+        ))
+        hits = [r for r in out["recommendations"]
+                if r["candidate"]["source_location"] == "Cianjur"
+                and r["candidate"]["destination_location"] == "Jakarta"]
+>       assert hits, "kandidat Cianjur→Jakarta wajib ada"
+E       AssertionError: kandidat Cianjur→Jakarta wajib ada
+E       assert []
+
+tests/test_recommendation_service.py:60: AssertionError
+__________________________ test_sdc_arithmetic_locked __________________________
+
+    def test_sdc_arithmetic_locked():
+        out = _run(rs.build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI
+        ))
+>       top = out["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_recommendation_service.py:70: IndexError
+__________________ test_price_anomaly_emitted_reusing_engine ___________________
+
+    def test_price_anomaly_emitted_reusing_engine():
+        out = _run(rs.build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI
+        ))
+>       top = out["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_recommendation_service.py:93: IndexError
+_________________________ test_no_quote_anomaly_marked _________________________
+
+    def test_no_quote_anomaly_marked():
+        facts = (
+            SUPPLY,
+            DEMAND,
+            REFS,
+            {("Cianjur", "telur"): (None, None)},
+            BATCHES,
+            RELIABILITY,
+        )
+        out = _run(rs.build_recommendations(
+            lambda: facts, as_of=AS_OF, logistics_by_pair=LOGI
+        ))
+>       top = out["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_recommendation_service.py:112: IndexError
+____________________________ test_evidence_emitted _____________________________
+
+    def test_evidence_emitted():
+        out = _run(rs.build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI
+        ))
+>       top = out["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_recommendation_service.py:121: IndexError
+__________________ test_ruling_b_tanpa_filter_semua_komoditas __________________
+
+client = None
+
+    def test_ruling_b_tanpa_filter_semua_komoditas(client=None):
+        """Tanpa argumen commodity: perilaku lama (global) tidak berubah."""
+        out = _run(_import_rs().build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI
+        ))
+        coms = {r["candidate"]["commodity"] for r in out["recommendations"]}
+>       assert {"telur", "ayam"} <= coms
+E       AssertionError: assert {'ayam', 'telur'} <= set()
+E         
+E         Extra items in the left set:
+E         'telur'
+E         'ayam'
+
+tests/test_s4_rulings_tdd.py:273: AssertionError
+_____________________ test_ruling_b_filter_ayam_hanya_ayam _____________________
+
+client = None
+
+    def test_ruling_b_filter_ayam_hanya_ayam(client=None):
+        """commodity='ayam' → hanya kandidat ayam (telur tersaring)."""
+        out = _run(_import_rs().build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI, commodity="ayam"
+        ))
+        recs = out["recommendations"]
+>       assert recs, "kandidat ayam wajib ada"
+E       AssertionError: kandidat ayam wajib ada
+E       assert []
+
+tests/test_s4_rulings_tdd.py:282: AssertionError
+________________ test_ruling_b_filter_ayam_kandidat_bogor_rank1 ________________
+
+client = None
+
+    def test_ruling_b_filter_ayam_kandidat_bogor_rank1(client=None):
+        """Filter ayam → rank-1 = Bogor→Jakarta (bukan kandidat telur global)."""
+        out = _run(_import_rs().build_recommendations(
+            _facts, as_of=AS_OF, logistics_by_pair=LOGI, commodity="ayam"
+        ))
+>       top = out["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_s4_rulings_tdd.py:291: IndexError
+_______________ test_scenario_1_cianjur_surplus_jakarta_shortage _______________
+
+    def test_scenario_1_cianjur_surplus_jakarta_shortage():
+        supply, demand, *_ = _scenario_facts()
+        gap_src = calculate_supply_gap(supply[("Cianjur", "telur")],
+                                       demand[("Cianjur", "telur")])
+        gap_dst = calculate_supply_gap(supply[("Jakarta", "telur")],
+                                       demand[("Jakarta", "telur")])
+        assert gap_src.surplus_kg == Decimal("900")
+        assert gap_dst.shortage_kg == Decimal("700")
+        out = _run(_scenario_facts())
+        hits = [r for r in out["recommendations"]
+                if r["candidate"]["source_location"] == "Cianjur"
+                and r["candidate"]["destination_location"] == "Jakarta"]
+>       assert hits, "kandidat Cianjur→Jakarta telur wajib ada"
+E       AssertionError: kandidat Cianjur→Jakarta telur wajib ada
+E       assert []
+
+tests/test_sprint2_scenarios.py:104: AssertionError
+_______ test_scenario_3_safety_fail_eliminated_safe_alternative_remains ________
+
+    def test_scenario_3_safety_fail_eliminated_safe_alternative_remains():
+        out = _run(_scenario_facts(safety="fail", alternative=True))
+        unsafe = [
+            r for r in out["recommendations"]
+            if r["candidate"]["source_location"] == "Cianjur"
+        ]
+        safe = [
+            r for r in out["recommendations"]
+            if r["candidate"]["source_location"] == "Bogor"
+        ]
+        assert unsafe == [], "candidate unsafe wajib excluded sebelum cost/ranking"
+>       assert safe, "candidate aman harus tetap tersedia"
+E       AssertionError: candidate aman harus tetap tersedia
+E       assert []
+
+tests/test_sprint2_scenarios.py:124: AssertionError
+___________________ test_scenario_5_needs_verification_band ____________________
+
+    def test_scenario_5_needs_verification_band():
+        out = _run(_scenario_facts(freshness=Decimal("0.70")))
+>       top = out["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_sprint2_scenarios.py:158: IndexError
+________________ test_cianjur_to_jakarta_telur_locked_scenario _________________
+
+    def test_cianjur_to_jakarta_telur_locked_scenario():
+        s, d, b, lg, p = _inputs()
+        out = generate_candidates(s, d, b, lg, prices=p, commodity="telur")
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_candidate_generation.py:83: AssertionError
+__________________ test_quantity_capped_by_batch_availability __________________
+
+    def test_quantity_capped_by_batch_availability():
+        s, d, b, lg, p = _inputs(batches=[_batch(quantity_kg=Decimal("450"))])
+        out = generate_candidates(s, d, b, lg, prices=p)
+>       assert out[0].quantity_kg == Decimal("450")
+E       IndexError: list index out of range
+
+tests/test_candidate_generation.py:99: IndexError
+_________________ test_quantity_capped_by_surplus_not_shortage _________________
+
+    def test_quantity_capped_by_surplus_not_shortage():
+        s, d, b, lg, p = _inputs(
+            source_records={("Cianjur", "telur"): Decimal("1000"),
+                            ("Jakarta", "telur"): Decimal("300")},
+        )
+        # surplus Cianjur = 1000-500 = 500 < shortage 700; batch 600
+        out = generate_candidates(s, d, b, lg, prices=p)
+>       assert out[0].quantity_kg == Decimal("500")
+E       IndexError: list index out of range
+
+tests/test_candidate_generation.py:109: IndexError
+________ test_batch_kuantitas_nol_diabaikan_yang_positif_tetap_dihitung ________
+
+    def test_batch_kuantitas_nol_diabaikan_yang_positif_tetap_dihitung():
+        """Batch nol dilewati; agregat dihitung dari batch yang benar-benar dikirim."""
+        s, d, b, lg, p = _inputs(
+            batches=[
+                _batch(quantity_kg=Decimal("0")),
+                _batch(quantity_kg=Decimal("300")),
+            ]
+        )
+        out = generate_candidates(s, d, b, lg, prices=p)
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_candidate_generation.py:134: AssertionError
+___________________ test_commodity_filter_excludes_mismatch ____________________
+
+    def test_commodity_filter_excludes_mismatch():
+        s, d, b, lg, p = _inputs(
+            batches=[
+                _batch(commodity="wortel", quantity_kg=Decimal("900")),
+                _batch(commodity="telur"),
+            ]
+        )
+        out = generate_candidates(s, d, b, lg, prices=p, commodity="telur")
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_candidate_generation.py:164: AssertionError
+__________________ test_needs_verification_allowed_and_marked __________________
+
+    def test_needs_verification_allowed_and_marked():
+        s, d, b, lg, p = _inputs(
+            batches=[_batch(freshness_status="needs_verification")]
+        )
+        out = generate_candidates(s, d, b, lg, prices=p)
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_candidate_generation.py:187: AssertionError
+________ test_mixed_batches_weighted_freshness_and_conservative_status _________
+
+    def test_mixed_batches_weighted_freshness_and_conservative_status():
+        s, d, b, lg, p = _inputs(
+            batches=[
+                _batch(quantity_kg=Decimal("300"), freshness_score=Decimal("0.95"),
+                       freshness_status="pass"),
+                _batch(quantity_kg=Decimal("300"), freshness_score=Decimal("0.70"),
+                       freshness_status="needs_verification"),
+            ]
+        )
+        out = generate_candidates(s, d, b, lg, prices=p)
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_candidate_generation.py:202: AssertionError
+____________________ test_exact_capacity_boundary_feasible _____________________
+
+    def test_exact_capacity_boundary_feasible():
+        """Batas persis: waktu estimasi == window → feasible, kandidat ada."""
+        s, d, b, lg, p = _inputs(
+            logistics_by_pair={
+                ("Cianjur", "Jakarta"): _logistics(time_min=150.0)
+            }
+        )
+        out = generate_candidates(s, d, b, lg, prices=p)
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_candidate_generation.py:225: AssertionError
+______________________ test_missing_logistics_pair_raises ______________________
+
+    def test_missing_logistics_pair_raises():
+        s, d, b, lg, p = _inputs(logistics_by_pair={})
+>       with pytest.raises(ValueError, match="logistik"):
+E       Failed: DID NOT RAISE <class 'ValueError'>
+
+tests/test_candidate_generation.py:231: Failed
+__________________________ test_missing_price_raises ___________________________
+
+    def test_missing_price_raises():
+        s, d, b, lg, p = _inputs(prices={})
+>       with pytest.raises(ValueError, match="harga"):
+E       Failed: DID NOT RAISE <class 'ValueError'>
+
+tests/test_candidate_generation.py:237: Failed
+_____________________ test_transport_includes_supplier_leg _____________________
+
+    def test_transport_includes_supplier_leg():
+>       top = _top(_facts())
+
+tests/test_supplier_leg_cost.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+facts = ({('Cianjur', 'telur'): Decimal('1400'), ('Jakarta', 'telur'): Decimal('300')}, {('Cianjur', 'telur'): Decimal('500'),...e': Decimal('0.90'), 'freshness_status': 'pass', ...}], {'11111111-1111-1111-1111-111111111111': Decimal('0.80')}, ...)
+
+    def _top(facts):
+>       return _run(facts)["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_supplier_leg_cost.py:96: IndexError
+____________________ test_supplier_leg_reported_with_source ____________________
+
+    def test_supplier_leg_reported_with_source():
+>       payload = _top(_facts())["supplier_leg"]
+
+tests/test_supplier_leg_cost.py:162: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+facts = ({('Cianjur', 'telur'): Decimal('1400'), ('Jakarta', 'telur'): Decimal('300')}, {('Cianjur', 'telur'): Decimal('500'),...e': Decimal('0.90'), 'freshness_status': 'pass', ...}], {'11111111-1111-1111-1111-111111111111': Decimal('0.80')}, ...)
+
+    def _top(facts):
+>       return _run(facts)["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_supplier_leg_cost.py:96: IndexError
+___________________ test_linehaul_and_feasibility_untouched ____________________
+
+    def test_linehaul_and_feasibility_untouched():
+        """Linehaul tetap jarak SPPG↔SPPG; kelayakan delivery window tidak berubah."""
+>       cand = _top(_facts())["candidate"]
+
+tests/test_supplier_leg_cost.py:171: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+facts = ({('Cianjur', 'telur'): Decimal('1400'), ('Jakarta', 'telur'): Decimal('300')}, {('Cianjur', 'telur'): Decimal('500'),...e': Decimal('0.90'), 'freshness_status': 'pass', ...}], {'11111111-1111-1111-1111-111111111111': Decimal('0.80')}, ...)
+
+    def _top(facts):
+>       return _run(facts)["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_supplier_leg_cost.py:96: IndexError
+________________ test_legacy_six_tuple_keeps_locked_arithmetic _________________
+
+    def test_legacy_six_tuple_keeps_locked_arithmetic():
+        """Kontrak Task 9 (6-tuple) tetap sah: biaya angkut lama + label jujur."""
+>       top = _top(_facts_legacy())
+
+tests/test_supplier_leg_cost.py:183: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+facts = ({('Cianjur', 'telur'): Decimal('1400'), ('Jakarta', 'telur'): Decimal('300')}, {('Cianjur', 'telur'): Decimal('500'),..._score': Decimal('0.90'), 'freshness_status': 'pass', ...}], {'11111111-1111-1111-1111-111111111111': Decimal('0.80')})
+
+    def _top(facts):
+>       return _run(facts)["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_supplier_leg_cost.py:96: IndexError
+________________ test_missing_supplier_coordinates_not_guessed _________________
+
+    def test_missing_supplier_coordinates_not_guessed():
+        """Pemasok dikenal tetapi tanpa koordinat → 0 km + label, bukan tebakan."""
+>       top = _top(_facts(legs={}))
+
+tests/test_supplier_leg_cost.py:196: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+facts = ({('Cianjur', 'telur'): Decimal('1400'), ('Jakarta', 'telur'): Decimal('300')}, {('Cianjur', 'telur'): Decimal('500'),...e': Decimal('0.90'), 'freshness_status': 'pass', ...}], {'11111111-1111-1111-1111-111111111111': Decimal('0.80')}, ...)
+
+    def _top(facts):
+>       return _run(facts)["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_supplier_leg_cost.py:96: IndexError
+____________________ test_candidate_without_supplier_marked ____________________
+
+    def test_candidate_without_supplier_marked():
+        """Tanpa identitas pemasok sama sekali (tanpa quote) → `no_supplier`."""
+        batches = [dict(BATCHES[0])]
+        batches[0].pop("supplier_id")
+        facts = (
+            SUPPLY,
+            DEMAND,
+            REFS,
+            {("Cianjur", "telur"): (None, None)},
+            batches,
+            RELIABILITY,
+            {},
+        )
+>       top = _top(facts)
+
+tests/test_supplier_leg_cost.py:215: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+facts = ({('Cianjur', 'telur'): Decimal('1400'), ('Jakarta', 'telur'): Decimal('300')}, {('Cianjur', 'telur'): Decimal('500'),...e': Decimal('0.90'), 'freshness_status': 'pass', ...}], {'11111111-1111-1111-1111-111111111111': Decimal('0.80')}, ...)
+
+    def _top(facts):
+>       return _run(facts)["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_supplier_leg_cost.py:96: IndexError
+_________________ test_identity_from_quote_still_resolves_leg __________________
+
+    def test_identity_from_quote_still_resolves_leg():
+        """Batch tanpa supplier_id tetap dapat kaki pertama bila quote membawa id."""
+        batches = [dict(BATCHES[0])]
+        batches[0].pop("supplier_id")
+>       top = _top(_facts(batches=batches))
+
+tests/test_supplier_leg_cost.py:225: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+facts = ({('Cianjur', 'telur'): Decimal('1400'), ('Jakarta', 'telur'): Decimal('300')}, {('Cianjur', 'telur'): Decimal('500'),...e': Decimal('0.90'), 'freshness_status': 'pass', ...}], {'11111111-1111-1111-1111-111111111111': Decimal('0.80')}, ...)
+
+    def _top(facts):
+>       return _run(facts)["recommendations"][0]
+E       IndexError: list index out of range
+
+tests/test_supplier_leg_cost.py:96: IndexError
+______________ test_batch_needs_verification_tetap_jadi_kandidat _______________
+
+    def test_batch_needs_verification_tetap_jadi_kandidat():
+        """Kontrol positif: tanpa karantina, batch ini memang masuk kandidat."""
+        s, d, b, lg, p = _inputs([_batch()])
+        out = generate_candidates(s, d, b, lg, prices=p, commodity="telur")
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_quarantine_candidates.py:55: AssertionError
+__________________ test_batch_dilepas_kembali_masuk_kandidat ___________________
+
+    def test_batch_dilepas_kembali_masuk_kandidat():
+        s, d, b, lg, p = _inputs([_batch(quarantine_status="released")])
+        out = generate_candidates(s, d, b, lg, prices=p, commodity="telur")
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_quarantine_candidates.py:68: AssertionError
+_________ test_hanya_batch_karantina_yang_menyisakan_pasokan_terbatas __________
+
+    def test_hanya_batch_karantina_yang_menyisakan_pasokan_terbatas():
+        """Dua batch, satu ditahan: kuantitas kandidat hanya dari yang bebas."""
+        batches = [
+            _batch(batch_id="b-1", quantity_kg=Decimal("600"), quarantine_status="quarantined"),
+            _batch(batch_id="b-2", quantity_kg=Decimal("150"), quarantine_status="none"),
+        ]
+        s, d, b, lg, p = _inputs(batches)
+        out = generate_candidates(s, d, b, lg, prices=p, commodity="telur")
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_quarantine_candidates.py:79: AssertionError
+_________ test_batch_tanpa_kunci_karantina_diperlakukan_sebagai_bebas __________
+
+    def test_batch_tanpa_kunci_karantina_diperlakukan_sebagai_bebas():
+        """Kontrak lama (7-tuple facts) tidak mengenal kolom ini — jangan pecah."""
+        batch = _batch()
+        batch.pop("quarantine_status")
+        s, d, b, lg, p = _inputs([batch])
+        out = generate_candidates(s, d, b, lg, prices=p, commodity="telur")
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_quarantine_candidates.py:90: AssertionError
+_____________ test_kebutuhan_menu_membuat_destinasi_tetap_dilayani _____________
+
+    def test_kebutuhan_menu_membuat_destinasi_tetap_dilayani():
+        """Menu butuh 90 kg tetapi stok lokal 400 → tetap tanpa kandidat.
+    
+        Supaya lantai menu terlihat bekerja, menu harus melebihi stok lokal:
+        porsi 8.000 × 60 g = 480 kg > stok 400 kg → kekurangan 80 kg.
+        """
+        s, d, b, lg, p = _inputs(source=(1400, 400), demand=(500, 300))
+        out = generate_candidates(
+            s,
+            d,
+            b,
+            lg,
+            prices=p,
+            commodity="telur",
+            menu_requirements={("Jakarta", "telur"): Decimal("480")},
+        )
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_menu_hierarchy_candidates.py:83: AssertionError
+__________ test_kebutuhan_menu_tidak_menurunkan_kekurangan_permintaan __________
+
+    def test_kebutuhan_menu_tidak_menurunkan_kekurangan_permintaan():
+        s, d, b, lg, p = _inputs(source=(1400, 300), demand=(500, 1000))
+        tanpa_menu = generate_candidates(s, d, b, lg, prices=p, commodity="telur")
+        dengan_menu = generate_candidates(
+            s,
+            d,
+            b,
+            lg,
+            prices=p,
+            commodity="telur",
+            menu_requirements={("Jakarta", "telur"): Decimal("60")},
+        )
+>       assert len(tanpa_menu) == 1 and len(dengan_menu) == 1
+E       assert (0 == 1)
+E        +  where 0 = len([])
+
+tests/test_menu_hierarchy_candidates.py:100: AssertionError
+______________ test_cadangan_kontinuitas_membatasi_ekspor_sumber _______________
+
+    def test_cadangan_kontinuitas_membatasi_ekspor_sumber():
+        """Stok 1400 kg, cadangan kontinuitas 1300 kg → ekspor maksimum 100 kg."""
+        s, d, b, lg, p = _inputs(source=(1400, 300), demand=(500, 1000))
+        out = generate_candidates(
+            s,
+            d,
+            b,
+            lg,
+            prices=p,
+            commodity="telur",
+            continuity_reserve={("Cianjur", "telur"): Decimal("1300")},
+        )
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_menu_hierarchy_candidates.py:117: AssertionError
+_________ test_cadangan_kontinuitas_destinasi_tidak_dihitung_dua_kali __________
+
+    def test_cadangan_kontinuitas_destinasi_tidak_dihitung_dua_kali():
+        """Cadangan milik destinasi tidak boleh memotong pasokan yang ia terima."""
+        s, d, b, lg, p = _inputs(source=(1400, 300), demand=(500, 1000))
+        out = generate_candidates(
+            s,
+            d,
+            b,
+            lg,
+            prices=p,
+            commodity="telur",
+            continuity_reserve={("Jakarta", "telur"): Decimal("999")},
+        )
+>       assert len(out) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_menu_hierarchy_candidates.py:147: AssertionError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_decision_context.py::test_context_integration_with_real_service_emission
+FAILED tests/test_event3_service.py::test_service_fail_batch_excluded_bogor_alternative_persisted
+FAILED tests/test_event3_service.py::test_service_key_reuse_other_batch_409_semantics
+FAILED tests/test_event3_service.py::test_service_lineage_previous_decision_recorded
+FAILED tests/test_recommendation_service.py::test_cianjur_to_jakarta_telur_ranked
+FAILED tests/test_recommendation_service.py::test_sdc_arithmetic_locked - Ind...
+FAILED tests/test_recommendation_service.py::test_price_anomaly_emitted_reusing_engine
+FAILED tests/test_recommendation_service.py::test_no_quote_anomaly_marked - I...
+FAILED tests/test_recommendation_service.py::test_evidence_emitted - IndexErr...
+FAILED tests/test_s4_rulings_tdd.py::test_ruling_b_tanpa_filter_semua_komoditas
+FAILED tests/test_s4_rulings_tdd.py::test_ruling_b_filter_ayam_hanya_ayam - A...
+FAILED tests/test_s4_rulings_tdd.py::test_ruling_b_filter_ayam_kandidat_bogor_rank1
+FAILED tests/test_sprint2_scenarios.py::test_scenario_1_cianjur_surplus_jakarta_shortage
+FAILED tests/test_sprint2_scenarios.py::test_scenario_3_safety_fail_eliminated_safe_alternative_remains
+FAILED tests/test_sprint2_scenarios.py::test_scenario_5_needs_verification_band
+FAILED tests/test_candidate_generation.py::test_cianjur_to_jakarta_telur_locked_scenario
+FAILED tests/test_candidate_generation.py::test_quantity_capped_by_batch_availability
+FAILED tests/test_candidate_generation.py::test_quantity_capped_by_surplus_not_shortage
+FAILED tests/test_candidate_generation.py::test_batch_kuantitas_nol_diabaikan_yang_positif_tetap_dihitung
+FAILED tests/test_candidate_generation.py::test_commodity_filter_excludes_mismatch
+FAILED tests/test_candidate_generation.py::test_needs_verification_allowed_and_marked
+FAILED tests/test_candidate_generation.py::test_mixed_batches_weighted_freshness_and_conservative_status
+FAILED tests/test_candidate_generation.py::test_exact_capacity_boundary_feasible
+FAILED tests/test_candidate_generation.py::test_missing_logistics_pair_raises
+FAILED tests/test_candidate_generation.py::test_missing_price_raises - Failed...
+FAILED tests/test_supplier_leg_cost.py::test_transport_includes_supplier_leg
+FAILED tests/test_supplier_leg_cost.py::test_supplier_leg_reported_with_source
+FAILED tests/test_supplier_leg_cost.py::test_linehaul_and_feasibility_untouched
+FAILED tests/test_supplier_leg_cost.py::test_legacy_six_tuple_keeps_locked_arithmetic
+FAILED tests/test_supplier_leg_cost.py::test_missing_supplier_coordinates_not_guessed
+FAILED tests/test_supplier_leg_cost.py::test_candidate_without_supplier_marked
+FAILED tests/test_supplier_leg_cost.py::test_identity_from_quote_still_resolves_leg
+FAILED tests/test_quarantine_candidates.py::test_batch_needs_verification_tetap_jadi_kandidat
+FAILED tests/test_quarantine_candidates.py::test_batch_dilepas_kembali_masuk_kandidat
+FAILED tests/test_quarantine_candidates.py::test_hanya_batch_karantina_yang_menyisakan_pasokan_terbatas
+FAILED tests/test_quarantine_candidates.py::test_batch_tanpa_kunci_karantina_diperlakukan_sebagai_bebas
+FAILED tests/test_menu_hierarchy_candidates.py::test_kebutuhan_menu_membuat_destinasi_tetap_dilayani
+FAILED tests/test_menu_hierarchy_candidates.py::test_kebutuhan_menu_tidak_menurunkan_kekurangan_permintaan
+FAILED tests/test_menu_hierarchy_candidates.py::test_cadangan_kontinuitas_membatasi_ekspor_sumber
+FAILED tests/test_menu_hierarchy_candidates.py::test_cadangan_kontinuitas_destinasi_tidak_dihitung_dua_kali
+40 failed, 74 passed, 1 warning in 23.23s

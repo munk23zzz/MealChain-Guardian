@@ -1,0 +1,95 @@
+FFFFFFF................................................................. [  3%]
+.................................................ss..................... [  7%]
+........................................................................ [ 10%]
+........................................................................ [ 14%]
+....................................s................................... [ 17%]
+....................s................................................... [ 21%]
+........................................................................ [ 24%]
+........................................................................ [ 28%]
+........................................................................ [ 31%]
+.........F.............................................................. [ 35%]
+................................FFF...FF..F............................. [ 38%]
+.....................F..........ssssssssssss............................ [ 42%]
+.......sss..........................FFFFFFFFFFFFF............FFF........ [ 45%]
+...................F..F................................................. [ 49%]
+.......................................................................F [ 52%]
+FF...............................................F.....F................ [ 56%]
+........................................................................ [ 59%]
+........................................................................ [ 63%]
+................................................s....................... [ 66%]
+.....................................................ss...........FF.... [ 70%]
+........................................................................ [ 73%]
+.........FFFFF.......................................................... [ 77%]
+.........sss............................................................ [ 80%]
+........................................................................ [ 84%]
+.......................................................................F [ 87%]
+FFF.............................................s....................... [ 91%]
+........................................................................ [ 94%]
+........................................................................ [ 98%]
+...............................s..                                       [100%]
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+tests/test_human_verification.py::test_review_sah_mencatat_decision_evidence_dan_mengubah_status
+tests/test_human_verification.py::test_review_sah_mencatat_decision_evidence_dan_mengubah_status
+  /usr/local/lib/python3.12/site-packages/pydantic/main.py:1114: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.9/migration/
+    warnings.warn('The `dict` method is deprecated; use `model_dump` instead.', category=PydanticDeprecatedSince20)
+
+tests/test_road_route_sync.py::test_baris_batch_memuat_koordinat_dua_ujung[True]
+  sys:1: SAWarning: The garbage collector is trying to clean up non-checked-in connection <AdaptedConnection <asyncpg.connection.Connection object at 0x7aa6454a95e0>>, which will be terminated.  Please ensure that SQLAlchemy pooled connections are returned to the pool explicitly, either by calling ``close()`` or by using appropriate context managers to manage their lifecycle.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_action_boundary_e2e.py::test_actions_verify_writes_verifier_note_and_flagged_status
+FAILED tests/test_action_boundary_e2e.py::test_actions_verify_rejects_unknown_verdict
+FAILED tests/test_action_boundary_e2e.py::test_e2e_event1_to_mock_sap_dua_approval_untuk_transfer
+FAILED tests/test_action_boundary_e2e.py::test_e2e_flagged_requires_both_approvers
+FAILED tests/test_action_boundary_e2e.py::test_e2e_rejected_decision_blocked
+FAILED tests/test_action_boundary_e2e.py::test_e2e_expired_decision_blocked
+FAILED tests/test_action_boundary_e2e.py::test_e2e_bgn_monitor_cannot_touch_lifecycle
+FAILED tests/test_decision_read_endpoints.py::test_get_decision_traces_returns_ordered_actual_steps
+FAILED tests/test_demo_cases_procurement_binding.py::test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan
+FAILED tests/test_demo_cases_procurement_binding.py::test_binding_pengadaan_memakai_pemasok_keputusan
+FAILED tests/test_demo_cases_procurement_binding.py::test_kasus_pengadaan_lolos_resolve_binding_dan_safety
+FAILED tests/test_demo_completed_decisions_konsisten.py::test_menyemai_ulang_menyembuhkan_binding_yang_menunjuk_batch_hilang
+FAILED tests/test_demo_completed_decisions_konsisten.py::test_menyemai_ulang_menyembuhkan_sumber_yang_sudah_kedaluwarsa
+FAILED tests/test_demo_completed_decisions_konsisten.py::test_ringkasan_hanya_menyisakan_alasan_yang_nyata
+FAILED tests/test_demo_seed_per_kota.py::test_seed_dari_bandung_menargetkan_bandung
+FAILED tests/test_event1_e2e_acceptance.py::test_event1_e2e_propose_approve_execute_mock_sap
+FAILED tests/test_event1_e2e_acceptance.py::test_event1_e2e_safety_fail_guard_via_api
+FAILED tests/test_event1_e2e_acceptance.py::test_event1_e2e_approval_boundary_blocked_paths
+FAILED tests/test_event1_e2e_acceptance.py::test_event1_e2e_verifier_unavailable_dual_approval
+FAILED tests/test_event1_supervisor_flow.py::test_event1_unverified_full_flow_persists_proposed
+FAILED tests/test_event1_supervisor_flow.py::test_event1_unverified_persists_agent_traces_with_real_steps
+FAILED tests/test_event1_supervisor_flow.py::test_event1_expiry_enforced_later
+FAILED tests/test_event1_supervisor_flow.py::test_event1_consistent_verdict_records_verifier_attempt
+FAILED tests/test_event1_supervisor_flow.py::test_event1_safety_fail_never_consistent
+FAILED tests/test_event1_supervisor_flow.py::test_event1_no_auto_execution - ...
+FAILED tests/test_event1_supervisor_flow.py::test_event1_kpi_traceable_to_backend_outputs
+FAILED tests/test_event1_supervisor_flow.py::test_memory_gagal_tidak_mengubah_angka_keputusan
+FAILED tests/test_event1_supervisor_flow.py::test_memory_mati_tidak_menambah_langkah_learn
+FAILED tests/test_event3_api.py::test_api_safety_happy_path_revised_201 - Ass...
+FAILED tests/test_event3_api.py::test_api_safety_replay_same_key_idempotent
+FAILED tests/test_event3_api.py::test_api_safety_conflict_same_key_other_batch_409
+FAILED tests/test_evidence_consistency_wiring.py::test_event3_menulis_seluruh_bukti_dengan_penilaian
+FAILED tests/test_evidence_live.py::test_live_evidence_batch_ids_nonempty - S...
+FAILED tests/test_kpi_act_trace.py::test_eksekusi_menulis_trace_act_dengan_nomor_po
+FAILED tests/test_kpi_act_trace.py::test_eksekusi_yang_ditolak_tidak_menulis_act
+FAILED tests/test_kpi_act_trace.py::test_decision_time_tersedia_setelah_eksekusi
+FAILED tests/test_kpi_safe_delivered_cost.py::test_safe_delivered_cost_tersedia_setelah_eksekusi
+FAILED tests/test_least_privilege_app_role.py::test_akun_aplikasi_bisa_membaca_dan_menulis_tabel_kerja
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[live-race]
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[historical]
+FAILED tests/test_s4_verifier_independence.py::test_verify_menolak_verdict_dari_client
+FAILED tests/test_s4_verifier_independence.py::test_verify_menurunkan_unavailable_tanpa_provider
+FAILED tests/test_s4_verifier_independence.py::test_verify_memakai_chain_server_side
+FAILED tests/test_s4_verifier_independence.py::test_verify_flagged_turunkan_status_verifier_flagged
+FAILED tests/test_s4_verifier_independence.py::test_verify_ditolak_409_setelah_approved
+FAILED tests/test_supervisor_narration.py::test_supervise_step_narrates_with_honest_labels
+FAILED tests/test_supervisor_narration.py::test_supervise_falls_back_to_second_model
+FAILED tests/test_supervisor_narration.py::test_supervise_unavailable_recorded_honestly
+FAILED tests/test_supervisor_narration.py::test_supervise_chain_panjang_label_jujur
+49 failed, 1974 passed, 28 skipped, 4 warnings in 1080.44s (0:18:00)
+DONE exit=1

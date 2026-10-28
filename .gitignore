@@ -133,3 +133,10 @@ _qa/f12/layout-*.css
 _qa/f12/*.out
 _qa/f12/*.err
 frontend/public/_preview-band.html
+
+# Salinan pohon aplikasi untuk audit Fase 2 (312 MB) — bukan bukti, cukup hasil ringkasnya
+_qa/f2/staged/
+_qa/f2/staged2/
+
+# Entri filesystem rusak di drive exFAT (WinError 1392) — tidak bisa di-stat/dihapus
+_qa/f6/pytest.txt

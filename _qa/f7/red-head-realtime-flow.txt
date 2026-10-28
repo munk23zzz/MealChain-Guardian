@@ -1,0 +1,18 @@
+FFFFFFF                                                                  [100%]
+=================================== FAILURES ===================================
+/app/app/api/demo.py:495: ImportError: cannot import name 'scenario_generator' from 'app.services' (unknown location)
+/app/app/api/demo.py:495: ImportError: cannot import name 'scenario_generator' from 'app.services' (unknown location)
+/app/app/api/demo.py:495: ImportError: cannot import name 'scenario_generator' from 'app.services' (unknown location)
+/app/app/api/demo.py:495: ImportError: cannot import name 'scenario_generator' from 'app.services' (unknown location)
+/app/app/api/demo.py:495: ImportError: cannot import name 'scenario_generator' from 'app.services' (unknown location)
+/app/app/api/demo.py:495: ImportError: cannot import name 'scenario_generator' from 'app.services' (unknown location)
+/app/app/api/demo.py:495: ImportError: cannot import name 'scenario_generator' from 'app.services' (unknown location)
+=========================== short test summary info ============================
+FAILED tests/test_realtime_demo_flow.py::test_replay_dua_kali_menghasilkan_baris_sama_tanpa_duplikasi
+FAILED tests/test_realtime_demo_flow.py::test_replay_tidak_menyentuh_jumlah_baris_kanonik
+FAILED tests/test_realtime_demo_flow.py::test_realtime_berbeda_dari_replay - ...
+FAILED tests/test_realtime_demo_flow.py::test_waktu_kejadian_simulasi_relatif_jangkar_dan_tidak_di_masa_depan
+FAILED tests/test_realtime_demo_flow.py::test_tenggat_kebutuhan_setelah_jangkar_dan_sebelum_masa_layak
+FAILED tests/test_realtime_demo_flow.py::test_jendela_aksi_operator_tetap_jam_dinding
+FAILED tests/test_realtime_demo_flow.py::test_reset_satu_sesi_tidak_mengubah_sesi_lain
+7 failed in 5.61s

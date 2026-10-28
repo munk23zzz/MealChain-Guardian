@@ -1,0 +1,51 @@
+.s.FF...                                                                 [100%]
+=================================== FAILURES ===================================
+___________________ test_recommend_endpoint_ranks_candidates ___________________
+
+client = <starlette.testclient.TestClient object at 0x76b544551130>
+
+    def test_recommend_endpoint_ranks_candidates(client):
+        resp = client.post("/balance/recommend", json={})
+        assert resp.status_code == 200, resp.text
+        items = resp.json()["recommendations"]
+        assert items, "seed wajib menghasilkan kandidat"
+        ranks = [r["rank"] for r in items]
+        assert ranks == sorted(ranks)
+        telur = [r for r in items
+                 if r["candidate"]["source_location"] == "Cianjur"
+                 and r["candidate"]["destination_location"] == "Jakarta"]
+>       assert telur, "Cianjur→Jakarta telur wajib ada"
+E       AssertionError: Cianjur→Jakarta telur wajib ada
+E       assert []
+
+tests/test_api_decision_intelligence.py:180: AssertionError
+___________________ test_decisions_persist_and_get_validity ____________________
+
+client = <starlette.testclient.TestClient object at 0x76b541e72240>
+
+    def test_decisions_persist_and_get_validity(client):
+        rec = client.post("/balance/recommend", json={}).json()
+        # Keputusan hanya boleh menyasar lokasi milik SPPG pengguna (Jakarta), jadi
+        # pilih kandidat TERATAS yang tujuannya Jakarta — bukan rank 1 global, yang
+        # bisa saja menuju kota lain dan memang ditolak 403 oleh aturan scope.
+        items = rec["recommendations"]
+        top = next(
+            (r for r in items if r["candidate"]["destination_location"] == "Jakarta"),
+            None,
+        )
+>       assert top is not None, "seed wajib punya kandidat menuju Jakarta"
+E       AssertionError: seed wajib punya kandidat menuju Jakarta
+E       assert None is not None
+
+tests/test_api_decision_intelligence.py:193: AssertionError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_api_decision_intelligence.py::test_recommend_endpoint_ranks_candidates
+FAILED tests/test_api_decision_intelligence.py::test_decisions_persist_and_get_validity
+2 failed, 5 passed, 1 skipped, 1 warning in 12.59s
+EXIT=1

@@ -1,0 +1,34 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v2.1.9 /app
+
+ ✓ tests/decision-loop.test.tsx (11 tests) 12ms
+ ❯ tests/decision-evidence-boundary.test.tsx (17 tests | 1 failed) 97ms
+   × batas domain peran > BGN monitor tetap dinyatakan hanya-baca 44ms
+     → expected '<section class="role-hero" aria-label…' to contain 'tidak dapat mengubah apa pun'
+ ✓ tests/evidence-dossier.test.tsx (18 tests) 128ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/decision-evidence-boundary.test.tsx > batas domain peran > BGN monitor tetap dinyatakan hanya-baca
+AssertionError: expected '<section class="role-hero" aria-label…' to contain 'tidak dapat mengubah apa pun'
+
+Expected: "tidak dapat mengubah apa pun"
+Received: "<section class="role-hero" aria-label="Papan Pengawasan BGN"><div class="role-hero-text"><h2>Papan Pengawasan BGN</h2><details class="role-hero-more"><summary>Panduan peran</summary><p class="role-mission">Akun hanya-baca: memantau seluruh keputusan, alasan penolakan, dan jejak audit agen tanpa dapat mengubah apa pun.</p><ol class="role-steps"><li>Amati feed keputusan lintas SPPG</li><li>Buka detail untuk jejak audit &amp; iterasi</li><li>Semua aksi perubahan memang dinonaktifkan untuk peran ini</li></ol></details></div></section>"
+
+ ❯ tests/decision-evidence-boundary.test.tsx:197:18
+    195|     const html = renderToStaticMarkup(<RoleHero role="bgn_monitor" />);
+    196|     expect(html).toContain("hanya-baca");
+    197|     expect(html).toContain("tidak dapat mengubah apa pun");
+       |                  ^
+    198|   });
+    199| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 45 passed (46)
+   Start at  15:20:26
+   Duration  10.34s (transform 12.86s, setup 0ms, collect 21.57s, tests 236ms, environment 2ms, prepare 538ms)
+
+EXIT=1

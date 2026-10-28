@@ -1,0 +1,109 @@
+..F                                                                      [100%]
+=================================== FAILURES ===================================
+_______________ test_hapus_kasus_demo_menaikkan_generasi_ledger ________________
+
+    def test_hapus_kasus_demo_menaikkan_generasi_ledger():
+        """Menghapus keputusan berblok tidak boleh menyisakan yatim di generasi aktif.
+    
+        Blok ledger **dibuat di dalam tes**, bukan diharapkan dari data demo: pada
+        suite penuh tes lain sudah membersihkan keputusan demo, sehingga keputusan
+        yang dihapus tidak punya blok dan versi yang mengandalkan keadaan DB gagal
+        dengan "generasi tidak naik" — merah palsu yang menyalahkan kode padahal
+        keadaan data (terukur: 1 kegagalan di suite penuh, lulus saat berdiri sendiri).
+    
+        Keputusan yang dipilih WAJIB ber-`demo_case` di `DEMO_CASES`: itulah himpunan
+        yang benar-benar dihapus `_seed_demo_cases(force=True)`. Dulu tes mengambil
+        `limit(1)` tanpa filter, sehingga di suite penuh ia bisa memilih baris
+        `bukti-hari-ini` (dari seeder lain) yang TIDAK ikut terhapus — generasi
+        memang tidak naik, dan tes merah padahal kode benar.
+        """
+        from app.api.demo import DEMO_CASES, _seed_demo_cases
+        from app.models import Decision, Location
+        from app.services.ledger_service import append_block
+    
+        dipilih: list = []
+    
+        async def _siapkan(db) -> None:
+            jakarta = (
+                await db.execute(select(Location).where(Location.name == "Jakarta"))
+            ).scalar_one()
+            await _seed_demo_cases(db, True, jakarta)
+            await db.flush()
+            kasus = (
+                await db.execute(
+                    select(Decision.id)
+                    .where(
+                        Decision.demo_case.in_(DEMO_CASES),
+                        Decision.target_location_id == jakarta.id,
+                    )
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            assert kasus is not None, "seed demo tidak menghasilkan kasus Jakarta"
+            dipilih.append(kasus)
+            # Satu blok di generasi aktif menunjuk keputusan yang akan dihapus.
+            await append_block(db, "uji_generasi", kasus, None, {"uji": True})
+            await db.commit()
+    
+        async def _hapus(db) -> None:
+            jakarta = (
+                await db.execute(select(Location).where(Location.name == "Jakarta"))
+            ).scalar_one()
+            await _seed_demo_cases(db, True, jakarta)
+            # Prasyarat yang dulu tersirat: keputusan berblok benar-benar terhapus.
+            tersisa = (
+                await db.execute(select(Decision.id).where(Decision.id == dipilih[0]))
+            ).scalar_one_or_none()
+            assert tersisa is None, (
+                "prasyarat: keputusan berblok harus ikut terhapus oleh "
+                "`_seed_demo_cases(force=True)` — kalau tidak, generasi memang "
+                "tidak akan naik"
+            )
+            await db.commit()
+    
+        _jalankan(_siapkan)
+    
+        with _koneksi().connect() as conn:
+            sebelum = conn.execute(
+                text("SELECT generation FROM ledger_meta WHERE id = 1")
+            ).scalar_one()
+    
+>       _jalankan(_hapus)
+
+tests/test_demo_template_provenance_ledger.py:218: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_demo_template_provenance_ledger.py:38: in _jalankan
+    return asyncio.run(_main())
+/usr/local/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+/usr/local/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+/usr/local/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+tests/test_demo_template_provenance_ledger.py:34: in _main
+    return await fn(db)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x763a0668e8d0>
+
+    async def _hapus(db) -> None:
+        jakarta = (
+            await db.execute(select(Location).where(Location.name == "Jakarta"))
+        ).scalar_one()
+        await _seed_demo_cases(db, True, jakarta)
+        # Prasyarat yang dulu tersirat: keputusan berblok benar-benar terhapus.
+        tersisa = (
+            await db.execute(select(Decision.id).where(Decision.id == dipilih[0]))
+        ).scalar_one_or_none()
+>       assert tersisa is None, (
+            "prasyarat: keputusan berblok harus ikut terhapus oleh "
+            "`_seed_demo_cases(force=True)` — kalau tidak, generasi memang "
+            "tidak akan naik"
+        )
+E       AssertionError: prasyarat: keputusan berblok harus ikut terhapus oleh `_seed_demo_cases(force=True)` — kalau tidak, generasi memang tidak akan naik
+E       assert UUID('375c831b-78ca-5a4c-817e-b7496122f2b0') is None
+
+tests/test_demo_template_provenance_ledger.py:204: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_demo_template_provenance_ledger.py::test_hapus_kasus_demo_menaikkan_generasi_ledger
+1 failed, 2 passed in 10.95s

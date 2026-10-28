@@ -1,0 +1,241 @@
+F
+=================================== FAILURES ===================================
+_____________ test_eksekusi_menulis_harga_invoice_bukan_sdc_per_kg _____________
+
+self = <sqlalchemy.engine.base.Connection object at 0x775499f58b60>
+dialect = <sqlalchemy.dialects.postgresql.psycopg.PGDialect_psycopg object at 0x775499f58da0>
+context = <sqlalchemy.dialects.postgresql.psycopg.PGExecutionContext_psycopg object at 0x775499f5a9f0>
+statement = <sqlalchemy.dialects.postgresql.psycopg.PGCompiler_psycopg object at 0x775499f58bf0>
+parameters = [{'d': 'a47b0016-d280-47f7-9e31-93334ae96f06', 'id': '87e908d0-661b-4d4d-9713-205cdbe5a77e', 'p': '{"allocation_binding": true, "batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "supplier_id": "3702c204-d4b2-4240-ae30-260856b7632e"}'}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x77549abff350>
+query = "INSERT INTO decision_evidence (id, decision_id, evidence_type, payload, is_consistent, recorded_at) VALUES (%(id)s, %(d)s, 'allocation_binding', %(p)s, true, now())"
+params = {'d': 'a47b0016-d280-47f7-9e31-93334ae96f06', 'id': '87e908d0-661b-4d4d-9713-205cdbe5a77e', 'p': '{"allocation_binding": true, "batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "supplier_id": "3702c204-d4b2-4240-ae30-260856b7632e"}'}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.CheckViolation: new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E           DETAIL:  Failing row contains (87e908d0-661b-4d4d-9713-205cdbe5a77e, a47b0016-d280-47f7-9e31-93334ae96f06, allocation_binding, {"batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "supplie..., t, 2026-10-27 11:55:43.568892+00).
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: CheckViolation
+
+The above exception was the direct cause of the following exception:
+
+client = <starlette.testclient.TestClient object at 0x77549abee2d0>
+
+    def test_eksekusi_menulis_harga_invoice_bukan_sdc_per_kg(client):
+        """Ini RED yang diminta rencana: `price` dulu `sdc / qty` (37.171,00)."""
+        head = _mk_user("sppg_head", "Jakarta")
+        nutritionist = _mk_user("sppg_nutritionist", "Jakarta")
+        decision_id = None
+        try:
+            headers = _login(client, head)
+            decision_id = _mk_decision(client, headers)
+>           _ikat_binding(decision_id)
+
+tests/test_po_invoice_commercial.py:260: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_po_invoice_commercial.py:198: in _ikat_binding
+    conn.execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x77549abff350>
+query = "INSERT INTO decision_evidence (id, decision_id, evidence_type, payload, is_consistent, recorded_at) VALUES (%(id)s, %(d)s, 'allocation_binding', %(p)s, true, now())"
+params = {'d': 'a47b0016-d280-47f7-9e31-93334ae96f06', 'id': '87e908d0-661b-4d4d-9713-205cdbe5a77e', 'p': '{"allocation_binding": true, "batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "supplier_id": "3702c204-d4b2-4240-ae30-260856b7632e"}'}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           sqlalchemy.exc.IntegrityError: (psycopg.errors.CheckViolation) new row for relation "decision_evidence" violates check constraint "decision_evidence_type_check"
+E           DETAIL:  Failing row contains (87e908d0-661b-4d4d-9713-205cdbe5a77e, a47b0016-d280-47f7-9e31-93334ae96f06, allocation_binding, {"batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "supplie..., t, 2026-10-27 11:55:43.568892+00).
+E           [SQL: INSERT INTO decision_evidence (id, decision_id, evidence_type, payload, is_consistent, recorded_at) VALUES (%(id)s, %(d)s, 'allocation_binding', %(p)s, true, now())]
+E           [parameters: {'id': '87e908d0-661b-4d4d-9713-205cdbe5a77e', 'd': 'a47b0016-d280-47f7-9e31-93334ae96f06', 'p': '{"allocation_binding": true, "batch_ids": ["7ed8ff62-b059-5c0a-bcdd-8db75096254e"], "supplier_id": "3702c204-d4b2-4240-ae30-260856b7632e"}'}]
+E           (Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: IntegrityError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_po_invoice_commercial.py::test_eksekusi_menulis_harga_invoice_bukan_sdc_per_kg
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 7 deselected, 1 warning in 7.65s

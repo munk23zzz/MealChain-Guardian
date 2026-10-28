@@ -1,0 +1,40 @@
+F.                                                                       [100%]
+=================================== FAILURES ===================================
+______________ test_kasus_skrip_punya_bukti_termasuk_yang_ditolak ______________
+
+    @pytest.mark.skipif(text is None, reason="app/sqlalchemy tidak tersedia")
+    async def test_kasus_skrip_punya_bukti_termasuk_yang_ditolak():
+        eng = create_engine(_url())
+        async with eng.connect() as conn:
+            baris = (
+                await conn.execute(
+                    text(
+                        """
+                        SELECT left(d.id::text, 8) AS id, d.decision_type, d.status, d.demo_case
+                        FROM decisions d
+                        WHERE d.demo_case IS NOT NULL
+                          AND d.created_at > now() - interval '2 days'
+                          AND NOT EXISTS (
+                            SELECT 1 FROM decision_evidence e WHERE e.decision_id = d.id
+                          )
+                        ORDER BY d.created_at DESC
+                        LIMIT 10
+                        """
+                    )
+                )
+            ).fetchall()
+        await eng.dispose()
+>       assert baris == [], f"kasus skrip tanpa bukti: {baris}"
+E       AssertionError: kasus skrip tanpa bukti: [('d801c730', 'supplier_procurement', 'pending_approval', 'rejection-loop-kuota')]
+E       assert [('d801c730',...-loop-kuota')] == []
+E         
+E         Left contains one more item: ('d801c730', 'supplier_procurement', 'pending_approval', 'rejection-loop-kuota')
+E         Use -v to get more diff
+
+tests/test_bukti_dan_draf_demo.py:58: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+[conftest] kunci gerbang dipegang
+=========================== short test summary info ============================
+FAILED tests/test_bukti_dan_draf_demo.py::test_kasus_skrip_punya_bukti_termasuk_yang_ditolak
+1 failed, 1 passed in 4.31s
+EXIT=1

@@ -1,0 +1,27 @@
+
+=== rehearsal mode=realtime (http://127.0.0.1:18100) ===
+  [OK   ] 0. login kepala SPPG + nutritionist
+  [OK   ] 1. Muat Demo realtime (POST /demo/session/start replace=true)
+  [OK   ] 2. anchor realtime = jam sesi (bukan kanon), selisih < 10 menit
+  [OK   ] 3. GET /demo/session membaca sesi yang sama (tahan refresh)
+  [OK   ] 4. POST /balance/analyze dijalankan pada keadaan awal sesi
+  [OK   ] 5. daftar keputusan terbaca dari backend
+  [OK   ] 6. kasus replay/realtime tersedia: satu aman, satu bukti kurang
+  [OK   ] 7. approval-summary: butuh dua peran, eksekusi belum boleh
+  [OK   ] 8. approval peran-1 lalu execute DITOLAK (butuh dua peran)
+  [OK   ] 9. approval peran-2 → can_execute true
+  [OK   ] 10. execute → keputusan executed + PO terbit
+  [OK   ] 11. invoice (purchase+transport+handling) terpisah dari SDC (+3 komponen risiko)
+  [OK   ] 12. PO ada di backend dan tertaut keputusan
+  [OK   ] 13. kiriman: ada batch 'di jalan' dengan ETA dihitung server
+  [OK   ] 14. ceklis + penerimaan batch usable diterima, pasokan lokasi bergerak
+  [OK   ] 15. KPI: state + provenance per metrik; cakupan tanpa bukti = no_data
+  [GAGAL] N1. batch bukti kurang: ceklis tercatat, PENERIMAAN ditolak
+          {"batch_id": "af8fecf5-488b-50c1-8c71-96d413d76b3c", "safety_status": "needs_verification", "usable_until": "2027-04-03T16:48:00+00:00", "receipt_http": 409, "approve_http": 0, "detail": null}
+  [OK   ] N2. bukti suhu tidak lengkap → safety bukan 'pass'
+  [OK   ] N2b. log cold chain kosong/rusak → evidence_sufficient=false (tidak pernah 'pass')
+  [OK   ] N3. batch kedaluwarsa ditolak (batch_expired)
+  [OK   ] N4. bukti kurang + dua approval → execute tetap ditolak
+  [OK   ] N5. PO tanpa penalti risiko; invoice = purchase+transport+handling
+
+  21 lulus · 1 gagal  →  out/realtime.json

@@ -1,0 +1,28 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AgentCoreMemoryDataPlane",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:CreateEvent",
+        "bedrock-agentcore:GetEvent",
+        "bedrock-agentcore:ListEvents",
+        "bedrock-agentcore:DeleteEvent"
+      ],
+      "Resource": "arn:aws:bedrock-agentcore:us-west-2:624606539664:memory/mealchain_memory_01-soAIdH8viw"
+    },
+    {
+      "Sid": "AgentCoreGatewayTargets",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:CreateGatewayTarget",
+        "bedrock-agentcore:GetGatewayTarget",
+        "bedrock-agentcore:ListGatewayTargets",
+        "bedrock-agentcore:UpdateGatewayTarget",
+        "bedrock-agentcore:DeleteGatewayTarget"
+      ],
+      "Resource": "arn:aws:bedrock-agentcore:us-west-2:624606539664:gateway/*"
+    }
+  ]
+}

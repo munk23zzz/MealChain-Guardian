@@ -1,0 +1,40 @@
+...F.......                                                              [100%]
+=================================== FAILURES ===================================
+_________ test_daftar_po_menyebut_invoice_unit_price_secara_eksplisit __________
+
+client = <starlette.testclient.TestClient object at 0x751f31be1700>
+
+    def test_daftar_po_menyebut_invoice_unit_price_secara_eksplisit(client):
+        """Klien tidak boleh menebak arti `price_per_kg`."""
+        monitor = _mk_user("bgn_monitor")
+        try:
+            headers = _login(client, monitor)
+            resp = client.get("/sap/purchase-orders?limit=5", headers=headers)
+            assert resp.status_code == 200, resp.text
+            items = resp.json()["items"]
+            assert items, "DB tidak punya PO untuk diuji"
+            for row in items:
+                assert "invoice_unit_price" in row, "nama harga komersial wajib ada"
+                # Alias lama tetap ada supaya panel/tes lama tidak pecah, tetapi
+                # artinya sekarang sama: harga yang ditagihkan.
+                assert row["price_per_kg"] == pytest.approx(row["invoice_unit_price"])
+>               assert row["invoice_total"] == pytest.approx(
+                    row["invoice_unit_price"] * row["ordered_quantity_kg"]
+                )
+E               assert 8391712.74 == 7980000.0 ± 8.0e+00
+E                 
+E                 comparison failed
+E                 Obtained: 8391712.74
+E                 Expected: 7980000.0 ± 8.0e+00
+
+tests/test_po_invoice_commercial.py:471: AssertionError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_po_invoice_commercial.py::test_daftar_po_menyebut_invoice_unit_price_secara_eksplisit
+1 failed, 10 passed, 1 warning in 13.88s
+EXIT=1

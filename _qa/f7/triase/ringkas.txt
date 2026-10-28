@@ -1,0 +1,15 @@
+tests/test_action_boundary_e2e.py | EXIT=0 | 7 passed, 1 warning in 19.16s
+tests/test_event3_api.py | EXIT=0 | 8 passed, 1 warning in 11.73s
+tests/test_demo_cases_procurement_binding.py | EXIT=1 | 3 failed in 6.19s
+tests/test_recommendation_snapshot.py | EXIT=1 | 2 failed in 4.57s
+tests/test_receipt_accepted_value.py | EXIT=0 | 3 passed, 1 warning in 7.75s
+tests/test_api_decision_intelligence.py | EXIT=1 | 2 failed, 5 passed, 1 skipped, 1 warning in 12.59s
+tests/test_po_invoice_commercial.py | EXIT=1 | 1 failed, 10 passed, 1 warning in 13.88s
+tests/test_kredensial_db_tidak_di_kode.py | EXIT=1 | 1 failed, 1 passed in 4.29s
+tests/test_kpi_provenance.py | EXIT=0 | 12 passed in 3.88s
+tests/test_evidence_live.py | EXIT=0 | 1 passed in 3.10s
+tests/test_evidence_consistency_wiring.py | EXIT=0 | 4 passed, 1 warning in 7.17s
+tests/test_demo_template_reset.py | EXIT=1 | 1 failed, 6 passed, 1 warning in 7.63s
+tests/test_demo_template_provenance_ledger.py | EXIT=1 | 1 failed, 2 passed in 16.43s
+tests/test_decision_read_endpoints.py | EXIT=0 | 4 passed, 1 warning in 14.38s
+tests/test_bukti_dan_draf_demo.py | EXIT=1 | 1 failed, 1 passed in 4.31s

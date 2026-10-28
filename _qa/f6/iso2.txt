@@ -1,0 +1,28 @@
+NOTICE:  database "mealchain_f6_iso2" does not exist, skipping
+clone=mealchain_f6_iso2 decisions=36
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+......................FFF..............F...............................F [ 87%]
+.......F..                                                               [100%]
+=================================== FAILURES ===================================
+/app/tests/test_demo_cases_procurement_binding.py:189: AssertionError: rejection-loop-kuota b28f18ca: safety gate memblokir karena batch acuan tidak layak — kasus demo tidak bisa dieksekusi
+/app/tests/test_recommendation_snapshot.py:95: AssertionError: assert '8584a645-6aea-424b-a363-8e58bd31a100' not in {'050ec2d7-e4d6-574e-b7a4-52e32511c4e8': {'batch_id': '050ec2d7-e4d6-574e-b7a4-52e32511c4e8', 'commodity': 'ayam', 'ev...-5f16-ad32-30b3873742df', 'commodity': 'beras', 'evidence_state': 'sufficient', 'excluded_destinations': [], ...}, ...}
+/app/tests/test_recommendation_snapshot.py:102: AssertionError: assert Decimal('0.664286') == Decimal('0.964286')
+/app/tests/test_ledger_immutability.py:142: AssertionError: {'DELETE': False, 'INSERT': False, 'SELECT': False, 'TRUNCATE': False, ...}
+/app/app/services/demo_session.py:214: AttributeError: 'DbPalsu' object has no attribute 'execute'
+/app/tests/test_demo_template_provenance_ledger.py:204: AssertionError: prasyarat: keputusan berblok harus ikut terhapus oleh `_seed_demo_cases(force=True)` — kalau tidak, generasi memang tidak akan naik
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_demo_cases_procurement_binding.py::test_kasus_pengadaan_lolos_resolve_binding_dan_safety
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[live-race]
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[historical]
+FAILED tests/test_ledger_immutability.py::test_role_aplikasi_hanya_insert_dan_select
+FAILED tests/test_demo_template_reset.py::test_memanggil_penyemai_dengan_opsi_yang_benar
+FAILED tests/test_demo_template_provenance_ledger.py::test_hapus_kasus_demo_menaikkan_generasi_ledger
+6 failed, 76 passed, 1 warning in 69.13s (0:01:09)
+ISO2_EXIT=1

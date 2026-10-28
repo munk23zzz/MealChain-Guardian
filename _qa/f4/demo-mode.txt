@@ -1,0 +1,944 @@
+..FFF.....F...F........FFFFFF.F..F........................F..F.......... [ 87%]
+..........                                                               [100%]
+=================================== FAILURES ===================================
+____________________ test_api_safety_happy_path_revised_201 ____________________
+
+client = <starlette.testclient.TestClient object at 0x7bb5155a1d30>
+
+    def test_api_safety_happy_path_revised_201(client):
+        """FAIL → 201 revised; decision+evidence+trace terbaca dari DB."""
+        b = _mk_batch("Cianjur", fail=True)
+        try:
+            headers = _head_user(client)
+            resp = client.post(
+                "/events/safety-disruption",
+                headers=headers,
+                json={
+                    "batch_id": b["batch_id"],
+                    "target_location_id": _target_jakarta(),
+                    "operation_key": str(uuid.uuid4()),
+                },
+            )
+>           assert resp.status_code == 201, resp.text
+E           AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E           assert 409 == 201
+E            +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_event3_api.py:223: AssertionError
+__________________ test_api_safety_replay_same_key_idempotent __________________
+
+client = <starlette.testclient.TestClient object at 0x7bb51557f560>
+
+    def test_api_safety_replay_same_key_idempotent(client):
+        """operation_key sama + batch sama → replay, satu decision saja."""
+        b = _mk_batch("Cianjur", fail=True)
+        try:
+            headers = _head_user(client)
+            payload = {
+                "batch_id": b["batch_id"],
+                "target_location_id": _target_jakarta(),
+                "operation_key": str(uuid.uuid4()),
+            }
+            r1 = client.post("/events/safety-disruption", headers=headers, json=payload)
+>           assert r1.status_code == 201, r1.text
+E           AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E           assert 409 == 201
+E            +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_event3_api.py:258: AssertionError
+______________ test_api_safety_conflict_same_key_other_batch_409 _______________
+
+client = <starlette.testclient.TestClient object at 0x7bb515d9f290>
+
+    def test_api_safety_conflict_same_key_other_batch_409(client):
+        """operation_key sama + batch beda → 409."""
+        b1 = _mk_batch("Cianjur", fail=True)
+        b2 = _mk_batch("Cianjur", fail=True)
+        try:
+            headers = _head_user(client)
+            op_key = str(uuid.uuid4())
+            r1 = client.post(
+                "/events/safety-disruption",
+                headers=headers,
+                json={
+                    "batch_id": b1["batch_id"],
+                    "target_location_id": _target_jakarta(),
+                    "operation_key": op_key,
+                },
+            )
+>           assert r1.status_code == 201, r1.text
+E           AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E           assert 409 == 201
+E            +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_event3_api.py:290: AssertionError
+_________________ test_decision_time_tersedia_setelah_eksekusi _________________
+
+client = <starlette.testclient.TestClient object at 0x7bb50ef1a270>
+monitor_headers = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiYzE3MzM5NC1iMmM5LTRmYTgtYmU5Ni1kNDZkMjk1YjI...21vbml0b3IiLCJsb2MiOm51bGwsImlhdCI6MTc5MzExMjE3NSwiZXhwIjoxNzkzMTU1Mzc1fQ.Eyh6PK9ZLzVTR5IxDM9NAzlyveJEB_Xk4r08tRYKQVg'}
+
+    def test_decision_time_tersedia_setelah_eksekusi(client, monitor_headers):
+        """Kartu Decision Time berhenti jadi `no_data` setelah satu eksekusi nyata.
+    
+        Metrik hanya menghitung keputusan ber-`demo_case IS NULL` yang sudah
+        committed (PO ada) — keputusan Event 1 memenuhi keduanya setelah eksekusi.
+        """
+        head = _mk_user("sppg_head", "Jakarta")
+        restore = _force_server_verdict("CONSISTENT")
+        decision_id: str | None = None
+        gizi_email: str | None = None
+        try:
+            before = _kpi_metric(client, monitor_headers, "Decision Time")
+            # JANGAN mengandaikan DB kosong. DB kerja adalah DB DEMO yang dipakai
+            # bersama: keputusan nyata yang sudah dieksekusi (beserta PO-nya) bisa
+            # sudah ada di jendela metrik, sehingga keadaannya `available` sebelum
+            # tes ini jalan. Yang diuji adalah TRANSISI: keputusan yang baru
+            # dieksekusi ikut terhitung.
+            sebelum_sampel = int(before.get("sample_count") or 0)
+            decision_id, _po, gizi_email = _run_execute_flow(client, head)
+            after = _kpi_metric(client, monitor_headers, "Decision Time")
+            assert after["state"] == "available", after
+            assert after["value"] is not None
+>           assert int(after["sample_count"]) == sebelum_sampel + 1, after
+E           AssertionError: {'coverage': '0.11', 'name': 'Decision Time', 'previous_value': None, 'provenance': {'baseline': {'kind': 'no_baseline...': None}, 'classification': {'historical_seed': 7, 'live': 8}, 'coverage': '0.11', 'data_basis': 'campuran', ...}, ...}
+E           assert 1 == (8 + 1)
+E            +  where 1 = int(1)
+
+tests/test_kpi_act_trace.py:209: AssertionError
+______________ test_penerimaan_bahan_tidak_menulis_porsi_tersaji _______________
+
+    def test_penerimaan_bahan_tidak_menulis_porsi_tersaji():
+        """Bahan diterima ≠ makanan tersaji: penerimaan hanya memberi proyeksi."""
+    
+        async def _skenario(db):
+            lokasi, komoditas = await _lokasi_komoditas(db)
+            rencana = await db.execute(
+                text(
+                    "SELECT id, planned_portions FROM menu_plans WHERE planned_portions > 0 LIMIT 1"
+                )
+            )
+            baris = rencana.first()
+            if baris is None:
+                pytest.skip("DB uji tanpa menu plan berisi porsi")
+            batch = SimpleNamespace(
+                location_id=lokasi, commodity_id=komoditas, quantity_kg=Decimal("30.00")
+            )
+            receipt = SimpleNamespace(id=uuid.uuid4())
+            hasil = await settlement.catat_penerimaan(
+                db, batch=batch, receipt=receipt, sekarang=datetime.now(timezone.utc)
+            )
+            await db.flush()
+            jumlah = (
+                await db.execute(
+                    text(
+                        "SELECT count(*) FROM delivery_events WHERE source_ref = :r"
+                    ),
+                    {"r": f"receipt:{receipt.id}"},
+                )
+            ).scalar()
+            await db.rollback()
+            return hasil, int(jumlah or 0)
+    
+        hasil, jumlah_delivery = _jalankan(_skenario)
+        assert jumlah_delivery == 0, "penerimaan tidak boleh menulis baris porsi tersaji"
+        assert hasil["ditulis"] is False
+        assert "proyeksi" in str(hasil.get("alasan", "")).lower(), hasil
+        # Proyeksi tetap dihitung (bukan dibuang), hanya TIDAK disimpan sebagai fakta.
+        if hasil.get("proyeksi_porsi") is not None:
+>           assert hasil["proyeksi_porsi"] > 0
+E           assert 0 > 0
+
+tests/test_kpi_provenance.py:265: AssertionError
+____ test_fetch_excludes_later_harvests_without_advancing_as_of[live-race] _____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7bb515d9f740>
+explicit_as_of = False
+
+    @pytest.mark.parametrize("explicit_as_of", [False, True], ids=["live-race", "historical"])
+    def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, explicit_as_of):
+        engine = create_engine(
+            DSN_SYNC
+        )
+    
+        # Pipeline kini mengambil jam dari `evaluation_clock()` (refactor jam sesi
+        # lain), bukan `datetime.now()`. Membekukan `rs.datetime` tidak lagi
+        # berpengaruh; yang dibekukan adalah jam evaluasinya.
+        beku = AS_OF + timedelta(days=1) if explicit_as_of else AS_OF
+    
+        def _jam(as_of=None):
+            return as_of if as_of is not None else beku
+    
+        monkeypatch.setattr(rs, "evaluation_clock", _jam)
+        try:
+            with engine.connect() as connection, connection.begin() as transaction:
+                with Session(bind=connection) as session:
+                    location = session.scalar(select(Location).where(Location.name == "Cianjur"))
+                    commodity = session.scalar(select(Commodity).where(Commodity.name == "telur"))
+                    supplier = session.scalar(select(Supplier).limit(1))
+                    ids = {name: uuid.uuid4() for name in ("old", "boundary", "later")}
+                    harvested = {
+                        "old": AS_OF - timedelta(days=1),
+                        "boundary": AS_OF,
+                        "later": AS_OF + timedelta(milliseconds=600),
+                    }
+    
+                    class LaterVisibleSession:
+                        inserted = False
+    
+                        async def execute(self, statement):
+                            if not self.inserted:
+                                self.inserted = True
+                                # Deterministic interleaving: these rows become visible only
+                                # after fetch_operational_facts has captured its clock.
+                                session.add_all([
+                                    Batch(
+                                        id=ids[name], location_id=location.id,
+                                        commodity_id=commodity.id, supplier_id=supplier.id,
+                                        quantity_kg=Decimal("10"), harvested_at=timestamp,
+                                        # Bukti suhu lengkap: sejak F-02 (25 Okt 2026) log
+                                        # kosong tidak lagi berbuah skor `pass` (0,7), dan
+                                        # tes ini menguji pemotongan `as_of`, bukan freshness.
+                                        temperature_log=_log_suhu(timestamp),
+                                        safety_status="pass",
+                                    )
+                                    for name, timestamp in harvested.items()
+                                ])
+                                session.flush()
+                            return session.execute(statement)
+    
+                    facts = asyncio.run(rs.fetch_operational_facts(
+                        LaterVisibleSession(), AS_OF if explicit_as_of else None
+                    ))
+                    batches = {b["batch_id"]: b for b in facts[4]}
+>                   assert str(ids["later"]) not in batches
+E                   AssertionError: assert 'abccc08a-38b3-493b-a52f-04c994197c96' not in {'050ec2d7-e4d6-574e-b7a4-52e32511c4e8': {'batch_id': '050ec2d7-e4d6-574e-b7a4-52e32511c4e8', 'commodity': 'ayam', 'ev...194c16f48144', 'commodity': 'telur', 'evidence_state': 'insufficient', 'excluded_destinations': ['Jakarta'], ...}, ...}
+E                    +  where 'abccc08a-38b3-493b-a52f-04c994197c96' = str(UUID('abccc08a-38b3-493b-a52f-04c994197c96'))
+
+tests/test_recommendation_snapshot.py:95: AssertionError
+____ test_fetch_excludes_later_harvests_without_advancing_as_of[historical] ____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7bb50eb52e10>
+explicit_as_of = True
+
+    @pytest.mark.parametrize("explicit_as_of", [False, True], ids=["live-race", "historical"])
+    def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, explicit_as_of):
+        engine = create_engine(
+            DSN_SYNC
+        )
+    
+        # Pipeline kini mengambil jam dari `evaluation_clock()` (refactor jam sesi
+        # lain), bukan `datetime.now()`. Membekukan `rs.datetime` tidak lagi
+        # berpengaruh; yang dibekukan adalah jam evaluasinya.
+        beku = AS_OF + timedelta(days=1) if explicit_as_of else AS_OF
+    
+        def _jam(as_of=None):
+            return as_of if as_of is not None else beku
+    
+        monkeypatch.setattr(rs, "evaluation_clock", _jam)
+        try:
+            with engine.connect() as connection, connection.begin() as transaction:
+                with Session(bind=connection) as session:
+                    location = session.scalar(select(Location).where(Location.name == "Cianjur"))
+                    commodity = session.scalar(select(Commodity).where(Commodity.name == "telur"))
+                    supplier = session.scalar(select(Supplier).limit(1))
+                    ids = {name: uuid.uuid4() for name in ("old", "boundary", "later")}
+                    harvested = {
+                        "old": AS_OF - timedelta(days=1),
+                        "boundary": AS_OF,
+                        "later": AS_OF + timedelta(milliseconds=600),
+                    }
+    
+                    class LaterVisibleSession:
+                        inserted = False
+    
+                        async def execute(self, statement):
+                            if not self.inserted:
+                                self.inserted = True
+                                # Deterministic interleaving: these rows become visible only
+                                # after fetch_operational_facts has captured its clock.
+                                session.add_all([
+                                    Batch(
+                                        id=ids[name], location_id=location.id,
+                                        commodity_id=commodity.id, supplier_id=supplier.id,
+                                        quantity_kg=Decimal("10"), harvested_at=timestamp,
+                                        # Bukti suhu lengkap: sejak F-02 (25 Okt 2026) log
+                                        # kosong tidak lagi berbuah skor `pass` (0,7), dan
+                                        # tes ini menguji pemotongan `as_of`, bukan freshness.
+                                        temperature_log=_log_suhu(timestamp),
+                                        safety_status="pass",
+                                    )
+                                    for name, timestamp in harvested.items()
+                                ])
+                                session.flush()
+                            return session.execute(statement)
+    
+                    facts = asyncio.run(rs.fetch_operational_facts(
+                        LaterVisibleSession(), AS_OF if explicit_as_of else None
+                    ))
+                    batches = {b["batch_id"]: b for b in facts[4]}
+                    assert str(ids["later"]) not in batches
+                    assert batches[str(ids["boundary"])]["freshness_score"] == Decimal("1.000000")
+                    expected = rs.compute_freshness_score(
+                        harvested["old"], AS_OF, rs.settings.shelf_life_days_telur,
+                        _log_suhu(harvested["old"]),
+                        rs.settings.safe_temp_min_c, rs.settings.safe_temp_max_c,
+                    )
+>                   assert batches[str(ids["old"])]["freshness_score"] == rs._score(
+                        Decimal(str(expected))
+                    )
+E                   AssertionError: assert Decimal('0.664286') == Decimal('0.964286')
+E                    +  where Decimal('0.964286') = <function _score at 0x7bb517f907c0>(Decimal('0.9642857142857143'))
+E                    +    where <function _score at 0x7bb517f907c0> = rs._score
+E                    +    and   Decimal('0.9642857142857143') = Decimal('0.9642857142857143')
+E                    +      where '0.9642857142857143' = str(0.9642857142857143)
+
+tests/test_recommendation_snapshot.py:102: AssertionError
+____________________ test_live_evidence_batch_ids_nonempty _____________________
+
+    def test_live_evidence_batch_ids_nonempty():
+        engine = create_async_engine(_AURL)
+        session_maker = async_sessionmaker(engine, expire_on_commit=False)
+    
+        async def _run():
+            async with session_maker() as db:
+                out = await rs.build_recommendations(
+                    lambda: rs.fetch_operational_facts(db, None)
+                )
+            await engine.dispose()
+            return out
+    
+        out = asyncio.run(_run())
+        recs = out["recommendations"]
+        assert recs, "service live wajib menghasilkan kandidat"
+    
+        def _find(src, dst, com):
+            return next(
+                r
+                for r in recs
+                if r["candidate"]["source_location"] == src
+                and r["candidate"]["destination_location"] == dst
+                and r["candidate"]["commodity"] == com
+            )
+    
+>       top = _find("Cianjur", "Jakarta", "telur")
+
+tests/test_evidence_live.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+src = 'Cianjur', dst = 'Jakarta', com = 'telur'
+
+    def _find(src, dst, com):
+>       return next(
+            r
+            for r in recs
+            if r["candidate"]["source_location"] == src
+            and r["candidate"]["destination_location"] == dst
+            and r["candidate"]["commodity"] == com
+        )
+E       StopIteration
+
+tests/test_evidence_live.py:37: StopIteration
+_____________ test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan _____________
+
+kasus = [{'batches': [], 'binding_supplier': None, 'demo_case': 'rejection-loop-kuota', 'id': UUID('36b5fb5a-c91d-4433-8407-d3...42bf-a472-7ce946aa75a8', 'demo_case': 'rejection-loop-kuota', 'id': UUID('67db92b1-33e8-475e-aad2-07a6d0edf70e'), ...}]
+
+    def test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan(kasus):
+        """Batch acuan harus di lokasi TUJUAN, bukan lokasi asal (semantik pengadaan)."""
+        for k in kasus:
+>           assert k["batches"], (
+                f"{k['demo_case']} {str(k['id'])[:8]}: pengadaan tanpa binding batch — "
+                "layar akan menampilkan 'pemasok tidak dikenal'"
+            )
+E           AssertionError: rejection-loop-kuota 36b5fb5a: pengadaan tanpa binding batch — layar akan menampilkan 'pemasok tidak dikenal'
+E           assert []
+
+tests/test_demo_cases_procurement_binding.py:158: AssertionError
+_______________ test_binding_pengadaan_memakai_pemasok_keputusan _______________
+
+kasus = [{'batches': [], 'binding_supplier': None, 'demo_case': 'rejection-loop-kuota', 'id': UUID('36b5fb5a-c91d-4433-8407-d3...42bf-a472-7ce946aa75a8', 'demo_case': 'rejection-loop-kuota', 'id': UUID('67db92b1-33e8-475e-aad2-07a6d0edf70e'), ...}]
+
+    def test_binding_pengadaan_memakai_pemasok_keputusan(kasus):
+        """Pemasok di binding = `decisions.supplier_id`, jadi PO = pemasok di layar."""
+        for k in kasus:
+>           assert k["binding_supplier"] == str(k["supplier"]), (
+                f"{k['demo_case']} {str(k['id'])[:8]}: binding menunjuk pemasok "
+                f"{k['binding_supplier']}, kolom keputusan {k['supplier']}"
+            )
+E           AssertionError: rejection-loop-kuota 36b5fb5a: binding menunjuk pemasok None, kolom keputusan 6fbf0a04-4499-4d95-91e6-b420eec639b9
+E           assert None == '6fbf0a04-4499-4d95-91e6-b420eec639b9'
+E            +  where '6fbf0a04-4499-4d95-91e6-b420eec639b9' = str(UUID('6fbf0a04-4499-4d95-91e6-b420eec639b9'))
+
+tests/test_demo_cases_procurement_binding.py:172: AssertionError
+____________ test_kasus_pengadaan_lolos_resolve_binding_dan_safety _____________
+
+kasus = [{'batches': [], 'binding_supplier': None, 'demo_case': 'rejection-loop-kuota', 'id': UUID('36b5fb5a-c91d-4433-8407-d3...42bf-a472-7ce946aa75a8', 'demo_case': 'rejection-loop-kuota', 'id': UUID('67db92b1-33e8-475e-aad2-07a6d0edf70e'), ...}]
+
+    def test_kasus_pengadaan_lolos_resolve_binding_dan_safety(kasus):
+        """Tidak boleh ada kasus demo pengadaan yang pasti ditolak guard eksekusi."""
+        for k in kasus:
+            try:
+                hasil = _resolve(k["id"], k["supplier"])
+            except HTTPException as exc:  # pragma: no cover - pesan kegagalan
+                raise AssertionError(
+                    f"{k['demo_case']} {str(k['id'])[:8]} ditolak guard: "
+                    f"{exc.status_code} {exc.detail}"
+                ) from exc
+            assert hasil["batches"], f"{str(k['id'])[:8]}: resolve tanpa batch"
+>           assert hasil["blocked"] is False, (
+                f"{k['demo_case']} {str(k['id'])[:8]}: safety gate memblokir karena "
+                "batch acuan tidak layak — kasus demo tidak bisa dieksekusi"
+            )
+E           AssertionError: rejection-loop-kuota 36b5fb5a: safety gate memblokir karena batch acuan tidak layak — kasus demo tidak bisa dieksekusi
+E           assert True is False
+
+tests/test_demo_cases_procurement_binding.py:189: AssertionError
+__________________ test_seed_dari_bandung_menargetkan_bandung __________________
+
+self = <sqlalchemy.engine.base.Connection object at 0x7bb50dc34b00>
+dialect = <sqlalchemy.dialects.postgresql.psycopg.PGDialect_psycopg object at 0x7bb50e6c7170>
+context = <sqlalchemy.dialects.postgresql.psycopg.PGExecutionContext_psycopg object at 0x7bb514d654c0>
+statement = <sqlalchemy.dialects.postgresql.psycopg.PGCompiler_psycopg object at 0x7bb514d640b0>
+parameters = [{'e': 'sppg_head-5f03563b@seed-kota.local'}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7bb515d8a690>
+query = 'DELETE FROM users WHERE email = %(e)s'
+params = {'e': 'sppg_head-5f03563b@seed-kota.local'}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.ForeignKeyViolation: update or delete on table "users" violates foreign key constraint "approvals_approved_by_fkey" on table "approvals"
+E           DETAIL:  Key (id)=(f970e411-cb7b-476e-ac6b-fc5a13711ddb) is still referenced from table "approvals".
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: ForeignKeyViolation
+
+The above exception was the direct cause of the following exception:
+
+client = <starlette.testclient.TestClient object at 0x7bb50ef28a40>
+
+    def test_seed_dari_bandung_menargetkan_bandung(client):
+        kepala = _mk_user("sppg_head", "Bandung")
+        try:
+            resp = client.post(
+                "/demo/seed", json={"force": True}, headers=_login(client, kepala)
+            )
+            assert resp.status_code == 200, resp.text
+            rows = _demo_rows("Bandung")
+            assert {r["demo_case"] for r in rows} == set(CASES), rows
+            assert all(r["target"] == "Bandung" for r in rows), rows
+            # Sumber tidak boleh = target.
+            assert all(r["sumber"] not in (None, "Bandung") for r in rows), rows
+        finally:
+>           _drop(kepala["email"])
+
+tests/test_demo_seed_per_kota.py:132: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_demo_seed_per_kota.py:70: in _drop
+    conn.execute(text("DELETE FROM users WHERE email = :e"), {"e": email})
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7bb515d8a690>
+query = 'DELETE FROM users WHERE email = %(e)s'
+params = {'e': 'sppg_head-5f03563b@seed-kota.local'}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           sqlalchemy.exc.IntegrityError: (psycopg.errors.ForeignKeyViolation) update or delete on table "users" violates foreign key constraint "approvals_approved_by_fkey" on table "approvals"
+E           DETAIL:  Key (id)=(f970e411-cb7b-476e-ac6b-fc5a13711ddb) is still referenced from table "approvals".
+E           [SQL: DELETE FROM users WHERE email = %(e)s]
+E           [parameters: {'e': 'sppg_head-5f03563b@seed-kota.local'}]
+E           (Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: IntegrityError
+_______________ test_force_bandung_tidak_menghapus_kasus_jakarta _______________
+
+self = <sqlalchemy.engine.base.Connection object at 0x7bb50ebc5820>
+dialect = <sqlalchemy.dialects.postgresql.psycopg.PGDialect_psycopg object at 0x7bb50e7b0380>
+context = <sqlalchemy.dialects.postgresql.psycopg.PGExecutionContext_psycopg object at 0x7bb50ee4f7a0>
+statement = <sqlalchemy.dialects.postgresql.psycopg.PGCompiler_psycopg object at 0x7bb50ebbe120>
+parameters = [{'e': 'sppg_head-3108d5d6@seed-kota.local'}]
+
+    def _exec_single_context(
+        self,
+        dialect: Dialect,
+        context: ExecutionContext,
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+    ) -> CursorResult[Any]:
+        """continue the _execute_context() method for a single DBAPI
+        cursor.execute() or cursor.executemany() call.
+    
+        """
+        if dialect.bind_typing is BindTyping.SETINPUTSIZES:
+            generic_setinputsizes = context._prepare_set_input_sizes()
+    
+            if generic_setinputsizes:
+                try:
+                    dialect.do_set_input_sizes(
+                        context.cursor, generic_setinputsizes, context
+                    )
+                except BaseException as e:
+                    self._handle_dbapi_exception(
+                        e, str(statement), parameters, None, context
+                    )
+    
+        cursor, str_statement, parameters = (
+            context.cursor,
+            context.statement,
+            context.parameters,
+        )
+    
+        effective_parameters: Optional[_AnyExecuteParams]
+    
+        if not context.executemany:
+            effective_parameters = parameters[0]
+        else:
+            effective_parameters = parameters
+    
+        if self._has_events or self.engine._has_events:
+            for fn in self.dispatch.before_cursor_execute:
+                str_statement, effective_parameters = fn(
+                    self,
+                    cursor,
+                    str_statement,
+                    effective_parameters,
+                    context,
+                    context.executemany,
+                )
+    
+        if self._echo:
+            self._log_info(str_statement)
+    
+            stats = context._get_cache_stats()
+    
+            if not self.engine.hide_parameters:
+                self._log_info(
+                    "[%s] %r",
+                    stats,
+                    sql_util._repr_params(
+                        effective_parameters,
+                        batches=10,
+                        ismulti=context.executemany,
+                    ),
+                )
+            else:
+                self._log_info(
+                    "[%s] [SQL parameters hidden due to hide_parameters=True]",
+                    stats,
+                )
+    
+        evt_handled: bool = False
+        try:
+            if context.execute_style is ExecuteStyle.EXECUTEMANY:
+                effective_parameters = cast(
+                    "_CoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_executemany(
+                        cursor,
+                        str_statement,
+                        effective_parameters,
+                        context,
+                    )
+            elif not effective_parameters and context.no_parameters:
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute_no_params:
+                        if fn(cursor, str_statement, context):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+                    self.dialect.do_execute_no_params(
+                        cursor, str_statement, context
+                    )
+            else:
+                effective_parameters = cast(
+                    "_CoreSingleExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_execute:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = True
+                            break
+                if not evt_handled:
+>                   self.dialect.do_execute(
+                        cursor, str_statement, effective_parameters, context
+                    )
+
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7bb515107b90>
+query = 'DELETE FROM users WHERE email = %(e)s'
+params = {'e': 'sppg_head-3108d5d6@seed-kota.local'}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           psycopg.errors.ForeignKeyViolation: update or delete on table "users" violates foreign key constraint "approvals_approved_by_fkey" on table "approvals"
+E           DETAIL:  Key (id)=(b4356117-c07f-4671-89de-e26c48466a39) is still referenced from table "approvals".
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: ForeignKeyViolation
+
+The above exception was the direct cause of the following exception:
+
+client = <starlette.testclient.TestClient object at 0x7bb514db5e50>
+
+    def test_force_bandung_tidak_menghapus_kasus_jakarta(client):
+        jakarta = _mk_user("sppg_head", "Jakarta")
+        bandung = _mk_user("sppg_head", "Bandung")
+        try:
+            # Pastikan Jakarta punya kasus dulu — jangan bergantung pada sisa run lain.
+            client.post("/demo/seed", json={"force": True}, headers=_login(client, jakarta))
+            jakarta_awal = len(_demo_rows("Jakarta"))
+            assert jakarta_awal >= len(CASES)
+    
+            client.post("/demo/seed", json={"force": True}, headers=_login(client, bandung))
+    
+            jakarta_akhir = _demo_rows("Jakarta")
+            assert len(jakarta_akhir) == jakarta_awal, (jakarta_awal, len(jakarta_akhir))
+            assert all(r["target"] == "Jakarta" for r in jakarta_akhir)
+            assert {r["demo_case"] for r in _demo_rows("Bandung")} == set(CASES)
+        finally:
+>           _drop(jakarta["email"])
+
+tests/test_demo_seed_per_kota.py:207: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_demo_seed_per_kota.py:70: in _drop
+    conn.execute(text("DELETE FROM users WHERE email = :e"), {"e": email})
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1418: in execute
+    return meth(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/sql/elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1846: in _execute_context
+    return self._exec_single_context(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:2355: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+/usr/local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: in do_execute
+    cursor.execute(statement, parameters)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <psycopg.Cursor [closed] [BAD] at 0x7bb515107b90>
+query = 'DELETE FROM users WHERE email = %(e)s'
+params = {'e': 'sppg_head-3108d5d6@seed-kota.local'}
+
+    def execute(
+        self,
+        query: Query,
+        params: Params | None = None,
+        *,
+        prepare: bool | None = None,
+        binary: bool | None = None,
+    ) -> Self:
+        """
+        Execute a query or command to the database.
+        """
+        try:
+            with self._conn.lock:
+                self._conn.wait(
+                    self._execute_gen(query, params, prepare=prepare, binary=binary)
+                )
+        except e._NO_TRACEBACK as ex:
+>           raise ex.with_traceback(None)
+E           sqlalchemy.exc.IntegrityError: (psycopg.errors.ForeignKeyViolation) update or delete on table "users" violates foreign key constraint "approvals_approved_by_fkey" on table "approvals"
+E           DETAIL:  Key (id)=(b4356117-c07f-4671-89de-e26c48466a39) is still referenced from table "approvals".
+E           [SQL: DELETE FROM users WHERE email = %(e)s]
+E           [parameters: {'e': 'sppg_head-3108d5d6@seed-kota.local'}]
+E           (Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+/usr/local/lib/python3.12/site-packages/psycopg/cursor.py:97: IntegrityError
+______________ test_kasus_skrip_punya_bukti_termasuk_yang_ditolak ______________
+
+    @pytest.mark.skipif(text is None, reason="app/sqlalchemy tidak tersedia")
+    async def test_kasus_skrip_punya_bukti_termasuk_yang_ditolak():
+        eng = create_engine(_url())
+        async with eng.connect() as conn:
+            baris = (
+                await conn.execute(
+                    text(
+                        """
+                        SELECT left(d.id::text, 8) AS id, d.decision_type, d.status, d.demo_case
+                        FROM decisions d
+                        WHERE d.demo_case IS NOT NULL
+                          AND d.created_at > now() - interval '2 days'
+                          AND NOT EXISTS (
+                            SELECT 1 FROM decision_evidence e WHERE e.decision_id = d.id
+                          )
+                        ORDER BY d.created_at DESC
+                        LIMIT 10
+                        """
+                    )
+                )
+            ).fetchall()
+        await eng.dispose()
+>       assert baris == [], f"kasus skrip tanpa bukti: {baris}"
+E       AssertionError: kasus skrip tanpa bukti: [('86579605', 'supplier_procurement', 'pending_approval', 'rejection-loop-kuota')]
+E       assert [('86579605',...-loop-kuota')] == []
+E         
+E         Left contains one more item: ('86579605', 'supplier_procurement', 'pending_approval', 'rejection-loop-kuota')
+E         Use -v to get more diff
+
+tests/test_bukti_dan_draf_demo.py:58: AssertionError
+______________ test_event3_menulis_seluruh_bukti_dengan_penilaian ______________
+
+client = <starlette.testclient.TestClient object at 0x7bb5172acf20>
+
+    def test_event3_menulis_seluruh_bukti_dengan_penilaian(client):
+        """Event 3 (suhu + binding) menulis penilaian, tidak ada yang NULL."""
+        from tests.test_event3_api import _cleanup_batch, _cleanup_decision, _mk_batch
+    
+        b = _mk_batch("Cianjur", fail=True)
+        decision_id = None
+        try:
+            resp = client.post(
+                "/events/safety-disruption",
+                headers=_head_user(client),
+                json={
+                    "batch_id": b["batch_id"],
+                    "target_location_id": str(
+                        _db_all("SELECT id FROM locations WHERE name='Jakarta'")[0][0]
+                    ),
+                    "operation_key": str(uuid.uuid4()),
+                },
+            )
+>           assert resp.status_code == 201, resp.text
+E           AssertionError: {"detail":"Tidak ada alternatif eligible setelah batch fail di-exclude"}
+E           assert 409 == 201
+E            +  where 409 = <Response [409 Conflict]>.status_code
+
+tests/test_evidence_consistency_wiring.py:129: AssertionError
+=============================== warnings summary ===============================
+../usr/local/lib/python3.12/site-packages/starlette/testclient.py:40
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_event3_api.py::test_api_safety_happy_path_revised_201 - Ass...
+FAILED tests/test_event3_api.py::test_api_safety_replay_same_key_idempotent
+FAILED tests/test_event3_api.py::test_api_safety_conflict_same_key_other_batch_409
+FAILED tests/test_kpi_act_trace.py::test_decision_time_tersedia_setelah_eksekusi
+FAILED tests/test_kpi_provenance.py::test_penerimaan_bahan_tidak_menulis_porsi_tersaji
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[live-race]
+FAILED tests/test_recommendation_snapshot.py::test_fetch_excludes_later_harvests_without_advancing_as_of[historical]
+FAILED tests/test_evidence_live.py::test_live_evidence_batch_ids_nonempty - S...
+FAILED tests/test_demo_cases_procurement_binding.py::test_binding_pengadaan_menunjuk_batch_di_sppg_tujuan
+FAILED tests/test_demo_cases_procurement_binding.py::test_binding_pengadaan_memakai_pemasok_keputusan
+FAILED tests/test_demo_cases_procurement_binding.py::test_kasus_pengadaan_lolos_resolve_binding_dan_safety
+FAILED tests/test_demo_seed_per_kota.py::test_seed_dari_bandung_menargetkan_bandung
+FAILED tests/test_demo_seed_per_kota.py::test_force_bandung_tidak_menghapus_kasus_jakarta
+FAILED tests/test_bukti_dan_draf_demo.py::test_kasus_skrip_punya_bukti_termasuk_yang_ditolak
+FAILED tests/test_evidence_consistency_wiring.py::test_event3_menulis_seluruh_bukti_dengan_penilaian
+15 failed, 67 passed, 1 warning in 287.45s (0:04:47)
