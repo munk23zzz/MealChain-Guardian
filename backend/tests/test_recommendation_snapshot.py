@@ -94,10 +94,18 @@ def test_fetch_excludes_later_harvests_without_advancing_as_of(monkeypatch, expl
                 batches = {b["batch_id"]: b for b in facts[4]}
                 assert str(ids["later"]) not in batches
                 assert batches[str(ids["boundary"])]["freshness_score"] == Decimal("1.000000")
+                # `policy` WAJIB sama dengan yang dipakai jalur produksi
+                # (`fetch_operational_facts` memanggil dengan policy=...).
+                # Tanpa policy, penalti bukti suhu kosong dihitung berbeda dan
+                # selisihnya tepat 0,30 (0,964286 vs 0,664286) — itu cacat
+                # kontrak tes, bukan bug skor (terukur 28 Okt 2026).
+                from app.core.commodity_policy import policy_for
+
                 expected = rs.compute_freshness_score(
                     harvested["old"], AS_OF, rs.settings.shelf_life_days_telur,
                     _log_suhu(harvested["old"]),
                     rs.settings.safe_temp_min_c, rs.settings.safe_temp_max_c,
+                    policy=policy_for("telur"),
                 )
                 assert batches[str(ids["old"])]["freshness_score"] == rs._score(
                     Decimal(str(expected))

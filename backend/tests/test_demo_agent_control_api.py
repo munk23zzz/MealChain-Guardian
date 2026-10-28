@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -121,7 +122,7 @@ def test_run_ahli_gizi_ditolak_403(client, pemakai):
 # --- jalur sukses ----------------------------------------------------------
 
 
-def test_run_memakai_lokasi_akun_dan_komoditas_bawaan(client, monkeypatch, pemakai):
+def test_run_tanpa_payload_menjalankan_semua_komoditas(client, monkeypatch, pemakai):
     dipanggil: dict = {}
 
     def _fake(commodity, target_location, **kwargs):
@@ -134,9 +135,17 @@ def test_run_memakai_lokasi_akun_dan_komoditas_bawaan(client, monkeypatch, pemak
     resp = client.post("/demo/agent/run", json={}, headers=_login(client, head))
 
     assert resp.status_code == 201, resp.text
-    # Tanpa payload: beras + lokasi akun sendiri (bukan lokasi yang diketik klien).
-    assert dipanggil == {"commodity": "beras", "target_location": "Jakarta", "ttl_minutes": 30}
+    # Tanpa payload (28 Okt 2026): SEMUA komoditas, lokasi akun sendiri. Bawaan
+    # `beras` dihapus karena lokasi yang tidak kekurangan beras membuat setiap
+    # klik berakhir 409. `demo_session_id` = sesi yang sedang berjalan (bila ada),
+    # supaya keputusan hasil agent ikut terhapus saat sesi berakhir.
+    dipanggil.pop("demo_session_id", None)
+    assert dipanggil["target_location"] == "Jakarta"
+    assert dipanggil["ttl_minutes"] == 30
+    # satu putaran per komoditas; nama datang dari DB, bukan dipaku
+    assert dipanggil["commodity"]
     body = resp.json()
+    assert body["scope"] == "semua"
     assert body["target_location"] == "Jakarta"
     assert body["supervisor"]["status"] == "narrated"
     assert body["agent_review"]["status"] in {
@@ -164,6 +173,7 @@ def test_run_komoditas_dan_ttl_bisa_diubah(client, monkeypatch, pemakai):
         headers=_login(client, head),
     )
     assert resp.status_code == 201, resp.text
+    dipanggil.pop("demo_session_id", None)
     assert dipanggil == {"commodity": "telur", "target_location": "Jakarta", "ttl_minutes": 45}
 
 
@@ -487,4 +497,130 @@ def test_last_run_memilih_putaran_pipeline_penuh(client, pemakai) -> None:
         with engine.begin() as conn:
             _bersihkan(conn)
         engine.dispose()
+
+
+# --- putaran SEMUA komoditas (28 Okt 2026) ----------------------------------
+#
+# Kenapa ada: bawaan `beras` membuat tombol "Jalankan agent" selalu 409 di
+# lokasi yang tidak kekurangan beras, padahal komoditas lain punya celah
+# pasokan. Sekarang satu klik menjalankan satu putaran per komoditas, dan
+# komoditas yang tidak punya celah DILEWATI (dilaporkan di `skipped`) bukan
+# menggagalkan seluruh permintaan.
+
+
+def test_run_semua_komoditas_satu_gagal_tidak_membatalkan_lain(
+    client, monkeypatch, pemakai
+):
+    dipanggil: list[str] = []
+
+    def _fake(commodity, target_location, **kwargs):
+        dipanggil.append(commodity)
+        if commodity == "beras":
+            raise ValueError("tidak ada pemasok yang memasok Jakarta untuk beras")
+        return _fake_outcome(commodity=commodity)
+
+    monkeypatch.setattr("app.api.demo.run_supplier_procurement", _fake)
+
+    head = pemakai("sppg_head", "Jakarta")
+    resp = client.post("/demo/agent/run", json={}, headers=_login(client, head))
+
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert len(dipanggil) > 1, "tanpa payload: satu putaran per komoditas"
+    dibuat = {c["commodity"] for c in body["created"]}
+    dilewati = {s["commodity"]: s["reason"] for s in body["skipped"]}
+    assert "beras" not in dibuat
+    assert "pemasok" in dilewati["beras"].lower()
+    assert dibuat, "komoditas lain tetap menghasilkan keputusan"
+    assert body["primary_decision_id"] == body["decision_id"]
+    assert body["scope"] == "semua"
+
+
+def test_run_semua_komoditas_gagal_semua_dijawab_409(client, monkeypatch, pemakai):
+    def _fake(commodity, target_location, **kwargs):
+        raise ValueError(
+            f"tidak ada pemasok yang memasok {target_location} untuk {commodity}"
+        )
+
+    monkeypatch.setattr("app.api.demo.run_supplier_procurement", _fake)
+
+    head = pemakai("sppg_head", "Jakarta")
+    resp = client.post("/demo/agent/run", json={}, headers=_login(client, head))
+
+    assert resp.status_code == 409
+    detail = resp.json()["detail"].lower()
+    assert "tidak ada komoditas" in detail
+    assert "pemasok" in detail, "alasan per komoditas ikut dilaporkan"
+
+
+class _SesiPalsu:
+    """Bentuk minimal yang dibaca `blok_sesi` (id, mode, jangkar, dataset)."""
+
+    id = uuid.uuid4()
+    mode = "realtime"
+    evaluation_anchor = datetime(2026, 10, 28, 0, 0, tzinfo=timezone.utc)
+    dataset_version = "uji"
+
+
+def test_run_terikat_sesi_demo_yang_sedang_berjalan(client, monkeypatch, pemakai):
+    """Keputusan hasil agent WAJIB berstempel sesi. Tanpa stempel, "Akhiri sesi"
+    tidak pernah menghapusnya, jadi data demo tidak hilang saat waktu demo habis.
+    """
+    diterima: dict = {}
+    ditandai: list[uuid.UUID] = []
+
+    def _fake(commodity, target_location, **kwargs):
+        diterima.update(kwargs)
+        return _fake_outcome(commodity=commodity)
+
+    async def _aktif(db):
+        return _SesiPalsu()
+
+    async def _tandai(db, sesi_id):
+        ditandai.append(sesi_id)
+        return 0
+
+    monkeypatch.setattr("app.api.demo.run_supplier_procurement", _fake)
+    monkeypatch.setattr("app.services.demo_session.aktif", _aktif)
+    monkeypatch.setattr("app.services.demo_session.tandai_sesi", _tandai)
+
+    head = pemakai("sppg_head", "Jakarta")
+    resp = client.post(
+        "/demo/agent/run",
+        json={"commodity": "telur"},
+        headers=_login(client, head),
+    )
+
+    assert resp.status_code == 201, resp.text
+    assert diterima["demo_session_id"] == _SesiPalsu.id
+    assert ditandai == [_SesiPalsu.id], "baris Core/bulk ikut distempel sesi"
+
+
+def test_run_tanpa_sesi_saat_penjaga_menyala_dijawab_409(
+    client, monkeypatch, pemakai
+):
+    """Penjaga sesi menyala + tidak ada sesi aktif = tolak, bukan menulis baris
+    kanonik yang tidak akan pernah terhapus."""
+    async def _aktif(db):
+        return None
+
+    monkeypatch.setattr(
+        "app.api.demo.run_supplier_procurement",
+        lambda commodity, target_location, **kwargs: _fake_outcome(commodity=commodity),
+    )
+    monkeypatch.setattr("app.services.demo_session.aktif", _aktif)
+
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "demo_session_enforce", True, raising=False)
+
+    head = pemakai("sppg_head", "Jakarta")
+    resp = client.post(
+        "/demo/agent/run",
+        json={"commodity": "telur"},
+        headers=_login(client, head),
+    )
+
+    assert resp.status_code == 409
+    assert "sesi demo" in resp.json()["detail"].lower()
 

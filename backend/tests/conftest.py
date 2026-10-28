@@ -361,11 +361,13 @@ def _sapu_sisa_test() -> int:
             with engine.begin() as conn:
                 conn.execute(
                     text(
+                        # Tanpa saringan umur: FK `approvals_approved_by_fkey`
+                        # tetap menggagalkan DELETE users bila ada satu approval
+                        # milik user uji yang baru dibuat (terukur 28 Okt 2026:
+                        # suite penuh gagal saat dijalankan berurutan, padahal
+                        # berkasnya lulus sendiri-sendiri).
                         "DELETE FROM approvals WHERE approved_by IN "
-                        "(SELECT id FROM users WHERE email LIKE :p "
-                        " AND created_at < now() - interval '"
-                        + _SISA_UMUR_TENGGANG
-                        + "')"
+                        "(SELECT id FROM users WHERE email LIKE :p)"
                     ),
                     {"p": _SISA_TEST_LIKE},
                 )
@@ -725,8 +727,12 @@ def jaga_kiriman_demo(request):
         yield
         return
     # Modul pengadaan butuh batch SEGAR, bukan sekadar "ada batch demo": suite
-    # lain mem-purge/membasi-kan batch, dan batch lama tetap terhitung ada.
-    # Selalu semai ulang (idempoten, tanggal diperbarui) untuk modul ini.
-    if nama == "test_supplier_procurement_eval.py" or not _ada_kiriman_demo():
+    # lain mem-purge/membasi-kan batch, dan batch kanonik 8 Okt tetap terhitung
+    # ada walau kesegarannya jauh di bawah ambang. Terukur 27 Okt 2026 pada
+    # gerbang DB terpisah: 50 gagal, 40 di antaranya "tidak ada kandidat
+    # eligible untuk Event 1 (telur -> Jakarta)" karena pemeriksaan lama hanya
+    # menghitung keberadaan baris. Pemeriksaannya diganti ke "ada batch demo
+    # yang dibuat HARI INI" — predikat yang sama dengan jaring sesi di atas.
+    if nama == "test_supplier_procurement_eval.py" or not _ada_kiriman_demo_hari_ini():
         _semai_kiriman_demo()
     yield

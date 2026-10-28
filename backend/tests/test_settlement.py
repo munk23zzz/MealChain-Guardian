@@ -5,8 +5,9 @@ kutipan pemasok, `disposal_events`) hanya ditulis oleh seeder, sehingga kartu
 KPI tidak bergerak saat operator menerima barang, mengeksekusi keputusan, atau
 mencatat limbah. Berkas ini mengunci kontrak `app/services/settlement.py`:
 
-1. penerimaan disetujui -> satu baris `delivery_events`, porsi = kg ÷ gram
-   per porsi komoditas, dibatasi sisa rencana porsi hari itu (tidak melebihkan);
+1. penerimaan disetujui -> TIDAK menulis `delivery_events`; hanya proyeksi porsi
+   (kg ÷ gram per porsi, dibatasi sisa rencana) yang dikembalikan berlabel. Bahan
+   diterima bukan makanan tersaji (Fase 8, 27 Okt 2026);
 2. PO terbit -> satu baris `price_signals` sumber `supplier_quote`;
 3. limbah dicatat -> satu baris `disposal_events`;
 4. ketiganya idempoten: panggilan kedua tidak menggandakan angka;
@@ -71,19 +72,19 @@ async def _komoditas_beras(db) -> Commodity | None:
     ).scalar_one_or_none()
 
 
-async def test_penerimaan_menulis_porsi_dan_idempoten(sesi):
+async def test_penerimaan_hanya_proyeksi_tanpa_fakta_tersaji(sesi):
+    """Fase 8: bahan diterima ≠ porsi tersaji.
+
+    Dulu penerimaan disetujui menulis `delivery_events.delivered_portions`, sehingga
+    kartu Meal Continuity melaporkan "porsi tersaji" dari berat yang diterima.
+    Sekarang penerimaan hanya mengembalikan proyeksi berlabel; TIDAK ada fakta kiriman
+    yang ditulis, jadi metrik operasional tetap `no_data` sampai petugas mencatat kiriman.
+    """
     db = sesi
     rencana = await _rencana_hari_ini(db)
     komoditas = await _komoditas_beras(db)
     if rencana is None or komoditas is None:
         pytest.skip("tidak ada rencana menu hari ini / komoditas beras")
-
-    # Beri ruang porsi di dalam TRANSAKSI tes saja: rencana demo hari ini bisa
-    # sudah terpenuhi 100%, dan `uq_menu_plans_loc_date` melarang rencana kedua
-    # untuk lokasi+tanggal yang sama. Perubahan ini di-rollback oleh fixture.
-    rencana.planned_portions = int(rencana.planned_portions) + 1000
-    await db.flush()
-    rencana.is_dirty_uji = True  # penanda jelas: tidak pernah di-commit
 
     receipt_id = uuid.uuid4()
     ref = f"receipt:{receipt_id}"
@@ -99,26 +100,20 @@ async def test_penerimaan_menulis_porsi_dan_idempoten(sesi):
         db, batch=batch, receipt=receipt, sekarang=sekarang
     )
     await db.flush()
-    assert hasil["ditulis"] is True, hasil
-    assert hasil["porsi"] == 300  # 30 kg ÷ 100 g/porsi
-    assert hasil["gram_per_porsi"] == pytest.approx(settings.menu_grams_beras)
 
-    # Idempoten: panggilan kedua tidak menambah baris.
-    ulang = await settlement.catat_penerimaan(
-        db, batch=batch, receipt=receipt, sekarang=sekarang
-    )
-    assert ulang["ditulis"] is False
-    assert ulang["alasan"] == "sudah tercatat"
+    assert hasil["ditulis"] is False, hasil
+    assert "proyeksi" in hasil["alasan"].lower(), hasil
+    assert hasil["porsi_dari_berat"] == 300  # 30 kg ÷ 100 g/porsi
+    assert hasil["gram_per_porsi"] == pytest.approx(settings.menu_grams_beras)
+    # Proyeksi dibatasi sisa rencana, tetapi tidak pernah melebihi berat terima.
+    assert 0 <= hasil["proyeksi_porsi"] <= hasil["porsi_dari_berat"]
 
     jumlah = (
         await db.execute(
             select(func.count()).select_from(DeliveryEvent).where(DeliveryEvent.source_ref == ref)
         )
     ).scalar_one()
-    assert jumlah == 1
-
-    await db.execute(delete(DeliveryEvent).where(DeliveryEvent.source_ref == ref))
-    await db.flush()
+    assert jumlah == 0, "penerimaan tidak boleh menulis baris porsi tersaji"
 
 
 async def test_po_terbit_menulis_kutipan_harga_dan_idempoten(sesi):

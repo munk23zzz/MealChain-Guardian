@@ -65,16 +65,29 @@ def _login(client: TestClient, user: dict) -> dict:
 
 
 def _batch_pemasok_di_sppg() -> dict:
-    """Batch milik pemasok DI SPPG tujuan (definisi "memasok SPPG ini")."""
+    """Batch milik pemasok DI SPPG tujuan (definisi "memasok SPPG ini").
+
+    Keadaan batch DIPAKSA layak (safety `pass`, masa layak jauh di depan)
+    sebelum dipakai. Tanpa ini fixture bergantung pada urutan suite: tes lain
+    boleh menandai batch yang sama `fail` atau kedaluwarsa, dan guard lalu
+    menolak dengan alasan yang benar tetapi bukan yang sedang diuji
+    (terukur: `safety revalidation gagal: batch sumber kedaluwarsa` di suite
+    penuh, padahal lulus saat berkas dijalankan sendiri).
+    """
     row = _exec(
         "SELECT b.id, b.supplier_id, b.location_id, b.commodity_id, l.name "
         "FROM batches b "
         "JOIN suppliers s ON s.id = b.supplier_id "
         "JOIN locations l ON l.id = b.location_id "
-        "WHERE b.location_id = s.location_id AND b.safety_status = 'pass' "
+        "WHERE b.location_id = s.location_id "
         "ORDER BY b.created_at DESC LIMIT 1"
     )
-    assert row, "butuh batch pemasok-di-SPPG yang aman untuk fixture"
+    assert row, "butuh batch pemasok-di-SPPG untuk fixture"
+    _exec(
+        "UPDATE batches SET safety_status = 'pass', "
+        "usable_until = now() + interval '30 days' WHERE id = :b",
+        {"b": str(row[0][0])},
+    )
     return {
         "batch_id": str(row[0][0]),
         "supplier_id": str(row[0][1]),
@@ -84,32 +97,48 @@ def _batch_pemasok_di_sppg() -> dict:
     }
 
 
-def _batch_lokasi_lain(location_id: str) -> dict:
+def _nama_lokasi(location_id: str) -> str:
+    row = _exec("SELECT name FROM locations WHERE id = CAST(:l AS uuid)", {"l": location_id})
+    assert row, f"lokasi {location_id} tidak ada"
+    return row[0][0]
+
+
+def _batch_lokasi_lain(location_id: str, commodity_id: str) -> dict:
+    """Batch komoditas SAMA di lokasi LAIN (untuk kasus negatif lokasi)."""
     row = _exec(
         "SELECT b.id, b.supplier_id, b.location_id FROM batches b "
-        "WHERE b.location_id <> :l AND b.safety_status = 'pass' LIMIT 1",
-        {"l": location_id},
+        "WHERE b.location_id <> CAST(:l AS uuid) "
+        "AND b.commodity_id = CAST(:k AS uuid) "
+        "AND b.safety_status = 'pass' LIMIT 1",
+        {"l": location_id, "k": commodity_id},
     )
-    assert row, "butuh batch di lokasi lain untuk fixture negatif"
+    assert row, "butuh batch komoditas sama di lokasi lain untuk fixture negatif"
     return {
         "batch_id": str(row[0][0]),
         "supplier_id": str(row[0][1]),
         "location_id": str(row[0][2]),
+        "commodity_id": commodity_id,
     }
 
 
 def _siapkan(
     *,
     jenis: str = "supplier_procurement",
-    batch: dict | None = None,
+    target: dict | None = None,
+    binding_batch: dict | None = None,
     supplier_binding: str | None = None,
     source_null: bool = True,
     approver_kota: str | None = None,
 ) -> dict:
-    """Keputusan pending + binding + dua approval (head & ahli gizi) target."""
+    """Keputusan pending + binding + dua approval (head & ahli gizi) lokasi TUJUAN.
+
+    `target` menentukan SPPG tujuan + komoditas; `binding_batch` menentukan batch
+    yang ditulis ke bukti (boleh sengaja tidak cocok untuk kasus negatif).
+    """
     dasar = _batch_pemasok_di_sppg()
-    batch = batch or dasar
-    supplier_binding = supplier_binding or batch["supplier_id"]
+    target = target or dasar
+    binding_batch = binding_batch or target
+    supplier_binding = supplier_binding or binding_batch["supplier_id"]
     did = str(uuid.uuid4())
     _exec(
         "INSERT INTO decisions (id, decision_type, status, proposed_by, "
@@ -117,7 +146,7 @@ def _siapkan(
         "safe_delivered_cost, expires_at, cost_breakdown, iteration, "
         "verified_by, verifier_note, supplier_id) "
         "VALUES (:id, :jenis, 'pending_approval', 'supervisor_agent', "
-        "CASE WHEN :src_null THEN NULL ELSE CAST(:target AS uuid) END, "
+        "CASE WHEN :src_null THEN NULL ELSE CAST(:src AS uuid) END, "
         "CAST(:target AS uuid), CAST(:kom AS uuid), 300, "
         "9000000, now() + interval '45 minutes', "
         "'{\"purchase\": \"9000000\", \"candidate_score\": \"0.4\"}'::jsonb, 1, "
@@ -126,8 +155,9 @@ def _siapkan(
             "id": did,
             "jenis": jenis,
             "src_null": source_null,
-            "target": batch["location_id"],
-            "kom": batch["commodity_id"],
+            "src": target["location_id"],
+            "target": target["location_id"],
+            "kom": target["commodity_id"],
             "sup": supplier_binding if jenis == "supplier_procurement" else None,
         },
     )
@@ -139,12 +169,12 @@ def _siapkan(
             "p": (
                 '{"allocation_binding": true, "procurement": true, '
                 '"supplier_id": "' + supplier_binding + '", '
-                '"target_location_id": "' + batch["location_id"] + '", '
-                '"batch_ids": ["' + batch["batch_id"] + '"]}'
+                '"target_location_id": "' + target["location_id"] + '", '
+                '"batch_ids": ["' + binding_batch["batch_id"] + '"]}'
             ),
         },
     )
-    kota = approver_kota or dasar["kota"]
+    kota = approver_kota or _nama_lokasi(target["location_id"])
     kepala = _mk_user("sppg_head", kota)
     gizi = _mk_user("sppg_nutritionist", kota)
     for u in (kepala, gizi):
@@ -153,7 +183,7 @@ def _siapkan(
             "SELECT :d, u.id, true, 'fixture' FROM users u WHERE u.email = :e",
             {"d": did, "e": u["email"]},
         )
-    return {"decision_id": did, "kepala": kepala, "gizi": gizi, "batch": batch}
+    return {"decision_id": did, "kepala": kepala, "gizi": gizi, "batch": target}
 
 
 def _bersihkan(hasil: dict) -> None:
@@ -201,8 +231,8 @@ def test_pengadaan_tanpa_lokasi_asal_bisa_dieksekusi(client):
 def test_binding_pengadaan_batch_lokasi_lain_ditolak(client):
     """Batch bukan di SPPG tujuan tetap 409 dengan pesan yang sama (bukan dilonggarkan)."""
     dasar = _batch_pemasok_di_sppg()
-    lain = _batch_lokasi_lain(dasar["location_id"])
-    hasil = _siapkan(batch={**lain, "commodity_id": dasar["commodity_id"]})
+    lain = _batch_lokasi_lain(dasar["location_id"], dasar["commodity_id"])
+    hasil = _siapkan(binding_batch=lain)
     try:
         headers = _login(client, hasil["kepala"])
         resp = client.post(
@@ -217,7 +247,7 @@ def test_binding_pengadaan_batch_lokasi_lain_ditolak(client):
 def test_binding_pengadaan_supplier_lain_ditolak(client):
     """Supplier di binding bukan pemilik batch → 409."""
     dasar = _batch_pemasok_di_sppg()
-    lain = _batch_lokasi_lain(dasar["location_id"])
+    lain = _batch_lokasi_lain(dasar["location_id"], dasar["commodity_id"])
     hasil = _siapkan(supplier_binding=lain["supplier_id"])
     try:
         headers = _login(client, hasil["kepala"])

@@ -9,10 +9,11 @@ Percobaan pertama perbaikan (25 Okt 2026) terlalu jauh: "SEMUA batch harus
 tak terkait memblokir eksekusi selamanya (seed kanonik: Jakarta/ayam
 `['fail','pass']`) dan memutus paritas dengan `can_execute`.
 
-Kontrak akhir: himpunan batch dari `batch_sumber_transfer`; blokir hanya pada
-fakta keras (tidak ada batch, `fail`, karantina, kedaluwarsa); `pending` dan
-`needs_verification` TIDAK memblokir karena itu keadaan normal sebelum
-pengujian.
+Kontrak akhir (MG/phase-04-safety-gates.md poin 1-4): himpunan batch dari
+`batch_sumber_transfer`, dievaluasi oleh SATU evaluator
+(`app.core.batch_eligibility`). Hanya batch `usable` yang meloloskan eksekusi;
+`pending` dan `needs_verification` adalah `on_hold` — boleh dilaporkan untuk
+verifikasi, tetapi tidak boleh dieksekusi atau menjadi stok `usable`.
 """
 
 from __future__ import annotations
@@ -84,10 +85,14 @@ async def test_semua_batch_aman_meloloskan_eksekusi():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("status", ["pending", "needs_verification", "pass"])
-async def test_status_belum_pass_tidak_memblokir_eksekusi(status):
-    """Paritas dengan `can_execute`: hanya `fail` yang memblokir eksekusi."""
-    assert await _nilai([_batch(), _batch(id="batch-2", safety_status=status)]) is True
+@pytest.mark.parametrize("status", ["pending", "needs_verification"])
+async def test_status_belum_pass_memblokir_eksekusi(status):
+    """Fase 4: batch yang belum terbukti aman TIDAK boleh dieksekusi.
+
+    Sebelum Fase 4 kedua status ini lolos (paritas dengan `can_execute` lama
+    yang hanya melihat `fail`) — itulah celah yang ditutup di sini.
+    """
+    assert await _nilai([_batch(), _batch(id="batch-2", safety_status=status)]) is False
 
 
 @pytest.mark.asyncio
@@ -106,11 +111,15 @@ async def test_batch_kedaluwarsa_memblokir_eksekusi():
 
 
 @pytest.mark.asyncio
-async def test_bukti_suhu_tidak_lengkap_tidak_memblokir_di_eksekusi():
-    """Kelengkapan bukti ditegakkan saat dispatch (batch masuk `ditahan`),
-    bukan dengan menolak seluruh keputusan — kalau tidak, paritas UI↔API
-    pecah lagi (`can_execute` hanya melihat `fail`)."""
-    assert await _nilai([_batch(temperature_log=[])]) is True
+async def test_bukti_suhu_tidak_lengkap_memblokir_eksekusi():
+    """Log kurang dari dua sampel = `on_hold`, bukan `pass` (poin 1 Fase 4)."""
+    assert await _nilai([_batch(temperature_log=[])]) is False
+
+
+@pytest.mark.asyncio
+async def test_usable_until_kosong_memblokir_eksekusi():
+    """Tidak ada provenance masa layak = tidak dapat dibuktikan layak."""
+    assert await _nilai([_batch(usable_until=None)]) is False
 
 
 @pytest.mark.asyncio

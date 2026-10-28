@@ -151,3 +151,102 @@ def test_execute_ditolak_untuk_batch_butuh_verifikasi():
         assert "safety revalidation gagal" in resp.text
     finally:
         _pulihkan(asli)
+
+
+def _baca_umur_dan_log(batch_ids: list[str]):
+    """Simpan `usable_until` + `temperature_log` asli supaya bisa dipulihkan."""
+    engine = _db()
+    try:
+        with engine.begin() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT id, usable_until, temperature_log FROM batches "
+                    "WHERE id = ANY(:ids)"
+                ),
+                {"ids": batch_ids},
+            ).all()
+        return [(str(r[0]), r[1], r[2]) for r in rows]
+    finally:
+        engine.dispose()
+
+
+def _pulihkan_umur_dan_log(asli) -> None:
+    import json
+
+    engine = _db()
+    try:
+        with engine.begin() as conn:
+            for batch_id, layak, log in asli:
+                conn.execute(
+                    text(
+                        "UPDATE batches SET usable_until = :u, "
+                        "temperature_log = CAST(:l AS jsonb) WHERE id = :i"
+                    ),
+                    {"u": layak, "l": json.dumps(log), "i": batch_id},
+                )
+    finally:
+        engine.dispose()
+
+
+def test_execute_ditolak_bila_barang_kedaluwarsa_sebelum_dikirim():
+    """Butir 1 Fase 4: `usable_until` lewat → 409 `batch_expired`, bukan 200."""
+    target = _keputusan_dengan_batch()
+    if target is None:
+        import pytest
+
+        pytest.skip("tidak ada keputusan approved dengan batch sumber di DB uji")
+    decision_id, lokasi, batch = target
+    ids = [b[0] for b in batch]
+    asli = _baca_umur_dan_log(ids)
+    try:
+        _set_status(ids, "pass")
+        engine = _db()
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "UPDATE batches SET usable_until = now() - interval '2 hours' "
+                        "WHERE id = ANY(:ids)"
+                    ),
+                    {"ids": ids},
+                )
+        finally:
+            engine.dispose()
+        resp = _eksekusi(decision_id, lokasi)
+        assert resp.status_code == 409, resp.text
+        assert "kedaluwarsa" in resp.text.lower()
+    finally:
+        _pulihkan_umur_dan_log(asli)
+        _pulihkan([(b[0], b[1]) for b in batch])
+
+
+def test_execute_ditolak_bila_bukti_suhu_kosong():
+    """Butir 1 Fase 4: log suhu kosong → on_hold, bukan lolos sebagai aman."""
+    target = _keputusan_dengan_batch()
+    if target is None:
+        import pytest
+
+        pytest.skip("tidak ada keputusan approved dengan batch sumber di DB uji")
+    decision_id, lokasi, batch = target
+    ids = [b[0] for b in batch]
+    asli = _baca_umur_dan_log(ids)
+    try:
+        _set_status(ids, "pass")
+        engine = _db()
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "UPDATE batches SET temperature_log = '[]'::jsonb "
+                        "WHERE id = ANY(:ids)"
+                    ),
+                    {"ids": ids},
+                )
+        finally:
+            engine.dispose()
+        resp = _eksekusi(decision_id, lokasi)
+        assert resp.status_code == 409, resp.text
+        assert "bukti suhu" in resp.text.lower()
+    finally:
+        _pulihkan_umur_dan_log(asli)
+        _pulihkan([(b[0], b[1]) for b in batch])

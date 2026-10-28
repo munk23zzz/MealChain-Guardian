@@ -35,7 +35,7 @@ from sqlalchemy import delete, select
 
 from app.core.config import settings
 from app.db import create_engine, create_session_maker
-from app.models import Approval, Batch, Decision, DecisionEvidence, User
+from app.models import Approval, Batch, Decision, DecisionEvidence, DemoSession, User
 from app.seed.demo_activity import (
     KOTA_DEMO,
     demo_decision_id,
@@ -312,8 +312,16 @@ async def _ringkasan(decision_id: uuid.UUID) -> dict:
         await engine.dispose()
 
 
-async def _kedaluwarsakan(batch_ids: list[uuid.UUID]) -> dict:
-    """Paksa batch sumber lewat masa layaknya; kembalikan nilai aslinya."""
+async def _kedaluwarsakan(
+    batch_ids: list[uuid.UUID], acuan: datetime | None = None
+) -> dict:
+    """Paksa batch sumber lewat masa layaknya; kembalikan nilai aslinya.
+
+    27 Okt 2026: keputusan demo dievaluasi pada JANGKAR sesinya (replay = 8 Okt),
+    jadi "kedaluwarsa" harus dihitung terhadap jangkar itu — bukan jam dinding.
+    Memakai jam dinding membuat batch yang sudah lewat masa layak pada jangkar
+    justru terlihat masih berlaku, dan tes ini gagal karena gate-nya benar.
+    """
     asli: dict = {}
     engine = create_engine(settings.database_url)
     maker = create_session_maker(engine)
@@ -323,9 +331,31 @@ async def _kedaluwarsakan(batch_ids: list[uuid.UUID]) -> dict:
                 b = await sesi.get(Batch, bid)
                 assert b is not None, f"batch {bid} tidak ada"
                 asli[bid] = b.usable_until
-                b.usable_until = datetime.now(UTC) - timedelta(hours=1)
+                # Acuan = jangkar sesi keputusan (diberikan pemanggil) atau
+                # jangkar sesi batch; jam dinding hanya bila keduanya tidak ada.
+                saat = acuan
+                if saat is None and b.demo_session_id is not None:
+                    dari_sesi = await sesi.get(DemoSession, b.demo_session_id)
+                    saat = getattr(dari_sesi, "evaluation_anchor", None)
+                if saat is None:
+                    saat = datetime.now(UTC)
+                b.usable_until = saat - timedelta(hours=1)
             await sesi.commit()
         return asli
+    finally:
+        await engine.dispose()
+
+
+async def _jangkar_keputusan(keputusan) -> datetime | None:
+    """Jangkar evaluasi sesi milik satu keputusan (None bila tanpa sesi)."""
+    if getattr(keputusan, "demo_session_id", None) is None:
+        return None
+    engine = create_engine(settings.database_url)
+    maker = create_session_maker(engine)
+    try:
+        async with maker() as sesi:
+            baris = await sesi.get(DemoSession, keputusan.demo_session_id)
+            return getattr(baris, "evaluation_anchor", None)
     finally:
         await engine.dispose()
 
@@ -411,7 +441,7 @@ async def test_menyemai_ulang_menyembuhkan_sumber_yang_sudah_kedaluwarsa() -> No
     terikat = await _batch_terikat(target.id)
     assert terikat, f"keputusan {target.id} tidak punya allocation_binding"
 
-    asli = await _kedaluwarsakan(terikat)
+    asli = await _kedaluwarsakan(terikat, acuan=await _jangkar_keputusan(target))
     try:
         sebelum = await _ringkasan(target.id)
         assert sebelum["blocking_reasons"] != [], (

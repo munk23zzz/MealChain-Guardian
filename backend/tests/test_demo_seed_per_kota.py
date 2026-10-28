@@ -172,18 +172,38 @@ def test_keputusan_ditolak_punya_pencatat(client):
         _drop(kepala["email"])
 
 
+def _baris_semua_kasus(kota: str) -> list[dict]:
+    """Baris KASUS yang ditulis `/demo/seed` untuk satu kota (skrip + komoditas).
+
+    Fase 7 menambahkan kasus komoditas ke KELUARAN endpoint yang sama, jadi
+    `already` pada respons mencakupnya. `_demo_rows` sengaja tetap menyaring
+    empat kasus SKRIP: himpunan itulah yang dipakai asersi nama kasus.
+    """
+    from app.services.scenario_specs import kasus_komoditas
+
+    kunci = list(DEMO_CASES) + [spec.key for spec in kasus_komoditas()]
+    return _rows(
+        "SELECT d.id, d.demo_case, d.status, dl.name AS target, sl.name AS sumber "
+        "FROM decisions d "
+        "JOIN locations dl ON dl.id = d.target_location_id "
+        "LEFT JOIN locations sl ON sl.id = d.source_location_id "
+        "WHERE d.demo_case = ANY(:kasus) AND dl.name = :k",
+        {"k": kota, "kasus": kunci},
+    )
+
+
 def test_seed_idempoten_per_kota(client):
     kepala = _mk_user("sppg_head", "Bandung")
     try:
         headers = _login(client, kepala)
         client.post("/demo/seed", json={"force": True}, headers=headers)
-        jumlah = len(_demo_rows("Bandung"))
+        jumlah = len(_baris_semua_kasus("Bandung"))
         resp = client.post("/demo/seed", json={"force": False}, headers=headers)
         assert resp.status_code == 200, resp.text
         body = resp.json()
         assert body["seeded"] is False
         assert body["already"] == jumlah
-        assert len(_demo_rows("Bandung")) == jumlah
+        assert len(_baris_semua_kasus("Bandung")) == jumlah
     finally:
         _drop(kepala["email"])
 

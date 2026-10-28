@@ -159,13 +159,16 @@ def test_jalan_lokal_mengoper_model_ke_verifier_dan_memetakan_status(
 ) -> None:
     ditangkap: dict = {}
 
-    def _fake_review(decision_id, *, api, workers, timeout_seconds, mode):
+    def _fake_review(
+        decision_id, *, api, workers, timeout_seconds, mode, narrator=None
+    ):
         ditangkap.update(
             decision_id=decision_id,
             workers=workers,
             timeout_seconds=timeout_seconds,
             mode=mode,
             base_url=api.base_url,
+            narrator=narrator,
         )
         return _RunPalsu()
 
@@ -196,14 +199,20 @@ def test_jalan_lokal_mengoper_model_ke_verifier_dan_memetakan_status(
     assert ditangkap["mode"] == "advisory"
     assert ditangkap["base_url"] == "http://127.0.0.1:8000"
     assert ditangkap["decision_id"] == "decision-1"
+    # Agent ke-9 (supervisor) PUNYA jalur narasi: `narrator` selalu diteruskan
+    # (None hanya bila tidak ada model yang bisa dipanggil).
+    assert "narrator" in ditangkap
 
 
 def test_api_lokal_menghormati_env_dan_tidak_memakai_url_tunnel(monkeypatch) -> None:
     """Review lokal harus membaca backend LOKAL, bukan tunnel milik runtime."""
     ditangkap: dict = {}
 
-    def _fake_review(decision_id, *, api, workers, timeout_seconds, mode):
+    def _fake_review(
+        decision_id, *, api, workers, timeout_seconds, mode, narrator=None
+    ):
         ditangkap["base_url"] = api.base_url
+        ditangkap["narrator"] = narrator
         return _RunPalsu()
 
     monkeypatch.setattr("agent.orchestrator.run_review", _fake_review)

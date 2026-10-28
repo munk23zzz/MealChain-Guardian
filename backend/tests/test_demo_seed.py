@@ -44,7 +44,6 @@ def test_seed_idempotent_dan_lengkap():
             r1 = c.post("/demo/seed", json={"force": True}, headers=auth_headers)
             assert r1.status_code == 200, r1.text
             assert r1.json()["seeded"] is True
-            assert r1.json()["decisions"] == 7
 
             # Idempotent: seed ulang tanpa force → skip.
             r2 = c.post("/demo/seed", json={}, headers=auth_headers)
@@ -67,6 +66,15 @@ def test_seed_idempotent_dan_lengkap():
             assert CASES <= set(per_case)
             assert per_case["rejection-loop-kuota"] == 3
             assert per_case["gangguan-logistik"] == 2
+            # Jumlah yang dilaporkan seed = baris kasus yang benar-benar
+            # tertulis untuk kasus yang DEKLARASIKAN seed (skrip + komoditas).
+            # Angka mati `== 7` basi sejak kasus komoditas Fase 7 ikut disemai.
+            kunci_deklarasi = CASES | {
+                kasus.get("case") for kasus in r1.json().get("commodity_cases", [])
+            }
+            assert r1.json()["decisions"] == sum(
+                n for k, n in per_case.items() if k in kunci_deklarasi
+            )
 
             # v3 kuota: pending_approval FRESH, chain utuh v1→v2→v3.
             with engine.begin() as conn:

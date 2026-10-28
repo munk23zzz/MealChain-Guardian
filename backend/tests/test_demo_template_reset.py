@@ -65,11 +65,43 @@ def test_tolak_saat_kunci_dipegang():
 def test_memanggil_penyemai_dengan_opsi_yang_benar(monkeypatch):
     dipanggil: dict = {}
 
-    async def build_palsu(db, *, purge, freeze, bersihkan_sisa):
-        dipanggil.update({"purge": purge, "freeze": freeze, "bersihkan_sisa": bersihkan_sisa})
+    async def build_palsu(db, *, purge, freeze, bersihkan_sisa, mode=None, anchor=None):
+        # `mode`/`anchor` (Fase 7 MG) diteruskan pembangun template; palsu ini
+        # mencatatnya supaya perubahan kontrak pemanggil tetap terlihat.
+        dipanggil.update(
+            {
+                "purge": purge,
+                "freeze": freeze,
+                "bersihkan_sisa": bersihkan_sisa,
+                "mode": mode,
+                "anchor": anchor,
+            }
+        )
         return {"hitung": {"batches": 121, "decisions": 27}, "kasus": {}, "bukti": {}}
 
+    class _HasilKosong:
+        """Hasil query kosong: cukup untuk pembacaan "sesi aktif terakhir"."""
+
+        def scalar_one_or_none(self):
+            return None
+
+        def scalars(self):
+            return self
+
+        def all(self):
+            return []
+
+        def first(self):
+            return None
+
     class DbPalsu:
+        # 27 Okt 2026: `_sesi_aktif_terakhir()` (dipakai saat menyemai template)
+        # memanggil `db.execute(select(...))`. DB palsu tanpa `execute` membuat
+        # tes ini gagal dengan AttributeError padahal alurnya benar — jadi
+        # pembacaan dipenuhi dengan hasil kosong, bukan dengan menambal kode.
+        async def execute(self, *args, **kwargs):
+            return _HasilKosong()
+
         async def commit(self):
             return None
 
@@ -116,7 +148,14 @@ def test_memanggil_penyemai_dengan_opsi_yang_benar(monkeypatch):
         return await reset.bangun_ulang(DbPalsu())  # type: ignore[arg-type]
 
     hasil = asyncio.run(skenario())
-    assert dipanggil == {"purge": True, "freeze": True, "bersihkan_sisa": False}
+    assert dipanggil == {
+        "purge": True,
+        "freeze": True,
+        "bersihkan_sisa": False,
+        # Tanpa sesi aktif, mode/jangkar memang tidak diisi.
+        "mode": None,
+        "anchor": None,
+    }
     assert dilengkapi == {"deret": True, "aktivitas": True, "pelengkap": True}
     assert hasil["hitung"]["batches"] == 121
     assert hasil["hitung"]["decisions"] == 48  # dibaca sesudah langkah pelengkap

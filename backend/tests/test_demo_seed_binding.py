@@ -63,7 +63,7 @@ def test_kasus_demo_punya_binding_pemasok_yang_cocok_dengan_batch() -> None:
                 kasus = conn.execute(
                     text(
                         "SELECT d.id, d.demo_case, d.status, d.source_location_id, "
-                        "       d.commodity_id "
+                        "       d.commodity_id, d.decision_type, d.target_location_id "
                         "FROM decisions d JOIN locations l ON l.id = d.target_location_id "
                         "WHERE d.demo_case IS NOT NULL AND l.name = 'Jakarta' "
                         "AND d.status = ANY(:aktif) "
@@ -84,7 +84,15 @@ def test_kasus_demo_punya_binding_pemasok_yang_cocok_dengan_batch() -> None:
                 ).all()
             assert kasus, "seed demo tidak membuat keputusan yang bisa ditindaklanjuti"
 
-            for decision_id, case, status, sumber, komoditas in kasus:
+            for (
+                decision_id,
+                case,
+                status,
+                sumber,
+                komoditas,
+                jenis,
+                tujuan,
+            ) in kasus:
                 with engine.begin() as conn:
                     binding = _bindings(conn, str(decision_id))
                 assert len(binding) == 1, (
@@ -103,7 +111,14 @@ def test_kasus_demo_punya_binding_pemasok_yang_cocok_dengan_batch() -> None:
                         {"b": batch_ids[0]},
                     ).one()
                 assert str(batch[0]) == payload["supplier_id"], f"{case}: supplier tidak cocok"
-                assert batch[1] == sumber, f"{case}: batch bukan dari lokasi asal keputusan"
+                # Pengadaan tidak memindahkan stok SPPG lain: batch acuannya di
+                # SPPG TUJUAN milik pemasok keputusan (audit 27 Okt 2026). Jenis
+                # pemindahan tetap di lokasi ASAL.
+                acuan = tujuan if jenis == "supplier_procurement" else sumber
+                assert batch[1] == acuan, (
+                    f"{case} ({jenis}): batch bukan dari lokasi acuan keputusan "
+                    f"({batch[1]} != {acuan})"
+                )
                 assert batch[2] == komoditas, f"{case}: batch komoditas lain"
 
                 ringkas = c.get(

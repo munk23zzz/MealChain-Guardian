@@ -291,10 +291,12 @@ def test_seed_realtime_membawa_anchor_dan_versi_dataset_sendiri(tanpa_sesi_aktif
         assert sesi["dataset_version"] != decision_time.REPLAY_DATASET_VERSION
         # Semua keputusan hasil seed (termasuk yang `rejected`) milik sesi ini.
         baris = _keputusan_sesi(sid)
-        # 4 kasus skrip, 7 baris: rantai penolakan membuat v1/v2 kuota dan
-        # g1 logistik ikut tersimpan.
-        assert len(baris) == 7
-        assert {r[1] for r in baris} == set(KASUS_SKRIP)
+        # 4 kasus skrip = 7 baris (rantai penolakan membuat v1/v2 kuota dan g1
+        # logistik ikut tersimpan), ditambah kasus komoditas Fase 7. Jumlah
+        # tidak dipaku: yang dikunci adalah "seed hanya menulis baris yang
+        # dilaporkannya, dan semuanya dimiliki sesi ini".
+        assert len(baris) == resp.json()["decisions"]
+        assert set(KASUS_SKRIP) <= {r[1] for r in baris}
         assert all(r[3] == "demo" for r in baris)
         tolak = [r for r in baris if r[2] == "rejected"]
         assert tolak, "seed harus tetap membuat baris rejected (chain penolakan)"
@@ -862,6 +864,68 @@ def test_penulis_po_memakai_sesi_dari_keputusan():
 # ------------------------------------- 8. mode pada analisis + penerimaan
 
 
+
+# ------------------------------------- 9. read path: jangkar sesi pada detail
+
+def _sisip_keputusan_berjangkar(sid: uuid.UUID, *, status: str = "proposed") -> uuid.UUID:
+    """Satu keputusan milik `sid`, cukup lengkap untuk `GET /decisions/{id}`.
+
+    Dibuat lewat SQL supaya tes ini tidak bergantung pada mesin rekomendasi
+    (yang butuh kandidat + snapshot) — yang diuji adalah READ PATH-nya.
+    """
+    did = uuid.uuid4()
+    engine = _db()
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO decisions (id, decision_type, status, proposed_by, "
+                    " target_location_id, quantity_kg, expires_at, created_at, "
+                    " demo_session_id, demo_case, iteration) "
+                    "SELECT :id, 'regional_balance', :st, u.id, u.location_id, 10, "
+                    "       now() + interval '2 hours', now(), :sid, false, 1 "
+                    "FROM users u WHERE u.email = :email LIMIT 1"
+                ),
+                {"id": did, "st": status, "sid": sid, "email": EMAIL},
+            )
+    finally:
+        engine.dispose()
+    return did
+
+
+def _hapus_keputusan(did: uuid.UUID) -> None:
+    engine = _db()
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM decisions WHERE id = :id"), {"id": did})
+    finally:
+        engine.dispose()
+
+
+def test_detail_keputusan_membawa_jangkar_sesi(tanpa_sesi_aktif):
+    """`GET /decisions/{id}` menjawab jam evaluasi + mode sesi pemiliknya.
+
+    Inilah read path yang membutuhkan relasi sesi: relasinya
+    `lazy="raise_on_sql"`, jadi jawaban 200 di sini hanya mungkin bila query
+    memuat relasi itu lebih dulu (selectinload) — bukan lazy-load di dalam loop.
+    """
+    anchor = datetime(2026, 9, 1, 3, 0, tzinfo=UTC)
+    sid = _buat_sesi(mode="replay", anchor=anchor)
+    did = _sisip_keputusan_berjangkar(sid)
+    try:
+        with TestClient(app) as client:
+            head = _login(client)
+            resp = client.get(f"/decisions/{did}", headers=head)
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["demo_session_id"] == str(sid)
+        assert data["session_mode"] == "replay"
+        assert data["evaluation_anchor"] == anchor.isoformat()
+    finally:
+        _hapus_keputusan(did)
+        _hapus_sesi(sid)
+
+
 def _payload_pengadaan(commodity: str) -> dict:
     """Balasan minimal `run_supplier_procurement` untuk uji seam endpoint."""
     return {
@@ -1015,3 +1079,124 @@ def _hapus_penerimaan_uji(batch_id: uuid.UUID) -> None:
             )
     finally:
         engine.dispose()
+
+
+# ------------------------------------- 10. reset: kiriman, pasokan, ledger
+
+def _baris_sesi(tabel: str, sid: uuid.UUID) -> list[tuple]:
+    engine = _db()
+    try:
+        with engine.begin() as conn:
+            return conn.execute(
+                text(f"SELECT id::text FROM {tabel} WHERE demo_session_id = :s"),
+                {"s": sid},
+            ).all()
+    finally:
+        engine.dispose()
+
+
+def _jumlah_ledger() -> int:
+    engine = _db()
+    try:
+        with engine.begin() as conn:
+            return int(conn.execute(text("SELECT count(*) FROM ledger_blocks")).scalar_one())
+    finally:
+        engine.dispose()
+
+
+def _pindah_sebagian_ke_sesi(tabel: str, dari: uuid.UUID, ke: uuid.UUID, jumlah: int) -> int:
+    """Pindahkan `jumlah` baris `dari` → `ke` supaya dua sesi berbagi satu DB.
+
+    Dipakai alih-alih menyemai dua kali: penyemaian kedua menabrak
+    `uq_demand_records_loc_com_time` (baris kanon sama, sesi berbeda) dan
+    kegagalannya bukan tentang kepemilikan.
+    """
+    engine = _db()
+    try:
+        with engine.begin() as conn:
+            hasil = conn.execute(
+                text(
+                    f"UPDATE {tabel} SET demo_session_id = :ke WHERE id IN "
+                    f"(SELECT id FROM {tabel} WHERE demo_session_id = :dari LIMIT :n)"
+                ),
+                {"ke": ke, "dari": dari, "n": jumlah},
+            )
+            return int(hasil.rowcount or 0)
+    finally:
+        engine.dispose()
+
+
+def _tandai_milik_sesi(tabel: str, sid: uuid.UUID, jumlah: int) -> int:
+    """Tandai `jumlah` baris demo TANPA pemilik sebagai milik `sid`.
+
+    `POST /demo/seed` menulis KEPUTUSAN kasus (plus batch/kebutuhan/harga kasus
+    komoditas). Kiriman (`delivery_events`) dan pasokan (`supply_records`)
+    dataset demo lahir dari penyemai deret waktu, bukan dari seed kasus — jadi
+    tes di bawah menyiapkan barisnya sendiri, lalu menguji yang sebenarnya
+    diuji: cakupan reset terhadap kiriman + pasokan.
+    """
+    engine = _db()
+    try:
+        with engine.begin() as conn:
+            hasil = conn.execute(
+                text(
+                    f"UPDATE {tabel} SET demo_session_id = :s WHERE id IN "
+                    f"(SELECT id FROM {tabel} WHERE demo_session_id IS NULL "
+                    f"AND origin = 'demo' LIMIT :n)"
+                ),
+                {"s": sid, "n": jumlah},
+            )
+            return int(hasil.rowcount or 0)
+    finally:
+        engine.dispose()
+
+
+def test_reset_menghapus_kiriman_dan_pasokan_sesi_itu_saja(tanpa_sesi_aktif):
+    """Reset sesi A menghapus kiriman + pasokan A, menyisakan B dan ledger.
+
+    Butir rencana menyebut eksplisit: decision, PO, **shipment**, supply record,
+    dan fakta. Tes purge sebelumnya hanya memeriksa decision, jadi kiriman dan
+    pasokan bisa lolos tanpa ketahuan.
+
+    Reset yang diuji adalah RESET SESI AKTIF lewat endpoint (`POST /demo/seed`
+    dengan `force=true`), bukan panggilan `purge_session` langsung — supaya
+    terbukti jalur PRODUK yang memakainya, bukan hanya fungsinya.
+    """
+    sid_a = _buat_sesi(mode="replay", anchor=datetime(2026, 10, 8, 12, tzinfo=UTC))
+    sid_b: uuid.UUID | None = None
+    try:
+        anchor_b = datetime.now(UTC).replace(microsecond=0)
+        sid_b = _buat_sesi(
+            mode="realtime",
+            anchor=anchor_b,
+            dataset_version=decision_time.dataset_version_untuk("realtime", anchor_b),
+        )
+        if _tandai_milik_sesi("delivery_events", sid_a, 3) != 3 or (
+            _tandai_milik_sesi("supply_records", sid_a, 5) != 5
+        ):
+            pytest.skip("tidak ada baris demo tanpa pemilik (DB belum disemai)")
+        assert _tandai_milik_sesi("delivery_events", sid_b, 2) == 2
+        assert _tandai_milik_sesi("supply_records", sid_b, 4) == 4
+
+        kiriman_b = _baris_sesi("delivery_events", sid_b)
+        pasokan_b = _baris_sesi("supply_records", sid_b)
+        assert _baris_sesi("delivery_events", sid_a)
+        assert _baris_sesi("supply_records", sid_a)
+        ledger_awal = _jumlah_ledger()
+
+        with TestClient(app) as client:
+            head = _login(client)
+            reset = client.post(
+                "/demo/seed",
+                json={"force": True, "mode": "replay", "demo_session": str(sid_a)},
+                headers=head,
+            )
+            assert reset.status_code == 200, reset.text
+
+        assert not _baris_sesi("delivery_events", sid_a), "kiriman sesi A tersisa"
+        assert not _baris_sesi("supply_records", sid_a), "pasokan sesi A tersisa"
+        assert _baris_sesi("delivery_events", sid_b) == kiriman_b, "reset A menghapus kiriman B"
+        assert _baris_sesi("supply_records", sid_b) == pasokan_b, "reset A menghapus pasokan B"
+        assert _jumlah_ledger() == ledger_awal, "reset sesi menghapus ledger"
+    finally:
+        _hapus_sesi(sid_a, *([sid_b] if sid_b else []))

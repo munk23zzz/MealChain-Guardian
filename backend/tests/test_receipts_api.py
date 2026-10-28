@@ -4,8 +4,11 @@ Diuji terhadap DB nyata (pola conftest repo ini): 201 benar-benar tersimpan,
 scope lokasi berlaku untuk pencatat, dan catatan kosong tidak jadi string kosong.
 """
 
+import json
 import uuid
+from datetime import UTC, datetime, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 
 from tests.dsn import DSN_SYNC  # DSN mengikuti DATABASE_URL
@@ -15,6 +18,80 @@ def _client():
     from app.main import app
 
     return TestClient(app)
+
+
+@pytest.fixture()
+def batch_siap_terima():
+    """Batch baru di Jakarta yang LOLOS evaluator kelayakan Fase 4.
+
+    Sebelum Fase 4, tes pencatatan penerimaan memakai batch demo terbaru
+    (`_batch_jakarta_id`). Gerbang kelayakan membuat batch demo yang masa
+    layaknya sudah lewat ditolak 409 `batch_expired` — benar sebagai perilaku,
+    tetapi membuat tes endpoint bergantung pada umur data demo (merah hanya
+    karena kalender). Fixture ini menyemai batch sendiri: safety `pass`,
+    `usable_until` di depan, dan log suhu dua sampel bersih. Batch dihapus
+    setelah tes, jadi tidak ada residu di DB tes.
+    """
+    from sqlalchemy import create_engine, text
+
+    bid = str(uuid.uuid4())
+    sekarang = datetime.now(UTC)
+    log = [
+        {
+            "timestamp": (sekarang - timedelta(hours=4)).isoformat(),
+            "temperature_c": 4.0,
+        },
+        {
+            "timestamp": (sekarang - timedelta(hours=2)).isoformat(),
+            "temperature_c": 4.5,
+        },
+        {"timestamp": sekarang.isoformat(), "temperature_c": 5.0},
+    ]
+    engine = create_engine(DSN_SYNC)
+    try:
+        with engine.begin() as conn:
+            lokasi = conn.execute(
+                text("SELECT id FROM locations WHERE name = 'Jakarta'")
+            ).scalar_one()
+            komoditas = conn.execute(
+                text("SELECT id FROM commodities WHERE name = 'telur'")
+            ).scalar_one()
+            pemasok = conn.execute(
+                text(
+                    "SELECT supplier_id FROM batches b JOIN locations l ON l.id = b.location_id "
+                    "WHERE l.name = 'Jakarta' LIMIT 1"
+                )
+            ).scalar_one()
+            conn.execute(
+                text(
+                    "INSERT INTO batches (id, commodity_id, location_id, supplier_id, "
+                    "quantity_kg, harvested_at, temperature_log, certification_status, "
+                    "freshness_score, safety_status, usable_until, origin) VALUES "
+                    "(:id, :komoditas, :lokasi, :pemasok, 120, :panen, :log, 'hygiene', "
+                    "0.95, 'pass', :layak, 'demo')"
+                ),
+                {
+                    "id": bid,
+                    "komoditas": str(komoditas),
+                    "lokasi": str(lokasi),
+                    "pemasok": str(pemasok),
+                    "panen": sekarang - timedelta(hours=6),
+                    "log": json.dumps(log),
+                    "layak": sekarang + timedelta(days=3),
+                },
+            )
+    finally:
+        engine.dispose()
+    yield bid
+    engine = create_engine(DSN_SYNC)
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM batch_receipts WHERE batch_id = :id"), {"id": bid}
+            )
+            conn.execute(text("DELETE FROM batches WHERE id = :id"), {"id": bid})
+    finally:
+        engine.dispose()
 
 
 def _batch_jakarta_id() -> str:
@@ -87,8 +164,8 @@ def _bersihkan(*ids: str) -> None:
         engine.dispose()
 
 
-def test_catat_penerimaan_tersimpan_dan_terbaca_kembali(auth_headers):
-    batch_id = _batch_jakarta_id()
+def test_catat_penerimaan_tersimpan_dan_terbaca_kembali(auth_headers, batch_siap_terima):
+    batch_id = batch_siap_terima
     dibuat: list[str] = []
     try:
         with _client() as c:
@@ -121,9 +198,9 @@ def test_catat_penerimaan_tersimpan_dan_terbaca_kembali(auth_headers):
         _bersihkan(*dibuat)
 
 
-def test_catatan_kosong_disimpan_sebagai_null(auth_headers):
+def test_catatan_kosong_disimpan_sebagai_null(auth_headers, batch_siap_terima):
     """Menulis spasi ≠ menulis catatan; UI harus bisa membedakannya."""
-    batch_id = _batch_jakarta_id()
+    batch_id = batch_siap_terima
     dibuat: list[str] = []
     try:
         with _client() as c:
@@ -162,8 +239,10 @@ def test_batch_lokasi_lain_dibalas_403(auth_headers):
         assert resp.status_code == 403, resp.text
 
 
-def test_monitor_nasional_hanya_bisa_membaca(monitor_headers, auth_headers):
-    batch_id = _batch_jakarta_id()
+def test_monitor_nasional_hanya_bisa_membaca(
+    monitor_headers, auth_headers, batch_siap_terima
+):
+    batch_id = batch_siap_terima
     dibuat: list[str] = []
     try:
         with _client() as c:
@@ -190,8 +269,8 @@ def test_monitor_nasional_hanya_bisa_membaca(monitor_headers, auth_headers):
         _bersihkan(*dibuat)
 
 
-def test_urutan_terbaru_dulu_dan_batas_limit(auth_headers):
-    batch_id = _batch_jakarta_id()
+def test_urutan_terbaru_dulu_dan_batas_limit(auth_headers, batch_siap_terima):
+    batch_id = batch_siap_terima
     dibuat: list[str] = []
     try:
         with _client() as c:

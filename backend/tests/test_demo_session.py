@@ -398,7 +398,12 @@ def test_stempel_otomatis_saat_enforce(monkeypatch):
             try:
                 monkeypatch.setattr(settings, "demo_session_enforce", True)
                 sesi.set_sesi(sid)
-                batch = await _buat_batch(db, loc, com, sup)
+                # `origin="demo"` WAJIB: sejak regresi 27 Okt 2026 penjaga hanya
+                # menstempel baris demo (`boleh_distempel`), sedangkan `origin`
+                # bawaan kolom adalah 'seed' (baris kanonik tidak boleh
+                # berstempel sesi). Tanpa ini asersi di bawah menguji baris
+                # kanonik, bukan perilaku stempel yang dimaksud tes.
+                batch = await _buat_batch(db, loc, com, sup, origin="demo")
                 assert batch.demo_session_id == sid
             finally:
                 sesi.set_sesi(None)
