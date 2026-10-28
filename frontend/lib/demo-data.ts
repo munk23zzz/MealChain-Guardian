@@ -165,7 +165,7 @@ export function purgeWarning(): string {
   return (
     "Menghapus SEMUA baris deret waktu demo (pasokan, harga, rencana menu). " +
     "Snapshot kanonik tidak tersentuh — Overview kembali ke angka kanonik " +
-    "(4.900 kg, 3 surplus : 7 shortage). Kasus skrip punya tombolnya sendiri, " +
+    "(4.900 kg telur di jangkar). Kasus skrip punya tombolnya sendiri, " +
     "jadi ia tetap ada."
   );
 }
@@ -196,8 +196,8 @@ export function purgeLine(result: any): string {
 export function refreshWarning(): string {
   return (
     "Seeder relatif menjalankan ulang snapshot kanonik pada tanggal HARI INI dan " +
-    "memuat ulang 4 kasus skrip dengan batas waktu baru. Nilai jangkar (4.900 kg, " +
-    "3 surplus : 7 shortage, Cianjur 1.400 kg) tidak berubah — yang bergeser adalah " +
+    "memuat ulang 4 kasus skrip dengan batas waktu baru. Nilai jangkar (4.900 kg " +
+    "telur, Cianjur 1.400 kg) tidak berubah — yang bergeser adalah " +
     "TANGGALNYA, sehingga tes backend yang memaku 8 Okt 12.00 tidak lagi cocok sampai " +
     "snapshot dikembalikan. Akun demo tidak direset dan baris deret waktu demo tidak dihapus."
   );

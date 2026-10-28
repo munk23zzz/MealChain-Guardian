@@ -27,6 +27,11 @@ const API_ROOTS = [
   "events",
   "price",
   "kpi",
+  // 27 Okt 2026: angka pengadaan untuk tile Overview (PO terbit, keputusan
+  // berjejak ACT, batch berangkat). Tanpa akar ini tile menerima 404 HTML dari
+  // router Next sendiri dan menulis "gagal memuat angka pengadaan" — terukur
+  // saat uji UI pertama.
+  "procurement",
   "ledger",
   "demo",
   "batches",

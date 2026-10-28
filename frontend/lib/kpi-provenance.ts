@@ -47,12 +47,12 @@ export const KPI_SCOPES: readonly { key: KpiScope; label: string; hint: string }
   {
     key: "operational",
     label: "Operasional",
-    hint: "Hanya fakta kerja: baris yang bukan milik sesi demo.",
+    hint: "Fakta kerja, tanpa data simulasi.",
   },
   {
     key: "demo",
-    label: "Simulasi (demo)",
-    hint: "Hanya fakta sesi demo yang sedang aktif. Angka di sini simulasi, bukan hasil lapangan.",
+    label: "Simulasi",
+    hint: "Angka simulasi, bukan hasil lapangan.",
   },
 ];
 
@@ -63,12 +63,6 @@ export function scopeLabel(mode: unknown): string {
   if (m === "operational") return "Hasil operasional";
   return "Cakupan tidak disebutkan";
 }
-
-/** Kalimat penjelas perbedaan dua cakupan — dipakai tooltip toggle. */
-export const SCOPE_EXPLANATION =
-  "Operasional menghitung fakta kerja (tanpa baris sesi demo). " +
-  "Simulasi menghitung satu sesi demo yang sedang aktif, sehingga angkanya " +
-  "bukan hasil lapangan dan tidak boleh dibandingkan dengan angka operasional.";
 
 /* --------------------------------------------------------------- baseline */
 

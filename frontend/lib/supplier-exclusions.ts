@@ -1,6 +1,7 @@
 import { metodeMenulis, segarkanSetelahTulis } from "./refresh";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// `||` bukan `??`: basis kosong menghasilkan URL relatif yang gagal di fetch.
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 // Keep backend validation details visible; generic api.request drops them.
 async function request<T>(path: string, init: RequestInit): Promise<T> {

@@ -218,8 +218,8 @@ export default function HumanReviewPanel({
               placeholder="Contoh: suhu ruang muat dicek ulang, dua sampel baru dicatat dari termometer kalibrasi."
             />
             <small className="field-note">
-              {alasan.trim().length}/{REASON_MIN} karakter — "aman" saja bukan
-              alasan.
+              {alasan.trim().length}/{REASON_MIN} karakter — &ldquo;aman&rdquo; saja
+              bukan alasan.
             </small>
           </label>
 

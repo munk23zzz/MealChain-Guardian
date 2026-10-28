@@ -446,10 +446,10 @@ export default function TodayDashboard({
           )}
         </article>
 
-        {/* 4. KPI 24 jam terakhir */}
+        {/* 4. KPI periode berjalan (hari ini, sejak 00.00 WIB) */}
         <article className="card today-card today-kpi" id="today-kpi" tabIndex={-1}>
           <div className="today-card-head">
-            <h2>KPI 24 jam</h2>
+            <h2>KPI hari ini</h2>
             <span className="today-count">
               {metricsTersedia}/{metrics.length || "—"}
             </span>

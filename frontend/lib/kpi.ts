@@ -1,7 +1,7 @@
 /** Gerbang muat KPI (GET /kpi) per tab.
 
 KPI dipakai DUA bagian aplikasi:
-- tab **Hari Ini** (kartu KPI 24 jam di rekap operasional), dan
+- tab **Hari Ini** (kartu KPI hari ini di rekap operasional), dan
 - tab **KPI & Kualitas Agen** (halaman gabungan, keputusan pemilik 2026-10-15).
 
 Sebelum 2026-10-15 `useKpi` TIDAK punya gerbang: potret KPI diambil di setiap tab

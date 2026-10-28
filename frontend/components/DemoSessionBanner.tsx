@@ -7,7 +7,7 @@
 // - Hanya muncul bila backend MELAPOR mode sesi menyala (`enforced`) dan tidak
 //   ada sesi aktif — di pengembangan (flag mati) banner tidak pernah tampil.
 // - Tidak ada tombol yang memanggil API tulis dari sini: tombol hanya membawa
-//   pengguna ke tab Demo Control, tempat tombol "Siapkan data demo" berada.
+//   pengguna ke tab Demo Control, tempat tombol "Muat Demo" berada.
 // - Status dibaca ulang tiap 10 detik, jadi sesi yang habis di tab lain ikut
 //   menampilkan petunjuk tanpa memuat ulang halaman. 10 detik (bukan 30)
 //   karena penyemaian sesi butuh ~30 detik: banner tidak boleh tertinggal jauh.
@@ -61,7 +61,7 @@ export default function DemoSessionBanner({
         </button>
       ) : (
         <p className="demo-kosong-teks demo-kosong-muted">
-          Minta Kepala SPPG menekan „Siapkan data demo” di Demo Control.
+          Minta Kepala SPPG menekan „Muat Demo” di Demo Control.
         </p>
       )}
     </div>

@@ -49,6 +49,7 @@ export default function ShipmentCard({
   hanya,
   empty,
   action,
+  anchor,
 }: {
   /** Payload `GET /supplier-routes` (amplop `{routes}` atau array). */
   routes: unknown;
@@ -63,12 +64,18 @@ export default function ShipmentCard({
   empty?: string;
   /** Tindakan per kiriman (mis. tombol "Periksa kiriman"). */
   action?: (row: SupplierRoute) => ReactNode;
+  /** id jangkar supaya kartu bisa ditautkan langsung (lompat ke bagian). */
+  anchor?: string;
 }) {
   const { rows, hidden } = pickShipments(supplierRoutes(routes), maks, hanya);
   if (!rows.length && empty === undefined) return null;
 
   return (
-    <section className="card shipment-card" aria-label={title}>
+    <section
+      className={anchor ? "card shipment-card jump-target" : "card shipment-card"}
+      id={anchor}
+      aria-label={title}
+    >
       <div className="card-header">
         <h2>{title}</h2>
         {rows.length > 0 && (

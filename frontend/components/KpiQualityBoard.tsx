@@ -22,6 +22,7 @@ import AgentQualityBoard from "./AgentQualityBoard";
 import KPIDashboard from "./KPIDashboard";
 import type { QualityRun } from "../lib/agent-quality";
 import type { KpiWindowKey } from "../lib/kpi";
+import type { KpiScope } from "../lib/kpi-provenance";
 
 export default function KpiQualityBoard({
   kpi,
@@ -30,6 +31,9 @@ export default function KpiQualityBoard({
   onRetryKpi,
   windowKey,
   onWindowChange,
+  scope,
+  onScopeChange,
+  scopeDisabledReason,
   runs,
   evaluatedCount,
   totalDecisions,
@@ -46,6 +50,10 @@ export default function KpiQualityBoard({
   /** Jendela KPI yang sedang diminta halaman + pengubahnya (pemilih periode). */
   windowKey?: KpiWindowKey;
   onWindowChange?: (key: KpiWindowKey) => void;
+  /** Cakupan data KPI (fakta kerja vs sesi demo) + pengubahnya. */
+  scope?: KpiScope;
+  onScopeChange?: (scope: KpiScope) => void;
+  scopeDisabledReason?: string | null;
   /** Sampel keputusan untuk penilaian mutu agen (8 terakhir dalam cakupan). */
   runs: QualityRun[];
   evaluatedCount: number;
@@ -64,6 +72,9 @@ export default function KpiQualityBoard({
         onRetry={onRetryKpi}
         windowKey={windowKey}
         onWindowChange={onWindowChange}
+        scope={scope}
+        onScopeChange={onScopeChange}
+        scopeDisabledReason={scopeDisabledReason}
       />
       {/* Pembatas bergaris: dua bagian panjang dalam satu gulungan tanpa
           penanda mudah terbaca sebagai satu tabel raksasa. */}

@@ -517,7 +517,12 @@ dl dd,
   background: var(--accent-strong);
   color: var(--ink-inverse);
   border: 1px solid transparent;
-  border-radius: var(--radius-control-sm);
+  /* 27 Okt 2026 (permintaan pemilik): semua TOMBOL berbentuk pil/oval.
+     Sebelumnya 8 px lalu 4 px — keduanya terbaca kotak. Nilai `999px` ada di
+     skala radius sah (tests/radius-scale-css.test.ts). Kartu/baris yang seluruh
+     permukaannya bisa diklik TIDAK diikutkan — lihat blok "tombol pil" di akhir
+     berkas. */
+  border-radius: 999px;
   padding: 8px 16px;
   font-size: var(--fs-3);
   font-weight: 500;
@@ -1048,30 +1053,6 @@ a:focus-visible {
   color: var(--ink-muted);
 }
 
-.role-hero .role-steps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 18px;
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: var(--fs-1);
-  line-height: var(--lh-body);
-  color: var(--ink-muted);
-}
-
-.role-hero .role-steps li {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-/* Penanda langkah: arah panah kecil, bukan emoji. */
-.role-hero .role-steps li::before {
-  content: "\2192";
-  color: var(--accent-strong);
-}
-
 /* Konsol operasi — interaksi sebelum hasil */
 .ops-console {
   margin: 0 0 18px;
@@ -1351,10 +1332,6 @@ a:focus-visible {
 @media (max-width: 720px) {
   .ops-facts {
     grid-template-columns: max-content 1fr;
-  }
-
-  .role-steps {
-    padding-left: 18px;
   }
 }
 
@@ -4498,8 +4475,8 @@ a:focus-visible {
   border-top: 1px solid var(--line);
 }
 
-/* Tombol ala DESIGN.md Buttons: radius 4px, hover primary #115E59 */
-.button { border-radius: var(--radius-chip); }
+/* Tombol: radius pil (999px) sejak 27 Okt 2026 — lihat `.button` di atas dan
+   blok "tombol pil" di akhir berkas. Hover primary #115E59 tetap. */
 .button-secondary {
   background: var(--surface);
   color: var(--navy-700);
@@ -4765,6 +4742,200 @@ a:focus-visible {
   color: var(--ink-subtle);
 }
 
+/* "Pengadaan & eksekusi" di Overview (redesign 28 Okt 2026).
+   Arah pemilik: lebih sederhana, meniru bentuk kartu KPI di atasnya, tetapi
+   TANPA gradasi. Panel pembungkus, judul, subjudul, dan pil periode dihapus;
+   empat langkah langsung menjadi kartu terpisah dengan pita atas solid.
+   Urutan tetap dibawa nomor, bukan panah hiasan. */
+.procurement-today {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+/* Header panel (judul, subjudul, pil periode) dihapus 28 Okt 2026: angka
+   langsung menjadi pembuka section, penjelasan pindah ke disclosure di bawah. */
+
+.procurement-rail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* Kartu langkah = bentuk kartu KPI di atasnya: sudut 12px, border rambut,
+   pita atas 3px. Bedanya, latar di sini SOLID (--ok-bg), bukan gradasi. */
+.procurement-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: 10px;
+  row-gap: 4px;
+  padding: 14px 16px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: none;
+}
+
+/* Langkah yang angkanya benar-benar bergerak mendapat wash hijau rata. Kartu
+   "belum ada" tetap netral supaya tidak terbaca sebagai kemajuan. */
+.procurement-card.is-ok {
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+  border-top-color: var(--status-safe);
+}
+
+/* Pita atas kini border-top; pseudo lama tidak dipakai lagi. */
+.procurement-card::before {
+  display: none;
+}
+
+/* Panah hiasan dihapus: nomor 01–04 sudah menyatakan urutan, dan tanpa panel
+   pembungkus celah antar kartu cukup dibaca sebagai grid. */
+.procurement-card:not(:last-child)::after {
+  display: none;
+}
+
+.procurement-card-top {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Nomor langkah menggantikan titik nada bawaan .kpi-card-label: dua penanda di
+   satu baris hanya jadi bising. */
+.procurement-step {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-chip);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink-subtle);
+  font-size: var(--fs-1);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Nomor langkah yang sudah terisi menjadi blok hijau solid — satu titik fokus
+   kecil di kartu, tanpa menambah gradasi atau bayangan. */
+.procurement-card.is-ok .procurement-step {
+  background: var(--status-safe);
+  border-color: var(--status-safe);
+  color: #fff;
+}
+
+.procurement-card .kpi-card-label::before {
+  display: none;
+}
+
+.procurement-card .kpi-card-label {
+  min-width: 0;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+/* Angka diletakkan di KANAN label (28 Okt 2026): satu baris judul + nilai,
+   jadi kartu lebih pendek. Ukuran 20px tetap lebih besar dari label supaya
+   hierarki terbaca, dan unit mengecil di sebelahnya. */
+.procurement-card .kpi-card-value {
+  grid-column: 2;
+  margin-top: 0;
+  font-size: var(--fs-6);
+  line-height: 1.1;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* "belum ada"/"—" bukan angka: jangan diberi bobot visual angka besar, supaya
+   saat angkanya benar-benar ada (mis. 1 PO · Rp7,5 jt) mata langsung ke situ. */
+.procurement-card .kpi-card-value.is-unknown {
+  font-size: var(--fs-4);
+  font-weight: 500;
+  color: var(--ink-muted);
+  line-height: 1.4;
+}
+
+/* Keterangan bawah dipotong dua baris supaya keempat kartu punya tinggi dan
+   garis dasar yang sama; teks penuh tetap ada di title. */
+.procurement-card .kpi-card-foot {
+  grid-column: 1 / -1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Satuan ditulis sebaris dengan angka: "2 PO" — bukan angka telanjang yang
+   pembaca harus tebak. Ukurannya kecil supaya angka tetap jadi fokus. */
+.kpi-card-unit {
+  margin-left: 6px;
+  font-size: var(--fs-1);
+  font-weight: 500;
+  color: var(--ink-muted);
+  letter-spacing: 0;
+}
+
+/* Keterangan bawah dipotong dua baris; teks penuh tetap ada di title. Tanpa
+   potongan, keempat kartu jadi tinggi berbeda dan rel kehilangan garis dasar. */
+.procurement-card .kpi-card-mini {
+  grid-column: 1 / -1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Keadaan "belum ada eksekusi" ditulis SEKALI di bawah rel, bukan empat kali. */
+.procurement-empty {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-control-sm);
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font-size: var(--fs-2);
+}
+
+.procurement-note {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+}
+
+@media (max-width: 1180px) {
+  .procurement-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .procurement-card:not(:last-child)::after {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .procurement-today {
+    padding: 0;
+  }
+  .procurement-rail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Nilai di sisi KANAN (permintaan pemilik 2026-10-17: "bagian ini '−765,8 kg' di
    halaman overview tolong di buat di sebelah kanan juga — di Selisih pasokan
    Jakarta"): label di kiri, NILAI rata kanan pada baris yang sama, keterangan
@@ -4908,37 +5079,87 @@ a:focus-visible {
   padding: 2px 10px;
 }
 
-/* Banner peringatan lokasi kritis (tint danger, teks navy terbaca). */
+/* Banner peringatan lokasi kritis (tint danger, teks navy terbaca).
+   28 Okt 2026: dipadatkan (padding 12/16 → 8/12, teks 14 → 13) dan diberi
+   kedip halus pada bingkai + ikon; teks tetap diam supaya tetap terbaca. */
 .overview-alert {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 16px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
   border-radius: var(--radius-control-sm);
   border: 1px solid rgba(198, 40, 40, 0.4);
   background: rgba(198, 40, 40, 0.1);
   color: var(--navy-900);
-  font-size: var(--fs-3);
+  font-size: var(--fs-2);
+  line-height: 1.4;
+  animation: overview-alert-pulse 1.8s ease-in-out infinite;
 }
 
 .overview-alert p {
   margin: 0;
-  flex: 1 1 320px;
+  flex: 1 1 280px;
   min-width: 0;
 }
 
 .overview-alert svg {
   flex: none;
-  margin-top: 2px;
+  width: 14px;
+  height: 14px;
+  margin-top: 0;
   color: var(--status-danger);
-}
-
-.overview-alert p {
-  margin: 0;
+  animation: overview-alert-blink 1.8s steps(2, end) infinite;
 }
 
 .overview-alert strong {
   color: var(--status-danger);
+}
+
+.overview-alert-action {
+  flex: none;
+  min-height: 28px;
+  padding: 3px 10px;
+  border: 1px solid rgba(198, 40, 40, 0.4);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface);
+  color: var(--status-danger);
+  font: inherit;
+  font-size: var(--fs-1);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.overview-alert-action:hover {
+  background: var(--danger-bg);
+  border-color: var(--status-danger);
+}
+
+.overview-alert-action:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@keyframes overview-alert-pulse {
+  0%, 100% {
+    border-color: rgba(198, 40, 40, 0.4);
+    box-shadow: 0 0 0 0 rgba(198, 40, 40, 0);
+  }
+  50% {
+    border-color: rgba(198, 40, 40, 0.85);
+    box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.12);
+  }
+}
+
+@keyframes overview-alert-blink {
+  0%, 45%, 100% { opacity: 1; }
+  50%, 95% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overview-alert,
+  .overview-alert svg {
+    animation: none;
+  }
 }
 
 .commodity-pill {
@@ -7878,6 +8099,454 @@ a:focus-visible {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+/* ── Keamanan Pangan: tata letak band (27 Okt 2026, permintaan pemilik) ──────
+   Halaman dibaca sebagai papan operasi, bukan tumpukan kartu:
+   1) status seluruh cakupan = SATU band selebar halaman (tile status 4 kolom
+      yang sejajar dengan tile penanda di bawahnya) — dulu kartu ini duduk di
+      kolom kiri yang sempit sehingga empat tile berdesakan 3+1;
+   2) di dalam band, fakta keputusan di kiri dan tindakan + peringatan di kanan,
+      memakai lebar yang sama dengan baris tile di atasnya;
+   3) bukti suhu + urgensi berdampingan, kolom bukti lebih lebar karena isinya
+      catatan per batch (bukan angka pendek).
+   Tidak ada warna atau tipografi baru: hanya susunan. */
+.safety-band {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  column-gap: 20px;
+  row-gap: 10px;
+  align-items: start;
+}
+
+.safety-band > h2,
+.safety-band > .board-card-head,
+.safety-band > .stat-tiles {
+  grid-column: 1 / -1;
+}
+
+.safety-band > .fact-list {
+  grid-column: 1;
+}
+
+/* Di band yang lebar, fakta disusun 2 kolom: nilai tidak lagi melayang jauh dari
+   labelnya seperti pada satu kolom selebar 900 px. */
+.safety-band .fact-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+}
+
+.safety-band .fact-row {
+  grid-template-columns: minmax(104px, auto) minmax(0, 1fr);
+  padding: 6px 0;
+}
+
+.safety-band > .safety-cta {
+  grid-column: 2;
+  align-self: center;
+}
+
+.safety-band > .board-alert,
+.safety-band > .evidence-note {
+  grid-column: 1 / -1;
+}
+
+.safety-band .stat-tiles,
+.safety-band .stat-tiles-legend {
+  margin-bottom: 0;
+}
+
+.safety-band .stat-tiles {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* Penanda + keterangannya SATU baris (28 Okt 2026): dua tile penanda di dalam
+   baris 4 kolom menyisakan 452 px kosong di kanan, dan keterangan selebar band
+   menambah satu baris penuh (42 px). Sekarang penanda di kolom kiri, keterangan
+   di kolom kanan — barisnya penuh dan keterangan duduk di samping hal yang
+   dijelaskannya. */
+.safety-band > .stat-tiles-markers {
+  grid-column: 1;
+  /* auto-fit, bukan repeat(2): tampilan jaringan hanya punya satu penanda
+     (ditahan) dan kolomnya akan separuh kosong bila kolomnya dipaku dua. */
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.safety-band > .stat-tiles-legend {
+  grid-column: 2;
+  align-self: center;
+  margin: 0;
+}
+
+/* Judul band naik satu langkah (fs-3 → fs-5) supaya hierarki halaman jelas:
+   band = kepala, kartu lain = isi. Ukuran lain tetap memakai skala yang sama. */
+.safety-band .board-card-head h2 {
+  font-size: var(--fs-5);
+}
+
+/* Nada band: keadaan terburuk TIDAK lagi mewarnai permukaan kartu (permintaan
+   pemilik 27 Okt 2026: "shape utama jangan pakai warna merah, pakai putih
+   seperti shape di halaman lain"). Kartu sekarang putih dengan tepi 1 px yang
+   sama seperti kartu lain; nada dibawa oleh tiga hal yang tetap terbaca tanpa
+   bidang warna besar: lencana teks di kepala kartu, angka yang menuntut
+   perhatian, dan bar komposisi. */
+.safety-band,
+.safety-band[data-tone="danger"],
+.safety-band[data-tone="warn"],
+.safety-band[data-tone="ok"] {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+
+/* Lencana memakai tint token-nya sendiri (tidak ada bidang ber-tint yang perlu
+   ditutup lagi). Tidak ada override. */
+
+.safety-band .stat-tile-ok .stat-tile-value {
+  color: var(--ok-ink);
+}
+
+.safety-band .stat-tile-warn .stat-tile-value {
+  color: var(--warn-ink);
+}
+
+.safety-band .stat-tile-danger .stat-tile-value {
+  color: var(--danger-ink);
+}
+
+/* Peringatan di dalam band ber-tint dibalik: kotak putih bertepi bahaya, supaya
+   tetap terbaca sebagai peringatan dan bukan menyatu dengan latar. */
+.safety-band[data-tone="danger"] .board-alert {
+  background: var(--surface);
+}
+
+.safety-band .safety-cta {
+  margin-top: 0;
+}
+
+/* ── Ringkasan pengawasan, bentuk tenang (27 Okt 2026, putaran kedua).
+   Kritik atas putaran pertama: satu kartu memakai EMPAT pembawa warna sekaligus
+   (permukaan band ber-tint, garis nada 2 px di tiap tile, angka berwarna, bar
+   porsi berwarna) plus label huruf kapital berspasi dan chip berpilar — terlalu
+   banyak isyarat untuk sembilan angka kecil, dan itu yang membuatnya terbaca
+   ramai. Putaran ini memilih SATU pembawa warna per tingkat:
+     - permukaan band ber-tint + tepi kiri 4 px  → keadaan terburuk (sudah ada)
+     - angka ber-tone + titik kecil di depan label → nada per status uji
+   Bar porsi dibuang (dekorasi pada angka 1–9), huruf kapital dibuang (label
+   mengikuti pola `.kpi-card-label` halaman lain), chip berpilar jadi baris teks
+   berpemisah titik, supaya kartu tenang dan angkanya yang menonjol. */
+.safety-band {
+  display: flex;
+  flex-direction: column;
+  /* `align-items: start` warisan grid lama membuat semua anak menyusut selebar
+     isinya: bar komposisi tinggal 22 px dan sisa kanan kartu kosong. Regangan
+     penuh yang benar untuk satu kolom. */
+  align-items: stretch;
+  gap: 9px;
+}
+
+/* Netralkan penempatan grid lama supaya tidak ada anak yang "menempel" di kolom
+   yang sudah tidak dipakai. */
+.safety-band > * {
+  grid-column: auto;
+}
+
+.safety-band .board-card-head h2 {
+  font-size: var(--fs-4);
+}
+
+/* Kepala band: tombol tindakan + lencana nada dalam satu baris judul, supaya
+   tombol tidak memakan satu baris sendiri di bawah fakta (dulu ±49 px).
+   Tombolnya sekunder: satu-satunya bidang berwarna kuat di kartu ini adalah
+   keadaan band, bukan aksi. */
+.safety-head-right {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.safety-head-cta {
+  min-height: 26px;
+  padding: 3px 10px;
+  font-size: var(--fs-1);
+}
+
+/* Fakta ringkas sebaris: pasangan label–nilai yang DISEBAR selebar kartu, bukan
+   menumpuk di kiri lalu menyisakan setengah baris kosong. Semua teks tetap ada
+   di DOM (label "Batch diperiksa" tetap terbaca). */
+.safety-band .fact-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 18px;
+  margin: 0;
+}
+
+.safety-band .fact-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  grid-template-columns: none;
+  padding: 0;
+  font-size: var(--fs-1);
+}
+
+.safety-band .fact-row dt {
+  color: var(--ink-muted);
+}
+
+.safety-band .fact-row dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* ── Baris angka + bar komposisi (putaran ketiga, arah Swiss/minimal).
+   Alasan bentuk ini, bukan empat kotak: empat kotak bertepi untuk empat
+   bilangan satu-dua digit hanya menambah empat garis, empat latar, dan empat
+   sudut tanpa menambah makna — dan di atas band ber-tint, kotak putih itu yang
+   membuat kartu terbaca ramai. Di sini angka duduk di permukaan band, dipisah
+   garis rambut 1 px (grid Swiss), lalu SATU bar komposisi menyatakan porsi
+   keempatnya. Warna: angka memakai tinta status hanya untuk nada yang menuntut
+   perhatian (gagal/kuning); "aman" dan "belum diuji" memakai tinta biasa supaya
+   mata jatuh ke yang perlu ditindak. Bar komposisi memakai pasangan warna yang
+   SAMA dengan meter "Bukti suhu" (--safe-ink-tint/--warn-ink/--danger-ink/
+   --neutral-ink): --status-warning hanya 1,8:1 di atas tint, jadi tidak dipakai
+   sebagai bidang grafik. */
+.safety-figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.safety-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 12px;
+  border-left: 1px solid var(--line);
+}
+
+.safety-figure:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.safety-figure-value {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-7);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.safety-figure.is-danger .safety-figure-value {
+  color: var(--danger-ink);
+}
+
+.safety-figure.is-warn .safety-figure-value {
+  color: var(--warn-ink);
+}
+
+.safety-figure-label {
+  font-size: var(--fs-1);
+  font-weight: 500;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Bar komposisi: 6 px, celah 2 px, radius chip — persis bahasa meter di kartu
+   "Bukti suhu". Bukan hiasan: lebarnya porsi tiap status terhadap total. */
+.safety-ratio {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+  margin-top: 2px;
+}
+
+.safety-ratio-part {
+  flex: 1 1 0;
+  min-width: 4px;
+  border-radius: var(--radius-chip);
+}
+
+.safety-ratio-part[data-tone="ok"] {
+  background: var(--safe-ink-tint);
+}
+
+.safety-ratio-part[data-tone="warn"] {
+  background: var(--warn-ink);
+}
+
+.safety-ratio-part[data-tone="danger"] {
+  background: var(--danger-ink);
+}
+
+.safety-ratio-part[data-tone="muted"] {
+  background: var(--neutral-ink);
+}
+
+/* Baris meta: penanda di kiri, tautan legenda di kanan — satu baris penuh,
+   tanpa sisa ruang di kanan. */
+.safety-meta-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+
+/* Penanda: satu baris teks berpemisah titik, bukan chip berpilar — penanda
+   bukan tombol dan bukan bagian partisi status uji. */
+.safety-markers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.safety-markers-lead {
+  font-weight: 600;
+  color: var(--ink-subtle);
+}
+
+.safety-marker {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.safety-marker-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--ink-subtle);
+  transform: translateY(-1px);
+}
+
+.safety-marker.is-danger .safety-marker-dot {
+  background: var(--status-danger);
+}
+
+.safety-marker.is-warn .safety-marker-dot {
+  background: var(--status-warning);
+}
+
+.safety-marker-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.safety-marker-hint {
+  color: var(--ink-subtle);
+}
+
+/* Nol tidak butuh keterangan tindakan: "Kedaluwarsa 0 — lewat masa layak"
+   terbaca seperti peringatan padahal tidak ada yang perlu dikerjakan. */
+.safety-marker.is-muted .safety-marker-hint {
+  display: none;
+}
+
+.safety-legend {
+  flex: none;
+  padding-top: 0;
+}
+
+.safety-legend summary {
+  display: flex;
+  align-items: center;
+  min-height: 22px;
+  color: var(--ink-subtle);
+  cursor: pointer;
+  font-size: var(--fs-1);
+}
+
+.safety-legend summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.safety-legend .stat-tiles-legend {
+  margin: 2px 0 0;
+}
+
+@media (max-width: 1100px) {
+  .safety-figure {
+    padding: 0 10px;
+  }
+}
+
+@media (max-width: 640px) {
+  .safety-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 8px;
+  }
+  .safety-figure:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .safety-marker-hint {
+    display: none;
+  }
+}
+
+/* 28 Okt 2026: baris bukti dulu dua kolom 1,4fr/1fr. Kartu bukti suhu setinggi
+   ±900 px (ledger enam batch + alasan server) sedangkan "Batch perlu segera
+   dipakai" ±140 px, jadi kolom kanan menyisakan ±760 px ruang kosong. Keduanya
+   sekarang selebar halaman; kartu "segera" menyusun barisnya menjadi kolom
+   ringkas supaya tidak melar saat selebar 947 px. */
+.safety-grid-evidence {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.safety-grid-evidence .board-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px;
+}
+
+.safety-grid-evidence .board-list li {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1100px) {
+  .safety-band {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .safety-band > * {
+    grid-column: auto;
+  }
+
+  /* Penempatan dua kolom (penanda | keterangan) tidak berlaku di satu kolom;
+     selektor ini lebih spesifik daripada `.safety-band > *`, jadi harus
+     dikembalikan sendiri. */
+  .safety-band > .stat-tiles-markers,
+  .safety-band > .stat-tiles-legend {
+    grid-column: 1 / -1;
+  }
+
+  .safety-band .stat-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .safety-grid-evidence {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .board-alert {
   margin: 0.75rem 0 0;
   padding: 0.7rem 0.85rem;
@@ -9037,6 +9706,25 @@ button:active:not(:disabled),
   color: var(--neutral-ink);
 }
 .action-menu-button { flex: none; }
+/* MG/phase-04 poin 7: langkah verifikasi berikutnya di dalam catatan penahan.
+   Dibedakan dari kalimat sebab (bukan warna status baru): tinta biasa +
+   huruf tebal, supaya terbaca sebagai PERINTAH, bukan peringatan kedua.
+   Selektor sengaja lebih spesifik daripada `.action-menu-text span` di atas —
+   tanpa `!important`. */
+.action-menu-text span.action-menu-next {
+  color: var(--ink);
+}
+.action-menu-next strong { font-weight: 600; }
+.approval-modal-blockers-next {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-2);
+  line-height: var(--lh-body);
+  color: var(--danger-ink);
+}
+.safety-row-next {
+  display: block;
+  margin-top: 2px;
+}
 .reject-reason-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 /* Galat aksi tampil di dalam popup, di dekat kontrolnya. */
 .action-error {
@@ -9051,6 +9739,21 @@ button:active:not(:disabled),
   line-height: var(--lh-body);
 }
 /* Kartu Governance kini hanya memuat pemicu: tombol + satu baris keterangan. */
+/* Pesan sukses aksi (`.action-message`) dulu TANPA aturan CSS sama sekali:
+   "Approval tercatat" / "PO MC-… dibuat (mock)" tampil sebagai paragraf polos
+   yang menempel ke baris fakta. Nada aman, bukan galat. */
+.action-message {
+  flex-basis: 100%;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--ok-bg, var(--surface-sunken));
+  border: 1px solid var(--ok-border, var(--border-subtle));
+  border-left: 3px solid var(--status-ok);
+  border-radius: var(--radius-control-sm);
+  color: var(--ink);
+  font-size: var(--fs-2);
+  line-height: var(--lh-body);
+}
 .decision-actions-hint {
   flex-basis: 100%;
   font-size: var(--fs-2);
@@ -10435,20 +11138,9 @@ button:active:not(:disabled),
 
 /* --- Step 2 (17 Okt): blok penjelas dilipat, angka/tag tetap terlihat --- */
 
-/* Role hero: misi + langkah peran di dalam <details>. */
-.role-hero-more { margin-top: 2px; }
-.role-hero-more > summary {
-  width: fit-content;
-  cursor: pointer;
-  list-style: none;
-  font-size: var(--fs-1);
-  color: var(--ink-muted);
-}
-.role-hero-more > summary::-webkit-details-marker { display: none; }
-.role-hero-more > summary::before { content: "▸ "; }
-.role-hero-more[open] > summary::before { content: "▾ "; }
-.role-hero-more .role-mission { margin-top: 4px; }
-.role-hero-more .role-steps { margin-top: 6px; }
+/* Role hero: panduan peran (misi + langkah) DIHAPUS 27 Okt 2026 — aturan
+   `.role-hero-more` dan `.role-hero .role-steps` ikut dihapus, bukan ditinggal
+   sebagai CSS mati. Batas domain peran tetap tampil memakai `.role-hero p`. */
 
 /* Papan integrasi: satu baris per komponen; bukti & catatan di dalam <details>. */
 .integration-row { display: block; padding: 0; }
@@ -10529,6 +11221,24 @@ p, li, dd { text-wrap: pretty; }
 .commodity-pill[data-komoditas].commodity-pill-active {
   background: var(--cat-ink);
   border-color: var(--cat-ink);
+  color: #FFFFFF;
+}
+
+/* Filter komoditas di Overview (28 Okt 2026): pemilik meminta satu warna biru
+   untuk telur/ayam/beras/wortel, bukan empat identitas warna. Dot tetap ada
+   sebagai penanda bentuk, tetapi tint, garis, dan tinta semuanya biru. */
+.filter-card .commodity-pill[data-komoditas] {
+  --cat-bg: var(--accent-soft);
+  --cat-line: #BFDBFE;
+  --cat-ink: var(--accent-strong);
+  background: var(--cat-bg);
+  border-color: var(--cat-line);
+  color: var(--cat-ink);
+}
+
+.filter-card .commodity-pill[data-komoditas].commodity-pill-active {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
   color: #FFFFFF;
 }
 
@@ -11766,14 +12476,6 @@ p, li, dd { text-wrap: pretty; }
   font-size: var(--fs-2);
   color: var(--ink);
 }
-.dc-session-count {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-  font-size: var(--fs-4);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--ink);
-}
 .dc-session-warn {
   margin: 0;
   flex-basis: 100%;
@@ -11785,6 +12487,84 @@ p, li, dd { text-wrap: pretty; }
   gap: 8px;
   flex-wrap: wrap;
   margin-left: auto;
+}
+
+/* ── Demo Control: header ringkas + chip konteks (28 Okt 2026) ──────────────
+   Blok 1 dibaca sebagai satu baris perintah: judul → tombol → konteks dataset.
+   Chip menggantikan tiga baris teks mode/jangkar/dataset yang dulu bertumpuk,
+   dan hitungan mundur pindah ke baris yang sama supaya tidak memakan tinggi
+   vertikal. Semua nilai tetap token proyek (tidak ada palet baru). */
+.dc-hero {
+  gap: 10px;
+}
+.dc-primary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.dc-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.dc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  line-height: 1.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dc-chip--mono {
+  color: var(--ink);
+  font-family: var(--font-mono, ui-monospace, "SFMono-Regular", Menlo, monospace);
+}
+.dc-chip--timer {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono, ui-monospace, "SFMono-Regular", Menlo, monospace);
+  border-color: color-mix(in srgb, var(--safe) 40%, var(--line));
+}
+.dc-chip--muted {
+  border-style: dashed;
+}
+.dc-dataset-line {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+.dc-live {
+  font-size: var(--fs-1);
+}
+.dc-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+.dc-foot .dc-status {
+  margin: 0;
+}
+@media (max-width: 600px) {
+  .dc-primary .button {
+    width: 100%;
+  }
+  .dc-chips {
+    width: 100%;
+  }
 }
 
 /* Banner global saat data memang sengaja kosong. */
@@ -11832,6 +12612,37 @@ p, li, dd { text-wrap: pretty; }
 .dc-error {
   color: var(--status-danger);
 }
+/* Kesiapan kasus (Fase 10 MG butir 3): satu blok, warna mengikuti keadaan
+   gerbang yang SUDAH dihitung server — bukan penilaian baru di klien. */
+.dc-readiness {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--status-neutral);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+}
+.dc-readiness[data-kind="siap"] { border-left-color: var(--status-safe); }
+.dc-readiness[data-kind="on_hold"] { border-left-color: var(--warn); }
+.dc-readiness[data-kind="quarantined"] { border-left-color: var(--status-danger); }
+.dc-readiness[data-kind="tertahan"] { border-left-color: var(--warn); }
+.dc-readiness[data-kind="selesai"] { border-left-color: var(--status-safe); }
+.dc-readiness-label,
+.dc-readiness-next {
+  margin: 0;
+  font-size: var(--fs-2);
+  color: var(--ink);
+}
+.dc-readiness-reasons {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+}
+.dc-readiness-next {
+  margin-top: 6px;
+  color: var(--ink-muted);
+}
 .dc-readonly {
   font-style: italic;
 }
@@ -11867,14 +12678,19 @@ p, li, dd { text-wrap: pretty; }
   color: var(--ink-muted);
 }
 .dc-note summary,
-.dc-narration summary {
+.dc-narration summary,
+.dc-advanced summary {
   cursor: pointer;
   font-size: var(--fs-2);
   color: var(--ink-muted);
 }
 .dc-note summary:hover,
-.dc-narration summary:hover {
+.dc-narration summary:hover,
+.dc-advanced summary:hover {
   color: var(--accent-strong);
+}
+.dc-advanced[open] summary {
+  margin-bottom: 8px;
 }
 .dc-note p,
 .dc-narration p {
@@ -12340,6 +13156,260 @@ p, li, dd { text-wrap: pretty; }
   padding: 2px 8px;
   line-height: 16px;
   min-height: 22px;
+  font-size: var(--fs-1);
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   KEAMANAN PANGAN — lapisan tampilan "data-dense" (27 Okt 2026)
+
+   Arah diambil dari skill ui-ux-pro-max: `--design-system` dengan dial
+   variance 5 / motion 2 / density 8 → gaya **Data-Dense Dashboard**
+   ("minimal padding, grid layout, space-efficient, maximum data visibility";
+   syarat aksesibilitasnya: kontras teks 4.5, fokus terlihat, reduced-motion).
+
+   Yang TIDAK diambil dari hasil skill: palet biru #1E40AF/#3B82F6 dan font
+   Fira Code/Fira Sans — keduanya memutus konsistensi 12 layar lain yang sudah
+   punya token sendiri. Struktur & kepadatan diambil; warna tetap token.
+   Yang SENGAJA tidak ada (penanda "AI slop"): gradien, kaca/blur, bayangan
+   tambahan, emoji sebagai ikon, animasi masuk per bagian. Satu-satunya gerak
+   adalah sorot baris tabel 120 ms, dimatikan saat `prefers-reduced-motion`.
+
+   Semua aturan di-scope `.safety-page` supaya tidak mengubah Overview,
+   Recommendations, dan papan lain yang memakai `.card`/`.location-table` sama.
+
+   Hasil terukur (layar 1440 px, lebar konten 947 px):
+     kartu ringkasan 261 → 227 px · tabel status 1.192 → 793 px (−33%)
+     tinggi halaman 3.796 → 3.533 px · tanpa gulir mendatar
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Rak bagian ────────────────────────────────────────────────────────────────
+   Garis rambut di bawah tiap kepala kartu + nomor urut. Nomornya mengikuti
+   alur halaman (keadaan → bukti → tenggat → tindakan → rujukan → konteks →
+   jejak) dan sama dengan urutan nav "Bagian", jadi ia menambah informasi, bukan
+   hiasan. */
+.safety-page {
+  counter-reset: bagian;
+}
+
+.safety-page .jump-target {
+  counter-increment: bagian;
+}
+
+.safety-page .board-card-head,
+.safety-page .card-header {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.safety-page .board-card-head h2,
+.safety-page .card-header h2,
+.safety-page .jump-target > h2 {
+  font-size: var(--fs-4);
+  letter-spacing: -0.01em;
+}
+
+.safety-page .jump-target h2::before {
+  content: counter(bagian, decimal-leading-zero);
+  margin-right: 9px;
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-subtle);
+  vertical-align: 0.08em; /* duduk di garis dasar judul, bukan mengapung */
+}
+
+/* Kerapatan kartu ─────────────────────────────────────────────────────────── */
+.safety-page .card {
+  padding: 14px 16px 15px;
+}
+
+.safety-page .board-alert {
+  margin-top: 10px;
+}
+
+/* Angka ringkasan ───────────────────────────────────────────────────────────
+   Empat bilangan ini yang dibaca pertama; 24 → 30 px cukup untuk menjadikannya
+   titik masuk mata tanpa berteriak. Persentase ikut label karena panduan grafik
+   skill menuntut tiap kategori berlabel DAN berpersentase (warna saja tidak
+   cukup — Color Only). */
+.safety-page .safety-figure-value {
+  font-size: 30px;
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+}
+
+.safety-page .safety-figure-label {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.safety-page .safety-figure-pct {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-1);
+  font-weight: 500;
+  color: var(--ink-subtle);
+}
+
+/* Di bawah 1100 px empat kolom menyempit dan "Perlu verifikasi 33%" bisa
+   terpotong; label dibiarkan membungkus daripada dipotong. */
+@media (max-width: 1100px) {
+  .safety-page .safety-figure-label {
+    white-space: normal;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+}
+
+/* Bar komposisi 100%: satu track membulat, celah 2 px, tinggi 10 px sehingga
+   terbaca sebagai grafik, bukan garis hias. */
+.safety-page .safety-ratio {
+  height: 10px;
+  gap: 2px;
+  border-radius: var(--radius-chip);
+  overflow: hidden;
+}
+
+.safety-page .safety-ratio-part {
+  border-radius: 0;
+}
+
+/* Tabel status (permukaan terbesar halaman) ─────────────────────────────────
+   Tata letak OTOMATIS, bukan `table-layout: fixed`. Fixed sempat dicoba dan
+   diukur: kolom sempit memotong judul ("Komoditas" → "Komodi") dan memaksa
+   "380 kg" serta tanggal pecah dua baris; menambahkan `nowrap` lalu membuat
+   isinya melimpah ke kolom sebelah. Lebar otomatis + petunjuk lebar pada tiga
+   kolom penentu kepadatan memberi hasil terbaik tanpa satu pun kata terpotong.
+
+   Baris: pemisah garis rambut (bukan belang), angka rata kanan dengan angka
+   tabular, tombol tindakan dirapatkan agar tidak mendikte tinggi baris.
+   Kepala tabel menempel di bawah nav saat digulir (≥ 1080 px, saat tabel tidak
+   lagi butuh gulir mendatar). */
+.safety-page .safety-table {
+  font-size: var(--fs-2);
+}
+
+.safety-page .safety-table thead th {
+  padding: 8px 10px;
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: normal;
+  border-bottom: 1px solid var(--line-strong);
+  vertical-align: bottom;
+}
+
+.safety-page .safety-table th:nth-child(1) { width: 13%; }
+.safety-page .safety-table th:nth-child(4) { width: 28%; }
+.safety-page .safety-table th:nth-child(7) { width: 14%; }
+
+.safety-page .safety-table tbody td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.safety-page .safety-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.safety-page .safety-table tbody tr {
+  transition: background-color 120ms ease;
+}
+
+.safety-page .safety-table tbody tr:hover {
+  background: var(--surface-sunken);
+}
+
+.safety-page .safety-table .num {
+  text-align: right;
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.safety-page .safety-table tbody td:nth-child(1) {
+  font-size: var(--fs-1);
+  line-height: 1.3;
+}
+
+/* Kalimat "Langkah: …" di kolom status sempat membuat tiap baris 95 px.
+   Dibatasi dua baris; teks penuh tetap ada di DOM untuk pembaca layar. */
+.safety-page .safety-table .safety-row-next {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 2px;
+  font-size: var(--fs-1);
+  line-height: 1.3;
+}
+
+.safety-page .safety-table .board-badge {
+  padding: 0 6px;
+  font-size: var(--fs-1);
+  line-height: 18px;
+}
+
+.safety-page .safety-table td .cell-meta {
+  line-height: 1.35;
+}
+
+/* Tombol tindakan: rapat, tetap ≥ 30 px; target 44 px di layar sentuh diatur
+   aturan `(pointer: coarse)` yang sudah ada di berkas ini. */
+.safety-page .safety-table .button {
+  padding: 2px 8px;
+  font-size: var(--fs-1);
+  line-height: 16px;
+  min-height: 0;
+}
+
+.safety-page .safety-row-actions {
+  gap: 6px;
+}
+
+@media (min-width: 1080px) {
+  .safety-page .board-table-wrap {
+    /* `clip` (bukan `auto`) supaya sisa 3 px lebar tabel tidak memunculkan
+       gulir mendatar, tanpa mengubah pembungkus jadi wadah gulir — `auto` akan
+       mematikan `position: sticky` pada kepala tabel. */
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+
+  .safety-page .safety-table thead th {
+    position: sticky;
+    top: 118px; /* top bar 64 + nav bagian 46 + 8 */
+    z-index: 2;
+    box-shadow: 0 1px 0 var(--line-strong);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .safety-page .safety-table tbody tr {
+    transition: none;
+  }
+}
+
+/* Dua koreksi terakhir dari pengukuran:
+   1. `Jumlah` satu kata sehingga pemenggalan baris tidak mungkin — tanpa
+      `overflow-wrap`, judulnya terpotong di kolom 65 px.
+   2. Tanggal "23 Okt 2026, 00.45" pecah tiga baris di kolom 59 px; dengan
+      ukuran huruf satu langkah lebih kecil + `nowrap`, tata letak otomatis
+      melebarkan kolomnya dan mengambil sisa dari kolom status (yang teksnya
+      sudah dibatasi dua baris). */
+.safety-page .safety-table thead th {
+  overflow-wrap: anywhere;
+}
+
+.safety-page .safety-table tbody td:nth-child(6) {
   font-size: var(--fs-1);
   white-space: nowrap;
 }

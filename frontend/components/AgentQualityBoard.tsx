@@ -227,7 +227,7 @@ export default function AgentQualityBoard({
       <PageHeader
         level={2}
         title="Kualitas Agen"
-        description="Seberapa baik rantai agen bekerja pada keputusan terakhir cakupan Anda: langkah yang diambil, kesesuaian dengan verifikator, dan berapa yang akhirnya diubah manusia."
+        description="Mutu kerja agen pada keputusan terakhir cakupan Anda: langkah, kesesuaian verifikator, dan yang diubah manusia."
         meta={
           <span className="page-header-pills">
             <span className="commodity-pill">{metrics.runs} run dinilai</span>
@@ -340,10 +340,16 @@ export default function AgentQualityBoard({
             {metrics.judged} dari {metrics.runs} run dinilai
           </span>
         </div>
-        <p className="evidence-note">
-          Berapa run yang disetujui verifikator, ditandai berbeda, atau belum pernah dinilai sama
-          sekali.
-        </p>
+        {/* Penjelasan "apa yang dihitung" dulu selalu terbentang di atas grafik.
+            Judul kartu + angka + legenda sudah menyatakan hal yang sama, jadi
+            kalimatnya dipindahkan ke lipatan satu klik. */}
+        <details className="card-note-more">
+          <summary>Cara membaca kartu ini</summary>
+          <p className="evidence-note">
+            Berapa run yang disetujui verifikator, ditandai berbeda, atau belum pernah dinilai sama
+            sekali.
+          </p>
+        </details>
         <div
           className="quality-verdict-bar"
           data-empty={total === 0 ? "true" : undefined}
@@ -385,12 +391,15 @@ export default function AgentQualityBoard({
             <span className="board-badge board-badge-muted">{perAgent.length} agen</span>
           ) : null}
         </div>
-        <p className="evidence-note">
-          Berapa run yang benar-benar memuat baris tiap agen — tujuh worker, supervisor, lalu
-          verifier — dari {metrics.runs || evaluatedCount} keputusan yang dinilai. Putusan verifier
-          dihitung dari ringkasan approval tiap run, jadi bisa mencakup run yang baris auditnya tidak
-          tersimpan.
-        </p>
+        <details className="card-note-more">
+          <summary>Cara membaca kartu ini</summary>
+          <p className="evidence-note">
+            Berapa run yang benar-benar memuat baris tiap agen — tujuh worker, supervisor, lalu
+            verifier — dari {metrics.runs || evaluatedCount} keputusan yang dinilai. Putusan verifier
+            dihitung dari ringkasan approval tiap run, jadi bisa mencakup run yang baris auditnya
+            tidak tersimpan.
+          </p>
+        </details>
         {waiting ? (
           <LoadingState label="Memuat jejak agen…" />
         ) : perAgent.length === 0 ? (

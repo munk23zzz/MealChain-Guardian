@@ -134,6 +134,14 @@ export default function DecisionActions({
 
   // Setiap handler: `null` = berhasil (menu menutup popup & pesan tampil di
   // kartu), string = galat yang ditampilkan DI DALAM popup.
+  // Galat aksi WAJIB menyebut aksi mana yang gagal dan sudah diterjemahkan.
+  // Dulu popup menampilkan kalimat server apa adanya ("binding batch/supplier
+  // berubah") tanpa konteks: penyetuju tidak tahu itu penolakan eksekusi.
+  function galatAksi(judul: string, err: unknown): string {
+    const mentah = String((err as any)?.message ?? err ?? "").trim();
+    if (!mentah) return judul;
+    return `${judul}: ${humanizeBlocker(mentah) ?? mentah}`;
+  }
   async function approve(): Promise<string | null> {
     if (!token) return "Login diperlukan";
     try {
@@ -141,7 +149,7 @@ export default function DecisionActions({
       setMessage("Approval tercatat");
       return null;
     } catch (err: any) {
-      return String(err.message ?? err);
+      return galatAksi("Persetujuan tidak tercatat", err);
     }
   }
 
@@ -155,7 +163,7 @@ export default function DecisionActions({
       setMessage("Keputusan ditolak — agent bisa re-propose dengan iterasi baru.");
       return null;
     } catch (err: any) {
-      return String(err.message ?? err);
+      return galatAksi("Penolakan tidak tercatat", err);
     }
   }
 
@@ -168,7 +176,7 @@ export default function DecisionActions({
       );
       return null;
     } catch (err: any) {
-      return String(err.message ?? err);
+      return galatAksi("Pengajuan gagal", err);
     }
   }
 
@@ -181,7 +189,7 @@ export default function DecisionActions({
       );
       return null;
     } catch (err: any) {
-      return String(err.message ?? err);
+      return galatAksi("Re-propose gagal", err);
     }
   }
 
@@ -196,7 +204,7 @@ export default function DecisionActions({
       );
       return null;
     } catch (err: any) {
-      return String(err.message ?? err);
+      return galatAksi("Eksekusi tidak dijalankan", err);
     }
   }
 
@@ -219,7 +227,7 @@ export default function DecisionActions({
       }
       return null;
     } catch (err: any) {
-      return String(err.message ?? err);
+      return galatAksi("Verifikasi gagal", err);
     }
   }
 

@@ -30,7 +30,6 @@ import {
   KPI_SCOPES,
   klasifikasiAsalOf,
   provenanceLines,
-  SCOPE_EXPLANATION,
   scopeLabel,
   type KpiScope,
 } from "../lib/kpi-provenance";
@@ -130,7 +129,7 @@ export function KpiScopeToggle({
       })}
       <span id="kpi-scope-explanation" className="kpi-scope-hint">
         {disabled && disabledReason ? `${disabledReason} ` : ""}
-        {aktif.hint} {SCOPE_EXPLANATION}
+        {aktif.hint}
       </span>
     </div>
   );
@@ -218,7 +217,7 @@ export default function KPIDashboard({
       <section className="kpi-dashboard" aria-busy="true">
         <PageHeader
           title="KPI"
-          description="Tujuh indikator kontinuitas pangan institusional."
+          description="Tujuh indikator kontinuitas pangan. Angka yang belum bisa dihitung ditulis alasannya."
         />
         {/* Kelas kpi-loading tetap ada (dipin tes) tetapi hanya untuk pembaca
             layar: tampilannya kini skeleton, bukan teks "Memuat…" berkedip. */}
@@ -240,7 +239,7 @@ export default function KPIDashboard({
       <section className="kpi-dashboard">
         <PageHeader
           title="KPI"
-          description="Tujuh indikator kontinuitas pangan institusional."
+          description="Tujuh indikator kontinuitas pangan. Angka yang belum bisa dihitung ditulis alasannya."
         />
         <p className="kpi-error status-danger" role="alert">
           {error}
@@ -262,7 +261,7 @@ export default function KPIDashboard({
     <section className="kpi-dashboard">
       <PageHeader
         title="KPI"
-        description="Tujuh indikator kontinuitas pangan institusional. Indikator yang belum bisa dihitung ditulis alasannya, bukan diganti nol."
+        description="Tujuh indikator kontinuitas pangan. Angka yang belum bisa dihitung ditulis alasannya."
         meta={
           <span className="page-header-pills" data-testid="kpi-scope">
             <span className="commodity-pill">
@@ -283,6 +282,7 @@ export default function KPIDashboard({
           menjawab "belum ada data" padahal datanya ADA di database — hanya di
           luar 24 jam. Kontrol ini tidak menghitung apa pun; ia memberi tahu
           HALAMAN jendela mana yang harus dimuat (angkanya tetap dari backend). */}
+      <div className="kpi-controls">
       <div className="kpi-period" role="group" aria-label="Jendela periode KPI">
         <span className="kpi-period-label">Periode:</span>
         {KPI_WINDOWS.map((w) => {
@@ -309,6 +309,7 @@ export default function KPIDashboard({
         disabled={Boolean(scopeDisabledReason)}
         disabledReason={scopeDisabledReason}
       />
+      </div>
       {/* Grup terpisah: angka simulasi tidak boleh terbaca sebagai hasil
           operasional, jadi judulnya menyebut mode data yang dikirim backend. */}
       <section
@@ -319,21 +320,18 @@ export default function KPIDashboard({
         <h2 className="kpi-group-title">{scopeLabel(kpi.data_mode)}</h2>
         {String(kpi.data_mode) === "demo" ? (
           <p className="kpi-group-note" data-testid="kpi-demo-note">
-            Angka di grup ini berasal dari sesi demo — simulasi, bukan hasil
-            lapangan. Kartu bertanda <strong>estimasi</strong> adalah proyeksi
-            model, bukan catatan kejadian.
+            Angka simulasi, bukan hasil lapangan.
           </p>
         ) : null}
         {/* Batas domain (Fase 6 butir 6): yang diukur adalah BAHAN untuk rencana
             dan catatan pengiriman — bukan porsi yang sudah dimasak/disajikan.
             Sistem ini tidak mencatat fakta memasak/distribusi per porsi, jadi
             klaim "makanan tersaji" tidak boleh lahir dari angka di bawah. */}
+        {/* Batas domain tetap dinyatakan (kejujuran data), tetapi cukup satu
+            baris: paragraf panjang di atas semua kartu hanya dibaca sekali. */}
         <p className="kpi-group-note" data-testid="kpi-domain-note">
-          Angka di sini dihitung dari <strong>bahan untuk rencana</strong> dan
-          catatan pengiriman yang tercatat — bukan porsi yang sudah dimasak atau
-          disajikan. Metrik yang fakta memasak/distribusinya tidak ada
-          ditampilkan <em>no_data</em>, dan proyeksi bahan diberi label{" "}
-          <em>estimasi</em>.
+          Dihitung dari <strong>bahan rencana</strong> dan catatan kirim, bukan
+          porsi tersaji.
         </p>
       {/* Grid kartu metrik tiga kolom (pola halaman KPI acuan).
           Fase 4: tiap kartu = angka besar + bullet bar (hanya untuk metrik
@@ -349,6 +347,41 @@ export default function KPIDashboard({
           const est = estimateOf(m);
           const estText = estimateLine(m);
           const factText = factLine(m);
+          // Semua teks panjang kartu dikumpulkan di SATU lipatan per kartu.
+          // Yang tetap terlihat: nama, angka, bar skala, keadaan/arah/bukti,
+          // alasan `no_data`, dan asal baris historis. Sisanya (sampel,
+          // cakupan, sumber/periode/metode, definisi estimasi, baris fakta)
+          // dibaca sekali lalu mengganggu di setiap kartu.
+          const rincian = (
+            <details className="kpi-more">
+              <summary>Rincian angka</summary>
+              <p className="kpi-meta">
+                sampel {m.sample_count ?? 0}
+                {m.coverage !== null && m.coverage !== undefined
+                  ? ` · cakupan ${fmtCoverage(m.coverage)}`
+                  : ""}
+              </p>
+              {prov.length ? (
+                <dl>
+                  {prov.map((l) => (
+                    <div key={l.key} className="kpi-prov-row">
+                      <dt>{l.label}</dt>
+                      <dd>{l.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
+              {estText ? (
+                <p className="kpi-estimate" data-testid="kpi-estimate">
+                  {estText}
+                  {est?.definition ? (
+                    <span className="kpi-estimate-note"> — {est.definition}</span>
+                  ) : null}
+                </p>
+              ) : null}
+              {factText ? <p className="kpi-fact">{factText}</p> : null}
+            </details>
+          );
           return (
             <article key={m.name} className={`kpi-card card kpi-${m.state}`}>
               <div className="kpi-card-top">
@@ -365,6 +398,9 @@ export default function KPIDashboard({
               ) : (
                 <p className="kpi-value kpi-value-none">—</p>
               )}
+              {/* Bar skala tetap terlihat, tetapi label "0 … maks" dibuang: satu
+                  baris angka kecil di bawah setiap bar hanya menambah derau, dan
+                  skalanya sudah dibawa `aria-label` untuk pembaca layar. */}
               {bullet && bullet.pct !== null ? (
                 <div
                   className="kpi-bullet"
@@ -380,16 +416,10 @@ export default function KPIDashboard({
                       style={{ width: `${bullet.pct}%` }}
                     />
                   </span>
-                  <span className="kpi-bullet-scale" aria-hidden="true">
-                    <span>0</span>
-                    <span>
-                      {bullet.max}
-                      {unitLabel(m.unit) ? ` ${unitLabel(m.unit)}` : ""}
-                    </span>
-                  </span>
                 </div>
               ) : null}
-              {arah ? <p className="kpi-direction">{arah}</p> : null}
+              {/* Satu baris keadaan: status + arah (dulu kalimat terpisah di
+                  barisnya sendiri) + tingkat bukti (wajib terbaca tanpa klik). */}
               <p className="kpi-card-flags">
                 <span className={`kpi-state kpi-state-${m.state}`}>
                   {STATE_LABEL[m.state] ?? m.state}
@@ -397,57 +427,33 @@ export default function KPIDashboard({
                 {trend && (
                   <span className={`kpi-trend ${trend}`}>
                     {m.trend === "up" ? "▲ naik" : m.trend === "down" ? "▼ turun" : "■ datar"}
+                    {arah ? ` · ${arah}` : ""}
                   </span>
                 )}
-              </p>
-              {m.reason && <p className="kpi-reason">{m.reason}</p>}
-              <p className="kpi-meta">
-                sampel {m.sample_count ?? 0}
-                {m.coverage !== null && m.coverage !== undefined
-                  ? ` · cakupan ${fmtCoverage(m.coverage)}`
-                  : ""}
-              </p>
-              {/* Provenance (Fase 8): tingkat bukti selalu terlihat; sumber,
-                  periode, metode, dan baseline ada satu klik di bawahnya. */}
-              {prov.length ? (
-                <div className="kpi-prov" data-testid="kpi-provenance">
-                  <p className="kpi-prov-evidence">
+                {prov.length ? (
+                  <span className="kpi-prov-evidence">
                     Bukti:{" "}
                     <strong>
                       {prov.find((l) => l.key === "evidence")?.value ?? "—"}
                     </strong>
-                  </p>
-                  {/* Asal baris (Fase 8, spesifikasi baris 23): angka yang
-                      seluruhnya dari seed historis tidak boleh tampak sebagai
-                      catatan lapangan baru. Ditampilkan terbuka, bukan di balik
-                      satu klik, karena ini mengubah cara angka harus dibaca. */}
-                  {asal && (asal.basis === "historical_seed" || asal.basis === "campuran") ? (
-                    <p className="kpi-meta kpi-basis-note" data-testid="kpi-basis">
-                      Basis data: {asal.text}
-                    </p>
-                  ) : null}
-                  <details className="kpi-prov-detail">
-                    <summary>Asal data, periode, dan metode</summary>
-                    <dl>
-                      {prov.map((l) => (
-                        <div key={l.key} className="kpi-prov-row">
-                          <dt>{l.label}</dt>
-                          <dd>{l.value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </details>
-                </div>
-              ) : null}
-              {estText ? (
-                <p className="kpi-estimate" data-testid="kpi-estimate">
-                  {estText}
-                  {est?.definition ? (
-                    <span className="kpi-estimate-note"> — {est.definition}</span>
-                  ) : null}
+                  </span>
+                ) : null}
+              </p>
+              {m.reason && <p className="kpi-reason">{m.reason}</p>}
+              {/* Asal baris historis WAJIB terbaca tanpa klik (mengubah cara
+                  angka dibaca), jadi ia tetap di luar lipatan. */}
+              {prov.length && asal && (asal.basis === "historical_seed" || asal.basis === "campuran") ? (
+                <p className="kpi-meta kpi-basis-note" data-testid="kpi-basis">
+                  Basis data: {asal.text}
                 </p>
               ) : null}
-              {factText ? <p className="kpi-fact">{factText}</p> : null}
+              {prov.length ? (
+                <div className="kpi-prov" data-testid="kpi-provenance">
+                  {rincian}
+                </div>
+              ) : (
+                rincian
+              )}
             </article>
           );
         })}

@@ -60,7 +60,11 @@ export const SAFETY_SECTION_IDS = {
   bukti: "safety-bukti-suhu",
   segera: "safety-segera",
   terima: "safety-terima",
+  // Jangkar "Menunggu persetujuan" dan "Pasokan masuk": tidak masuk nav (jatah
+  // lima tujuan penuh) tetapi tetap punya id supaya bisa ditautkan langsung.
+  persetujuan: "safety-persetujuan",
   batch: "safety-batch",
+  kiriman: "safety-pasokan",
   keputusan: "safety-keputusan",
 } as const;
 
@@ -99,9 +103,19 @@ export function overviewSections({
 }
 
 /**
- * Bagian Keamanan Pangan. "Penerimaan barang" hanya dirender bila pengguna
- * punya lokasi sendiri; panel "Keputusan keamanan lokasi ini" hanya bila daftar
- * keputusan tersedia. Karena itu keduanya opsional di sini juga.
+ * Bagian Keamanan Pangan.
+ *
+ * URUTAN daftar ini harus sama dengan urutan render di `FoodSafetyBoard.tsx`:
+ * keadaan → bukti → tindakan tulis → rujukan panjang → konteks → jejak audit.
+ * Nav yang urutannya berbeda membuat klik "Status per batch" menggulir MELEWATI
+ * bagian lain, dan penanda posisi melompat tidak sesuai urutan mata.
+ *
+ * Jatah maksimum lima tujuan (docs/design.md §24). Halaman ini punya tujuh
+ * bagian, jadi yang masuk nav adalah yang paling sering dituju: keadaan, bukti,
+ * tindakan tulis (penerimaan), rujukan panjang (status batch), dan jejak audit.
+ * "Batch perlu segera dipakai" hanya satu kartu di bawah panel bukti sehingga
+ * tidak perlu jatah nav; "Menunggu persetujuan" dan "Pasokan masuk" punya
+ * jangkar sendiri (`persetujuan`, `kiriman`).
  */
 export function safetySections({
   ownLocation,
@@ -114,7 +128,6 @@ export function safetySections({
     { id: SAFETY_SECTION_IDS.ringkasan, label: "Ringkasan" },
     // Panel bukti suhu selalu dirender (Fase 3 butir 5), jadi jangkarnya tetap.
     { id: SAFETY_SECTION_IDS.bukti, label: "Bukti suhu" },
-    { id: SAFETY_SECTION_IDS.segera, label: "Segera dipakai" },
   ];
   if (ownLocation) items.push({ id: SAFETY_SECTION_IDS.terima, label: "Penerimaan" });
   items.push({ id: SAFETY_SECTION_IDS.batch, label: "Status per batch" });

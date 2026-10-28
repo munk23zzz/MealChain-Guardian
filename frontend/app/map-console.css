@@ -261,7 +261,10 @@
 .map-card .map-gl .maplibregl-ctrl-group {
   background: var(--map-glass-solid);
   border: 1px solid var(--map-hair-strong);
-  border-radius: var(--radius-chip);
+  border-radius: 999px;
+  /* Klaster pil: tombol zoom/kompas di dalamnya tetap bersudut, jadi sudutnya
+     HARUS dipotong — tanpa ini sudut kotak mencuat keluar busur pil. */
+  overflow: hidden;
   box-shadow: var(--shadow-control);
 }
 .map-card .maplibregl-ctrl-group button + button {

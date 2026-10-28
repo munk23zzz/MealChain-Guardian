@@ -200,3 +200,38 @@ export function buildCostView(
         : undefined,
   };
 }
+
+/**
+ * Tempelkan blok biaya dari DETAIL ke baris DAFTAR keputusan.
+ *
+ * Kenapa perlu: `GET /decisions` (daftar) tidak memuat `commercial_cost`;
+ * payload biaya hanya ada di `GET /decisions/{id}`. Halaman Decision & Evidence
+ * memberi komponen baris daftar, sehingga sebelum ini blok biaya selalu
+ * "tidak berlaku" di browser walaupun server mengirim angkanya.
+ *
+ * Aturan (dikunci `tests/decision-detail-cost.test.ts`):
+ *  - `detail` null (gagal dibaca) → baris dikembalikan APA ADANYA; kegagalan
+ *    sudah dilaporkan terpisah, jangan berubah jadi klaim "tidak berlaku";
+ *  - kunci tidak ada di detail (backend lama) → nilai baris dipertahankan;
+ *  - `commercial_cost: null` dari server → tetap null: keputusan administratif
+ *    memang tidak punya transfer, dan UI menulis "tidak berlaku".
+ */
+export type WithCost<T> = T & {
+  commercial_cost?: CommercialCostPayload | null;
+  market_reference?: MarketReference | null;
+};
+
+export function withDetailCost<T extends object>(
+  baris: T | null,
+  detail: Record<string, unknown> | null,
+): WithCost<T> | null {
+  if (!baris || !detail) return baris;
+  const hasil = { ...baris } as WithCost<T>;
+  if ("commercial_cost" in detail) {
+    hasil.commercial_cost = (detail.commercial_cost ?? null) as CommercialCostPayload | null;
+  }
+  if ("market_reference" in detail) {
+    hasil.market_reference = (detail.market_reference ?? null) as MarketReference | null;
+  }
+  return hasil;
+}

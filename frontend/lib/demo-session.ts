@@ -175,7 +175,7 @@ export function pesanSesi(sesi: StatusSesiDemo | null, detikBerlalu = 0): string
   // kembali" menjanjikan layar kosong yang tidak pernah terjadi.
   if (keadaan === "habis")
     return "Sesi demo sudah berakhir — perubahan selama sesi dibuang; data contoh bawaan tetap tampil.";
-  return "Belum ada sesi demo — tekan Siapkan data demo untuk membangun data contoh selama satu jendela waktu.";
+  return "Belum ada sesi demo — tekan Muat Demo untuk membangun data contoh selama satu jendela waktu.";
 }
 
 /** Peringatan yang layak muncul di layar saat sisa waktu menipis. */

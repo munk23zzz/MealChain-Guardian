@@ -17,6 +17,7 @@
 
 import { useState } from "react";
 import ApprovalModal from "./ApprovalModal";
+import { batchGateView } from "../lib/safety-gate";
 
 export type MenuActions = {
   approve: boolean;
@@ -93,7 +94,16 @@ export default function ApprovalMenu({
   // gagal). Dulu tombol Eksekusi tetap ditawarkan dan klik-nya berakhir 409
   // "decision expired" (backend app/api/actions.py `/actions/execute`).
   // Fail-closed, sama seperti `can_approve` di ApprovalModal (§S4-04/§S4-05).
-  const canExecute = summary?.can_execute === true;
+  //
+  // MG/phase-04 poin 7: alasannya kini KODE STABIL dari evaluator batch
+  // (`safety_pending`, `quarantined`, …). Kode itu tidak pernah tampil di
+  // layar — `batchGateView` menerjemahkannya jadi kalimat + langkah berikutnya,
+  // dan satu peta itu dipakai juga oleh ringkasan approval dan papan Keamanan
+  // Pangan. Sebelumnya yang tampil `blocking_reasons[0]` mentah.
+  const gate = batchGateView(summary);
+  const sudahDieksekusi = summary?.status === "executed";
+  const canExecute = gate.canExecute && !sudahDieksekusi;
+
   // Keputusan owner 2026-10-16 (3b): "Tolak" memakai endpoint yang SAMA dengan
   // "Setuju" (approve_action dengan approved=false), jadi kelayakannya juga
   // milik server. Dulu UI menebaknya dari peran+status karena read model tidak
@@ -107,9 +117,6 @@ export default function ApprovalMenu({
   // (actions.py:129). `valid` yang tidak ada JANGAN dianggap kedaluwarsa —
   // jangan mengarang penghalang.
   const belumKedaluwarsa = summary?.expiry?.valid !== false;
-  const alasanBlokir = Array.isArray(summary?.blocking_reasons)
-    ? String(summary.blocking_reasons[0] ?? "")
-    : "";
 
   return (
     <div className="approval-menu">
@@ -264,13 +271,21 @@ export default function ApprovalMenu({
             )}
 
             {actions.execute && !canExecute && (
-              <li className="action-menu-item action-menu-note">
+              <li className="action-menu-item action-menu-note" data-action="execute-blocked">
                 <div className="action-menu-text">
                   <strong>Eksekusi ke SAP (mock)</strong>
                   <span>
                     Belum tersedia — server belum mengizinkan
-                    {alasanBlokir ? `: ${alasanBlokir}` : "."}
+                    {gate.reasons.length > 0 ? `: ${gate.reasons.join(" · ")}` : "."}
                   </span>
+                  {sudahDieksekusi ? (
+                    <span>Keputusan ini sudah dieksekusi; tidak ada eksekusi kedua.</span>
+                  ) : null}
+                  {gate.nextStep && !sudahDieksekusi ? (
+                    <span className="action-menu-next">
+                      <strong>Langkah berikutnya:</strong> {gate.nextStep}
+                    </span>
+                  ) : null}
                 </div>
               </li>
             )}

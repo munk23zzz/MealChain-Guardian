@@ -27,9 +27,11 @@ import {
 import { useBalanceMap } from "../lib/hooks/useBalanceMap";
 import { useDecisionDetail } from "../lib/hooks/useDecisionDetail";
 import { readDecisionLink, withDecisionLink } from "../lib/decision-link";
+import { withDetailCost } from "../lib/decision-economics";
 import { useExclusions } from "../lib/hooks/useExclusions";
 import { useKpi } from "../lib/hooks/useKpi";
 import { useDemoSessionId } from "../lib/hooks/useDemoSessionId";
+import { useProcurementSummary } from "../lib/hooks/useProcurementSummary";
 import { useWasteSummary } from "../lib/hooks/useWasteSummary";
 import { useSurplusPlan } from "../lib/hooks/useSurplusPlan";
 import { usePurchaseOrders } from "../lib/hooks/usePurchaseOrders";
@@ -115,9 +117,9 @@ import DemoSessionBanner from "../components/DemoSessionBanner";
 import { mapHeaderSubtitle } from "../lib/overview-copy";
 import DecisionChain from "../components/DecisionChain";
 import ProviderPanel from "../components/ProviderPanel";
-import RoleHero from "../components/RoleHero";
 import PageHeader from "../components/PageHeader";
 import SectionJump from "../components/SectionJump";
+import ProcurementToday from "../components/ProcurementToday";
 import { overviewSections } from "../lib/section-jump";
 import KpiQualityBoard from "../components/KpiQualityBoard";
 import SupplyMap from "../components/SupplyMap";
@@ -627,6 +629,11 @@ export default function Home() {
     kpiScope,
     demoSession.sessionId
   );
+  // Angka pengadaan untuk tile Overview (27 Okt 2026): PO yang benar-benar
+  // terbit, keputusan berjejak ACT, dan batch yang berangkat. Inilah yang
+  // bergerak saat tombol Eksekusi ditekan — kartu pasokan di atasnya TIDAK,
+  // karena stok baru bertambah ketika penerimaan disetujui.
+  const procurementQuery = useProcurementSummary(token, identityScope, tab, "today");
   // Limbah + mitra pengolahan (18 Okt 2026): panel Surplus & Limbah dulu menulis
   // "—" karena tidak ada sumbernya. Sekarang dari server, dimuat hanya di tab itu.
   const wasteQuery = useWasteSummary(token, identityScope, tab);
@@ -892,7 +899,11 @@ export default function Home() {
     );
   }
 
-  const selected = decisions.find((d) => d.decision_id === selectedId) ?? null;
+  // Fase 9 butir 3: daftar `GET /decisions` tidak membawa `commercial_cost`;
+  // biaya hanya ada di `GET /decisions/{id}` (hook detail). Tanpa penggabungan
+  // ini blok biaya di layar selalu "tidak berlaku" walaupun server punya angka.
+  const selectedBaris = decisions.find((d) => d.decision_id === selectedId) ?? null;
+  const selected = withDetailCost(selectedBaris, detail.decision);
   // Turunan data peta untuk banner + judul (dipakai tab Overview).
   const mapShortage: any[] = (mapData?.locations ?? []).filter(
     (l: any) => l.status === "shortage"
@@ -1236,8 +1247,6 @@ export default function Home() {
               ariaLabel="Bagian halaman Overview"
             />
 
-            <RoleHero role={role ?? "sppg_head"} />
-
             {/* Strip bento (Fase 2, Arah 4): tile hero selisih pasokan + dua
                 pendamping dengan bobot berbeda. Semua angka dari data peta
                 real; yang belum tersedia ditulis "—" (lib/overview-bento),
@@ -1314,6 +1323,19 @@ export default function Home() {
                 <span className="kpi-card-mini">{kpiAntrean.mini}</span>
               </div>
             </section>
+
+            {/* Tile pengadaan (27 Okt 2026): tiga angka yang BENAR-BENAR bergerak
+                saat pengadaan dieksekusi — PO terbit + nilai komitmen (dari
+                `sap_mock_purchase_orders`), keputusan berjejak ACT, dan batch
+                yang berangkat. Tanpa ini satu-satunya angka Overview yang
+                berubah saat eksekusi adalah hitungan antrean, sehingga laporan
+                "Overview tidak berubah" memang benar. Nilai tak diketahui
+                ditulis "—"; periode kosong ditulis "belum ada". */}
+            <ProcurementToday
+              data={procurementQuery.data}
+              loading={procurementQuery.loading}
+              error={procurementQuery.error}
+            />
 
             {/* Banner peringatan ala acuan: lokasi kritis disebut namanya,
                 angkanya dari data peta real (bukan karangan). */}

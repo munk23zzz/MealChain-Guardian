@@ -14,6 +14,9 @@ import "./overview-p0.css";
 // Grafik kecukupan: aturan .supply-adequacy/.sa-* dipisah dari globals.css
 // supaya lapisan grafik dapat di-commit tanpa hunk stylesheet bersama.
 import "./supply-adequacy.css";
+// Tombol pil/oval di seluruh halaman (27 Okt 2026, permintaan pemilik).
+// Diimpor terakhir dengan alasan yang sama: menang urutan tanpa !important.
+import "./tombol-pil.css";
 
 import Providers from "./providers";
 

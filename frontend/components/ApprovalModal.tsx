@@ -8,6 +8,7 @@
 import type { ReactNode } from "react";
 import { formatIDR } from "../lib/auth";
 import { safetyLabel } from "../lib/bahasa";
+import { batchGateView } from "../lib/safety-gate";
 
 function Show({ value }: { value: any }) {
   // Semua nilai dari server ditampilkan apa adanya; null → unavailable.
@@ -90,7 +91,12 @@ export default function ApprovalModal({
     .flat()
     .filter((r: string, i: number, a: string[]) => a.indexOf(r) === i)
     .join(" + ");
-  const blocking = summary.blocking_reasons ?? [];
+  // MG/phase-04 poin 7: `blocking_reasons` kini membawa KODE stabil
+  // (`safety_pending`, `quarantined`, `temperature_evidence_incomplete`, …).
+  // Menampilkannya mentah membuat layar berbicara bahasa API. `batchGateView`
+  // menerjemahkan kode → kalimat + langkah berikutnya, dan peta itu SATU untuk
+  // popup, ringkasan ini, serta papan Keamanan Pangan.
+  const gate = batchGateView(summary);
   // S4-05 regression (rehearsal 2026-10-08): tombol Setuju di-gate
   // can_approve (approve masih sah), BUKAN can_execute — can_execute
   // selalu false sebelum approval terpenuhi → deadlock approval.
@@ -208,17 +214,25 @@ export default function ApprovalModal({
         </Fact>
       </dl>
 
-      {blocking.length > 0 && (
+      {gate.reasons.length > 0 && (
         <div className="approval-modal-blockers">
           <p className="approval-modal-blockers-title">Tertahan</p>
           <ul>
-            {blocking.map((reason: string) => (
+            {gate.reasons.map((reason: string) => (
               <li key={reason}>
                 <BlockerIcon />
                 <span>{reason}</span>
               </li>
             ))}
           </ul>
+          {/* MG/phase-04 poin 7: "tertahan" saja tidak cukup — penyetuju harus
+              tahu langkah berikutnya (uji keamanan, selesaikan verifikasi,
+              lepas karantina). Satu kalimat, dari peta kode yang sama. */}
+          {gate.nextStep ? (
+            <p className="approval-modal-blockers-next">
+              <strong>Langkah berikutnya:</strong> {gate.nextStep}
+            </p>
+          ) : null}
         </div>
       )}
 

@@ -1,0 +1,226 @@
+/* Kartu "Bukti suhu" — modul sendiri supaya suntingan tidak bertabrakan dengan
+   `app/globals.css` yang dipakai bersama kartu lain di halaman Keamanan Pangan.
+
+   PRINSIP: konsisten dulu, baru baru. Kelas yang sudah jadi bahasa halaman ini
+   dipakai ulang di TSX (`.card`, `.board-card-head`, `.board-badge-*`,
+   `.evidence-note`, `.board-link`). Modul ini hanya memuat yang belum punya
+   padanan: bar tersegmen, legenda berangka, dan baris bertone.
+
+   Geometri baris SENGAJA menyalin `.board-list li` (border 1px, radius kontrol,
+   padding 0.45/0.55rem, jarak antar-baris 0.4rem) supaya daftar di kartu ini
+   tidak terasa seperti komponen dari aplikasi lain.
+
+   Token-only: tidak ada warna baru. `--status-warning` hanya untuk TINT;
+   teks/label peringatan memakai `--warn-ink` (kontras >= 3:1 untuk non-teks).
+   Radius hanya dari skala sah (lihat tests/radius-scale-css.test.ts). */
+
+/* Bar tersegmen: lebar proporsional terhadap jumlah yang SUDAH dihitung server.
+   Bukan dekorasi — ia menyampaikan komposisi yang sama dengan legenda di
+   bawahnya, hanya supaya terbaca tanpa membaca. */
+.meter {
+  display: flex;
+  gap: 3px;
+  height: 8px;
+  margin: 0 0 7px;
+}
+
+.segment {
+  flex: 1 1 0;
+  min-width: 6px;
+  border-radius: var(--radius-chip);
+}
+
+.segment[data-tone="ok"] {
+  background: var(--safe-ink-tint);
+}
+
+.segment[data-tone="warn"] {
+  background: var(--warn-ink);
+}
+
+.segment[data-tone="danger"] {
+  background: var(--danger-ink);
+}
+
+.segment[data-tone="muted"] {
+  background: var(--neutral-ink);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 12px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-chip);
+  flex: none;
+}
+
+.swatch[data-tone="ok"] {
+  background: var(--safe-ink-tint);
+}
+
+.swatch[data-tone="warn"] {
+  background: var(--warn-ink);
+}
+
+.swatch[data-tone="danger"] {
+  background: var(--danger-ink);
+}
+
+.swatch[data-tone="muted"] {
+  background: var(--neutral-ink);
+}
+
+.legendCount {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Kalimat "belum bisa dialokasikan". Geometri menyalin `.board-alert` (padding
+   0.7/0.85rem, radius kartu, tepi kiri 4 px) supaya satu halaman hanya punya
+   SATU bentuk kotak peringatan; warnanya peringatan, bukan bahaya — bukti yang
+   belum lengkap bukan batch gagal uji. */
+.pending {
+  margin: 0 0 10px;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--warn-border);
+  border-left: 4px solid var(--warn-ink);
+  border-radius: var(--radius);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font-size: var(--fs-2);
+  line-height: 1.45;
+}
+
+.pending strong {
+  font-weight: 600;
+}
+
+/* Daftar batch: geometri `.board-list`, bukan kotak penuh selebar kartu tanpa
+   jarak seperti versi pertama redesign.
+   Bentuk ringkas 27 Okt 2026 (permintaan pemilik: "ukuran jangan terlalu besar"):
+   enam baris satu kolom = ±500 px hanya untuk daftar. Dua kolom di layar lebar
+   memotong separuh tinggi tanpa menghilangkan satu baris pun (batas 6 baris
+   tetap, urutan "paling perlu tindakan dulu" tetap). */
+.rows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Tepi kiri bertone = keadaan. Warna tidak pernah satu-satunya tanda: lencana
+   teks selalu ada di baris pertama. */
+.row {
+  padding: 0.38rem 0.5rem 0.42rem 0.62rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
+  border-radius: var(--radius-control);
+}
+
+.row[data-tone="ok"] {
+  border-left-color: var(--ok-border);
+}
+
+.row[data-tone="warn"] {
+  border-left-color: var(--status-warning);
+}
+
+.row[data-tone="danger"] {
+  border-left-color: var(--status-danger);
+}
+
+.row[data-tone="muted"] {
+  border-left-color: var(--neutral-ink);
+}
+
+.rowHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.rowHead .commodity {
+  margin-right: auto;
+}
+
+.commodity {
+  font-size: var(--fs-3);
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.3;
+}
+
+.commodity::first-letter {
+  text-transform: uppercase;
+}
+
+/* Meta memakai ukuran yang sama dengan `.board-list-meta` (fs-2), bukan lebih
+   kecil: satu halaman, satu skala keterangan. */
+.rowMeta {
+  margin: 1px 0 0;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+  line-height: 1.4;
+}
+
+.rowProfile {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+  line-height: 1.4;
+}
+
+.rowReason {
+  margin: 3px 0 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  line-height: 1.4;
+}
+
+.rowReasonLabel {
+  font-weight: 600;
+  color: var(--ink-subtle);
+}
+
+/* Kaki kartu memakai `.evidence-note`; modul hanya menambah jarak. */
+.foot {
+  margin: 9px 0 0;
+}
+
+/* Satu kolom di layar sempit: dua kolom hanya masuk akal kalau tiap baris masih
+   ≥ 300 px, karena baris berisi meta + profil + alasan server. */
+@media (max-width: 760px) {
+  .rows {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Meter dan legenda rapat: kartu ini dibaca sebagai satu blok status, bukan
+   tiga blok terpisah. */
+.meter {
+  margin-bottom: 6px;
+}
+
+.legend {
+  margin-bottom: 10px;
+}

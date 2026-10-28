@@ -12,7 +12,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 
-import { fetchApprovalSummary, fetchDecisionChain, fetchDecisionTraces } from "../api";
+import { fetchApprovalSummary, fetchDecision, fetchDecisionChain, fetchDecisionTraces } from "../api";
 import { queryKeys } from "../query";
 import { fetchSupplierContext, type SupplierContext } from "../supplier-exclusions";
 
@@ -23,6 +23,12 @@ export type DecisionDetail = {
   chain: any[];
   approvalSummary: any;
   supplierContext: SupplierContext | null;
+  /**
+   * `GET /decisions/{id}` — sumber `commercial_cost` + `market_reference`
+   * (Fase 9 butir 3). Daftar `GET /decisions` tidak memuat keduanya, jadi
+   * tanpa ini blok biaya di layar selalu "tidak berlaku".
+   */
+  decision: any | null;
   /**
    * Bagian yang GAGAL dibaca (label bahasa Indonesia).
    *
@@ -39,6 +45,7 @@ const KOSONG: DecisionDetail = {
   chain: [],
   approvalSummary: null,
   supplierContext: null,
+  decision: null,
   errors: [],
 };
 
@@ -53,11 +60,12 @@ export function useDecisionDetail(
       const id = decisionId as string;
       // `allSettled` (bukan penelanan galat): panel tetap terbuka dengan
       // bagian yang berhasil, tetapi bagian yang gagal DICATAT dan dilaporkan.
-      const [traces, chain, summary, supplier] = await Promise.allSettled([
+      const [traces, chain, summary, supplier, keputusan] = await Promise.allSettled([
         fetchDecisionTraces(id, token as string),
         fetchDecisionChain(id, token as string),
         fetchApprovalSummary(id, token as string),
         fetchSupplierContext(id, token as string),
+        fetchDecision(id, token as string),
       ]);
       const gagal: string[] = [];
       const nilai = <T,>(hasil: PromiseSettledResult<T>, label: string): T | null => {
@@ -69,11 +77,13 @@ export function useDecisionDetail(
       const rantai = nilai(chain, "rantai audit");
       const ringkasan = nilai(summary, "ringkasan persetujuan");
       const konteks = nilai(supplier, "konteks pemasok");
+      const detailKeputusan = nilai(keputusan, "detail keputusan");
       return {
         traces: jejak?.steps ?? [],
         chain: rantai?.chain ?? [],
         approvalSummary: ringkasan ?? null,
         supplierContext: konteks ?? null,
+        decision: detailKeputusan ?? null,
         errors: gagal,
       };
     },

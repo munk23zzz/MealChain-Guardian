@@ -132,3 +132,4 @@ qa_*.json
 _qa/f12/layout-*.css
 _qa/f12/*.out
 _qa/f12/*.err
+frontend/public/_preview-band.html
