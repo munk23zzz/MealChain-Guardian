@@ -5680,17 +5680,10 @@ a:focus-visible {
   gap: 18px 28px;
   align-items: start;
 }
-/* Dua kolom di layar lebar: tiga kolom sempit memaksa keterangan "13 menunggu
-   persetujuan · 2 dieksekusi · 2 ditandai" membungkus jadi dua baris pendek.
-   Kelompok ganjil terakhir memakai lebar penuh supaya tidak menyisakan lubang. */
-@media (min-width: 720px) {
-  .agenda-groups {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .agenda-group:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
-  }
-}
+/* Tiga kelompok berdampingan di layar lebar. Dua kolom + kelompok terakhir
+   selebar penuh menyisakan ruang kosong panjang di tengah baris (pemilik
+   29 Okt: "banyak space kosong"), jadi kembali tiga kolom: yang dipendekkan
+   adalah KETERANGANNYA (lihat STATUS_HINT_PENDEK di lib/agenda.ts). */
 .agenda-group {
   display: grid;
   gap: 2px;
@@ -7707,6 +7700,20 @@ a:focus-visible {
   font-size: var(--fs-3);
   font-weight: 500;
   color: var(--ink);
+  /* Kartu "Hari Ini" kini memuat 5 baris terdekat, jadi judul panjang yang
+     membungkus dua baris tidak lagi "dimoderasi" oleh baris lain: biarkan
+     peramban memilih titik potong yang tidak meninggalkan satu kata sendirian
+     (sama seperti .today-row-meta di bawah). */
+  text-wrap: pretty;
+  line-height: 1.4;
+}
+
+/* Pil tenggat & tombol aksi tidak pernah membungkus: yang boleh dua baris hanya
+   judul di kolom pertama. Tanpa ini, "3 jam 27 menit lagi" terpecah dan tinggi
+   baris berbeda-beda sehingga kolom kanan terlihat bergerigi. */
+.today-row .today-due,
+.today-row .today-row-action {
+  white-space: nowrap;
 }
 .today-row-meta {
   font-family: var(--font-data);

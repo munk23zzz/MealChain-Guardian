@@ -95,7 +95,7 @@ describe("kalender agenda — baris ringkasan hari", () => {
     expect(byLabel["Pasokan tercatat"]).toBeNull();
     expect(byLabel["Harga tercatat"]).toBeNull();
     expect(byLabel["Batch kedaluwarsa"]).toBeNull();
-    expect(byLabel["Keputusan agen"]).toBeNull();
+    expect(byLabel["Total"]).toBeNull();
   });
 
   it("available=true selalu punya nilai, available=false selalu null", () => {
@@ -121,10 +121,12 @@ describe("kalender agenda — baris ringkasan hari", () => {
     expect(byLabel["Limbah dibuang"]).toBe("4 kg");
     // Angka pokok dan rincian status DIPISAH: nilai panjang di dalam kurung
     // membuat baris agenda membungkus di tengah kalimat.
-    expect(byLabel["Keputusan agen"]).toBe("12 keputusan");
-    expect(baris.find((r) => r.label === "Keputusan agen")?.hint).toBe(
-      "12 menunggu persetujuan"
-    );
+    // Label baris tidak mengulang judul kelompok ("Keputusan agen") — di kolom
+    // sempit keduanya terbaca sebagai teks kembar.
+    expect(byLabel["Total"]).toBe("12 keputusan");
+    // Keterangan memakai kata pendek: kolom agenda sempit (~287 px), kalimat
+    // penuh membuat keterangan membungkus jadi dua baris.
+    expect(baris.find((r) => r.label === "Total")?.hint).toBe("12 menunggu");
   });
 });
 

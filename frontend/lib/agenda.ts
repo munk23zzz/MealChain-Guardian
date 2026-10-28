@@ -168,6 +168,23 @@ function kg(n: unknown): string {
   return Number.isInteger(nilai) ? angka(nilai) : nilai.toFixed(1).replace(".", ",");
 }
 
+// Keterangan baris agenda memakai kata PENDEK: kolom agenda sempit (~287 px),
+// dan kalimat penuh ("menunggu persetujuan", "ditandai verifikator") membuat
+// keterangan membungkus jadi dua baris. Label panjang tetap dipakai di tempat
+// lain lewat STATUS_LABELS di bawah.
+const STATUS_HINT_PENDEK: Record<string, string> = {
+  proposed: "diusulkan",
+  pending_approval: "menunggu",
+  needs_verification: "belum diverifikasi",
+  verifier_flagged: "ditandai",
+  verified: "terverifikasi",
+  approved: "disetujui",
+  executed: "dieksekusi",
+  rejected: "ditolak",
+  review_only: "tinjauan",
+  expired: "kedaluwarsa",
+};
+
 const STATUS_LABELS: Record<string, string> = {
   proposed: "diusulkan",
   pending_approval: "menunggu persetujuan",
@@ -202,14 +219,14 @@ export function agendaRows(hari: AgendaDay): AgendaRow[] {
 
   const rincianStatus = Object.entries((keputusan?.by_status ?? {}) as Record<string, number>)
     .sort((a, b) => b[1] - a[1])
-    .map(([status, jumlah]) => `${jumlah} ${STATUS_LABELS[status] ?? status}`);
+    .map(([status, jumlah]) => `${jumlah} ${STATUS_HINT_PENDEK[status] ?? status}`);
 
   return [
     {
       label: "Rencana menu",
       value: menu ? `${angka(menu.planned_portions)} porsi` : null,
       available: Boolean(menu),
-      hint: menu ? `${angka(menu.rows)} lokasi merencanakan` : undefined,
+      hint: menu ? `${angka(menu.rows)} lokasi` : undefined,
     },
     {
       // "Kiriman tiba" ambigu (audit data 26 Okt 2026): di Overview istilah yang
@@ -242,7 +259,10 @@ export function agendaRows(hari: AgendaDay): AgendaRow[] {
       available: Boolean(batch),
     },
     {
-      label: "Keputusan agen",
+      // Judul kelompoknya sudah "Keputusan agen"; label baris mengulang kata
+      // yang sama persis dan di kolom sempit keduanya terbaca sebagai teks
+      // kembar. Label baris cukup menyebut apa yang dihitung.
+      label: "Total",
       // Angka pokok dan rincian status DIPISAH: nilai panjang di dalam kurung
       // membuat baris agenda membungkus di tengah kalimat. Rinciannya menjadi
       // `hint` yang dicetak pada barisnya sendiri.
@@ -294,7 +314,9 @@ const AGENDA_GROUPS: { title: string; labels: string[] }[] = [
     labels: ["Rencana menu", "Pengiriman makan tiba", "Pasokan tercatat", "Harga tercatat"],
   },
   { title: "Limbah & kedaluwarsa", labels: ["Limbah dibuang", "Batch kedaluwarsa"] },
-  { title: "Keputusan agen", labels: ["Keputusan agen"] },
+  // Label baris sengaja beda dari judul kelompok (lihat `label: "Total"`):
+  // kalau keduanya sama, kolom sempit menampilkan dua teks kembar.
+  { title: "Keputusan agen", labels: ["Total"] },
 ];
 
 export function agendaGroups(hari: AgendaDay): AgendaGroup[] {
