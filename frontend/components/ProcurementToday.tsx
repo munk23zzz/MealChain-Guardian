@@ -80,11 +80,12 @@ export default function ProcurementToday({
               {tile.value}
               <span className="kpi-card-unit">{tile.unit}</span>
             </span>
-            <span className="kpi-card-foot" title={tile.foot}>
+            {/* Satu kalimat per kartu (permintaan pemilik 29 Okt 2026: "di buat
+                lebih pendek hanya kalimat baris 1 saja"). Detail baris kedua
+                tidak dihapus dari data — ia menempel sebagai tooltip pada
+                kalimat pertama, jadi tetap bisa dibaca tanpa menambah tinggi. */}
+            <span className="kpi-card-foot" title={`${tile.foot} · ${tile.mini}`}>
               {tile.foot}
-            </span>
-            <span className="kpi-card-mini" title={tile.mini}>
-              {tile.mini}
             </span>
           </li>
         ))}

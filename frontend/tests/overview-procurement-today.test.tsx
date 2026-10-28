@@ -158,6 +158,19 @@ describe("ProcurementToday — yang benar-benar tertulis di layar", () => {
     expect(html).not.toContain(">0<");
   });
 
+  it("satu kalimat per kartu — detail baris kedua menempel sebagai tooltip", () => {
+    // Permintaan pemilik 29 Okt 2026: rel "1. PO terbit … 4. Kg diterima"
+    // dipendekkan, cukup kalimat baris pertama yang tampak.
+    const html = renderToStaticMarkup(
+      <ProcurementToday data={SUMMARY} loading={false} error={null} />
+    );
+    expect(html).not.toContain("kpi-card-mini");
+    // Informasi baris kedua tidak hilang: ia jadi title pada kalimat pertama.
+    const foot = html.match(/class="kpi-card-foot" title="([^"]+)"/);
+    expect(foot?.[1]).toContain("·");
+    expect((foot?.[1] ?? "").length).toBeGreaterThan(20);
+  });
+
   it("menyebut periode dan zona waktunya", () => {
     const html = renderToStaticMarkup(
       <ProcurementToday data={SUMMARY} loading={false} error={null} />

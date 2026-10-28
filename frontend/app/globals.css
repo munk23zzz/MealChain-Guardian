@@ -4928,8 +4928,14 @@ a:focus-visible {
 
 /* Keterangan bawah dipotong dua baris supaya keempat kartu punya tinggi dan
    garis dasar yang sama; teks penuh tetap ada di title. */
+/* Kalimat foot kini satu-satunya teks penjelas: dibatasi dua baris supaya
+   kartu tetap pendek walau kalimatnya panjang. */
 .procurement-card .kpi-card-foot {
   grid-column: 1 / -1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -4948,14 +4954,6 @@ a:focus-visible {
 
 /* Keterangan bawah dipotong dua baris; teks penuh tetap ada di title. Tanpa
    potongan, keempat kartu jadi tinggi berbeda dan rel kehilangan garis dasar. */
-.procurement-card .kpi-card-mini {
-  grid-column: 1 / -1;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
 /* Keadaan "belum ada eksekusi" ditulis SEKALI di bawah rel, bukan empat kali. */
 .procurement-empty {
   margin: 0;
