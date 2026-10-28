@@ -16,6 +16,8 @@ import {
   quantityLabel,
   rupiahLabel,
   routeLabel,
+  ringkasPutaran,
+  ringkasSatuKomoditas,
   runButtonLabel,
   stepNames,
   supervisorLine,
@@ -458,5 +460,74 @@ describe("kartu sembilan agen di Demo Control", () => {
     // `unavailable` = audit belum bisa menyimpulkan → tetap jujur "Terbatas".
     expect(kartu[8].state).toBe("limited");
     expect(kartu[8].statusLabel).toBe("Terbatas");
+  });
+});
+
+// --- ringkasan satu putaran "Jalankan agent" --------------------------------
+// Server menjawab dengan `created`/`skipped` per komoditas (atau `decision_id`
+// untuk satu komoditas di backend lama). Ringkasannya MURNI: setiap nama dan
+// angka diambil dari payload, tidak ada yang dikarang.
+describe("ringkasPutaran", () => {
+  it("menyebut jumlah dan nama komoditas yang menghasilkan keputusan", () => {
+    const baris = ringkasPutaran({
+      created: [
+        { commodity: "telur", decision_id: "d1" },
+        { commodity: "ayam", decision_id: "d2" },
+        { commodity: "wortel", decision_id: "d3" },
+      ],
+      skipped: [],
+    });
+    expect(baris).toBe("3 keputusan dibuat (telur, ayam, wortel)");
+  });
+
+  it("menyebut komoditas yang dilewati BESERTA alasannya, bukan menyembunyikannya", () => {
+    const baris = ringkasPutaran({
+      created: [{ commodity: "telur", decision_id: "d1" }],
+      skipped: [{ commodity: "beras", reason: "SPPG ini tidak kekurangan komoditas tersebut" }],
+    });
+    expect(baris).toBe(
+      "1 keputusan dibuat (telur) · beras dilewati: SPPG ini tidak kekurangan komoditas tersebut"
+    );
+  });
+
+  it("memotong alasan yang panjang tanpa menghapus sebabnya", () => {
+    const panjang = "x".repeat(400);
+    const baris = ringkasPutaran({ created: [], skipped: [{ commodity: "beras", reason: panjang }] }, 40);
+    expect(baris).toContain("beras dilewati: ");
+    expect(baris).toContain("…");
+    expect((baris ?? "").length).toBeLessThan(120);
+  });
+
+  it("payload lama tanpa created/skipped tidak menghasilkan baris kosong", () => {
+    expect(ringkasPutaran({ commodity: "beras", decision_id: "d1" })).toBeNull();
+    expect(ringkasPutaran(null)).toBeNull();
+  });
+
+  it("nol keputusan tetap dinyatakan, bukan disembunyikan", () => {
+    expect(ringkasPutaran({ created: [], skipped: [] })).toBe("0 keputusan dibuat");
+  });
+});
+
+// Penanda "Semua komoditas" dihapus 28 Okt 2026 (permintaan pemilik): panel
+// wajib menyebut satu komoditas nyata, jadi tidak ada konstanta yang perlu
+// dikunci lagi.
+describe("ringkasSatuKomoditas", () => {
+  it("menyebut komoditas, jumlah langkah, dan potongan id dari payload", () => {
+    const baris = ringkasSatuKomoditas(
+      { commodity: "telur", decision_id: "82a2cf7d-c232-49e3-839a-6f7cf4bec9a9", trace_steps: [1, 2, 3, 4, 5, 6, 7] },
+      "telur"
+    );
+    expect(baris).toBe("1 keputusan dibuat (telur) · 7 langkah agent tercatat · id 82a2cf7d");
+  });
+
+  it("tetap menyebut keputusan saat langkah belum tercatat", () => {
+    expect(ringkasSatuKomoditas({ commodity: "beras", decision_id: "abcdef1234567890" }, "beras")).toBe(
+      "1 keputusan dibuat (beras) · id abcdef12"
+    );
+  });
+
+  it("tanpa decision_id tidak mengarang bukti", () => {
+    expect(ringkasSatuKomoditas({ commodity: "telur" }, "telur")).toBeNull();
+    expect(ringkasSatuKomoditas(null, "telur")).toBeNull();
   });
 });

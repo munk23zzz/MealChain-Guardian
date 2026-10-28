@@ -71,9 +71,9 @@ function render(props: Partial<React.ComponentProps<typeof DemoControlPanel>> = 
 }
 
 describe("DemoControlPanel — tiga blok, tanpa event", () => {
-  it("menyusun blok dalam urutan siapkan data → jalankan agent → bukti", () => {
+  it("menyusun blok dalam urutan muat demo → jalankan agent → bukti", () => {
     const html = render();
-    const i1 = html.indexOf("Siapkan data demo");
+    const i1 = html.indexOf("Muat demo");
     const i2 = html.indexOf("Jalankan agent");
     const i3 = html.indexOf("Bukti agent");
     expect(i1).toBeGreaterThan(-1);
@@ -90,9 +90,14 @@ describe("DemoControlPanel — tiga blok, tanpa event", () => {
     expect(html).not.toContain("Picu");
   });
 
-  it("menampilkan parameter yang benar-benar dipakai: beras + lokasi akun", () => {
+  it("menampilkan parameter yang benar-benar dipakai: komoditas terpilih + lokasi akun", () => {
+    // Kontrak 28 Okt 2026 (permintaan pemilik): pilihan "Semua komoditas"
+    // dihapus — operator wajib menyebut satu komoditas. Sebelum daftar dari
+    // server termuat, dropdown menyatakan belum ada pilihan (bukan mengarang
+    // nama). Lokasi tetap lokasi akun sendiri.
     const html = render();
-    expect(html).toContain("beras");
+    expect(html).not.toContain("Semua komoditas");
+    expect(html).toContain("Belum ada komoditas");
     expect(html).toContain("Jakarta");
   });
 
@@ -101,12 +106,12 @@ describe("DemoControlPanel — tiga blok, tanpa event", () => {
     expect(html).toContain("lokasi akun Anda");
   });
 
-  it("tombol agent aktif untuk kepala SPPG bertoken, dan tidak aktif saat sibuk/kosong", () => {
-    const aktif = render();
-    expect(aktif).not.toMatch(/class="button button-primary dc-run"[^>]*disabled/);
-    expect(render({ token: null })).toMatch(
-      /class="button button-primary dc-run"[^>]*disabled/
-    );
+  it("tombol agent menunggu komoditas: mati tanpa token DAN saat daftar komoditas kosong", () => {
+    // Sejak 28 Okt 2026 tidak ada lagi "Semua komoditas": tombol baru hidup
+    // setelah satu komoditas nyata terpilih. Kasus hidupnya diuji di
+    // demo-control-interaction.test.tsx (daftar dari server berisi "beras").
+    expect(render()).toMatch(/dc-run"[^>]*disabled/);
+    expect(render({ token: null })).toMatch(/dc-run"[^>]*disabled/);
   });
 
   it("komoditas berupa dropdown yang pilihannya dari server (bukan teks mati)", () => {
@@ -114,8 +119,10 @@ describe("DemoControlPanel — tiga blok, tanpa event", () => {
     expect(html).toContain('aria-label="Komoditas"');
     expect(html).toContain("<select");
     // Daftar belum termuat pada render statis → tidak ada nama komoditas
-    // karangan; dropdown menyatakan dirinya kosong.
-    expect(html).toContain("belum ada pilihan");
+    // karangan, dan tidak ada lagi opsi "Semua komoditas" (dihapus 28 Okt 2026).
+    expect(html).not.toContain("Semua komoditas");
+    expect(html).toContain("Belum ada komoditas");
+    expect(html).not.toContain('<option value="beras"');
     expect(html).not.toContain('class="dc-param">beras<');
   });
 

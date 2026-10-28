@@ -3,8 +3,9 @@
 // Demo Control sederhana (keputusan Roy 2026-10-19).
 //
 // Bentuknya tiga blok, tanpa Event 1/2/3:
-//   1. Siapkan data demo  -> POST /demo/refresh (idempoten; snapshot hari ini)
-//   2. Jalankan agent     -> POST /demo/agent/run (beras + lokasi akun sendiri)
+//   1. Muat demo         -> POST /demo/session/start (mode realtime; jangkar = waktu muat)
+//                           atau POST /demo/refresh bila jendela sesi mati
+//   2. Jalankan agent     -> POST /demo/agent/run (semua komoditas / satu komoditas + lokasi akun sendiri)
 //   3. Bukti agent        -> GET  /demo/agent/last-run (dibaca ulang dari DB)
 //
 // Yang dijaga:
@@ -23,6 +24,7 @@ import {
   ApiError,
   endDemoSession,
   extendDemoSession,
+  fetchApprovalSummary,
   fetchDemoAgentCommodities,
   fetchDemoAgentLastRun,
   fetchDemoDataStatus,
@@ -33,6 +35,7 @@ import {
   runDemoAgent,
   startDemoSession,
 } from "../lib/api";
+import { batchGateView, type BatchGateView } from "../lib/safety-gate";
 import {
   formatSisa,
   jangkarSesi,
@@ -50,6 +53,8 @@ import {
   defaultCommodity,
   elapsedLine,
   proofFacts,
+  ringkasPutaran,
+  ringkasSatuKomoditas,
   runButtonLabel,
   stepNames,
   supervisorLine,
@@ -157,8 +162,8 @@ export function DemoProof({
             {running
               ? "Putaran baru sedang berjalan — kesembilan kartu menyala sampai review menutup putaran."
               : run.agents_run_id
-                ? "Status dibaca dari baris review yang tersimpan, bukan dari langkah pipeline."
-                : "Review sembilan agen belum pernah tercatat untuk keputusan ini."}
+                ? "Status dibaca dari baris review tersimpan."
+                : "Review sembilan agen belum tercatat."}
           </p>
         </>
       )}
@@ -178,7 +183,9 @@ export function DemoProof({
         </ol>
       </details>
 
-      <p className="dc-line">{supervisorLine(run.supervisor)}</p>
+      {run.supervisor?.status && run.supervisor.status !== "missing" && (
+        <p className="dc-line">{supervisorLine(run.supervisor)}</p>
+      )}
       {!adaAgen && (
         <p className="dc-line dc-line--muted">{agentReviewLine(run.agent_review)}</p>
       )}
@@ -245,9 +252,8 @@ export function DemoRebuild({
   return (
     <div className="dc-rebuild" data-keadaan={sibuk ? "jalan" : konfirmasi ? "konfirmasi" : "diam"}>
       <p className="dc-rebuild-sub">
-        Mengembalikan angka ke keadaan awal tanpa menutup sesi: batch, keputusan, pesanan,
-        bukti, dan ledger dibangun ulang dari template. Terukur 41 detik pada mesin demo
-        ini; sediakan waktu sampai sekitar 1 menit di laptop yang lebih lambat.
+        Mengembalikan angka ke keadaan awal tanpa menutup sesi. Terukur 41 detik di mesin
+        demo ini; sediakan sekitar 1 menit di laptop yang lebih lambat.
       </p>
       {sibuk ? (
         <p className="dc-rebuild-line" role="status" aria-live="polite">
@@ -313,10 +319,22 @@ export default function DemoControlPanel({
   const [sesi, setSesi] = useState<StatusSesiDemo | null>(null);
   const [tickSesi, setTickSesi] = useState(0);
   const [busySesi, setBusySesi] = useState<"mulai" | "tambah" | "tutup" | null>(null);
-  // Pilihan komoditas datang dari DB (GET /demo/agent/commodities). Selama
-  // daftarnya belum termuat, dropdown kosong — bukan ditebak "beras".
+  // Pilihan komoditas datang dari DB (GET /demo/agent/commodities). Pilihan
+  // "Semua komoditas" DIHAPUS 28 Okt 2026 atas permintaan pemilik: operator
+  // harus menyebut komoditas yang dinilai, sehingga hasil satu putaran tidak
+  // tertukar dengan komoditas lain. Sebelum daftar termuat, belum ada pilihan
+  // (tombol agent menunggu), bukan menebak "beras".
   const [daftarKomoditas, setDaftarKomoditas] = useState<string[]>([]);
   const [komoditas, setKomoditas] = useState<string>("");
+  // Ringkasan hasil putaran, diambil dari payload server (bukan dihitung ulang).
+  const [hasilAgent, setHasilAgent] = useState<string | null>(null);
+  // Kesiapan eksekusi kasus yang terakhir dianalisis (Fase 10 MG butir 3).
+  // Sumbernya read model kanonik server (`/decisions/{id}/approval-summary`);
+  // `can_execute` + `blocking_reasons` dipakai APA ADANYA, lalu diterjemahkan
+  // peta kode yang SAMA dengan popup governance (`lib/safety-gate.ts`). Panel
+  // tidak menghitung ulang aturan: dua tempat menghitung = dua kebenaran.
+  const [kesiapan, setKesiapan] = useState<BatchGateView | null>(null);
+  const [kesiapanError, setKesiapanError] = useState<string | null>(null);
 
   const bolehJalankan = role === ROLE_JALAN;
   const bolehLihatBukti = ROLE_LIHAT.includes(role);
@@ -363,7 +381,7 @@ export default function DemoControlPanel({
       const daftar: string[] = Array.isArray(r?.commodities) ? r.commodities : [];
       setDaftarKomoditas(daftar);
       setKomoditas((sekarang) =>
-        sekarang && daftar.includes(sekarang) ? sekarang : defaultCommodity(daftar)
+        daftar.includes(sekarang) ? sekarang : defaultCommodity(daftar)
       );
     } catch {
       // Daftar gagal dimuat bukan alasan mengarang pilihan: dropdown tetap
@@ -372,12 +390,38 @@ export default function DemoControlPanel({
     }
   }, [token, bolehLihatBukti]);
 
+  const idKeputusan =
+    bukti?.found && bukti?.decision_id ? String(bukti.decision_id) : null;
+
+  const muatKesiapan = useCallback(async () => {
+    if (!token || !idKeputusan) {
+      // Tanpa putaran agent belum ada kasus yang bisa dinilai: blok ini
+      // disembunyikan, BUKAN diisi "siap" sebagai tebakan.
+      setKesiapan(null);
+      setKesiapanError(null);
+      return;
+    }
+    setKesiapanError(null);
+    try {
+      setKesiapan(batchGateView(await fetchApprovalSummary(idKeputusan, token)));
+    } catch (e: any) {
+      setKesiapan(null);
+      setKesiapanError(String(e?.message ?? e));
+    }
+  }, [token, idKeputusan]);
+
   useEffect(() => {
     void muatStatus();
     void muatBukti();
     void muatKomoditas();
     void muatSesi();
   }, [muatStatus, muatBukti, muatKomoditas, muatSesi]);
+
+  // Dijalankan ulang setiap kali keputusan yang ditampilkan berganti (mis.
+  // sesudah seed berikutnya): kesiapan sesi lama tidak boleh menempel.
+  useEffect(() => {
+    void muatKesiapan();
+  }, [muatKesiapan]);
 
   // Hitungan mundur sesi: tick lokal 1 detik, diselaraskan ulang tiap 20 detik
   // dengan `remaining_seconds` server (jam browser tidak dipercaya).
@@ -415,63 +459,39 @@ export default function DemoControlPanel({
     return () => window.clearInterval(jam);
   }, [busy]);
 
-  async function onSiapkan() {
-    if (!token || busy !== null) return;
-    setBusy("data");
-    setPesan(null);
-    try {
-      // Mode sesi (024/025): tombol ini MEMULAI sesi — membuatnya, menyemai
-      // data, dan menyalakan jendela waktu. Tanpa mode sesi, perilakunya tetap
-      // seperti dulu (POST /demo/refresh) supaya pengembangan tidak berubah.
-      if (sesi?.enforced) {
-        // Fase 2 MG: tombol ini memulai sesi REPLAY — jangkar kanon 8 Okt yang
-        // bisa direproduksi. Mode dikirim eksplisit; tombol realtime datang
-        // bersama dua tombol Demo Control (Fase 10).
-        const r = await startDemoSession(token, undefined, { mode: "replay" });
-        setSesi(r as StatusSesiDemo);
-        setTickSesi(0);
-        if (r?.created) {
-          // Data baru tumbuh di bawah sesi ini: muat ulang halaman agar SEMUA
-          // tab membaca data sesi, bukan sisa render lama.
-          window.location.reload();
-          return;
-        }
-        setHasilData("Sesi demo sudah berjalan — data tidak di-reset.");
-        await muatStatus();
-        await muatBukti();
-        return;
-      }
-      const r = await refreshDemoToToday(token);
-      setHasilData(refreshLine(r));
-      // Peringatan backend ditampilkan APA ADANYA — bukan diringkas klien.
-      setPeringatanData(
-        typeof r?.warning === "string" && r.warning ? r.warning : refreshWarning()
-      );
-      await muatStatus();
-      await muatBukti();
-    } catch (e: any) {
-      setPesan(String(e?.message ?? e));
-    } finally {
-      setBusy(null);
-    }
-  }
-
   /**
-   * Tombol "Muat Demo …": memuat dataset dengan MODE yang diminta operator.
+   * Tombol "Muat Demo" — satu-satunya jalan memuat dataset dari panel ini.
    *
-   * `replace: true` karena arti tombol ini memang "pakai dataset ini" — sesi
-   * bermode lain ditutup server lalu dibangun ulang. Tombol lama ("Siapkan
-   * data demo") sengaja TIDAK memakai `replace`, supaya menekannya saat demo
-   * real-time berjalan tidak diam-diam mengganti pilihan operator.
+   * Keputusan Roy 28 Okt 2026: pilihan dua mode dihapus dari UI. Dataset replay
+   * (jangkar kanon 8 Okt) tidak lagi bisa dimuat dari tombol mana pun; yang
+   * dimuat SELALU dataset yang dibangun pada saat tombol ditekan — jangkar =
+   * waktu sekarang, sama seperti konsep awal sebelum dua tombol Fase 10.
+   *
+   * `replace: true` karena arti tombol ini memang "pakai dataset ini": sesi
+   * bermode lain (mis. sisa replay dari sesi sebelumnya) ditutup server lalu
+   * dibangun ulang, supaya layar tidak diam-diam bercampur dua jangkar.
    */
-  async function muatMode(mode: "replay" | "realtime") {
+  async function onMuatDemo() {
     if (!token || !bolehJalankan || busy !== null) return;
     setBusy("data");
     setPesan(null);
     setHasilData(null);
     try {
+      // Mode sesi mati (pengembangan tanpa DEMO_SESSION_ENFORCE): tidak ada
+      // jendela waktu untuk dibuka, jadi cukup isi data untuk hari ini.
+      if (!sesi?.enforced) {
+        const r = await refreshDemoToToday(token);
+        setHasilData(refreshLine(r));
+        // Peringatan backend ditampilkan APA ADANYA — bukan diringkas klien.
+        setPeringatanData(
+          typeof r?.warning === "string" && r.warning ? r.warning : refreshWarning()
+        );
+        await muatStatus();
+        await muatBukti();
+        return;
+      }
       const r = await startDemoSession(token, undefined, {
-        mode: mode,
+        mode: "realtime",
         replace: true,
       });
       setSesi(r as StatusSesiDemo);
@@ -482,7 +502,7 @@ export default function DemoControlPanel({
         // Server menolak mengganti sesi: katakan apa adanya, jangan menampilkan
         // mode yang diminta seolah-olah sudah aktif.
         setPesan(
-          `Sesi ${konflik.active_mode ?? "lain"} sedang berjalan — permintaan ${konflik.requested_mode ?? mode} tidak menggantikannya.`
+          `Sesi ${konflik.active_mode ?? "lain"} sedang berjalan — permintaan ${konflik.requested_mode ?? "realtime"} tidak menggantikannya.`
         );
         await muatStatus();
         return;
@@ -493,7 +513,7 @@ export default function DemoControlPanel({
         window.location.reload();
         return;
       }
-      setHasilData(`Dataset ${mode} sudah aktif — data tidak dibangun ulang.`);
+      setHasilData("Dataset sudah aktif — data tidak dibangun ulang.");
       await muatStatus();
       await muatBukti();
     } catch (e: any) {
@@ -543,7 +563,7 @@ export default function DemoControlPanel({
       setHasilData(rebuildLine(r));
       setPeringatanData(rebuildWarning());
       // Data diganti seluruhnya: muat ulang supaya SEMUA tab membaca baris baru,
-      // bukan sisa render lama (sama seperti tombol "Siapkan data demo").
+      // bukan sisa render lama (sama seperti tombol "Muat Demo").
       window.location.reload();
     } catch (e: any) {
       const detail = e instanceof ApiError && e.detail ? e.detail : null;
@@ -556,14 +576,22 @@ export default function DemoControlPanel({
     if (!token || !bolehJalankan || busy !== null) return;
     setBusy("agent");
     setPesan(null);
+    setHasilAgent(null);
     try {
-      await runDemoAgent(token, {
-        commodity: komoditas || undefined,
+      const hasil = await runDemoAgent(token, {
+        // Komoditas WAJIB disebut: tidak ada lagi mode "semua komoditas" di
+        // panel, supaya satu klik = satu komoditas yang bisa diperiksa.
+        commodity: komoditas,
         // Fase 2 MG: analisis dijalankan ATAS SESI yang sedang dipilih panel,
         // dan modenya ikut dikirim supaya server bisa menolak bila berbeda.
         demoSession: sesi?.session_id ?? undefined,
         mode: modeSesi(sesi) ?? undefined,
       });
+      // Ringkasan dibaca dari payload server (created/skipped). Backend lama
+      // belum mengirim kedua kunci itu; tanpa cadangan, putaran yang BERHASIL
+      // tampak seperti tidak terjadi apa-apa (gejala 28 Okt 2026: "tidak bisa
+      // menjalankan agent" padahal keputusan lahir).
+      setHasilAgent(ringkasPutaran(hasil) ?? ringkasSatuKomoditas(hasil, komoditas));
       // Sumber kebenaran blok bukti adalah DB, bukan respons tombol di atas.
       await muatBukti();
       await muatStatus();
@@ -582,61 +610,50 @@ export default function DemoControlPanel({
 
   return (
     <section className="demo-control-section" aria-label="Demo Control">
-      {/* 1 ─ Siapkan data ------------------------------------------------ */}
-      <section className="card dc-block" aria-label="Siapkan data demo">
+      {/* 1 ─ Muat demo ---------------------------------------------------- */}
+      <section className="card dc-block dc-hero" aria-label="Muat demo">
         <div className="dc-head">
           <span className="dc-stepno" aria-hidden="true">
             1
           </span>
-          <h2 className="dc-title">Siapkan data demo</h2>
+          <h2 className="dc-title">Muat demo</h2>
           <span className={`badge ${adaBaris(status) ? "status-safe" : "status-neutral"}`}>
             {adaBaris(status) ? "data siap" : "belum ada data"}
           </span>
+          {sesi?.active && <span className="badge status-safe dc-live">sesi berjalan</span>}
         </div>
         <p className="dc-sub">
-          Mengisi data demo untuk satu jendela waktu: hari ini, empat skenario uji,
-          dan hitungan mundur sesi. Menekan lagi saat sesi berjalan tidak memuat
-          ulang data — sesi yang sama diteruskan.
+          Data dibangun saat tombol ditekan — jangkar waktu = sekarang.
         </p>
+        <div className="dc-primary">
+          <button
+            type="button"
+            className="button button-primary dc-prepare"
+            onClick={onMuatDemo}
+            disabled={!token || !bolehJalankan || busy !== null}
+            title="Membangun data demo pada waktu sekarang (realtime), lalu memuatnya"
+          >
+            {busy === "data" ? "Memuat…" : "Muat Demo"}
+          </button>
+          {sesi?.active && (
+            <div className="dc-chips" aria-label="Konteks dataset">
+              {sesi.enforced && (
+                <span className="dc-chip" data-testid="demo-session-mode">
+                  {labelModeSesi(ringkasan.mode)}
+                </span>
+              )}
+              <span className="dc-chip dc-chip--timer" role="timer" aria-live="off">
+                {formatSisa(sisaSekarang)}
+              </span>
+            </div>
+          )}
+        </div>
+        {ringkasan.baris && <p className="dc-dataset-line">{ringkasan.baris}</p>}
         {sesi?.enforced && (
           <div className="dc-session" data-keadaan={keadaanSesi(sesi)}>
             <p className="dc-session-line" role="status" aria-live="polite">
               {pesanSesi(sesi, tickSesi)}
             </p>
-            {sesi.active && (
-              <p className="dc-session-count" role="timer" aria-live="off">
-                {formatSisa(sisaSekarang)}
-              </p>
-            )}
-            {/* Fase 2 MG: mode + jangkar ditampilkan APA ADANYA dari sesi.
-                Tanpa ini operator tidak bisa membedakan "data kanon 8 Okt"
-                dari "sesi yang baru dibuka hari ini" — dua dataset berbeda
-                yang angkanya tidak boleh dibandingkan diam-diam. */}
-            {sesi.active && (
-              <div className="dc-session-dataset">
-                <p className="dc-session-mode" data-testid="demo-session-mode">
-                  Mode: <strong>{labelModeSesi(ringkasan.mode)}</strong>
-                  {ringkasan.anchor ? <> · Jangkar: {ringkasan.anchor}</> : null}
-                  {ringkasan.datasetVersion ? (
-                    <>
-                      {" "}
-                      · Dataset: <code>{ringkasan.datasetVersion}</code>
-                    </>
-                  ) : null}
-                </p>
-                {ringkasan.baris && (
-                  <p className="dc-session-summary">{ringkasan.baris}</p>
-                )}
-                {/* Label jujur: angka suhu pada dataset demo dibangun ulang
-                    oleh penyemai, bukan bacaan sensor. */}
-                <p className="dc-session-sim">
-                  Dataset demo memakai suhu simulasi, bukan sensor aktif.
-                </p>
-              </div>
-            )}
-            {sesi.active && peringatanWaktu(sisaSekarang) && (
-              <p className="dc-session-warn">{peringatanWaktu(sisaSekarang)}</p>
-            )}
             {sesi.active && (
               <div className="dc-session-actions">
                 <button
@@ -659,48 +676,12 @@ export default function DemoControlPanel({
                 </button>
               </div>
             )}
+            {sesi.active && peringatanWaktu(sisaSekarang) && (
+              <p className="dc-session-warn">{peringatanWaktu(sisaSekarang)}</p>
+            )}
           </div>
         )}
-        <DemoRebuild
-          // Aksi destruktif = hanya kepala SPPG (sama seperti tombol lain di blok ini);
-          // ahli gizi melihat catatan mode baca, bukan tombol yang pasti 403.
-          aktif={Boolean(sesi?.active) && bolehJalankan}
-          sibuk={busy === "bangun"}
-          detik={detik}
-          onRebuild={onBangunUlang}
-        />
-        {/* Fase 10 MG: dua jalur demo. Keduanya memuat DATASET, jadi mode
-            dikirim eksplisit dan sesi bermode lain diganti (`replace`). */}
-        <div className="dc-mode-actions" role="group" aria-label="Muat dataset demo">
-          <button
-            type="button"
-            className="button button-primary"
-            onClick={() => muatMode("replay")}
-            disabled={!token || !bolehJalankan || busy !== null}
-            title="Muat dataset kanon 8 Oktober 2026 — dapat diulang dengan hasil sama"
-          >
-            {busy === "data" ? "Memuat…" : "Muat Demo Utama"}
-          </button>
-          <button
-            type="button"
-            className="button button-secondary"
-            onClick={() => muatMode("realtime")}
-            disabled={!token || !bolehJalankan || busy !== null}
-            title="Muat dataset baru berjangkar waktu sekarang (bukan kanon)"
-          >
-            {busy === "data" ? "Memuat…" : "Muat Demo Real-time"}
-          </button>
-        </div>
-        <div className="dc-actions">
-          <button
-            type="button"
-            className="button button-secondary dc-prepare"
-            onClick={onSiapkan}
-            disabled={!token || !bolehJalankan || busy !== null}
-            title="Mengisi data demo hari ini dan memuat empat skenario uji"
-          >
-            {busy === "data" ? "Menyiapkan…" : "Siapkan data demo"}
-          </button>
+        <div className="dc-foot">
           {(!sesi?.enforced || sesi.active) && (
             <p className="dc-status" role="status" aria-live="polite">
               {status ? (
@@ -710,15 +691,24 @@ export default function DemoControlPanel({
                   statusLine(status)
                 )
               ) : statusError ? (
-              <span className="status-danger">
-                Status data gagal dibaca: {statusError}
-              </span>
-            ) : (
+                <span className="status-danger">Status data gagal dibaca: {statusError}</span>
+              ) : (
                 <LoadingState label="Memuat status data demo" />
               )}
             </p>
           )}
         </div>
+        <details className="dc-advanced">
+          <summary>Opsi lanjutan</summary>
+          <DemoRebuild
+            // Aksi destruktif = hanya kepala SPPG (sama seperti tombol lain di blok ini);
+            // ahli gizi melihat catatan mode baca, bukan tombol yang pasti 403.
+            aktif={Boolean(sesi?.active) && bolehJalankan}
+            sibuk={busy === "bangun"}
+            detik={detik}
+            onRebuild={onBangunUlang}
+          />
+        </details>
         {hasilData && <p className="dc-result">{hasilData}</p>}
         {peringatanData && (
           <details className="dc-note">
@@ -728,8 +718,7 @@ export default function DemoControlPanel({
         )}
         {!bolehJalankan && (
           <p className="dc-readonly">
-            Mode baca — hanya kepala SPPG yang boleh menyiapkan data dan menjalankan
-            agent.
+            Mode baca — hanya Kepala SPPG yang boleh memuat data dan menjalankan agent.
           </p>
         )}
       </section>
@@ -748,18 +737,17 @@ export default function DemoControlPanel({
           </span>
         </div>
         <p className="dc-sub">
-          Satu putaran penuh pipeline di server: deteksi, verifikasi, prakiraan,
-          optimasi, keputusan, lalu narasi supervisor. Tidak ada approve otomatis —
-          keputusan lahir berstatus <code>proposed</code>.
+          Satu putaran pipeline di server; keputusan lahir berstatus <code>proposed</code> —
+          tanpa approve otomatis.
         </p>
         <div className="dc-actions">
           <button
             type="button"
             className="button button-primary dc-run"
             onClick={onJalankan}
-            disabled={!token || !bolehJalankan || busy !== null}
+            disabled={!token || !bolehJalankan || busy !== null || !komoditas}
             aria-busy={busy === "agent"}
-            title="Jalankan pipeline agent untuk komoditas beras di lokasi SPPG Anda"
+            title="Jalankan pipeline agent untuk komoditas yang dipilih, di lokasi SPPG Anda"
           >
             {runButtonLabel(busy === "agent")}
           </button>
@@ -771,10 +759,12 @@ export default function DemoControlPanel({
               value={komoditas}
               onChange={(e) => setKomoditas(e.target.value)}
               disabled={!token || !bolehJalankan || busy !== null || daftarKomoditas.length === 0}
-              title="Daftar komoditas yang punya data di database"
+              title="Komoditas yang punya data di database — wajib dipilih sebelum menjalankan agent"
             >
               {daftarKomoditas.length === 0 ? (
-                <option value="">belum ada pilihan</option>
+                // Belum ada daftar dari server: jangan mengarang nama, dan
+                // jangan menawarkan "semua" yang sudah dihapus dari panel.
+                <option value="">Belum ada komoditas</option>
               ) : (
                 daftarKomoditas.map((nama) => (
                   <option key={nama} value={nama}>
@@ -789,13 +779,15 @@ export default function DemoControlPanel({
             <span className="dc-param">{locationName || "lokasi akun Anda"}</span>
           </label>
         </div>
+        {hasilAgent && (
+          <p className="dc-result" role="status">
+            {hasilAgent}
+          </p>
+        )}
         {busy === "agent" && (
           <p className="dc-progress" role="status" aria-live="polite">
             {elapsedLine(detik)}
-            <span className="dc-progress-note">
-              Langkah ditulis sekaligus saat putaran selesai — biasanya sekitar satu
-              menit.
-            </span>
+            <span className="dc-progress-note">Langkah ditulis sekaligus saat putaran selesai.</span>
           </p>
         )}
         {pesan && (
@@ -830,19 +822,49 @@ export default function DemoControlPanel({
             {/* Audit data 26 Okt 2026: kalimat lama ("belum ada jejak agent di
                 database") terlalu luas — database tetap menyimpan jejak dari
                 putaran sebelumnya; yang kosong hanyalah putaran TERAKHIR. */}
-            Belum ada putaran agent yang terekam pada mesin ini. Tekan{" "}
-            <strong>Jalankan agent</strong> — sesudah putaran selesai, langkah yang
-            benar-benar tertulis muncul di sini. Jejak dari keputusan lama tetap bisa
-            dibaca di tab Agent Log.
+            Belum ada putaran agent di mesin ini. Tekan <strong>Jalankan agent</strong>;
+            jejak putaran lama tetap ada di tab Agent Log.
           </p>
         ) : (
-          <DemoProof
-            run={bukti as AgentRun}
-            running={busy === "agent"}
-            onOpenDecision={onOpenDecision}
-            onOpenAgentLog={onOpenAgentLog}
-            onRefresh={() => void muatBukti()}
-          />
+          <>
+            {/* Kesiapan eksekusi (Fase 10 MG butir 3): satu label yang
+                membedakan siap / ditahan / karantina / selesai, plus SEBABNYA
+                dan langkah berikutnya. Tanpa ini operator harus menebak dari
+                status mentah dan alasan hold tidak pernah terbaca. */}
+            {kesiapanError && (
+              <p className="dc-error" role="alert">
+                Kesiapan kasus gagal dibaca: {kesiapanError}
+              </p>
+            )}
+            {kesiapan && (
+              <div
+                className="dc-readiness"
+                data-kind={kesiapan.kind}
+                data-testid="demo-case-readiness"
+              >
+                <p className="dc-readiness-label">
+                  Kesiapan kasus: <strong>{kesiapan.label}</strong>
+                </p>
+                {kesiapan.reasons.length > 0 && (
+                  <ul className="dc-readiness-reasons">
+                    {kesiapan.reasons.map((alasan) => (
+                      <li key={alasan}>{alasan}</li>
+                    ))}
+                  </ul>
+                )}
+                {kesiapan.nextStep && (
+                  <p className="dc-readiness-next">Langkah: {kesiapan.nextStep}</p>
+                )}
+              </div>
+            )}
+            <DemoProof
+              run={bukti as AgentRun}
+              running={busy === "agent"}
+              onOpenDecision={onOpenDecision}
+              onOpenAgentLog={onOpenAgentLog}
+              onRefresh={() => void muatBukti()}
+            />
+          </>
         )}
       </section>
     </section>

@@ -85,6 +85,52 @@ export function defaultCommodity(daftar: string[], disukai = "beras"): string {
   return daftar.includes(disukai) ? disukai : daftar[0];
 }
 
+// Catatan 28 Okt 2026: penanda "Semua komoditas" DIHAPUS. Panel sekarang selalu
+// menyebut satu komoditas nyata; server tetap menerima permintaan tanpa
+// `commodity` (perilaku lama dipertahankan untuk pemanggil lain), tetapi UI
+// tidak lagi menawarkannya — operator harus tahu komoditas mana yang dinilai.
+
+export type PutaranKomoditas = {
+  created?: Array<{ commodity?: string | null; decision_id?: string | null }>;
+  skipped?: Array<{ commodity?: string | null; reason?: string | null }>;
+};
+
+/**
+ * Ringkasan satu putaran "Jalankan agent" untuk dibaca operator.
+ *
+ * Murni: setiap angka dan nama diambil dari payload server (`created`/
+ * `skipped`), tidak ada tebakan. Payload lama (tanpa kedua kunci itu) → `null`
+ * supaya panel tidak menampilkan baris kosong yang berpura-pura jadi bukti.
+ * Alasan penolakan dipendekkan supaya tidak memenuhi layar, tetapi tidak
+ * dihapus seluruhnya — tanpa sebab, "dilewati" tidak bisa diperiksa.
+ */
+export function ringkasPutaran(outcome: unknown, maksAlasan = 140): string | null {
+  if (!outcome || typeof outcome !== "object") return null;
+  const isi = outcome as PutaranKomoditas;
+  const dibuat = Array.isArray(isi.created) ? isi.created : null;
+  const dilewati = Array.isArray(isi.skipped) ? isi.skipped : null;
+  if (dibuat === null && dilewati === null) return null;
+
+  const namaDibuat = (dibuat ?? [])
+    .map((baris) => String(baris?.commodity ?? "").trim())
+    .filter(Boolean);
+  const bagian: string[] = [];
+  if (namaDibuat.length > 0) {
+    bagian.push(
+      `${namaDibuat.length} keputusan dibuat${namaDibuat.length <= 4 ? ` (${namaDibuat.join(", ")})` : ""}`
+    );
+  } else {
+    bagian.push("0 keputusan dibuat");
+  }
+  for (const baris of dilewati ?? []) {
+    const nama = String(baris?.commodity ?? "").trim() || "komoditas tanpa nama";
+    const alasan = String(baris?.reason ?? "").trim();
+    const pendek = alasan.length > maksAlasan ? `${alasan.slice(0, maksAlasan - 1)}…` : alasan;
+    bagian.push(pendek ? `${nama} dilewati: ${pendek}` : `${nama} dilewati`);
+  }
+  return bagian.join(" · ");
+}
+
 /** Angka dari DB → label Indonesia. `null` tetap `—`, tidak diubah jadi 0. */
 export function quantityLabel(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
@@ -447,4 +493,30 @@ export function demoAgentCards(
       note: agen.key === "verifier" ? teksAtau(agen.summary) : null,
     };
   });
+}
+
+/**
+ * Ringkasan cadangan untuk putaran SATU komoditas.
+ *
+ * Backend yang belum mengirim `created`/`skipped` menjawab dengan
+ * `decision_id` + `trace_steps`. Tanpa baris ini, putaran yang berhasil tampak
+ * seperti tidak terjadi apa-apa — persis keluhan "tidak bisa menjalankan agent"
+ * (28 Okt 2026). Murni: nomor keputusan dan jumlah langkah diambil dari
+ * payload; kalau payload tidak punya keduanya, kembalikan `null` (jangan
+ * mengarang bukti).
+ */
+export function ringkasSatuKomoditas(outcome: unknown, komoditas: string): string | null {
+  if (!outcome || typeof outcome !== "object") return null;
+  const isi = outcome as {
+    decision_id?: string | null;
+    commodity?: string | null;
+    trace_steps?: unknown[] | null;
+  };
+  const id = String(isi.decision_id ?? "").trim();
+  if (!id) return null;
+  const nama = String(isi.commodity ?? "").trim() || komoditas || "komoditas";
+  const langkah = Array.isArray(isi.trace_steps) ? isi.trace_steps.length : 0;
+  return langkah > 0
+    ? `1 keputusan dibuat (${nama}) · ${langkah} langkah agent tercatat · id ${id.slice(0, 8)}`
+    : `1 keputusan dibuat (${nama}) · id ${id.slice(0, 8)}`;
 }
