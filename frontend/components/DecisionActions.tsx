@@ -86,6 +86,45 @@ export function visibleActions(
   };
 }
 
+/**
+ * Kalimat batch untuk gerbang review PO.
+ *
+ * Backend `POST /actions/purchase-orders/{po}/approve` mengembalikan `dikirim`
+ * (batch yang benar-benar berangkat sekarang) dan `ditahan` (batch terikat yang
+ * TIDAK berangkat: sudah berangkat, gagal gerbang keselamatan, karantina).
+ * Komentar backend tegas: `ditahan` disertakan "supaya UI tidak mengaku semua
+ * barang jalan". Dulu UI hanya membaca status PO/keputusan, sehingga keputusan
+ * bisa `executed` tanpa satu truk pun bergerak — terukur 29 Okt 2026 pada
+ * keputusan bef077a8 (batch b772248c "sudah berangkat").
+ *
+ * Fungsi murni supaya teks yang sama bisa diuji tanpa DOM.
+ */
+export function ringkasanBatchPo(result: {
+  dikirim?: { batch_id?: string; dispatched_at?: string }[] | null;
+  ditahan?: { batch_id?: string; alasan?: string }[] | null;
+}): string {
+  const dikirim = Array.isArray(result?.dikirim) ? result.dikirim : [];
+  const ditahan = Array.isArray(result?.ditahan) ? result.ditahan : [];
+  const bagian: string[] = [];
+  if (dikirim.length > 0) {
+    bagian.push(`${dikirim.length} batch diberangkatkan`);
+  }
+  if (ditahan.length > 0) {
+    const alasan = ditahan
+      .map((baris) => (baris?.alasan ?? "").trim())
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("; ");
+    bagian.push(`${ditahan.length} batch ditahan${alasan ? `: ${alasan}` : ""}`);
+  }
+  if (bagian.length === 0) {
+    // Tidak ada binding batch pada PO ini — jangan meninggalkan kesan barang
+    // berangkat.
+    return "Tidak ada batch terikat pada PO ini, jadi tidak ada barang yang diberangkatkan.";
+  }
+  return `${bagian.join(" · ")}.`;
+}
+
 export default function DecisionActions({
   decisionId,
   role,
@@ -302,7 +341,8 @@ export default function DecisionActions({
       setMessage(
         `PO ${result.po_number ?? po.po_number} terkirim ke SAP (status ${
           result.po_status ?? "submitted"
-        }) — keputusan menjadi ${result.decision_status ?? "executed"}.`
+        }) — keputusan menjadi ${result.decision_status ?? "executed"}. ` +
+          ringkasanBatchPo(result)
       );
       return null;
     } catch (err: any) {

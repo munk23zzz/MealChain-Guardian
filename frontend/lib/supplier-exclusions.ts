@@ -1,7 +1,10 @@
 import { metodeMenulis, segarkanSetelahTulis } from "./refresh";
 
-// `||` bukan `??`: basis kosong menghasilkan URL relatif yang gagal di fetch.
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// `??` bukan `||` — sama seperti `lib/api.ts`: seluruh konsol memanggil API lewat
+// origin sendiri (rewrites di next.config), dan CSP `connect-src 'self'` menolak
+// fetch lintas-origin. Basis kosong = URL relatif (benar); `||` jatuh ke
+// http://localhost:8000 dan diblokir CSP → panel "konteks pemasok" selalu gagal.
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 // Keep backend validation details visible; generic api.request drops them.
 async function request<T>(path: string, init: RequestInit): Promise<T> {
