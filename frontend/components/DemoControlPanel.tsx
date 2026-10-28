@@ -601,14 +601,44 @@ export default function DemoControlPanel({
     setPesan(null);
     setHasilAgent(null);
     try {
+      // Sesi WAJIB hidup sebelum agent dijalankan: server menolak 409 dan
+      // keputusan harus terikat sesi. Sebelum ini panel membiarkan operator
+      // menekan tombol setelah "Akhiri sesi"/sesi kedaluwarsa, lalu ia hanya
+      // membaca 409 dan mengira fiturnya rusak (terukur 28 Okt 2026). Sesi
+      // dibuka di sini SEKALI, dengan `replace:false`, supaya data yang ada
+      // tidak dibangun ulang tanpa diminta.
+      let sesiId = sesi?.session_id ?? null;
+      if (!sesiId) {
+        // Tanya server dulu SEBELUM membuka sesi. `startDemoSession` tanpa sesi
+        // aktif akan MEMBANGUN template baru, dan jangkar waktunya menjadi
+        // "sekarang" — jam demo seolah di-restart hanya karena menekan
+        // Jalankan agent (terukur 28 Okt 2026 saat demo: panel tidak memegang
+        // id sesi walau server masih punya sesi aktif).
+        const aktif = (await fetchDemoSession(token)) as StatusSesiDemo;
+        if (aktif?.active !== false && aktif?.session_id) {
+          setSesi(aktif);
+          setTickSesi(0);
+          sesiId = aktif.session_id;
+        }
+      }
+      if (!sesiId) {
+        const baru = (await startDemoSession(token, undefined, {
+          mode: modeSesi(sesi) ?? "realtime",
+        })) as StatusSesiDemo;
+        if (baru?.session_id) {
+          setSesi(baru);
+          setTickSesi(0);
+          sesiId = baru.session_id;
+        }
+      }
       const hasil = await runDemoAgent(token, {
         // Komoditas WAJIB disebut: tidak ada lagi mode "semua komoditas" di
         // panel, supaya satu klik = satu komoditas yang bisa diperiksa.
         commodity: komoditas,
         // Fase 2 MG: analisis dijalankan ATAS SESI yang sedang dipilih panel,
         // dan modenya ikut dikirim supaya server bisa menolak bila berbeda.
-        demoSession: sesi?.session_id ?? undefined,
-        mode: modeSesi(sesi) ?? undefined,
+        demoSession: sesiId ?? undefined,
+        mode: modeSesi(sesi) ?? "realtime",
       });
       // Ringkasan dibaca dari payload server (created/skipped). Backend lama
       // belum mengirim kedua kunci itu; tanpa cadangan, putaran yang BERHASIL

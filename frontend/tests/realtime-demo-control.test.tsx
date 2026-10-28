@@ -184,7 +184,23 @@ describe("analisis membawa sesi", () => {
   it("tombol agent di panel membawa sesi aktif", () => {
     const badan = badanFungsi("components/DemoControlPanel.tsx", "onJalankan");
     expect(badan).toContain("runDemoAgent(");
-    expect(badan).toMatch(/demoSession:\s*sesi\?\.session_id/);
+    // Id sesi yang dikirim adalah `sesiId` hasil adopsi/penbukaan, bukan lagi
+    // ekspresi langsung `sesi?.session_id` (28 Okt 2026).
+    expect(badan).toMatch(/demoSession:\s*sesiId/);
+  });
+
+  it("menekan Jalankan agent tidak membangun ulang data bila server punya sesi", () => {
+    // Gejala demo 28 Okt 2026: jam demo "restart" sesudah Jalankan agent.
+    // Sebabnya panel membuka sesi baru (yang MEMBANGUN template + jangkar=now)
+    // padahal server masih punya sesi aktif. Kontraknya: baca /demo/session
+    // lebih dulu dan pakai id-nya.
+    const badan = badanFungsi("components/DemoControlPanel.tsx", "onJalankan");
+    const adopsi = badan.indexOf("fetchDemoSession(");
+    const buka = badan.indexOf("startDemoSession(");
+    expect(adopsi).toBeGreaterThan(-1);
+    expect(buka).toBeGreaterThan(-1);
+    expect(adopsi).toBeLessThan(buka);
+    expect(badan).toContain("sesiId = aktif.session_id");
   });
 
   it("mode dan jangkar tidak ditebak dari data terbaru", () => {
