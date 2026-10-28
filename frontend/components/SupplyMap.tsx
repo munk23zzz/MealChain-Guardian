@@ -1485,8 +1485,10 @@ export default function SupplyMap({
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-color": "#FFFFFF",
-        "line-width": 7.6,
-        "line-opacity": 0.75,
+        // Alas sedikit lebih lebar dari garis (5,4 vs 3,2) supaya garis slate
+        // tetap terbaca di basemap OSM yang ramai, tanpa jadi pita putih tebal.
+        "line-width": 5.4,
+        "line-opacity": 0.6,
       },
     });
     map.addLayer({
@@ -1497,9 +1499,13 @@ export default function SupplyMap({
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
         "line-color": "#475569",
-        "line-width": 4.4,
-        "line-dasharray": [7, 5],
-        "line-opacity": 0.75,
+        // Bentuk akhir (pemilik 29 Okt 2026): PUTUS-PUTUS tetap dipakai, tetapi
+        // lebih tebal (3,2 px vs 4,4 px versi lama yang terlalu gemuk dengan
+        // pola rapat) dan lebih pekat (0,92 vs 0,75). Pola celah 6/4 memberi
+        // napas supaya garis tidak terbaca sebagai pita padat.
+        "line-width": 3.8,
+        "line-dasharray": [6, 4],
+        "line-opacity": 0.92,
       },
     });
 

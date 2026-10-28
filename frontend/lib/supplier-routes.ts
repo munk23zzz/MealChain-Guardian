@@ -686,6 +686,8 @@ export function routeLegendEntries(
     // Nada "tiba": kanvas menggambar kiriman yang sudah tiba dengan SLATE
     // #475569 (--route-arrived), bukan violet. Dulu entri ini memakai "ok"
     // sehingga legenda menjanjikan violet untuk garis yang tampak abu-abu.
+    // Gaya legenda harus sama dengan kanvas: jalur yang sudah tiba digambar
+    // putus-putus tipis, jadi legenda menyebut "putus" — bukan "padat".
     entries.push({ tone: "tiba", label: "Sudah tiba (redup)", gaya: "putus" });
   }
   if (bergerak.some((row) => routeLineTone(row) === "fail")) {
