@@ -140,3 +140,11 @@ _qa/f2/staged2/
 
 # Entri filesystem rusak di drive exFAT (WinError 1392) — tidak bisa di-stat/dihapus
 _qa/f6/pytest.txt
+
+# Snapshot harga PIHPS: hanya berkas `pihps_latest.json` yang disimpan di repo
+# (supaya panel Overview jalan tanpa jaringan). Arsip per tanggal tarik tidak.
+data/harga_pihps/pihps_2*.json
+
+# Artefak build & folder sementara verifikasi (jangan pernah ikut commit)
+frontend/.next-*/
+frontend/tmp/
