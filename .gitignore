@@ -147,4 +147,6 @@ data/harga_pihps/pihps_2*.json
 
 # Artefak build & folder sementara verifikasi (jangan pernah ikut commit)
 frontend/.next-*/
+_qa/ukur-viewport.cjs
+_qa/*-*.png
 frontend/tmp/

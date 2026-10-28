@@ -478,3 +478,7 @@ Parameter `max_distance_km` + cakupan jarak di UI dijadikan fase tersendiri sete
 - Keadaan data lokal saat ini: sesi demo aktif (mode realtime, dibangun 03.46 WIB), approval
   dan timestamp template disegarkan; `375c831b` dan `bef077a8` sudah `executed` dengan PO
   `MC-375C831B78CA` / `MC-BEF077A8A935` berstatus `submitted`; tidak ada PO draft tersisa.
+- Mengukur lebar sempit TIDAK perlu playwright: `_qa/ukur-viewport.cjs` (CDP + Edge headless,
+  memakai `ws` dari `frontend/node_modules`). Contoh: `NODE_PATH=<repo>/frontend/node_modules
+  UKUR_LEBAR=390 UKUR_AKUN="BGN Monitor" UKUR_OUT=<folder> node _qa/ukur-viewport.cjs`.
+  Halaman menolak iframe (`X-Frame-Options: DENY`), jadi harness iframe TIDAK bisa dipakai.

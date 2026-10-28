@@ -1031,8 +1031,14 @@ Gerbang: tsc 0, lint 0, vitest 214/2502, build `ubpvBA7URr_Dy82BlkAZE`. 0 commit
    bukan paragraf penjelas di kepala.
 6. Penjelasan proses tidak masuk baris baca: rumus biaya rencana alih pindah ke `title`
    judul kolom; kaki tabel tinggal ambang surplus.
+7. Layar sempit 390 px DIUKUR dengan CDP (`_qa/ukur-viewport.cjs`), bukan disimpulkan dari CSS.
+   Dua cacat ikut diperbaiki: `<th>` "Wilayah" harus hilang bersama selnya (dulu seluruh angka
+   bergeser satu kolom), dan setiap tabel yang bergulir sendiri wajib punya `ScrollHint`
+   (`kelasWadah` baru supaya panel bisa memakai pengukur yang sama).
+8. Sisa yang disengaja: pada 390 px tabel lokasi masih digeser di dalam kartunya (389 vs 316 px)
+   — dinyatakan lewat petunjuk, bukan disembunyikan.
 
-Gerbang: tsc 0, lint 0, vitest 216/2512, build `-N541gMU4jDNPcxcztwAE`. 0 commit.
+Gerbang: tsc 0, lint 0, vitest 217/2528, build `YZRmCQjqXtfsWB-9rnFUA`. 0 commit.
 
 ## Ronde 52 — 2026-10-29: Decision & Evidence — bukti pemasok & pesan batch ditahan
 
@@ -1063,3 +1069,65 @@ Gerbang: tsc 0 (seluruh proyek), vitest 4 berkas / 37 tes lulus (termasuk
 `tests/po-dispatch-summary.test.ts`, 6 tes baru), bukti live pesan review PO:
 "… executed. 1 batch ditahan: sudah berangkat 2026-10-28T05:15:30.119336+00:00."
 0 commit.
+
+## Ronde 53 — 2026-10-29: halaman "Pasokan & Kebutuhan" disamakan dengan bahasa konsol
+
+Arahan pemilik: "redesign page supaya hasilnya benar-benar design consistent dengan halaman
+lainnya". Halaman = tab `Pasokan & Kebutuhan` (peran Ahli Gizi). Sebelum menyunting, hierarki
+judul dan tombol seluruh tab DIUKUR di aplikasi hidup (Hari Ini, Overview, Location Network,
+Recommendations, Decision & Evidence) — jadi keputusannya angka, bukan selera.
+
+1. **`button-quiet` adalah kelas HANTU.** Dipakai empat kali (tombol "Tutup" rincian lokasi +
+   tiga kontrol Demo Control) tetapi TIDAK PERNAH dideklarasikan, sehingga keempatnya mewarisi
+   `.button` dan tampil pil biru penuh. Terukur: `Tutup` 71x39 px, `backgroundColor` rgb(37,99,235)
+   — elemen paling berteriak di kartu, mengalahkan judul kartunya sendiri. Dideklarasikan sebagai
+   kontrol tenang (putih, garis `--line`, tinta `--ink`, hover `--surface-sunken`); sesudahnya
+   terukur putih/rgb(15,23,42), tetap pil 999px (bahasa tombol proyek sejak 27 Okt 2026).
+2. **Judul sub-bagian "Batch" keluar dari tangga tipografi.** `.batches h4` memakai `--fs-4` (16 px)
+   + bobot bawaan h4 (700) sehingga LEBIH BESAR daripada judul kartu induknya ("Jakarta · telur",
+   14 px/600) — hierarki terbalik, dan satu-satunya 16 px di antara sebelas judul 14 px/600.
+   Diturunkan ke bahasa label mikro yang sudah dipakai `agenda-group-title` / kepala panel
+   Governance: 12 px/700 KAPITAL, letter-spacing `--track-caps`, tinta `--ink-muted`.
+3. **Empat ubin angka adalah kartu di dalam kartu.** Permukaan putih + radius 12 + garis sendiri
+   di dalam kartu putih radius 12, nilai 18 px/650 (bobot 650 tidak ada di skala 400/500/600/700).
+   Disamakan dengan bahasa ubin dalam-kartu `.detail-kpi` (Decision & Evidence): `--surface-sunken`,
+   radius kontrol 8 px, label 12 px/600 KAPITAL, nilai `--font-data` 16 px/600 dengan angka tabular.
+   Nada danger/safe/unknown DIPERTAHANKAN — di situ warnanya membawa makna, bukan hiasan.
+
+Yang sengaja TIDAK diubah, karena sudah konsisten dan terukur: kolom `.fact-row`
+(`minmax(150px,45%) 1fr` — dipakai bersama Decision & Evidence), radius pil 999 px pada semua
+tombol (keputusan pemilik 27 Okt 2026), dan judul kartu 14 px/600.
+
+Gerbang: tsc 0, `next lint` 0, vitest **219 berkas / 2.532 tes lulus** (termasuk
+`tests/tombol-quiet-dan-label-batch.test.ts`, 4 tes baru, ditulis MERAH dulu: 4 gagal sebelum
+implementasi), build `BUILD_ID=5h4_bilKeSy83C_aN2b0W` (via `NEXT_DIST_DIR=.next-build` karena
+`next dev` memegang `.next`). Bukti live (peran Ahli Gizi, 1247 px): Tutup putih/tinta biasa,
+label BATCH 12 px/700 KAPITAL, ubin `rgb(241,245,249)` radius 8 px, nilai 16 px/600 Fira Code.
+0 commit.
+
+### Gugus filter "Komoditas" → bahasa chip filter Recommendations
+
+Pemilik memilih (setelah diukur): gugus filter disamakan ke POLA CHIP FILTER Recommendations,
+bukan dibiarkan seperti Overview. Fakta sebelum perubahan: gugus "Komoditas" di Pasokan &
+Kebutuhan dan di Overview SUDAH identik piksel satu sama lain (kartu 947x46, padding 10px 16px,
+radius 12, label 14 px/500, pil 63x24 13 px/500) — jadi yang benar-benar berbeda adalah blok
+filter di Recommendations: chip 132x32, 13 px/600, TANPA kartu putih.
+
+Perubahan: `filter-card` dilepas dari TIGA tempat markup (`components/LocationNetworkBoard.tsx`,
+`components/SurplusBoard.tsx`, `app/page.tsx` bagian Overview) sehingga tidak ada lagi kartu
+putih untuk gugus filter; CSS baru ditulis SESUDAH aturan `.filter-card .commodity-pill` dan
+semua selektornya bersarang di `.commodity-filters` (`.commodity-filters .commodity-pill`,
+`…-active`, `…:hover`) supaya pil hitungan statis di halaman lain tidak ikut berubah.
+
+Bukti terukur sesudahnya (1247 px): gugus 947x32, latar transparan, tanpa garis/padding, gap 8,
+satu baris; chip 56x32, 13 px/600, padding 5px 13px, radius 999, aktif `rgb(37,99,235)`/putih —
+sama keluarga dengan chip Recommendations 132x32 13 px/600. Pil statis di halaman Pemasok TETAP
+88x22 / 12 px/500 / padding 2px 10px (scope berhasil). 390 px: `docScrollWidth` 390 =
+`docClientWidth`, tanpa gulir mendatar; tinggi halaman 1.856 px.
+
+Tes: `tests/filter-komoditas-chip.test.ts` (6 tes, MERAH dulu — 5 gagal). Satu tes lama yang
+memaku kelas persis (`tests/location-network-transfers.test.tsx:119`) sengaja diubah ke
+`class="commodity-filters"` — kontraknya memang berubah, bukan dilonggarkan.
+
+Gerbang: tsc 0, `next lint` 0, vitest **220 berkas / 2.538 tes lulus**, build
+`BUILD_ID=JTXRrhT23kPfgXu8Cajwd`. 0 commit.
