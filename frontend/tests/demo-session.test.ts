@@ -148,10 +148,13 @@ describe("kontrak sumber komponen", () => {
     expect(panel).toContain("20000");
   });
 
-  it("tombol utama memulai sesi saat mode sesi menyala", () => {
-    expect(panel).toContain("if (sesi?.enforced)");
+  it("tombol utama memakai jendela sesi realtime bila mode sesi menyala", () => {
+    // Sejak 28 Okt 2026: satu tombol "Muat Demo" — jendela sesi hidup berarti
+    // sesi realtime (jangkar = waktu muat), jendela mati berarti POST /demo/refresh.
+    expect(panel).toContain("if (!sesi?.enforced)");
     expect(panel).toContain("refreshDemoToToday(token)");
-    expect(panel).toContain("Sesi demo sudah berjalan — data tidak di-reset.");
+    expect(panel).toContain('mode: "realtime"');
+    expect(panel).toContain("Dataset sudah aktif — data tidak dibangun ulang.");
   });
 
   it("banner kosong hanya muncul saat enforced dan tidak aktif", () => {
@@ -172,6 +175,7 @@ describe("kontrak sumber komponen", () => {
     // Saat sesi kosong, petunjuknya sudah dibawa pesanSesi — baris status
     // kedua yang mengulang kalimat itu justru mengulang informasi.
     expect(panel).not.toContain("Data demo belum dimuat — mulai dengan Siapkan data demo.");
+    expect(panel).not.toContain("mulai dengan Siapkan data demo");
     expect(panel).toContain("Data demo siap dipakai selama sesi ini.");
     expect(panel).not.toContain("Buat/perbarui data");
     expect(panel).not.toContain("Data demo hanya bisa diubah selama sesi");

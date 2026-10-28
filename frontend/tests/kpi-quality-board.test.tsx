@@ -95,7 +95,7 @@ describe("KpiQualityBoard (tab gabungan KPI & Kualitas Agen)", () => {
     const html = render({ runs: [], qualityError: "jejak agen tidak bisa dimuat" });
     expect(html).toContain("jejak agen tidak bisa dimuat");
     expect(html).toContain("kpi-dashboard");
-    expect(html).toContain("Tujuh indikator kontinuitas pangan institusional.");
+    expect(html).toContain("Tujuh indikator kontinuitas pangan. Angka yang belum bisa dihitung ditulis alasannya.");
   });
 
   it("loading tiap bagian berdiri sendiri", () => {
@@ -108,7 +108,7 @@ describe("KpiQualityBoard (tab gabungan KPI & Kualitas Agen)", () => {
     const tanpaKpi = render({ kpi: null });
     expect(tanpaKpi).toContain("Skor agregat");
     const tanpaRun = render({ runs: [] });
-    expect(tanpaRun).toContain("Tujuh indikator kontinuitas pangan institusional.");
+    expect(tanpaRun).toContain("Tujuh indikator kontinuitas pangan. Angka yang belum bisa dihitung ditulis alasannya.");
   });
 
   it("tidak ada angka target PRD yang ikut kembali (kontrol negatif)", () => {

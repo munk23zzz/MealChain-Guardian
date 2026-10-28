@@ -31,7 +31,10 @@ describe("FoodSafetyBoard", () => {
   it("batch gagal dinyatakan terang-terangan beserta lokasinya", () => {
     const html = render();
     expect(html).toContain("Batch gagal uji: Surabaya");
-    expect(html).toContain("tidak boleh dialokasikan");
+    // Jaminan "gagal uji tidak boleh dialokasikan" kini dibawa kalimat peringatan,
+    // bukan lagi hint penanda karantina: penanda bernilai nol tidak dirender
+    // (28 Okt 2026), jadi hint-nya tidak muncul saat tidak ada batch ditahan.
+    expect(html).toContain("alokasi hanya boleh memakai batch berstatus aman");
   });
 
   it("tabel per batch memuat status, kesegaran, dan sisa masa", () => {
@@ -83,13 +86,14 @@ describe("FoodSafetyBoard — navigasi bagian", () => {
     return hasil;
   }
 
-  it("tanpa lokasi sendiri dan tanpa keputusan: empat tujuan yang pasti ada", () => {
+  it("tanpa lokasi sendiri dan tanpa keputusan: tiga tujuan yang pasti ada", () => {
     // `safety-bukti-suhu` masuk sejak Fase 3 MG butir 5: panel bukti suhu
     // selalu dirender, jadi jangkarnya ikut di navigasi.
+    // "Segera dipakai" tidak lagi memegang jatah nav (maks lima tujuan,
+    // docs/design.md §24): kartunya hanya satu baris di bawah panel bukti.
     expect(tujuan(render())).toEqual([
       "safety-ringkasan",
       "safety-bukti-suhu",
-      "safety-segera",
       "safety-batch",
     ]);
   });
@@ -99,7 +103,6 @@ describe("FoodSafetyBoard — navigasi bagian", () => {
     expect(tujuan(html)).toEqual([
       "safety-ringkasan",
       "safety-bukti-suhu",
-      "safety-segera",
       "safety-terima",
       "safety-batch",
     ]);

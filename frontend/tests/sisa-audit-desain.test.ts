@@ -28,7 +28,10 @@ describe("kontrol peta MapLibre", () => {
     const blok = /^\.map-card \.map-gl \.maplibregl-ctrl-group \{([^}]*)\}/m.exec(mapConsole);
     expect(blok, "blok kontrol peta tidak ditemukan").not.toBeNull();
     expect(blok![1]).toContain("box-shadow: var(--shadow-control)");
-    expect(blok![1]).toContain("border-radius: var(--radius-chip)");
+    // 27 Okt 2026: klaster kontrol peta jadi PIL (`999px`) mengikuti permintaan
+    // pemilik "semua tombol oval". Radius chip 4 px dipertahankan sebagai token
+    // untuk chip/lencana, bukan untuk klaster tombol ini.
+    expect(blok![1]).toContain("border-radius: 999px");
   });
 });
 

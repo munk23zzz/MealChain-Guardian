@@ -2,7 +2,7 @@
 //
 // Sebelum penggabungan, `useKpi` dijalankan di SEMUA tab; sekarang hanya di tab
 // yang benar-benar menampilkan angka KPI. Daftarnya sengaja ditulis eksplisit dan
-// diuji: kalau tab "Hari Ini" (yang memakai KPI 24 jam) lupa dicantumkan, kartu
+// diuji: kalau tab "Hari Ini" (yang memakai KPI hari ini) lupa dicantumkan, kartu
 // KPI-nya kosong TANPA error — jadi kegagalannya harus tertangkap tes, bukan
 // ketahuan saat demo.
 import { describe, expect, it } from "vitest";

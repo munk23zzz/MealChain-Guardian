@@ -1,7 +1,7 @@
 // Kontrak blok "Bangun ulang data" (21 Okt 2026).
 //
 // Yang dipaku:
-// - blok ini HANYA muncul saat sesi berjalan (di luar sesi, "Siapkan data demo"
+// - blok ini HANYA muncul saat sesi berjalan (di luar sesi, "Muat Demo"
 //   sudah membangun ulang dari awal — dua tombol untuk hal yang sama membingungkan);
 // - teksnya menyebut biaya waktu yang sebenarnya (±70 detik), bukan "sebentar";
 // - saat berjalan, yang tampil hanya hitungan detik — bukan bar progres palsu;

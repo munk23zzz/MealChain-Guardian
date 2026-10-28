@@ -125,13 +125,21 @@ describe("OpsConsole — interaksi sebelum hasil (arah Roy)", () => {
   });
 });
 
-describe("RoleHero — konsol tiap role tidak polos", () => {
-  it("tiap role punya judul + langkah kerja dari profil", () => {
+describe("RoleHero — identitas role tanpa panduan peran", () => {
+  it("judul role tetap tampil, panduan peran & langkahnya sudah dihapus", () => {
     for (const role of ["sppg_head", "sppg_nutritionist", "bgn_monitor"]) {
       const html = renderToStaticMarkup(<RoleHero role={role} />);
       expect(html).toContain("role-hero");
-      expect(html).toContain("role-steps");
       expect(html).toContain(roleProfile[role].title);
+      // 27 Okt 2026: pemilik meminta blok "Panduan peran" (misi + langkah)
+      // dilepas untuk SEMUA peran. Tes ini memaku KETIADAANNYA — bukan
+      // menghapus cakupan — sambil memastikan identitas role & batas domain
+      // peran tetap ada.
+      expect(html).not.toContain("Panduan peran");
+      expect(html).not.toContain("role-hero-more");
+      expect(html).not.toContain("role-steps");
+      expect(html).not.toContain("<ol");
+      expect(html).toContain('data-testid="role-scope-note"');
     }
   });
 

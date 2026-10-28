@@ -90,7 +90,7 @@ describe("halaman Hari Ini — struktur", () => {
     expect(html).toContain("Menunggu tindakan");
     expect(html).toContain("Batch mendekati kedaluwarsa");
     expect(html).toContain("Lokasi shortage");
-    expect(html).toContain("KPI 24 jam");
+    expect(html).toContain("KPI hari ini");
     expect(html).toContain("Rantai audit");
   });
 

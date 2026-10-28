@@ -30,8 +30,11 @@ describe("wiring sidebar + map di app/page.tsx (S4-06 polish)", () => {
     expect(apiSrc).toMatch(/fetchBalanceMap[\s\S]*Bearer/);
   });
 
-  it("RoleHero tetap dirender (identitas role tidak hilang)", () => {
-    expect(pageSrc).toMatch(/<RoleHero/);
+  it("RoleHero tidak lagi dirender di Overview", () => {
+    // 28 Okt 2026: pemilik meminta blok "Konsol ..." (judul + batas domain)
+    // dihapus untuk SEMUA peran. Komponennya masih diuji terpisah, tetapi
+    // halaman tidak boleh memasangnya lagi.
+    expect(pageSrc).not.toMatch(/<RoleHero/);
   });
 
   it("feed traceable: chip filter status + count, EXPIRED tampil", () => {

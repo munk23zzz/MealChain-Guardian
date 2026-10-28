@@ -150,16 +150,18 @@ const KPI_MIN = {
 };
 
 describe("batas domain pada dashboard", () => {
-  it("menyatakan angka dihitung dari bahan untuk rencana, bukan porsi tersaji", () => {
+  it("menyatakan angka dihitung dari bahan rencana, bukan porsi tersaji", () => {
     const html = renderToStaticMarkup(<KPIDashboard kpi={KPI_MIN} />);
     const catatan = /data-testid="kpi-domain-note"[^>]*>([\s\S]*?)<\/p>/.exec(html);
     expect(catatan).not.toBeNull();
     const teks = catatan![1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
-    expect(teks).toContain("bahan untuk rencana");
-    expect(teks).toContain("bukan porsi yang sudah dimasak");
-    // Metrik tanpa fakta memasak/distribusi: no_data; proyeksi: estimasi.
-    expect(teks).toContain("no_data");
-    expect(teks).toContain("estimasi");
+    // Klaim intinya tetap ada, tetapi dalam SATU baris (bukan paragraf teknis
+    // yang dulu memakan tiga baris di atas semua kartu).
+    expect(teks).toContain("bahan rencana");
+    expect(teks).toContain("bukan porsi tersaji");
+    // Nama enum internal tidak boleh kembali ke layar.
+    expect(teks).not.toContain("no_data");
+    expect(teks.trim().split(/\s+/).length).toBeLessThan(20);
   });
 
   it("menampilkan batas yang sama pada cakupan simulasi (bukan hanya operasional)", () => {

@@ -7,11 +7,13 @@
 // murni `ringkasSesi()` lalu dipastikan panel benar-benar memakainya.
 //
 // Yang dikunci:
-// 1. Dua tombol terpisah: "Muat Demo Utama" → mode=replay, "Muat Demo
-//    Real-time" → mode=realtime. Keduanya MENGGANTI sesi bermode lain
-//    (`replace: true`), karena itu arti "muat dataset ini".
-// 2. Tombol lama "Siapkan data demo" tetap ada, mengirim mode=replay eksplisit,
-//    dan TIDAK mengganti sesi realtime yang sedang berjalan (tanpa `replace`).
+// 1. SATU tombol "Muat Demo" (keputusan Roy 28 Okt 2026): pilihan replay/realtime
+//    dihapus dari UI. Tombol mengirim mode=realtime + `replace: true`, karena
+//    arti "muat dataset ini" adalah mengganti sesi bermode lain — termasuk sisa
+//    sesi replay yang masih ada di DB.
+// 2. Tidak ada lagi tombol "Muat Demo Utama"/"Muat Demo Real-time"/"Siapkan
+//    data demo": konsep datanya kembali ke "dibangun saat dimuat" (jangkar =
+//    waktu sekarang).
 // 3. Panel menyebut mode, jangkar, dan bahwa suhu berasal dari simulasi.
 // 4. Refresh membaca sesi dari server (`GET /demo/session`), bukan menebak
 //    "sesi terbaru" dan bukan menyimpannya di localStorage.
@@ -75,34 +77,33 @@ function renderPanel(): string {
   );
 }
 
-// --- butir 1: dua tombol, dua payload ---------------------------------------
+// --- butir 1: satu tombol, satu payload -------------------------------------
 
-describe("dua tombol muat demo", () => {
-  it("menampilkan tombol replay dan realtime yang berbeda", () => {
+describe("satu tombol muat demo", () => {
+  it("hanya menampilkan Muat Demo, tanpa tombol mode terpisah", () => {
     const html = renderPanel();
-    expect(html).toContain("Muat Demo Utama");
-    expect(html).toContain("Muat Demo Real-time");
-    // Tombol lama tetap ada (jangan menghapus jalur yang sudah dipakai).
-    expect(html).toContain("Siapkan data demo");
+    expect(html).toContain("Muat Demo");
+    // Tombol replay & realtime yang terpisah sudah dihapus dari UI.
+    expect(html).not.toContain("Muat Demo Utama");
+    expect(html).not.toContain("Muat Demo Real-time");
+    expect(html).not.toContain("Siapkan data demo");
   });
 
-  it("mengirim mode eksplisit per tombol, bukan hanya mengganti label", () => {
+  it("mengirim mode=realtime + replace dari satu handler", () => {
     const sumber = baca("components/DemoControlPanel.tsx");
-    // Setiap tombol memilih mode lewat satu helper; mode tidak boleh diturunkan
-    // dari teks tombol atau dari keadaan server.
-    expect(sumber).toMatch(/muatMode\(\s*"replay"\s*\)/);
-    expect(sumber).toMatch(/muatMode\(\s*"realtime"\s*\)/);
-    const badan = badanFungsi("components/DemoControlPanel.tsx", "muatMode");
+    // Helper dua-mode lama tidak boleh kembali diam-diam.
+    expect(sumber).not.toMatch(/muatMode\(/);
+    const badan = badanFungsi("components/DemoControlPanel.tsx", "onMuatDemo");
     expect(badan).toContain("startDemoSession(");
-    expect(badan).toMatch(/mode:\s*mode/);
-    // "Muat Demo …" = ganti dataset: sesi bermode lain harus ditutup server.
+    expect(badan).toMatch(/mode:\s*"realtime"/);
+    // Sesi bermode lain (sisa replay) harus diganti, bukan diteruskan.
     expect(badan).toMatch(/replace:\s*true/);
   });
 
-  it("tombol lama mengirim mode=replay tanpa mengganti sesi realtime", () => {
-    const badan = badanFungsi("components/DemoControlPanel.tsx", "onSiapkan");
-    expect(badan).toMatch(/mode:\s*"replay"/);
-    expect(badan).not.toMatch(/replace:\s*true/);
+  it("tanpa jendela sesi, memakai POST /demo/refresh untuk hari ini", () => {
+    const badan = badanFungsi("components/DemoControlPanel.tsx", "onMuatDemo");
+    expect(badan).toContain("refreshDemoToToday(");
+    expect(badan).toMatch(/!\s*sesi\?\.enforced/);
   });
 });
 
@@ -149,7 +150,12 @@ describe("panel sesi aktif", () => {
   it("panel memakai helper yang sama, bukan format sendiri", () => {
     const sumber = baca("components/DemoControlPanel.tsx");
     expect(sumber).toContain("ringkasSesi(");
-    expect(sumber).toContain("suhu simulasi");
+    // Label "suhu simulasi" dimiliki helper (`ringkasSesi`), bukan panel:
+    // panel merender `ringkasan.baris` apa adanya. Dulu panel juga menulis
+    // labelnya sendiri, dan hasilnya muncul dua kali di layar.
+    expect(sumber).toContain("ringkasan.baris");
+    expect(sumber).not.toContain("suhu simulasi");
+    expect(baca("lib/demo-session.ts")).toContain("suhu simulasi");
   });
 
   it("membaca sesi dari server, tanpa sesi terbaru yang dikarang", () => {
