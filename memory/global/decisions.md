@@ -469,12 +469,457 @@ Gerbang: tsc 0, 161 berkas / 1761 tes, lint 0.
 
 
 
-- [2026-10-27] **Pengadaan (`supplier_procurement`) tidak bisa dieksekusi: 409 `binding batch/supplier berubah` walau approval sah — diperbaiki di guard, bukan di data.** Keputusan: pengadaan TIDAK diberi `source_location_id` palsu (= target) walaupun itu cara tercepat menyembuhkan gejala, karena model data sudah menyatakan pengadaan tidak memindahkan stok SPPG lain (`demo_procurement_orchestrator.py:209`) dan `demo_cost.py:145` bergantung pada fakta itu. Yang diperbaiki: satu definisi lokasi acuan `lokasi_batch_acuan(decision)` di `services/supplier_eligibility.py` (pengadaan → `target_location_id`, jenis lain → `source_location_id`) dipakai oleh `resolve_binding`, `batch_sumber_transfer`, `actions._source_batches_still_safe`, dan `approval_summary._safety_view`, supaya endpoint dan read model tidak bisa menyimpang lagi. Fakta penyebab bug lolos: pengadaan hasil seed selalu punya `source_location_id` terisi, hanya jalur agen (`POST /demo/agent/run`) yang menulis NULL — jadi jalur demo yang dipakai juri justru yang tidak teruji. Jenis non-pengadaan dengan lokasi asal NULL tetap ditolak (fail-closed). Bukti: `backend/tests/test_procurement_execute_guard.py` 6 tes RED→GREEN; rusak → hijau terukur pada keputusan demo `943e662c…` (`still_safe=True`, sisa penghalang hanya `decision expired`).
-
-- [2026-10-27] **Satu definisi "lokasi acuan batch" dipakai di SEMUA penulis dan pembaca binding — bukan hanya guard eksekusi.** Setelah temuan F1 diperbaiki, audit menemukan tiga jalur lain yang masih memakai `source_location_id` untuk keputusan pengadaan: (a) `api/demo.py::_ikat_sumber` (penyemai kasus demo menulis binding transfer untuk pengadaan → PO bisa ke pemasok berbeda dari layar; sesudah guard diperbaiki justru 409), (b) `supplier_eligibility.persist_binding` (`POST /decisions` menolak 422 binding pengadaan yang sah — terukur di gate write-flow), (c) `actions.repropose_action` (iterasi baru pengadaan kehilangan `supplier_id` + binding → `409 supplier_unknown`). Keputusan: `lokasi_batch_acuan(decision)` + aturan "pemasok binding = pemasok keputusan" menjadi kontrak tunggal; binding pengadaan divalidasi terhadap SPPG TUJUAN. Data demo 4 kota disemai ulang lewat jalur resmi `_seed_demo_cases(force=True)` supaya binding lama yang menunjuk stok SPPG asal hilang. Bukti: `test_persist_binding_acuan.py` (2 RED→GREEN, 1 regresi transfer), `test_repropose_pengadaan.py`, `test_demo_cases_procurement_binding.py` (3), guard pengadaan 6; gate read-only `verify/decision-evidence.spec.json` 100/100 PASS.
+- [2026-10-27] **Pengadaan (`supplier_procurement`) tidak bisa dieksekusi: 409 `binding batch/supplier berubah` walau approval sah — diperbaiki di guard, bukan di data.** Keputusan: pengadaan TIDAK diberi `source_location_id` palsu (= target) walaupun itu cara tercepat menyembuhkan gejala, karena model data sudah menyatakan pengadaan tidak memindahkan stok SPPG lain (`demo_procurement_orchestrator.py:209`) dan `demo_cost.py:145` bergantung pada fakta itu. Yang diperbaiki: satu definisi lokasi acuan `lokasi_batch_acuan(decision)` di `services/supplier_eligibility.py` (pengadaan → `target_location_id`, jenis lain → `source_location_id`) dipakai oleh `resolve_binding`, `batch_sumber_transfer`, `actions._source_batches_still_safe`, dan `approval_summary._safety_view`, supaya endpoint dan read model tidak bisa menyimpang lagi. Fakta penyebab bug lolos: pengadaan hasil seed selalu punya `source_location_id` terisi, hanya jalur agen (`POST /demo/agent/run`) yang menulis NULL — jadi jalur demo yang dipakai juri justru yang tidak teruji. Jenis non-pengadaan dengan lokasi asal NULL tetap ditolak (fail-closed). Bukti: `backend/tests/test_procurement_execute_guard.py` 6 tes RED→GREEN; rusak → hijau terukur pada keputusan demo `943e662c…` (`still_safe=True`, sisa penghalang hanya `decision expired`).
+
+
+
+- [2026-10-27] **Satu definisi "lokasi acuan batch" dipakai di SEMUA penulis dan pembaca binding — bukan hanya guard eksekusi.** Setelah temuan F1 diperbaiki, audit menemukan tiga jalur lain yang masih memakai `source_location_id` untuk keputusan pengadaan: (a) `api/demo.py::_ikat_sumber` (penyemai kasus demo menulis binding transfer untuk pengadaan → PO bisa ke pemasok berbeda dari layar; sesudah guard diperbaiki justru 409), (b) `supplier_eligibility.persist_binding` (`POST /decisions` menolak 422 binding pengadaan yang sah — terukur di gate write-flow), (c) `actions.repropose_action` (iterasi baru pengadaan kehilangan `supplier_id` + binding → `409 supplier_unknown`). Keputusan: `lokasi_batch_acuan(decision)` + aturan "pemasok binding = pemasok keputusan" menjadi kontrak tunggal; binding pengadaan divalidasi terhadap SPPG TUJUAN. Data demo 4 kota disemai ulang lewat jalur resmi `_seed_demo_cases(force=True)` supaya binding lama yang menunjuk stok SPPG asal hilang. Bukti: `test_persist_binding_acuan.py` (2 RED→GREEN, 1 regresi transfer), `test_repropose_pengadaan.py`, `test_demo_cases_procurement_binding.py` (3), guard pengadaan 6; gate read-only `verify/decision-evidence.spec.json` 100/100 PASS.
+
 - [2026-10-27] Geladi Fase 12 dijalankan pada **DB klon** `mealchain_r12` + stack terpisah `mcg-f12` (backend 18100, frontend 13110) supaya DB demo tidak tersentuh; tiga mode diuji lewat skrip `_qa/f12/rehearsal_f12.py` yang menulis JSON bukti. — replay 22/22, realtime, operasional 6/6.
 - [2026-10-27] **Jembatan Joule tidak dipush ulang.** `mealchain-joule-bridge-4sehat3trio` hidup tetapi `backend.reachable=false`; uji fungsional lima skill dilakukan pada jembatan lokal yang menunjuk backend sesi. Alasan: aturan fase melarang push tanpa izin pemilik. — status CF dicatat sebagai batas, bukan selesai.
 - [2026-10-27] Gate suite penuh pada DB terpisah: **50 gagal / 2077 lulus / 31 skip**. Sebab utama bukan kode demo: batch berjangkar REF 8 Okt menjadi basi pada jam dinding 27 Okt, dan `fuse_evidence` menilai satu lokasi secara konservatif sehingga gabungan batch tua+baru = `on_hold`. — butir 7 tetap `OPEN` sampai jam evaluasi suite dipin atau batch REF dibersihkan.
-- [2026-10-28] **Tata letak halaman Keamanan Pangan diubah jadi papan operasi — FRONTEND SAJA (permintaan pemilik: "redesign layout ... hanya ubah design di front end").** Dua perubahan susunan, nol perubahan data/logika: (a) kartu "Ringkasan pengawasan" keluar dari grid 2 kolom dan menjadi BAND selebar halaman — empat tile status + tile penanda kini 4 kolom sejajar (dulu berdesakan 3+1 di kolom kiri), fakta keputusan di kolom kiri dan tombol "Tinjau N batch gagal" + peringatan di kolom kanan (`app/globals.css` `.safety-band`); (b) "Bukti suhu" dan "Batch perlu segera dipakai" berdampingan dengan kolom bukti lebih lebar (`.safety-grid-evidence` 1,4fr/1fr), keduanya jatuh ke satu kolom pada <=1100 px. Kartu "Bukti suhu" dipindah ke komponen presentasional `frontend/components/TemperatureEvidenceCard.tsx` + modul CSS-nya: bar tersegmen + legenda berangka menggantikan satu kalimat berjalan, baris per batch jadi ledger (komoditas + lencana keadaan, meta observasi/sampel/asal log, profil, alasan server), baris yang membelokkan alokasi didahulukan (sort stabil), dan SEMUA kelas yang sudah jadi bahasa halaman dipakai ulang (`.card`, `.board-card-head`, `.board-badge-*`, `.evidence-note`, `.board-link`, geometri `.board-list li`). Batas keselamatan tidak berubah: label tetap dari blok `evidence` server, klien tidak menghitung kelengkapan, "log simulasi" dan "simulasi, bukan standar regulasi" tetap disebut, radius hanya dari skala sah, warna hanya token (`--status-warning` tetap tint; teks peringatan `--warn-ink`). Bukti: suite frontend 186 berkas / 2035 tes lulus (termasuk 8 tes baru `tests/temperature-evidence-card.test.tsx` dan gate `radius-scale-css`), `tsc --noEmit` 0, `next lint` 0; live di stack dev (viewport 1262 px): band 947 px dengan empat tile 222 px sejajar, grid bukti 543/388 px, tanpa overflow horizontal. Batas jujur: pemeriksaan 375 px lewat iframe tidak bisa dijalankan di sesi ini (dokumen menolak framing), jadi responsif diverifikasi dari aturan media query (<=1100 px -> satu kolom), bukan dari tangkapan layar.
-- [2026-10-28] **Lapisan visual Keamanan Pangan: band ringkasan jadi "kepala" halaman, tetap token-only.** Lanjutan redesign tata letak hari yang sama (permintaan pemilik: "layout dan design eye catching" + tetap konsisten). Yang ditambahkan hanya tampilan: (a) band ringkasan memakai `data-tone` = keadaan terburuk pada cakupan (gagal/karantina -> danger, perlu verifikasi -> warn, selain itu ok) sehingga PERMUKAAN band ber-tint `--danger-bg`/`--warn-bg`/`--ok-bg` + tepi kiri 4 px warna status — satu-satunya bidang ber-tint besar di halaman; (b) tile di dalam band diputihkan (`--surface`) supaya angka tidak tenggelam, nilai tile berwarna `--danger-ink`/`--warn-ink`/`--ok-ink`, lencana kepala diputihkan agar tidak menyatu dengan tint, kotak `.board-alert` di band danger dibalik jadi putih; (c) judul band naik ke `--fs-5` (18 px) sebagai hierarki "band = kepala, kartu lain = isi"; (d) fakta keputusan disusun 2 kolom (`.safety-band .fact-list`) agar nilai tidak melayang jauh dari label di lebar 900 px; (e) tombol "Tinjau N batch gagal" duduk di kolom kanan sejajar fakta, peringatan selebar band di bawahnya; (f) kepala kartu "Batch perlu segera dipakai" diseragamkan (`board-card-head` + lencana "≤ 48 jam"). Label kepala band sengaja TANPA angka ("Ada batch gagal") karena angkanya sudah ada di tile — halaman ini tidak menyimpan dua penyaji angka yang sama. Tidak ada warna baru, tidak ada radius baru, tidak ada hitungan baru di klien. Gerbang: suite frontend 186 berkas / 2035 tes lulus, `tsc --noEmit` 0, `next lint` 0, `radius-scale-css` + `design-tokens-kontrak` hijau; live di viewport 1262 px: band 947 px tone=danger (rgb(254,242,242), tepi kiri rgb(198,40,40), tile putih), grid bukti 543/388 px, tanpa overflow horizontal.
+- [2026-10-28] **Tata letak halaman Keamanan Pangan diubah jadi papan operasi — FRONTEND SAJA (permintaan pemilik: "redesign layout ... hanya ubah design di front end").** Dua perubahan susunan, nol perubahan data/logika: (a) kartu "Ringkasan pengawasan" keluar dari grid 2 kolom dan menjadi BAND selebar halaman — empat tile status + tile penanda kini 4 kolom sejajar (dulu berdesakan 3+1 di kolom kiri), fakta keputusan di kolom kiri dan tombol "Tinjau N batch gagal" + peringatan di kolom kanan (`app/globals.css` `.safety-band`); (b) "Bukti suhu" dan "Batch perlu segera dipakai" berdampingan dengan kolom bukti lebih lebar (`.safety-grid-evidence` 1,4fr/1fr), keduanya jatuh ke satu kolom pada <=1100 px. Kartu "Bukti suhu" dipindah ke komponen presentasional `frontend/components/TemperatureEvidenceCard.tsx` + modul CSS-nya: bar tersegmen + legenda berangka menggantikan satu kalimat berjalan, baris per batch jadi ledger (komoditas + lencana keadaan, meta observasi/sampel/asal log, profil, alasan server), baris yang membelokkan alokasi didahulukan (sort stabil), dan SEMUA kelas yang sudah jadi bahasa halaman dipakai ulang (`.card`, `.board-card-head`, `.board-badge-*`, `.evidence-note`, `.board-link`, geometri `.board-list li`). Batas keselamatan tidak berubah: label tetap dari blok `evidence` server, klien tidak menghitung kelengkapan, "log simulasi" dan "simulasi, bukan standar regulasi" tetap disebut, radius hanya dari skala sah, warna hanya token (`--status-warning` tetap tint; teks peringatan `--warn-ink`). Bukti: suite frontend 186 berkas / 2035 tes lulus (termasuk 8 tes baru `tests/temperature-evidence-card.test.tsx` dan gate `radius-scale-css`), `tsc --noEmit` 0, `next lint` 0; live di stack dev (viewport 1262 px): band 947 px dengan empat tile 222 px sejajar, grid bukti 543/388 px, tanpa overflow horizontal. Batas jujur: pemeriksaan 375 px lewat iframe tidak bisa dijalankan di sesi ini (dokumen menolak framing), jadi responsif diverifikasi dari aturan media query (<=1100 px -> satu kolom), bukan dari tangkapan layar.
+
+- [2026-10-28] **Lapisan visual Keamanan Pangan: band ringkasan jadi "kepala" halaman, tetap token-only.** Lanjutan redesign tata letak hari yang sama (permintaan pemilik: "layout dan design eye catching" + tetap konsisten). Yang ditambahkan hanya tampilan: (a) band ringkasan memakai `data-tone` = keadaan terburuk pada cakupan (gagal/karantina -> danger, perlu verifikasi -> warn, selain itu ok) sehingga PERMUKAAN band ber-tint `--danger-bg`/`--warn-bg`/`--ok-bg` + tepi kiri 4 px warna status — satu-satunya bidang ber-tint besar di halaman; (b) tile di dalam band diputihkan (`--surface`) supaya angka tidak tenggelam, nilai tile berwarna `--danger-ink`/`--warn-ink`/`--ok-ink`, lencana kepala diputihkan agar tidak menyatu dengan tint, kotak `.board-alert` di band danger dibalik jadi putih; (c) judul band naik ke `--fs-5` (18 px) sebagai hierarki "band = kepala, kartu lain = isi"; (d) fakta keputusan disusun 2 kolom (`.safety-band .fact-list`) agar nilai tidak melayang jauh dari label di lebar 900 px; (e) tombol "Tinjau N batch gagal" duduk di kolom kanan sejajar fakta, peringatan selebar band di bawahnya; (f) kepala kartu "Batch perlu segera dipakai" diseragamkan (`board-card-head` + lencana "≤ 48 jam"). Label kepala band sengaja TANPA angka ("Ada batch gagal") karena angkanya sudah ada di tile — halaman ini tidak menyimpan dua penyaji angka yang sama. Tidak ada warna baru, tidak ada radius baru, tidak ada hitungan baru di klien. Gerbang: suite frontend 186 berkas / 2035 tes lulus, `tsc --noEmit` 0, `next lint` 0, `radius-scale-css` + `design-tokens-kontrak` hijau; live di viewport 1262 px: band 947 px tone=danger (rgb(254,242,242), tepi kiri rgb(198,40,40), tile putih), grid bukti 543/388 px, tanpa overflow horizontal.
+
 - [2026-10-28] **Pass kerapian TERUKUR halaman Keamanan Pangan: dua ruang kosong besar dihapus tanpa menambah hiasan baru (frontend saja).** Baseline diukur lebih dulu di aplikasi hidup (viewport 1262 px, kepala SPPG Bandung): band 947x394 px, dan DUA ruang kosong terukur: (1) baris tile penanda `0 DITAHAN` + `0 KEDALUWARSA` memakai grid 4 kolom padahal isinya 2 -> 452 px kosong di kanan, ditambah keterangan `stat-tiles-legend` yang menempati barisnya sendiri selebar band (42 px); (2) baris bukti dua kolom 1,4fr/1fr menaruh kartu `Bukti suhu` 543x904 px di samping `Batch perlu segera dipakai` 388x143 px -> 761 px kosong di kolom kanan. Perbaikan: (a) keterangan dipindah ke kolom 2 band dan tile penanda ke kolom 1 (`grid-column`), jadi satu baris penuh (markers 478 px + keterangan 416 px) dan satu baris band hilang; markers memakai `repeat(auto-fit, minmax(220px, 1fr))` supaya tampilan jaringan yang hanya punya satu penanda tidak separuh kosong; (b) `.safety-grid-evidence` jadi SATU kolom: kartu bukti selebar halaman (baris ledger 117 -> 100 px karena alasan server tidak lagi membungkus) dan kartu `segera` selebar halaman dengan daftarnya disusun 2 kolom (2 item 455x38 px). Kalimat keterangan berubah dari `Penanda di bawah` menjadi `Penanda menandai kondisi tambahan ...` karena posisinya kini di samping (di <=1100 px ia kembali di bawah, jadi kata arah dihapus). Hasil terukur: band 394 -> 328 px (-66), ruang kosong baris penanda 452 -> 0 px, ruang kosong kolom kanan 761 -> 0 px, dokumen 3883 -> 3856 px, luapan horizontal 0 px, teks terpotong 0, tumpang tindih anak kartu 0, font terkecil di band+bukti 12 px. Gerbang: vitest 186 berkas / 2035 tes lulus, `tsc --noEmit` 0, `next lint` 0, gate `radius-scale-css`/`design-tokens-kontrak`/`token-warna-komponen` hijau (dijalankan ulang sesudah suntingan CSS terakhir). Artefak angka sebelum/sesudah: `_qa/keamanan-pangan-28okt-sebelum.json` dan `_qa/keamanan-pangan-28okt-sesudah.json`. Batas jujur: (i) data demo bergeser antar-run (11 -> 15 batch), jadi yang dibandingkan adalah angka struktural dan baris bukti yang sama-sama 6 baris; (ii) uji lebar 375/768 px tetap tidak bisa lewat iframe (dokumen menolak framing) -> responsif diverifikasi dari aturan media query, dan reset `.safety-band > .stat-tiles-markers/.stat-tiles-legend { grid-column: 1/-1 }` ditambahkan di blok <=1100 px karena selektor itu lebih spesifik daripada `.safety-band > *`; (iii) tile `Status lain` (hanya muncul bila ada status uji di luar empat kategori) masih 1 tile di grid 4 kolom - tidak disentuh karena tidak pernah muncul pada data sekarang.
+
+- [2026-10-28] **Overview: "Informasi pengiriman" + "Telemetri Node" + daftar "Status Lokasi" DIGANTI panel "Monitor harga komoditas" (permintaan pemilik: "saya mau hapus dan ganti menjadi monitoring harga komoditas ... gunakan skill ui ux dan terapkan semuanya").** Keputusan yang mengikat: (a) penghapusan tingkat-MOUNT — `ShipmentCard`, `NodeTelemetry`, dan `StatusLocationList` dilepas dari Overview tetapi berkas komponen + tesnya TETAP ada (isi kiriman masih terbaca di tab Pemasok lewat `ShipmentBoard` dan di Decision & Evidence); (b) data panel = SALINAN harian PIHPS Bank Indonesia (Pasar Tradisional, Rp/kg, 21 komoditas, tingkat provinsi/kota) yang ditarik `backend/scripts/tarik_harga_pihps.py` ke `data/harga_pihps/pihps_latest.json` dan dibaca `GET /price/monitor` lewat `app/core/harga_monitor.py` — **tabel `price_signals` tidak disentuh**, supaya metrik deviasi 5%/15% tidak berubah diam-diam; (c) hari tanpa publikasi (Sabtu/Minggu) digambar sebagai JARAK, bukan harga 0; (d) panel memakai mode INDEKS (basis 100) sebagai bawaan karena tiga komoditas punya level harga jauh berbeda (beras ~Rp17rb vs ayam ~Rp39rb) sehingga grafik rupiah terbaca sebagai tiga garis datar; (e) wortel TIDAK diterbitkan PIHPS → disebut sebagai keterbatasan cakupan di layar, bukan digambar seri palsunya; (f) nav "Lompat ke bagian" Overview turun 5 → 4 tujuan (Ringkasan · Peta & antrean · Kecukupan · Harga pasar). Bukti: `pytest tests/test_harga_monitor.py` 17 lulus, `tests/price-monitor*.test.*` 31 lulus, suite frontend penuh 2.088 lulus, `tsc` 0, `next lint` 0, `next build` sukses; verifikasi hidup :3010 (BGN Monitor = cakupan nasional; Kepala Bandung = Kota Bandung).
+
+- [2026-10-28] **Ringkasan pengawasan + Bukti suhu: tiga cacat pemahaman ditutup di tampilan, bukan dengan hiasan baru (frontend saja).** Permintaan pemilik: "upgrade ui ux supaya lebih enak dilihat dan dipahami ... no ai slop dan tidak aneh dengan desain halaman lain". Yang diperbaiki, semuanya terukur di DOM hidup: (a) **bar komposisi tanpa keterangan** — bar 5 px menggelar selebar kartu (913 px) dengan empat warna yang tidak punya padanan label, dan tanpa penyebut (porsi dari berapa batch?). Sekarang tiap sel angka membawa titik 8 px yang warnanya SAMA dengan segmen bar (`--safe-ink-tint`/`--warn-ink`/`--danger-ink`/`--neutral-ink`) dan bar duduk di baris bersama penyebut `dari N batch`; (b) **dua angka berdempet** — penanda "Ditahan (karantina) **1** 540 kg tidak boleh dialokasikan" terbaca sebagai "1540 kg" karena hitungan batch dan berat karantina bersambung tanpa pemisah. Sekarang hint penanda didahului `· ` (`<span aria-hidden>`), jadi "1 · 540 kg"; (c) **kalimat profil diulang enam kali** di kartu Bukti suhu — "Profil sim-2026-10-27.v1 — simulasi, bukan standar regulasi" dicetak di SETIAP baris sehingga menutupi yang memang beda antar-baris (asal log, jumlah sampel, alasan server). Sekarang dicetak SEKALI sebagai catatan kaki kartu bila profilnya seragam; kalau tidak seragam (ada komoditas tanpa profil) tiap baris tetap menyebut miliknya sendiri — jadi tidak ada label yang dikarang saat keadaan berbeda. Tidak ada warna, radius, bayangan, gradien, ikon, atau gerak baru; bentuknya memakai bahasa yang sudah ada di halaman lain (`.kpi-card-label` = titik + label, `.safety-marker` = titik + nilai, `.safety-foot` = lipatan sebaris). Terukur (viewport 1262 px): band 947x227 -> 947x244 px (**+17 px** = harga penyebut: baris bar 5 px jadi 18 px berisi teks 12 px, plus 4 px jarak baris penanda), bar komposisi 913x5 -> bar 831 px + penyebut 82 px dalam baris 913x18, baris Bukti suhu 3 -> 2 paragraf (profil dipindah), enam baris tetap sama tinggi per baris grid (76 px), luapan horizontal 0 px, font terkecil 12 px. Batas jujur: data demo bergerak antar-pengukuran (cakupan lokasi sendiri 12 batch -> cakupan jaringan 118 batch), jadi tinggi dokumen (3488 -> 3032 px) TIDAK boleh dibaca sebagai efek suntingan; artefak angka sebelum/sesudah: `_qa/keamanan-pangan-28okt-ringkasan-suhu.json`. Uji baru yang mengunci janji ini: `tests/food-safety-board.test.tsx` (penyebut + 4 titik kategori, dan teks pengguna tidak lagi memuat "1 540 kg") dan `tests/temperature-evidence-card.test.tsx` (profil seragam dicetak sekali; profil tidak seragam tetap per baris). Gerbang: vitest 189 berkas / 2087 tes lulus, `tsc --noEmit` 0, `next lint` 0. Responsif 375 px tetap tidak bisa dibuktikan lewat iframe (dokumen menolak framing); aturan <=640 px dan <=1100 px tidak diubah dan label memakai elipsis supaya tidak melimpah.
+
+- [2026-10-28] **Kartu feed Recommendations diringkas (frontend saja): pengirim, badge kasus, dan verdict verifier mentah DIHAPUS dari kartu.** Permintaan pemilik: "shape rekomendasi diperkecil dan hapus informasi konsisten, supplier, dan kasus". Tiga elemen yang dilepas dari `components/RecommendationCard.tsx`: (a) baris "Rencana kirim dari pemasok X ke Y" + helper `routeLineOf()` (dihapus seluruhnya beserta `tests/recommendation-route.test.ts` — tidak ada pemakai lain; pengirim tetap terbaca di Decision & Evidence lewat panel konteks pemasok), (b) badge "Kasus: …" (`caseLabelOf()` TETAP diekspor karena kepala Decision & Evidence memakainya, dan `lib/decision-feed.ts` masih mencocokkan `demo_case` saat pencarian, jadi placeholder "…kasus…" tetap benar), (c) narasi `verifier_note` — isinya verdict mentah backend ("consistent"/"flagged") yang tampil sebagai satu kata Inggris tak bertuan di tiap kartu; `rejection_reason` TETAP dicetak (kontrak lama, diuji) tetapi kini satu baris bergaris kiri, bukan kotak. Tata letak: kedua badge status berjejer ke samping (dulu bertumpuk 50 px; di ≤720 px kembali bertumpuk), padding kartu 14 px vertikal / 16 px horizontal, jarak feed 10 → 8 px, jarak baris ajakan 18 px. Terukur di DOM hidup (viewport 1262 px, Kepala Bandung): tinggi kartu **188 → 113-114 px** (−39%), seragam untuk 10 kartu — versi pertama (padding 12 / jarak 8 = 99-100 px) dinaikkan dua kali atas permintaan pemilik: "sedikit dinaikan saja" lalu "kalimat Klik untuk rincian duduk pas di bawah waktu, tidak ada space" (jarak meta→ajakan 12 → 18 px, terukur), luapan horizontal 0 px, `/\bconsistent\b/`, `/\bflagged\b/`, `Kasus:`, `Rencana kirim` = 0 kemunculan di seluruh `.feed`. Uji kontrak diperbarui/ditambah: `tests/recommendation-card.test.tsx` (verdict verifier tidak dicetak, baris pengirim + badge kasus tidak dirender), `tests/ops-console.test.tsx` (badge kasus hilang dari kartu feed, `caseLabelOf` tetap melabeli kepala bukti). Gerbang: vitest 191 berkas / 2.128 tes lulus, `tsc --noEmit` 0, `next lint` 0, gate token (`design-tokens-kontrak`, `radius-scale-css`, `token-warna-komponen`, `token-alias-css`, `token-bayangan`) 27 tes hijau, tanpa warna/radius/bayangan baru. Batas jujur: uji lebar 375 px lewat iframe tetap gagal (dokumen menolak framing); responsif diverifikasi dengan menyempitkan `.feed` ke 358 px di DOM hidup — 0 luapan, badge membungkus 2 baris — ditambah aturan media query ≤720 px yang menumpuk badge kembali.
+
+
+- [2026-10-28] **Overview: "Perlu keputusan" dipangkas setengah dan di bawahnya ditambah kartu bukti "Jejak kepercayaan" (permintaan pemilik).** Keputusan yang mengikat: (a) antrean menampilkan DUA baris teratas, bukan empat — satu konstanta `QUEUE_SHOWN` di `app/page.tsx` dipakai juga oleh tile "Rekomendasi menunggu" (`pendingKpiCopy`), supaya "+N lain menunggu tindakan" di tile dan di kaki antrean tidak pernah berbeda angka; sisa pekerjaan tetap dinyatakan apa adanya ("+10 keputusan lain menunggu tindakan", "+21 lewat tenggat") dan seluruhnya tetap bisa dibuka lewat tab Recommendations — yang dipangkas ruang yang terlihat, bukan jumlah kerja; (b) kartu baru menjawab pertanyaan dasar "kenapa angka di halaman ini bisa dipercaya" dengan EMPAT bukti: blok ledger (`GET /ledger/verify`), batch lolos uji (`GET /batches`), keputusan tereksekusi (`GET /decisions`), dan node tanpa angka terlapor (`GET /balance/map`, sisi berstatus `tidak_ada_baris`); (c) logika murni di `frontend/lib/trust-trail.ts` (16 uji `tests/trust-trail.test.ts`) memegang aturan "tanpa angka karangan": data tidak terbaca → "—" + alasan (bukan 0), 0 hanya sah bila terukur (mis. 0 dari 10 node tanpa catatan), setiap rasio menuliskan totalnya ("101/118"), dan batch yang ditahan TIDAK dihitung lolos; kepala kartu menulis keadaan terburuk yang jujur (`plain` "sebagian belum terbaca" menang atas "perlu tinjau", karena "terverifikasi" tidak boleh ditulis sementara satu bukti belum termuat). Tampilan (revisi kedua hari yang sama, arah pemilik "dibuat 2 baris, ada teks yang hilang, kurang center atas-bawah", lalu "jejak kepercayaan terlalu banyak space"): `components/TrustTrailCard.tsx` + blok CSS di `app/overview-p0.css` — empat bukti disusun **grid 2 baris × 2 kolom** dengan pemisah garis rambut (bukan empat kotak berbingkai, bukan pula satu daftar memanjang), dan **tiap sel hanya DUA baris**: label di kiri + angka/keadaan di kanan pada baris pertama, alasan selebar sel di baris kedua. Sebelumnya label/angka/alasan bertumpuk tiga baris sehingga sel 77 px dan separuh kanan sel kosong. **Alasan SELALU dicetak penuh** (boleh membungkus) — versi sebelumnya menyembunyikannya saat metrik aman dan memotongnya dengan elipsis, sehingga kalimat bukti ("102 blok tertaut keputusan · checkpoint luar cocok") hilang dari layar. Catatan teknis yang menjebak: `dl > div > dt/dd` tidak boleh dipecah lagi ke dalam div baris (invalid), dan membuat `dd` memuat `foot` selebar 100% membuat lebar intrinsik `dd` = lebar teks alasan sehingga angka selalu terdorong ke baris baru; karena itu sel memakai `div`/`span` dengan `role="list"`/`role="listitem"` dan flex-wrap (label `flex: 0 1 auto`, angka `margin-left: auto`, alasan `flex: 0 0 100%`). Tinggi (arah pemilik "panjangin lagi sampe space kosong rata dengan shape peta"): **antrean memanjang mengisi sisa kolom** (`.overview-side .queue-card { flex: 1 1 auto }`) sehingga tepi bawah KOLOM KANAN rata dengan tepi bawah kartu peta, sementara **kartu bukti tetap setinggi isinya** (`flex: 0 0 auto`) supaya tidak ada rongga di dalam kartu bukti. Ruang sisa antrean dikumpulkan di atas tombol "Lihat semua rekomendasi" (`.queue-foot` `margin-top: auto`), jadi CTA duduk di dasar kartu dan isi (dua baris + catatan "+N lain menunggu tindakan") tetap rapat di atas — bukan lubang di tengah. Terukur di DOM hidup (viewport 1262 px, BGN Monitor): susunan bertumpuk — antrean 947x257 px, kartu bukti 947x**158** px (dari 214 px, −26%) dengan empat sel SAMA tinggi 51 px, luapan 0; susunan 2 kolom (grid `.overview-split` dipaksa di DOM untuk mensimulasikan >=1280 px) — kolom kanan 312 px: antrean **452** px (isi 748-980 px, tombol 1092-1130 px, sisa 100 px di atas tombol) + kartu bukti 258 px, dan tepi bawah kolom **1417 px = tepi bawah kartu peta 1417 px** (selisih 0 px); sel kartu bukti 132x101 px tanpa luapan horizontal. Di <=1280 px susunan menumpuk selebar halaman dan flex-grow tidak berefek — tidak ada yang perlu diratakan. Data nyata saat pengukuran (BGN Monitor): ledger 978 blok (78 tertaut, checkpoint luar cocok), batch 101/118 lolos (2 gagal uji, 1 ditahan, 13 perlu verifikasi), keputusan 5/51 tereksekusi, node 0/10 tanpa catatan. Gerbang: vitest 196 berkas / 2218 tes lulus (termasuk 16 uji `tests/trust-trail.test.ts`), `next lint` 0. Catatan gate: `tsc --noEmit` pada berkas aplikasi 0 galat, tetapi `tests/approval-panel.test.ts` — berkas uji baru milik pekerjaan paralel, bukan perubahan ini — masih menyisakan 3 galat `TS18047` saat entri ini ditulis. Batas jujur: (i) susunan >=1280 px diverifikasi dengan memaksa aturan grid di DOM (viewport sesi 1262 px), bukan dari monitor 1440 px; (ii) `ledger`/`batches` berasal dari `useToday` yang mem-poll 60 detik, jadi angka kartu ini bergerak lebih lambat daripada peta (5 detik) — sengaja: bukti tidak perlu secepat posisi truk.
+
+- [2026-10-28] **Overview: kartu "Kecukupan pasokan" menjadi bar chart SETENGAH halaman dan separuh kanannya panel "Surplus wilayah lain" (permintaan pemilik).** Keputusan yang mengikat: (a) angka surplus wilayah TIDAK dihitung klien dari peta — peta akun SPPG dibatasi cakupan (Ruling 2026-10-14) sehingga hanya berisi satu lokasi, jadi "daerah lain" mustahil ada di data klien; sumbernya endpoint baru `GET /surplus/regions` yang mengagregasi per `Location.region` lintas lokasi (boleh empat komoditas sekali panggil, `exclude` = lokasi pengguna). (b) Kejujuran angka: sumber surplus hanya lokasi yang permintaannya tercatat (PLAN-023), kg lokasi pengguna yang dibuang dilaporkan (`totals.excluded_surplus_kg`), lokasi bersurplus tanpa baris permintaan dihitung terpisah, dan panel kosong menulis SEBAB bukan "0 kg". (c) Wilayah dengan surplus di bawah ambang 150 kg tetap disebut — dikumpulkan satu baris "surplus kecil" — karena baris 0,5 kg di daftar utama hanya menghasilkan batang tak terlihat; yang dipangkas ruang grafiknya, bukan angkanya. (d) Dua kartu memakai satu bahasa visual (`supply-adequacy`/`sa-*`): yang berbeda hanya arti baris (wilayah vs komoditas) dan susunan kolom; warna batang komoditas memakai palet kategorikal, BUKAN token status, supaya hijau/merah tetap berarti aman/bahaya. Terukur di DOM hidup (viewport 1000 px, Kepala Bandung): grid 467,5+467,5 px, batang grafik 406 px selebar kartu, baris grafik 139-162 → 106-129 px, panel 1 wilayah layak (Jawa Barat 3.554,81 kg) + 4 wilayah surplus kecil (16,76 kg), tanpa luapan horizontal dan tanpa galat konsol; BGN nasional berjudul "Surplus per wilayah" dengan sub "seluruh jaringan · 1 komoditas". Gerbang: vitest 2.132 lulus / 191 berkas, `tsc` 0, `next lint` 0, ruff bersih, pytest surplus+drift 22 lulus. Batas: `next build` tidak dijalankan (dev server hidup), responsif 375 px diverifikasi dari media query.
+
+- [2026-10-28] **Kecukupan pasokan jadi bar vertikal ringkas + soft UI (lanjutan permintaan pemilik).** Keputusan yang mengikat: (a) TINGGI BATANG dinormalkan per kolom — stok dibagi kebutuhan KOMODITAS/LOKASI ITU SENDIRI, bukan dibagi kg terbesar di grafik. Percobaan pertama memakai skala kg bersama dan hasilnya menipu: ayam berkebutuhan 400 kg tampil sebagai tonggak 6 px walau cakupannya 65%, sementara beras mendominasi seluruh kotak. Dengan normalisasi per kebutuhan, tinggi batang SELALU sama dengan angka cakupan di atasnya, dan garis putus-putus di puncak kotak berarti "kebutuhan (100%)" untuk semua kolom. (b) Stok yang TIDAK ikut dihitung lensa (tidak layak / tidak segar) tetap digambar sebagai bagian batang, tetapi diberi garis putus-putus putih di dalam batang pada posisi kg yang dihitung — jadi selisih batang ↔ garis adalah kg yang tidak layak, dan angkanya tidak pernah lebih besar dari gambar. (c) Tanpa kebutuhan terukur tidak ada batang (bukan 100% mengarang) dan catatannya berbunyi "belum tercatat", bukan "0 kg layak". (d) Saat kolom lebih dari 6 (BGN nasional 10 lokasi), nama dibaca tegak dan angka mengecil: label horizontal terpotong menjadi "Jak…/Band…" pada kolom 40 px, dan itu terbukti di DOM sebelum diperbaiki. (e) Dua grafik bentuk lama dilepas dari Overview (tetap di repo + tes), pemasangan dijaga tes kontrak. (f) Token bayangan peran baru `--shadow-inset-soft` untuk permukaan terbenam; tanpa itu file kartu memakai literal dan gerbang `tests/token-bayangan.test.ts` merah. Terukur di DOM hidup (viewport 1000 px, kartu 468 px): Kepala Bandung 542 px tinggi dengan batang 65/68/70/100% dan garis dalam 80% pada beras; Gizi Bandung (lensa Kesegaran) 57/59/68/80; BGN 502 px, 10 kolom tanpa tabrakan angka. Gerbang: vitest 2.166 lulus / 193 berkas, `tsc` 0, `next lint` 0. Batas: `next build` tidak dijalankan karena dev server hidup.
+
+- [2026-10-28] **Kartu Overview dibuat "simple, sedikit teks" (permintaan pemilik).** Aturan yang mengikat untuk kartu sejenis: (a) TIDAK ada paragraf penjelasan di dalam kartu. Yang tercetak maksimum judul + satu baris sub + satu angka ringkasan + legenda kata-per-kata + satu baris petunjuk; semua kalimat pindah ke `title` (hover) dan aria-label, sehingga kejujuran angka tetap bisa diperiksa tanpa memenuhi layar. (b) Angka yang mengulang angka lain tidak dicetak — mis. "3.554,81 kg / 3.554,81 kg layak dialihkan" kini satu angka saja, dan "1 wilayah layak dialihkan" jadi "1 wilayah layak". (c) Label satuan yang berulang ("cakupan"/"segar" di bawah tiap angka) dihapus karena pil lensa sudah menyebutnya. (d) Kepala panel dua kartu ditumpuk (judul → angka → chip) supaya judul tidak terlipat dua baris karena angka besar di kanan. (e) Dijaga tes: `tests/adequacy-columns-render.test.tsx` membatasi teks tercetak kartu < 320 karakter dan melarang paragraf lama muncul kembali. Terukur: teks kartu 209 karakter, tinggi 378 px (dari 542 px); panel 460 px dengan teks 324 karakter. Gerbang: vitest 2.194 lulus / 195 berkas, `next lint` 0; `tsc` memerahkan 3 galat lama di tests/approval-panel.test.ts (bukan dari perubahan ini, tersingkap setelah cache incremental invalid).
+- [2026-10-28] **"Detail & jejak agen" dibuka sebagai POPUP, bukan pindah tab (permintaan pemilik).** Alasan yang mengikat: pengguna yang mengklik kartu ke-7 dari feed kehilangan posisi gulir + filter, lalu harus kembali sendiri; dokumen acuan `D:\Downloads-detail-keputusan.md` menggambarkan pola drawer/popup untuk alur yang sama. Yang dikerjakan: (a) ISI detail dipindah dari `components/DecisionEvidence.tsx` (721 baris) ke `components/DecisionDetail.tsx` (572 baris) tanpa mengubah markup — halaman tinggal cangkang (PageHeader + DecisionPicker + SectionJump + keadaan kosong), dengan prop baru `dalamPopup` yang mematikan pengukur posisi zona (memakai gulir jendela) dan bilah pintasan bawah; (b) `components/DecisionDetailPopup.tsx` memakai cangkang `Popup` yang sudah ada (portal, role=dialog, aria-modal, Escape, klik latar, focus trap, kunci gulir, fokus balik) + pengalih dua tampilan "Detail & bukti" / "Jejak agen (N)" — tombol `aria-pressed` + `is-active`, BUKAN role=tablist (pola pengalih yang sudah dipakai konsol); "Buka jejak agen" di dalam detail kini berpindah tampilan DI JENDELA YANG SAMA (keputusan pemilik), memakai `AgentTraceViewer` dari endpoint yang sama (GET /decisions/{id}/traces); (c) alur klik yang DIUBAH: kartu feed Recommendations dan antrean "Hari Ini" → `bukaPopupKeputusan()` (set `selectedId` + popup, TIDAK set tab), fokus dikembalikan ke kartu pemicu lewat `popupTriggerRef`; yang TETAP pindah tab: deep link `?keputusan=`, daftar PO (`bukaKeputusanDariPO`), dan sidebar — sebab semuanya berbagi URL/tautan dan popup tidak bisa dibagikan. Terukur di DOM hidup (Kepala Jakarta, viewport sempit 570 px): panel 1000x488 px (batas 86vh milik `.popup`, badan menggulir 2.823 px isi dalam 398 px), `role=dialog` + `aria-modal=true` + `aria-labelledby=popup-detail-keputusan-title`, judul "Detail keputusan #2ae7e0f9", `.evidence-actionbar` 0 di popup, scroll halaman dikunci (`body.style.overflow=hidden`), tab tetap "Recommendations (2)" saat popup terbuka, ESC menutup + fokus kembali ke `link-button` kartu, tautan "Ke zona keputusan" di dalam popup menggulir BADAN POPUP (scrollTop 0 → 543 px) tanpa menggeser halaman di belakang (window.scrollY tetap 0). Bug yang tertangkap saat verifikasi layar dan sudah diperbaiki: menutup lalu membuka kartu yang SAMA masih menampilkan tampilan "Jejak agen" (komponen tidak dilepas saat `open=false`) — efek reset kini bergantung pada `[decisionId, open]`, dikunci uji. Uji: `tests/decision-detail-popup.test.tsx` (11 tes, env jsdom: dialog & label, tanpa bilah pintasan, pindah ke jejak & kembali, ESC, klik latar vs isi, fokus balik, ganti keputusan, buka ulang kartu sama, dan kontrak sumber `app/page.tsx` bahwa kartu feed/antrean memakai `bukaPopupKeputusan` dan tidak lagi `setTab("evidence")`). Gerbang: vitest 195 berkas / 2.195 tes lulus, `tsc --noEmit` 0, `next lint` 0, tanpa warna/radius/bayangan baru (kelas `.popup-decision*` hanya token). Batas jujur: (i) popup memuat 2.823 px isi dalam badan 398 px pada viewport pendek — tanpa navigasi bagian halaman; kalau pemilik ingin lompat antar-bagian, pasang bilah ringkas di dalam popup, jangan hidupkan `SectionJump` (tautannya menunjuk jangkar halaman); (ii) dua cacat LAMA ikut terlihat dan belum disentuh: judul hero mencetak slug mentah "supplier exclusion restoration: …" (tidak ada label untuk `supplier_exclusion_restoration`), dan hero menulis "Rp0" untuk biaya yang di kartu feed ditulis "—"; (iii) ejaan berkas baru tetap ber-CRLF karena tes kontrak membaca sumber mentah.
+
+
+- [2026-10-28] **Dua kartu Overview: warna SOLID, panel surplus dipangkas lagi (permintaan pemilik).** Aturan: (a) TIDAK ada gradasi di kartu Overview — latar kartu, kotak batang, segmen, titik legenda, skeleton, dan hero panel semuanya satu warna solid dari token; kedalaman hanya dari bayangan token (`--shadow-2`, `--shadow-inset-soft`). Ini dijaga tes yang menolak kata `gradient` di `adequacy-columns.css` dan `surplus-regions.css` — kalau nanti butuh gradasi, ubah tesnya secara sadar, jangan diam-diam. (b) Baris legenda komoditas di panel surplus DIHAPUS: chip "Asal" sudah menyebut nama komoditas + titik warnanya, jadi legenda hanya mengulang. (c) Chip "N wilayah layak" dihapus — baris wilayah sudah menyebut daerahnya. (d) Catatan kaki panel dihapus: "dihitung server" masuk ke baris sub, dan kalimat kejujuran lengkap (peta SPPG hanya memuat lokasi sendiri, hanya lokasi dengan permintaan tercatat yang boleh menyumbang, ambang 150 kg, surplus lokasi sendiri tidak dihitung) menjadi `title` kartu — tetap bisa diaudit lewat hover, tanpa memenuhi layar. Terukur: teks panel 324 → 196 karakter, tinggi 460 → 360 px; kartu kecukupan 378 px, jadi kedua kartu kini hampir setinggi. Gerbang: vitest 2.206 lulus / 196 berkas, `next lint` 0. Sisa: 3 galat tipe lama di tests/approval-panel.test.ts.
+- [2026-10-28] **Dua cacat lama di kepala keputusan ditutup: judul slug mentah & "Rp0" untuk biaya tak diketahui.** (a) **Judul**: `decisionHeadline()` di `frontend/lib/evidence.ts` memakai peta `HEADLINE_VERBS` yang menyebut tipe KARANGAN (`supplier_restoration`, dan `supplier_reinstatement` pada penjaga rute) sehingga `supplier_exclusion_restoration` jatuh ke `type.replace(/_/g, " ")` dan tampil sebagai "supplier exclusion restoration: …" di layar. Tipe yang benar-benar bisa tersimpan hanya enam (`CheckConstraint decisions_decision_type_check` di `backend/app/models/decisions.py`). Sekarang labelnya "Pulihkan status pemasok" (mengikuti frasa UI yang sudah ada) dan himpunan `JENIS_ADMINISTRATIF` (price_anomaly, supplier_exclusion, supplier_exclusion_restoration) memakai "di <lokasi>", BUKAN panah — tidak ada barang berpindah. Judul terukur: "Pulihkan status pemasok: CV Ayam Kampung Cugenang di Jakarta". (b) **Biaya**: `Number(s.safe_delivered_cost ?? d.safe_delivered_cost)` mengubah `null` (kolom DB kosong, dipetakan eksplisit oleh `backend/app/api/decisions.py`) menjadi 0, jadi hero mencetak "Rp0" sementara kartu feed (yang memakai `formatIDR`) mencetak "—". Sekarang `angkaAtauNull()` membedakan tak-diketahui dari nol, biaya kosong ditulis "—", selisih dari harga beli tidak dihitung, dan hint rekonsiliasi tidak lagi mencetak Rp0; nol yang BENAR-BENAR tersimpan tetap "Rp0". Terukur di layar: kartu "SDC —" ↔ hero "Biaya aman terkirim —", tidak ada "Rp0" di hero. Uji: `tests/evidence-summary.test.ts` +3 (restorasi tanpa slug/panah; setiap tipe backend punya label; bentuk lama tidak berubah) dan +6 (null→"—" identik dengan kartu, selisih tidak dihitung, medan tak dikirim tidak dikarang, 0 tersimpan tetap Rp0). Gerbang: vitest 196 berkas / 2.218 tes lulus, `tsc --noEmit` 0, `next lint` 0. Efek samping yang DITERIMA sementara (belum diputuskan pemilik): karena satu aturan yang sama, judul `supplier_exclusion` dan `price_anomaly` kini juga menyebut pihak + lokasi ("Keluarkan pemasok: CV Ayam Kampung Cugenang di Jakarta", "Sesuaikan harga 600 kg telur di Jakarta") — sebelumnya diam soal siapa & di mana. Kalau pemilik ingin keduanya persis seperti dulu, persempit `JENIS_ADMINISTRATIF` ke tipe restorasi saja.
+
+
+- [2026-10-28] **Kepala kartu Overview tanpa lokasi/jam.** Pemilik menunjuk baris "Jakarta · 22.00" di bawah judul "Kecukupan pasokan" dan meminta dihapus. Keputusan: mode komoditas tidak lagi mencetak baris sub sama sekali — kepala kartu hanya judul + satu angka ringkasan ("4/4 kurang"); lokasi, jumlah komoditas, sumber snapshot, dan jam hitung pindah ke `title` judul (hover) dan aria-label. Mode lokasi (monitor nasional) TETAP mencetak "komoditas · N lokasi" karena itu pembeda utamanya. Jam juga dihapus dari sub panel surplus (kini "di luar Bandung · dihitung server"). Dijaga tes: kartu tidak boleh punya `.ac-sub`, dan teks tercetak panel tidak boleh memuat pola jam `HH.MM`. Terukur: kartu 361 px, panel 360 px (praktis setinggi). Gerbang: vitest 2.219 lulus / 196 berkas, `next lint` 0.
+
+- [2026-10-28] **Overview: antrean "Perlu keputusan" kembali menampilkan EMPAT keputusan, dan sisa tinggi kolom kanan diserap KANVAS PETA (bukan rongga).** Koreksi pemilik setelah revisi sebelumnya: "kenapa gak nampil yang lainya?" — pemotongan dua baris membuat antrean hanya menampilkan 2 dari 32 keputusan. Keputusan yang mengikat: (a) `QUEUE_SHOWN` 2 → 4 (app/page.tsx) — yang dipangkas TINGGINYA, bukan jumlah yang bisa dibaca: baris antrean memang sudah padat (56 px, dua baris teks + badge), jadi empat keputusan masuk dalam tinggi yang dulu dipakai dua baris longgar; sisa pekerjaan tetap dinyatakan ("+28 keputusan lain menunggu tindakan") dan konstanta yang sama dipakai tile "Rekomendasi menunggu" sehingga 32 / 4 / +28 tidak pernah berbeda antar-tempat. (b) Kolom kanan kini bisa LEBIH TINGGI daripada kartu peta saat empat baris ditampilkan (terukur 537 px vs 610 px tinggi peta pada 312 px)—karena itu kartu peta dibuat kolom flex dan kanvas yang menyerap kelebihan: `.overview-split .map-card{display:flex;flex-direction:column}`, `.map-body{flex:1 1 auto;min-height:0}`, `.map-shell{flex:1 1 auto;min-height:400px}`, `.map-shell .map-gl{flex:1 1 auto;height:auto;min-height:400px}`. Tanpa aturan ini kartu peta melar dengan ±85 px ruang kosong di bawah "Rincian lapisan peta" (terukur); dengan aturan ini MapLibre ikut membesar (canvas 400 → 483 px) sehingga tidak ada rongga, dan batas bawah kanvas tetap 400 px. Antrean tetap `flex: 1 1 auto` (memanjang mengisi sisa kolom, CTA di dasar kartu) dan kartu bukti `flex: 0 0 auto` (setinggi isinya). Terukur di DOM hidup (viewport 1262 px, BGN Monitor): susunan bertumpuk — antrean 947x368 px (empat baris 56 px), kartu bukti 947x158 px, peta 947x610 px; susunan 2 kolom (grid dipaksa di DOM untuk >=1280 px) — kolom kanan 312 px: antrean 537 px + kartu bukti 258 px, tepi bawah kolom = tepi bawah kartu peta (selisih 0 px), `map-body` mengisi seluruh kartu (selisih 0 px), kanvas peta 485 px. Gerbang: vitest 197 berkas / 2.244 tes lulus, `next lint` 0. Batas jujur: (i) susunan >=1280 px masih disimulasikan di DOM karena viewport sesi 1262 px; (ii) saat verifikasi, dev server sempat mati dan gagal build karena pekerjaan paralel (`components/DecisionDrawer.tsx` mengimpor `../lib/detail-keputusan` yang tidak ada — modulnya bernama `lib/drawer-keputusan.ts`; import diperbaiki satu baris dan container `mealchain-frontend` dijalankan ulang), jadi halaman sempat kosong bukan karena perubahan ini. Catatan: `tsc --noEmit` masih 10 galat di berkas pekerjaan paralel (`components/DecisionDrawer.tsx`, `lib/location-network.ts`), bukan di berkas perubahan ini.
+
+
+- [2026-10-28] **Halaman "Decision & Evidence": modul persetujuan mengikuti `02-approval-action.md` §7 + review PO dijadikan JALUR SUNGGUHAN (dua gerbang).** Keputusan yang mengikat: (a) dua gerbang: `POST /actions/execute` hanya MENERBITKAN PO `draft` (keputusan tetap `approved`, tidak ada barang berangkat), lalu `POST /actions/purchase-orders/{po_number}/approve` oleh Kepala SPPG mengirim PO ke SAP mock (`submitted`) dan menuntaskan keputusan ke `executed`; matriks approval dipakai bersama lewat `_evaluasi_approval` supaya kedua gerbang tidak menyimpang. Konsekuensi yang diterima: pesan "PO ... dibuat (mock)" DIGANTI, dan tes yang mengharapkan `submitted`/`executed` tepat setelah `execute` harus menambah langkah review (`test_actions`, `test_event1_e2e_acceptance`, `test_procurement_execute_guard`, `test_approval_summary`, `test_kpi_act_trace`, `test_status_approved`). (b) Satu kepala, tiga jawaban: "apa menahan, siapa dibutuhkan, apa setelah ini" naik ke atas, kronologi jalur turun ke bawahnya, lima blok lama dilebur jadi satu modul (`components/ApprovalOverview.tsx`) yang seluruh isinya diturunkan modul murni `frontend/lib/approval-panel.ts` sehingga komponen tidak menghitung keadaan sendiri. (c) Ditolak tidak sama dengan kedaluwarsa: penolakan bernada bahaya dan bisa diusulkan ulang, kedaluwarsa bergaris putus-putus dengan nada sendiri (waktu habis bukan tindakan orang). (d) Keadaan kelima yang tidak ada di dokumen ditambahkan karena nyata di lapangan: semua peran sudah menyetujui tetapi PO belum terbit, sehingga panel menulis "Siap menerbitkan PO draft" (sebelumnya "Belum bisa disetujui" padahal ada pekerjaan). (e) Read model diperbaiki, bukan hanya UI: `can_approve`/`can_reject` kini false untuk pembaca di luar `APPROVER_ROLES`; terukur `bgn_monitor` menerima `can_approve: true` sebelum perbaikan, sehingga panel baru menawarkan "Bisa Anda setujui sekarang" kepada peran pengawas. (f) Label pemicu per-peran: "Menunggu rekan" hanya bagi yang sudah menyetujui; yang belum melihat "Setujui sekarang" (terukur: Ahli Gizi menunggu dirinya sendiri). (g) Status PO adalah fakta SERVER (`approval-summary.purchase_order`), bukan rakitan UI dari daftar PO, supaya satu keadaan punya satu sumber. Bukti: DOM hidup tiga peran (Kepala: "Siap menerbitkan PO draft" lalu eksekusi lalu "Menunggu review PO" + "Review PO..." lalu "Selesai"; Ahli Gizi: "Setujui sekarang..." lalu ledger berisi nama+jam; Monitor: "tampilan read-only (Monitor BGN)" dengan semua langkah tertutup beralasan peran), DB `sap_mock_purchase_orders` draft lalu submitted + `decisions.status` executed, vitest 196 berkas / 2218 tes lulus, `tsc` 0, `next build` EXIT 0 (distDir `.next-verif` terpisah karena `.next` dipakai dev server + pekerjaan paralel), 7 berkas backend yang disentuh 56 lulus / 1 skip. Batas jujur: suite backend PENUH pada `mealchain_po_review` masih 59 gagal / 2126 lulus / 31 skip, semuanya galat lingkungan yang diperiksa satu per satu (jendela keputusan lampau pada `test_dispatch_safety_gate` yang memilih keputusan approved TERBARU dari DB bersama; `token tidak valid`/401 karena sesi demo dibangun ulang proses lain saat suite berjalan; `11 == 10` dan `61 == 60` karena lokasi/batch bertambah; satu teardown `ForeignKeyViolation` di `test_approval_summary`) dan berkas yang sama hijau saat dijalankan terisolasi.
+
+- [2026-10-28] **Overview: pasangan kartu "Kecukupan pasokan" + "Surplus wilayah lain" dibuat SAMA TINGGI (permintaan pemilik: "perbaiki lagi keduanya").** Masalah terukur sebelumnya: `.ov-pasokan-grid` memakai `align-items: start`, sehingga grafik kecukupan 468x372 px berdampingan dengan panel surplus 468x328 px — tepi bawah ragged 44 px dan pasangan yang seharusnya terbaca sebagai SATU grafik terlihat seperti dua kotak lepas. Perbaikan (hanya `app/surplus-regions.css`, tanpa warna/radius/bayangan baru): (a) `align-items: stretch`; (b) panel surplus jadi kolom flex (`.ov-pasokan-grid > .sr-panel`), daftar wilayahnya `flex: 1 1 auto` dan chip "Asal" `margin-top: auto` sehingga kelebihan tinggi TIDAK jadi lubang di tengah; (c) baris wilayah di dalam daftar `justify-content: safe center` — di tengah selama ada sisa ruang (kasus BGN: satu wilayah layak, kelebihan 57 px terbagi 29 px atas / 28 px bawah), tetapi kembali ke atas (`safe`) begitu wilayahnya banyak supaya tidak terpotong dan tidak ada baris yang tak bisa dijangkau. Terukur di DOM hidup: BGN Monitor (viewport 1262 px) — kiri 468x372 px, kanan 468x**372** px, selisih tepi bawah 0 px, baris wilayah 106 px di tengah daftar 163 px, chip "Asal" menempel dasar; Kepala Bandung (SPPG) — kiri 468x348 px, kanan 468x**348** px, selisih 0 px, tanpa luapan. Gerbang: vitest 200 berkas / 2.289 tes lulus, `next lint` 0. Catatan jujur: (i) saat verifikasi, dev server beberapa kali gagal build karena pekerjaan paralel di `components/DecisionDrawer.tsx` (`Module not found: ../lib/detail-keputusan` — modulnya `lib/drawer-keputusan.ts`, import saya perbaiki; lalu `Unexpected token`/`Lipat is defined multiple times` saat berkas sedang ditulis), jadi halaman sempat kosong; angka di atas diambil saat kompilasi sehat. (ii) kepala dua kartu masih beda tinggi (kiri 44 px satu baris; kanan 130 px karena hero angka ditumpuk) sehingga isi panel surplus mulai ~57 px lebih rendah — sengaja dari redesign "judul → angka"; kalau pemilik ingin keduanya rata, itu perubahan terpisah.
+
+
+## 2026-10-28 — Popup "Detail Keputusan" dirancang ulang (tetap di tengah)
+
+Keputusan pemilik: **popup tetap di tengah**, yang berubah hanya desain, tata letak, dan isinya,
+mengikuti dokumen acuan `D:\Downloads\01-detail-keputusan.md`. Panel samping (drawer kanan 520 px)
+yang sempat dibuat DITOLAK — jangan dikembalikan.
+
+Bentuk sekarang:
+- `components/DecisionDrawer.tsx` (nama berkas dipertahankan agar wiring halaman tidak berubah) memakai
+  cangkang `Popup.tsx` dengan modifier `.popup-keputusan`: lebar `min(920px, 100%)`, tinggi maksimum
+  `min(90vh, 880px)`, terpusat, sudut membulat, animasi naik 8 px. Backdrop memakai gaya `.popup` biasa.
+- Isi = grid dua kolom (`.popup-keputusan .popup-body`); bagian lebar penuh memakai `.detail-sec--full`
+  (pengalih tampilan, strip alur, aksi, usulan, lipatan).
+- Kepala popup memakai slot baru `Popup` → `eyebrow` ("Detail Keputusan") + `meta` (pil status + id 8 aksara).
+  Kasus sengaja TIDAK diulang di kepala: ia sudah jadi baris "Alasan" di Fakta dasar.
+- Urutan bagian mengikuti §2 dokumen: alur → fakta dasar → biaya → PO → catatan verifier → kewajiban
+  persetujuan → aksi → usulan → jejak iterasi → pemasok → bukti & audit. Tampilan kedua "Jejak agen (N)"
+  tetap ada di jendela yang sama.
+- Tiga bagian dilipat (`<details>` + komponen lokal `Lipat`): Kewajiban persetujuan ("N dari M disetujui"),
+  Jejak iterasi ("N langkah"), Bukti & audit (berkas JSON + halaman lengkap). Panjang gulungan badan
+  2.008 → 1.088 px pada keputusan uji.
+- Biaya disusun §6.1/§6.2: total terkirim + rumus "RpX ÷ N kg" + chip perbandingan di ATAS, lalu tiga
+  lapis (dibayar ke pemasok / tambahan sampai tiba / tambahan karena risiko). Angka hanya dari payload
+  (`commercial_cost`, `market_reference`), dihitung di `lib/detail-keputusan.ts`.
+- Keputusan administratif tidak menampilkan biaya/PO palsu: bagian biaya menjelaskan "tidak membeli barang"
+  dan PO menulis "belum terbit".
+
+Kontrak yang dikunci tes: `tests/decision-drawer.test.tsx` (bentuk terpusat, urutan bagian, tiga lapis + rumus,
+perbandingan harga, tiga titik PO, jejak di jendela yang sama, wiring `page.tsx` tidak memindah tab) dan
+`tests/detail-keputusan.test.ts` (22 uji acuan hitung). Gerbang: 199 berkas / 2.275 tes lulus, tsc 0, lint 0.
+
+## Ronde 41 — 2026-10-28: dokumen 03 §6 masuk guardian (Location Network + pop-up pasokan/permintaan)
+
+**Keputusan 1 — koridor dari `decisions`, bukan tabel baru.** `GET /balance/flows` mengagregasi baris
+`decisions` (sumber→tujuan, kg, status per lane) dan TIDAK punya rumus gap kedua. Alasan: dokumen §6.2
+meminta garis "yang sudah punya rekomendasi"; membuat tabel alur sendiri berarti dua sumber kebenaran untuk
+pasangan lokasi yang sama.
+
+**Keputusan 2 — cakupan peran disempitkan di klien, bukan di endpoint.** `/balance/flows` hanya mengirim
+pasangan hasil olahan (pola sama dengan `/surplus/allocations`); `corridorsFromFlows(flows, {dalamCakupan})`
+menyaring lane yang tidak menyentuh lokasi terlihat. Kalau kelak ada konsumen lain, cakupan harus pindah ke server.
+
+**Keputusan 3 — peta dipakai ulang (`SupplyMap`), bukan peta kedua.** Dua prop aditif: `corridors`
+(layer garis sendiri: source `network-corridors`, warna status, lebar 1,5–4 px dari kg aktif, kedaluwarsa redup)
+dan `showSuppliersPins` (bawaan `true`, dimatikan modul ini supaya legenda tidak menerangkan lapisan pemasok
+yang tidak dikirim). Peta kedua akan menggandakan 1.900 baris kode MapLibre untuk nol manfaat.
+
+**Keputusan 4 — pop-up memakai `Popup.tsx` yang sudah ada**, bukan dialog baru. Fokus, Esc, kunci gulir, dan
+portal sudah diuji di sana; dialog kedua selalu menyimpang pada satu dari empat hal itu.
+
+**Temuan yang diperbaiki (bukan fitur):** (a) `next.config.js` tidak mem-proxy akar `supply`/`demand`, sehingga
+pop-up menulis "catatan tidak tersedia" padahal `curl` ke backend menjawab 200 — terukur pada uji UI pertama;
+(b) `hoursLabel` menulis "2 hari 24 jam" karena pembulatan jam tidak dibawa ke satuan hari.
+
+Gerbang: tsc 0, lint 0, vitest **200 berkas / 2.289 tes**, build `B4avyq5nyf_GBIMaRKPut`. 0 commit.
+
+## Ronde 42 — 2026-10-28: dokumen 05 §8 masuk guardian (penerimaan barang)
+
+Permintaan pemilik repo: terapkan `05-penerimaan-barang.md` **di repo ini**, bukan di klon lain; desain
+sederhana, konsisten dengan token yang sudah ada, dan diuji dengan data/backend sungguhan.
+
+**Keputusan 1 — model data TIDAK diubah.** Repo ini tidak punya mesin ceklis berbobot dokumen 05 (7 butir,
+skor 0–100, ambang 65/85, jumlah diterima sebagian). Yang ada: lima titik periksa boolean (`RECEIVING_CHECKS`)
+→ catatan `menunggu` → Kepala SPPG setujui/tolak, plus nilai dari harga invoice PO. Karena itu §8.1 ditampilkan
+sebagai **titik yang benar-benar ditandai** ("4 dari 5"), bukan skor yang dikarang; menambah tabel/skor berarti
+migrasi baru untuk angka yang belum dipakai keputusan mana pun.
+
+**Keputusan 2 — angka pratinjau dihitung SERVER.** `backend/app/services/receipt_value.py` mendapat
+`po_dan_harga()` (nomor PO + harga satuan) dan `nilai_dari()`; `_row()` di `api/receipts.py` kini membawa
+`batch_quantity_kg`, `po_number`, `unit_price_idr`, `estimated_value_idr` untuk POST, GET, approve, dan reject.
+`accepted_value_idr`/`stock_kg` tetap kosong sampai disetujui — jadi UI bisa menampilkan tiga angka (§8.2) dan
+menulis asal harga (§8.3) tanpa pernah mengalikan kg × harga sendiri.
+
+**Keputusan 3 — panel jadi daftar + drawer kanan tiga langkah.** `GoodsReceiptDrawer` dipecah: panel mendaftar
+batch (kg + nilai, label "(perkiraan)" bila belum disetujui), tombol "Buka penerimaan" membuka drawer 440 px
+berisi langkah 1 titik periksa, 2 tiga angka + asal harga + status, 3 penandaan. Drawer dirender lewat
+**portal ke `<body>`** karena popup keputusan ber-`transform` membuat `position: fixed` mengacu ke leluhur itu —
+tanpa portal panel melayang di tengah halaman (terukur sebelum perbaikan: tinggi 4.923 px, bukan 568 px).
+
+**Temuan yang diperbaiki (bukan fitur):** `frontend/components/LocationNetworkBoard.module.css` memakai
+`border-radius: 4px` mentah sehingga tes `radius-scale-css` gagal → diganti `var(--radius-chip)`.
+
+Gerbang: frontend **200 berkas / 2.289 tes** lulus, tsc 0, `next lint` 0; backend 58 tes penerimaan lulus
+(DB klon `mealchain_doc05`), ruff bersih. Verifikasi hidup di `:3010`/`:8000`: batch 800 kg, PO
+`MC-B54D0F110D61`, `unit_price_idr` Rp 41.500 → "800 kg × Rp 41.500 per kg dari PO MC-B54D0F110D61",
+nilai Rp 33.200.000 berlabel perkiraan, 4 dari 5 titik ditandai, drawer 440 × 568 px, gulir latar terkunci.
+Catatan uji (1 penerimaan sementara) dihapus kembali dari DB demo. 0 commit.
+
+## Ronde 43 — 2026-10-28: bentuk modul Location Network dibalik (halaman gabungan, tanpa peta)
+
+Pemilik menilai hasil Ronde 41 aneh: modul berdiri sebagai halaman jaringan sendiri, sementara
+isi "pasokan & permintaan" disembunyikan di pop-up. Keputusannya verbatim: *"satu halaman
+gabungan berisi kalimat ringkasan + pemilih lokasi + 4 kartu + tabel batch (koridor/peta
+dibuang)"*.
+
+1. **Halaman jadi satu kolom.** Urutan: kalimat ringkasan §6.3 → baris angka → pemilih lokasi
+   (`button aria-pressed`, urut terparah, otomatis memilih yang paling kekurangan) → rincian
+   `SupplyDemandPanel` **inline** → chip kelengkapan §6.5. `Popup` tidak dipakai lagi; state
+   `sdTarget` dihapus. Pemilih menggantikan tabel lokasi 6 kolom.
+2. **Peta & koridor dibuang seluruhnya**: `SupplyMap` tidak lagi dipakai halaman ini
+   (`components/SupplyMap.tsx` dikembalikan ke `HEAD`, jadi 0 sisa kode koridor),
+   `useBalanceFlows`, `corridorsFromFlows`/`corridorLegend`, `fetchBalanceFlows`, dan endpoint
+   `GET /balance/flows` ikut dihapus karena tidak ada konsumen. Bentuk endpoint tercatat di
+   `TODO.md` S4-59 bila nanti dibutuhkan lagi.
+3. **Regresi §5 diperbaiki**: `sppg_nutritionist` semula tidak punya jalan masuk ke modul ini.
+   Kini ia melihat tab dan judul "Pasokan & Kebutuhan"; peran lain tetap "Location Network".
+   Judul halaman ikut peran (`heading`/`description` prop di `LocationNetworkBoard`).
+4. **Kartu ke-4 §3 bukan lagi tulisan "belum ada"**: backend ternyata sudah punya
+   `GET /demand/forecast` (pekerjaan sesi paralel), jadi kartu menampilkan angka + metode +
+   keyakinan (`perkiraan statistik · keyakinan penuh`).
+
+Gerbang: `tsc` 0, `next lint` 0, vitest **201 berkas / 2.300 tes** lulus (tes board ditulis
+ulang: 14 tes, termasuk "tidak lagi memasang peta", "pemilih urut terparah", "tidak ada field
+mentah"). Browser: SPPG Head 1 lokasi/780 kg/7.420 kg/5 batch; nutritionist judul "Pasokan &
+Kebutuhan"; BGN Monitor 10 tombol dua baris, headline 8 lokasi kurang 968 kg sisa 209 kg;
+`document.querySelector("canvas") === null`. 0 commit.
+
+## 2026-10-28 — Popup detail: dua tombol tampilan di kepala + persetujuan tanpa jendela kedua
+
+Permintaan pemilik: "buat 2 tombol supaya tidak ada popup dalam popup dan bisa mengganti rincian
+dan jejak agen", disesuaikan dengan `01-detail-keputusan.md` dan `02-approval-action.md`.
+
+1. Slot baru `Popup.tsx` → `tabs`: deret tombol dirender di bawah kepala, DI LUAR `.popup-body`
+   yang bisa digulir. Popup detail memakai dua tombol pil `.popup-tab`: "Rincian" dan
+   "Jejak agen (N)" (aria-pressed). Bar pil lama `.detail-switch` di dalam badan dihapus — inilah
+   yang terbaca sebagai "panel di dalam panel". Slot `eyebrow`/`meta` tetap dipakai.
+2. `DecisionActions` dapat prop `tampil?: "dialog" | "panel"`. Di popup detail dipakai
+   `tampil="panel"`: konfirmasi dirender sebagai `.aksi-panel` di dalam badan popup yang sama,
+   bukan `<Popup>` kedua. Isinya tetap `ApprovalMenu` + `GovernanceStatus`, jadi jalur mutasi
+   tunggal (dokumen 02 §3) dan isi konfirmasi (requirement, penghalang, label tindakan) tidak
+   berubah. Panel digulir ke tampilan (`scrollIntoView`, dijaga bila tidak tersedia) supaya
+   pengguna tidak menekan tombol lalu melihat apa-apa.
+   Halaman lain TIDAK berubah: tanpa prop, perilakunya tetap dialog.
+
+Bukti DOM (popup "Pengadaan 600 kg telur", Kepala Jakarta): `.popup-tabs` ada dan bukan keturunan
+`.popup-body`; tombol `["Rincian", "Jejak agen (2)"]`; `aria-pressed` berpindah; setelah "Kelola
+persetujuan": `popup-backdrop`=1, `[role=dialog]`=1, `.aksi-panel` di dalam `.popup-body`,
+`.popup-governance`=0. Gerbang: 201 berkas / 2.300 tes, tsc 0, lint 0.
+
+- [2026-10-28] **Overview: penggunaan warna pada pasangan "Kecukupan pasokan" + "Surplus wilayah lain" disamakan (permintaan pemilik: "sesuaikan penggunaan warna").** Masalah: kartu kanan memakai hex kategorikal sendiri (`#2563eb`, `#7c3aed`, `#0891b2`, `#b45309`) dan memetakan warna menurut URUTAN komoditas (`komoditasTone`), jadi (a) telur bisa biru di panel tapi amber di pil peta, (b) satu baris memakai tiga warna sekaligus: rel kiri aksen biru (`--accent-strong`), batang biru pekat, angka kg hijau (`--sa-tone` status). Keputusan: warna DATA mengikuti palet identitas yang sudah didokumentasikan di `docs/design.md` — telur amber, ayam rose, beras biru, wortel violet (token `--cat-*-solid`, sama dengan titik di pil komoditas peta) — dan satu warna membawa satu arti: (1) `lib/surplus-regions.ts` menambah `komoditasKeluarga(nama)` (nama → amber/rose/blue/violet, tanpa peka huruf besar & spasi tepi); `komoditasTone` TETAP ada sebagai cadangan indeks untuk komoditas di luar empat kanonik; (2) `components/SurplusRegionPanel.tsx` memakai kelas `sr-komod-<keluarga>` pada segmen batang, titik legenda, DAN baris wilayah; (3) `app/surplus-regions.css`: kelas `sr-komod-*` hanya menetapkan hue (`--sr-komod`), `.sr-seg`/`.sr-dot`/rel baris memakai variabel itu — batang & titik & rel satu wilayah kini SATU warna; batang memakai warna identitas PENUH sementara batang kartu kiri tetap pucat karena pucat = STATUS, jadi dua bahasa warna tidak tertukar; (4) angka kg baris kembali TINTA NETRAL (aturan `docs/design.md`: "angka hero tetap tinta netral, hanya wash yang berwarna") — sebelumnya hijau warisan `--sa-tone`; (5) `#DBEAFE`/`--accent-soft` untuk kotak hero dan lencana diganti token `--cat-blue-line`/`--cat-blue-bg`/`--cat-blue-ink`; rel aksen biru pada baris teratas DIHAPUS (aturan `.sr-row-teratas` dibuang, bukan CSS mati) karena penanda "terbesar" sudah ada sebagai lencana. Terukur di DOM hidup (BGN Monitor, viewport 1262 px): rel `rgb(146,64,14)` = batang `rgb(146,64,14)` = titik legenda `rgb(146,64,14)`; angka kg `rgb(15,23,42)` (tinta); lencana & hero `#EFF6FF` + `#BFDBFE`; batang kartu kiri tidak berubah (`color-mix(--status-*)`); tinggi dua kartu tetap 372 px = 372 px. Gerbang: vitest 201 berkas / 2.300 tes lulus (termasuk 3 uji baru `komoditasKelas` di `tests/surplus-regions.test.ts` dan gate token `design-tokens-kontrak`, `token-warna-komponen`, `token-alias-css`, `token-bayangan`, `radius-scale-css`), `next lint` 0. Catatan: uji lama `warna komoditas tidak memakai token status` sempat merah karena aturan `.sr-row-teratas` menaruh `--status-safe` setelah blok `.sr-komod-0`; aturan itu dihapus sehingga uji kembali hijau tanpa melonggarkan tes. Batas jujur: bar telur sekarang berwarna amber-tua (identitas komoditas), bukan hijau "surplus" — makna surplus dibawa label/angka/lencana, bukan warna. Kalau pemilik ingin batang memakai warna status hijau, itu perubahan satu baris di `.sr-seg` tetapi akan bertabrakan dengan makna identitas komoditas.
+
+
+## 2026-10-28 (revisi) — Dua tombol pindah ke KARTU feed, popup tidak lagi punya tab
+
+Pemilik menolak tab di dalam popup: "halaman popup dan rincian dibedakan… 2 tombol berada di sini
+`<span class="rec-hint">Klik untuk rincian & jejak agen</span>`". Jadi:
+
+- `RecommendationCard` punya prop `onBuka?: (tampilan, pemicu) => void`. Bila diisi, ajakan teks
+  `rec-hint` DIGANTI dua tombol `.rec-act-btn`: "Rincian" dan "Jejak agen" (aria-label menyebut tipe
+  keputusan, tidak `aria-hidden`). Tanpa prop, perilaku lama (hint teks) tetap — dipakai kartu
+  "Usulan" di dalam popup dan halaman Decision & Evidence.
+- Pembungkus kartu di feed berubah dari `<button class="link-button">` menjadi `<div class="rec-baris">`:
+  tombol tidak boleh bersarang di dalam tombol. Klik seluruh kartu karena itu tidak lagi membuka popup —
+  masukannya hanya lewat dua tombol.
+- `bukaPopupKeputusan(decisionId, pemicu, tampilan)` menyimpan pilihan ke `popupTampilan`; `DecisionDrawer`
+  menerima `tampilanAwal` dan me-reset tampilan pada `[decisionId, open, tampilanAwal]`. Tab `.popup-tab`
+  dan slot `tabs` di `Popup.tsx` DIHAPUS — jangan dihidupkan lagi tanpa alasan.
+- `onBuka` meneruskan elemen tombol sebagai `pemicu` supaya fokus balik ke tombol yang ditekan saat
+  popup ditutup (diuji di layar: `document.activeElement` = `.rec-act-btn`).
+
+Bukti DOM: 10 kartu, tinggi 76 → 82 px, tiap kartu `["Rincian [Rincian: …]", "Jejak agen [Jejak agen: …]"]`,
+teks "Klik untuk rincian" hilang; klik "Jejak agen" → popup langsung `.agent-console` (tanpa `.detail-layer`,
+`.popup-tab` = 0); klik "Rincian" → tampilan rincian. Gerbang: 203 berkas / 2.341 tes, tsc 0, lint 0.
+
+### Tambahan Ronde 42 — bentuk dialog: popup tengah, bukan drawer kanan
+
+Pemilik bertanya "bukannya pop up yaa??" setelah drawer kanan 440 px dipasang. Tiga subagent read-only
+menilai tiga opsi; hasilnya: popup tengah `Popup.tsx` **direkomendasikan**, drawer kanan "dapat diterima
+tapi cacat", satu-tombol-tanpa-daftar **ditolak** (menghapus pembanding kg/nilai antar batch dan memaksa
+pemilih batch baru).
+
+Bukti yang menentukan: `decisions.md:520-522` sudah mencatat pemilik **menolak** drawer kanan 520 px untuk
+permukaan bersaudara dan meminta popup tetap di tengah; `decisions.md:564-565` mewajibkan `Popup.tsx`
+sebagai satu-satunya cangkang dialog. Klausa dok 05 §1 "drawer kanan, sama seperti drawer keputusan" sudah
+tidak punya rujukan di repo ini (DecisionDrawer.tsx memakai `Popup` terpusat), jadi paritas yang diminta
+dokumen kini berarti popup tengah. Bentuknya menyimpang dari bunyi §1 — dicatat di sini supaya tidak dibaca
+sebagai kelalaian; yang mengikat dari §2 (tiga langkah berurutan) tetap utuh di `GoodsReceiptSheet`.
+
+Cacat cangkang buatan sendiri yang TERUKUR hidup lalu hilang setelah pindah ke `Popup`:
+(a) Tab keluar ke "Tutup sidebar" di halaman belakang meski `aria-modal="true"`; (b) Escape saat panel
+TERTUTUP memindahkan fokus ke tombol "Buka penerimaan" (effect keydown tanpa dependensi + `tutupPanel`
+selalu memfokuskan pemicu); (c) tombol Tutup hilang saat isi digulir (seluruh panel yang menggulir, bukan
+hanya isi); (d) latar ditutup `onClick` (seleksi teks yang berakhir di latar membuang isian alasan tolak);
+(e) `z-index: 60` di bawah `.popup-backdrop` 80.
+
+Sesudah: `role=dialog`, `aria-labelledby="popup-penerimaan-judul"`, fokus awal di dalam popup, Tab berputar
+dari "Tolak penerimaan" ke "Tutup jendela", Escape menutup + fokus kembali ke `receipt-open-drawer` +
+`body.overflow` dipulihkan, Escape saat tertutup tidak menyentuh fokus. Popup 720 × 500 px (dari 640 px
+bawaan lewat modifier `.popup-penerimaan`), tanpa luapan horizontal, tombol 44 px pada pointer kasar, dan
+media query 460 px menumpuk strip tiga angka jadi satu kolom.
+
+Gerbang: frontend **203 berkas / 2.341 tes** lulus, tsc 0 error, `next lint` 0. Backend tidak disentuh ronde
+ini (58 tes penerimaan lulus sebelumnya). Catatan: saat ronde ini berjalan ada penulis lain di tree yang
+sama (`LocationNetworkBoard.tsx` + tes `agent-activity`/`location-network-board`) sehingga tsc sempat merah
+di berkas itu; sudah hijau lagi dan bukan bagian pekerjaan ini. 0 commit.
+
+- [2026-10-28] **Location Network = satu halaman gabungan tanpa peta, rincian lokasi lewat pop-up; koridor dan `GET /balance/flows` dibatalkan.** Keputusan pemilik, dan bentuk inilah yang berlaku sekarang. (a) Tab `location-network` (`frontend/app/page.tsx`) satu kolom: kalimat ringkasan jaringan → baris statistik (kekurangan / kelebihan / seimbang / tanpa koordinat) → pemilih lokasi `aria-pressed` urut keparahan → satu pintu masuk rincian → panel Kelengkapan data (`frontend/components/LocationNetworkBoard.tsx`). (b) Rincian satu lokasi dibuka sebagai pop-up `frontend/components/Popup.tsx` (`sdTarget` + `returnFocusRef` di `app/page.tsx`, isi `frontend/components/SupplyDemandPanel.tsx`, empat kartu), BUKAN dirender inline — klaim "pop-up dihapus" di S4-60 dan di halaman verifikasi lama tidak berlaku. (c) Peta `SupplyMap` tidak lagi dirender di modul ini (tetap dipakai Overview); layer koridor `network-corridors` beserta `useBalanceFlows`, `corridorsFromFlows`, `corridorLegend`, `corridorStatusLabel`, dan **endpoint `GET /balance/flows`** dihapus dari `backend/app/api/balance.py` — sekarang 404 dan 0 rujukan tersisa di `backend/` + `frontend/`. Alasan: agregat baris `decisions` tidak bisa menjamin lane surplus→kekurangan dan endpoint itu tidak punya cakupan peran, sehingga garis di peta akan terbaca sebagai bukti aliran barang padahal bukan; halaman jaringan berdiri sendiri juga tidak memberi `sppg_nutritionist` jalan masuk. (d) Kartu keempat "Perkiraan 7 hari" WAJIB memakai `GET /demand/forecast/{lokasi}/{komoditas}?horizon_days=7` (metode `statistical_fallback`, keyakinan `min(1, jumlah catatan / 3)`) dan WAJIB menulis "dasar tipis" bila keyakinan < 1, karena tanpa label itu angka perkiraan terbaca sebagai kepastian. (e) Penyimpangan sadar yang diterima: `GET /balance/map` tetap mengirim `0.0` untuk sisi yang tidak punya catatan, ditambah penanda `supply_state`/`demand_state` = `tidak_ada_baris`, bukan `null`; mengubahnya ke `null` akan menyentuh Overview dan grafik kecukupan, jadi klien wajib membaca penanda itu. Gerbang ronde ini: `tsc --noEmit` 0 galat, vitest 203 berkas / 2.341 tes lulus; tangkapan Jakarta·telur pasokan 299,09 kg, kebutuhan 1.087,22 kg, selisih kurang 780 kg, perkiraan 7 hari 7.550,26 kg.
+
+## Ronde 43 — 2026-10-29: realisasi PO (nilai PO vs nilai barang masuk)
+
+**Keputusan.** Dokumen 05 §9 butir 3 ("belum ada tampilan perbandingan antara
+nilai PO dan nilai diterima dalam satu baris") dikerjakan pada daftar Purchase
+Order yang sudah ada, **tanpa migrasi dan tanpa endpoint baru**: `GET
+/sap/purchase-orders` diperluas dan `PurchaseOrderList` menampilkan dua angka
+berlabel plus selisih bertanda.
+
+**Alasan memilih ini, bukan §8.5 atau popup penerimaan.** Diukur dari DB demo:
+`batch_receipts` hanya 2 baris dan 0 di antaranya menunjuk batch yang punya
+ikatan PO, sehingga kolom nilai di jalur penerimaan akan berbunyi "tidak
+tercatat" di semua baris. Sisi realisasi PO punya angka nyata (4 dari 6 PO
+berkeputusan) dan tempatnya sudah ada. Dua dari tiga butir §8.5 ternyata SUDAH
+selesai di repo ini (urut `recorded_at` di `api/receipts.py`, warna putusan di
+`lib/food-safety.ts`), jadi §8.5 bukan celah terbuka — hanya kehilangan kolom
+nilai yang, seperti di atas, kosong hari ini.
+
+**Cara menghitung (server, satu kueri).** `services/po_realization.py` membaca
+ikatan PO→batch dari jalur yang SAMA dengan nilai penerimaan
+(`decision_evidence` bertipe `human_inspection` → `payload->'batch_ids'`),
+dengan `SELECT DISTINCT` supaya batch yang muncul di beberapa bukti tidak
+dihitung dua kali. `received_value_idr = harga_satuan × kg_terikat`;
+`variance_idr = received − total PO`.
+
+**Aturan yang dijaga.** `None` ≠ `0`: PO tanpa ikatan bukti mengirim
+`received_kg/received_value_idr/variance_*` = `null` dan panel menulis "belum
+ada barang tercatat". `0` hanya sah bila memang ada batch 0 kg. Selisih diberi
+tanda arah (`+`/`−`) dan kata, bukan hanya warna.
+
+**Gate.** `backend/tests/test_sap_orders_api.py`: `FIELDS` diperluas (asersi
+`set(row) == FIELDS` DIPERTAHANKAN) + 2 tes baru yang membandingkan hasil API
+dengan kueri ground truth di DB; 15 lulus. `frontend/tests/purchase-orders.test.tsx`
++3 tes (dua angka berdampingan, selisih bertanda, null ≠ Rp 0): 20 lulus.
+`tsc` 0, `next lint` 0.
+
+**Belum dikerjakan.** Dok 05 §8.4 (bukti foto) menuntut kolom baru — migrasi
+`044` + kolom `photos` jsonb, base64 di body JSON, 1 foto ≤300 KB terikat
+`check_id`, tanpa dependensi/endpoint baru. Bentuk itu sudah dinilai dan
+direkomendasikan, tetapi keputusan skema tetap milik pemilik repo.
+
+## 2026-10-28 (final) — Kartu feed: "Rincian" + "Persetujuan"; jejak agen pindah ke kepala popup
+
+Keputusan pemilik: dua tombol di kartu adalah **Rincian** (baca) dan **Persetujuan** (tindakan),
+bukan Rincian + Jejak agen.
+
+- `RecommendationCard`: prop `onBuka(tampilan: "rincian" | "persetujuan", pemicu)` dan
+  `tampilPersetujuan` (dari `visibleActions(role, status)` di `page.tsx` — `!readOnly && approve`;
+  jangan menduplikasi daftar peran). Tombol kedua berkelas `.rec-act-btn--utama`. Untuk peran pengawas
+  dan keputusan yang sudah disetujui/ditolak tombolnya ABSEN (dok 02 §7.5), bukan tombol mati.
+- `DecisionDrawer`: `tampilanAwal: "rincian" | "persetujuan"`. Pilihan "persetujuan" meneruskan
+  `terbukaAwal` ke `DecisionActions` dan menggulir `.detail-aksi` ke tampilan.
+- Jejak agen bukan lagi tombol kartu: tautan tenang `.detail-tautan` di kepala popup
+  ("Jejak agen (N)" ↔ "Kembali ke rincian"), satu elemen supaya fokus keyboard tidak hilang.
+- **Jebakan yang sudah diperbaiki** (temuan audit eksternal): `DecisionActions` dulu hanya memakai
+  `useState(terbukaAwal)`, jadi sesudah popup ditutup dan dibuka ulang dengan pilihan lain, panel
+  bisa tertutup padahal diminta atau terbuka padahal cuma membaca. Sekarang ada efek sinkron
+  `[terbukaAwal, decisionId]`. Tes regresinya memakai root yang SAMA (`renderUlang()`);
+  tes "mount segar" tidak bisa menangkap kelas bug ini.
+- `ApprovalMenu` dapat prop `dalamPanel`: saat dirender di dalam popup, kalimat
+  "Tekan Esc untuk menutup jendela ini" diganti "Tutup panel ini untuk kembali membaca rincian."
+  (Escape menutup seluruh popup keputusan, bukan panel).
+- Sesuai dok 01 §4, keputusan administratif TIDAK merender bagian biaya maupun PO sama sekali
+  (sebelumnya dirender lalu diberi penjelasan). Seksi PO kini juga mencetak "Status PO" dalam
+  bahasa Indonesia ("Terkirim ke SAP"), bukan status mentah.
+
+Bukti DOM (keputusan "Ganti pasokan 780 kg telur", Kepala Jakarta): kartu `["Rincian", "Persetujuan"]`;
+tombol Persetujuan → `.aksi-panel` terbuka (panelTop 125), 1 `.popup-backdrop`, 1 `[role=dialog]`,
+tanpa teks "Tekan Esc"; buka ulang via Rincian → panel 0; buka ulang via Persetujuan → panel 1 lagi.
+Kartu "Disetujui" hanya menampilkan Rincian. Gerbang: 203 berkas / 2.363 tes, tsc 0, lint 0,
+5 gate token hijau (27 tes).
+
+## Ronde 44 — 2026-10-28: bentuk halaman Location Network diputuskan lewat audit + verifikasi, bukan selera
+
+Dua subagent (read-only) dijalankan: audit UI/UX yang menimbang tiga bentuk, dan verifikasi
+fullstack yang menelusuri tiap angka sampai endpoint. Keputusannya: **satu kartu ringkasan →
+tabel lokasi → baris terbuka berisi rincian**, tanpa peta, tanpa chip, tanpa popup.
+
+1. Alasan pilihan, terukur: popup 640 px memaksa 4 kartu jadi 3+1 dan menyembunyikan tabel
+   batch di bawah tepi panel (y=491 vs y=488); `aria-pressed` pada chip bertahan `true`
+   setelah jendela ditutup. Tabel yang membuka rincian di tempat menghapus ketiganya tanpa
+   CSS baru, dan memakai bahasa tabel yang sudah ada (`location-table`).
+2. `TONE_CLASS` (kelas global pada elemen ber-CSS-module) tidak pernah cocok karena kelas
+   di-hash → penekanan bahaya diganti `data-tone` + selektor atribut. Ini cacat yang tidak
+   pernah tertangkap tes.
+3. Invarian baru di layar: jumlah 0 tidak mencetak kg; data belum masuk tidak dibunyikan
+   sebagai "tidak ada kekurangan"; saat galat tidak ada kesimpulan sama sekali.
+4. Batch ber-`quarantine_status=quarantined` kini bertanda "Ditahan" dan tidak dihitung
+   "lolos uji" — server sudah mengirim field itu, klien dulu membuangnya.
+5. Pemilihan otomatis lokasi terparah dibatasi sekali per kunjungan (`autoPilihRef`); tanpa
+   itu baris tidak bisa ditutup karena efek langsung memilih ulang.
+6. **Bentrok sesi dicatat terbuka**: sesi lain menulis berkas yang sama dengan bentuk "popup"
+   (S4-61) sementara kode berjalan memakai tabel + rincian sebaris (S4-62). Pemilik harus
+   memilih satu; jangan menambah bentuk ketiga.
+
+Batas yang tetap terbuka: `/supply`, `/demand`, `/demand/forecast` belum menerima `as_of`
+sehingga panel bisa menampilkan dua snapshot (300/1.080 vs 299,09/1.087,22; selisih 780 vs
+788,13). Gerbang: `tsc` 0, `next lint` 0, vitest 2.362 lulus (1 kegagalan di
+`decision-drawer.test.tsx` milik sesi lain), `npm run build` `GP2D05hcnICD2cJ5206ct`. 0 commit.
+
+## 2026-10-29 — Redesign dua popup halaman Recommendations (Rincian & Persetujuan)
+
+Permintaan pemilik: "redesign lagi untuk setiap pop up pada halaman rekomendasi, design
+tampilan dan susunan isinya".
+
+Tiga popup, tiga susunan (kepala popup sama supaya tidak terasa pindah aplikasi):
+
+| Popup | Lebar / kolom | Urutan isi |
+|---|---|---|
+| Rincian (baca) | 920 px, 2 kolom | alur → pita 3 angka → fakta dasar / biaya+PO → verifier → kewajiban (lipat) → aksi → usulan → jejak iterasi → pemasok → bukti |
+| Persetujuan (putus) | 760 px, 1 kolom | pita 3 angka → **Putuskan sekarang** (panel terbuka) → kewajiban (terbuka) → verifier → konteks angka (lipat) → bukti |
+| Jejak agen | 920 px | kepala berisi jumlah langkah + waktu UTC → konsol jejak |
+
+- Pita angka `.detail-kpi` (3 sel): Jumlah, Harga terkirim/kg, selisih vs harga acuan
+  beserta persennya. Semua angka turunan `lib/detail-keputusan.ts`, bukan hitungan baru.
+- CTA di popup Persetujuan ditaruh di atas kewajiban: tombol tidak boleh di bawah gulungan.
+  Daftar penyetuju tetap terbuka karena justru itu isi "siapa yang dibutuhkan" (dok 02 §7.1).
+- Gulir: popup selalu dibuka dari atas. `DecisionActions` hanya menggulir bila KEPALA panel
+  di luar layar (`top < 0 || top > viewport - 120`) — patokan dasar panel membuat panel
+  setinggi layar selalu "digulir", dan pita angka ikut hilang.
+- Tombol pemicu "Kelola persetujuan…" disembunyikan saat panel terbuka (panel sudah punya
+  "Tutup panel"); fokus kembali ke pemicu saat panel ditutup.
+- `.aksi-panel .approval-menu-foot { position: static }`: kaki sticky dirancang untuk modal
+  setinggi layar; di panel inline ia melayang menutupi ringkasan bukti.
+- Copy: `ApprovalModal`/`ApprovalMenu` tidak lagi mencetak enum mentah — pakai `statusLabel`,
+  `roleList` dari `lib/bahasa.ts`; "unavailable" → "belum tercatat"; slug jenis keputusan
+  dibuang dari baris Alokasi; contoh `<code>executed</code>` → `<code>dieksekusi</code>`.
+
+Bukti DOM (Kepala Jakarta, "Ganti pasokan 780 kg telur"):
+- Rincian: 920 px, kolom "426.5px 426.5px", urutan 11 blok, KPI `780 kg` / `Rp29.186/kg` / `−Rp1.947/kg · 6,3%`.
+- Persetujuan: 760 px, kolom 711 px, urutan `KPI → Putuskan sekarang → Kewajiban → Verifier → Konteks angka → Bukti`,
+  `.aksi-panel` terbuka, gulir badan 0, tidak ada "pending_approval/unavailable/expired" di teks popup.
+- Gerbang: 203 berkas / 2.364 tes, tsc 0, lint 0, 5 gate token hijau.
+
+## Ronde 45 — 2026-10-28: halaman Location Network dirapikan, satu fakta satu tempat
+
+1. Informasi berulang dihapus: baris angka di bawah kalimat ringkasan, pil "N lokasi",
+   pil "Sinkron" (jam pengambilan, bukan tanggal data), kotak kelengkapan yang selalu
+   tampil, kolom "Catatan" berisi "lengkap", caption tabel, dan suku rekap batch yang nol.
+2. Kelengkapan data kini **hanya muncul bila ada isu**; kolom tanda hanya dipasang bila ada
+   baris bertanda. Prinsipnya: elemen yang selalu berbunyi sama sekali tidak memberi informasi.
+3. Panel rincian tidak boleh berada di dalam `<td>` — tabel bersarang merusak lebar kolom
+   tabel luar (terukur). Daftar disclosure dipakai sebagai gantinya.
+4. Komoditas bisa diganti dari halaman ini (chips `aria-pressed`), menutup temuan bahwa pil
+   statis menyerupai kontrol.
+
+Gerbang: `tsc` 0, `next lint` 0, vitest 203/2.367, build `cidkYdagb5FLBY_2ljV0n`. 0 commit.
+
+## 2026-10-29 (lanj.) — "Ringkasan bukti" di panel persetujuan dirapikan
+
+Keluhan pemilik: blok Ringkasan bukti / Konfirmasi Approval "kurang rapih".
+
+Penyebab sebenarnya bukan isi, tapi dua hal:
+1. `.approval-facts` hanya diberi gaya di dalam `.popup-governance`; begitu dipakai di
+   panel inline, daftar 12 baris itu jatuh ke gaya bawaan peramban.
+2. Nilai mentah ikut tercetak: uuid panjang, `consistent (server-side)`, kode peran
+   `sppg_head + sppg_nutritionist`, `MOCK`, `7071 detik`, "approval belum memenuhi
+   requirement (missing/rejected)".
+
+Bentuk baru — empat bagian tetap, dua kolom label-nilai (`.approval-grid`):
+  1. Isi keputusan  : Alokasi, Komoditas, Pemasok (+ kode material), Total biaya
+  2. Pemeriksaan    : Status, Keamanan batch sumber, Hasil verifier, Masa berlaku
+  3. Persetujuan    : Dibutuhkan, Peran, Sudah tercatat
+  4. Setelah disetujui : Jalur (simulasi vs administratif)
+  + blok "Tertahan" (alasan kalimat) dan tombol aksi.
+
+Aturan copy yang dipakai: id 8 aksara (`#bef077a8 · versi 1`), `consistent` → "Konsisten",
+`unavailable` → "Belum tersedia", kode peran → nama manusia (`Kepala SPPG + Ahli Gizi SPPG`),
+`MOCK` → "Simulasi - PO simulasi, bukan PO SAP sungguhan", detik → "Masih 1 jam 37 menit lagi",
+"approval belum memenuhi requirement (missing/rejected)" → "Persetujuan belum lengkap - masih
+ada peran yang belum menyetujui." Peran hanya diulang di baris "Sudah tercatat" bila sebagian
+sudah menyetujui (kalau masih nol, baris "Peran" sudah menyebut semuanya).
+
+Chip status di kepala panel dihapus: ringkasan di bawahnya sudah mencetak status, syarat, dan
+peran yang kurang — tiga kalimat sama dalam satu layar terbaca sebagai berisik.
+
+Bukti DOM: kartu 655 × 754 px, kolom `307px 307px`, empat bagian, `.aksi-panel` tanpa chip.
+Gerbang: tsc 0, lint 0, vitest 205/2419 (1 sisa kegagalan di `prd-nav` milik penulis lain).
+Catatan: `next dev` sempat menggantung (port 3010 menerima koneksi tapi tak menjawab); proses
+lama dimatikan lalu dijalankan ulang, siap dalam 5,6 dtk.
+
+**Tambahan Ronde 43 (29 Okt, 01:10) — pemasangan UI ditunda karena refactor paralel.**
+Saat ronde ini selesai, ada alur kerja LAIN di checkout yang sama yang menulis
+ulang halaman Decision & Evidence (`components/DecisionDetail.tsx`,
+`components/DecisionPurchaseOrder.tsx`, `lib/decision-dossier.ts` — semuanya
+untracked, berubah 00:42–01:00). Refactor itu mencabut `<PurchaseOrderList>` dari
+halaman keputusan (diganti satu PO per keputusan), sehingga kolom
+"Nilai PO | Diterima | selisih" BELUM tampil di UI walau API dan tesnya benar.
+Pemilik repo memilih MENUNGGU refactor itu selesai, lalu memasang angkanya di
+komponen baru. Yang harus disambungkan nanti: `received_kg`,
+`received_value_idr`, `variance_idr`, `variance_pct`, `received_batch_count`,
+`received_basis` (sudah dikirim `GET /sap/purchase-orders`), dengan aturan
+`null` != 0 dan bantuan `varianceNada()` / `varianceLabel()` di
+`components/PurchaseOrderList.tsx` yang bisa dipindahkan apa adanya.
+
+## Ronde 46 — 2026-10-29: Location Network memakai bahasa desain konsol, bukan CSS sendiri
+
+1. Halaman ini tidak boleh punya sistem visual sendiri. Primitive wajib: `board-page`,
+   `PageHeader` (+`page-header-pills`), kartu `card` + `board-card-head`, tabel
+   `location-table` di `board-table-wrap`, `commodity-filters`/`commodity-pill`,
+   `button`, `evidence-note`. CSS modul hanya untuk hal yang belum ada padanannya.
+2. Rincian lokasi tidak boleh berada di dalam `<td>`: panel berisi tabel batch membuat
+   tabel bersarang dan merusak lebar kolom tabel luar. Rincian = kartu sendiri di bawah
+   tabel, baris memakai `aria-pressed` + penanda ▸/▾.
+3. Satu batch satu badge: "Ditahan" mengalahkan "Aman". Satu sel satu keterangan:
+   angka masa layak mengalahkan ember "≤ 7 hari". Rekap batch tidak menghitung ulang
+   apa yang sudah tampak di badge.
+4. Keterangan proses ("dihitung server…"), asal data ("catatan simulasi"), dan ambang
+   metode ("≥ 3 catatan permintaan") bukan informasi layar operator — dihapus.
+
+Gerbang: `tsc` 0, `next lint` 0, vitest 205 berkas/2.417 tes (1 gagal `prd-nav.test.tsx`,
+milik sesi lain), build `WDpMMCWmdO-Z04vCJsV-2`. 0 commit.

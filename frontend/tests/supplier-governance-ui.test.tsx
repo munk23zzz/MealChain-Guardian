@@ -24,7 +24,10 @@ describe("Approval administratif supplier", () => {
   it("mereset form supplier saat keputusan terpilih berganti", () => {
     // Langkah 4 (11 Okt): form supplier ikut pindah ke halaman tersendiri
     // "Decision & Evidence" — kontrak `key` tetap sama, lokasinya berubah.
-    const page = readFileSync("components/DecisionEvidence.tsx", "utf8");
+    // 28 Okt 2026: isi detail pindah ke DecisionDetail.tsx (halaman + popup).
+    const page =
+      readFileSync("components/DecisionEvidence.tsx", "utf8") +
+      readFileSync("components/DecisionDetail.tsx", "utf8");
     expect(page).toMatch(/<SupplierExclusionView\s+key=\{selected\.decision_id\}/);
   });
   it("menampilkan supplier, alasan, scope dan bukti tanpa PO atau biaya palsu", () => {
@@ -33,7 +36,7 @@ describe("Approval administratif supplier", () => {
     expect(html).toContain("Pemasok teridentifikasi");
     expect(html).toContain("Jakarta");
     expect(html).toContain("batch-1");
-    expect(html).toContain("approval baru");
+    expect(html).toContain("persetujuan baru");
     expect(html).not.toContain("PO mock");
     expect(html).not.toContain("Total biaya");
     expect(html).not.toContain("Jumlah:");
@@ -45,7 +48,7 @@ describe("Approval administratif supplier", () => {
         ...summary.supplier_governance, action: "restore",
       },
     }} />);
-    expect(html).toContain("Pemulihan supplier");
+    expect(html).toContain("Pemulihan pemasok");
     // Peringatannya tetap ada, dalam bahasa manusia (dulu "Batch FAIL ...").
     expect(html).toContain("gagal pemeriksaan");
     expect(html).not.toContain("PO mock");

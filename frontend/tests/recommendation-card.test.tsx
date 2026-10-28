@@ -1,6 +1,7 @@
 // Kontrak RecommendationCard: kartu hanya menampilkan yang benar-benar ada di
-// data. Kata penanda dari backend (mis. verifier_note "unavailable") bukan
-// narasi — jangan dicetak sebagai paragraf.
+// data, dan sejak 28 Okt 2026 kartu feed diringkas — judul + meta + status.
+// Verdict verifier mentah ("consistent"/"flagged") tidak lagi dicetak; ia
+// terbaca lengkap di Decision & Evidence.
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -32,17 +33,43 @@ describe("RecommendationCard — narasi", () => {
     expect(html).not.toContain("unavailable");
   });
 
-  it("catatan verifier yang bermakna tetap dicetak", () => {
+  it("catatan verifier bermakna PUN tidak dicetak (kartu feed ringkas)", () => {
     const html = renderToStaticMarkup(
       <RecommendationCard decision={{ ...BASE, verifier_note: "Konsisten dengan data batch" } as any} />
     );
-    expect(html).toContain("Konsisten dengan data batch");
-    expect(html).toContain("rec-narrative");
+    expect(html).not.toContain("Konsisten dengan data batch");
+    expect(html).not.toContain("rec-narrative");
+  });
+
+  it("verdict verifier mentah 'consistent'/'flagged' tidak bocor ke layar", () => {
+    for (const note of ["consistent", "flagged"]) {
+      const html = renderToStaticMarkup(
+        <RecommendationCard decision={{ ...BASE, verifier_note: note } as any} />
+      );
+      expect(html).not.toContain(`>${note}<`);
+    }
   });
 
   it("tanpa narasi: tidak ada paragraf kosong", () => {
     const html = renderToStaticMarkup(<RecommendationCard decision={{ ...BASE } as any} />);
     expect(html).not.toContain("rec-narrative");
+  });
+
+  it("baris pengirim pemasok dan badge kasus tidak lagi dirender", () => {
+    const html = renderToStaticMarkup(
+      <RecommendationCard
+        decision={{
+          ...BASE,
+          supplier_name: "CV Berkah Telur Bekasi",
+          target_location_name: "Jakarta",
+          demo_case: "shortage-darurat",
+        } as any}
+      />
+    );
+    expect(html).not.toContain("rec-route");
+    expect(html).not.toContain("Rencana kirim");
+    expect(html).not.toContain("rec-case");
+    expect(html).not.toContain("Kasus:");
   });
 
   it("valid tanpa sisa waktu: TIDAK mencetak '0 dtk' yang dikarang", () => {
@@ -97,5 +124,67 @@ describe("RecommendationCard — ajakan klik", () => {
   it("hint kosong: juga tidak menghasilkan penanda kosong", () => {
     const html = renderToStaticMarkup(<RecommendationCard decision={{ ...BASE } as any} hint="" />);
     expect(html).not.toContain("rec-hint");
+  });
+});
+
+// Dua tombol di kartu feed (permintaan pemilik 28 Okt 2026): "Rincian" untuk
+// membaca/mengisi keputusan, "Persetujuan" langsung membuka panel persetujuan.
+// Ajakan teks hilang. Jejak agen BUKAN tombol kartu — ia tautan tenang di kepala
+// popup detail (lihat tests/decision-drawer.test.tsx).
+describe("RecommendationCard — dua tombol buka", () => {
+  const html = renderToStaticMarkup(
+    <RecommendationCard
+      decision={{ ...BASE } as any}
+      onBuka={() => {}}
+    />
+  );
+
+  it("mengganti ajakan teks dengan SATU tombol Tinjau", () => {
+    expect(html).not.toContain("rec-hint");
+    expect(html).not.toContain("Klik untuk rincian");
+    expect(html).toContain("rec-act");
+    expect(html).toContain(">Tinjau<");
+    // Permintaan pemilik 28 Okt 2026: tombol "Rincian" dan "Persetujuan"
+    // digabung jadi satu — popup yang dibuka sudah memuat keduanya.
+    expect(html).not.toContain(">Rincian<");
+    expect(html).not.toContain(">Persetujuan<");
+    // Jejak agen tidak lagi ditawarkan sebagai tombol kartu.
+    expect(html).not.toContain(">Jejak agen<");
+  });
+
+  it("menandai tombol Tinjau sebagai aksi utama", () => {
+    expect(html).toContain("rec-act-btn rec-act-btn--utama");
+  });
+
+  it("hanya merender satu tombol di area aksi", () => {
+    const area = html.slice(html.indexOf("rec-act"));
+    expect(area.split("<button").length - 1).toBe(1);
+  });
+
+  it("memberi nama aksesibel yang menyebut kartunya", () => {
+    expect(html).toContain('aria-label="Tinjau: ');
+  });
+
+  it("tidak menyembunyikan tombol dari pembaca layar (bukan hiasan)", () => {
+    // Ajakan lama memakai aria-hidden karena hanya dekorasi; tombol tidak boleh.
+    const potongan = html.slice(html.indexOf("rec-act"));
+    expect(potongan).not.toContain('aria-hidden="true"');
+  });
+
+  it("tampilPersetujuan={false}: tetap satu tombol, dibuka di rincian", () => {
+    // Peran pemantau dan keputusan yang sudah selesai tidak boleh ditawari
+    // tindakan yang pasti ditolak server (dok 02 §7.5) — tetapi tombolnya tetap
+    // satu; yang berbeda hanya tampilan awal popup.
+    const tanpa = renderToStaticMarkup(
+      <RecommendationCard
+        decision={{ ...BASE } as any}
+        onBuka={() => {}}
+        tampilPersetujuan={false}
+      />
+    );
+    expect(tanpa).toContain(">Tinjau<");
+    expect(tanpa).not.toContain(">Persetujuan<");
+    const area = tanpa.slice(tanpa.indexOf("rec-act"));
+    expect(area.split("<button").length - 1).toBe(1);
   });
 });

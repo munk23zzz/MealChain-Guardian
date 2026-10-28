@@ -25,6 +25,9 @@ import {
   triggerSafetyDisruption,
 } from "../lib/api";
 import { useBalanceMap } from "../lib/hooks/useBalanceMap";
+// Dokumen 03 §6 (28 Okt 2026): Location Network + pop-up pasokan & permintaan.
+import { useSupplyDemand } from "../lib/hooks/useSupplyDemand";
+import { sortBySeverity } from "../lib/location-network";
 import { useDecisionDetail } from "../lib/hooks/useDecisionDetail";
 import { readDecisionLink, withDecisionLink } from "../lib/decision-link";
 import { withDetailCost } from "../lib/decision-economics";
@@ -64,6 +67,14 @@ import {
 } from "../lib/hooks/useDecisions";
 import { useToday } from "../lib/hooks/useToday";
 import { errorMessage, MAP_TRUCK_POLL_MS } from "../lib/query";
+import { useSupervisorHealth } from "../lib/hooks/useSupervisorHealth";
+import {
+  commodityOptions,
+  filterDecisions,
+  tableSummary,
+  verificationCounts,
+  type VerificationKey,
+} from "../lib/decision-table";
 import {
   FEED_WINDOWS,
   FEED_WINDOW_DEFAULT,
@@ -84,9 +95,9 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { formatDateTime } from "../lib/datetime";
 import SettingsPanel from "../components/SettingsPanel";
+import LocationNetworkBoard from "../components/LocationNetworkBoard";
 import Pager from "../components/Pager";
 import { paginate } from "../lib/pagination";
-import PurchaseOrderList from "../components/PurchaseOrderList";
 import TopBar from "../components/TopBar";
 import {
   ALL_LOCATIONS,
@@ -106,33 +117,44 @@ import {
   type NavId,
 } from "../components/NavIcon";
 import SideNav from "../components/SideNav";
-import { StatusLocationList } from "../components/SupplyMap";
+import PriceMonitor from "../components/PriceMonitor";
 import RecommendationCard, { DECISION_TYPE_LABELS } from "../components/RecommendationCard";
+// Satu sumber aturan peran/status: kartu feed tidak boleh menebak sendiri siapa
+// yang boleh menyetujui (daftar peran duplikat = dua kebenaran yang menyimpang).
+import { visibleActions } from "../components/DecisionActions";
+import AgentActivityPanel from "../components/AgentActivityPanel";
+import AgentRoster from "../components/AgentRoster";
+import AgentRunSummary from "../components/AgentRunSummary";
+import IntegrityPanel from "../components/IntegrityPanel";
+import ModuleSearch from "../components/ModuleSearch";
+import PeriodPicker from "../components/PeriodPicker";
+import SupervisorAskPanel from "../components/SupervisorAskPanel";
+import SupervisorStatusLine from "../components/SupervisorStatusLine";
 import AgentTraceViewer from "../components/AgentTraceViewer";
-import AgentSwarmPanel from "../components/AgentSwarmPanel";
 import DecisionPicker from "../components/DecisionPicker";
 import { defaultAgentLogId } from "../lib/agent-swarm";
 import DemoControlPanel from "../components/DemoControlPanel";
 import DemoSessionBanner from "../components/DemoSessionBanner";
 import { mapHeaderSubtitle } from "../lib/overview-copy";
 import DecisionChain from "../components/DecisionChain";
-import ProviderPanel from "../components/ProviderPanel";
 import PageHeader from "../components/PageHeader";
 import SectionJump from "../components/SectionJump";
 import ProcurementToday from "../components/ProcurementToday";
 import { overviewSections } from "../lib/section-jump";
 import KpiQualityBoard from "../components/KpiQualityBoard";
 import SupplyMap from "../components/SupplyMap";
-import NodeTelemetry from "../components/NodeTelemetry";
 import TodayDashboard from "../components/TodayDashboard";
-import SupplyAdequacyChart from "../components/SupplyAdequacyChart";
-import SupplyBalanceChart from "../components/SupplyBalanceChart";
+import AdequacyColumns from "../components/AdequacyColumns";
+import SurplusRegionPanel from "../components/SurplusRegionPanel";
 import { useCommodityBalance } from "../lib/hooks/useCommodityBalance";
+import { useSurplusRegions } from "../lib/hooks/useSurplusRegions";
 import { buildAdequacyRows } from "../lib/supply-adequacy";
-import ShipmentCard from "../components/ShipmentCard";
-import { focusNote, focusPick, focusRows } from "../lib/route-focus";
 import { formatKg, snapshotNote, syncLabel } from "../lib/overview-format";
 import { pendingKpiCopy, queueQuantityLabel } from "../lib/overview-kpi";
+// Jejak kepercayaan (28 Okt 2026): empat bukti di bawah antrean keputusan —
+// logika murni di lib/trust-trail.ts (diuji di tests/trust-trail.test.ts).
+import { trustTrail } from "../lib/trust-trail";
+import TrustTrailCard from "../components/TrustTrailCard";
 // Fase 2 bento Overview: selisih hero & pangsa terhadap kebutuhan — logika
 // murni di lib/overview-bento.ts (diuji di tests/overview-bento.test.ts).
 import {
@@ -144,6 +166,9 @@ import {
 } from "../lib/overview-bento";
 import { SupplierExclusionView } from "../components/SupplierExclusionPanel";
 import DecisionEvidence from "../components/DecisionEvidence";
+import DecisionDrawer from "../components/DecisionDrawer";
+import Popup from "../components/Popup";
+import SupplyDemandPanel from "../components/SupplyDemandPanel";
 import FoodSafetyBoard from "../components/FoodSafetyBoard";
 import SurplusBoard from "../components/SurplusBoard";
 import SupplierBoard from "../components/SupplierBoard";
@@ -163,6 +188,14 @@ const APPROVER_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
 // Papan Kiriman. Semua kartu yang lolos filter tetap bisa dijangkau lewat Pager.
 const FEED_PAGE_SIZE = 10;
 
+// Antrean "Perlu keputusan" di Overview: barisnya dipadatkan (satu baris teks +
+// badge, 56 px) sehingga EMPAT keputusan teratas tetap terlihat dalam tinggi
+// separuh kartu lama — yang dipangkas tingginya, bukan jumlah yang bisa
+// dibaca. Sisa pekerjaan tetap dinyatakan apa adanya di kaki kartu
+// ("+N keputusan lain menunggu tindakan") dan seluruhnya bisa dibuka lewat tab
+// Recommendations — tidak ada keputusan yang hilang diam-diam.
+const QUEUE_SHOWN = 4;
+
 // Halaman Kualitas Agen & Pemasok menilai SAMPEL keputusan terakhir dalam
 // cakupan: jejak agen + putusan verifikator dipanggil per keputusan, jadi
 // jumlahnya dibatasi — angkanya ditulis apa adanya di halaman, bukan
@@ -175,6 +208,19 @@ const SURPLUS_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
 // tanpa karangan — agen tanpa langkah model tampil "tidak tersedia".
 // CATATAN: baris di bawah membandingkan verdict SERVER ("UNAVAILABLE") — itu
 // nilai kontrak, bukan label layar. Jangan disamakan dengan teks tampilan.
+/**
+ * Berapa langkah trace yang benar-benar berasal dari MODEL (bukan tool).
+ * Dipakai AgentRunSummary untuk membedakan "trace ada tapi tanpa langkah model"
+ * dari "trace ada dan model ikut menjawab" — dua keadaan yang berbeda.
+ */
+function modelStepCount(steps: any[]): number {
+  return (steps ?? []).filter(
+    (s) =>
+      ["VERIFY", "SUPERVISE"].includes(s?.step_name) &&
+      Boolean(s?.output_summary?.provider || s?.agent_name)
+  ).length;
+}
+
 function providersFromTraces(steps: any[]): Record<string, any> {
   const out: Record<string, any> = {};
   for (const s of steps ?? []) {
@@ -269,9 +315,21 @@ export default function Home() {
   // 7 hari / 1 bulan. Dideklarasikan di sini karena query feed di bawah sudah
   // memakainya; angkanya tetap dari backend (`GET /decisions?window=…`).
   const [feedWindow, setFeedWindow] = useState<FeedWindowKey>(FEED_WINDOW_DEFAULT);
+  // Tab Agent Log (dokumen `06-agent-log.md`, 28 Okt 2026): pencarian + periode
+  // milik modul itu sendiri. Dipisah dari feed rekomendasi supaya mempersempit
+  // satu tab tidak diam-diam mengubah tab lain.
+  const [logWindow, setLogWindow] = useState<FeedWindowKey>(FEED_WINDOW_DEFAULT);
+  const [logQuery, setLogQuery] = useState("");
+  const [logCommodity, setLogCommodity] = useState<string | null>(null);
+  const [logVerification, setLogVerification] = useState<VerificationKey>("all");
+  const [logPage, setLogPage] = useState(1);
   const [mapCommodity, setMapCommodity] = useState("telur");
   // Lokasi aktif yang disorot di peta, dipilih dari dropdown top bar.
   const [activeLocation, setActiveLocation] = useState<string | null>(null);
+  // Dokumen 03 §3 (28 Okt 2026) — modul gabungan "Location Network / Pasokan &
+  // Kebutuhan". `networkSelected` adalah lokasi yang barisnya sedang terbuka —
+  // satu state, karena "yang dipilih" dan "yang dibaca" hal yang sama di sini.
+  const [networkSelected, setNetworkSelected] = useState<string | null>(null);
   // Kiriman yang sedang disorot di peta (Arah C riset 16 Okt 2026). `null` =
   // semua kiriman; satu nilai ini dipakai BERSAMA oleh pemilih di peta dan kartu
   // kiriman di bawahnya, jadi angka di kartu dan garis di peta tidak bisa beda
@@ -318,6 +376,29 @@ export default function Home() {
   // ringkasan jaringan), bukan hanya halaman Overview. Stempel "terakhir
   // diperbarui" datang dari React Query, bukan state kedua yang bisa menyimpang.
   const mapQuery = useBalanceMap(token, identityScope, mapCommodity);
+  // Rincian lokasi (pasokan/kebutuhan/batch/perkiraan) dimuat untuk baris yang
+  // sedang terbuka. `null` = tidak ada baris terbuka → hook tidak memanggil apa pun.
+  const supplyDemand = useSupplyDemand(
+    token,
+    networkSelected ? { location: networkSelected, commodity: mapCommodity } : null
+  );
+  // Lokasi pertama yang dipilih = yang paling kekurangan, bukan yang kebetulan
+  // pertama di daftar server. Hanya SEKALI per kunjungan tab: tanpa penanda ini,
+  // menutup baris (selected → null) langsung memicu pemilihan ulang dan baris
+  // tidak pernah bisa ditutup (terukur di browser).
+  const autoPilihRef = useRef(false);
+  useEffect(() => {
+    if (tab !== "location-network") {
+      autoPilihRef.current = false;
+      return;
+    }
+    if (autoPilihRef.current || networkSelected) return;
+    const terparah = sortBySeverity(mapQuery.data?.locations ?? [])[0];
+    if (terparah) {
+      autoPilihRef.current = true;
+      setNetworkSelected(terparah.location);
+    }
+  }, [tab, networkSelected, mapQuery.data?.locations]);
   // Grafik kecukupan membandingkan EMPAT komoditas sekaligus untuk SATU
   // lokasi. SPPG/gizi selalu memakainya; BGN Monitor memakainya begitu ia
   // memilih lokasi tertentu (bukan "__all__"). Saat BGN masih nasional,
@@ -334,6 +415,34 @@ export default function Home() {
     identityScope,
     COMMODITIES,
     pakaiGrafikKecukupan
+  );
+  // Panel "Surplus wilayah lain" (28 Okt 2026) — separuh kanan baris grafik
+  // kecukupan. Sumber angkanya SERVER (`/surplus/regions`), karena peta akun
+  // SPPG hanya memuat lokasinya sendiri: "daerah lain" tidak ada di data klien.
+  // - SPPG/gizi & BGN yang memilih lokasi: empat komoditas, lokasi sendiri
+  //   dibuang (`exclude`) supaya angka = surplus daerah LAIN.
+  // - BGN nasional: satu komoditas yang sedang dipilih di peta, seluruh
+  //   jaringan (tanpa exclude) — "daerah lain" tidak punya arti di skala itu.
+  const bgnNasional =
+    role === "bgn_monitor" && (!activeLocation || activeLocation === ALL_LOCATIONS);
+  const komoditasSurplus = useMemo(() => {
+    if (pakaiGrafikKecukupan) return [...COMMODITIES];
+    // `mapQuery.data` langsung, bukan `mapData`: const itu dideklarasikan
+    // SETELAH blok ini (urutan file), dan memakainya di sini adalah TDZ.
+    const satu = String(mapQuery.data?.commodity ?? mapCommodity ?? "");
+    return satu ? [satu] : [];
+  }, [pakaiGrafikKecukupan, mapQuery.data?.commodity, mapCommodity]);
+  const lokasiPanel = bgnNasional
+    ? null
+    : activeLocation && activeLocation !== ALL_LOCATIONS
+      ? activeLocation
+      : me?.location_name?.trim() || null;
+  const surplusRegions = useSurplusRegions(
+    token,
+    identityScope,
+    komoditasSurplus,
+    lokasiPanel,
+    tab === "overview"
   );
   // Purchase order mock SAP (W-5): sisi baca yang selama ini tidak ada. Kunci
   // query memakai `identityScope` karena isinya berbeda per peran.
@@ -356,10 +465,70 @@ export default function Home() {
     () => feedWindowQuery.data?.items ?? [],
     [feedWindowQuery.data]
   );
+  // Feed KHUSUS tab Agent Log: periode sendiri + hanya jalan saat tab dibuka.
+  const agentLogQuery = useDecisions(
+    token,
+    identityScope,
+    logWindow,
+    tab === "agent-log"
+  );
+  const agentLogRows = useMemo(
+    () => agentLogQuery.data?.items ?? [],
+    [agentLogQuery.data]
+  );
+  const agentLogFiltered = useMemo(
+    () =>
+      filterDecisions(agentLogRows, {
+        query: logQuery,
+        commodity: logCommodity,
+        verification: logVerification,
+      }),
+    [agentLogRows, logQuery, logCommodity, logVerification]
+  );
+  const agentLogCommodities = useMemo(
+    () => commodityOptions(agentLogRows),
+    [agentLogRows]
+  );
+  const agentLogCounts = useMemo(
+    () => verificationCounts(agentLogRows),
+    [agentLogRows]
+  );
+  const agentLogSummary = tableSummary({
+    shown: agentLogFiltered.length,
+    total: agentLogRows.length,
+    query: logQuery,
+    commodity: logCommodity,
+    verification: logVerification,
+  });
+  const supervisorHealth = useSupervisorHealth(token, tab === "agent-log");
   // Dibungkus useMemo: literal `[]` baru setiap render akan membuat useMemo
   // turunan (sampel → run/pemasok) dihitung ulang tanpa perlu.
   const decisions = useMemo(() => decisionsQuery.data?.items ?? [], [decisionsQuery.data]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // 28 Okt 2026 (permintaan pemilik): "detail & jejak agen" dibuka sebagai POPUP
+  // di atas halaman yang sedang dipakai, bukan dengan berpindah tab. Alasannya
+  // praktis: pengguna yang mengklik kartu ke-7 dari feed kehilangan posisi
+  // scroll & filter, lalu harus kembali sendiri. Menutup popup mengembalikan
+  // fokus ke kartu yang diklik (ref pemicu, lihat `Popup`).
+  const [popupKeputusanId, setPopupKeputusanId] = useState<string | null>(null);
+  const [popupTampilan, setPopupTampilan] = useState<"rincian" | "persetujuan">("rincian");
+  const popupTriggerRef = useRef<HTMLElement | null>(null);
+  // Tampilan awal popup dipilih DI KARTU ("Rincian" / "Persetujuan"), bukan
+  // dengan tab di dalam popup — permintaan pemilik 28 Okt 2026. Jejak agen
+  // bukan tombol kartu lagi; ia tautan tenang di kepala popup.
+  const bukaPopupKeputusan = useCallback(
+    (
+      decisionId: string,
+      pemicu: HTMLElement | null,
+      tampilan: "rincian" | "persetujuan" = "rincian"
+    ) => {
+      popupTriggerRef.current = pemicu;
+      setPopupTampilan(tampilan);
+      setSelectedId(decisionId);
+      setPopupKeputusanId(decisionId);
+    },
+    []
+  );
   // ── Deep link `?keputusan=<id>` (Langkah 3) ──────────────────────────────
   // `linkSiap` memastikan pembacaan URL selesai SEBELUM efek penulis berjalan,
   // supaya param yang baru dibuka tidak langsung dihapus pada commit pertama.
@@ -407,6 +576,18 @@ export default function Home() {
   // Detail keputusan terpilih (jejak, rantai, ringkasan kanonik, konteks
   // pemasok) lewat React Query — lihat lib/hooks/useDecisionDetail.ts.
   const detail = useDecisionDetail(token, selectedId, identityScope);
+  // Keputusan yang dipilih ternyata sudah tidak ada (404). Jangan biarkan
+  // `selectedId` + `?keputusan=` menahan id mati: lepaskan pilihan supaya
+  // efek tautan dalam menulis ulang URL dan pemilihan default mengambil alih.
+  const [pesanDiganti, setPesanDiganti] = useState<string | null>(null);
+  useEffect(() => {
+    if (!detail.gone || !selectedId) return;
+    setPesanDiganti(
+      `Keputusan #${String(selectedId).slice(0, 8)} sudah diganti oleh Muat Demo — ` +
+        "pilih keputusan terbaru di kanan atas."
+    );
+    setSelectedId(null);
+  }, [detail.gone, selectedId]);
   const traces = detail.traces;
   const chain = detail.chain;
   // S4-04: read model kanonik dari /approval-summary — sumber tunggal modal.
@@ -503,10 +684,6 @@ export default function Home() {
     // backend saat tab peta tidak dibuka (query-nya memang tidak aktif).
     MAP_TRUCK_POLL_MS
   );
-  // Sorotan peta (Arah C): baris yang dipilih + jumlah seluruh kiriman tampilan.
-  // Keduanya dari data yang SAMA dengan garis di peta (mapSupplierRoutesQuery).
-  const focusRow = focusPick(mapSupplierRoutesQuery.data, focusedRoute);
-  const focusTotal = focusRows(mapSupplierRoutesQuery.data).length;
   // Tabel Pemasok menampilkan SEMUA pemasok (tidak disaring komoditas), jadi
   // jalurnya juga daftar penuh — kalau disaring komoditas, baris pemasok lain
   // akan terbaca "tidak punya jalur" padahal jalurnya hanya tidak diminta.
@@ -931,13 +1108,27 @@ export default function Home() {
   // `proposed` adalah pekerjaan Kepala SPPG (ia yang menekan "Ajukan"), jadi
   // tanpa peran angka di sini 16 sementara lonceng menulis 24 — dua angka
   // untuk hal yang sama (temuan audit 19 Okt 2026).
-  const notif = notifList(decisions, 4, role);
+  //
+  // 28 Okt 2026 (permintaan Roy): kartu antrean DIPANGKAS SETENGAH — dua baris,
+  // bukan empat — supaya kolom kanan tidak lagi dikuasai satu daftar; sisa
+  // tingginya dipakai kartu "Jejak kepercayaan". Batas ini juga dipakai tile
+  // "Rekomendasi menunggu" (`pendingKpiCopy`) supaya kalimat "+N lain menunggu
+  // tindakan" di tile dan di kaki antrean tidak pernah berbeda angka.
+  const notif = notifList(decisions, QUEUE_SHOWN, role);
   const kpiAntrean = pendingKpiCopy({
     total: notif.total,
     monitored: decisions.length,
-    limit: 4,
+    limit: QUEUE_SHOWN,
     loading: decisionsQuery.isLoading,
     expired: notif.expired,
+  });
+  // Empat bukti di kartu "Jejak kepercayaan": ledger, batch, eksekusi, node.
+  // Dihitung di lib/trust-trail (murni, diuji) — halaman tidak menghitung ulang.
+  const trust = trustTrail({
+    ledger,
+    batches,
+    decisions,
+    locations: mapData?.locations ?? [],
   });
   const roleLabel = ROLE_LABEL[role ?? ""] ?? (role ?? "user");
 
@@ -996,6 +1187,19 @@ export default function Home() {
   }[] = [
     { id: "today", label: "Hari Ini" },
     { id: "overview", label: "Overview" },
+    // Dokumen 03 §3/§5 (28 Okt 2026): halaman gabungan jaringan + pasokan &
+    // permintaan satu lokasi. Untuk nutritionist — yang menurut §5 tidak
+    // memakai pandangan jaringan — nama tabnya menyebut pekerjaannya sendiri,
+    // bukan "Location Network": ia membuka halaman ini untuk membaca kecukupan
+    // gizi satu lokasi, dan tombol lokasinya tetap ada di dalamnya.
+    {
+      id: "location-network",
+      label: role === "sppg_nutritionist" ? "Pasokan & Kebutuhan" : "Location Network",
+      title:
+        role === "sppg_nutritionist"
+          ? "Pasokan, kebutuhan, dan batch satu lokasi"
+          : "Siapa kekurangan, siapa berlebih, dan dari mana catatannya",
+    },
     {
       // Angka = jumlah yang PERLU DI-APPROVE, bukan seluruh keputusan yang
       // pernah dibuat (dulu 126 dan sulit ditafsirkan).
@@ -1015,7 +1219,6 @@ export default function Home() {
     },
     { id: "evidence", label: "Decision & Evidence" },
     { id: "safety", label: "Keamanan Pangan" },
-    { id: "surplus", label: "Surplus & Limbah", roles: Array.from(SURPLUS_ROLES) },
     { id: "suppliers", label: "Pemasok" },
     { id: "agent-log", label: "Agent Log" },
     { id: "kpi-kualitas", label: "KPI & Kualitas Agen" },
@@ -1243,7 +1446,7 @@ export default function Home() {
                 dari lib/section-jump (bukan tautan yang ditulis ulang di sini),
                 dan tujuan kiriman hanya muncul kalau kartunya memang dirender. */}
             <SectionJump
-              items={overviewSections({ isApprover, hasShipments: focusTotal > 0 })}
+              items={overviewSections({ isApprover })}
               ariaLabel="Bagian halaman Overview"
             />
 
@@ -1457,13 +1660,11 @@ export default function Home() {
                           <button
                             type="button"
                             className="queue-item-action"
-                            onClick={() => {
+                            onClick={(event) => {
                               if (item.decision_id) {
-                                setSelectedId(item.decision_id);
-                                setTab("evidence");
-                                requestAnimationFrame(() =>
-                                  window.scrollTo({ top: 0, left: 0 })
-                                );
+                                // 28 Okt 2026: detail & jejak agen jadi popup —
+                                // antrean di bawahnya tidak hilang saat dibuka.
+                                bukaPopupKeputusan(item.decision_id, event.currentTarget);
                               } else {
                                 setTab("recommendations");
                               }
@@ -1506,106 +1707,91 @@ export default function Home() {
                     </button>
                   </div>
                 </section>
+                {/* Bukti di bawah antrean (28 Okt 2026): antrean hanya
+                    bercerita tentang pekerjaan yang BELUM selesai; kartu ini
+                    menjawab "kenapa angka di halaman ini bisa dipercaya". */}
+                <TrustTrailCard metrics={trust} />
               </div>
             </section>
 
-            {/* Grafik kecukupan: peran SPPG/gizi melihat EMPAT komoditas
-                sekaligus untuk lokasi sendiri (bukan satu komoditas yang
-                kebetulan sedang dipilih di peta). Diletakkan TEPAT di bawah
-                peta + antrean: ini lapisan "scan" sebelum detail kiriman.
-                BGN Monitor memakai SupplyBalanceChart saat cakupan nasional,
-                lalu beralih ke grafik empat komoditas yang sama begitu ia
-                memilih satu lokasi. */}
-            <div className="jump-target" id="ov-kecukupan">
-            {pakaiGrafikKecukupan ? (
-              <SupplyAdequacyChart
-                rows={adequacyRows}
+            {/* Grafik kecukupan + surplus wilayah lain (28 Okt 2026): DUA SISI
+                satu neraca dalam satu baris. Kiri = apakah lokasi ini cukup
+                (empat komoditas; BGN nasional memakai grafik lintas lokasi).
+                Kanan = di WILAYAH mana surplusnya berada. Kolom kanan wajib
+                dari server: peta akun SPPG hanya memuat lokasinya sendiri
+                (Ruling 2026-10-14), jadi "daerah lain" tidak ada di data klien.
+                Diletakkan TEPAT di bawah peta + antrean: ini lapisan "scan"
+                sebelum detail kiriman. */}
+            <div className="jump-target ov-pasokan-grid" id="ov-kecukupan">
+              {/* Bentuk kartu: BAR VERTIKAL ringkas (28 Okt 2026, permintaan
+                  pemilik). SupplyAdequacyChart & SupplyBalanceChart TETAP ada di
+                  repo dan tetap diuji sendiri; yang dilepas hanya pemasangan di
+                  slot ini — sama seperti ShipmentCard saat Monitor harga masuk. */}
+              <AdequacyColumns
+                mode={pakaiGrafikKecukupan ? "commodity" : "location"}
+                rows={pakaiGrafikKecukupan ? adequacyRows : undefined}
+                locations={pakaiGrafikKecukupan ? undefined : mapData?.locations ?? []}
+                commodity={mapData?.commodity ?? mapCommodity}
                 role={role}
                 locationName={activeLocation ?? me?.location_name ?? "SPPG"}
-                updatedAt={commodityBalance.updatedAt}
-                sourceNote={snapshotNote(mapData?.locations ?? [])}
+                updatedAt={
+                  pakaiGrafikKecukupan ? commodityBalance.updatedAt : mapUpdatedAt
+                }
+                sourceNote={
+                  pakaiGrafikKecukupan ? snapshotNote(mapData?.locations ?? []) : null
+                }
                 now={now}
                 loading={
-                  !grafikKecukupanError &&
-                  (commodityBalance.isLoading || batches === null)
+                  pakaiGrafikKecukupan
+                    ? !grafikKecukupanError &&
+                      (commodityBalance.isLoading || batches === null)
+                    : !mapData && !mapError
                 }
-                error={grafikKecukupanError}
-                onRetry={() => {
-                  void commodityBalance.refetch();
-                  void todayQuery.refetch();
-                }}
-                onSelect={(commodity) => {
-                  setMapCommodity(commodity);
-                  // "auto", bukan "smooth": gulir halus membuat kontainer peta
-                  // berubah ukuran terus-menerus dan MapLibre melempar error
-                  // (terbukti 20 Okt 2026). Lompat sekali = peta tetap hidup.
-                  document
-                    .getElementById("overview-map")
-                    ?.scrollIntoView({ behavior: "auto", block: "center" });
-                }}
+                error={pakaiGrafikKecukupan ? grafikKecukupanError : mapError}
+                onRetry={
+                  pakaiGrafikKecukupan
+                    ? () => {
+                        void commodityBalance.refetch();
+                        void todayQuery.refetch();
+                      }
+                    : () => void mapQuery.refetch()
+                }
+                onSelect={
+                  pakaiGrafikKecukupan
+                    ? (commodity) => {
+                        setMapCommodity(commodity);
+                        // "auto", bukan "smooth": gulir halus membuat kontainer peta
+                        // berubah ukuran terus-menerus dan MapLibre melempar error
+                        // (terbukti 20 Okt 2026). Lompat sekali = peta tetap hidup.
+                        document
+                          .getElementById("overview-map")
+                          ?.scrollIntoView({ behavior: "auto", block: "center" });
+                      }
+                    : undefined
+                }
               />
-            ) : (
-              <SupplyBalanceChart
-                locations={mapData?.locations ?? []}
-                commodity={mapData?.commodity ?? mapCommodity}
-                updatedAt={mapUpdatedAt}
-                now={now}
-                loading={!mapData && !mapError}
-                error={mapError}
-                onRetry={() => void mapQuery.refetch()}
+              <SurplusRegionPanel
+                payload={surplusRegions.data}
+                commodities={komoditasSurplus}
+                locationName={
+                  bgnNasional ? "seluruh jaringan" : lokasiPanel ?? "SPPG"
+                }
+                sourceNote={snapshotNote(mapData?.locations ?? [])}
+                updatedAt={surplusRegions.updatedAt}
+                loading={surplusRegions.loading && !surplusRegions.error}
+                error={surplusRegions.error}
+                onRetry={() => void surplusRegions.refetch()}
               />
-            )}
             </div>
 
-            {/* Informasi pengiriman (Arah A riset 16 Okt 2026): satu blok per
-                kiriman — pil status, stepper tahap, angka kunci, kalimat
-                keputusan. Datanya kiriman yang sama dengan garis di peta
-                (disaring komoditas tampilan), jadi angka di kartu dan garis di
-                peta tidak bisa berbeda cerita. */}
-            <div className="jump-target" id="ov-kiriman">
-            <ShipmentCard
-              routes={mapSupplierRoutesQuery.data}
-              hanya={focusRow ? (row) => row.id === focusRow.id : undefined}
-              note={`${focusNote(focusRow, focusTotal)} Mengikuti komoditas yang sedang ditampilkan di peta.`}
-            />
-            </div>
-
-            {/* Dua kartu ringkas BERDAMPINGAN (revisi 16 Okt: "shape terlalu
-                besar/kosong"). Sebelumnya Telemetri Node (237 px) dan daftar
-                Status Lokasi (203 px) masing-masing selebar halaman padahal
-                isinya hanya beberapa baris teks — total 440 px tinggi demi
-                ~10 baris. Di >=1100px keduanya berbagi satu baris; di bawah itu
-                tetap bertumpuk (lihat `.overview-pair`). */}
-            <div className="overview-pair jump-target" id="ov-telemetri">
-              {/* Telemetri Node di bawah baris peta */}
-              <section aria-label="Telemetri node">
-                <NodeTelemetry
-                  locations={mapData?.locations ?? []}
-                  activeLocation={activeLocation}
-                  loading={!mapData && !mapError}
-                />
-              </section>
-
-              {/* Status lokasi (tata letak acuan): daftar lokasi + statusnya. */}
-              <section
-                className="map-card card status-location-list"
-                aria-label="Status lokasi"
-                aria-busy={!mapData && !mapError}
-              >
-                {mapData ? (
-                  <StatusLocationList locations={mapData.locations ?? []} />
-                ) : (
-                  <>
-                    <div className="map-section-head">
-                      <h3>Status Lokasi</h3>
-                    </div>
-                    <p className="sr-only" aria-live="polite">
-                      Memuat status lokasi…
-                    </p>
-                    <div className="skeleton skeleton-map" aria-hidden="true" />
-                  </>
-                )}
-              </section>
+            {/* Monitor harga komoditas (28 Okt 2026) — menggantikan kartu
+                "Informasi pengiriman" (ShipmentCard), "Telemetri Node", dan
+                daftar "Status Lokasi" di tab ini. Ketiga komponennya TETAP ada
+                di repo dan tetap diuji sendiri; yang dilepas hanya pemasangan
+                di Overview. Isi kiriman masih terbaca di tab Pemasok
+                (ShipmentBoard) dan jalur persetujuan di Decision & Evidence. */}
+            <div className="jump-target" id="ov-harga">
+              <PriceMonitor token={token} activeLocation={activeLocation} />
             </div>
           </div>
         )}
@@ -1843,23 +2029,30 @@ export default function Home() {
                     </div>
                   ) : (
                     <div className="feed">
-                      {feedCards.map((d) => (
-                        <div key={d.decision_id}>
-                          <button
-                            type="button"
-                            className="link-button"
-                            onClick={() => {
-                              setSelectedId(String(d.decision_id));
-                              setTab("evidence");
-                            }}
-                          >
+                      {feedCards.map((d) => {
+                        // Tombol "Persetujuan" hanya untuk yang benar-benar
+                        // boleh menyetujui — peran pemantau dan keputusan yang
+                        // sudah selesai tidak ditawari tombol yang akan ditolak.
+                        const aksi = visibleActions(role ?? "", String(d.status ?? ""));
+                        const bolehSetujui = !aksi.readOnly && aksi.approve;
+                        return (
+                          <div key={d.decision_id} className="rec-baris">
+                            {/* Satu tombol "Tinjau" (permintaan pemilik 28 Okt
+                                2026): popup yang dibuka memuat rincian sekaligus
+                                panel persetujuan, jadi tidak perlu dua tombol.
+                                Pembungkusnya <div> karena <button> tidak boleh
+                                bersarang di dalam <button>. */}
                             <RecommendationCard
                               decision={d}
                               mockSourced={d.status === "executed"}
+                              onBuka={(tampilan, pemicu) =>
+                                bukaPopupKeputusan(String(d.decision_id), pemicu, tampilan)
+                              }
+                              tampilPersetujuan={bolehSetujui}
                             />
-                          </button>
-                        </div>
-                      ))}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -1882,16 +2075,24 @@ export default function Home() {
           {/* Audit data 26 Okt 2026: kegagalan sebagian dulu ditelan
               `catch(() => null)` sehingga panel kosong tak bisa dibedakan dari
               "memang tidak ada data". Sekarang bagian yang gagal disebut. */}
-          {detail.errors.length > 0 ? (
+          {pesanDiganti ? (
+            <p className="board-alert" role="status">
+              {pesanDiganti}
+            </p>
+          ) : null}
+          {detail.errors.length > 0 && !detail.gone ? (
             <p className="board-alert" role="status">
               Sebagian bukti gagal dibaca: {detail.errors.join(", ")}. Panel di bawah hanya
               menampilkan bagian yang berhasil dimuat.
             </p>
           ) : null}
           <DecisionEvidence
+            purchaseOrders={purchaseOrders.data}
+            traces={detail.loading ? null : traces}
             decisions={decisions}
             selected={selected}
             selectedId={selectedId}
+            diganti={detail.gone}
             loading={decisionsQuery.isPending}
             onSelect={(decisionId) => setSelectedId(decisionId)}
             chain={selectedId ? chain : []}
@@ -1907,23 +2108,6 @@ export default function Home() {
             onOpenRecommendations={() => setTab("recommendations")}
             onOpenTraces={() => setTab("agent-log")}
           />
-          {/* W-5: purchase order yang benar-benar terbit setelah eksekusi.
-              Dulu hanya toast sesaat, sehingga klaim "PO terbit di SAP" tidak
-              bisa ditunjukkan. Panel ini membaca tabel mock SAP dan menyebut
-              sumbernya apa adanya. 19 Okt 2026: `decisionId` diteruskan supaya
-              baris milik keputusan yang sedang dibuka ditandai "keputusan ini" —
-              tanpa itu, panel di bawah detail keputusan terbaca seolah seluruh
-              daftar milik keputusan tersebut. */}
-          <PurchaseOrderList
-            data={purchaseOrders.data}
-            summary={purchaseOrders.summary}
-            loading={purchaseOrders.isFetching}
-            error={purchaseOrders.error}
-            decisionId={selectedId}
-            token={token}
-            onOpenDecision={bukaKeputusanDariPO}
-            onRetry={purchaseOrders.refetch}
-          />
           </>
         )}
 
@@ -1932,6 +2116,58 @@ export default function Home() {
             ini — Keamanan Pangan (/compliance), Surplus & Limbah (/surplus),
             Pemasok (/suppliers), Kualitas Agen (/quality) — disesuaikan ke
             endpoint yang benar-benar ada. Angka kosong ditulis "—". */}
+        {tab === "location-network" && (
+          <>
+          <LocationNetworkBoard
+            locations={mapData?.locations ?? []}
+            commodity={mapData?.commodity ?? mapCommodity}
+            loading={!mapData && !mapError}
+            error={mapError}
+            onRetry={() => void mapQuery.refetch()}
+            selected={networkSelected}
+            onSelect={setNetworkSelected}
+            detail={supplyDemand.detail}
+            detailLoading={supplyDemand.loading}
+            detailError={supplyDemand.error}
+            snapshot={mapSnapshotNote}
+            commodities={COMMODITIES}
+            onCommodityChange={setMapCommodity}
+            heading={role === "sppg_nutritionist" ? "Pasokan & Kebutuhan" : "Location Network"}
+            description={
+              role === "sppg_nutritionist"
+                ? "Pasokan, kebutuhan, selisih, perkiraan, dan batch satu lokasi."
+                : "Siapa kekurangan, siapa berlebih, dan isi catatan tiap lokasi."
+            }
+          />
+          {/* Surplus & Limbah dilebur ke halaman ini (arah pemilik 29 Okt 2026):
+              "siapa kekurangan, siapa berlebih, apa yang dialihkan, apa yang
+              terbuang" adalah satu pertanyaan, jadi satu halaman — bukan dua tab
+              yang menampilkan angka neraca yang sama. Dinamai "Bagian" supaya
+              pembaca tahu ini modul yang dulu punya tab sendiri. */}
+          {role && SURPLUS_ROLES.has(role) ? (
+            <section className="merged-surplus" aria-label="Surplus & Limbah">
+              <SurplusBoard
+                locations={mapData?.locations ?? null}
+                commodity={mapData?.commodity ?? mapCommodity}
+                commodities={COMMODITIES}
+                onChangeCommodity={setMapCommodity}
+                loading={!mapData && !mapError}
+                error={mapError}
+                onRetry={() => void mapQuery.refetch()}
+                onOpenLocation={(location) => {
+                  setActiveLocation(location);
+                  setTab("overview");
+                }}
+                waste={wasteQuery.data}
+                plan={planQuery.data}
+                planLoading={planQuery.loading}
+                planError={planQuery.error}
+              />
+            </section>
+          ) : null}
+          </>
+        )}
+
         {tab === "safety" && (
           <FoodSafetyBoard
             batches={batches}
@@ -1962,25 +2198,6 @@ export default function Home() {
           />
         )}
 
-        {tab === "surplus" && (
-          <SurplusBoard
-            locations={mapData?.locations ?? null}
-            commodity={mapData?.commodity ?? mapCommodity}
-            commodities={COMMODITIES}
-            onChangeCommodity={setMapCommodity}
-            loading={!mapData && !mapError}
-            error={mapError}
-            onRetry={() => void mapQuery.refetch()}
-            onOpenLocation={(location) => {
-              setActiveLocation(location);
-              setTab("overview");
-            }}
-            waste={wasteQuery.data}
-            plan={planQuery.data}
-            planLoading={planQuery.loading}
-            planError={planQuery.error}
-          />
-        )}
 
         {tab === "suppliers" && (
           <SupplierBoard
@@ -2043,7 +2260,7 @@ export default function Home() {
           <section className="agent-log-section">
             <PageHeader
               title="Agent Activity Log"
-              description="Jejak reasoning tiap langkah agen untuk satu keputusan — model, durasi, dan pesan apa adanya dari trace; tidak ada baris yang dikarang."
+              description="Pilih satu keputusan, lalu klik satu tahap untuk melihat tool dan catatannya. Keadaan jejak ditulis apa adanya dari trace."
               meta={
                 <DecisionPicker
                   id="pilih-keputusan-log"
@@ -2054,28 +2271,119 @@ export default function Home() {
                 />
               }
             />
-            {selected && (
-              <p className="section-sub">
-                Trace untuk <strong>{typeWord(selected.decision_type)}</strong> (
-                {selected.decision_id.slice(0, 8)}) — status {statusWord(selected.status)}.
-              </p>
-            )}
-            <ProviderPanel providers={providersFromTraces(traces)} />
-            <AgentSwarmPanel
-              steps={traces}
-              decisionId={selected?.decision_id ?? null}
+
+            {/* Urutan baca dokumen `06-agent-log.md` §4.3: pencarian → periode →
+                tabel keputusan → keadaan trace → strip tahap → langkah rinci →
+                konteks (agent, supervisor, status model) → integritas. Semua yang
+                bergantung pada satu keputusan berada SETELAH pemilihnya. */}
+            <ModuleSearch
+              query={logQuery}
+              onQuery={(value) => {
+                setLogQuery(value);
+                setLogPage(1);
+              }}
+              commodity={logCommodity}
+              onCommodity={(value) => {
+                setLogCommodity(value);
+                setLogPage(1);
+              }}
+              verification={logVerification}
+              onVerification={(value) => {
+                setLogVerification(value);
+                setLogPage(1);
+              }}
+              commodities={agentLogCommodities}
+              counts={agentLogCounts}
+              total={agentLogRows.length}
             />
+
+            <PeriodPicker
+              value={logWindow}
+              onChange={(value) => {
+                setLogWindow(value);
+                setLogPage(1);
+              }}
+            />
+
+            <AgentActivityPanel
+              role={role}
+              decisions={agentLogFiltered}
+              total={agentLogRows.length}
+              page={logPage}
+              onPage={setLogPage}
+              selectedId={selectedId}
+              onSelect={(decisionId) => setSelectedId(decisionId)}
+              summary={agentLogSummary}
+              steps={detail.loading ? null : traces}
+              ledger={detail.loading ? null : detail.ledger}
+              onOpenEvidence={() => setTab("evidence")}
+            />
+
+            {/* §2.9: tanya-jawab hanya untuk peran non-approver. */}
+            {role && !APPROVER_ROLES.has(role) ? (
+              <SupervisorAskPanel token={token} />
+            ) : null}
+
+            <p className="agent-log-connector">
+              Panel di atas melaporkan APA yang tercatat. Bagian berikut menampilkan
+              langkah rinci, status model, dan integritas ledger — bukan penilaian
+              benar atau salah.
+            </p>
+
+            <AgentRunSummary
+              providers={providersFromTraces(traces)}
+              traceCount={traces.length}
+              modelSteps={modelStepCount(traces)}
+            />
+
             <AgentTraceViewer
               steps={traces}
               decisionId={selected?.decision_id ?? null}
               now={now}
             />
-            {/* W-3 (2026-10-17): panel bukti integrasi dicabut dari tab ini 21 Okt
-                atas permintaan pemilik; komponennya masih ada untuk dipasang lain kali. */}
+
+            <AgentRoster />
+
+            <SupervisorStatusLine
+              health={supervisorHealth.data ?? null}
+              loading={supervisorHealth.isLoading}
+            />
+
+            {selected ? (
+              <IntegrityPanel token={token ?? ""} decisionId={selected.decision_id} />
+            ) : null}
           </section>
         )}
         </div>
       </div>
+      {/* Drawer "Detail Keputusan" (dokumen `01-detail-keputusan.md`, 28 Okt
+          2026). Satu instance untuk seluruh konsol: yang berganti hanya
+          keputusan yang dibuka, jadi panel tidak menumpuk dan kunci gulir tetap
+          satu. Ditaruh di akhir <main> supaya tidak ikut tata letak tab mana pun. */}
+
+      <DecisionDrawer
+        open={popupKeputusanId !== null}
+        onClose={() => setPopupKeputusanId(null)}
+        decision={selected}
+        summary={approvalSummary}
+        tampilanAwal={popupTampilan}
+        chain={selectedId ? chain : []}
+        traces={selectedId ? traces : []}
+        supplierContext={supplierContext}
+        role={role ?? ""}
+        token={token}
+        now={now}
+        onSupplierCreated={(decisionId) => {
+          if (token) void decisionsQuery.refetch();
+          setSelectedId(decisionId);
+        }}
+        onOpenFullPage={(decisionId) => {
+          setPopupKeputusanId(null);
+          setSelectedId(decisionId);
+          setTab("evidence");
+        }}
+        returnFocusRef={popupTriggerRef}
+      />
     </main>
   );
 }

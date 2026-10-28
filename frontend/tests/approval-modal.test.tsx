@@ -26,7 +26,7 @@ describe("ApprovalModal (friksi disengaja)", () => {
     );
     expect(html).toContain("600 kg");
     expect(html).toContain("Rp16.206.000");
-    expect(html).toContain("consistent");
+    expect(html).toContain("Konsisten");
   });
 
   it("tanpa ringkasan → menolak approval (tidak ada approve-all)", () => {

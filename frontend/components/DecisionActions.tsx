@@ -15,9 +15,10 @@
 // mengembalikan pesan galat — menu menampilkan galat itu DI DALAM popup,
 // bukan di kartu yang sudah tertutup popup.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   approveAction,
+  approvePurchaseOrder,
   executeAction,
   proposeAction,
   reproposeAction,
@@ -26,7 +27,9 @@ import {
 import ApprovalMenu from "./ApprovalMenu";
 import GovernanceStatus from "./GovernanceStatus";
 import { governanceView } from "../lib/governance";
-import { humanizeBlocker } from "../lib/bahasa";
+import { langkahPersetujuan, peranSudahSetuju, poDari } from "../lib/approval-panel";
+import { humanizeBlocker, statusLabel } from "../lib/bahasa";
+import { roleLabel } from "../lib/settings";
 import Popup from "./Popup";
 
 const APPROVER_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
@@ -89,38 +92,111 @@ export default function DecisionActions({
   status,
   token,
   summary,
+  tampil = "dialog",
+  terbukaAwal = false,
 }: {
   decisionId: string;
   role: string;
   status: string;
   token: string | null;
   summary?: any;
+  /**
+   * `dialog` (bawaan): konfirmasi dibuka sebagai jendela sendiri — dipakai di
+   * halaman dan panel approval. `panel`: konfirmasi dirender DI DALAM induknya,
+   * dipakai saat komponen ini hidup di dalam popup detail keputusan (permintaan
+   * pemilik: "tidak ada popup dalam popup"). Jalur mutasinya tetap satu.
+   */
+  tampil?: "dialog" | "panel";
+  /** Panel konfirmasi langsung terbuka (dipakai tombol "Persetujuan" di kartu). */
+  terbukaAwal?: boolean;
 }) {
-  const [opened, setOpened] = useState(false);
+  const [opened, setOpened] = useState(terbukaAwal);
   const [message, setMessage] = useState<string | null>(null);
+  // Prop `terbukaAwal` bisa BERUBAH saat popup detail dibuka ulang dengan pilihan
+  // lain ("Persetujuan" ↔ "Rincian"). `useState` hanya membaca nilai awal, jadi
+  // tanpa sinkronisasi ini panel bisa tertutup padahal diminta, atau terbuka
+  // padahal pengguna cuma ingin membaca.
+  useEffect(() => {
+    setOpened(terbukaAwal);
+  }, [terbukaAwal, decisionId]);
   // Tombol pemicu: fokus dikembalikan ke sini saat popup ditutup.
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  // Panel konfirmasi inline (mode `panel`) bisa berada jauh di bawah popup
+  // detail; tanpa ini pengguna menekan tombol lalu tidak melihat apa pun.
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!opened || tampil !== "panel") return;
+    const el = panelRef.current;
+    // jsdom tidak menyediakan scrollIntoView; di peramban ia ada. Tanpa penjaga
+    // ini membuka panel di tes melempar TypeError.
+    if (!el || typeof el.scrollIntoView !== "function") return;
+    // Hanya gulir bila panel benar-benar di luar layar. Di popup "Persetujuan"
+    // panel sudah berada tepat di bawah pita angka, dan menggulirnya ke atas
+    // justru menyembunyikan angka yang menjelaskan keputusan.
+    const kotak = el.getBoundingClientRect();
+    const tinggi = window.innerHeight || document.documentElement.clientHeight;
+    // Patokannya KEPALA panel, bukan dasarnya: panel setinggi layar pasti
+    // "melewati bawah", dan mengejar dasarnya justru menyembunyikan konteks.
+    // Gulir hanya bila kepala panel di atas layar atau masih di bawahnya.
+    if (kotak.top < 0 || kotak.top > tinggi - 120) {
+      el.scrollIntoView({ block: "nearest" });
+    }
+  }, [opened, tampil]);
+
+  // Panel ditutup → pemicunya muncul kembali; fokus harus ikut ke sana, bukan
+  // jatuh ke <body>.
+  const pernahBuka = useRef(false);
+  useEffect(() => {
+    if (tampil !== "panel") return;
+    if (opened) {
+      pernahBuka.current = true;
+      return;
+    }
+    if (pernahBuka.current) triggerRef.current?.focus();
+  }, [opened, tampil]);
 
   const actions = visibleActions(role, status);
   // Satu turunan status untuk label pemicu DAN chip di kepala popup — jangan
   // menghitung dua kali dengan dua aturan berbeda.
   const view = governanceView(summary);
+  // Gerbang kedua (dokumen `02-approval-action.md` §6): PO draft menunggu review
+  // Kepala SPPG. Kewenangannya tetap keputusan server-side; di sini hanya dibaca.
+  const po = poDari(summary);
+  const langkah = langkahPersetujuan({ summary, role });
+  const reviewTersedia = langkah.reviewPo.tersedia;
+  const poDraft = po !== null && po.status === "draft";
   // Langkah 4 (19 Okt 2026): label mengikuti keadaan. "Kelola persetujuan"
   // pada keputusan final menjanjikan pekerjaan yang tidak ada, dan pada
   // keputusan yang baru disetujui sebagian yang ditunggu adalah REKAN.
   // Semua keadaan tetap bisa dibuka — popup tetap satu-satunya gerbang aksi.
   const triggerLabel =
-    view.state === "selesai" || view.state === "ditolak"
-      ? "Lihat hasil"
-      : view.state === "sebagian"
-        ? "Menunggu rekan"
-        : "Kelola persetujuan";
+    reviewTersedia
+      ? "Review PO"
+      : view.state === "selesai" || view.state === "ditolak"
+        ? "Lihat hasil"
+        : view.state === "sebagian"
+          ? peranSudahSetuju(summary, role)
+            ? "Menunggu rekan"
+            : "Setujui sekarang"
+          : poDraft
+            ? "Menunggu review PO"
+            : "Kelola persetujuan";
   const administrative = [
     "supplier_exclusion",
     "supplier_exclusion_restoration",
   ].includes(summary?.decision_type);
   if (actions.readOnly) {
-    return <p className="read-only-note">Peran {role} bersifat read-only.</p>;
+    // §7.5 (dan temuan F9 audit FE 27 Okt): peran pengawas tidak melihat tombol,
+    // tetapi harus tahu KENAPA. Dulu baris ini mencetak kode peran mentah
+    // ("Peran bgn_monitor bersifat read-only") — istilah API, bukan bahasa orang.
+    return (
+      <p className="read-only-note">
+        Peran Anda memantau, bukan menyetujui — tampilan hanya-baca
+        {roleLabel(role) ? ` (${roleLabel(role)})` : ""}. Tidak ada tombol yang
+        hilang di sini: aksi persetujuan memang bukan kewenangan peran Anda, dan
+        keputusan tetap bisa dibaca lengkap beserta alasan tertahannya.
+      </p>
+    );
   }
   // Audit M6 (18 Okt 2026): temuan review-only tidak punya approval maupun
   // eksekusi. Menawarkan "Kelola persetujuan" hanya mengantar ke penolakan.
@@ -197,14 +273,40 @@ export default function DecisionActions({
     if (!token) return "Login diperlukan";
     try {
       const result = await executeAction(decisionId, token);
-      setMessage(
-        administrative
-          ? `Status administratif supplier tercatat: ${result.status ?? "executed"}. Safety batch tidak diubah.`
-          : `PO ${result.po_number ?? ""} dibuat (mock)`
-      );
+      if (administrative) {
+        setMessage(
+          `Status administratif pemasok tercatat: ${statusLabel(result.status) ?? "dieksekusi"}. Keamanan batch tidak diubah.`
+        );
+      } else if (result.po_status === "draft" || result.awaiting === "po_review") {
+        // Dua gerbang (dokumen 02-approval-action.md §6): eksekusi berhenti di
+        // dokumen draft. Pesan lama "PO dibuat (mock)" membuat penyetuju
+        // mengira pembelian sudah terjadi.
+        setMessage(
+          `PO ${result.po_number ?? ""} terbit sebagai DRAFT — menunggu review Kepala SPPG sebelum dikirim ke SAP.`
+        );
+      } else {
+        setMessage(`PO ${result.po_number ?? ""} dibuat (mock)`);
+      }
       return null;
     } catch (err: any) {
       return galatAksi("Eksekusi tidak dijalankan", err);
+    }
+  }
+
+  /** Gerbang 2 — Kepala SPPG mereview PO draft; PO lalu dikirim ke SAP mock. */
+  async function reviewPo(): Promise<string | null> {
+    if (!token) return "Login diperlukan";
+    if (!po) return "Belum ada PO untuk direview";
+    try {
+      const result = await approvePurchaseOrder(po.po_number, token);
+      setMessage(
+        `PO ${result.po_number ?? po.po_number} terkirim ke SAP (status ${
+          result.po_status ?? "submitted"
+        }) — keputusan menjadi ${result.decision_status ?? "executed"}.`
+      );
+      return null;
+    } catch (err: any) {
+      return galatAksi("Review PO tidak tercatat", err);
     }
   }
 
@@ -218,11 +320,11 @@ export default function DecisionActions({
       // mencatatnya, jadi UI tidak boleh menjanjikan jalan ke eksekusi.
       if (result.recorded === false) {
         setMessage(
-          `Verifier (${result.provider ?? "tanpa provider"}): ${result.verdict ?? "tidak tersedia"} — tidak ada verdict hasil audit, jadi belum dihitung sebagai verifikasi. Setuju tetap terkunci sampai verifier memberi hasil.`
+          `Verifier (${result.provider ?? "tanpa provider"}): ${verdictManusia(result.verdict)} — belum ada hasil audit, jadi belum dihitung sebagai verifikasi. Tombol Setuju tetap terkunci sampai verifier memberi hasil.`
         );
       } else {
         setMessage(
-          `Verifier (${result.provider ?? "tanpa provider"}): ${result.verdict ?? "tidak tersedia"} — verdict tercatat, keputusan siap dieksekusi setelah approval terpenuhi.`
+          `Verifier (${result.provider ?? "tanpa provider"}): ${verdictManusia(result.verdict)} — hasil audit tercatat; keputusan siap dieksekusi setelah persetujuan lengkap.`
         );
       }
       return null;
@@ -231,20 +333,46 @@ export default function DecisionActions({
     }
   }
 
+  const menu = (
+    <ApprovalMenu
+      summary={summary}
+      actions={actions}
+      administrative={administrative}
+      canReviewPo={reviewTersedia}
+      poNumber={po?.po_number ?? null}
+      onReviewPo={reviewPo}
+      onApprove={approve}
+      onReject={reject}
+      onVerify={verify}
+      onPropose={ajukan}
+      onExecute={execute}
+      onRepropose={repropose}
+      onClose={() => setOpened(false)}
+      dalamPanel={tampil === "panel"}
+    />
+  );
+
   return (
     <div className="decision-actions">
+      {/* Saat panel inline terbuka, tombol pemicu disembunyikan: panelnya sudah
+          punya "Tutup panel", dan dua kontrol untuk hal yang sama membingungkan
+          (terutama di popup "Persetujuan" yang membuka panel sejak awal). */}
+      {tampil === "panel" && opened ? null : (
       <button
         type="button"
         ref={triggerRef}
         className="button"
-        onClick={() => setOpened(true)}
-        aria-haspopup="dialog"
+        onClick={() => setOpened((v) => !v)}
+        // Di dalam popup detail, konfirmasi tidak lagi membuka jendela baru.
+        aria-haspopup={tampil === "panel" ? undefined : "dialog"}
         aria-expanded={opened}
+        aria-controls={tampil === "panel" ? "aksi-panel" : undefined}
         aria-describedby="governance-action-hint"
       >
         {triggerLabel}
         <span aria-hidden="true">…</span>
       </button>
+      )}
       {/* Dulu ini teks terlihat di bawah tombol dan mengulang isi deskripsi
           popup — satu baris noise di kartu yang sempit. Janji "tidak ada aksi
           satu klik" tetap diumumkan ke pembaca layar lewat aria-describedby. */}
@@ -256,33 +384,58 @@ export default function DecisionActions({
           {humanizeBlocker(message) ?? message}
         </p>
       )}
-      <Popup
-        open={opened}
-        onClose={() => setOpened(false)}
-        className="popup-governance"
-        title={"Governance & persetujuan"}
-        description={`Keputusan ${String(decisionId).slice(0, 8)} · ${String(
-          summary?.decision_type ?? "keputusan"
-        ).replace(/_/g, " ")} — periksa ringkasan bukti sebelum menyetujui.`}
-        labelledBy="approval-popup-title"
-        returnFocusRef={triggerRef}
-      >
-        {/* Chip status di kepala popup: pengguna yang menggulir ringkasan
-            panjang tetap tahu posisi persetujuan tanpa menutup popup. */}
-        <GovernanceStatus view={view} variant="chip" />
-        <ApprovalMenu
-          summary={summary}
-          actions={actions}
-          administrative={administrative}
-          onApprove={approve}
-          onReject={reject}
-          onVerify={verify}
-          onPropose={ajukan}
-          onExecute={execute}
-          onRepropose={repropose}
+      {tampil === "panel" ? (
+        opened ? (
+          <div className="aksi-panel" id="aksi-panel" ref={panelRef} role="group" aria-label="Governance & persetujuan">
+            <div className="aksi-panel-head">
+              <span className="detail-h">Governance &amp; persetujuan</span>
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => setOpened(false)}
+              >
+                Tutup panel
+              </button>
+            </div>
+            {/* Chip status tidak diulang di sini: ringkasan bukti tepat di
+                bawahnya sudah mencetak Status ("Menunggu persetujuan"), syarat
+                ("2 persetujuan"), dan peran yang kurang. Tiga kali kalimat yang
+                sama dalam satu layar justru terbaca sebagai berisik. */}
+            {menu}
+          </div>
+        ) : null
+      ) : (
+        <Popup
+          open={opened}
           onClose={() => setOpened(false)}
-        />
-      </Popup>
+          className="popup-governance"
+          title={"Governance & persetujuan"}
+          description={`Keputusan ${String(decisionId).slice(0, 8)} · ${String(
+            summary?.decision_type ?? "keputusan"
+          ).replace(/_/g, " ")} — periksa ringkasan bukti sebelum menyetujui.`}
+          labelledBy="approval-popup-title"
+          returnFocusRef={triggerRef}
+        >
+          {/* Chip status di kepala popup: pengguna yang menggulir ringkasan
+              panjang tetap tahu posisi persetujuan tanpa menutup popup. */}
+          <GovernanceStatus view={view} variant="chip" />
+          {menu}
+        </Popup>
+      )}
     </div>
   );
+}
+
+/** Verdict verifier → kata di layar (jangan cetak enum backend). */
+function verdictManusia(verdict: unknown): string {
+  switch (String(verdict ?? "")) {
+    case "consistent":
+      return "konsisten";
+    case "flagged":
+      return "ditandai perlu diperiksa";
+    case "unavailable":
+      return "belum tersedia";
+    default:
+      return verdict ? String(verdict) : "belum tersedia";
+  }
 }

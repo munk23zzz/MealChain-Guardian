@@ -35,6 +35,9 @@ export default function ApprovalMenu({
   summary,
   actions,
   administrative,
+  canReviewPo = false,
+  poNumber = null,
+  onReviewPo,
   onApprove,
   onReject,
   onVerify,
@@ -42,10 +45,15 @@ export default function ApprovalMenu({
   onExecute,
   onRepropose,
   onClose,
+  dalamPanel = false,
 }: {
   summary: any;
   actions: MenuActions;
   administrative: boolean;
+  /** PO draft menunggu review Kepala SPPG (gerbang kedua, §6 dokumen 02). */
+  canReviewPo?: boolean;
+  poNumber?: string | null;
+  onReviewPo?: () => ActionResult;
   onApprove: () => ActionResult;
   onReject: (reason: string) => ActionResult;
   onVerify: () => ActionResult;
@@ -53,6 +61,12 @@ export default function ApprovalMenu({
   onExecute: () => ActionResult;
   onRepropose: () => ActionResult;
   onClose: () => void;
+  /**
+   * Panel ini dirender DI DALAM popup detail, bukan sebagai jendela sendiri.
+   * Kalimat penutup wajib jujur: Escape menutup seluruh popup keputusan,
+   * bukan cuma panel ini.
+   */
+  dalamPanel?: boolean;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +95,7 @@ export default function ApprovalMenu({
   }
 
   const hasChoice =
+    canReviewPo ||
     actions.approve ||
     actions.verify ||
     actions.propose ||
@@ -134,12 +149,36 @@ export default function ApprovalMenu({
         <section className="approval-menu-block" aria-label="Pilihan tindakan lain">
           <h4 className="approval-menu-heading">Pilihan tindakan</h4>
           <ul className="action-menu">
+            {/* Gerbang kedua (dokumen 02-approval-action.md §6): PO draft sudah
+                terbit tetapi BELUM dikirim ke SAP. Tanpa baris ini, keadaan
+                "menunggu review PO" tidak punya jalan keluar dari panel. */}
+            {canReviewPo && onReviewPo && (
+              <li className="action-menu-item" data-action="review-po">
+                <div className="action-menu-text">
+                  <strong>Review PO {poNumber ?? ""}</strong>
+                  <span>
+                    PO draft dikirim ke SAP simulasi, keputusan menjadi{" "}
+                    <code>dieksekusi</code>, dan batch terikat diberangkatkan. Sebelum
+                    ini, tidak ada barang yang berangkat.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="button action-menu-button"
+                  data-action="review-po"
+                  onClick={() => run("review-po", onReviewPo)}
+                  disabled={busy !== null}
+                >
+                  {busy === "review-po" ? "Memproses…" : "Review & kirim"}
+                </button>
+              </li>
+            )}
             {actions.approve && canReject && (
               <li className="action-menu-item" data-action="reject">
                 <div className="action-menu-text">
                   <strong>Tolak keputusan</strong>
                   <span>
-                    Status menjadi <code>rejected</code>. Alasan wajib diisi dan dipakai agent
+                    Status menjadi <code>ditolak</code>. Alasan wajib diisi dan dipakai agent
                     sebagai bahan iterasi berikutnya.
                   </span>
                 </div>
@@ -174,7 +213,7 @@ export default function ApprovalMenu({
                   <strong>Setuju belum tersedia</strong>
                   <span>
                     Verifikasi belum menghasilkan verdict. Tanpa verdict, persetujuan mengunci
-                    jalan keluar (status <code>approved</code> tidak menerima verifikasi lagi) —
+                    jalan keluar (status <code>disetujui</code> tidak menerima verifikasi lagi) —
                     catat hasil verifier dulu.
                   </span>
                 </div>
@@ -219,9 +258,9 @@ export default function ApprovalMenu({
                 <div className="action-menu-text">
                   <strong>Ajukan untuk persetujuan</strong>
                   <span>
-                    Status berpindah ke <code>pending_approval</code> supaya Ahli Gizi dan Kepala
+                    Status berpindah ke <code>menunggu persetujuan</code> supaya Ahli Gizi dan Kepala
                     SPPG bisa menilai. Tanpa langkah ini keputusan berhenti di{" "}
-                    <code>proposed</code>.
+                    <code>diusulkan</code>.
                   </span>
                 </div>
                 <button
@@ -251,11 +290,11 @@ export default function ApprovalMenu({
             {actions.execute && canExecute && (
               <li className="action-menu-item" data-action="execute">
                 <div className="action-menu-text">
-                  <strong>Eksekusi ke SAP (mock)</strong>
+                  <strong>Terbitkan PO draft (data simulasi)</strong>
                   <span>
                     {administrative
                       ? "Mencatat status administratif supplier; safety batch tidak diubah."
-                      : "Hanya sah setelah approval terpenuhi. Menulis purchase order berlabel data simulasi."}
+                      : "Hanya sah setelah approval terpenuhi. PO terbit sebagai DRAFT — belum dikirim ke SAP; Kepala SPPG mereviewnya lebih dulu."}
                   </span>
                 </div>
                 <button
@@ -273,7 +312,7 @@ export default function ApprovalMenu({
             {actions.execute && !canExecute && (
               <li className="action-menu-item action-menu-note" data-action="execute-blocked">
                 <div className="action-menu-text">
-                  <strong>Eksekusi ke SAP (mock)</strong>
+                  <strong>Terbitkan PO draft (data simulasi)</strong>
                   <span>
                     Belum tersedia — server belum mengizinkan
                     {gate.reasons.length > 0 ? `: ${gate.reasons.join(" · ")}` : "."}
@@ -379,7 +418,11 @@ export default function ApprovalMenu({
       )}
 
       <div className="approval-menu-foot">
-        <p className="approval-menu-hint">Tekan Esc untuk menutup jendela ini.</p>
+        <p className="approval-menu-hint">
+          {dalamPanel
+            ? "Tutup panel ini untuk kembali membaca rincian."
+            : "Tekan Esc untuk menutup jendela ini."}
+        </p>
         <button type="button" className="button button-secondary" onClick={onClose} disabled={busy !== null}>
           Tutup
         </button>

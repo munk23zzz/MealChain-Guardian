@@ -377,3 +377,80 @@ Parameter `max_distance_km` + cakupan jarak di UI dijadikan fase tersendiri sete
   `.section-jump`/`.jump-target` sekarang di `globals.css` (bukan `evidence-dossier.css` lagi).
   Gerbang frontend: 150 berkas / 1.671 tes lulus, `tsc` 0, `next lint` 0 error. Verifikasi live di
   :3010 (SPPG Head). Berikutnya: tidak ada yang menggantung dari pekerjaan ini.
+
+- **28 Okt — Overview: panel "Monitor harga komoditas" menggantikan tiga bagian lama.** Sumber
+  nyata PIHPS Bank Indonesia (harian, Pasar Tradisional, Rp/kg): tarik dengan
+  `cd backend && python scripts/tarik_harga_pihps.py --days 30 --provinsi demo --komoditas all`
+  (±5 menit, 168 permintaan, ~8.500 baris, snapshot 2 MB di `data/harga_pihps/`). Panel membaca
+  `GET /price/monitor`; logika potong jendela ada di `backend/app/core/harga_monitor.py`, logika
+  tampilan di `frontend/lib/price-monitor.ts`. Yang dilepas dari Overview (komponennya TETAP ada):
+  `ShipmentCard`, `NodeTelemetry`, `StatusLocationList`. Jebakan yang sudah terbukti: (a) permintaan
+  ke bi.go.id dari TLS Python direset server → transport memakai `curl` bila ada; (b) endpoint grid
+  menolak tanpa cookie sesi halaman + `X-Requested-With`; (c) filter komoditas dulu salah petakan
+  (`_KE_KODE_PROYEK` dibaca sebagai nama proyek) sehingga filter tidak berlaku — sekarang
+  `KOMODITAS_PROYEK[nama]`; (d) jendela hari harus dibatasi DUA ujung, kalau tidak baris bertanggal
+  masa depan ikut terkirim. Pergerakan antar wilayah dihitung SERVER (`movers`) karena jendela satu
+  wilayah tidak cukup untuk membandingkan.
+
+- **28 Okt — Kartu feed Recommendations diringkas.** Permintaan pemilik: "shape rekomendasi diperkecil
+  dan hapus informasi konsisten, supplier, dan kasus". Kartu sekarang = judul (+badge versi) + satu
+  baris meta (kg · SDC · waktu) + status & masa berlaku sebaris di kanan + ajakan klik; tinggi terukur
+  188 → 113-114 px (padding 14 px, jarak ajakan 18 px). Yang dilepas: baris "Rencana kirim dari pemasok …" (`routeLineOf()` dihapus beserta
+  tesnya), badge "Kasus: …" (`caseLabelOf()` tetap hidup untuk kepala Decision & Evidence, pencarian
+  feed tetap mencocokkan `demo_case`), dan narasi `verifier_note` yang mencetak verdict mentah
+  "consistent"/"flagged". `rejection_reason` tetap dicetak sebagai satu baris bergaris kiri. Kalau nanti
+  ada yang ingin baris pengirim kembali di feed: bangun ulang di kartu, JANGAN menghidupkan lagi
+  `routeLineOf()` sebagai helper tanpa pemakai. Gerbang: 191 berkas / 2.128 tes, tsc 0, lint 0,
+  gate token hijau.
+  Popup detail & jejak agen (28 Okt 2026): kartu feed + antrean Hari Ini membuka `DecisionDetailPopup`
+  (isi = `DecisionDetail`, dipindah dari `DecisionEvidence`) dengan dua tampilan "Detail & bukti" / "Jejak agen";
+  deep link, PO, dan sidebar TETAP pindah tab. Jangan kembalikan `setTab("evidence")` ke dalam kartu feed:
+  tes `tests/decision-detail-popup.test.tsx` mengunci kontrak itu. Kalau butuh navigasi antar-bagian di dalam
+  popup, buat bilah sendiri — `SectionJump` menunjuk jangkar halaman.
+
+  Popup "Detail Keputusan" (28 Okt 2026, revisi): permintaan pemilik "tetap pop up di tengah, design layout
+  dan isinya yang diubah". `components/DecisionDrawer.tsx` sekarang panel TENGAH 920 px dengan isi dua kolom
+  dan tiga bagian dilipat; panel samping 520 px sudah dibuang, jangan dihidupkan lagi. Kepala popup memakai
+  slot `eyebrow`/`meta` milik `Popup.tsx`. Isi & angka mengikuti `D:\Downloads\01-detail-keputusan.md`
+  (acuan desain, bukan kode untuk disalin). Kalau menambah bagian: taruh di grid, tandai `.detail-sec--full`
+  hanya bila perlu selebar panel, dan lipat kalau isinya arsip. Tes kontrak: `tests/decision-drawer.test.tsx`
+  + `tests/detail-keputusan.test.ts`.
+
+### Modul Location Network + pop-up Pasokan & permintaan (28 Okt 2026, dokumen 03 §6)
+
+- Tab baru **Location Network** di `frontend/app/page.tsx` (setelah Overview): `components/LocationNetworkBoard.tsx`
+  = kalimat ringkasan (§6.3) + empat angka + peta `SupplyMap` dengan koridor + tabel 6 kolom + panel lokasi
+  terpilih + chip kelengkapan (§6.5).
+- Data: `GET /balance/map` (lokasi, `supply_state`/`demand_state`, `*_recorded_at`) dan **endpoint baru**
+  `GET /balance/flows` (agregat `decisions`: sumber→tujuan, kg, status per lane, koordinat). Pop-up memakai
+  `/balance/{lok}/{kom}` + `/supply/...` + `/demand/...` + `/batches`, dan **akar proxy `supply`/`demand`
+  ditambahkan ke `next.config.js`** — tanpa itu Next menjawab 404 HTML sendiri.
+- Aturan yang jangan dilanggar: `tidak_ada_baris` = "tidak ada catatan", bukan 0 kg; `Number(null) === 0`
+  tidak boleh dipakai untuk cek koordinat; koridor hanya untuk lane yang benar-benar ada dan menyentuh
+  lokasi dalam cakupan peran.
+- Tes kontrak: `tests/location-network.test.ts`, `tests/location-network-board.test.tsx`
+  (+ kasus pembawa-jam di `tests/food-safety.test.ts`). Bukti lengkap: `docs/verification/location-network-supply-demand.md`.
+- Jangan menambah `NODE_OPTIONS=--require` saat build: `npm run build` repo sudah memuat
+  `scripts/exfat-readlink-patch.cjs`; menambahkannya lagi membuat build gagal.
+- **Location Network = halaman GABUNGAN, tanpa peta (Ronde 43).** Tab `location-network`:
+  kalimat ringkasan §6.3 → baris angka → pemilih lokasi (`aria-pressed`, urut terparah,
+  auto-pilih yang paling kekurangan) → `SupplyDemandPanel` **inline** (4 kartu + tabel batch)
+  → chip kelengkapan. Peta/koridor/`GET /balance/flows`/`useBalanceFlows` sudah DIHAPUS
+  (S4-60); jangan menghidupkannya lagi tanpa keputusan pemilik. Nutritionist melihat tab &
+  judul "Pasokan & Kebutuhan" (peran lain "Location Network") — jangan hilangkan: itu
+  memperbaiki regresi §5 dokumen 03.
+- **Location Network (Ronde 44)**: bentuk final = satu kartu ringkasan → TABEL lokasi → baris
+  terbuka berisi `SupplyDemandPanel` (4 kartu + batch). Tanpa peta, tanpa chip, tanpa popup.
+  Kontrak yang dijaga tes: jumlah 0 tanpa "kg", data kosong ≠ "tidak ada kekurangan", nada
+  lewat `data-tone` (BUKAN kelas global — CSS module me-hash), batch ditahan berlabel "Ditahan".
+  Catatan: sesi lain menulis berkas sama dengan bentuk popup (TODO S4-61); pemilik perlu
+  memilih satu bentuk sebelum pekerjaan dianggap selesai.
+
+## 2026-10-29 — Popup Recommendations
+- `DecisionDrawer.tsx`: blok JSX bernama (`blokFakta`, `blokBiaya`, `blokPo`, `blokAksi(utama)`,
+  `blokKewajiban(terbuka)`, …) disusun ulang per mode; `modeAksi` menambah kelas
+  `.popup-keputusan--aksi`.
+- `DecisionActions`: pemicu disembunyikan saat panel terbuka, gulir hanya bila kepala panel
+  di luar layar, fokus balik ke pemicu.
+- CSS baru di ujung `app/globals.css`: `.detail-kpi*`, `.detail-aksi--utama`, `.detail-setelah`,
+  `.detail-konteks`, `.detail-jejak-kepala`, `.popup-keputusan--aksi`, `.aksi-panel .approval-menu-foot`.

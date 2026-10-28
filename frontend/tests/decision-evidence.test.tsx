@@ -156,6 +156,14 @@ describe("Decision & Evidence — dengan keputusan", () => {
     expect(render({ selected: null, selectedId: null })).toContain("Belum ada keputusan dipilih");
   });
 
+  it("keputusan yang sudah diganti Muat Demo tidak dituduh di luar cakupan", () => {
+    // 404 = barisnya sudah tidak ada, bukan soal cakupan peran. Pesan lama
+    // menyesatkan operator tepat setelah ia menekan "Muat Demo".
+    const html = render({ selected: null, selectedId: "id-mati", diganti: true });
+    expect(html).toContain("sudah diganti oleh Muat Demo");
+    expect(html).not.toContain("tidak ada di cakupan");
+  });
+
   it("badge kasus demo ikut terbawa ke kepala keputusan (dulu dari kartu feed)", () => {
     const denganKasus = render({ selected: { ...SELECTED, demo_case: "gangguan-logistik" } });
     expect(denganKasus).toContain("Kasus: Gangguan Logistik");
@@ -331,15 +339,33 @@ describe("Decision & Evidence — jejak agen", () => {
     expect(html).not.toContain("rec-hint");
   });
 
-  it("jejak agen punya tombol nyata + keterangan ke mana ia membawa", () => {
-    const html = render({ onOpenTraces: () => {} });
-    expect(html).toContain("Buka jejak agen");
-    expect(html).toContain("evidence-traces");
-    expect(html).toContain("tab Agent Log");
+  // 29 Okt 2026: jejak agen tidak lagi dilempar ke tab Agent Log. Dossier harus
+  // lengkap di halamannya sendiri, jadi jejak dirender DI DALAM bagian "Jejak &
+  // hasil" dan tombol lompatan di kepala dihapus.
+  it("jejak agen dirender di dalam dossier, bukan lewat lompatan ke tab lain", () => {
+    const html = render();
+    expect(html).toContain("Jejak agen keputusan ini");
+    expect(html).toContain('data-testid="trace-list"');
+    expect(html).not.toContain("Buka jejak agen");
+    expect(html).not.toContain("tab Agent Log");
+    expect(html).not.toContain("evidence-traces");
   });
 
-  it("tanpa callback, tombolnya tidak dirender (bukan tombol mati)", () => {
-    expect(render()).not.toContain("Buka jejak agen");
+  it("jejak kosong menyebut sebabnya, bukan panel kosong", () => {
+    const html = render();
+    expect(html).toMatch(/belum ada langkah agen yang terekam/i);
+  });
+});
+
+describe("Decision & Evidence — peran baca-saja", () => {
+  // Kontrak F9: kode peran mentah tidak dicetak, tetapi ALASANnya harus terbaca.
+  it("bgn_monitor melihat alasan read-only, bukan tombol yang diam-diam hilang", () => {
+    const html = render({
+      role: "bgn_monitor",
+      summary: { ...(SUMMARY as Record<string, unknown>), can_approve: false, can_reject: false, can_execute: false },
+    });
+    expect(html).toContain("read-only");
+    expect(html).not.toContain("bgn_monitor");
   });
 });
 
@@ -458,9 +484,12 @@ describe("Decision & Evidence — struktur catatan keputusan", () => {
     expect(html).toContain("evidence-route-waiting");
   });
 
-  it("urutan region: kepala → rute → zona keputusan → bukti → jejak", () => {
+  it("urutan region: kepala → zona keputusan → rute → bukti → jejak", () => {
+    // Dokumen `02-approval-action.md` §7.1 (28 Okt 2026): jawaban (apa menahan,
+    // siapa dibutuhkan, apa setelah ini) dibaca LEBIH DULU daripada kronologi.
+    // Karena itu kartu keputusan berdiri di atas kartu jalur.
     const html = render();
-    const urut = ["evidence-hero", "evidence-route", "evidence-decide", "evidence-grid", "evidence-bottom"].map(
+    const urut = ["evidence-hero", "evidence-decide", "evidence-route", "evidence-grid", "evidence-bottom"].map(
       (kelas) => html.indexOf(kelas)
     );
     for (let i = 1; i < urut.length; i += 1) {

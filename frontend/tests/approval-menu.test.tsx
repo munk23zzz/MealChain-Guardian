@@ -58,10 +58,10 @@ function render(extra: Record<string, unknown> = {}) {
 describe("ApprovalMenu (isi popup governance & persetujuan)", () => {
   it("ringkasan bukti tampil lebih dulu — friksi disengaja tetap ada", () => {
     const html = render();
-    expect(html).toContain("Konfirmasi Approval");
+    expect(html).toContain("Konfirmasi persetujuan");
     expect(html).toContain("600 kg");
     expect(html).toContain("Rp16.206.000");
-    expect(html).toContain("consistent");
+    expect(html).toContain("Konsisten");
     // Ringkasan tidak lagi mengklaim dirinya dialog: popup yang memegang
     // role="dialog"/aria-modal, jadi tidak ada dialog bersarang.
     expect(html).not.toContain('role="dialog"');

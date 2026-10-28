@@ -29,12 +29,18 @@ export default function Popup({
   labelledBy = "popup-title",
   returnFocusRef,
   className,
+  eyebrow,
+  meta,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   description?: string;
+  /** Label kecil di atas judul (mis. "Detail Keputusan"). */
+  eyebrow?: ReactNode;
+  /** Baris tambahan di bawah judul (pil status, potongan id). */
+  meta?: ReactNode;
   /** id elemen judul — dipakai aria-labelledby (harus unik per popup). */
   labelledBy?: string;
   /**
@@ -132,9 +138,14 @@ export default function Popup({
       >
         <header className="popup-head">
           <div className="popup-heading">
+            {/* Slot tambahan untuk popup yang kepalanya bukan sekadar judul
+                (drawer detail keputusan: label kecil + pil status + potongan id).
+                Opsional, jadi dialog lain tidak berubah. */}
+            {eyebrow ? <span className="popup-eyebrow">{eyebrow}</span> : null}
             <h3 className="popup-title" id={labelledBy}>
               {title}
             </h3>
+            {meta ? <div className="popup-meta">{meta}</div> : null}
           </div>
           <button
             type="button"

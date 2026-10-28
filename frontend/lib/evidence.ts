@@ -250,6 +250,20 @@ export function nextStep(input: {
       tone: "ok",
     };
   }
+  // Gerbang kedua (dokumen 02-approval-action.md §6): PO draft menunggu review
+  // Kepala SPPG. Tanpa cabang ini kepala halaman menulis "tidak ada tindakan
+  // mendesak" padahal justru di sinilah satu-satunya tindakan tersisa.
+  const po = (payload?.purchase_order ?? null) as Record<string, unknown> | null;
+  const poDraft =
+    po && String(po.status ?? "").toLowerCase() === "draft"
+      ? String(po.po_number ?? "")
+      : null;
+  if (poDraft) {
+    return {
+      text: `PO ${poDraft} terbit sebagai draft — Kepala SPPG perlu mereviewnya sebelum PO dikirim ke SAP.`,
+      tone: "warn",
+    };
+  }
   if (payload?.can_execute === true) {
     return { text: "Semua syarat terpenuhi — keputusan siap dieksekusi.", tone: "ok" };
   }
@@ -317,6 +331,13 @@ export function butuhTindakan(input: {
   const payload = (input?.summary ?? null) as Record<string, unknown> | null;
   if (!payload) return false;
   if (!APPROVER_ROLES.has(role)) return false;
+  // Gerbang kedua: PO draft yang menunggu review Kepala SPPG juga "menunggu
+  // tindakan pengguna ini" — tanpa cabang ini pintasan bawah tidak muncul
+  // justru pada keadaan yang paling butuh perhatian (dokumen 02 §7.2 keadaan 3).
+  const po = (payload.purchase_order ?? null) as Record<string, unknown> | null;
+  if (po && String(po.status ?? "").toLowerCase() === "draft") {
+    return role === "sppg_head";
+  }
   if (status !== "pending_approval" && status !== "verifier_flagged") return false;
   if (payload.can_reject !== true) return false;
   const jumlah = Array.isArray(payload.approvals) ? payload.approvals.length : null;
@@ -382,8 +403,27 @@ const HEADLINE_VERBS: Record<string, string> = {
   //   UD Sumber Rejeki Telur → Jakarta
   // Kata "pemasok" tidak perlu diulang karena baris kedua sudah nama pemasok.
   supplier_procurement: "Pengadaan",
-  supplier_restoration: "Pulihkan pemasok",
+  // Restorasi = usul MEMBUKA lagi eksklusi pemasok, bukan pengiriman barang.
+  // Kuncinya WAJIB nama tipe yang benar-benar bisa disimpan backend —
+  // `supplier_exclusion_restoration` (CheckConstraint `decisions_decision_type_check`
+  // di backend/app/models/decisions.py, dan `/supplier-exclusions/{id}/restore`).
+  // Nama karangan seperti "supplier_restoration" tidak pernah cocok, sehingga
+  // judul jatuh ke slug mentah "supplier exclusion restoration" (terukur di UI
+  // 28 Okt 2026). Frasa "status" mengikuti label Jenis yang sudah dipakai
+  // ApprovalModal/RecommendationCard ("Pemulihan status pemasok").
+  supplier_exclusion_restoration: "Pulihkan status pemasok",
 };
+
+/**
+ * Jenis keputusan yang TIDAK menggerakkan barang: penyesuaian harga, pemasok
+ * dikeluarkan, pemasok dipulihkan. Dipakai dua kali — menyembunyikan tanda "→"
+ * (yang terbaca seperti truk berangkat) dan memilih cara menyebut pihaknya.
+ */
+const JENIS_ADMINISTRATIF = new Set([
+  "price_anomaly",
+  "supplier_exclusion",
+  "supplier_exclusion_restoration",
+]);
 
 export type MetricItem = { label: string; value: string };
 export type FlagItem = { id: string; label: string; text: string; tone: FactTone };
@@ -440,14 +480,21 @@ export function decisionHeadline(decision: unknown, summary: unknown): string {
   const dariPemasok = type === "supplier_procurement" || type === "safety_disruption";
   const asal = dariPemasok ? pemasok ?? kotaAsal : kotaAsal ?? pemasok;
   const tujuan = text(s.target_location) ?? text(d.target_location);
-  // Tiga jenis ini BUKAN pengiriman barang: harga, pemasok dikeluarkan,
-  // pemasok dipulihkan. Menampilkan "Cianjur → Jakarta" di judulnya membuat
-  // pembaca mengira ada truk berangkat, padahal tidak ada barang bergerak.
-  const adaRute =
-    type !== "price_anomaly" &&
-    type !== "supplier_exclusion" &&
-    type !== "supplier_reinstatement";
-  const bedaKota = Boolean(adaRute && asal && tujuan && asal !== tujuan);
+  // Jenis administratif BUKAN pengiriman barang: harga disesuaikan, pemasok
+  // dikeluarkan, pemasok dipulihkan. Menampilkan "Cianjur → Jakarta" di
+  // judulnya membuat pembaca mengira ada truk berangkat, padahal tidak ada
+  // barang bergerak — jadi pihak yang diubah (pemasok) dan lingkupnya disebut
+  // dengan "di", bukan panah.
+  const administratif = type ? JENIS_ADMINISTRATIF.has(type) : false;
+  if (administratif) {
+    // Hanya nama pemasok + kota tujuan: `source_location` pada kasus ini kota
+    // gudang/cakupan, bukan kota asal kiriman, sehingga tidak boleh dicetak
+    // sebagai sisi asal ("Cianjur di Jakarta" bukan kalimat).
+    const lingkup = pemasok && tujuan ? `${pemasok} di ${tujuan}` : pemasok ?? "";
+    if (lingkup) return `${bagian.join(" ")}: ${lingkup}`;
+    return tujuan ? `${bagian.join(" ")} di ${tujuan}` : bagian.join(" ");
+  }
+  const bedaKota = Boolean(asal && tujuan && asal !== tujuan);
   // Barang dari pemasok dibaca dua baris: baris 1 "apa", baris 2 "dari siapa
   // ke mana". Pemindahan antar-SPPG tetap satu baris karena asalnya kota.
   if (dariPemasok && pemasok && bedaKota) {
@@ -457,6 +504,21 @@ export function decisionHeadline(decision: unknown, summary: unknown): string {
   return `${bagian.join(" ")}${rute}`;
 }
 
+/**
+ * Angka dari payload, atau `null` bila nilainya memang tidak diketahui.
+ *
+ * Dipakai supaya "tidak ada data" tidak berubah menjadi angka: `Number(null)`
+ * dan `Number("")` sama-sama bernilai 0, sehingga nilai kosong sempat tercetak
+ * "Rp0" — angka yang tidak pernah terukur. Angka 0 yang SUNGGUH tersimpan tetap
+ * dikembalikan sebagai 0 (0 terukur sah ditampilkan).
+ */
+function angkaAtauNull(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
 /** 2–4 angka kunci untuk dibaca dalam tiga detik. Yang tidak ada tidak dipaksa. */
 export function decisionMetrics(decision: unknown, summary: unknown, now?: Date | null): MetricItem[] {
   const d = objectOf(decision) ?? {};
@@ -464,10 +526,24 @@ export function decisionMetrics(decision: unknown, summary: unknown, now?: Date 
   const rows: MetricItem[] = [];
   const jumlah = kg(d.quantity_kg ?? s.quantity_kg);
   if (jumlah) rows.push({ label: "Kuantitas", value: jumlah });
-  const biaya = Number(s.safe_delivered_cost ?? d.safe_delivered_cost);
-  if (Number.isFinite(biaya)) rows.push({ label: "Biaya aman terkirim", value: idr(biaya) });
-  const beli = Number(objectOf(s.cost_breakdown)?.purchase);
-  if (Number.isFinite(biaya) && Number.isFinite(beli) && beli > 0) {
+  // Biaya aman terkirim: `null` dari backend berarti kolom DB kosong, BUKAN nol
+  // (`app/api/decisions.py` dan `services/approval_summary.py` memetakan NULL
+  // apa adanya). Terukur 28 Okt 2026 pada keputusan `supplier_exclusion_restoration`
+  // — tipe administratif tanpa PO dan tanpa pengiriman barang: kartu feed menulis
+  // "SDC —" sementara strip ini menulis "Rp0" karena `Number(null) === 0`.
+  // Sekarang keduanya memakai aturan yang sama: kosong → "—".
+  const biaya = angkaAtauNull(s.safe_delivered_cost ?? d.safe_delivered_cost);
+  if (biaya !== null) {
+    rows.push({ label: "Biaya aman terkirim", value: idr(biaya) });
+  } else if ("safe_delivered_cost" in s || "safe_delivered_cost" in d) {
+    // Medan DIKIRIM tetapi kosong: keputusan ini memang tidak punya biaya.
+    // Baris tetap disebut dengan "—" (pembaca perlu tahu biayanya tidak ada),
+    // sama seperti kartu feed. Medan yang tidak dikirim sama sekali tidak dikarang.
+    rows.push({ label: "Biaya aman terkirim", value: DASH });
+  }
+  // Selisih hanya bisa dihitung kalau biaya dan harga beli dua-duanya diketahui.
+  const beli = angkaAtauNull(objectOf(s.cost_breakdown)?.purchase);
+  if (biaya !== null && beli !== null && beli > 0) {
     rows.push({ label: "Selisih dari harga beli", value: selisih(biaya - beli) });
   }
   // "Tujuan" keluar dari strip: ia sudah ada di judul keputusan ("…: Bogor → Jakarta").
@@ -1081,8 +1157,12 @@ export function costFacts(decision: unknown): FactRow[] {
     rows.push({
       label: "Rekonsiliasi rincian",
       value: DASH,
+      // Total kosong juga tidak dicetak "Rp0": `idr(null)` bernilai Rp0 karena
+      // `Number(null) === 0`. Yang belum tercatat disebut apa adanya.
       hint: lengkap
-        ? `enam komponen berjumlah ${idr(jumlah)}, total tercatat ${idr(total)} — jangan dikutip sampai dihitung ulang`
+        ? Number.isFinite(totalNum)
+          ? `enam komponen berjumlah ${idr(jumlah)}, total tercatat ${idr(total)} — jangan dikutip sampai dihitung ulang`
+          : `enam komponen berjumlah ${idr(jumlah)}, total (biaya aman terkirim) belum tercatat — jangan dikutip sampai dihitung ulang`
         : `${komponen.length - enam.length} dari ${komponen.length} komponen belum ada — rincian tidak bisa direkonsiliasi`,
       tone: "danger",
     });
@@ -1095,7 +1175,7 @@ export function costFacts(decision: unknown): FactRow[] {
 }
 
 /** Keamanan pangan & jejak eksekusi dari /approval-summary. */
-export function safetyFacts(summary: unknown): FactRow[] {
+export function safetyFacts(summary: unknown, opts: { countInBadge?: boolean } = {}): FactRow[] {
   const payload = (summary ?? null) as Record<string, unknown> | null;
   const safety = (payload?.safety ?? null) as Record<string, unknown> | null;
   const verifier = (payload?.verifier ?? null) as Record<string, unknown> | null;
@@ -1104,7 +1184,7 @@ export function safetyFacts(summary: unknown): FactRow[] {
   const blocked = typeof safety?.blocked === "boolean" ? safety.blocked : null;
   const verdict = text(verifier?.verdict);
   const verifiedBy = text(verifier?.verified_by);
-  return [
+  const rows: FactRow[] = [
     {
       label: "Status keamanan terburuk",
       // Nada tetap dari enum mentah; yang dibaca manusia adalah katanya.
@@ -1126,6 +1206,48 @@ export function safetyFacts(summary: unknown): FactRow[] {
     { label: "Nomor material", value: text(payload?.material_number) ?? DASH },
     { label: "Target eksekusi", value: executionTargetLabel(payload?.execution_target) ?? DASH },
   ];
+  // Jumlah batch yang sudah naik ke lencana putusan (lihat `safetyBadge`) tidak
+  // dicetak dua kali di kartu yang sama — satu angka, satu tempat di layar.
+  if (opts.countInBadge && safetyBadge(summary)?.detail) {
+    return rows.filter((row) => row.label !== "Batch diperiksa");
+  }
+  return rows;
+}
+
+export type SafetyBadge = {
+  /** Nada lencana: memakai kelas `.board-badge-*` yang sudah ada. */
+  tone: "ok" | "warn" | "danger" | "muted";
+  /** Putusan dalam kata manusia ("Gagal", "Lolos", "Perlu verifikasi"). */
+  label: string;
+  /**
+   * Provenance "N batch diperiksa" — `null` bila server tidak mengirim jumlah
+   * yang bermakna. Backend mengirim `batches_checked: 0` juga saat status tidak
+   * terdefinisi, jadi 0 TIDAK dinaikkan menjadi kalimat (itu akan terbaca
+   * seolah nol batch sudah diperiksa dan dianggap aman).
+   */
+  detail: string | null;
+  /** Teks lencana siap cetak: "Gagal · 3 batch diperiksa". */
+  text: string;
+};
+
+/**
+ * Putusan safety satu keputusan sebagai SATU lencana (dokumen
+ * `07-safety-evidence.md` §4.2 butir 2): status + jumlah batch yang diperiksa.
+ *
+ * Semua nilainya dari `GET /decisions/{id}/approval-summary`; tidak ada angka
+ * yang dihitung ulang di klien dan tidak ada status yang diubah nadanya.
+ */
+export function safetyBadge(summary: unknown): SafetyBadge | null {
+  const payload = (summary ?? null) as Record<string, unknown> | null;
+  const safety = (payload?.safety ?? null) as Record<string, unknown> | null;
+  const worst = text(safety?.worst_status)?.toUpperCase() ?? null;
+  if (!worst) return null;
+  const label = safetyLabel(worst) ?? worst;
+  const checked = Number(safety?.batches_checked);
+  const detail = Number.isFinite(checked) && checked > 0 ? `${checked} batch diperiksa` : null;
+  const tone: SafetyBadge["tone"] =
+    worst === "PASS" ? "ok" : worst === "FAIL" ? "danger" : SAFETY_TONE[worst] === "warn" ? "warn" : "muted";
+  return { tone, label, detail, text: detail ? `${label} · ${detail}` : label };
 }
 
 /** Pemasok + skor keandalan (persen kalau ada). */

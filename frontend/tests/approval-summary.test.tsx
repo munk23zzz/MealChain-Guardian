@@ -1,7 +1,7 @@
 // Test S4-04 — ApprovalModal read model kanonik (RED dulu, TDD).
 // Kontrak plan §S4-04: modal menampilkan ringkasan LENGKAP dari
 // GET /decisions/{id}/approval-summary — UI tidak menghitung requirement,
-// tidak ada verdict literal client, missing facts tampil "unavailable".
+// tidak ada verdict literal client, field kosong tampil "belum tercatat".
 // can_approve=false → tombol Setuju nonaktif + alasan blocking tampil.
 // (Revisi S4-05 rehearsal 2026-10-08: can_approve INDEPENDEN dari satisfaction —
 // can_execute=false hanya memblokir EKSEKUSI server-side, bukan approval.
@@ -46,7 +46,7 @@ describe("ApprovalModal (summary kanonik S4-04)", () => {
     blocking_reasons: ["approval belum memenuhi requirement (missing/rejected)"],
   };
 
-  it("menampilkan konteks lengkap: lokasi, komoditas, supplier, MOCK, matrix", () => {
+  it("menampilkan konteks lengkap: lokasi, komoditas, pemasok, jalur simulasi, syarat", () => {
     const html = renderToStaticMarkup(
       <ApprovalModal summary={CANONICAL} onConfirm={() => {}} />
     );
@@ -56,13 +56,15 @@ describe("ApprovalModal (summary kanonik S4-04)", () => {
     expect(html).toContain("488,88 kg");
     expect(html).toContain("Supplier A Cianjur");
     expect(html).toContain("MAT-TELUR");
-    expect(html).toContain("MOCK");
-    expect(html).toContain("unavailable");
-    // Requirement dua role (AND) — dari server, bukan dihitung UI.
-    expect(html).toContain("sppg_head");
-    expect(html).toContain("sppg_nutritionist");
-    // Alasan blocking tampil.
-    expect(html).toContain("approval belum memenuhi requirement");
+    expect(html).toContain("Simulasi");
+    expect(html).toContain("Belum tersedia");
+    // Requirement dua peran (AND) — dari server; kode peran diterjemahkan ke
+    // nama manusia, bukan dicetak mentah.
+    expect(html).toContain("Kepala SPPG");
+    expect(html).toContain("Ahli Gizi SPPG");
+    expect(html).not.toContain("sppg_head");
+    // Alasan tertahan tampil sebagai kalimat, bukan kode berbentuk kalimat.
+    expect(html).toContain("Persetujuan belum lengkap");
   });
 
   it("can_approve=false → tombol Setuju disabled (gate approval, bukan can_execute)", () => {
@@ -113,7 +115,7 @@ describe("ApprovalModal (summary kanonik S4-04)", () => {
     expect(html).not.toContain("disabled");
   });
 
-  it("field hilang → 'unavailable', bukan default palsu", () => {
+  it("field hilang → 'belum tercatat', bukan default palsu", () => {
     const partial = {
       ...CANONICAL,
       supplier: null,
@@ -122,7 +124,7 @@ describe("ApprovalModal (summary kanonik S4-04)", () => {
       commodity: null,
     };
     const html = renderToStaticMarkup(<ApprovalModal summary={partial} />);
-    expect(html).toContain("unavailable");
+    expect(html).toContain("belum tercatat");
   });
 
   it("tanpa ringkasan → menolak approval (tidak ada approve-all)", () => {

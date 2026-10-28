@@ -11,7 +11,7 @@
 
 import StatusBadge from "./StatusBadge";
 import { cardEdge } from "../lib/recommendations";
-import { ClockIcon, TruckIcon } from "./NavIcon";
+import { ClockIcon } from "./NavIcon";
 import { formatIDR } from "../lib/auth";
 import { formatDateTime } from "../lib/datetime";
 import { formatKg } from "../lib/overview-format";
@@ -84,33 +84,10 @@ export const DECISION_TYPE_LABELS: Record<string, string> = {
 // Catatan yang isinya hanya kata penanda: bukan narasi, jangan dicetak.
 const PLACEHOLDER_NOTES = new Set(["unavailable", "n/a", "na", "-", "none", "null", "undefined"]);
 
-/**
- * Siapa yang mengirim — satu kalimat, tanpa tebakan (24 Okt 2026).
- *
- * Pemilik bingung karena kartu hanya menyebut WILAYAH ("Bandung"), sehingga
- * tidak jelas apakah barang datang dari pemasok atau dari SPPG lain. Backend
- * mengirim `pengirim` ("pemasok" | "antar_sppg") + `supplier_name` +
- * `target_location_name`; kalau ketiganya kosong, kalimat ini tidak ditampilkan
- * sama sekali — lebih baik tidak ada baris daripada baris yang mengarang.
- */
-export function routeLineOf(decision: any): string | null {
-  const tujuan = decision?.target_location_name
-    ? ` ke ${decision.target_location_name}`
-    : "";
-  // Status menentukan kata kerja: sebelum disetujui belum ada barang yang
-  // jalan, jadi menulis "Dikirim" akan berbohong. Sesudah dieksekusi, "Dikirim"
-  // memang yang terjadi.
-  const sudahJalan = ["approved", "executed"].includes(String(decision?.status));
-  if (decision?.supplier_name) {
-    return sudahJalan
-      ? `Dikirim pemasok ${decision.supplier_name}${tujuan}`
-      : `Rencana kirim dari pemasok ${decision.supplier_name}${tujuan}`;
-  }
-  if (decision?.pengirim === "antar_sppg") {
-    return `Bukan dari pemasok — stok dipindahkan antar-SPPG${tujuan}`;
-  }
-  return null;
-}
+// Catatan: baris pengirim ("Dikirim pemasok X ke Y") yang dulu dirender kartu
+// feed DIHAPUS 28 Okt 2026 saat kartu diringkas (permintaan pemilik: kartu
+// tinggal judul + meta + status). Pengirim tetap terbaca di Decision & Evidence
+// (panel konteks pemasok) — jangan menghidupkan kembali salinannya di sini.
 
 
 // Ajakan pada kartu. Hanya berlaku di FEED, karena di sana seluruh kartu
@@ -121,8 +98,10 @@ export function routeLineOf(decision: any): string | null {
 export const CARD_HINT = "Klik untuk rincian & jejak agen";
 
 /**
- * Badge "kasus demo" dari `decision.demo_case` — SATU sumber untuk kartu feed DAN
- * kepala halaman Decision & Evidence (dua peta label cepat menyimpang).
+ * Badge "kasus demo" dari `decision.demo_case` — SATU sumber untuk kepala
+ * halaman Decision & Evidence (dan pencarian feed, `lib/decision-feed.ts`).
+ * 28 Okt 2026: badge ini tidak lagi dicetak di kartu feed — pemilik meminta
+ * kartu rekomendasi diringkas (judul + meta + status saja).
  */
 export function caseLabelOf(decision: any): string | null {
   if (!decision?.demo_case) return null;
@@ -133,47 +112,48 @@ export default function RecommendationCard({
   decision,
   mockSourced = false,
   hint = CARD_HINT,
+  onBuka,
+  tampilPersetujuan = true,
 }: {
   decision: any;
   mockSourced?: boolean;
   /** Teks ajakan; null/"" = tidak ditampilkan (kartu tidak bisa diklik). */
   hint?: string | null;
+  /**
+   * Bila diisi, ajakan teks diganti SATU tombol "Tinjau" (permintaan pemilik
+   * 28 Okt 2026: dua tombol "Rincian"/"Persetujuan" digabung). `tampilanAwal`
+   * yang dikirim ke popup ikut `tampilPersetujuan`: kartu yang boleh disetujui
+   * dibuka dengan panel persetujuan terbuka, sisanya dibuka di rincian —
+   * peran pengawas dan keputusan selesai tidak ditawari tindakan yang pasti
+   * ditolak server (dok 02 §7.5).
+   */
+  onBuka?: (tampilan: "rincian" | "persetujuan", pemicu: HTMLElement | null) => void;
+  tampilPersetujuan?: boolean;
 }) {
   const typeLabel = DECISION_TYPE_LABELS[decision.decision_type] ?? "Rekomendasi baru";
-  const caseLabel = caseLabelOf(decision);
-  const routeLine = routeLineOf(decision);
   const edge = cardEdge(decision);
-  // Alasan penolakan / catatan verifier = satu-satunya narasi yang benar-benar
-  // ada di data; kalau dua-duanya kosong, tidak ada paragraf yang ditampilkan.
-  // Backend kadang mengisi catatan dengan kata penanda ("unavailable") — itu
-  // bukan narasi dan tidak boleh muncul sebagai paragraf di kartu.
-  const rawNarrative = decision.rejection_reason || decision.verifier_note || null;
+  // Narasi kartu feed = alasan penolakan saja. `verifier_note` TIDAK dipakai:
+  // isinya verdict mentah backend ("consistent", "flagged") yang muncul sebagai
+  // satu kata Inggris tak bertuan di daftar (temuan 28 Okt 2026). Verdict itu
+  // tetap terbaca lengkap di Decision & Evidence. Kata penanda
+  // ("unavailable"/"n/a") juga bukan narasi dan tidak pernah dicetak.
+  const rawReason = decision.rejection_reason;
   const narrative =
-    typeof rawNarrative === "string" && PLACEHOLDER_NOTES.has(rawNarrative.trim().toLowerCase())
-      ? null
-      : rawNarrative;
+    typeof rawReason === "string" &&
+    rawReason.trim() !== "" &&
+    !PLACEHOLDER_NOTES.has(rawReason.trim().toLowerCase())
+      ? rawReason
+      : null;
 
   return (
     <article className={`card recommendation-card rec-edge ${edge}`}>
       <div className="rec-head">
-        <div className="rec-head-text">
-          <p className="rec-title">
-            {typeLabel}
-            {decision.iteration && decision.iteration > 1 && (
-              <span className="badge version-badge">v{decision.iteration}</span>
-            )}
-          </p>
-          <p className="rec-meta-line">
-            <span className="rec-qty">{formatKg(decision.quantity_kg)}</span>
-            <span className="rec-sep" aria-hidden="true">·</span>
-            <span>SDC {formatIDR(decision.safe_delivered_cost)}</span>
-            <span className="rec-sep" aria-hidden="true">·</span>
-            <span className="rec-time">
-              <ClockIcon />
-              {formatDateTime(decision.created_at)}
-            </span>
-          </p>
-        </div>
+        <p className="rec-title">
+          {typeLabel}
+          {decision.iteration && decision.iteration > 1 && (
+            <span className="badge version-badge">v{decision.iteration}</span>
+          )}
+        </p>
         <div className="rec-badges">
           <StatusBadge status={decision.status} />
           <span
@@ -185,17 +165,41 @@ export default function RecommendationCard({
         </div>
       </div>
 
-      {routeLine && (
-        <p className="rec-route">
-          <TruckIcon aria-hidden="true" />
-          <span>{routeLine}</span>
-        </p>
-      )}
-
+      {/* Satu baris informasi + ajakan: kg · SDC · waktu di kiri, ajakan di kanan.
+          Dulu ajakan punya barisnya sendiri sehingga ada pita kosong di antara
+          keduanya (pemilik 28 Okt 2026: "hapus space-nya supaya lebih compact"). */}
       <div className="rec-foot">
-        {caseLabel && <span className="badge rec-case">{caseLabel}</span>}
+        <p className="rec-meta-line">
+          <span className="rec-qty">{formatKg(decision.quantity_kg)}</span>
+          <span className="rec-sep" aria-hidden="true">·</span>
+          <span>SDC {formatIDR(decision.safe_delivered_cost)}</span>
+          <span className="rec-sep" aria-hidden="true">·</span>
+          <span className="rec-time">
+            <ClockIcon />
+            {formatDateTime(decision.created_at)}
+          </span>
+        </p>
         {mockSourced && <span className="badge mock-badge">Data Simulasi</span>}
-        {hint ? (
+        {onBuka ? (
+          <span className="rec-act">
+            {/* SATU tombol (koreksi pemilik 28 Okt 2026: "tombol rincian dan
+                persetujuan jadikan 1 saja"). Popup yang dibuka sudah memuat
+                rincian DAN panel persetujuan, jadi dua tombol hanya memaksa
+                pengguna memilih lebih dulu tanpa menambah kemampuan. Untuk
+                kartu yang boleh disetujui, popup dibuka langsung dengan panel
+                persetujuan terbuka; kartu lain dibuka di rincian. */}
+            <button
+              type="button"
+              className="rec-act-btn rec-act-btn--utama"
+              aria-label={`Tinjau: ${typeLabel}`}
+              onClick={(event) =>
+                onBuka(tampilPersetujuan ? "persetujuan" : "rincian", event.currentTarget)
+              }
+            >
+              Tinjau
+            </button>
+          </span>
+        ) : hint ? (
           <span className="rec-hint" aria-hidden="true">
             {hint}
           </span>

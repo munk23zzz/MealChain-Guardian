@@ -253,8 +253,8 @@ describe("ApprovalModal (friksi disengaja)", () => {
     );
     expect(html).toContain("600");
     expect(html).toContain("Rp16.206.000");
-    expect(html).toContain("consistent");
-    expect(html).toContain("Konfirmasi Approval");
+    expect(html).toContain("Konsisten");
+    expect(html).toContain("Konfirmasi persetujuan");
   });
 
   it("tanpa approve-all massal", () => {

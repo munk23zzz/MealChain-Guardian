@@ -34,6 +34,9 @@ import {
   supplierFact,
   supplierNameOf,
 } from "../lib/evidence";
+// Kartu feed memakai helper ini untuk kolom "SDC"; tes di bawah membandingkan
+// hasilnya dengan strip metrik supaya dua tempat tidak menjawab berbeda.
+import { formatIDR } from "../lib/auth";
 
 const SUMMARY = {
   decision_id: "d1",
@@ -509,6 +512,19 @@ describe("langkah berikutnya: satu kalimat yang menjawab \"apa yang harus saya l
   });
 });
 
+// Daftar kanonik jenis keputusan = CheckConstraint `decisions_decision_type_check`
+// di backend/app/models/decisions.py (enam nilai, tidak lebih). Dipakai tes judul:
+// tipe baru yang belum punya label kata kerja akan membuat tes GAGAL, bukan
+// diam-diam mencetak slug mentah ke layar seperti regresi 28 Okt 2026.
+const TIPE_KEPUTUSAN_BACKEND = [
+  "regional_balance",
+  "price_anomaly",
+  "safety_disruption",
+  "supplier_exclusion",
+  "supplier_exclusion_restoration",
+  "supplier_procurement",
+];
+
 // ── Desain baru halaman bukti (17 Okt 2026) ────────────────────────────────
 // Struktur "catatan keputusan": apa yang diminta → seberapa besar → siapa
 // memegang → saya harus apa → bukti. Riset: _qa/rencana-decision-evidence-v2.md.
@@ -533,6 +549,45 @@ describe("kepala keputusan: satu kalimat aksi + angka kunci", () => {
     expect(asing).not.toContain("_");
   });
 
+  // Regresi 28 Okt 2026 (terukur di UI hidup): hero keputusan restorasi mencetak
+  // slug mentah "supplier exclusion restoration: CV Ambarawa Telur Utama →
+  // Jakarta". Sebabnya peta kata kerja memakai nama tipe karangan
+  // ("supplier_restoration"), bukan nama yang benar-benar disimpan backend.
+  it("restorasi pemasok: judul bahasa Indonesia, tanpa slug dan tanpa tanda panah", () => {
+    const judul = decisionHeadline(RESTORASI_PEMASOK, null);
+    const kecil = judul.toLowerCase();
+    expect(judul).not.toContain("_");
+    expect(kecil).not.toContain("restoration");
+    expect(kecil).not.toContain("exclusion");
+    expect(judul.startsWith("Pulihkan status pemasok")).toBe(true);
+    // Pemulihan status TIDAK mengirim barang: panah "→" menyiratkan truk
+    // berangkat. Pemasok dan kota tujuan tetap disebut, dengan "di".
+    expect(judul).not.toContain("→");
+    expect(judul).toContain("CV Ambarawa Telur Utama");
+    expect(judul).toContain("Jakarta");
+  });
+
+  it("setiap jenis keputusan backend punya label kata kerja, bukan slug", () => {
+    for (const type of TIPE_KEPUTUSAN_BACKEND) {
+      const judul = decisionHeadline({ decision_type: type }, {}).toLowerCase();
+      expect(judul).not.toContain("_");
+      // Tidak satu kata pun dari slug yang boleh muncul ("supplier",
+      // "exclusion", "restoration", "regional", "balance", ...).
+      for (const kata of type.split("_")) {
+        expect(judul).not.toContain(kata);
+      }
+    }
+  });
+
+  it("bentuk lama tipe pengiriman barang tidak berubah", () => {
+    expect(decisionHeadline({ decision_type: "regional_balance", quantity_kg: 600 }, SUMMARY)).toBe(
+      "Seimbangkan 600 kg telur: Cianjur → Jakarta"
+    );
+    expect(decisionHeadline(PENGADAAN, null)).toBe(
+      "Pengadaan 779,86 kg telur\nTelur Berkah Bekasi → Jakarta"
+    );
+  });
+
   it("metrik kunci: kuantitas, biaya aman, selisih — hanya yang benar-benar ada", () => {
     const rows = decisionMetrics({ quantity_kg: 600 }, SUMMARY);
     const pick = (label: string) => rows.find((r) => r.label === label)?.value;
@@ -540,6 +595,54 @@ describe("kepala keputusan: satu kalimat aksi + angka kunci", () => {
     expect(pick("Biaya aman terkirim")).toBe("Rp16.206.000");
     expect(pick("Selisih dari harga beli")).toBe("+Rp486.000");
     expect(decisionMetrics({}, {})).toEqual([]);
+  });
+});
+
+// Regresi 28 Okt 2026 (temuan terukur di UI): keputusan administratif
+// `supplier_exclusion_restoration` — tanpa PO dan tanpa pengiriman barang —
+// menyimpan `safe_delivered_cost` NULL. Backend memetakan kolom NULL apa adanya
+// jadi `null` (`app/api/decisions.py`, `services/approval_summary.py`), sedangkan
+// strip ini dulu mencetak "Rp0" karena `Number(null) === 0`. Kartu feed sudah
+// benar ("SDC —"). Aturan repo: nilai tak diketahui ditulis —, bukan 0.
+describe("biaya aman terkirim: tidak diketahui ditulis '—', bukan Rp0", () => {
+  const RESTORASI = {
+    decision_type: "supplier_exclusion_restoration",
+    status: "pending_approval",
+    quantity_kg: null,
+    safe_delivered_cost: null,
+  };
+
+  it("safe_delivered_cost null → '—', sama dengan kartu feed", () => {
+    const biaya = find(decisionMetrics(RESTORASI, { ...RESTORASI }), "Biaya aman terkirim").value;
+    expect(biaya).toBe("—");
+    expect(biaya).not.toBe("Rp0");
+    // Kartu feed mencetak `formatIDR(decision.safe_delivered_cost)`; nilai yang
+    // sama harus menghasilkan tulisan yang sama di kedua tempat.
+    expect(formatIDR(RESTORASI.safe_delivered_cost)).toBe(biaya);
+  });
+
+  it("null hanya di ringkasan (payload keputusan kosong) → tetap '—'", () => {
+    const rows = decisionMetrics({}, { safe_delivered_cost: null });
+    expect(find(rows, "Biaya aman terkirim").value).toBe("—");
+  });
+
+  it("selisih dari harga beli tidak dihitung saat biaya tidak diketahui", () => {
+    const rows = decisionMetrics({}, { safe_delivered_cost: null, cost_breakdown: { purchase: 1500000 } });
+    expect(rows.map((r) => r.label)).not.toContain("Selisih dari harga beli");
+  });
+
+  it("medan tidak dikirim backend: baris biaya tidak dikarang", () => {
+    const rows = decisionMetrics({ decision_type: "supplier_exclusion_restoration" }, {});
+    expect(rows.map((r) => r.label)).not.toContain("Biaya aman terkirim");
+  });
+
+  // 0 yang tersimpan tetap Rp0 — nol yang terukur bukan "tidak diketahui".
+  it("biaya 0 yang tersimpan tetap 'Rp0'", () => {
+    expect(find(decisionMetrics({}, { safe_delivered_cost: 0 }), "Biaya aman terkirim").value).toBe("Rp0");
+  });
+
+  it("biaya normal tidak berubah", () => {
+    expect(find(decisionMetrics({}, { ...SUMMARY }), "Biaya aman terkirim").value).toBe("Rp16.206.000");
   });
 });
 
@@ -792,6 +895,18 @@ const PENGADAAN = {
   quantity_kg: 779.86,
   iteration: 1,
   supplier: { id: "036f2597-83e8-4985-81c2-47626a8a1395", name: "Telur Berkah Bekasi" },
+};
+
+// Kasus restorasi pemasok yang benar-benar ada di data demo: `source_location`
+// NULL (tidak ada kota asal — barang tidak bergerak), pemasok CV Ambarawa Telur
+// Utama, lingkup SPPG Jakarta. Lihat verify/decision-evidence.spec.json (F1).
+const RESTORASI_PEMASOK = {
+  decision_type: "supplier_exclusion_restoration",
+  source_location: null,
+  target_location: "Jakarta",
+  commodity: "telur",
+  quantity_kg: null,
+  supplier: { id: "s-ambarawa", name: "CV Ambarawa Telur Utama" },
 };
 
 describe("decisionFacts — pengadaan pemasok", () => {
