@@ -21,24 +21,27 @@ export type SwarmAgentKey =
   | "supervisor"
   | "verifier";
 
+// Nama agen ditulis ENGLISH: ini nama PERAN dalam sistem multi-agen (dipakai
+// laporan, jejak Agent Log, dan dokumen arsitektur), bukan kata benda sehari-
+// hari. Menerjemahkannya membuat satu agen punya dua nama di dua layar.
 export const SWARM_AGENTS: ReadonlyArray<{
   key: SwarmAgentKey;
   label: string;
   stage: string;
 }> = [
-  { key: "supply", label: "Pasokan", stage: "DETECT" },
-  { key: "demand", label: "Permintaan", stage: "PREDICT" },
-  { key: "freshness", label: "Kesegaran", stage: "VERIFY" },
-  { key: "safety", label: "Keamanan Pangan", stage: "VERIFY" },
-  { key: "price", label: "Harga", stage: "OPTIMIZE" },
-  { key: "logistics", label: "Logistik", stage: "OPTIMIZE" },
-  { key: "evidence", label: "Bukti", stage: "TRACE" },
+  { key: "supply", label: "Supply", stage: "DETECT" },
+  { key: "demand", label: "Demand", stage: "PREDICT" },
+  { key: "freshness", label: "Freshness", stage: "VERIFY" },
+  { key: "safety", label: "Food Safety", stage: "VERIFY" },
+  { key: "price", label: "Price", stage: "OPTIMIZE" },
+  { key: "logistics", label: "Logistics", stage: "OPTIMIZE" },
+  { key: "evidence", label: "Evidence", stage: "TRACE" },
   // Agen ke-8: supervisor. Merangkum temuan worker menjadi satu narasi; ia
   // kartu sendiri karena datanya datang dari `run.supervisor`, bukan worker.
   { key: "supervisor", label: "Supervisor", stage: "SUPERVISE" },
   // Agen ke-9: auditor. Dijalankan setelah narasi supervisor, tampil sebagai
   // kartu sendiri supaya juri melihat siapa yang mengaudit siapa.
-  { key: "verifier", label: "Verifikasi", stage: "VERIFY" },
+  { key: "verifier", label: "Verifier", stage: "VERIFY" },
 ];
 
 const AGENT_KEYS = new Set<string>(SWARM_AGENTS.map((agent) => agent.key));

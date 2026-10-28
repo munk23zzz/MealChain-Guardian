@@ -17,7 +17,7 @@ import {
   directionLabel,
   fmtCoverage,
   KPI_WINDOWS,
-  metricLabel,
+  metricDescription,
   periodePil,
   type KpiWindowKey,
 } from "../lib/kpi";
@@ -345,6 +345,7 @@ export default function KPIDashboard({
           const prov = provenanceLines(m);
           const asal = klasifikasiAsalOf(m);
           const est = estimateOf(m);
+          const desc = metricDescription(m.name);
           const estText = estimateLine(m);
           const factText = factLine(m);
           // Semua teks panjang kartu dikumpulkan di SATU lipatan per kartu.
@@ -385,11 +386,21 @@ export default function KPIDashboard({
           return (
             <article key={m.name} className={`kpi-card card kpi-${m.state}`}>
               <div className="kpi-card-top">
-                <p className="kpi-card-name" title={m.name}>
-                  {metricLabel(m.name)}
+                {/* Nama metrik di halaman KPI sengaja ENGLISH (istilah
+                    kanonik dari server), bukan terjemahan: istilah ini dipakai
+                    lintas laporan/Joule dan terjemahannya dulu membuat satu
+                    metrik punya dua nama. Terjemahan Indonesia tetap tersedia
+                    di `title` bila pembaca butuh artinya. */}
+                <p className="kpi-card-name" title={m.name} lang="en">
+                  {String(m.name)}
                 </p>
                 <MetricIcon name={m.name} />
               </div>
+              {desc ? (
+                <p className="kpi-card-desc" lang="en">
+                  {desc}
+                </p>
+              ) : null}
               {shown !== null ? (
                 <p className="kpi-value">
                   {shown}

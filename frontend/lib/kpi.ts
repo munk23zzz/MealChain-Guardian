@@ -120,6 +120,24 @@ export const KPI_LABELS: Record<string, string> = {
   "Evidence Completeness": "Kelengkapan bukti",
 };
 
+/** Satu baris arti metrik (English) — dipakai kartu KPI sebagai subjudul.
+ *  Sumber istilah: glosarium metrik deck (28 Okt 2026). Metrik yang belum
+ *  punya arti tidak diberi subjudul — lebih baik kosong daripada dikarang. */
+export const KPI_DESCRIPTIONS: Record<string, string> = {
+  "Meal Continuity Rate": "Fulfilled demand vs requirement",
+  "Avoidable Food Loss": "kg and monetary value",
+  "Regional Imbalance Resolution Rate": "Resolved shortage and surpluses",
+  "Safe Delivered Cost": "Total cost until goods are received",
+  "Procurement Price Deviation": "Deviation from valid reference prices",
+  "Decision Time": "Time to generate recommendation",
+  "Evidence Completeness": "Availability of supporting data and logs",
+};
+
+export function metricDescription(name: unknown): string | null {
+  const key = String(name ?? "").trim();
+  return KPI_DESCRIPTIONS[key] ?? null;
+}
+
 export function metricLabel(name: unknown): string {
   const key = String(name ?? "").trim();
   if (!key) return "—";

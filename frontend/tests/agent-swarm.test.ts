@@ -115,9 +115,9 @@ describe("swarmCards — tepat sembilan kartu: worker → supervisor → verifie
     // Urutan pipeline: worker → SUPERVISE → audit.
     expect(cards[7].label).toBe("Supervisor");
     expect(cards[7].stage).toBe("SUPERVISE");
-    expect(cards[8].label).toBe("Verifikasi");
+    expect(cards[8].label).toBe("Verifier");
     expect(cards[8].stage).toBe("VERIFY");
-    expect(cards[0].label).toBe("Pasokan");
+    expect(cards[0].label).toBe("Supply");
     expect(cards[0].statusLabel).toBe("Selesai");
     expect(cards[0].duration).toBe("1,5 dtk");
     expect(cards[0].confidence).toBe("87%");

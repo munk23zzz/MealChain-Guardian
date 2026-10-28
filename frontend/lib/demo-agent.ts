@@ -482,7 +482,10 @@ export function demoAgentCards(
     if (sedangJalan) {
       return {
         key: agen.key,
-        label: agen.label,
+        // Nama agen dari SWARM_AGENTS (English), BUKAN `agen.label` dari
+        // payload: backend mengirim label Indonesia, dan dua nama untuk satu
+        // agen membuat kartu ini berbeda dari Agent Log.
+        label: agent.label,
         state: "running" as const,
         statusLabel: "Berjalan",
         duration: "—",
@@ -505,7 +508,7 @@ export function demoAgentCards(
       dikenal && typeof agen.warnings === "number" ? `${agen.warnings} peringatan` : "—";
     return {
       key: agen.key,
-      label: agen.label,
+      label: agent.label,
       state,
       statusLabel: AGEN_LABEL[state],
       duration,

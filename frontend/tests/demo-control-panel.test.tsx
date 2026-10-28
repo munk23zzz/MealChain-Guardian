@@ -148,7 +148,10 @@ describe("DemoProof — bukti dari payload, bukan karangan", () => {
     expect(html).toContain(">Supervisor</h3>");
     expect(html).toContain("Narasi selesai");
     expect(html).toContain("fallback_1:sap_ai_core");
-    expect(html).toContain(">Verifikasi</h3>");
+    // Nama agen ENGLISH (peran sistem multi-agen), bukan terjemahan; label
+    // Indonesia dari payload tidak lagi dipakai kartu.
+    expect(html).toContain(">Verifier</h3>");
+    expect(html).not.toContain(">Verifikasi</h3>");
     expect(html).toContain("Audit sepakat: 8 cek lulus.");
     // Teks jumlah ikut sembilan.
     expect(html).not.toContain("Tujuh agen");

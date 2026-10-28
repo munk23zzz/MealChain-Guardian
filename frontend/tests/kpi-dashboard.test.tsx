@@ -259,3 +259,35 @@ describe("unitLabel (nama satuan untuk layar)", () => {
     expect(unitLabel("")).toBe("");
   });
 });
+
+// Nama metrik di kartu KPI sengaja ENGLISH — istilah kanonik dari server yang
+// juga dipakai laporan, Joule, dan dokumen spesifikasi. Sebelumnya tiap metrik
+// punya dua nama (kartu Indonesia, tes/dokumen Inggris), dan pembaca demo yang
+// mendengar istilah Inggris tidak menemukannya di layar.
+describe("nama metrik di kartu KPI", () => {
+  it("memakai istilah kanonik Inggris, bukan terjemahan Indonesia", () => {
+    const html = renderToStaticMarkup(<KPIDashboard kpi={ENVELOPE_AVAILABLE} />);
+    expect(html).toContain("Meal Continuity Rate");
+    expect(html).toContain("Regional Imbalance Resolution Rate");
+    // Terjemahan lama tidak boleh kembali ke kartu.
+    expect(html).not.toContain("Keberlanjutan menu");
+    expect(html).not.toContain("Penyelesaian ketimpangan");
+  });
+});
+
+// Arti satu baris tiap metrik (English) mengikuti glosarium deck; metrik yang
+// belum punya arti tidak diberi subjudul (jangan mengarang).
+describe("subjudul arti metrik di kartu KPI", () => {
+  it("menampilkan arti English untuk metrik yang dikenal", () => {
+    const html = renderToStaticMarkup(<KPIDashboard kpi={ENVELOPE_AVAILABLE} />);
+    expect(html).toContain("Fulfilled demand vs requirement");
+    expect(html).toContain("Total cost until goods are received");
+    expect(html).toContain("Time to generate recommendation");
+  });
+  it("metrik tak dikenal tidak diberi subjudul karangan", () => {
+    const kpi = { ...ENVELOPE_AVAILABLE, metrics: [{ ...ENVELOPE_AVAILABLE.metrics[0], name: "New Metric From Server" }] };
+    const html = renderToStaticMarkup(<KPIDashboard kpi={kpi as any} />);
+    expect(html).toContain("New Metric From Server");
+    expect(html).not.toContain("kpi-card-desc");
+  });
+});

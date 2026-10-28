@@ -73,13 +73,14 @@ describe("AgentSwarmPanel", () => {
       <AgentSwarmPanel steps={rows() as any} decisionId="d1" />
     );
     expect(html.match(/class="swarm-card"/g)).toHaveLength(9);
-    expect(html).toContain("Pasokan");
-    expect(html).toContain("Keamanan Pangan");
+    // Nama agen ENGLISH (istilah peran sistem multi-agen), bukan terjemahan.
+    expect(html).toContain("Supply");
+    expect(html).toContain("Food Safety");
     expect(html).toContain("Selesai");
     // Supervisor adalah kartu, bukan hanya blok ringkasan terpisah.
     expect(html).toContain(">Supervisor</h3>");
     expect(html).toContain("Narasi selesai");
-    expect(html).toContain("Verifikasi");
+    expect(html).toContain("Verifier");
     expect(html).toContain("Review selesai tanpa kontradiksi.");
     expect(html).not.toContain(">ok<");
     expect(html).toContain("run 12345678");

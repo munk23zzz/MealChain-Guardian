@@ -190,7 +190,7 @@ describe("agentQuality — kualitas per agen dari data nyata", () => {
       "verifier",
     ]);
     expect(rows[7].label).toBe("Supervisor");
-    expect(rows[8].label).toBe("Verifikasi");
+    expect(rows[8].label).toBe("Verifier");
   });
 
   it("menghitung run tercatat, keluaran, dan yang tidak tercatat", () => {

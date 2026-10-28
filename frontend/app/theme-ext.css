@@ -329,6 +329,14 @@ option {
 /* Satu lipatan per kartu. Marker bawaan peramban DIPERTAHANKAN
    (`display: list-item`), karena `<summary>` yang ditata flex kehilangan
    segitiga penanda dan lipatan jadi tidak terlihat bisa dibuka. */
+/* Subjudul arti metrik (satu baris, English) — di bawah nama kartu. */
+.kpi-card-desc {
+  margin: 2px 0 6px;
+  font-size: var(--fs-1);
+  line-height: 1.35;
+  color: var(--ink-muted);
+}
+
 .kpi-more,
 .card-note-more {
   margin: 8px 0 0;
