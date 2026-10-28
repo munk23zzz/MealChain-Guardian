@@ -56,12 +56,12 @@ export type RouteJourney = {
  * definisi warna yang bisa menyimpang tanpa ketahuan.
  */
 export const ROUTE_LINE_COLORS: Record<RouteLineTone, string> = {
-  // Bagian yang SUDAH ditempuh memakai violet tua (--route-live-strong).
-  // Sisa perjalanan memakai violet lebih terang (--route-live-soft) di
+  // Bagian yang SUDAH ditempuh memakai biru-600 (--route-live-strong).
+  // Sisa perjalanan memakai biru lebih terang (--route-live-soft) di
   // ROUTE_TODO_COLORS, jadi dua bagian satu kiriman tetap satu keluarga warna
-  // tetapi bisa dibedakan. Nilai ini WAJIB sama dengan --route-live-strong;
-  // tes supplier-routes mengunci pasangan CSS ↔ konstanta.
-  ok: "#7C3AED",
+  // tetapi bisa dibedakan lewat pola garis. Nilai ini WAJIB sama dengan
+  // --route-live-strong; tes supplier-routes mengunci pasangan CSS ↔ konstanta.
+  ok: "#2563EB",
   fail: "#C62828",
 };
 
@@ -77,9 +77,10 @@ export const ROUTE_LINE_COLORS: Record<RouteLineTone, string> = {
  * "rute berjalan", dan ia tidak menabrak merah (gagal uji) maupun hijau (tiba).
  */
 export const ROUTE_TODO_COLORS: Record<RouteLineTone, string> = {
-  // Sisa perjalanan = violet lebih terang (--route-live-soft), bukan biru:
-  // satu kiriman tetap satu keluarga warna.
-  ok: "#8B5CF6",
+  // Sisa perjalanan = biru-700 (--route-live-soft): satu kiriman tetap satu
+  // keluarga warna, dibedakan dari bagian yang sudah ditempuh lewat pola
+  // putus-putus.
+  ok: "#1D4ED8",
   fail: "#C62828",
 };
 

@@ -651,13 +651,30 @@ describe("SupplyMap — perilaku layer pemasok", () => {
     const done = warna("supplier-route-line-done");
     const todo = warna("supplier-route-line-todo");
     expect(done[3]).toBe("#C62828");
-    // Sejak audit 21 Okt 2026 kiriman berjalan memakai violet --status-live,
-    // dan sisa perjalanan memakai violet lebih terang (--route-live-soft):
-    // satu kiriman tetap satu keluarga warna, tetapi dua bagian tetap beda nada.
-    expect(done[4]).toBe("#7C3AED");
+    // Sejak 29 Okt 2026 kedua potong jalur memakai BIRU, dan dua nadanya
+    // ditukar atas permintaan pemilik: --route-live-strong (biru-600) untuk
+    // bagian yang sudah ditempuh, --route-live-soft (biru-700) untuk sisa.
+    expect(done[4]).toBe("#2563EB");
     expect(todo[3]).toBe("#C62828");
-    expect(todo[4]).toBe("#8B5CF6");
+    expect(todo[4]).toBe("#1D4ED8");
     expect(todo[4]).not.toBe(done[4]);
+  });
+
+  it("garis 'sudah ditempuh' & 'sisa perjalanan' digambar di atas lapisan konteks", () => {
+    // Permintaan pemilik 29 Okt 2026: jalur aktif harus terlihat, jangan
+    // tertutup alas putih, jalur "sudah tiba" yang redup, atau kilau.
+    mountWithRoutes();
+    const peta = map();
+    const urutan = Object.keys(peta.layers);
+    const posisi = (id: string) => urutan.indexOf(id);
+    expect(posisi("supplier-route-line-done")).toBeGreaterThan(posisi("supplier-route-glint"));
+    expect(posisi("supplier-route-line-todo")).toBeGreaterThan(posisi("supplier-route-glint"));
+    expect(posisi("supplier-route-line-done")).toBeGreaterThan(
+      posisi("supplier-route-line-tiba")
+    );
+    expect(posisi("supplier-route-line-todo")).toBeGreaterThan(
+      posisi("supplier-route-line-tiba-casing")
+    );
   });
 
   it("penanda memakai ikon: bangunan untuk SPPG, truk untuk pemasok", () => {

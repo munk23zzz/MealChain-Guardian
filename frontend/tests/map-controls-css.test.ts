@@ -102,9 +102,10 @@ describe("kontrak CSS kontrol peta (7b-1)", () => {
     expect(css).toMatch(/\.map-legend-line-sisa\s*\{[^}]*border-top-color:\s*var\(--route-live-soft\)/);
     expect(css).toMatch(/\.map-legend-line-tiba\s*\{[^}]*border-top-color:\s*var\(--route-arrived\)/);
     expect(css).not.toMatch(/\.map-legend-line-sisa\s*\{[^}]*--accent-strong/);
-    expect(css).toMatch(/--route-live-strong:\s*#7C3AED/);
-    expect(css).toMatch(/--route-live-soft:\s*#8B5CF6/);
-    expect(css).toMatch(/--route-arrived:\s*#475569/);
+    // 29 Okt 2026: jalur aktif memakai dua nada BIRU (violet ditinggalkan).
+    expect(css).toMatch(/--route-live-strong:\s*#2563EB/i);
+    expect(css).toMatch(/--route-live-soft:\s*#1D4ED8/i);
+    expect(css).toMatch(/--route-arrived:\s*#475569/i);
   });
 
   it("layar pesan gestur dipergelap: bawaan MapLibre terlalu tipis di atas peta terang", () => {

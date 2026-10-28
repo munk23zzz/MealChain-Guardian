@@ -71,19 +71,20 @@
   /* Warna STATUS sengaja TETAP gelap supaya kontras teks >= 4,5:1 (AA). */
   --status-safe: #2E7D32;       /* PASS / normal */
   /* "Aktif" — dipakai HANYA untuk penanda yang sedang bergerak/mengirim (pin
-     pemasok pengirim + puck mobil). Bukan warna status: violet tidak dipakai
+     pemasok pengirim + puck mobil). Bukan warna status: biru ini dipakai
      makna lain di peta, jadi ia menandai "hidup" tanpa menyamar sebagai
      aman/bahaya. Kontras ke tile OSM terang ~4,3:1. */
-  --status-live: #8B5CF6;
-  /* Sisa perjalanan: keluarga warna yang SAMA dengan --status-live, hanya lebih
-     terang. Dulu sisa memakai biru --accent-strong sementara bagian yang sudah
-     ditempuh hijau; hasilnya dua warna berbeda untuk satu kiriman dan garis
-     tenggelam di basemap terang (audit 21 Okt 2026). */
-  --route-live-soft: #8B5CF6;
-  /* Bagian yang SUDAH ditempuh: violet lebih tua (kontras 4,97:1 di tile OSM
-     terang) supaya terbaca; sisa perjalanan memakai --route-live-soft (3,69:1,
-     masih lolos ambang grafik 3:1) dan dibedakan lewat pola putus. */
-  --route-live-strong: #7C3AED;
+  --status-live: #2563EB;
+  /* Sisa perjalanan & bagian yang sudah ditempuh kini BIRU (permintaan pemilik
+     29 Okt 2026: "warna di ubah biru saja"). Dua nada biru yang sudah ada di
+     palet, bukan hex baru: biru-600 untuk estimasi, biru-700 untuk bagian yang
+     benar-benar sudah ditempuh. Pola garis (padat vs putus) tetap pembeda
+     utamanya, jadi warna tidak sendirian memikul arti. */
+  --route-live-soft: #1D4ED8;
+  /* Bagian yang SUDAH ditempuh: biru-600 (kontras ~5,2:1 di tile OSM terang);
+     sisa perjalanan memakai --route-live-soft (biru-700). Dua nada ini sempat
+     terbalik — pemilik 29 Okt 2026: "di tukar saja". */
+  --route-live-strong: #2563EB;
   /* Jalur yang sudah tiba: abu netral, sengaja di luar palet status. */
   --route-arrived: #475569;
   /* "Menyala" — khusus penanda bergerak (kiriman sedang berjalan). Bukan warna
@@ -2853,7 +2854,7 @@ a:focus-visible {
    dari pemasok biasa + diberi denyut.
 
    - Warna: pin biasa = lingkaran PUTIH bergaris nada; yang mengirim = lingkaran
-     PENUH violet `--status-live`. Jadi bedanya terbaca dari jarak pandang biasa,
+     PENUH biru `--status-live`. Jadi bedanya terbaca dari jarak pandang biasa,
      bukan dari warna garis tepi yang tipis.
    - Denyut: satu halo yang melebar lalu hilang (2,2 dtk, easing keluar) — pelan
      dan berulang, bukan kedip. Gerak ini membawa arti ("masih di jalan"), jadi
@@ -3792,7 +3793,9 @@ a:focus-visible {
 .sa-gap strong {
   color: var(--sa-tone);
   font-size: var(--fs-3);
-  font-weight: 700;
+  /* 700 → 600 (29 Okt 2026): angka kg di ujung batang sudah menjadi fokus
+     karena posisinya; ketebalan tambahan membuatnya bersaing dengan judul. */
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -13953,9 +13956,25 @@ p, li, dd { text-wrap: pretty; }
   /* Tiga warna garis grafik harga. Divalidasi kontras terhadap permukaan putih
      (>= 3:1 untuk objek grafis, WCAG 1.4.11): biru 5,1:1 · amber 5,5:1 ·
      teal 5,3:1. Bukan semantik status — karena itu tidak memakai --status-*. */
-  --chart-series-1: #2563EB; /* beras */
-  --chart-series-2: #B45309; /* telur */
-  --chart-series-3: #0F766E; /* ayam */
+  /* Satu palet identitas komoditas dipakai TIGA tempat: pil komoditas di peta,
+     batang surplus wilayah, dan garis "Monitor harga komoditas". Sebelumnya
+     garis memakai biru #2563EB / amber #B45309 / teal #0F766E sementara peta &
+     batang memakai #1D4ED8 / #92400E / #115E59 — dua palet yang berdekatan tapi
+     tidak sama, dan di tab Overview keduanya tampil berdampingan.
+     (29 Okt 2026) */
+  --chart-series-1: var(--cat-blue-solid);  /* beras */
+  --chart-series-2: var(--cat-amber-solid); /* telur */
+  --chart-series-3: var(--cat-teal-solid);  /* ayam */
+  --chart-series-4: var(--cat-violet-solid); /* wortel — violet dari palet kategori */
+  /* Isi batang memakai HUHUE yang sama dengan garis grafik (29 Okt 2026).
+     Sebelumnya batang surplus memakai `--cat-*-solid` (biru #1D4ED8, amber
+     pekat) sementara garis "Monitor harga" memakai seri di atas — dua palet
+     berdampingan di satu tab terbaca tidak cocok. Campuran 84% ke permukaan
+     mempertahankan identitas warna tanpa membuat blok besar menyala. */
+  --chart-fill-1: color-mix(in srgb, var(--chart-series-1) 84%, var(--surface));
+  --chart-fill-2: color-mix(in srgb, var(--chart-series-2) 84%, var(--surface));
+  --chart-fill-3: color-mix(in srgb, var(--chart-series-3) 84%, var(--surface));
+  --chart-fill-4: color-mix(in srgb, var(--chart-series-4) 84%, var(--surface));
 }
 
 .price-monitor {
@@ -14210,12 +14229,6 @@ p, li, dd { text-wrap: pretty; }
   white-space: nowrap;
 }
 
-.pm-tanpa-sumber {
-  margin: 12px 0 0;
-  font-size: var(--fs-1);
-  color: var(--ink-subtle);
-}
-
 .pm-empty,
 .pm-loading {
   margin: 8px 0 0;
@@ -14245,6 +14258,45 @@ p, li, dd { text-wrap: pretty; }
   border-collapse: collapse;
   margin-top: 8px;
   font-size: var(--fs-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tabel 23+ tanggal tidak boleh memanjangkan halaman: gulir di dalam kotaknya
+   sendiri, dengan kepala tabel yang melekat supaya nama komoditas tetap
+   terbaca saat pembaca menggulir ke tanggal lama. */
+.pm-tabel-gulir {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface);
+}
+
+.pm-tabel-gulir:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pm-tabel-gulir .pm-tabel {
+  margin-top: 0;
+}
+
+.pm-tabel thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--line-strong, var(--line));
+}
+
+.pm-tabel tbody tr:nth-child(even) th,
+.pm-tabel tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--surface-sunken) 55%, var(--surface));
+}
+
+.pm-tabel tbody tr:hover th,
+.pm-tabel tbody tr:hover td {
+  background: var(--surface-sunken);
 }
 
 .pm-tabel caption {

@@ -1326,7 +1326,8 @@ export default function SupplyMap({
       source: WAKE_SOURCE_ID,
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
-        "line-color": "#8B5CF6",
+        // Biru senada --status-live (dulu ungu, diganti 29 Okt 2026).
+        "line-color": "#2563EB",
         "line-width": ["interpolate", ["linear"], ["zoom"], 5, 8, 10, 13],
         "line-blur": 5,
         "line-opacity": 0.55,
@@ -1524,6 +1525,15 @@ export default function SupplyMap({
         "line-opacity": routeFokusRef.current ? 0.15 : 0.62,
       },
     });
+
+    // Garis "sudah ditempuh" & "sisa perjalanan" DINAIKKAN ke atas (permintaan
+    // pemilik 29 Okt 2026). Sebelumnya ia berada di bawah alas putih, jalur
+    // "sudah tiba" yang redup, dan kilau — sehingga jalur aktif bisa tertutup
+    // lapisan konteks. Lapisan sorotan (fokus) tetap di atas keduanya karena
+    // ditambahkan belakangan saat sebuah kiriman disorot.
+    for (const id of [ROUTE_DONE_LAYER_ID, ROUTE_TODO_LAYER_ID]) {
+      if (map.getLayer(id)) map.moveLayer(id);
+    }
 
     // Klik berlaku di KEDUA lapisan: kalau hanya lapisan putus-putus yang bisa
     // diklik, kiriman yang sudah tiba (garisnya padat semua) kehilangan popup.
