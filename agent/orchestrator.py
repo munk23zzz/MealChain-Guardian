@@ -371,7 +371,10 @@ def fakta_narasi(run: AgentRun) -> dict[str, Any]:
 
 
 def narasi_terjaga(
-    run: AgentRun, narrator: Any | None = None
+    run: AgentRun,
+    narrator: Any | None = None,
+    *,
+    lineage: dict[str, Any] | None = None,
 ) -> tuple[str, tuple[str, ...]]:
     """Narasi final + catatan bila narator (model) mengarang.
 
@@ -379,22 +382,49 @@ def narasi_terjaga(
     fakta (mis. mengklaim veto saat `safety_veto=false`), narasi itu dibuang dan
     diganti narasi deterministik dari fakta — bukan diloloskan, karena veto
     verifier atas narasi karangan itulah bug yang sedang diperbaiki.
+
+    `lineage` (28 Okt 2026) = out-param opsional yang diisi APA ADANYA:
+    `{"source": "model"|"template", "latency_ms": int, "note": str|None}`.
+    Sebelum ini jejak SUPERVISE tidak membedakan narasi model dari narasi
+    template, sehingga pemeriksa menyimpulkan supervisor "deterministik" —
+    padahal modelnya bisa saja dipanggil lalu narasinya ditolak gerbang.
     """
+    mulai = monotonic()
+
+    def _catat(sumber: str, catatan: str | None) -> None:
+        if lineage is None:
+            return
+        lineage.update(
+            {
+                "source": sumber,
+                "latency_ms": max(0, int((monotonic() - mulai) * 1000)),
+                "note": catatan,
+            }
+        )
+
     template = narasi_dari_fakta(run)
     if narrator is None:
+        _catat("template", "narator tidak dipasang (tanpa model)")
         return template, ()
     try:
         kandidat = str(narrator(fakta_narasi(run)) or "").strip()
     except Exception as exc:  # noqa: BLE001 - narator gagal ≠ review gagal
-        return template, (f"narator gagal ({type(exc).__name__}); narasi fakta dipakai",)
+        catatan = f"narator gagal ({type(exc).__name__}); narasi fakta dipakai"
+        _catat("template", catatan)
+        return template, (catatan,)
     if not kandidat:
-        return template, ("narator mengembalikan narasi kosong; narasi fakta dipakai",)
+        catatan = "narator mengembalikan narasi kosong; narasi fakta dipakai"
+        _catat("template", catatan)
+        return template, (catatan,)
     masalah = pelanggaran_narasi(kandidat, run)
     if masalah:
-        return template, (
+        catatan = (
             "narasi narator bertentangan dengan fakta, diganti narasi fakta: "
-            + "; ".join(masalah),
+            + "; ".join(masalah)
         )
+        _catat("template", catatan)
+        return template, (catatan,)
+    _catat("model", None)
     return kandidat, ()
 
 
@@ -506,8 +536,11 @@ def run_review(
         total_latency_ms=max(0, int((monotonic() - started) * 1000)),
     )
     run = run.model_copy(update={"narrative": None})
-    narasi, catatan_narasi = narasi_terjaga(run, narrator)
-    run = run.model_copy(update={"narrative": narasi})
+    lineage_narasi: dict[str, Any] = {}
+    narasi, catatan_narasi = narasi_terjaga(run, narrator, lineage=lineage_narasi)
+    run = run.model_copy(
+        update={"narrative": narasi, "narration": lineage_narasi or None}
+    )
     # Gerbang verifikasi deterministik dijalankan SETELAH supervisor menyusun
     # rangkuman, dan hanya menandai — tidak mengubah status atau keputusan.
     gerbang = verify_run(run)

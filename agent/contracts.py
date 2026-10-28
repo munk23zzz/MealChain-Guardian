@@ -213,6 +213,12 @@ class AgentRun(BaseModel):
     # telemetry untuk mengisi `agent_traces.parent_run_id`.
     verifier_run_id: UUID | None = None
     total_latency_ms: int | None = Field(default=None, ge=0)
+    #: Jejak narasi supervisor (28 Okt 2026): `{"source": "model"|"template",
+    #: "latency_ms": int, "note": str|None, "provider": str|None}`. `None` =
+    #: run lama yang belum mencatat asal narasinya. Tanpa field ini pembaca
+    #: jejak tidak bisa membedakan "supervisor memanggil model" dari "supervisor
+    #: memakai template" — dua keadaan yang dulu tampak identik di `agent_traces`.
+    narration: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def _validate_seven_unique_agents_and_veto(self) -> AgentRun:

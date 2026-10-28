@@ -37,7 +37,12 @@ def _iter_angka(value: Any) -> Iterable[float]:
         yield float(value)
         return
     if isinstance(value, str):
-        teks = value.strip()
+        teks = value.strip().rstrip("%").strip()
+        # Persen: fakta menyimpan "-1.197654435648897617342914185%"; tanpa
+        # membuang "%" float() gagal, nilai itu tidak masuk `angka_dikenal`,
+        # dan verifier menuduh narasi "-1,20%" tak bersumber (terukur 28 Okt
+        # 2026: keputusan `ec82c8fc` tetap flagged meski toleransi pembulatan
+        # sudah dipakai).
         try:
             yield float(teks)
         except ValueError:

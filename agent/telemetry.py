@@ -116,7 +116,17 @@ def build_trace_rows(run: AgentRun) -> list[dict]:
             "tool_called": "agent.review_summary",
             "status": run.status.value,
             "summary": run.narrative,
-            "duration_ms": run.total_latency_ms,
+            # Durasi baris SUPERVISE = durasi narasi itu sendiri bila model
+            # dipanggil; `run.total_latency_ms` (seluruh review) dipakai hanya
+            # bila tidak ada catatan lineage. Dulu barisnya selalu memakai
+            # total, sehingga 20 detik "supervisor" sebenarnya waktu tujuh
+            # worker — bukan panggilan model.
+            "duration_ms": (
+                run.narration.get("latency_ms")
+                if isinstance(run.narration, dict)
+                and run.narration.get("source") == "model"
+                else run.total_latency_ms
+            ),
             "confidence": None,
             "citations": [],
             "input_summary": {
@@ -127,6 +137,9 @@ def build_trace_rows(run: AgentRun) -> list[dict]:
             "output_summary": {
                 "status": run.status.value,
                 "narrative": run.narrative,
+                # Asal narasi + provider + latensi: bukti bahwa agent ke-9
+                # benar-benar memanggil model, atau jujur menyatakan template.
+                "narration": run.narration,
                 "safety_veto": run.safety_veto,
                 "contradiction_count": len(run.contradictions),
                 "contradictions": [

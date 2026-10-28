@@ -28,8 +28,9 @@ ANGKA_STRUKTURAL = frozenset(float(n) for n in range(0, 13))
 #: Ambang bisnis yang boleh disebut sebagai aturan, bukan sebagai pengukuran.
 ANGKA_AMBANG = frozenset({0.85, 0.6, 1.0, 100.0})
 
-_ANGKA_RE = re.compile(r"\d+(?:[.,]\d+)?")
+_ANGKA_RE = re.compile(r"\d+(?:[.,]\d+)+|\d+")
 _ID_PANJANG = re.compile(r"^\d{6,}$")
+
 
 KATA_JUJUR = (
     "degraded",
@@ -55,27 +56,57 @@ KATA_JUJUR = (
 
 
 def _ke_float(raw: str) -> float | None:
-    kandidat = [raw, raw.replace(",", ".")]
-    if re.fullmatch(r"\d{1,3}(?:[.,]\d{3})+", raw):
-        kandidat.append(raw.replace(".", "").replace(",", ""))
-    for teks in kandidat:
-        try:
-            return float(teks)
-        except ValueError:
-            continue
-    return None
+    """Baca angka Indonesia maupun Inggris sebagai satu nilai.
+
+    Kenapa (28 Okt 2026): narasi demo ditulis dengan format Indonesia
+    (`3.057,65`), sedangkan regex lama memotongnya menjadi `3.057` + `65`.
+    Akibatnya cek `angka_bersitasi` menuduh angka yang sebenarnya ada di fakta
+    (3057.65), verdict jatuh ke `unavailable`, dan keputusan berhenti di
+    `proposed` sehingga tidak bisa disetujui. Titik ribuan dibuang, koma
+    desimal dibaca sebagai titik desimal.
+    """
+    teks = raw.strip()
+    if not teks:
+        return None
+    if "," in teks and "." in teks:
+        # Pemisah terakhir = desimal; sisanya pemisah ribuan.
+        if teks.rfind(",") > teks.rfind("."):
+            teks = teks.replace(".", "").replace(",", ".")
+        else:
+            teks = teks.replace(",", "")
+    elif "," in teks:
+        teks = teks.replace(",", ".")
+    elif re.fullmatch(r"\d{1,3}(?:\.\d{3})+", teks):
+        teks = teks.replace(".", "")
+    try:
+        return float(teks)
+    except ValueError:
+        return None
 
 
 def angka_dalam_teks(teks: str) -> list[tuple[str, float]]:
     """Angka yang muncul di teks klaim (id panjang dilewati)."""
     hasil: list[tuple[str, float]] = []
-    for match in _ANGKA_RE.finditer(teks or ""):
+    isi = teks or ""
+    for match in _ANGKA_RE.finditer(isi):
         raw = match.group(0)
         if _ID_PANJANG.match(raw):
             continue
         nilai = _ke_float(raw)
-        if nilai is not None:
-            hasil.append((raw, nilai))
+        if nilai is None:
+            continue
+        # Tanda minus HARUS ikut dibaca. Narasi demo memakai minus tipografis
+        # (U+2212 "−"), dan regex angka tidak memuat tanda; akibatnya
+        # "-1,197654" dibaca 1,197654 dan cek `angka_bersitasi` menolak deviasi
+        # harga yang sebenarnya benar (terukur 28 Okt 2026 pada `f52941d5`).
+        awal = match.start()
+        if awal > 0 and isi[awal - 1] in "-−–":
+            sebelum = isi[awal - 2] if awal >= 2 else ""
+            # Hanya tanda yang berdiri sendiri (" −1,2"), bukan bagian kata
+            # atau kode seperti "PO-123".
+            if awal == 1 or sebelum in " 	(:=~>≥≤":
+                nilai = -nilai
+        hasil.append((raw, nilai))
     return hasil
 
 
@@ -172,6 +203,32 @@ def _fakta_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _presisi_teks(raw: str) -> int:
+    """Jumlah digit desimal yang benar-benar ditulis narasi.
+
+    Narasi wajar membulatkan (`-1,2%` dari `-1,197654`, `1.514,0` dari
+    `1514.0159999999998`). Dengan membaca presisi yang ditulis, verifier bisa
+    memakai toleransi pembulatan yang tepat alih-alih menuntut kesamaan 1e-9 —
+    tuntutan itu menandai SEMUA review sebagai `verifier_flagged` (terukur
+    28 Okt 2026: keputusan `9dbd0835` gagal di `angka_bersitasi` hanya karena
+    pembulatan, lalu tidak bisa di-approve saat demo).
+    """
+    teks = raw.strip().rstrip("%").replace(" ", "")
+    for sep in (",", "."):
+        idx = teks.rfind(sep)
+        if idx < 0:
+            continue
+        ekor = teks[idx + 1 :]
+        if not ekor.isdigit():
+            continue
+        lain = "," if sep == "." else "."
+        if len(ekor) == 3 and lain not in teks and teks.count(sep) >= 1:
+            # "1.514" / "1,514" tanpa pemisah lain = pemisah ribuan
+            continue
+        return len(ekor)
+    return 0
+
+
 def cek_angka_bersitasi(
     klaim: KlaimSupervisor, fakta: dict[str, Any], angka_dikenal: Iterable[float]
 ) -> VerifierCheck:
@@ -181,7 +238,9 @@ def cek_angka_bersitasi(
     for raw, nilai in angka_dalam_teks(klaim.teks):
         if nilai in ANGKA_STRUKTURAL or nilai in ANGKA_AMBANG:
             continue
-        if any(abs(nilai - item) <= 1e-9 for item in dikenal):
+        # Toleransi = setengah satuan digit terakhir yang ditulis narasi.
+        toleransi = 0.5 * 10 ** (-_presisi_teks(raw))
+        if any(abs(nilai - item) <= max(toleransi, 1e-9) for item in dikenal):
             continue
         tanpa_sumber.append(raw)
     if tanpa_sumber:
@@ -371,7 +430,11 @@ def cek_ledger(
     # akan menandai setiap review dini. Yang diaudit: klaim "sudah tercatat"
     # pada keputusan yang sudah punya aksi.
     status = str(fakta.get("status") or "").lower()
-    if jumlah == 0 and status in {"proposed", "pending", "menunggu"}:
+    # Blok ledger lahir saat eksekusi. `pending_approval` juga belum punya
+    # aksi — dulu status itu tidak ada di daftar, sehingga SETIAP review yang
+    # lahir dari Demo Control ditandai gagal `ledger_tercatat` dan keputusan
+    # berakhir `verifier_flagged` (terukur 28 Okt 2026: `9dbd0835`).
+    if jumlah == 0 and status in {"proposed", "pending", "menunggu", "pending_approval"}:
         return _cek(
             "ledger_tercatat",
             "ada blok ledger untuk keputusan",

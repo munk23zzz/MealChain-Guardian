@@ -128,6 +128,19 @@ def build_agent(model_id: str):
     )
 
 
+def model_dan_jalur_supervisor_dari_env() -> tuple[str, ModelCallable | None]:
+    """`(jalur, callable)` — jalur dilaporkan apa adanya untuk jejak/audit.
+
+    Dipakai pemanggil yang perlu MENCATAT provider mana yang melayani narasi
+    supervisor (`agent_review_local`), bukan hanya mendapat callable-nya.
+    """
+    try:
+        from .workers.reasoner import reasoner_dan_jalur_dari_env
+    except ImportError:
+        from workers.reasoner import reasoner_dan_jalur_dari_env  # type: ignore[no-redef]
+    return reasoner_dan_jalur_dari_env(agent=AGENT_SUPERVISOR)
+
+
 def model_supervisor_dari_env() -> ModelCallable | None:
     """Model narasi supervisor lewat pintu resolusi bersama (9 agent).
 
@@ -137,11 +150,7 @@ def model_supervisor_dari_env() -> ModelCallable | None:
     memakai impor relatif, dan modul ini masih dipakai sebagai skrip tunggal
     oleh tes S0-06 lama.
     """
-    try:
-        from .workers.reasoner import reasoner_dan_jalur_dari_env
-    except ImportError:
-        from workers.reasoner import reasoner_dan_jalur_dari_env  # type: ignore[no-redef]
-    return reasoner_dan_jalur_dari_env(agent=AGENT_SUPERVISOR)[1]
+    return model_dan_jalur_supervisor_dari_env()[1]
 
 
 def narasi(prompt: str, *, model: ModelCallable | None = None) -> str:
