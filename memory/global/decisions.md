@@ -923,3 +923,143 @@ komponen baru. Yang harus disambungkan nanti: `received_kg`,
 
 Gerbang: `tsc` 0, `next lint` 0, vitest 205 berkas/2.417 tes (1 gagal `prd-nav.test.tsx`,
 milik sesi lain), build `WDpMMCWmdO-Z04vCJsV-2`. 0 commit.
+
+
+## Ronde 47 — 2026-10-29: Keamanan Pangan — §4.2 `07-safety-evidence.md` dikerjakan di permukaan yang sudah ada
+
+Dokumen acuan ditulis untuk repo lain (modul “Safety & Evidence”). Di repo ini
+permukaannya tab “Keamanan Pangan” (`FoodSafetyBoard` + `lib/food-safety.ts`) dan tab
+“Decision & Evidence” (`DecisionEvidence`/`DecisionDetail`/`IntegrityPanel`). Yang dipakai
+adalah MAKSUD tiap butir, bukan nama berkasnya. Audit enam butir lebih dulu, baru menyunting.
+
+1. Butir 1 (postur ↔ gerbang) dikerjakan sebagai saringan komoditas, bukan tabel baru:
+   `safetyDecisions(items, commodity?)` menyaring keputusan `safety_disruption` menurut
+   `commodity_name` yang SUDAH dikirim `GET /decisions`. Sel komoditas di tabel status menjadi
+   tautan hanya bila komoditas itu benar-benar punya keputusan; komoditas lain tetap teks.
+   `allTotal` tetap menyebut seluruh feed, dan kalimat ringkasan dibuka “Disaring ke komoditas X”
+   supaya angka kecil tidak terbaca sebagai riwayat yang hilang.
+2. Butir 2 (jumlah batch di lencana) tidak boleh mengarang: `_safety_view` di
+   `approval_summary.py` mengirim `batches_checked: 0` juga saat status tidak terdefinisi, jadi
+   `safetyBadge()` hanya mencetak “N batch diperiksa” bila N > 0. Angka yang sudah naik ke
+   lencana TIDAK dicetak lagi sebagai baris fakta (`safetyFacts(summary, { countInBadge: true })`).
+3. Butir 3 tidak boleh mengurangi informasi: tabel status sudah menampilkan kesegaran tiap baris
+   tanpa lipatan, jadi lipatan baru tidak dipakai untuk menggantikannya. Yang ditambahkan adalah
+   kartu “Kesegaran terendah” (tiga skor terendah terbuka, sisanya di satu lipatan) plus dua
+   catatan yang memang belum ada: skor kosong bukan 0, dan rekap hanya dari baris yang termuat
+   (server mengirim maksimum 500 baris terbaru).
+4. Butir 4 (penanda mendekati kedaluwarsa) SUDAH ADA (`expiryState` + `URGENT_HOURS`/`WATCH_HOURS`,
+   kolom “Sisa masa”, kartu “Batch perlu segera dipakai”) — tidak dibungkus ulang.
+5. Butir 5 dijawab satu baris di bawah bilah saring tabel: saringan itu hanya menyentuh daftar
+   batch, sedangkan daftar keputusan punya saringan komoditas sendiri. Di tab Decision & Evidence
+   tidak berlaku (pemilih keputusan dan sakelar “lewat tenggat” menyaring kumpulan yang sama).
+6. Butir 6 memakai pola ekspor yang sudah ada: `tableToCsv` (diekstrak dari `dossierToCsv`, aturan
+   formula-injection ikut) + `downloadText`. Isi berkas = baris yang SEDANG tampil setelah saringan.
+   Satu penyimpangan yang disengaja: kolom `lokasi` memakai nama lengkap, bukan kode wilayah tabel,
+   karena singkatan justru menghilangkan informasi di berkas audit.
+
+Tidak dikerjakan dan disebut di laporan: ekspor PDF dan persistensi pilihan saringan antar-sesi
+(keduanya butuh keputusan produk, bukan kekurangan data). Tidak ada tombol tulis baru, tidak ada
+persentase gabungan, tidak ada status PASS/FAIL yang diubah.
+
+Gerbang: `tsc --noEmit` exit 0, `npm run lint` exit 0, vitest **212 berkas / 2.473 tes lulus,
+0 gagal**. (Run tengah sempat 1 gagal di `tests/agenda.test.ts` karena `lib/agenda.ts` sedang
+disunting sesi lain — berkas itu tidak disentuh di sini; hijau setelah suntingan itu selesai.)
+34 tes baru ditulis MERAH lebih dulu lalu hijau. 0 commit.
+
+## Ronde 47 — 2026-10-29: kalimat di "Jejak kepercayaan" harus bisa dicocokkan, bukan hanya pendek
+
+1. Kalimat penjelas satu sel memakai satu bentuk: `N <kategori>` dipisah " · ", tanpa
+   kata ganti yang menggantung ("masih", "luar", "…tidak ada yang…").
+2. Kategori hitungan WAJIB saling meniadakan. Batch: ditahan > gagal > belum diuji >
+   lolos > tanpa status, sehingga jumlahnya selalu sama dengan `/total`. Keputusan:
+   dieksekusi + menunggu + ditolak + sudah selesai = total.
+3. Status yang tidak masuk kategori mana pun tetap disebut ("N tanpa status"), tidak
+   dibiarkan hilang — penjelasan yang tidak bisa dijumlahkan membuat angka tampak salah.
+4. Label sel tidak boleh lebih kecil dari kalimat penjelasnya (12 → 13px), dan
+   `.trust-foot` 13px/1,5 dengan `text-wrap: pretty`.
+
+Gerbang: `tsc` 0, `next lint` 0, vitest 212 berkas/2.476 tes, build `nAmr-_z0zd1Mzz1CGFOEH`. 0 commit.
+
+## Ronde 48 — 2026-10-29: ukuran huruf penjelas "Jejak kepercayaan" = 12px
+
+Pemilik meminta kalimat penjelas dikecilkan ("bisa diperkecil mungkin fontnya") setelah
+sempat dinaikkan ke 13px. Aturan: `.trust-foot` 12px / line-height 1,4 / jarak 3px /
+`tabular-nums` / `text-wrap: pretty`, label sel 13px supaya hierarki tetap benar
+(label > penjelas bukan sebaliknya). Bukti di browser 947px: kartu 166px, empat sel 55px
+sama tinggi, keempat kalimat satu baris (tinggi 17px, tidak membungkus).
+
+Gerbang: `next lint` 0, vitest 25 tes terkait lulus, build `5HQf9LYaawBv5pstd_qPk`. 0 commit.
+
+## Ronde 49 — 2026-10-29: Location Network jadi satu halaman lima blok
+
+1. Satu tab = satu kepala + satu filter komoditas. `SurplusBoard` tidak dirender utuh lagi;
+   isinya menjadi blok 4 (Rencana alih, `AllocationTable`) dan 5 (Limbah) di dalam board.
+2. Rencana alih wajib dari `GET /surplus/allocations` (server), bukan hitungan klien: peta
+   peran SPPG hanya memuat satu lokasi sehingga hitungan klien selalu kosong.
+3. Rencana alih & limbah tampil untuk SEMUA peran (keputusan pemilik 29 Okt 2026); gerbang
+   `SURPLUS_ROLES` dicabut.
+4. Hook `useWasteSummary`/`useSurplusPlan` dulu bergantung pada `tab === "surplus"` yang sudah
+   tidak ada → blok selalu kosong. Kini juga hidup untuk `tab === "location-network"`.
+5. Panah aliran surplus→kekurangan TIDAK dipakai: mengulang angka kalimat ringkasan.
+
+Gerbang: tsc 0, lint 0, vitest 213/2489, build `ritoIHqRhgMCfG_oksSgY`. 0 commit.
+
+## Ronde 50 — 2026-10-29: dua kolom penting di tabel Location Network
+
+1. "Batch ≤7h" hanya menghitung stok yang BOLEH dipakai: `safety_status=pass` dan tidak
+   ditahan; tanggal tak terbaca tidak dihitung; yang sudah lewat masa layak tetap dihitung.
+2. "Rekomendasi" = keputusan berstatus terbuka per `target_location_name`; baris tanpa nama
+   dilewati supaya tidak muncul kunci "undefined".
+3. Kolom dipasang hanya bila ada nilai > 0 di salah satu baris (arahan pemilik); sel kosong
+   menulis "—", bukan 0.
+
+Gerbang: tsc 0, lint 0, vitest 214/2502, build `ubpvBA7URr_Dy82BlkAZE`. 0 commit.
+
+## Ronde 51 — 2026-10-29: copy & keadaan halaman Location Network (Langkah 3 rencana)
+
+1. Kalimat kepala halaman punya SATU sumber teks: bawaan `LocationNetworkBoard` ("Siapa
+   kekurangan, siapa kelebihan, apa yang dialihkan, dan apa yang terbuang"); `app/page.tsx`
+   hanya mengirim kalimat untuk peran nutritionist. Dua salinan sebelumnya sempat berbeda.
+2. Istilah di kepala & judul menu disamakan dengan kartu ringkasan ("kelebihan", bukan
+   "berlebih"); frasa "isi catatan tiap lokasi"/"dari mana catatannya" dibuang karena isi
+   itu tidak lagi ada di halaman.
+3. Angka hanya dicetak bila benar-benar terbaca: pil "N lokasi" disembunyikan selama memuat
+   dan saat galat ("0 lokasi" terbaca sebagai hasil pengukuran, bukan sebagai "belum tahu").
+4. Keadaan kosong diucapkan SEKALI (kartu "Keadaan jaringan"); kartu tabel tidak dirender.
+   Memuat memakai tiga baris kerangka `skeleton skeleton-line`, bukan teks "Memuat…".
+5. Satu lokasi dalam cakupan diberi baris kaki "Akun ini hanya mencakup satu lokasi." —
+   bukan paragraf penjelas di kepala.
+6. Penjelasan proses tidak masuk baris baca: rumus biaya rencana alih pindah ke `title`
+   judul kolom; kaki tabel tinggal ambang surplus.
+
+Gerbang: tsc 0, lint 0, vitest 216/2512, build `-N541gMU4jDNPcxcztwAE`. 0 commit.
+
+## Ronde 52 — 2026-10-29: Decision & Evidence — bukti pemasok & pesan batch ditahan
+
+Ditemukan saat menelusuri alur nyata (approve → eksekusi → review PO) di :3010,
+bukan dari membaca kode.
+
+1. **Modul fetch frontend WAJIB memakai basis relatif.** `lib/supplier-exclusions.ts`
+   memakai `NEXT_PUBLIC_API_URL || "http://localhost:8000"`. Variabel itu ada tetapi
+   KOSONG di stack lokal, jadi `||` memilih URL absolut; CSP `connect-src 'self'`
+   menolaknya dan request tidak pernah sampai ke backend (log bersih, `dikirim`
+   tidak ada). `lib/api.ts` memakai `??` sehingga path relatif lewat rewrites Next.
+   Fix `?? ""`. Konsekuensi yang dulu tidak terlihat: `supplierContext = null` membuat
+   `DecisionDetail` MELEWATI panel Supplier governance sepenuhnya — panelnya tidak
+   "kosong", panelnya tidak ada.
+2. **Endpoint yang mengembalikan alasan wajib punya pembaca.** `review PO`
+   (`POST /actions/purchase-orders/{po}/approve`) mengirim `dikirim` + `ditahan`;
+   `DecisionActions.reviewPo` hanya membaca status. Keputusan bisa `executed` dengan
+   PO `submitted` sementara batch terikat DITAHAN dan tidak ada truk bergerak
+   (terukur: bef077a8, batch b772248c "sudah berangkat", `max(dispatched_at)` tetap).
+   Ditambal dengan helper murni `ringkasanBatchPo()` + dipakai di `reviewPo`, supaya
+   teks "tidak ada barang berangkat" punya satu sumber yang bisa diuji.
+3. **Sesi demo adalah prasyarat tulis, bukan hiasan.** Approval/eksekusi ditolak
+   ("aksi tulis ditolak") sampai `POST /demo/session/start` aktif. Membangun template
+   menyegarkan timestamp dan me-reset baris approval meski ID deterministik tetap —
+   keputusan yang tadi "1 dari 2" bisa berubah jadi "0 dari 2" setelah "Muat Demo".
+
+Gerbang: tsc 0 (seluruh proyek), vitest 4 berkas / 37 tes lulus (termasuk
+`tests/po-dispatch-summary.test.ts`, 6 tes baru), bukti live pesan review PO:
+"… executed. 1 batch ditahan: sudah berangkat 2026-10-28T05:15:30.119336+00:00."
+0 commit.

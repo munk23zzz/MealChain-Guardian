@@ -454,3 +454,27 @@ Parameter `max_distance_km` + cakupan jarak di UI dijadikan fase tersendiri sete
   di luar layar, fokus balik ke pemicu.
 - CSS baru di ujung `app/globals.css`: `.detail-kpi*`, `.detail-aksi--utama`, `.detail-setelah`,
   `.detail-konteks`, `.detail-jejak-kepala`, `.popup-keputusan--aksi`, `.aksi-panel .approval-menu-foot`.
+
+## 2026-10-29 — Location Network: Langkah 3 (copy & keadaan) selesai
+- Rencana `docs/plans/location-network-page-plan.md` §11 kini Langkah 1–3 SELESAI; tidak ada
+  langkah lain di rencana itu (sisa = keputusan pemilik §12: nama menu, angka kolom Rekomendasi).
+- Kontrak copy yang dijaga tes (`frontend/tests/location-network-langkah3.test.tsx`): satu baris
+  filter + satu pil tanggal, tidak ada `<p>` > 120 karakter, memuat = 3 baris kerangka tanpa
+  pil jumlah, galat total tanpa angka, kosong = satu kalimat, catatan basi menyebut jumlahnya.
+- Kalimat kepala kini hanya ada di `components/LocationNetworkBoard.tsx`; jangan menyalinnya
+  lagi ke `app/page.tsx` (dua salinan pernah menyimpang).
+
+## 2026-10-29 — Decision & Evidence: bukti pemasok hidup lagi, batch ditahan terbaca
+
+- `lib/supplier-exclusions.ts` sekarang `process.env.NEXT_PUBLIC_API_URL ?? ""` (relatif).
+  Jangan kembalikan ke `|| "http://localhost:8000"`: CSP `connect-src 'self'` memblokir
+  lintas-origin dan kegagalannya SENYAP (tidak ada log backend, hanya banner
+  "Sebagian bukti gagal dibaca"). Gejala turunannya: panel "Supplier governance" tidak
+  dirender sama sekali karena `supplierContext` null.
+- `components/DecisionActions.tsx` mengekspor `ringkasanBatchPo()` (murni, diuji di
+  `tests/po-dispatch-summary.test.ts`) dan `reviewPo` memakainya untuk mengucapkan
+  `dikirim`/`ditahan` dari respons backend. Jangan menghapus lagi: tanpa itu keputusan bisa
+  `executed` + PO `submitted` walau batch terikat ditahan dan tidak ada truk bergerak.
+- Keadaan data lokal saat ini: sesi demo aktif (mode realtime, dibangun 03.46 WIB), approval
+  dan timestamp template disegarkan; `375c831b` dan `bef077a8` sudah `executed` dengan PO
+  `MC-375C831B78CA` / `MC-BEF077A8A935` berstatus `submitted`; tidak ada PO draft tersisa.
