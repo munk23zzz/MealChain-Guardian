@@ -1,8 +1,8 @@
 """Router balance (Task 10 Sprint 2) — tipis: validasi + delegasi service."""
 
+import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
-import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict

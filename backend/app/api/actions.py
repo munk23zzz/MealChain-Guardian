@@ -36,6 +36,7 @@ from app.models import (
     Commodity,
     Decision,
     DecisionEvidence,
+    DemoSession,
     User,
 )
 from app.services import settlement
@@ -324,6 +325,17 @@ async def _dispatch_bound_batches(
     ditahan: list[dict] = []
     for b in batch:
         if b.dispatched_at is not None:
+            # Batch yang sudah berangkat = sudah di jalan/tiba. Dulu dilewati
+            # diam-diam sehingga eksekusi berakhir "executed" tanpa truk apa pun
+            # (terukur 28 Okt 2026: batch template berangkat 8 Okt masih dipilih
+            # sebagai kandidat pengadaan). Sekarang dilaporkan sebagai ditahan
+            # supaya operator tahu barangnya memang sudah berangkat.
+            ditahan.append(
+                {
+                    "batch_id": str(b.id),
+                    "alasan": f"sudah berangkat {b.dispatched_at.isoformat()}",
+                }
+            )
             continue
         # Dulu `usable_until` yang sudah lewat DITULIS ULANG menjadi
         # `sekarang + 6 jam` sehingga barang kedaluwarsa bisa diberangkatkan
@@ -364,7 +376,22 @@ async def _source_batches_block_reason(db: AsyncSession, decision: Decision) -> 
         return "source_location_missing"
 
     batches = await batch_sumber_transfer(db, decision)
-    return penghalang_sumber(batches, sekarang=_now_utc())
+    # Jam revalidasi mengikuti JANGKAR SESI keputusan, bukan jam dinding.
+    # Fase 12 MG (terukur 27 Okt 2026): batch template berjangkar REF 8 Okt
+    # dinilai "bukti suhu tidak lengkap" saat jam dinding sudah 19 hari lebih
+    # maju, sehingga keputusan `executed` yang sah terbaca gagal revalidasi.
+    # Keputusan yang tidak punya sesi (data operasional) tetap memakai jam dinding.
+    sekarang = _now_utc()
+    sesi_id = getattr(decision, "demo_session_id", None)
+    if sesi_id is not None:
+        try:
+            sesi = await db.get(DemoSession, sesi_id)
+            jangkar = getattr(sesi, "evaluation_anchor", None)
+        except Exception:  # noqa: BLE001 — jam evaluasi tidak boleh menggagalkan guard
+            jangkar = None
+        if jangkar is not None:
+            sekarang = jangkar
+    return penghalang_sumber(batches, sekarang=sekarang)
 
 
 async def _source_batches_still_safe(db: AsyncSession, decision: Decision) -> bool:
@@ -708,12 +735,20 @@ async def approve_action(
             status_code=422,
             detail="penolakan wajib menyertakan alasan (comment)",
         )
+    # Persetujuan bersyarat (keputusan produk, 28 Okt 2026): keputusan
+    # `verifier_flagged` BOLEH disetujui, tetapi persetujuannya wajib membawa
+    # catatan bahwa approver sadar ada temuan verifier. Tanpa catatan, audit
+    # hanya melihat "approved" dan temuan verifier hilang dari jejak.
+    komentar_final = (payload.comment or "").strip() or None
+    if payload.approved and decision.status == "verifier_flagged":
+        tanda = "disetujui meski verifier menandai temuan (diketahui approver)"
+        komentar_final = f"{komentar_final} | {tanda}" if komentar_final else tanda
     db.add(
         Approval(
             decision_id=decision.id,
             approved_by=user.id,
             approved=payload.approved,
-            comment=payload.comment,
+            comment=komentar_final,
         )
     )
     if payload.approved:

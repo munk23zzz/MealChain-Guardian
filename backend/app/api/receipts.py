@@ -13,8 +13,14 @@ Dua lapis yang sengaja dipisah:
 Aturan yang ditegakkan di sini:
 - hanya `sppg_head` yang memutuskan; pencatat boleh kepala maupun ahli gizi;
 - batch harus di lokasi sendiri (scope, ruling 2026-10-14);
-- barang berstatus keamanan `fail` TIDAK boleh disetujui — stok tidak boleh
-  bertambah dari barang yang gagal CCP;
+- kelayakan batch dinilai SATU evaluator (`app.core.batch_eligibility`), bukan
+  aturan lokal berkas ini (Fase 4 MG poin 5). Pencatatan ditolak untuk batch
+  `rejected`/`quarantined`; batch `on_hold` TETAP dicatat karena ceklis petugas
+  adalah bukti untuk verifikasi lanjutan. Persetujuan hanya untuk `usable`,
+  sehingga stok tidak pernah bertambah dari barang yang gagal/belum terbukti
+  aman;
+- status `batches.safety_status` TIDAK PERNAH diubah oleh endpoint di sini —
+  tombol manusia bukan pengganti hasil uji laboratorium;
 - satu batch paling banyak satu penerimaan disetujui (unique index parsial 026),
   jadi klik ganda tidak menggandakan stok.
 """
@@ -33,37 +39,16 @@ from sqlalchemy.orm import aliased
 from app.api.auth import MUTATING_ROLES, get_current_user, require_roles
 from app.api.demo_session import butuh_sesi_aktif
 from app.api.dependencies import get_db
-from app.core.safety_gate import (
-    BLOKIR_EKSEKUSI_KARANTINA,
-    BLOKIR_EKSEKUSI_KEDALUWARSA,
-    BLOKIR_SAFETY_BUKAN_PASS,
-    BLOKIR_SUHU_TIDAK_LENGKAP,
-    receipt_blokir_alasan,
-)
+from app.core.batch_eligibility import USABLE
 from app.core.scope import assert_in_scope
 from app.models import Batch, BatchReceipt, Commodity, Location, SupplyRecord, User
 from app.services import receipt_value, settlement
+from app.services.batch_eligibility_service import (
+    BOLEH_DICATAT,
+    evaluasi_batch,
+    pesan_tolak,
+)
 from app.services.demo_session import sesi_sekarang
-
-#: Pesan 409 per alasan blokir. Ditulis eksplisit supaya petugas dapur tahu
-#: langkah berikutnya, bukan sekadar "ditolak".
-_PESAN_TOLAK_PENERIMAAN = {
-    BLOKIR_EKSEKUSI_KARANTINA: (
-        "barang masih berstatus karantina — tidak boleh masuk stok; "
-        "tunggu keputusan pelepasan atau penolakan"
-    ),
-    BLOKIR_SAFETY_BUKAN_PASS: (
-        "barang berstatus TIDAK AMAN atau belum terverifikasi — tolak penerimaan"
-        " atau periksa ulang keamanannya"
-    ),
-    BLOKIR_SUHU_TIDAK_LENGKAP: (
-        "bukti suhu barang tidak lengkap — tidak boleh masuk stok; tolak"
-        " penerimaan atau lengkapi pembacaan suhu"
-    ),
-    BLOKIR_EKSEKUSI_KEDALUWARSA: (
-        "barang sudah kedaluwarsa — tidak boleh masuk stok; tolak penerimaan"
-    ),
-}
 
 router = APIRouter()
 
@@ -169,6 +154,12 @@ async def create_receipt(
 
     Scope: barang hanya bisa diterima di dapur sendiri (ruling 2026-10-14) —
     peran SPPG yang mencoba mencatat batch milik lokasi lain dibalas 403.
+
+    Kelayakan (Fase 4 MG poin 5): 409 bila evaluator menyatakan batch
+    `rejected`/`quarantined`. Batch `on_hold` (safety `pending`/
+    `needs_verification`, bukti suhu kurang) TETAP DITERIMA — ceklis petugas
+    adalah bukti untuk verifikasi lanjutan, dan catatan `menunggu` tidak
+    menambah stok. `batches.safety_status` tidak disentuh di sini.
     """
     batch = (
         await db.execute(select(Batch).where(Batch.id == payload.batch_id))
@@ -177,6 +168,21 @@ async def create_receipt(
         raise HTTPException(status_code=404, detail="batch tidak ditemukan")
 
     assert_in_scope(user, batch.location_id, what="lokasi batch")
+
+    # Fase 4 MG poin 5: revalidasi di PENERIMAAN. Batch yang sudah ditolak
+    # evaluator (gagal uji, kedaluwarsa, masa layak tak tercatat, karantina,
+    # kesegaran gagal) tidak boleh dicatat seolah tinggal menunggu persetujuan.
+    # `on_hold` sengaja LOLOS: ceklis petugas adalah bukti untuk verifikasi
+    # lanjutan, dan belum ada stok yang bertambah di titik ini.
+    evaluasi = evaluasi_batch(batch)
+    if evaluasi.status not in BOLEH_DICATAT:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{pesan_tolak(evaluasi)}"
+                f" (kode: {', '.join(evaluasi.blocking_reasons)})"
+            ),
+        )
 
     # Catatan kosong/spasi = tidak ada catatan (NULL), bukan string kosong —
     # UI harus bisa membedakan "tidak menulis apa-apa" dari "menulis spasi".
@@ -213,6 +219,11 @@ async def approve_receipt(
     untuk lokasi & komoditas batch. Overview membaca supply terbaru per lokasi,
     jadi angka pasokan/gap berubah setelah ini — bukan karena UI mengarang.
 
+    Gerbang kelayakan (Fase 4 MG poin 5): hanya batch `usable` yang boleh
+    disetujui. `on_hold` dan `rejected` sama-sama 409, tetapi pesannya menyebut
+    sebab yang BERBEDA (`safety_pending` bukan `safety_fail`) supaya petugas
+    tidak membuang barang yang masih bisa diverifikasi.
+
     Klik kedua tidak menambah stok: bila catatan sudah `disetujui`, balasan
     mengembalikan baris yang sama (`sudah: true`) tanpa menulis apa pun.
     """
@@ -240,18 +251,18 @@ async def approve_receipt(
                 " barang diperiksa ulang"
             ),
         )
-    blokir = receipt_blokir_alasan(
-        safety_status=batch.safety_status,
-        quarantine_status=batch.quarantine_status,
-        usable_until=batch.usable_until,
-        temperature_log=batch.temperature_log,
-        sekarang=datetime.now(UTC),
-    )
-    if blokir is not None:
+    # Hanya batch `usable` yang boleh menjadi stok. Evaluator yang sama dengan
+    # `POST /receipts` dan `/actions/execute`, jadi `can_execute`, guard
+    # eksekusi, dan penerimaan tidak bisa menyimpang (Fase 4 MG poin 4-5).
+    # Alasan `on_hold` (pending/needs_verification/bukti suhu kurang) dijawab
+    # dengan kalimatnya sendiri — bukan disamakan dengan kegagalan uji.
+    evaluasi = evaluasi_batch(batch, datetime.now(UTC))
+    if evaluasi.status != USABLE:
         raise HTTPException(
             status_code=409,
-            detail=_PESAN_TOLAK_PENERIMAAN.get(
-                blokir, "barang belum terbukti aman — tolak penerimaan"
+            detail=(
+                f"{pesan_tolak(evaluasi)}"
+                f" (kode: {', '.join(evaluasi.blocking_reasons)})"
             ),
         )
 
