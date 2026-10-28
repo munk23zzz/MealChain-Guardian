@@ -830,7 +830,14 @@ async def compute_kpis(
     invoice_rows = await _rows(
         db,
         "SELECT po.price FROM sap_mock_purchase_orders po "
+        "JOIN decisions d ON d.id = po.decision_id "
         "WHERE po.created_at >= :start AND po.created_at < :end "
+        # Cakupan lokasi WAJIB, sama seperti kueri SDC di atasnya. Audit
+        # 28 Okt 2026: tanpa `loc_filter_dec` kartu ini menampilkan rata-rata
+        # 12 PO impor SAP yang target_location_id-nya NULL — angka yang tidak
+        # bisa dibuka pengguna di daftar PO-nya sendiri (scope jakarta = 0).
+        f"{loc_filter_dec}"
+        + _scope("d", include_demo)
         + _scope("po", include_demo),
         {"start": start, "end": end, **dasar},
     )

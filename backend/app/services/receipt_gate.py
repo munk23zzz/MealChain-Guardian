@@ -208,6 +208,13 @@ async def gerbang_penerimaan(
             batch, viewer_role, viewer_location_id, catatan, evaluasi
         )
         tahan_alasan = _alasan_karantina(batch, viewer_role, viewer_location_id)
+        # Langkah berikutnya PER BATCH: satu keputusan bisa memuat batch
+        # kedaluwarsa dan batch yang tinggal menunggu verifikasi, dan menyuruh
+        # petugas "selesaikan verifikasi" untuk barang yang sudah lewat masa
+        # layak adalah arahan yang salah (terukur di verifikasi browser 27 Okt).
+        langkah_baris = next_step(evaluasi)
+        if langkah_baris is None and KODE["receipt_missing"] in terima_alasan:
+            langkah_baris = _LANGKAH_CATAT
         baris_batch.append(
             {
                 "batch_id": kunci,
@@ -216,17 +223,17 @@ async def gerbang_penerimaan(
                 "can_quarantine": not tahan_alasan if viewer_role else None,
                 "receive_reasons": _unik(terima_alasan),
                 "quarantine_reasons": _unik(tahan_alasan),
+                "next_step": langkah_baris,
             }
         )
 
     terima_semua = [k for b in baris_batch for k in b["receive_reasons"]]
     tahan_semua = [k for b in baris_batch for k in b["quarantine_reasons"]]
 
-    langkah = next_step(evaluasi_batch(batches[0], saat))
-    if langkah is None and any(
-        KODE["receipt_missing"] in b["receive_reasons"] for b in baris_batch
-    ):
-        langkah = _LANGKAH_CATAT
+    # Agregat = langkah batch pertama yang masih tertahan; bila semua layak,
+    # langkah catatan/None milik batch pertama.
+    tertahan = [b for b in baris_batch if b["receive_reasons"] or b["quarantine_reasons"]]
+    langkah = (tertahan or baris_batch)[0]["next_step"]
 
     return {
         "location_id": str(decision.target_location_id),

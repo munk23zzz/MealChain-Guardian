@@ -31,7 +31,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.freshness import classify_freshness, compute_freshness_score
+from app.core.freshness import classify_freshness, evaluate_freshness
+from app.core.policy_store import profil_untuk_komoditas
 from app.core.safe_delivered_cost import (
     SafeDeliveredCostInputs,
     calculate_safe_delivered_cost,
@@ -244,7 +245,6 @@ async def evaluate_suppliers(
         .all()
     }
 
-    shelf = _SHELF_LIFE.get(commodity)
     kandidat: list[SupplierCandidate] = []
     for sup in pemasok:
         batch_rows = (
@@ -266,24 +266,50 @@ async def evaluate_suppliers(
         dipakai: list[str] = []
         freshness: list[Decimal] = []
         safety: set[str] = set()
+        # Kesegaran WAJIB dinilai dengan profil komoditas (pita suhu + umur
+        # simpan per komoditas), bukan `settings` global. Dulu beras (ambient)
+        # dinilai terhadap 0-8 C dan ayam memakai jalur yang sama dengan ambang
+        # pass 0,60 hardcoded, berbeda dari PASS_THRESHOLD 0,85 di
+        # `core/freshness.py`. Akibatnya dua mesin memberi angka berbeda untuk
+        # batch yang sama dan keputusan lahir `verifier_flagged` (28 Okt 2026).
+        profil, _asal_profil = await profil_untuk_komoditas(db, komoditas.id)
         for b in batch_rows:
             if b.quarantine_status and b.quarantine_status != "none":
                 stok_reasons.append(f"batch {str(b.id)[:8]} dikarantina")
                 continue
-            if b.safety_status == "fail":
-                stok_reasons.append(f"batch {str(b.id)[:8]} gagal uji keamanan")
+            if b.dispatched_at is not None:
+                # Stok yang sudah berangkat bukan stok yang bisa dibeli: batch
+                # itu sudah di jalan/tiba di SPPG. Tanpa gerbang ini, kandidat
+                # pengadaan bisa menunjuk batch yang berangkat 20 hari lalu dan
+                # `POST /actions/execute` berakhir tanpa truk (terukur 28 Okt 2026).
+                stok_reasons.append(f"batch {str(b.id)[:8]} sudah berangkat")
                 continue
-            skor = compute_freshness_score(
-                b.harvested_at,
-                as_of,
-                shelf or settings.shelf_life_days_beras,
-                b.temperature_log or [],
-                settings.safe_temp_min_c,
-                settings.safe_temp_max_c,
+            # Fail-closed, selaras `core/safety_gate.py`: batch yang belum
+            # `pass` (mis. needs_verification) BUKAN kandidat. Dulu batch itu
+            # diloloskan, lalu `POST /actions/execute` menolaknya — keputusan
+            # bisa di-approve tetapi pasti 409 saat eksekusi.
+            if b.safety_status != "pass":
+                stok_reasons.append(
+                    f"batch {str(b.id)[:8]} belum lolos uji keamanan "
+                    f"({b.safety_status or 'tanpa status'})"
+                )
+                continue
+            segar = evaluate_freshness(
+                harvested_at=b.harvested_at,
+                as_of=as_of,
+                policy=profil,
+                temperature_log=b.temperature_log or [],
             )
-            status = classify_freshness(float(skor))
-            if status == "fail":
-                stok_reasons.append(f"batch {str(b.id)[:8]} lewat kesegaran")
+            skor = segar.score
+            status = segar.status
+            # Hanya batch yang benar-benar `pass` yang boleh jadi kandidat,
+            # sejalan dengan `core/safety_gate.py` (fail-closed). Sebelumnya
+            # `needs_verification` ikut dipilih, lalu verifier menandai
+            # keputusannya sendiri dan eksekusi berisiko 409.
+            if status != "pass":
+                stok_reasons.append(
+                    f"batch {str(b.id)[:8]} kesegaran {status}"
+                )
                 continue
             tersedia += Decimal(str(b.quantity_kg))
             dipakai.append(str(b.id))
@@ -311,10 +337,10 @@ async def evaluate_suppliers(
         )
         reliability = Decimal(str(sup.reliability_score))
         freshness_score = min(freshness) if freshness else Decimal("0")
+        # Ambang dari `core/freshness.py` (PASS 0,85 / VERIFY 0,60), bukan
+        # literal 0,60: satu sumber ambang untuk kandidat, KPI, dan verifier.
         freshness_status = (
-            "pass" if freshness and min(freshness) >= Decimal("0.60")
-            else "needs_verification" if freshness
-            else "fail"
+            classify_freshness(float(min(freshness))) if freshness else "fail"
         )
         safety_status = _worst_safety(safety) if safety else "pending"
 

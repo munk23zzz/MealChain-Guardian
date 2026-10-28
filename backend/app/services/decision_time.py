@@ -96,6 +96,23 @@ def dataset_version_untuk(mode: str, anchor: datetime) -> str:
     return f"realtime-{anchor.astimezone(timezone.utc):%Y%m%dT%H%M%S}Z"
 
 
+def evaluation_clock(as_of: datetime | None = None) -> datetime:
+    """Jam evaluasi dataset untuk pipeline (rekomendasi, kelayakan, bukti).
+
+    Urutannya: `as_of` eksplisit → jangkar kanon saat `DEMO_MODE` menyala →
+    jam dinding. Alasan: dataset demo/seed adalah dataset replay yang
+    berjangkar `2026-10-08 12:00`. Menilainya dengan jam dinding membuat bukti
+    suhu yang sah terbaca basi (dan seluruh kandidat tertahan), sementara
+    menilainya dengan jam dinding di produksi tetap benar karena tidak ada
+    dataset replay. Preseden aturan ini sudah ada di `decision_now`.
+    """
+    if as_of is not None:
+        return as_of
+    if bool(settings.demo_mode):
+        return REPLAY_ANCHOR
+    return datetime.now(timezone.utc)
+
+
 def _anchor_relasi(decision) -> datetime | None:
     """Anchor dari relasi sesi yang SUDAH dimuat (tanpa memicu lazy-load).
 

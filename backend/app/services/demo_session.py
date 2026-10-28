@@ -176,6 +176,8 @@ def status_payload(sesi: DemoSession | None, saat: datetime | None = None) -> di
             "mode": None,
             "evaluation_anchor": None,
             "dataset_version": None,
+            # Jumlah kasus milik sesi; `None` = tidak ada sesi (bukan nol kasus).
+            "cases": None,
             "expires_at": None,
             "anchor_now": None,
             "server_now": saat.isoformat(),
@@ -198,6 +200,9 @@ def status_payload(sesi: DemoSession | None, saat: datetime | None = None) -> di
                 sesi.mode, sesi.evaluation_anchor
             )
         ),
+        # Diisi pemanggil yang punya DB (`GET /demo/session`): jumlah KASUS milik
+        # sesi ini. `None` = belum dihitung, bukan nol.
+        "cases": None,
         "expires_at": sesi.expires_at.isoformat(),
         "anchor_now": sesi.anchor_now.isoformat(),
         "server_now": saat.isoformat(),
@@ -356,11 +361,39 @@ async def mulai_dengan_template(
     if lama is not None:
         await akhiri(db, lama)
 
+    # Fase 7 MG: jangkar dihitung SEKALI di sini, lalu dipakai dua kali — untuk
+    # membangun kasus (ID + waktu kejadian) dan untuk baris sesi. Kalau keduanya
+    # menghitung sendiri (`anchor_untuk` dipanggil di dua tempat), sesi realtime
+    # bisa berjangkar satu menit setelah data, dan `needed_by`/masa layak yang
+    # dihitung dari jangkar itu tidak lagi cocok dengan sesi yang tampil di UI.
+    from app.services import decision_time
+
+    mode_final = decision_time.mode_sah(mode)
+    jangkar = anchor or decision_time.anchor_untuk(mode_final)
+
     # Impor di dalam fungsi: hindari siklus services <-> seed saat modul dimuat.
     from app.seed.demo_template import build_into
 
-    laporan = await build_into(db, purge=True, freeze=True, bersihkan_sisa=False)
-    sesi = await mulai(db, menit=menit, created_by=created_by, kosongkan=False)
+    laporan = await build_into(
+        db,
+        purge=True,
+        freeze=True,
+        bersihkan_sisa=False,
+        mode=mode_final,
+        anchor=jangkar,
+    )
+    # Fase 10 MG: mode/anchor diteruskan ke pembuat sesi. Tanpa ini tombol
+    # "Muat Demo Real-time" membangun template yang sama tetapi sesinya lahir
+    # `replay` — dataset realtime dilaporkan sebagai kanon, dan tidak ada galat
+    # yang menunjukkan kekeliruan itu.
+    sesi = await mulai(
+        db,
+        menit=menit,
+        created_by=created_by,
+        kosongkan=False,
+        mode=mode_final,
+        anchor=jangkar,
+    )
     return sesi, laporan
 
 

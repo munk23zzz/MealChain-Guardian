@@ -39,6 +39,7 @@ fail-closed, bukan lolos.
 
 from __future__ import annotations
 
+import json
 import os
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
@@ -133,6 +134,84 @@ def _api_url(explicit: str | None) -> str:
     return (nilai or DEFAULT_API_URL).rstrip("/")
 
 
+def _teks_narasi(mentah: str) -> str:
+    """Teks narasi dari jawaban supervisor yang (menurut prompt-nya) JSON.
+
+    Prompt system supervisor meminta JSON `{"ringkasan": ...}`, sedangkan
+    `narasi_terjaga` membandingkan TEKS. Tanpa pencairan ini jejak dan UI
+    menampilkan pagar ```json + objek mentah, bukan kalimat untuk dibaca.
+    Jawaban yang bukan JSON dikembalikan apa adanya (tidak dikarang).
+    """
+    teks = (mentah or "").strip()
+    if not teks:
+        return teks
+    pagar = teks
+    if pagar.startswith("```"):
+        # buang ```json ... ``` (pagar pembuka/penutup opsional)
+        baris = pagar.splitlines()
+        if baris and baris[0].startswith("```"):
+            baris = baris[1:]
+        if baris and baris[-1].strip().startswith("```"):
+            baris = baris[:-1]
+        pagar = "\n".join(baris).strip()
+    if pagar.startswith("{"):
+        try:
+            data = json.loads(pagar)
+        except ValueError:
+            return pagar
+        if isinstance(data, dict):
+            for kunci in ("ringkasan", "narrative", "summary", "narasi"):
+                nilai = data.get(kunci)
+                if isinstance(nilai, str) and nilai.strip():
+                    return nilai.strip()
+    return pagar
+
+
+def _narrator_supervisor(
+    *,
+    timeout_seconds: float = 45.0,
+) -> tuple[Callable[[dict[str, Any]], str] | None, str | None]:
+    """Narator supervisor dari rantai model yang sama dengan 8 agent lain.
+
+    Mengembalikan `(callable, jalur)`. `callable` = `None` bila tidak ada model
+    yang bisa dipanggil — jalur review tetap jalan dan narasinya jujur memakai
+    template (`narasi_terjaga` mencatat `source="template"`).
+
+    Sebelum ini jalur `local` memanggil `run_review` TANPA narrator, sehingga
+    supervisor tidak pernah memanggil model dan baris `SUPERVISE` di
+    `agent_traces` selalu narasi deterministik — "9 agent" hanya 8 yang LLM.
+    """
+    try:
+        from agent.supervisor_agent import (
+            model_dan_jalur_supervisor_dari_env,
+            narasi as narasi_supervisor,
+        )
+    except Exception:  # noqa: BLE001 - paket agent tidak terpasang
+        return None, None
+
+    jalur, panggil = model_dan_jalur_supervisor_dari_env()
+    if panggil is None:
+        return None, jalur
+
+    batas = max(1, int(timeout_seconds))
+
+    def _narator(fakta: dict[str, Any]) -> str:
+        prompt = (
+            "Rangkum hasil review ini untuk kepala SPPG dalam 2-4 kalimat "
+            "bahasa Indonesia yang tenang dan konkret.\n"
+            "Aturan keras: sebut HANYA angka, status, dan temuan yang ada di "
+            "FAKTA di bawah. Jangan menambah klaim baru, jangan menyebut "
+            "approval/eksekusi sudah terjadi, jangan menyimpulkan aman bila "
+            "ada temuan blocking.\n\n"
+            f"BATAS WAKTU INTERNAL: {batas} detik.\n"
+            "FAKTA:\n"
+            + json.dumps(fakta, ensure_ascii=False, default=str)[:6000]
+        )
+        return _teks_narasi(narasi_supervisor(prompt, model=panggil))
+
+    return _narator, jalur
+
+
 def _jalankan(
     decision_id: str,
     *,
@@ -178,13 +257,31 @@ def _jalankan(
             )
             for worker in build_workers()
         }
+        # Supervisor (agent ke-9) lewat model: tanpa ini narasi di jejak selalu
+        # template dan pemeriksa berhak menyebut supervisor deterministik.
+        narrator, jalur_narasi = _narrator_supervisor(
+            timeout_seconds=timeout_seconds
+        )
         run = run_review(
             decision_id,
             api=api,
             workers=workers,
             timeout_seconds=timeout_seconds,
             mode=mode,
+            narrator=narrator,
         )
+        if jalur_narasi and hasattr(run, "model_copy"):
+            # Provider yang benar-benar melayani narasi dicatat di lineage
+            # (`agent_traces.output_summary.narration.provider`). `hasattr`
+            # melindungi double uji yang mengembalikan objek ringkas.
+            run = run.model_copy(
+                update={
+                    "narration": {
+                        **(run.narration or {}),
+                        "provider": jalur_narasi,
+                    }
+                }
+            )
         payload: dict[str, Any] = run.model_dump(mode="json")
         payload["trace_rows"] = build_trace_rows(run)
     except Exception as exc:  # noqa: BLE001 - review gagal ≠ request gagal

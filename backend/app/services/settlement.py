@@ -84,18 +84,22 @@ async def catat_penerimaan(
     receipt: BatchReceipt,
     sekarang: datetime,
 ) -> dict:
-    """Tulis `delivery_events` saat penerimaan barang disetujui.
+    """Hitung PROYEKSI porsi dari bahan yang diterima — tanpa menulis fakta tersaji.
 
-    Denominator continuity adalah `menu_plans.planned_portions`; numerator-nya
-    porsi yang benar-benar tersampaikan. Penerimaan memberi kg, jadi konversinya
-    memakai gram/porsi komoditas yang sudah dipakai modul rekomendasi.
+    Fase 8 (27 Okt 2026): fungsi ini dulu menulis `delivery_events` dengan
+    `delivered_portions` hasil konversi kg ÷ gram. Itu salah secara konsep:
+    bahan yang sampai di gudang bukan makanan yang tersaji ke penerima manfaat,
+    dan `delivery_events` adalah catatan pengiriman yang dibuat petugas. Selama
+    keduanya dicampur, kartu Meal Continuity menampilkan "porsi tersaji" yang
+    sebenarnya hanya proyeksi dari berat terima.
+
+    Kontrak sekarang: TIDAK ADA baris yang ditulis. Nilai kembali hanya
+    proyeksi berlabel (`proyeksi_porsi`, `gram_per_porsi`) yang dipakai UI
+    sebagai estimasi; metrik operasional tetap `no_data` sampai ada catatan
+    kiriman yang sebenarnya.
     """
     if not _aktif():
         return {"ditulis": False, "alasan": "penulis KPI dimatikan (demo_kpi_writeback=false)"}
-
-    ref = f"receipt:{receipt.id}"
-    if await _sudah_ada(db, DeliveryEvent, ref):
-        return {"ditulis": False, "alasan": "sudah tercatat", "source_ref": ref}
 
     komoditas = (
         await db.execute(select(Commodity).where(Commodity.id == batch.commodity_id))
@@ -133,34 +137,20 @@ async def catat_penerimaan(
         )
     ).scalar_one()
     sisa = int(plan.planned_portions or 0) - int(terkirim or 0)
-    if sisa <= 0:
-        return {"ditulis": False, "alasan": "rencana porsi hari itu sudah terpenuhi"}
 
     porsi = int(Decimal(str(batch.quantity_kg)) * 1000 / Decimal(str(gram)))
-    porsi = min(porsi, sisa)
-    if porsi <= 0:
-        return {
-            "ditulis": False,
-            "alasan": "berat yang diterima lebih kecil dari satu porsi",
-        }
-
-    db.add(
-        DeliveryEvent(
-            menu_plan_id=plan.id,
-            delivered_portions=porsi,
-            status="delivered",
-            origin=_asal(),
-            generated_at=sekarang,
-            delivered_at=sekarang,
-            source_ref=ref,
-        )
-    )
+    porsi_proyeksi = max(0, min(porsi, sisa)) if sisa > 0 else 0
     return {
-        "ditulis": True,
-        "source_ref": ref,
-        "porsi": porsi,
+        "ditulis": False,
+        "alasan": (
+            "penerimaan bahan hanya menghasilkan proyeksi porsi — bukan porsi "
+            "tersaji; tidak ada fakta pengiriman yang ditulis"
+        ),
+        "proyeksi_porsi": porsi_proyeksi,
+        "porsi_dari_berat": porsi,
         "menu_plan_id": str(plan.id),
         "gram_per_porsi": gram,
+        "sisa_rencana": max(0, sisa),
     }
 
 

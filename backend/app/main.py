@@ -30,6 +30,7 @@ from app.api.kpi import router as kpi_router
 from app.api.ledger import router as ledger_router
 from app.api.logistics import router as logistics_router
 from app.api.price import router as price_router
+from app.api.procurement import router as procurement_router
 from app.api.quarantine import router as quarantine_router
 from app.api.receipts import router as receipts_router
 from app.api.safety import router as safety_router
@@ -163,6 +164,12 @@ _JALUR_TANPA_SESI = frozenset(
         "/demo/session/start",
         "/demo/session/extend",
         "/demo/session/end",
+        # Menjalankan agent DARI Demo Control boleh membuka sesi sendiri:
+        # tanpanya, setelah "Akhiri sesi"/sesi kedaluwarsa setiap klik
+        # "Jalankan Agent" dijawab 409 oleh middleware ini dan panel tampak
+        # rusak (terukur 28 Okt 2026). Handler `/demo/agent/run` membuka sesi
+        # realtime dengan `kosongkan=False`, jadi keputusan tetap terikat.
+        "/demo/agent/run",
     }
 )
 _METODE_MUTASI = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -207,6 +214,38 @@ async def _konteks_sesi_demo(request, call_next):
         _sesi.set_sesi(None)
 
 
+# ── Gerbang mode demo (Fase 12 MG butir 4) ─────────────────────────────────
+# `DEMO_MODE=False` berarti aplikasi berjalan sebagai OPERASIONAL: namespace
+# `/demo` tidak diakui sama sekali. Sebelum gerbang ini ada, `DEMO_MODE` hanya
+# dibaca di beberapa tempat (pesan `freshness.as_of`, seed kredensial), sehingga
+# mematikan variabel itu TIDAK menutup `/demo/seed`: siapa pun yang memegang token
+# masih bisa menyemai kasus demo ke data operasional.
+#
+# Keputusan bentuk:
+# - **404, bukan 403/409.** Rute demo tidak dianggap ada di mode operasional,
+#   jadi jawabannya sama dengan jalur yang tidak pernah didaftarkan. 409 tetap
+#   milik pagar sesi (`DEMO_SESSION_ENFORCE`), sehingga operator bisa membedakan
+#   "mode operasional" dari "sesi demo kedaluwarsa".
+# - **Didaftarkan SESUDAH middleware sesi** supaya ia berjalan lebih dulu
+#   (Starlette menyusun middleware: yang terakhir ditambahkan = terluar). Dengan
+#   begitu 404 keluar tanpa membuka koneksi DB, dan aplikasi operasional yang
+#   tidak punya tabel demo tetap menjawab 404, bukan 500.
+_DEMO_PATH = "/demo"
+
+
+def _jalur_demo(path: str) -> bool:
+    return path == _DEMO_PATH or path.startswith(_DEMO_PATH + "/")
+
+
+@app.middleware("http")
+async def _gerbang_mode_demo(request, call_next):
+    from app.core.config import settings as _settings
+
+    if not _settings.demo_mode and _jalur_demo(request.url.path):
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
+    return await call_next(request)
+
+
 # Forecast SEBELUM demand generik (path param `/demand/{location}` bisa menelan "forecast")
 app.include_router(forecast_router)
 app.include_router(demand_router)
@@ -233,6 +272,7 @@ app.include_router(sap_orders_router)
 app.include_router(demo_router)
 app.include_router(demo_session_router)
 app.include_router(kpi_router)
+app.include_router(procurement_router)
 app.include_router(waste_router)
 app.include_router(surplus_router)
 app.include_router(agenda_router)

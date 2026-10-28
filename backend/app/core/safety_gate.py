@@ -24,6 +24,7 @@ from datetime import datetime
 from typing import Any, Iterable, Mapping
 
 from app.core import quarantine as karantina
+from app.core.batch_eligibility import evaluate_batch
 from app.core.temperature import summarize_temperature_log
 
 BLOKIR_SAFETY_BUKAN_PASS = "safety_status_bukan_pass"
@@ -83,31 +84,34 @@ def _alasan_batch(
     return None
 
 
-def penghalang_sumber(batches: Iterable[Any], *, sekarang: datetime) -> str | None:
+def penghalang_sumber(
+    batches: Iterable[Any],
+    *,
+    sekarang: datetime,
+    policy: Any | None = None,
+    arrival_due_at: datetime | None = None,
+) -> str | None:
     """Alasan eksekusi diblokir karena keadaan batch SUMBER, atau `None`.
 
     Definisi TUNGGAL yang dipakai bersama oleh guard `execute` dan
     `approval-summary` (`can_execute`), sehingga tombol di UI tidak pernah
     menjanjikan eksekusi yang pasti ditolak 409.
 
-    Sengaja LEBIH SEMPIT daripada `batch_blokir_eksekusi`: `pending` dan
-    `needs_verification` TIDAK memblokir — itu keadaan normal sebelum
-    pengujian, dan memblokirnya membuat keputusan mustahil dieksekusi hanya
-    karena ada batch lain di lokasi+komoditas yang sama (terbukti pada seed
-    kanonik: Jakarta/ayam `['fail','pass']`). Yang memblokir hanya fakta
-    keras: tidak ada batch, `fail`, karantina, atau kedaluwarsa.
+    Fase 4 MG: fungsi ini tidak lagi punya aturan sendiri — setiap batch
+    dievaluasi `app.core.batch_eligibility`, dan hanya batch `usable` yang
+    meloloskan eksekusi. Sebelumnya `pending`/`needs_verification` sengaja
+    diloloskan; akibatnya batch yang belum terbukti aman bisa dieksekusi lalu
+    diterima sebagai stok `usable`. Kode yang dikembalikan adalah kode stabil
+    evaluator (`safety_pending`, `safety_fail`, `batch_expired`, …) supaya pesan
+    API/UI tidak lagi menebak sebabnya.
     """
     daftar = list(batches)
     if not daftar:
         return BLOKIR_EKSEKUSI_TANPA_BATCH
     for batch in daftar:
-        if _teks(_nilai(batch, "safety_status")) == "fail":
-            return BLOKIR_SAFETY_FAIL_SUMBER
-        if _teks(_nilai(batch, "quarantine_status")) in KARANTINA_BLOKIR:
-            return BLOKIR_EKSEKUSI_KARANTINA
-        kedaluwarsa = _nilai(batch, "usable_until")
-        if kedaluwarsa is not None and kedaluwarsa < sekarang:
-            return BLOKIR_EKSEKUSI_KEDALUWARSA
+        hasil = evaluate_batch(batch, policy, sekarang, arrival_due_at)
+        if not hasil.dispatchable:
+            return hasil.code
     return None
 
 

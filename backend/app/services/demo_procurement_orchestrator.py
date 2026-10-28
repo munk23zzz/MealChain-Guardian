@@ -200,13 +200,39 @@ async def _run_supplier_procurement(
         # DECIDE: baris keputusan (id dipakai FK trace) ---------------------
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(minutes=ttl_minutes)
+        # Status awal DITURUNKAN dari verdict verifier yang baru dihitung di
+        # langkah VERIFY — bukan dari model, dan bukan `proposed` buta.
+        #
+        # Kenapa (regresi 28 Okt 2026): keputusan lahir `proposed` sementara
+        # `verified_by`/`verifier_note` sudah terisi. Akibatnya `/actions/approve`
+        # menolak ("status proposed tidak dapat di-approve") DAN `/actions/execute`
+        # menolak ("status proposed tidak dapat dieksekusi") — satu-satunya jalan
+        # keluar adalah memanggil `/actions/propose` lebih dulu, yang tidak
+        # ditawarkan UI. Pemilik melihat "agent jalan tapi keputusannya tidak bisa
+        # di-approve/execute".
+        #
+        # Aturannya sama dengan `/actions/verify` + `/actions/propose`:
+        #   CONSISTENT → `pending_approval` (terverifikasi, siap disetujui)
+        #   FLAGGED    → `verifier_flagged` (tetap boleh disetujui, dengan catatan)
+        #   UNAVAILABLE→ tetap `proposed` (belum dinilai; verify masih boleh diulang)
+        verdict = (verifier_result.verdict or "").upper()
+        status_awal = {
+            "CONSISTENT": "pending_approval",
+            "FLAGGED": "verifier_flagged",
+        }.get(verdict, "proposed")
         decision = Decision(
             id=uuid.uuid4(),
             decision_type="supplier_procurement",
-            status="proposed",
+            status=status_awal,
             proposed_by="supervisor_agent",
             verified_by="verifier_agent",
             verifier_note=verifier_result.verdict.lower(),
+            # Baris ini lahir dari DEMO, bukan data kanonik: `origin='demo'`
+            # adalah syarat yang membuat penjaga sesi (`boleh_distempel`,
+            # `tandai_sesi`, `kosongkan_bertanda`) mau menghapusnya saat jendela
+            # demo berakhir. Dengan default DB `'seed'`, keputusan hasil agent
+            # hidup selamanya dan "data hilang saat demo habis" tidak terjadi.
+            origin="demo",
             # Pengadaan tidak memindahkan stok SPPG lain: sisi asal = NULL.
             source_location_id=None,
             target_location_id=target.id,

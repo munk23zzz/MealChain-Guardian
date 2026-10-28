@@ -19,10 +19,27 @@ from app.services.supplier_exclusion_service import lock_supplier
 
 #: Pesan manusiawi untuk kode blokir batch sumber. Kode → kalimat, bukan
 #: sebaliknya, supaya "dikarantina" tidak pernah dilaporkan sebagai "FAIL".
+#: Sejak Fase 4 kode berasal dari evaluator tunggal (`batch_eligibility`), jadi
+#: `pending`/`needs_verification` punya kalimat sendiri — bukan disamakan
+#: dengan FAIL seperti sebelumnya.
 PESAN_BLOKIR = {
     BLOKIR_SAFETY_FAIL_SUMBER: "batch sumber kini FAIL (temperature excursion)",
+    "safety_fail": "batch sumber kini FAIL (temperature excursion)",
+    "safety_pending": "batch sumber belum diuji (safety pending) — perlu verifikasi",
+    "safety_needs_verification": (
+        "batch sumber menunggu verifikasi keamanan pangan"
+    ),
+    "safety_status_unknown": "status keamanan batch sumber tidak dikenal",
     BLOKIR_EKSEKUSI_KARANTINA: "batch sumber dikarantina/gagal",
+    "quarantined": "batch sumber dikarantina/gagal",
     BLOKIR_EKSEKUSI_KEDALUWARSA: "batch sumber kedaluwarsa",
+    "batch_expired": "batch sumber kedaluwarsa",
+    "expiry_unknown": "masa layak batch sumber tidak tercatat",
+    "temperature_evidence_incomplete": "bukti suhu batch sumber tidak lengkap",
+    "evidence_missing": "bukti batch sumber tidak lengkap",
+    "freshness_fail": "batch sumber tidak lagi segar",
+    "expired_before_arrival": "batch sumber kedaluwarsa sebelum tiba",
+    "delivery_window_exceeded": "jadwal kirim tidak lagi terpenuhi",
 }
 
 
@@ -47,10 +64,21 @@ async def persist_binding(db: AsyncSession, decision: Decision, candidate: dict)
         raise HTTPException(422, "binding batch/supplier tidak valid") from exc
     if not batch_ids:
         raise HTTPException(422, "binding batch wajib")
+    # Pengadaan: pemasok binding WAJIB sama dengan pemasok keputusan. Tanpa ini
+    # PO bisa diterbitkan ke pemasok yang berbeda dari yang tampil di layar
+    # (temuan F5 audit 27 Okt 2026: `9d27bcfc` menampilkan "UD Blitar" tetapi
+    # PO-nya ke "CV Ambarawa").
+    if (
+        decision.decision_type == "supplier_procurement"
+        and decision.supplier_id is not None
+        and decision.supplier_id != supplier_id
+    ):
+        raise HTTPException(422, "binding supplier tidak sama dengan pemasok keputusan")
+    acuan = lokasi_batch_acuan(decision)
     batches = (await db.execute(select(Batch).where(Batch.id.in_(batch_ids)))).scalars().all()
     if len(batches) != len(set(batch_ids)) or any(
         b.supplier_id != supplier_id
-        or b.location_id != decision.source_location_id
+        or b.location_id != acuan
         or b.commodity_id != decision.commodity_id
         for b in batches
     ):
@@ -75,11 +103,30 @@ async def persist_binding(db: AsyncSession, decision: Decision, candidate: dict)
                 batch_locations=[b.location_id for b in batches],
                 batch_commodities=[b.commodity_id for b in batches],
                 supplier_id=supplier_id,
-                source_location_id=decision.source_location_id,
+                source_location_id=acuan,
                 commodity_id=decision.commodity_id,
             ),
         )
     )
+
+
+def lokasi_batch_acuan(decision: Decision) -> uuid.UUID | None:
+    """Lokasi tempat batch keputusan ini HARUS berada.
+
+    Satu definisi, dipakai `resolve_binding`, `batch_sumber_transfer` dan guard
+    safety (`actions._source_batches_still_safe`, `approval_summary._safety_view`).
+
+    Pengadaan (`supplier_procurement`) tidak memindahkan stok SPPG lain: batch
+    milik pemasok ada di SPPG TUJUAN, dan `decisions.source_location_id` memang
+    NULL (`demo_procurement_orchestrator`: "sisi asal = NULL"). Dulu guard
+    eksekusi membandingkan batch dengan lokasi SUMBER untuk semua jenis,
+    sehingga pengadaan yang datanya sehat selalu ditolak
+    `409 binding batch/supplier berubah` (terukur 27 Okt 2026, keputusan
+    `943e662c…`) sementara `approval-summary` menyatakan `can_execute=True`.
+    """
+    if getattr(decision, "decision_type", None) == "supplier_procurement":
+        return decision.target_location_id
+    return decision.source_location_id
 
 
 async def resolve_binding(db: AsyncSession, decision: Decision) -> tuple[uuid.UUID, list[Batch]]:
@@ -94,6 +141,7 @@ async def resolve_binding(db: AsyncSession, decision: Decision) -> tuple[uuid.UU
         .all()
     )
     bindings = [e.payload for e in evidence if e.payload.get("allocation_binding") is True]
+    acuan = lokasi_batch_acuan(decision)
     query = select(Batch)
     if bindings:
         if len(bindings) != 1:
@@ -110,12 +158,29 @@ async def resolve_binding(db: AsyncSession, decision: Decision) -> tuple[uuid.UU
             or not ids
             or any(
                 b.supplier_id != supplier_id
-                or b.location_id != decision.source_location_id
+                or b.location_id != acuan
                 or b.commodity_id != decision.commodity_id
                 for b in batches
             )
         ):
             raise HTTPException(409, "binding batch/supplier berubah")
+    elif decision.decision_type == "supplier_procurement":
+        # Pengadaan tanpa snapshot binding: pemasok datang dari kolom keputusan,
+        # batch-nya di SPPG TUJUAN (lihat `lokasi_batch_acuan`).
+        if decision.supplier_id is None or acuan is None:
+            raise HTTPException(
+                409, "supplier_unknown: keputusan pengadaan tanpa pemasok/batch tujuan"
+            )
+        supplier_id = decision.supplier_id
+        batches = list(
+            (await db.execute(query.where(
+                Batch.location_id == acuan,
+                Batch.supplier_id == supplier_id,
+                Batch.commodity_id == decision.commodity_id,
+            ))).scalars().all()
+        )
+        if not batches:
+            raise HTTPException(409, "supplier_unknown: tidak ada batch pemasok di SPPG tujuan")
     else:
         batches = (
             (await db.execute(query.where(
@@ -129,7 +194,7 @@ async def resolve_binding(db: AsyncSession, decision: Decision) -> tuple[uuid.UU
                 409, "supplier_unknown: keputusan lama perlu binding batch eksplisit"
             )
         supplier_id = suppliers.pop()
-    return supplier_id, batches
+    return supplier_id, list(batches)
 
 
 def source_batch_safety_blocked(batches) -> bool:
@@ -177,8 +242,22 @@ async def batch_sumber_transfer(db: AsyncSession, decision: Decision) -> list:
         for e in evidence
         if (e.payload or {}).get("allocation_binding") is True
     ]
+    # Binding GANDA berisi identik = satu alokasi yang ditulis dua kali, bukan
+    # dua alokasi berbeda. Dulu semuanya ditolak, sehingga batch sumber terbaca
+    # kosong, cek safety kehilangan bahan, verdict jatuh `unavailable`, dan
+    # keputusan berhenti di `proposed` (terukur 28 Okt 2026). Konflik sungguhan
+    # (fingerprint/batch berbeda) tetap fail-closed.
     if len(bindings) > 1:
-        return []
+        sidik = {
+            (
+                str(b.get("fingerprint") or ""),
+                tuple(sorted(str(v) for v in b.get("batch_ids") or [])),
+            )
+            for b in bindings
+        }
+        if len(sidik) > 1:
+            return []
+        bindings = bindings[:1]
     if len(bindings) == 1:
         try:
             ids = {uuid.UUID(str(v)) for v in bindings[0]["batch_ids"]}
@@ -188,6 +267,24 @@ async def batch_sumber_transfer(db: AsyncSession, decision: Decision) -> list:
             return []
         return list(
             (await db.execute(select(Batch).where(Batch.id.in_(ids)))).scalars().all()
+        )
+    acuan = lokasi_batch_acuan(decision)
+    if decision.decision_type == "supplier_procurement":
+        # Tanpa binding: batch milik pemasok keputusan, di SPPG TUJUAN.
+        if decision.supplier_id is None or acuan is None:
+            return []
+        return list(
+            (
+                await db.execute(
+                    select(Batch).where(
+                        Batch.location_id == acuan,
+                        Batch.supplier_id == decision.supplier_id,
+                        Batch.commodity_id == decision.commodity_id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
         )
     return list(
         (

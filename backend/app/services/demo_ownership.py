@@ -71,11 +71,13 @@ async def sesi_pemilik(
     return sesi_row
 
 
-def blok_sesi(sesi_row: DemoSession | None) -> dict | None:
+def blok_sesi(sesi_row: DemoSession | None, *, kasus: int | None = None) -> dict | None:
     """Bentuk ringkas sesi untuk respons seed (id, mode, anchor, versi).
 
     Bentuk ini SAMA dengan `GET /demo/session` supaya klien tidak punya dua
-    pembaca untuk satu konsep.
+    pembaca untuk satu konsep — termasuk `cases` (jumlah KASUS milik sesi).
+    `kasus=None` berarti pemanggil tidak menghitungnya; klien membedakan
+    "belum dihitung" (`null`) dari "nol kasus" (`0`) dan tidak mengarang angka.
     """
     if sesi_row is None:
         return None
@@ -85,6 +87,7 @@ def blok_sesi(sesi_row: DemoSession | None) -> dict | None:
         "evaluation_anchor": sesi_row.evaluation_anchor.isoformat(),
         "dataset_version": sesi_row.dataset_version
         or decision_time.REPLAY_DATASET_VERSION,
+        "cases": kasus,
     }
 
 

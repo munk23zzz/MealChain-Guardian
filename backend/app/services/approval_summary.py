@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.approval_matrix import APPROVER_ROLES, evaluate_approvals
 from app.core.decision_validity import is_decision_valid
+from app.core.safety_gate import penghalang_sumber
 from app.models import (
     Approval,
     Commodity,
@@ -112,24 +113,28 @@ async def _safety_view(db: AsyncSession, decision: Decision) -> dict:
     execute (O-EVENT-2). Tanpa lokasi/komoditas → unavailable, bukan fail.
 
     Set batch & definisi blokir diambil dari `supplier_eligibility`
-    (`batch_sumber_transfer` + `source_batch_safety_blocked`) supaya
-    `can_execute` tidak pernah menjanjikan eksekusi yang pasti 409.
+    (`batch_sumber_transfer`) + `safety_gate.penghalang_sumber` supaya
+    `can_execute` tidak pernah menjanjikan eksekusi yang pasti 409, dan sebab
+    blokirnya memakai kalimat yang SAMA dengan guard execute.
     """
     from app.services.supplier_eligibility import (
         batch_sumber_transfer,
-        source_batch_safety_blocked,
+        lokasi_batch_acuan,
     )
 
     tak_terdefinisi = {
         "worst_status": None,
         "blocked": False,
+        "block_code": None,
         "batches_checked": 0,
         "reason": None,
         # AUD-9B-29: himpunan batch SUMBER yang dipakai execute. Worker agen
         # (Safety/Freshness) menilai batch ini, bukan batch lokasi tujuan.
         "batch_ids": [],
     }
-    if decision.source_location_id is None or decision.commodity_id is None:
+    # Pengadaan menilai batch di SPPG TUJUAN (sisi asal NULL); jenis lain tetap
+    # butuh lokasi sumber. Satu definisi dengan guard execute (`lokasi_batch_acuan`).
+    if lokasi_batch_acuan(decision) is None or decision.commodity_id is None:
         return tak_terdefinisi
     batches = await batch_sumber_transfer(db, decision)
     if not batches:
@@ -138,28 +143,57 @@ async def _safety_view(db: AsyncSession, decision: Decision) -> dict:
         return {
             "worst_status": None,
             "blocked": True,
+            "block_code": "no_source_batch",
             "batches_checked": 0,
             "reason": "safety revalidation gagal: tidak ada batch sumber",
             "batch_ids": [],
         }
     statuses = [(b.safety_status or "pending") for b in batches]
-    blocked = source_batch_safety_blocked(batches)
-    worst = (
-        "fail"
-        if blocked
-        else (
-            "needs_verification"
-            if "needs_verification" in statuses
-            else "pending"
-            if "pending" in statuses
-            else "pass"
-        )
-    )
+    # Kode blokir + kalimatnya berasal dari SATU tempat (`PESAN_BLOKIR`), sama
+    # dengan yang dibaca guard execute. Sebelum Fase 7 MG modul ini menulis
+    # sendiri "batch sumber kini FAIL" untuk SEMUA blokir, sehingga batch
+    # `needs_verification` — kasus demo yang sengaja minta verifikasi — terbaca
+    # sebagai kegagalan uji keamanan. Dua tempat menulis sebab = dua cerita.
+    from app.services.supplier_eligibility import PESAN_BLOKIR
+
+    # Jam evaluasi mengikuti JANGKAR SESI keputusan (Fase 12 MG). Batch template
+    # berjangkar 8 Okt; menilai dengan jam dinding membuat bukti suhunya terbaca
+    # "tidak lengkap" 19 hari kemudian, sehingga keputusan `executed` yang sah
+    # memikul penghalang palsu di ringkasan. Tanpa sesi → jam dinding (lama).
+    sekarang = datetime.now(timezone.utc)
+    sesi_id = getattr(decision, "demo_session_id", None)
+    if sesi_id is not None:
+        from app.models import DemoSession
+
+        try:
+            sesi = await db.get(DemoSession, sesi_id)
+            jangkar = getattr(sesi, "evaluation_anchor", None)
+        except Exception:  # noqa: BLE001 — read model tidak boleh gagal karena jam
+            jangkar = None
+        if jangkar is not None:
+            sekarang = jangkar
+    kode = penghalang_sumber(batches, sekarang=sekarang)
+    blocked = kode is not None
+    # `worst` mengikuti status batch yang sebenarnya, bukan `blocked`
+    # (blocked=True untuk needs_verification juga).
+    if "fail" in statuses:
+        worst = "fail"
+    elif "needs_verification" in statuses:
+        worst = "needs_verification"
+    elif "pending" in statuses:
+        worst = "pending"
+    else:
+        worst = "pass"
     return {
         "worst_status": worst,
         "blocked": blocked,
+        "block_code": kode,
         "batches_checked": len(batches),
-        "reason": "safety revalidation gagal: batch sumber kini FAIL" if blocked else None,
+        "reason": (
+            f"safety revalidation gagal: {PESAN_BLOKIR.get(kode, kode)}"
+            if blocked
+            else None
+        ),
         # Himpunan yang SAMA dengan yang dipakai execute (`batch_sumber_transfer`),
         # sehingga worker agen tidak perlu menebak dari lokasi tujuan.
         "batch_ids": sorted(str(b.id) for b in batches),

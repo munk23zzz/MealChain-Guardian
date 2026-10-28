@@ -79,7 +79,20 @@ async def bangun_ulang(db: AsyncSession) -> dict:
         # Sesi aktif dulu: lihat komentar `pastikan_sesi` — tanpa itu penyapu di
         # proses aplikasi bisa menghapus baris demo yang baru lahir.
         await pastikan_sesi(db)
-        laporan = await build_into(db, purge=True, freeze=True, bersihkan_sisa=False)
+        # Fase 7 MG: bangun ulang memakai jangkar SESI AKTIF. Tanpa ini tombol
+        # "bangun ulang" menulis kasus pada jam dinding sementara sesi replay
+        # mengklaim jangkar 8 Oktober — data dan label sesi bercerita berbeda.
+        from app.services import demo_session as sesi_layanan
+
+        sesi_aktif = await sesi_layanan.aktif(db)
+        laporan = await build_into(
+            db,
+            purge=True,
+            freeze=True,
+            bersihkan_sisa=False,
+            mode=sesi_aktif.mode if sesi_aktif is not None else None,
+            anchor=sesi_aktif.evaluation_anchor if sesi_aktif is not None else None,
+        )
         await db.commit()
         # 22 Okt 2026: `build_into` mem-purge seluruh baris demo lalu membangun
         # ulang template. Tanpa langkah ini, data pelengkap cakupan (semua
