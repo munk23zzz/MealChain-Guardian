@@ -184,6 +184,8 @@ def _narrator_supervisor(
     try:
         from agent.supervisor_agent import (
             model_dan_jalur_supervisor_dari_env,
+        )
+        from agent.supervisor_agent import (
             narasi as narasi_supervisor,
         )
     except Exception:  # noqa: BLE001 - paket agent tidak terpasang
