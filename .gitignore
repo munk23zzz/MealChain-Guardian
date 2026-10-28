@@ -52,6 +52,9 @@ htmlcov/
 .env
 .env.local
 .env.*.local
+# Salinan/backup .env memuat rahasia nyata (mis. .env.bak-gateway).
+.env.bak*
+.env.backup*
 !.env.example
 
 # Scratch diagnosa AWS (dulu ikut ter-commit tanpa sengaja)
