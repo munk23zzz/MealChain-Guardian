@@ -1256,6 +1256,58 @@ klik → **"Tersimpan: PO-MC-BEF077A8A935.pdf"**; baris dokumen juga tampil di p
 Governance. Tes: 11 berkas terkait **111/111 lulus** (`aksi-panel-kontrol` +
 `decision-purchase-order` bertambah 6 tes). `next lint` 0; `tsc` bersih untuk berkas
 yang disentuh.
+### Fase 33 — Pemasok: riwayat penerimaan barang per pemasok (29 Okt 2026)
+
+Latar: `D:\Downloads\05-penerimaan-barang.md` §8.5 (riwayat penerimaan per pemasok) dan §9
+(nilai PO vs nilai diterima) belum punya permukaan di aplikasi. §8.1–§8.3 sudah hidup di popup
+penerimaan Decision & Evidence, tetapi halaman **Pemasok** hanya menjawab "siapa pemasoknya" —
+tidak pernah "berapa yang benar-benar diterima dari dia, dan berapa nilainya".
+
+**Backend (baru).**
+- `GET /receipts/riwayat` — satu baris per catatan penerimaan, terbaru dulu. Field per baris:
+  `ordered_kg`, `received_kg` (`null` sampai `disetujui`), `unit_price_idr`, `po_number`,
+  `estimated_value_idr`, `accepted_value_idr`. Cakupan lokasi sama dengan antrean `menunggu`.
+- `ringkasan` dihitung server dari **seluruh** baris cakupan (bukan hanya `limit` yang dikirim):
+  `total`, `menunggu`, `disetujui`, `ditolak`, `kg_dipesan`, `kg_diterima`,
+  `nilai_diterima_idr`, `nilai_menunggu_idr`, `tanpa_harga`, `supplier`.
+- `services/receipt_value.py::peta_po_dan_harga()` — nomor PO + harga satuan untuk **banyak**
+  batch dalam satu kueri (mencegah N+1 saat satu halaman memuat puluhan baris).
+- Barang **ditolak** tidak masuk `nilai_menunggu_idr`: perkiraannya bukan uang yang menunggu
+  keputusan. Dikunci oleh tes backend.
+
+**Seed.** `demo_template._semai_riwayat_penerimaan()` menambah tiga catatan deterministik (satu
+`disetujui` ber-PO dengan `received_kg` + nilai pembukuan, satu `ditolak` beralasan, satu
+`menunggu`), dipanggil **paling akhir** setelah `_rapikan_cakupan_ledger`. Batch yang sudah punya
+catatan dilewati — tanpa itu satu batch bisa punya catatan `disetujui` dan `menunggu` sekaligus.
+
+**Frontend.** `lib/supplier-receipts.ts` (murni, 20 tes), `components/SupplierReceipts.tsx`,
+`lib/hooks/useReceiptHistory.ts`, `app/supplier-receipts.css` (berkas sendiri, bukan tambahan
+`globals.css`). Kartu duduk di antara "Daftar pemasok" dan "Register eksklusi".
+
+| Hal | Aturan |
+|---|---|
+| Tiga angka (§8.2) | kepala kartu: **Dipesan · Diterima · Nilai diterima**, dari `ringkasan` server |
+| kg | dua baris dalam satu sel (dipesan / diterima) — tidak dikurangkan di klien |
+| Nilai | kolom sendiri; `disetujui` → nilai pembukuan, `menunggu` → "… perkiraan", tanpa PO → "tidak tercatat", `ditolak` → "—" |
+| Asal harga (§8.3) | "540 kg × Rp 15.000 per kg dari PO MC-…" di bawah nilai, memakai `valueOrigin()` yang sudah ada |
+
+**Dua cacat yang tertangkap saat verifikasi hidup** (bukan saat menulis kode):
+1. tabel **1.116 px** di dalam bungkus 917 px → kolom Nilai terpotong di tepi kanan.
+   Perbaikan: `table-layout: fixed` + lima lebar kolom 15/24/13/17/31 % + izin membungkus untuk
+   nama pemasok, alasan, dan asal harga; ≤760 px kembali `auto` + `min-width: 600px` (gulir di
+   dalam bungkus, pola tabel konsol lain).
+2. baris **ditolak** sempat mencetak "Rp 5.400.000 perkiraan" — terbaca seperti uang keluar untuk
+   barang yang tidak diterima. Sekarang "—", dan kalimat asal harga tidak dirender.
+
+**Angka.** Kartu 546 px, halaman Pemasok 3.145 px, luapan horizontal **0** di 1262×568; lima baris
+(3 menunggu · 1 disetujui Rp 8.100.000 · 1 ditolak), penyaring 1/1/3/5 baris.
+
+Gerbang: `tsc --noEmit` 0 · vitest **226 berkas / 2.589 tes lulus** · backend
+`tests/test_receipts_riwayat.py` + gate penerimaan + batch pemasok tunggal **21 lulus**.
+
+**Catatan alat.** Menjalankan `pytest` backend di kontainer memakai **DB dev yang sama** dan
+me-reset data penerimaan (fixture). Setelah suite backend, jalankan
+`docker compose exec -T backend python -m app.seed.demo_template` sebelum mengukur atau demo.
 
 Catatan gerbang: suite penuh **2.541/2.543**; dua kegagalan ada di
 `tests/evidence-dossier.test.tsx` (stepper) yang **sedang ditulis sesi lain** (berkas

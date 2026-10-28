@@ -482,3 +482,23 @@ Parameter `max_distance_km` + cakupan jarak di UI dijadikan fase tersendiri sete
   memakai `ws` dari `frontend/node_modules`). Contoh: `NODE_PATH=<repo>/frontend/node_modules
   UKUR_LEBAR=390 UKUR_AKUN="BGN Monitor" UKUR_OUT=<folder> node _qa/ukur-viewport.cjs`.
   Halaman menolak iframe (`X-Frame-Options: DENY`), jadi harness iframe TIDAK bisa dipakai.
+
+## 2026-10-29 — Pemasok: riwayat penerimaan barang (Dok 05 §8.5)
+
+- Kartu **Riwayat penerimaan** di tab Pemasok (`components/SupplierReceipts.tsx`), di antara
+  "Daftar pemasok" dan "Register eksklusi". Sumber: `GET /receipts/riwayat` lewat
+  `useReceiptHistory` (hanya dimuat saat tab Pemasok/Overview aktif).
+- Logika murni di `lib/supplier-receipts.ts`. Aturan yang tidak boleh diubah tanpa membaca
+  komentarnya: `ditolak` → nilai "—"; tanpa PO → "tidak tercatat"; `received_kg` null sampai
+  `disetujui`; kg dipesan & diterima DUA baris, tidak dikurangkan di klien.
+- Ringkasan (tiga angka di kepala kartu) datang dari server dan mencakup SELURUH cakupan; jangan
+  menjumlah ulang di klien saat penyaring aktif.
+- CSS di `app/supplier-receipts.css` (berkas sendiri, diimpor `app/layout.tsx`), bukan tambahan
+  `globals.css`. Tabel memakai `table-layout: fixed` + lima lebar kolom; tanpa itu tabel melebar
+  melewati kartu dan kolom Nilai terpotong.
+- **Jangan jalankan `pytest` backend lalu mengukur/demo tanpa seed ulang**: fixture tes memakai DB
+  dev yang sama dan mereset catatan penerimaan. Pemulihan:
+  `docker compose exec -T backend python -m app.seed.demo_template`.
+- Data demo terakhir (setelah seed): 5 catatan penerimaan — 3 `menunggu`, 1 `disetujui`
+  (beras 540 kg, Rp 8.100.000, PO `MC-38D418FCB776`), 1 `ditolak` (beras 360 kg, alasan kemasan
+  bocor). Dua catatan `menunggu` tanpa PO → kolom nilai "tidak tercatat" (contoh jujur, sengaja).
