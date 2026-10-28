@@ -724,7 +724,37 @@ export default function FoodSafetyBoard({
     // Nol tidak diberi warna: angka 0 yang merah/kuning terbaca sebagai
     // peringatan padahal tidak ada yang perlu dikerjakan.
     tone: grup.value > 0 ? grup.tone : ("muted" as const),
+    // Berat kelompok (29 Okt 2026): `failedKg` sudah dihitung server, tetapi
+    // sebelumnya hanya "Ditahan" yang memperlihatkan berat — angka gagal
+    // terbaca tanpa akibatnya. Kelompok lain tidak punya berat di server, jadi
+    // `null` (tidak dicetak) dan bukan 0.
+    kg:
+      grup.key === "gagal"
+        ? summary.failedKg
+        : grup.key === "ditahan"
+          ? summary.quarantinedKg
+          : null,
   }));
+
+  // Tenggat terdekat (29 Okt 2026): satu-satunya pertanyaan yang tidak dijawab
+  // lima angka — kapan batch yang MASIH boleh dipakai paling cepat kedaluwarsa.
+  // Batch gagal dan yang ditahan sengaja tidak ikut: keduanya tidak boleh
+  // dialokasikan, sehingga "segera pakai" untuk keduanya adalah kalimat yang
+  // menyesatkan. Urutannya memakai `hoursLeft` server, bukan taksiran layar.
+  const terdekat =
+    tampil
+      .filter(
+        (row) =>
+          row.tone !== "danger" &&
+          row.quarantine !== "quarantined" &&
+          row.hoursLeft !== null
+      )
+      .sort((a, b) => (a.hoursLeft as number) - (b.hoursLeft as number))[0] ?? null;
+  // Baris yang tanggalnya sudah lewat tetap yang paling perlu perhatian, tetapi
+  // labelnya tidak boleh berbunyi "paling mendesak" — kalimat itu terbaca
+  // seperti saran memakainya. Label berganti, bukan datanya disembunyikan.
+  const tenggatLewat = terdekat !== null && (terdekat.hoursLeft as number) < 0;
+
 
   // Satu kalimat keterangan untuk pembaca layar: lima angka + total.
   const ringkasUji =
@@ -787,7 +817,9 @@ export default function FoodSafetyBoard({
               >
                 {summary.failed
                   ? `Tinjau ${summary.failed} batch gagal`
-                  : "Tinjau batch perlu tindakan"}
+                  : `Tinjau ${
+                      summary.needsVerification + summary.quarantined + summary.unchecked
+                    } batch perlu tindakan`}
               </button>
             ) : null}
           </span>
@@ -824,6 +856,22 @@ export default function FoodSafetyBoard({
           </span>
         </p>
 
+        {/* Tenggat terdekat: satu baris yang menjawab "apa yang paling mendesak
+            sekarang" tanpa mengulang lima angka di bawahnya. Hanya muncul bila
+            ada baris yang benar-benar punya tanggal layak DAN masih boleh
+            dipakai — tidak ada tanggal berarti tidak ada kalimat, bukan "—". */}
+        {terdekat ? (
+          <p className="safety-deadline" data-keadaan={tenggatLewat ? "lewat" : "mendesak"}>
+            <span className="safety-deadline-label">
+              {tenggatLewat ? "Sudah lewat" : "Paling mendesak"}
+            </span>
+            <span className="safety-deadline-body">
+              <strong>{terdekat.commodity}</strong> · {terdekat.location}
+              <span className="safety-deadline-time">{terdekat.hoursLabel}</span>
+            </span>
+          </p>
+        ) : null}
+
         {/* Lima angka, satu arti per angka. Kelompoknya eksklusif sehingga
             jumlahnya selalu = batch diperiksa; tidak ada bar, persentase, atau
             legenda. Pemisah vertikal menggantikan kotak per angka. */}
@@ -832,18 +880,22 @@ export default function FoodSafetyBoard({
             <div key={tile.key} className={`safety-count is-${tile.tone}`} role="listitem">
               <span className="safety-count-value">{tile.value}</span>
               <span className="safety-count-label">{tile.label}</span>
-              {tile.key === "ditahan" && summary.quarantined > 0 ? (
+              {tile.kg !== null && tile.value !== "0" ? (
                 <span
                   className="safety-count-note"
-                  title={
-                    summary.quarantinedKg === null
-                      ? "Berat tidak tercatat: tidak boleh dialokasikan"
-                      : `${formatKg(summary.quarantinedKg)} tidak boleh dialokasikan`
-                  }
+                  title={`${formatKg(tile.kg)} tidak boleh dialokasikan`}
                 >
-                  {summary.quarantinedKg === null
-                    ? "berat tidak tercatat"
-                    : formatKg(summary.quarantinedKg)}
+                  {formatKg(tile.kg)}
+                </span>
+              ) : tile.key === "ditahan" && summary.quarantined > 0 ? (
+                // Berat yang tidak dikirim server tetap dinyatakan: "tidak
+                // tercatat" berbeda dari "nol kg" dan tetap berarti tidak boleh
+                // dialokasikan.
+                <span
+                  className="safety-count-note"
+                  title="Berat tidak tercatat: tidak boleh dialokasikan"
+                >
+                  berat tidak tercatat
                 </span>
               ) : null}
             </div>

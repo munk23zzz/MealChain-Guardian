@@ -144,9 +144,19 @@ describe("FoodSafetyBoard", () => {
     const angka = Array.from(html.matchAll(/class="safety-count-value">(\d+)</g)).map((m) => Number(m[1]));
     expect(angka.reduce((a, b) => a + b, 0)).toBe(3);
     expect(html).toContain("Ditahan");
-    expect(html).toContain("540 kg");
-    // Satu catatan saja: tidak ada baris kedua yang menghitung batch sama.
-    expect((html.match(/safety-count-note/g) ?? []).length).toBe(1);
+    // 29 Okt 2026: berat sekarang juga dicetak di bawah "Gagal uji", jadi
+    // hitungan catatan global tidak lagi berarti "satu". Yang diuji tetap
+    // maksud aslinya: batch ditahan hanya muncul di kelompknya sendiri, dan
+    // beratnya tidak ikut tercetak di kelompok gagal.
+    const blok = (label: string) => {
+      const i = html.indexOf(`<span class="safety-count-label">${label}</span>`);
+      expect(i, `kelompok ${label} tidak dirender`).toBeGreaterThan(-1);
+      const mulai = html.lastIndexOf('<div class="safety-count ', i);
+      return html.slice(mulai, html.indexOf("</div>", i));
+    };
+    expect(blok("Ditahan")).toContain("540 kg");
+    expect((blok("Ditahan").match(/safety-count-note/g) ?? []).length).toBe(1);
+    expect(blok("Gagal uji")).not.toContain("540 kg");
     expect(html).not.toContain("Ditahan walau uji lolos");
   });
 

@@ -2708,6 +2708,48 @@ kelas pada elemen tujuan, bukan daftar id — sebelumnya daftar lima id ditulis 
 - `tests/evidence-dossier.test.tsx` — nav memakai `.section-jump` di `globals.css`
   (`position: sticky`, `top: 72px`, `--accent-soft`) dan `.jump-target` 132 px.
 
+### Ringkasan pengawasan & bukti suhu — tenggat, kebaruan, syarat (29 Okt 2026, lanjutan)
+
+Permintaan pemilik: *"upgrade design upgrade ringkasan pengawasan, suhu semaksimal mungkin namun
+tetap sama atau cocok dengan design lainnya"*. Arah yang diambil: menambah **informasi yang belum
+ada**, bukan mengulang angka yang sudah ada — keputusan 29 Okt sebelumnya (satu angka satu arti,
+tanpa bar/legenda di Ringkasan) tetap dipegang.
+
+**Ringkasan pengawasan.**
+- Baris **"Paling mendesak"**: satu batch yang masih BOLEH dipakai dengan `usable_until` terdekat,
+  mis. `PALING MENDESAK · wortel · Bandung · 2 hari 20 jam lagi`. Batch gagal dan batch ditahan
+  tidak ikut (keduanya tidak boleh dialokasikan, jadi "segera pakai" menyesatkan); kalau tanggalnya
+  sudah lewat labelnya berganti menjadi **"Sudah lewat"** dengan tinta bahaya — datanya tidak
+  disembunyikan, kalimatnya tidak menyarankan memakainya. Sumber: `hoursLeft`/`hoursLabel` server.
+- **Berat di bawah angka**: `failedKg` kini dicetak di bawah "Gagal uji" (sebelumnya hanya
+  "Ditahan"), sehingga angka gagal terbaca bersama akibatnya. Berat yang tidak dikirim server tetap
+  ditulis "berat tidak tercatat" untuk kelompok Ditahan.
+- **Label tombol** menyebut jumlah: "Tinjau N batch perlu tindakan" memakai
+  `needsVerification + quarantined + unchecked`, bukan kalimat tanpa angka.
+
+**Bukti suhu.**
+- **Kebaruan bukti**: setiap baris mencetak `dibaca <waktu>` dari `observed_at` (mis.
+  "dibaca 28 Okt 2026 06.20"). Tanpa `observed_at`, tidak ada kalimat waktu — bukan "—".
+- **Penanda "wajib dingin"** untuk baris dengan `cold_chain_required = true`: syarat, bukan
+  keadaan, jadi bentuknya netral (garis + teks redup) dan **setinggi lencana keadaan** di
+  sebelahnya (terukur 87x22 vs 86x22, selisih 0 px).
+- **Ukuran bukti**: kaki kartu menyebut `N sampel tercatat` (jumlah `sample_count` yang dikirim);
+  tidak ada satu pun jumlah → kalimat tidak dicetak (0 sampel adalah klaim yang tidak dibuat server).
+- **Catatan "menuntut bukti"** tidak lagi kotak amber penuh dengan pagar kiri 4 px — pola yang sama
+  dengan putusan di Ringkasan: satu titik + satu kalimat (terukur: latar transparan, titik 8 px
+  `--warn-ink`).
+
+Kelas CSS baru: `.safety-deadline`, `.safety-deadline-label`, `.safety-deadline-body`,
+`.safety-deadline-time`, `.safety-count.is-danger .safety-count-note` (di `app/theme-ext.css`) dan
+`.rowBadges`, `.coldChain` (di `TemperatureEvidenceCard.module.css`). Tidak ada kelas tes-sensitif
+yang diubah.
+
+**Bukti terukur** (localhost:3010, peran Kepala SPPG Bandung, 1247 px): Ringkasan 947x233 dengan
+baris tenggat 911x20 (13 px, label 12 px kapital), Bukti suhu 947x447 dengan enam baris 454x76,
+tanpa gulir mendatar; 390 px `docScrollWidth` = `docClientWidth` = 390 (tinggi halaman 8.655 px
+karena tabel menjadi kartu berlabel). Gerbang: `tsc` 0, `next lint` 0, **223 berkas / 2.560 tes
+lulus**, build `BUILD_ID=xb_mNGteO2N0HbVkfLPZU`.
+
 **Urutan bagian Keamanan Pangan (27 Okt 2026).** Permintaan pemilik: "atur urutan dari tiap
 bagian". Halaman ini kini mengalir **keadaan → bukti → tenggat → tindakan → rujukan → konteks →
 jejak audit**:

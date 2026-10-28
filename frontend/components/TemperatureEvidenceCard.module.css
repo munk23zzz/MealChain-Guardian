@@ -96,16 +96,29 @@
    0.7/0.85rem, radius kartu, tepi kiri 4 px) supaya satu halaman hanya punya
    SATU bentuk kotak peringatan; warnanya peringatan, bukan bahaya — bukti yang
    belum lengkap bukan batch gagal uji. */
+/* Keadaan "ada yang menuntut bukti" (29 Okt 2026). Dulu kotak amber penuh
+   dengan pagar kiri 4 px — elemen TERBERAT di kartu, padahal isinya satu
+   kalimat. Ringkasan pengawasan di halaman yang sama sudah memakai pola
+   "satu titik + satu kalimat" untuk keadaan yang sama, jadi kartu ini ikut:
+   titik sebagai penanda, kalimat sebagai isi, tanpa bidang kedua. */
 .pending {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
   margin: 0 0 10px;
-  padding: 0.55rem 0.7rem;
-  border: 1px solid var(--warn-border);
-  border-left: 4px solid var(--warn-ink);
-  border-radius: var(--radius);
-  background: var(--warn-bg);
-  color: var(--warn-ink);
   font-size: var(--fs-2);
   line-height: 1.45;
+  color: var(--warn-ink);
+}
+
+.pending::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: var(--warn-ink);
 }
 
 .pending strong {
@@ -181,6 +194,38 @@
   font-size: var(--fs-2);
   color: var(--ink-muted);
   line-height: 1.4;
+}
+
+/* Kelompok lencana kanan (29 Okt 2026): penanda syarat + lencana keadaan duduk
+   di satu baris supaya `.commodity { margin-right: auto }` tetap mendorong
+   keduanya ke tepi kanan. */
+.rowBadges {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* Penanda "wajib dingin": label SYARAT, bukan lencana keadaan — jadi ia netral
+   (garis + teks redup) dan tidak memakai warna status yang sudah berarti
+   "perlu tindakan" di kolom sebelahnya. */
+.coldChain {
+  /* Geometri SAMA dengan `.board-badge` di sebelahnya (padding 2px 8px, radius
+     chip, ukuran fs-1): penanda syarat dan lencana keadaan harus duduk sebaris
+     tanpa selisih tinggi. */
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-chip);
+  font-size: var(--fs-1);
+  /* 16px = isi `.board-badge` pada fs-1; dengan padding 2px dan garis 1px
+     hasilnya 22px, sama tinggi dengan lencana di sebelahnya. Diukur, bukan
+     ditebak: `line-height: inherit` menghasilkan 24px (beda 2px). */
+  line-height: 16px;
+  display: inline-block;
+  letter-spacing: 0.02em;
+  color: var(--ink-subtle);
+  white-space: nowrap;
 }
 
 .rowProfile {

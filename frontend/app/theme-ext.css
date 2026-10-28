@@ -718,3 +718,58 @@ option {
 .safety-band .safety-counts {
   row-gap: var(--space-2);
 }
+
+/* ── Baris "Paling mendesak" (29 Okt 2026, lanjutan) ───────────────────────
+   Lima angka menjawab "berapa", bukan "kapan". Baris ini menyebut satu batch
+   yang masih BOLEH dipakai dan paling cepat kedaluwarsa — informasi waktu yang
+   tidak dikodekan ulang dari angka di bawahnya (keputusan 29 Okt: satu angka
+   satu arti, tanpa bar/legenda). Labelnya memakai bahasa label mikro yang sama
+   dengan `.safety-count-label`, sehingga baris ini terbaca sebagai keterangan
+   kartu, bukan judul kedua. */
+.safety-band .safety-deadline {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px var(--space-2);
+  /* Jarak kecil dari kalimat putusan di atasnya: dua baris keadaan, bukan satu
+     paragraf yang dipenggal. */
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-2);
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.safety-band .safety-deadline-label {
+  flex: 0 0 auto;
+  font-size: var(--fs-1);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+
+.safety-band .safety-deadline-body {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.safety-band .safety-deadline-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--warn-ink);
+}
+
+/* Sudah lewat: tinta bahaya, karena tidak ada tenggat yang perlu dikejar —
+   barangnya tidak boleh dipakai. */
+.safety-band .safety-deadline[data-keadaan="lewat"] .safety-deadline-time,
+.safety-band .safety-deadline[data-keadaan="lewat"] .safety-deadline-label {
+  color: var(--danger-ink);
+}
+
+/* Berat di bawah "Gagal uji" memakai tinta bahaya (bukan tint): angka ini
+   menjelaskan berapa kg yang tidak boleh dialokasikan. */
+.safety-band .safety-count.is-danger .safety-count-note {
+  color: var(--danger-ink);
+}

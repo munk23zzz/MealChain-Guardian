@@ -24,6 +24,7 @@
 
 import type { EvidenceRow, EvidenceSummary, SafetyTone } from "../lib/food-safety";
 import { evidenceLabel } from "../lib/food-safety";
+import { formatMomentWib } from "../lib/datetime";
 import styles from "./TemperatureEvidenceCard.module.css";
 
 /** Jumlah baris yang dipamerkan; sisanya di tabel di bawah. */
@@ -95,6 +96,14 @@ export default function TemperatureEvidenceCard({
     `${summary.total} batch diperiksa: ` +
     `${summary.sufficient} bukti cukup, ${summary.insufficient} bukti kurang, ` +
     `${summary.ambiguous} bukti bertentangan, ${summary.unknown} tidak tercatat.`;
+
+  /** Jumlah sampel yang benar-benar dilaporkan server (29 Okt 2026).
+   *  `null` = tidak ada satu pun jumlah yang dikirim → tidak dicetak, karena
+   *  "0 sampel" adalah klaim yang tidak dibuat server. */
+  const totalSampel = rows.reduce<number | null>(
+    (jumlah, row) => (row.sampleCount === null ? jumlah : (jumlah ?? 0) + row.sampleCount),
+    null
+  );
 
   /** Catatan profil per baris: komoditas tanpa profil selalu disebut (itu
    *  keadaan khusus barisnya), sedangkan profil yang seragam untuk seluruh
@@ -184,12 +193,26 @@ export default function TemperatureEvidenceCard({
                 >
                   <div className={styles.rowHead}>
                     <span className={styles.commodity}>{row.commodity}</span>
-                    <span className={LENCANA[row.tone]}>{row.stateLabel}</span>
+                    <span className={styles.rowBadges}>
+                      {row.coldChainRequired === true ? (
+                        <span
+                          className={styles.coldChain}
+                          title="Komoditas ini wajib rantai dingin, jadi bukti suhu wajib ada"
+                        >
+                          wajib dingin
+                        </span>
+                      ) : null}
+                      <span className={LENCANA[row.tone]}>{row.stateLabel}</span>
+                    </span>
                   </div>
                   <p className={styles.rowMeta}>
                     {row.observationLabel}
                     {row.sampleCount === null ? "" : `, ${row.sampleCount} sampel`}
                     {row.sourceLabel ? `, ${row.sourceLabel}` : ""}
+                    {/* Kebaruan bukti (29 Okt 2026): kapan pembacaan terakhir
+                        benar-benar tercatat. Server mengirim `observed_at`;
+                        tanpa itu baris tidak mengarang waktu. */}
+                    {row.observedAt ? `, dibaca ${formatMomentWib(row.observedAt)}` : ""}
                   </p>
                   {catatanProfil(row)}
                   {row.reasons.length > 0 ? (
@@ -215,8 +238,13 @@ export default function TemperatureEvidenceCard({
             </p>
           ) : null}
 
-          {rows.length > MAKS_BARIS || adaKurang ? (
+          {rows.length > MAKS_BARIS || adaKurang || totalSampel !== null ? (
             <p className={`evidence-note ${styles.foot}`}>
+              {totalSampel !== null ? (
+                <>
+                  <strong>{totalSampel} sampel tercatat</strong> menopang angka di atas.{" "}
+                </>
+              ) : null}
               {rows.length > MAKS_BARIS ? (
                 <>
                   Ditampilkan {MAKS_BARIS} dari {rows.length} batch, yang paling perlu tindakan lebih

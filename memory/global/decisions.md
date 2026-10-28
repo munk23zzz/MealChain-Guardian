@@ -1131,3 +1131,95 @@ memaku kelas persis (`tests/location-network-transfers.test.tsx:119`) sengaja di
 
 Gerbang: tsc 0, `next lint` 0, vitest **220 berkas / 2.538 tes lulus**, build
 `BUILD_ID=JTXRrhT23kPfgXu8Cajwd`. 0 commit.
+
+## Ronde 54 — 2026-10-29: Keamanan Pangan — Ringkasan pengawasan & Bukti suhu diupgrade
+
+Arahan pemilik: *"gunakan berbagai skill fullstack, ui ux, testing pada halaman Keamanan Pangan
+upgrade design upgrade ringkasan pengawasan, suhu semaksimal mungkin namun tetap sama atau cocok
+dengan design lainnya"*.
+
+**Batas yang dipegang.** Keputusan 29 Okt sebelumnya tetap berlaku: lima angka EKSKLUSIF di
+Ringkasan, tanpa bar komposisi, tanpa persentase, tanpa legenda — menambah bar berarti
+mengembalikan tiga pengkodean untuk satu himpunan data. Karena itu upgrade diisi dengan informasi
+yang BELUM ada di kartu, bukan dengan menggambar ulang angka yang sudah ada:
+
+1. **Paling mendesak** (`components/FoodSafetyBoard.tsx`): satu batch dengan `usable_until` terdekat
+   di antara baris yang MASIH boleh dipakai. Batch bertone danger dan yang ditahan dikecualikan —
+   "segera pakai" untuk keduanya menyesatkan. Bila `hoursLeft < 0`, label berganti **"Sudah lewat"**
+   dan waktunya bertinta bahaya; datanya tidak disembunyikan, kalimatnya tidak menyarankan memakai.
+2. **Berat di bawah "Gagal uji"**: `summary.failedKg` sudah ada tetapi hanya dicetak untuk "Ditahan".
+   Kini `tile.kg` mengisi kedua kelompok; berat yang tidak dikirim server tetap ditulis
+   "berat tidak tercatat" (null ≠ 0).
+3. **Label tombol** menjadi `Tinjau N batch perlu tindakan` dengan N =
+   needsVerification + quarantined + unchecked.
+4. **Kebaruan bukti** (`components/TemperatureEvidenceCard.tsx`): `observed_at` dikirim server tetapi
+   tidak pernah dicetak; sekarang tiap baris menulis "dibaca 28 Okt 2026 06.20" (via
+   `formatMomentWib`). Tanpa `observed_at` → tidak ada kalimat waktu.
+5. **Penanda "wajib dingin"** untuk `cold_chain_required = true`: netral (garis + teks redup),
+   karena ini SYARAT, bukan keadaan. Geometrinya disamakan dengan `.board-badge` — `line-height: 16px`
+   + `display: inline-block`; terukur 87x22 vs 86x22, selisih tinggi 0 px (percobaan pertama
+   `line-height: inherit` menghasilkan 24 px, beda 2 px — dicatat supaya tidak diulang).
+6. **Ukuran bukti**: kaki kartu menyebut `N sampel tercatat` (jumlah `sample_count` yang dikirim);
+   tidak dicetak bila tidak ada satu pun jumlah.
+7. **Catatan "menuntut bukti"** berhenti menjadi kotak amber penuh dengan pagar kiri 4 px —
+   sekarang pola yang sama dengan putusan Ringkasan: titik 8 px + kalimat, latar transparan.
+
+**Tes.** Dua berkas baru, ditulis MERAH lebih dulu: `tests/safety-ringkasan-mendesak.test.tsx`
+(6 tes; 6 gagal sebelum implementasi) dan `tests/temperature-evidence-recency.test.tsx`
+(6 tes). Satu tes lama menghitung `safety-count-note` secara global dan jadi 2 setelah berat gagal
+ikut dicetak — asersinya DIPERTAJAM per kelompok (blok "Ditahan" berisi 540 kg, blok "Gagal uji"
+tidak), bukan dilonggarkan.
+
+**Gerbang.** `tsc` 0, `next lint` 0, vitest **223 berkas / 2.560 tes lulus**, build
+`BUILD_ID=xb_mNGteO2N0HbVkfLPZU`. Build pertama sempat gagal dengan "JSX expressions must have one
+parent element" pada pohon yang sedang disunting sesi lain; `tsc` bersih dan build berikutnya hijau
+— dicatat sebagai kejadian pohon bersama, bukan cacat commit ini.
+
+**Bukti live** (localhost:3010, Kepala SPPG Bandung, 1247 px): Ringkasan 947x233 (baris tenggat
+911x20, label 12 px kapital, waktu 13 px/600 `--warn-ink` tabular), Bukti suhu 947x447 dengan enam
+baris 454x76, tanpa gulir mendatar, tinggi halaman 3.599 px. 390 px: `docScrollWidth` =
+`docClientWidth` = 390, tinggi 8.655 px (tabel menjadi kartu berlabel ≤860 px).
+
+**Catatan alat.** `_qa/ukur-viewport.cjs` kini menerima `UKUR_TAB` (regex judul tab) sehingga
+pengukuran 390 px bisa dipakai untuk halaman selain Location Network; sebelumnya tab-nya dipaku.
+
+## Ronde 55 — 2026-10-29: Pemasok dapat riwayat penerimaan (Dok 05 §8.5/§9)
+
+**Keputusan.** Halaman Pemasok mendapat kartu "Riwayat penerimaan" yang disuapi endpoint baru
+`GET /receipts/riwayat`, bukan memakai ulang `GET /receipts/menunggu`.
+
+Alasannya: antrean `menunggu` hanya memuat barang yang BELUM diputuskan — ia tidak bisa menjawab
+pertanyaan audit "berapa nilai yang sudah diterima dari pemasok ini", karena catatan `disetujui`
+dan `ditolak` tidak pernah ada di sana. Menambah parameter status pada endpoint antrean akan
+membuat satu endpoint dengan dua arti (antrean kerja vs buku riwayat); dua endpoint dengan dua
+kontrak lebih jujur.
+
+**Data honesty, tiga aturan yang tidak boleh dilunakkan.**
+1. `received_kg` tetap `null` sampai status `disetujui`; UI mencetak "diterima —", bukan 0.
+2. Batch tanpa ikatan PO → nilai `null` → "tidak tercatat", **bukan** "Rp 0". Rp 0 berarti
+   "barangnya tidak bernilai"; null berarti "acuannya tidak ada".
+3. Baris `ditolak` tidak menampilkan rupiah sama sekali ("—") dan tidak dirender kalimat asal
+   harga. Perkiraan rupiah untuk barang yang tidak diterima terbaca sebagai uang yang keluar.
+
+**Ringkasan dihitung server.** `ringkasan` menjumlah seluruh baris cakupan, termasuk yang tidak
+dikirim karena `limit`. Penyaring di UI hanya menyaring tampilan; angka kepala tetap angka
+cakupan — kalau klien yang menjumlah, angka kepala akan berubah saat orang menekan "Disetujui".
+
+**`nilai_menunggu_idr` hanya baris `menunggu`.** Versi pertama menjumlah setiap baris yang tidak
+punya `accepted_value_idr`, sehingga barang yang sudah ditolak ikut terhitung "menunggu"
+(Rp 8.100.000 → seharusnya Rp 2.700.000). Ditemukan dari verifikasi live, bukan dari tes; kini
+dikunci asersi di `tests/test_receipts_riwayat.py`.
+
+**Seed berbagi batch = data yang saling bertentangan.** Seed penerimaan lama membuat catatan pada
+batch yang sama dengan seed baru, sehingga satu batch punya catatan `disetujui` DAN `menunggu`.
+`_semai_riwayat_penerimaan` sekarang melewati batch yang sudah punya catatan; tidak ada lagi
+batch dengan dua putusan berbeda.
+
+**Tabel harus muat, bukan bergulir di desktop.** Tanpa lebar kolom eksplisit, tabel 1.116 px di
+bungkus 917 px dan kolom Nilai — alasan kartu ini ada — terpotong. `table-layout: fixed` + lima
+lebar kolom (15/24/13/17/31 %) menguncinya; gulir horizontal hanya diizinkan ≤760 px.
+
+**Catatan alat.** `pytest` backend di kontainer memakai DB dev yang sama dan me-reset data
+penerimaan lewat fixture. Setelah suite backend, jalankan
+`python -m app.seed.demo_template` sebelum mengukur atau demo — kalau tidak, angka yang dilaporkan
+berasal dari data tes, bukan data demo.
