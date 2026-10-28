@@ -29,17 +29,31 @@
 - `agent/` root DI LUAR bind-mount container → kode agent ditaruh di `app/services/` & `app/ai_providers/`.
 - Patch only (jangan write_file wipe) untuk file yang rawan: security.py, MANUAL_SETUP.
 
-## Status per 2026-10-10
-- Sprint 0–3: DONE (final gate PASS, lihat `docs/verification/sprint-3.md`).
-- Sprint 4: IN PROGRESS — final gate LOLOS (backend 567, FE 107, map MapLibre, KPI live,
-  paket integrity 1–6: Merkle ledger, dossier, ECDSA signing, chaos sliders, telemetry banner, KPI facts).
-- Sprint 5 (Real SAP via AWS for SAP MCP Server): ON-DEMAND, semua Not Started.
-- Baru ditambahkan: S4-10 (SAP AI Core: RPT-1.6 + Verifier primary), S4-11 (Settings/Admin, eks BL-01).
+## Status per 27 Okt 2026 (Fase 12 MG — dokumentasi & geladi)
+- Sprint 0–3: DONE. Sprint 4–5 dikerjakan ulang lewat rencana MG (`MG/overview.md`, 12 fase);
+  status per-butir ada di `MG/phase-*-*.md`, bukan di berkas ini.
+- Fase 1–12 MG: kode + tes per butir sudah ada dan dijalankan; bukti geladi dua jalur demo
+  (replay / realtime / operasional) ada di `MG/phase-12-docs-rehearsal.md`.
+- Status kerja memakai `OPEN` / `IN PROGRESS` (bukan `BLOCKED`); yang belum terbukti ditulis
+  apa adanya, mis. integrasi Gateway AgentCore dan tenant SAP S/4HANA.
+- Yang **belum** aktif dan tidak boleh diklaim: Gateway AgentCore (`integrasi_aktif=false`),
+  tulis-baca Memory ke AWS (AccessDenied), tenant S/4HANA/ECC, Joule sebagai kanal transaksi.
+
+## Joule — status jujur
+- Joule membaca **backend MealChain** lewat jembatan A2A `sap-joule/a2a_server` (13 skill);
+  ia **bukan** kanal transaksi ERP dan **tidak** menyetujui keputusan (permintaan approval
+  dijawab dengan arahan ke cockpit).
+- Jembatan CF `mealchain-joule-bridge-4sehat3trio` hidup dan `/health` menjawab, tetapi
+  `backend.reachable=false` (host backend AWS lama tidak resolve). Uji fungsional dilakukan
+  pada jembatan lokal yang menunjuk backend sesi — lihat `MG/phase-12-docs-rehearsal.md`.
+- Tenant SAP/Joule (BTP destination, `joule list`) — `INCONCLUSIVE`, bukan sukses.
 
 ## Paket akses SAP yang diterima (2026-10-10)
 - SAP AI Core — Access to RPT 1.6 (model forecast terstruktur, butuh plan extended).
 - SAP AI Core — Access to general 40+ (LLM untuk slot primary Verifier).
-- SAP Joule Orchestrator chat UI → talking point SAJA, bukan integrasi.
+- SAP Joule Orchestrator chat UI → **dipakai lewat jembatan A2A** `sap-joule/a2a_server` (13 skill,
+  baca-saja ke backend MealChain). Bukan kanal transaksi ERP; tenant/destination BTP belum
+  diverifikasi ulang (INCONCLUSIVE per 27 Okt 2026).
 - SAP AI Launchpad → console admin: deployment RPT-1.6, monitor usage token.
 - Kredensial `SAP_AI_CORE_*` di `.env` masih kosong → verifier/forecast jalan via fallback (by design).
 

@@ -1,3 +1,17 @@
+## Kondisi saat ini (2026-10-27, Fase 12 MG)
+- Dokumentasi Fase 12 diselaraskan: `docs/DemoRunbook.md` (baru), `docs/Architecture.md`,
+  `docs/Schema.md`, `docs/Skill.md`, `docs/PRD.md`, `sap-joule/docs/peta-skill-joule.md`,
+  `sap-joule/docs/runbook-cf-joule.md`, `docs/verification/AGENTCORE_STATUS.md`.
+- Geladi tiga mode dijalankan pada DB klon `mealchain_r12` + stack `mcg-f12`
+  (backend 18100, frontend 13110): replay 22/22, realtime (lihat `_qa/f12/out/`),
+  operasional 6/6. Joule lima skill diuji pada jembatan lokal 18091.
+- Gate suite penuh pada DB terpisah: 50 gagal / 2077 lulus / 31 skip — sebab dianalisis di
+  `MG/phase-12-docs-rehearsal.md` (batch REF basi + `fuse_evidence` konservatif), bukan
+  regresi kode demo. Butir 7 Fase 12 masih `OPEN`.
+- Jembatan CF hidup tetapi backend tidak resolve; **tidak** dipush ulang (menunggu izin).
+- JANGAN: menyimpulkan "suite hijau" dari laporan lama, atau mengklaim Joule/AgentCore live
+  tanpa bukti baru.
+
 # Active Context — MealChain Guardian
 
 > Satu file yang dibaca PALING AWAL tiap sesi build. Update tiap akhir sesi / tiap perubahan arah.

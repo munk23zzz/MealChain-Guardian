@@ -108,28 +108,33 @@ proposal kami" (menutup pertanyaan dengan bukti tertulis).
 konektivitas SAP kita. Tidak bisa diresubmit, tidak perlu — karena poin ini justru sudah ada
 di sana. Yang perlu disiapkan adalah cara menjawab kalau juri probe lebih dalam.
 
-**Kalau ditanya "apakah ini benar-benar terhubung ke SAP asli?"**
-> "MVP kami jalan dengan mode mock yang strukturnya identik dengan OData SAP asli — field
-> sama persis (`Plant`, `MaterialNumber`, `PurchaseOrder`, dst.), karena kami merancang
-> layer integrasi SAP sebagai adapter interface sejak hari pertama, bukan hardcode. Business
-> logic kami — Safe Delivered Cost, safety constraint, balancing — sama sekali tidak
-> menyentuh detail SAP, itu murni inovasi kami sendiri. Kalau diberi akses tenant SAP nyata,
-> switch ke AWS for SAP MCP Server adalah perubahan konfigurasi satu baris, bukan rewrite —
-> mau kami tunjukkan sekarang?"
+**Kalau ditanya "apakah ini benar-benar terhubung ke SAP asli?"** (jawaban as-built, 27 Okt 2026)
+> "Belum — dan kami tidak mengklaim begitu. Yang berjalan hari ini adalah **test double**:
+> `MockSAPProvider` di belakang kontrak `SAPDataProvider`, dengan field yang mengikuti OData
+> SAP (`Plant`, `MaterialNumber`, `PurchaseOrder`, dst.). Seluruh angka bisnis kami — Safe
+> Delivered Cost, pagar keamanan, balancing — tidak menyentuh detail SAP. Adapter
+> `AWSforSAPMCPProvider` juga sudah ditulis sebagai **pekerjaan kontrak** dan diuji dengan
+> contract test yang sama seperti mock, tetapi ia **bukan bukti koneksi**: tanpa tenant
+> S/4HANA/ECC beserta kredensial OData/BTP ia menolak jalan (fail closed) dan aplikasi tetap
+> memakai mock. Jadi status jujurnya: **siap secara kode, belum tersambung secara sistem** —
+> system of record tetap menuntut ERP, OData, dan kredensial yang belum kami miliki."
 
 **Kenapa framing ini kuat, bukan defensif:**
 1. Bukan mengaku kekurangan — ini menunjukkan *keputusan arsitektur yang disengaja* (adapter
    pattern), praktik standar integrasi enterprise: validasi business logic dengan contract
    test double dulu sebelum cutover ke sistem produksi.
-2. Membuktikan *production-readiness* justru lebih kuat lewat kemampuan switch cepat,
-   dibanding kalau dari awal di-hardcode ke satu tenant SAP tertentu (yang sebenarnya kurang
-   reusable).
-3. Kalau diminta live switch di tempat — itu ada di `Roadmap.md` Sprint 5, sudah
-   direncanakan sebagai task list siap eksekusi, tidak perlu planning dari nol.
+2. Yang **terbukti** adalah kesiapan kontrak: dua implementasi provider diuji dengan berkas
+   kontrak yang sama, sehingga perbedaan sumber data tidak mengubah hasil keputusan. Yang
+   **belum terbukti** adalah koneksi — itu butuh tenant + kredensial.
+3. Jalur cutover-nya tertulis sebagai daftar langkah yang masih memerlukan provisioning tenant
+   dan kredensial (`docs/Architecture.md` §9, `Roadmap.md` Sprint 5). Bukan "tinggal satu
+   baris": memindahkan system of record berarti menyediakan ERP/OData + kredensial lebih dulu.
 
-**Jangan pernah bilang:** "kami belum implementasi SAP-nya" (defensif, terdengar seperti gap).
-**Selalu bilang:** "SAP-nya di balik adapter, siap dinyalakan — mau lihat?" (proaktif,
-menunjukkan kontrol).
+**Jangan pernah bilang:** "tinggal satu baris" atau "siap dinyalakan" tanpa menyebut tenant dan
+kredensial yang belum ada — itu klaim yang tidak bisa ditunjukkan di layar. Kalimat yang boleh
+dipakai: *"adapternya sudah ada dan diuji sebagai kontrak; koneksi ke SAP asli belum, karena
+butuh tenant S/4HANA dan kredensial OData yang belum tersedia."*
+
 
 ## Peta dokumen lain
 

@@ -23,18 +23,21 @@ Frontend (Next.js :3000) → FastAPI (:8000, JWT+RBAC)
 - `backend/app/services/` — event1_orchestrator, event2/3_service, kpi, ledger_service, trace_persistence
 - `backend/app/ai_providers/` — verifier_client, forecast_client, resilience (`with_fallback_chain`), prompts/
 - `backend/app/api/` — router; openapi.json auto-generate (siap register ke Gateway)
-- `frontend/` — Next.js; token visual di `globals.css` (palet teal Stitch); 5 tab PRD 2.4
+- `frontend/` — Next.js; token visual di `globals.css` (palet teal Stitch); 11 item navigasi konsol (2 di antaranya bersyarat peran), bukan lagi 5 tab PRD.
 
 ## Database (Schema.md)
-- Migration: `008_rejection_loop` (head tunggal), `009_kpi_facts_tables`, `010_ledger_blocks`.
-- Alembic current=heads wajib dicek sebelum claim done.
-- REF seed canonical: 2026-10-08 12:00 UTC (stable_uuid bergantung REF).
+- Alembic head per 27 Okt 2026: **`043_least_privilege_app`** (43 migrasi). Rincian kolom/tabel ada di `docs/Schema.md`; angka operasional di `docs/state-snapshot.md`.
+- Ledger **append-only ditegakkan database**: role aplikasi hanya `INSERT`/`SELECT`, trigger `prevent_ledger_mutation()` menolak UPDATE/DELETE (migrasi `042`).
+- REF seed canonical: 2026-10-08 12:00 UTC (stable_uuid bergantung REF) = jangkar mode **replay**.
+- Tiga mode waktu: `replay` (jangkar kanon), `realtime` (jangkar sesi), `operasional` (`DEMO_MODE=false`, seluruh `/demo/*` 404).
 
-## Endpoint utama (26→32 paths)
+## Endpoint utama (81 path / 83 operasi di `backend/openapi.json`)
 - `/supply/*`, `/demand/*`, `/freshness/evaluate`, `/safety/evaluate`, `/price/*`, `/logistics/estimate`
 - `/cost/safe-delivered`, `/balance/analyze|recommend|map`, `/evidence/fuse`
-- `/actions/*` (approval), `/decisions/*` (+chain, dossier), `/events/safety-disruption`
-- `/kpi/*`, `/ledger/verify`, `/demo/seed` (idempotent)
+- `/actions/*` (propose/verify/approve/execute), `/decisions/*` (+packet, chain, dossier, traces, approval-summary)
+- `/kpi`, `/ledger/verify`, `/sap/purchase-orders*`, `/supplier-routes`, `/receipts*`, `/procurement/summary`
+- `/demo/*` (seed, session start/extend/end, template/rebuild, data-status) — tertutup bila `DEMO_MODE=false`
+- `/auth/*`, `/admin/*`, `/health`
 
 ## Quirk teknis yang sudah membakar waktu (jangan ulangi)
 - `agent/` root DI LUAR bind-mount → jangan taruh kode baru di sana.

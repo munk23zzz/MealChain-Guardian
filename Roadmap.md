@@ -124,3 +124,30 @@ keputusan agent.
   status/blocker per task
 - Kalau ada goal sprint yang di akhir minggu masih `[ ]` — jangan diam-diam skip, catat
   eksplisit di `TODO.md` sebagai "carry-over" dengan alasan
+
+---
+
+## Sprint 6 — Rencana MG (`MG/overview.md`, 12 fase) — status 27 Okt 2026
+
+Rencana 12 fase menggantikan sisa Sprint 4–5 di atas untuk pekerjaan *decision intelligence*
+yang bisa dibuktikan. Status memakai `OPEN` / `IN PROGRESS` (bukan `BLOCKED`); rincian bukti
+per butir ada di `MG/phase-01…12-*.md` dan dokumen bukti di `docs/verification/`.
+
+| Fase | Isi | Status |
+|---|---|---|
+| 1 | Baseline, DB invariants, ledger | DONE — bukti `docs/verification/phase-01-baseline.md` |
+| 2 | Sesi demo + dua sumbu waktu (replay/realtime) | DONE |
+| 3 | Profil komoditas + bukti suhu | DONE |
+| 4 | Gerbang keselamatan (evaluator batch, dispatch, penerimaan) | DONE |
+| 5 | Invoice vs Safe Delivered Cost | DONE |
+| 6 | Batas keputusan: paket bukti + review | DONE |
+| 7 | Realtime & skenario demo | DONE |
+| 8 | KPI + provenance | DONE |
+| 9 | Frontend biaya & penerimaan | DONE |
+| 10 | Demo Joule (A2A) | DONE (tenant BTP `INCONCLUSIVE`) |
+| 11 | Ledger append-only + AgentCore | DONE (Gateway/Memory `UNVERIFIED` sesuai `docs/verification/AGENTCORE_STATUS.md`) |
+| 12 | Dokumentasi + geladi dua jalur demo | IN PROGRESS → lihat `MG/phase-12-docs-rehearsal.md` |
+
+Sisa pekerjaan yang **bukan** bagian demo panggung dan tetap `OPEN`:
+menaikkan empat bukti Gateway AgentCore (izin `CreateGatewayTarget` belum ada), menulis-baca
+Memory ke AWS, dan memindahkan SAP ke tenant S/4HANA/ECC setelah ERP + kredensial tersedia.

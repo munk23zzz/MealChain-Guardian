@@ -409,10 +409,32 @@ kolomnya ada).
 | ended_at | TIMESTAMPTZ | nullable — diisi saat sesi diakhiri manual |
 | template_version | TEXT | nullable — versi template data demo yang membangun sesi ini |
 | created_by | UUID | FK → users.id, NULLABLE, ON DELETE SET NULL |
+| mode | TEXT | NOT NULL, DEFAULT 'replay', CHECK IN ('replay','realtime') — migrasi `040_session_modes_and_ownership` |
+| evaluation_anchor | TIMESTAMPTZ | NOT NULL, DEFAULT `2026-10-08 12:00:00+00` — jangkar waktu EVALUASI (freshness, umur dataset, timestamp simulasi), bukan waktu kejadian operator |
+| dataset_version | TEXT | nullable — identitas versi dataset sesi (mis. `kanon-2026-10-08T12:00:00Z`) |
 
 - **Tidak ada sesi aktif** berarti alur yang menuntut sesi (`/demo/session/*`,
   `/demo/template/rebuild`) menolak dengan `409`. Itu perilaku yang diinginkan, bukan bug.
 - Sesi `expired` tetap disimpan (riwayat), tidak dihapus.
+- **Satu sesi aktif** dijamin DB lewat indeks unik parsial `uq_demo_sessions_satu_aktif`
+  (migrasi `032`), bukan hanya kunci `asyncio` satu proses.
+- **Dua sumbu waktu:** `evaluation_anchor` dipakai evaluasi; `approvals`, PO, dan
+  `batch_receipts` tetap memakai jam dinding (`now()`) supaya Decision Time bukan selisih hari.
+
+### `demo_session_id` — daftar tabel pemilik baris demo (terukur 27 Okt 2026)
+
+`demo_session_id UUID NULL → demo_sessions.id ON DELETE SET NULL` ada di **13 tabel**:
+
+```
+batches · batch_receipts · decisions · delivery_events · demand_records · disposal_events ·
+menu_plans · price_signals · road_routes · sap_mock_material_stock · sap_mock_purchase_orders ·
+supplier_exclusions · supply_records
+```
+
+`NULL` = baris operasional/seed; `NOT NULL` = baris milik satu sesi demo. KPI memakai aturan ini
+langsung: `include_demo=false` menyaring `demo_session_id IS NULL`, `include_demo=true` menyaring
+ke **satu** `demo_session_id` eksplisit (tidak ada jalur "sesi terbaru").
+
 
 ### `ledger_blocks`
 Rantai hash append-only untuk bukti tindakan (create/verify/approve/reject/execute).
@@ -448,6 +470,63 @@ Satu baris (`id` kecil) yang menyimpan generasi aktif dan kapan terakhir diperba
 
 `bump_generation()` menaikkan generasi **tanpa** harus menulis blok; karena itu nomor
 generasi tidak boleh dibaca sebagai "jumlah reset" (pernah ada generasi tanpa blok).
+
+## 3c. Kebijakan komoditas, karantina, dan tingkat bukti (as-built 27 Okt 2026)
+
+Ditambahkan Fase 3/4/8 dan didokumentasikan Fase 12. Semua kolom di bawah **sudah ada di DB**
+(migrasi `035_commodity_policy*`, `036`, `037`), bukan usulan perubahan kontrak.
+
+### `commodity_policies` — kebijakan berversi per komoditas (migrasi `041`)
+
+| Kolom | Tipe | Arti |
+|---|---|---|
+| id | UUID | PK |
+| commodity_id | UUID | FK → commodities.id |
+| cold_chain_required | BOOLEAN | `false` = komoditas ambient (beras): excursion **tidak** diukur |
+| safe_temp_min_c / safe_temp_max_c | NUMERIC | rentang aman; `NULL` untuk ambient |
+| shelf_life_days | NUMERIC | masa layak dasar pembentuk `usable_until` |
+| min_temperature_samples | INTEGER | jumlah sampel minimum agar bukti suhu dianggap lengkap |
+| max_observation_age_minutes | INTEGER | usia maksimum sampel terakhir; lebih tua = observasi basi |
+| max_excursion_minutes | NUMERIC | ambang menit excursion yang membuat safety `fail` |
+| policy_version / policy_basis | TEXT | versi + asal angka (mis. `sim-2026-10-27.v1`) |
+| policy_kind | VARCHAR | `simulated_policy` selama belum divalidasi domain owner; `unavailable` bila tanpa dasar |
+| is_active | BOOLEAN | baris aktif yang dipakai `policy_for()` |
+
+Aturan: komoditas tanpa baris aktif **ditolak** (`KeyError`), bukan diberi default 0–8 °C.
+
+### `batches` — karantina dan bukti suhu (migrasi `036`, `041`)
+
+| Kolom | Arti |
+|---|---|
+| quarantine_status | `none` · `quarantined` · `released` · `failed` — `quarantined`/`failed` tidak pernah jadi stok usable |
+| quarantined_at / quarantine_updated_at | kapan transisi terjadi |
+| quarantine_actor_id | siapa yang menahan/melepas (FK → users.id) |
+| quarantine_reason | alasan manusia, wajib saat menahan |
+| temperature_log | JSONB log observasi; **kosong ≠ `pass`** → `on_hold` / `temperature_evidence_incomplete` |
+| origin | `seed` · `demo` (penanda asal baris; migrasi `013`) |
+
+Setiap transisi karantina menulis satu blok `ledger_blocks` — pertanyaan "siapa menahan batch ini
+dan kapan" punya jawaban yang bisa diverifikasi.
+
+### `batch_receipts` — titik akhir rantai
+
+| Kolom | Arti |
+|---|---|
+| checked | JSONB ceklis penerimaan yang diisi manusia |
+| status | status penerimaan (`menunggu` → diterima/ditahan) |
+| review_note / reviewed_by / reviewed_at | jejak review server-side |
+| supply_record_id | kaitan ke pasokan yang bertambah bila diterima |
+| demo_session_id | kepemilikan baris demo |
+
+`can_receive` / `can_quarantine` **tidak** disimpan: keduanya dihitung server
+(`services/receipt_gate.py`) dari pagar endpoint yang sama.
+
+### Tingkat bukti (provenance) tidak dipersistensikan
+
+`provenance` KPI dibentuk saat baca (`services/kpi_service.py`): `source`, `period`, `sample_count`,
+`coverage`, `definition`, `formula`, `method_version`, `evidence_kind`, `baseline`. Karena tidak
+disimpan, ia tidak bisa "basi" terhadap datanya — tetapi juga tidak bisa dijadikan bukti historis;
+untuk itu dipakai blok `ledger_blocks` + snapshot `docs/state-snapshot.md`.
 
 ## 4. Mock SAP tables (meniru struktur OData asli)
 

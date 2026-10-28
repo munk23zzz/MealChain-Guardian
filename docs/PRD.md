@@ -45,7 +45,8 @@ daerah oleh peran SPPG, karena memilih pemasok tidak dibatasi wilayah pengguna.
 ## 4. Scope MVP (3-4 minggu)
 
 ### In-scope
-- 10 lokasi, 3 komoditas (telur, ayam, wortel) — dataset sintetis terkalibrasi
+- 10 lokasi, 4 komoditas (telur, ayam, wortel, beras) — dataset sintetis terkalibrasi;
+  beras adalah komoditas **ambient** (batas suhu ruang, bukan rantai dingin).
 - 3 skenario demo **interaktif penuh**:
   - **Event 1** — Regional imbalance (Cianjur surplus → Jakarta shortage)
   - **Event 2** — Price anomaly (deviasi harga pemasok vs referensi pasar)
@@ -60,12 +61,25 @@ daerah oleh peran SPPG, karena memilih pemasok tidak dibatasi wilayah pengguna.
   Log (trace), approval flow, KPI dashboard
 - Evidence ledger (Postgres, append-only, hash chain sederhana)
 
+### Batas domain yang dikunci (Fase 12, 27 Okt 2026)
+
+**Rantai yang dibuktikan berhenti di "bahan diterima".** Titik terakhir yang punya bukti adalah
+`batch_receipts`: batch dinilai (evaluator `usable` / `on_hold` / `quarantined`), diceklis, lalu
+diterima atau ditahan di lokasi tujuan. Sesudah itu **tidak ada klaim**: tidak ada pengolahan/
+memasak, tidak ada porsi tersaji, tidak ada siswa yang dilayani. Metrik yang memerlukan fakta itu
+harus berbunyi `no_data` (operasional) atau `simulated_estimate` berlabel (demo) — lihat
+`docs/Skill.md` §4 dan `docs/kamus-kpi-dan-state-machine.md`. Kalimat "makanan sampai ke siswa"
+atau "porsi terlayani" tidak boleh diucapkan; yang boleh: "bahan aman dan layak diterima di
+dapur", beserta nama buktinya (`batch_receipts` + blok ledger).
+
 ### Out-of-scope (MVP default, tapi siap di-switch — lihat `Architecture.md` §9)
-- Integrasi SAP nyata via AWS for SAP MCP Server — di-mock sepenuhnya untuk demo default,
-  TAPI dibangun di belakang adapter interface sejak Sprint 1 sehingga bisa dinyalakan lewat
-  config change kalau juri/panitia meminta (rencana eksekusi: `Roadmap.md` Sprint 5). Ini
-  bukan gap — proposal yang lolos finalist sudah menyebut AWS for SAP MCP Server sebagai
-  konektivitas SAP kita.
+- Integrasi SAP nyata via AWS for SAP MCP Server — di-mock sepenuhnya untuk demo default.
+  Adapter `AWSforSAPMCPProvider` **sudah ada** dan diuji dengan contract test yang sama seperti
+  mock, tetapi itu **pekerjaan kontrak, bukan bukti koneksi**: tanpa tenant S/4HANA/ECC +
+  kredensial OData/BTP ia menolak jalan (fail closed). Memindahkan system of record berarti
+  menyediakan ERP + kredensial lebih dulu, bukan "satu baris config" (`Architecture.md` §9,
+  `Roadmap.md` Sprint 5). Proposal yang lolos finalist memang menyebut AWS for SAP MCP Server;
+  yang belum ada adalah tenant-nya.
 - AgentCore Identity (stretch goal kalau waktu ada)
 - Blockchain permissioned (Hyperledger Fabric) — future extension, bukan MVP
 - Mobile app
@@ -96,7 +110,10 @@ daerah oleh peran SPPG, karena memilih pemasok tidak dibatasi wilayah pengguna.
 - Backend: Python/FastAPI
 - Frontend: React (Next.js) + TypeScript
 - Database: PostgreSQL
-- Agent: Strands Agents SDK on Amazon Bedrock AgentCore (Runtime, Gateway, Memory, Observability)
+- Agent: Strands Agents SDK; Supervisor Agent **sudah di-deploy ke AgentCore Runtime** (VERIFIED
+  18 Okt 2026), sedangkan **Gateway belum aktif** (0 gateway; `AGENTCORE_GATEWAY_URL` kosong) dan
+  **Memory tulis belum diizinkan IAM**. Observability aplikasi masih sink lokal, bukan X-Ray.
+  Rincian per resource/target/invocation/aplikasi: `docs/verification/AGENTCORE_STATUS.md`.
 - Dev environment: Docker Compose (lokal); komponen AgentCore memanggil AWS asli (trial account)
 - Testing: TDD untuk business logic inti (safety & cost calculation wajib diuji)
 
@@ -109,7 +126,7 @@ Safe Delivered Cost · Procurement Price Deviation · Decision Time · Evidence 
 ### Metrics kompetisi (checklist penilaian juri)
 | Kriteria juri | Bukti di MVP |
 |---|---|
-| AWS/SAP agentic AI sebagai inti | Supervisor+Verifier Agent nyata di Bedrock AgentCore, bukan wrapper API biasa; konektivitas SAP dibangun siap-switch ke AWS for SAP MCP Server (§9 Architecture.md), bisa didemokan live kalau diminta |
+| AWS/SAP agentic AI sebagai inti | Supervisor Agent berjalan di AgentCore Runtime (VERIFIED), Verifier Agent + tool deterministik di backend; Gateway/Memory belum aktif (lihat `docs/verification/AGENTCORE_STATUS.md`). SAP: test double di balik adapter, adapter MCP diuji sebagai kontrak — **belum tersambung ke tenant** |
 | Working MVP | 3 skenario demo end-to-end jalan live |
 | Autonomous multi-step reasoning | Agent Activity Log dari trace asli AgentCore Observability |
 | Genuine business challenge | Terhubung ke data MBG terverifikasi (lihat proposal) |

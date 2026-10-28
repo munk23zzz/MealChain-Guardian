@@ -42,7 +42,24 @@ Candidate Score = Demand Fit × Supply Availability × Freshness × Safety Eligi
 Semua faktor dinormalisasi 0-1. `Safety Eligibility` bernilai 0 (bukan pecahan kecil) kalau
 `batches.safety_status = 'fail'` — ini membuat skor total otomatis 0, bukan sekadar berkurang.
 
-### Safe Delivered Cost
+### Dua angka biaya yang HARUS dibedakan (Fase 5/8, as-built 27 Okt 2026)
+
+```
+invoice_total (yang DITAGIH di PO)  = purchase + transport + handling
+sdc_total (analitis, 6 komponen)    = invoice_total
+                                    + expected_loss + freshness_risk + safety_penalty
+```
+
+Penalti risiko **tidak pernah** masuk invoice/PO (`services/po_document.py` hanya membaca blok
+`commercial_cost`). SDC dipakai untuk membandingkan pilihan, bukan untuk menagih.
+
+`risk_method` menyebut dasar bobot: `simulated_policy` (bobot demo: sumber
+`app/core/safe_delivered_cost.py:bobot_demo`, versi `sdc-policy-1`), `calibrated_model` (hanya
+bila benar-benar ada kalibrasi), `unavailable` (tanpa dasar). KPI "Safe Delivered Cost" memakai
+**mean SDC**; rata-rata **harga invoice PO** dilaporkan terpisah di `facts` — dua basis berbeda
+tidak boleh dibaca sebagai satu angka.
+
+### Safe Delivered Cost (enam komponen)
 ```
 Safe Delivered Cost = Purchase Cost
                      + Transportation Cost
@@ -72,6 +89,25 @@ delivery_window`.
 | **Procurement Price Deviation** | \|price_per_kg pemasok − price_signals referensi\| / referensi × 100% |
 | **Decision Time** | Rata-rata durasi dari `agent_traces` step pertama (DETECT) sampai step terakhir (ACT) per decision |
 | **Evidence Completeness** | % decisions yang punya ≥2 `decision_evidence` dengan `is_consistent = true` sebelum status berubah ke `approved` |
+
+### 4b. Tingkat bukti tiap metrik — dan baseline yang tidak boleh dikarang (Fase 8/12)
+
+Setiap metrik membawa blok `provenance` (`services/kpi_service.py`): `source` (tabel.kolom yang
+benar-benar dibaca), `period` + basis waktunya, `sample_count`, `coverage`, `definition`,
+`formula`, `method_version`, `evidence_kind`, dan `baseline`.
+
+| Hal | Aturan as-built |
+|---|---|
+| State metrik | `available` · `no_data` (+ alasan) · `unavailable` — tidak ada 0 pengganti |
+| `evidence_kind` | `recorded_fact` (fakta tercatat) · `derived` (turunan deterministik) · `simulated_estimate` (proyeksi, **tidak pernah** masuk nilai metrik) |
+| Baseline tidak ada | ditulis `kind="no_baseline"` + `reason`; **tidak** diganti nol |
+| Meal Continuity Rate | memakai `menu_plans ⋈ delivery_events` pada `plan_date`; kg bahan diterima **bukan** porsi tersaji — proyeksi porsi hanya di blok `estimate` |
+| Avoidable Food Loss | `disposal_events` ÷ (buangan + pasokan tercatat) = **disposal tercatat**, bukan estimasi dari skor freshness |
+| Cakupan demo vs operasional | `include_demo=false` (bawaan) menyaring setiap tabel fakta dengan `demo_session_id IS NULL`; `include_demo=true` menyaring ke SATU sesi eksplisit. Tidak ada jalur "sesi terbaru" |
+| Safe Delivered Cost | anchor eksekusi = `sap_mock_purchase_orders.created_at`, bukan `decisions.created_at` |
+
+Konsekuensi saat demo: angka `simulated_estimate` boleh ditampilkan **terpisah** dan berlabel; ia
+tidak boleh dipakai untuk menutup `no_data` menjadi 7/7.
 
 ## 5. Kontrak tool (dipakai AgentCore Gateway untuk generate MCP tool dari OpenAPI)
 
@@ -177,4 +213,36 @@ Gunakan contoh ini sebagai test case pertama di `backend/tests/test_safe_deliver
 > verify 0.60–<0.85, fail <0.60), contoh `freshness_score = 0.75` di atas berada di band
 > `needs_verification` — bukan kandidat PASS. Angka biaya tetap valid sebagai contoh
 > aritmetika Safe Delivered Cost untuk Sprint 2; formula §3 tidak berubah.
+
+## 9. Hierarki pada ranah bahan (as-built 27 Okt 2026, Fase 3/4/12)
+
+Batas domain proyek berhenti di **bahan diterima**. Karena itu aturan komoditas dan kelayakan
+batch harus dibaca berlapis, bukan sebagai satu skor:
+
+```
+1. Karantina manusia        quarantined / failed            → tidak pernah jadi stok usable
+2. Masa layak ada & belum lewat  usable_until NULL/lewat    → expiry_unknown / batch_expired
+3. Safety                   fail                            → gugur (tidak dinegosiasikan)
+                            pending / needs_verification    → on_hold (bukan lolos)
+4. Bukti suhu               policy cold-chain: log kosong   → on_hold (≠ pass)
+5. Freshness                < 0.60                          → fail
+6. Kecocokan waktu          usable_until < arrival_due_at   → expired_before_arrival
+7. Delivery window          terlampaui                      → delivery_window_exceeded
+```
+
+Empat aturan yang tidak boleh dilonggarkan:
+
+1. **Ambient bukan rantai dingin.** `policy_for("beras").temp_band is None` — suhu ruang 32 °C
+   **bukan** pelanggaran. Memaksa rentang 0–8 °C untuk semua komoditas adalah bug yang sudah
+   diperbaiki (bug 20 Okt 2026).
+2. **Komoditas tak dikenal ditolak** (`KeyError`), bukan diberi default 0–8 °C.
+3. **Log suhu kosong tidak pernah `pass`.** `summarize_temperature_log` menjawab "tidak ada
+   observasi", dan `batch_eligibility` menerjemahkannya menjadi `temperature_evidence_incomplete`
+   (on_hold) — bukan bukti aman.
+4. **Kebijakan demo diberi label.** Selama belum divalidasi domain owner, `policy_kind =
+   simulated_policy` dan `policy_version` (mis. `sim-2026-10-27.v1`) ikut dikirim ke API/UI.
+
+Evaluator yang memakai aturan ini satu: `core/batch_eligibility.py` (`USABLE` / `ON_HOLD` /
+`REJECTED` / `QUARANTINED` + kode alasan stabil). Dipakai rekomendasi, approval, dispatch, dan
+penerimaan — jangan menulis aturan kelayakan baru di endpoint.
 

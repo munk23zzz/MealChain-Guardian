@@ -2,6 +2,12 @@
 
 **Prasyarat baca:** `../IDEA.md`, `PRD.md`
 
+> **Status as-built (27 Okt 2026, Fase 12):** bagian §10–§13 di bawah adalah keadaan yang
+> **benar-benar berjalan** pada branch `feature/db-modes-demo-coverage`, bukan niat desain.
+> Kalau §1–§9 (ditulis saat perencanaan) berbeda dengan §10–§13, yang berlaku §10–§13 —
+> rincian bukti di `docs/verification/fase-12-docs-rehearsal.md` dan
+> `docs/verification/AGENTCORE_STATUS.md`.
+
 ---
 
 ## 1. Prinsip arsitektur (baca ini sebelum ubah apapun)
@@ -318,3 +324,104 @@ jadi tidak tersentuh sama sekali oleh switch ini.
 ### Framing kalau juri bertanya langsung
 
 Lihat `../IDEA.md` bagian "Framing: Mock vs Real SAP" untuk talking points siap pakai.
+
+> **Koreksi 27 Okt 2026.** Kalimat "siap-switch" di §9 berarti **kesiapan kontrak**, bukan
+> koneksi. `AWSforSAPMCPProvider` sudah ada dan diuji dengan contract test yang sama seperti
+> mock, tetapi tanpa `SAP_MCP_ENDPOINT` + `SAP_MCP_TOKEN` ia menolak jalan (fail closed) dan
+> aplikasi memakai `MockSAPProvider`. Memindahkan system of record menuntut tenant S/4HANA/ECC,
+> OData, dan kredensial BTP lebih dulu — lihat §13.
+
+## 10. Tiga mode waktu: replay, realtime, operasional
+
+Dua sumbu waktu dipisahkan dengan sengaja. **Jangkar evaluasi** (`evaluation_anchor`) menentukan
+umur data, freshness, dan timestamp simulasi; **jam dinding** menentukan kapan manusia bertindak.
+Tanpa pemisahan ini, Decision Time menjadi selisih hari dan approval tercatat "sebelum" keputusan
+yang disetujuinya.
+
+| Mode | Sakelar | Cara memuat | Jangkar evaluasi | Waktu kejadian (approval/PO/terima) |
+|---|---|---|---|---|
+| **Replay** | `DEMO_MODE=true` + sesi `mode=replay` | tombol **Muat Demo Utama** → `POST /demo/session/start {mode:"replay"}` | kanon beku `2026-10-08T12:00:00Z`; ID historis stabil dan dapat diulang | jam dinding (`now()`) |
+| **Realtime** | `DEMO_MODE=true` + sesi `mode=realtime` | tombol **Muat Demo Real-time** → `POST /demo/session/start {mode:"realtime"}` | waktu sesi dibuka; `dataset_version` baru; semua offset diturunkan dari anchor ini, tidak ada timestamp masa depan | jam dinding |
+| **Operasional** | `DEMO_MODE=false` | — (tidak ada tombol muat) | jam dinding; **tidak ada fallback** ke anchor demo | jam dinding |
+
+Bukti kode:
+
+- `models/demo_sessions.py` — kolom `mode` (CHECK `IN ('replay','realtime')`),
+  `evaluation_anchor`, `dataset_version` (migrasi `040_session_modes_and_ownership`), plus indeks
+  unik parsial `uq_demo_sessions_satu_aktif` (migrasi `032`) yang menjamin **satu sesi aktif**
+  bahkan antar-worker.
+- `services/demo_session.py` — mode diminta eksplisit; sesi bermode lain **tidak** ditutup diam-diam
+  (balasan membawa `conflict`) kecuali `replace=true`.
+- `app/main.py` → `_gerbang_mode_demo` (Fase 12) — `DEMO_MODE=false` menjawab **404** untuk seluruh
+  namespace `/demo`, sebelum middleware sesi membuka koneksi DB. Gerbang ini sengaja bukan 403/409
+  supaya bisa dibedakan dari pagar sesi. Tes: `tests/test_demo_mode_gate.py`.
+- Reset satu sesi tidak menghapus sesi lain: `tests/test_session_modes.py` (butir 4 rencana Fase 2).
+
+Konsekuensi untuk operator: mematikan `DEMO_MODE` **bukan** cara mengubah data operasional; ia
+adalah cara menyatakan "aplikasi ini tidak punya namespace demo". Data demo yang sudah ada tetap
+terbaca dengan tanggal lamanya, dan tidak ada baris demo baru yang bisa lahir.
+
+## 11. Dua arti biaya: invoice (PO) vs Safe Delivered Cost (analitis)
+
+Satu resolver, dua keluaran (`backend/app/core/commercial_cost.py`):
+
+```
+invoice_total = purchase + transport + handling                       → yang DITAGIH di PO
+sdc_total     = invoice_total + expected_loss + freshness_risk + safety_penalty   (6 komponen)
+```
+
+- **Penalti risiko tidak pernah masuk invoice.** `services/po_document.py` hanya membaca
+  `commercial_cost`; PO menagih barang dan logistik, bukan kerugian internal.
+- `risk_method.kind` menyebut dasar bobotnya: `simulated_policy` (bobot demo, sumber
+  `app/core/safe_delivered_cost.py:bobot_demo`, versi `sdc-policy-1`), `calibrated_model` (hanya
+  bila benar-benar ada kalibrasi), atau `unavailable` (tanpa dasar → jangan tampilkan sebagai fakta
+  finansial).
+- Uang keluar sebagai string desimal 2 angka agar tidak kehilangan presisi di JSON; frontend
+  memformat, tidak menghitung ulang.
+- Keputusan administratif tanpa kuantitas/biaya (mis. `supplier_exclusion`) mengembalikan `None`
+  supaya UI menulis "tidak berlaku", bukan Rp 0 karangan.
+
+## 12. Evaluator batch, karantina, dan hierarki bahan
+
+**Satu definisi kelayakan untuk empat jalur.** `core/batch_eligibility.py` dipakai rekomendasi,
+approval, dispatch, dan penerimaan; keluarannya `USABLE` / `ON_HOLD` / `REJECTED` / `QUARANTINED`
+dengan **kode alasan stabil** (untuk 409 dan UI). Aturannya fail-closed, 12 langkah berurutan:
+karantina → `expiry_unknown` → `batch_expired` → `safety_fail` → `safety_pending` →
+`safety_needs_verification` → `safety_status_unknown` → `evidence_missing` →
+`temperature_evidence_incomplete` → `freshness_fail` → `expired_before_arrival` →
+`delivery_window_exceeded`. `usable_until` NULL **memblokir** (`expiry_unknown`): "tidak dapat
+dibuktikan" bukan "aman".
+
+**Gerbang penerimaan dihitung server.** `services/receipt_gate.py` menambah `can_receive` /
+`can_quarantine` pada `GET /decisions/{id}/approval-summary`; batch acuan = batch di lokasi
+**tujuan**, karena barang diterima di dapur penerima.
+
+**Karantina** (`core/quarantine.py`): status `none → quarantined → released|failed`;
+`bgn_monitor` read-only secara desain; setiap transisi menulis satu blok evidence ledger.
+
+**Hierarki pada ranah bahan** (`core/commodity_policy.py`, tabel `commodity_policies`):
+
+| Hal | Aturan as-built |
+|---|---|
+| Komoditas wajib rantai dingin | `cold_chain_required=true` hanya untuk telur/ayam/wortel (0–8 °C) |
+| Komoditas ambient | beras: **tidak** diukur excursion; suhu ruang 32 °C bukan pelanggaran |
+| Komoditas tak dikenal | `policy_for()` melempar `KeyError` — tidak ada lagi default 0–8 °C |
+| Dasar kebijakan | `policy_kind=simulated_policy` selama belum divalidasi domain owner; `policy_basis` menyebut asalnya |
+| Bukti suhu | `summarize_temperature_log`: **log kosong ≠ `pass`** → `on_hold` / `temperature_evidence_incomplete` |
+
+## 13. Status layanan SAP/AWS — yang dipakai, yang tidak
+
+| Layanan | Status as-built | Bukti |
+|---|---|---|
+| **Amazon Bedrock** (Claude) | dipakai untuk narasi Supervisor; inferensia lewat inference profile | `docs/verification/fase-11.md` §3.7 |
+| **AgentCore Runtime** | **dipakai** — runtime `mealchain_supervisor_agent-…` READY, ARN terisi (94 char) | `TODO.md` S0-06, `AGENTCORE_STATUS.md` |
+| **AgentCore Gateway** | **tidak aktif** — `ListGateways` = 0; `AGENTCORE_GATEWAY_URL` kosong (0 char) | `AGENTCORE_STATUS.md` §1 |
+| **AgentCore Memory** | resource + baca **VERIFIED**, tulis **UNVERIFIED** (IAM menolak `CreateEvent`), `AGENT_MEMORY_WRITE=0` | `AGENTCORE_STATUS.md` §2 |
+| **SAP BTP / AI Core** | dipakai: LLM + RPT forecast (`primary:sap_ai_core`) | `ai_providers/sap_ai_core_caller.py`, `verifier_client.py` |
+| **SAP Joule** | dipakai sebagai **kanal baca/percakapan** lewat bridge A2A (`sap-joule/a2a_server`, lima skill); **bukan** kanal transaksi ERP | `sap-joule/docs/peta-skill-joule.md` |
+| **SAP S/4HANA / ECC** | **tidak tersedia** — tidak ada tenant, tidak ada kredensial OData | `IDEA.md` (Framing), `Roadmap.md` Sprint 5 |
+| **Mock SAP** | **test double** (`MockSAPProvider`, header `X-Data-Source: MOCK`), bukan SAP | `sap_integration/mock_provider.py` |
+
+Satu kalimat untuk juri: *"Layanan SAP yang kami pakai adalah BTP/AI Core dan Joule; SAP sebagai
+system of record belum tersambung karena tidak ada tenant — mock kami adalah test double yang
+dinyatakan sebagai mock."*

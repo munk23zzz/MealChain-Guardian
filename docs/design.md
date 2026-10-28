@@ -912,7 +912,7 @@ Bukti angka: `_qa/ui-kompaksi/sebelum.json` & `sesudah.json`. Luapan horizontal 
 | Yang berubah | Sebelum | Sesudah |
 |---|---|---|
 | Baris daftar `.today-row` | 83–84 px (tombol "Buka" jatuh ke baris kedua karena `grid-column: 2` bertabrakan dengan pil tenggat) | **55–56 px** — grid `1fr auto auto`, tombol di kolom 3; ≤720 px kembali 2 kolom |
-| `.role-hero` (panduan peran, tampil di 3 tab) | 140 px | **72 px** — misi + langkah masuk `<details>` "Panduan peran" |
+| `.role-hero` (panduan peran, tampil di 3 tab) | 140 px | **72 px** — misi + langkah masuk `<details>` "Panduan peran". **27 Okt 2026: blok itu DIHAPUS seluruhnya atas permintaan pemilik** (`.role-hero-more`, `.role-steps` ikut dihapus); yang tersisa hanya judul role + catatan batas domain peran, jadi tingginya turun lagi |
 | Baris `.integration-row` (Agent Log) | ±70 px, kartu 777 px | **46 px**, kartu **497 px** — bukti & catatan per komponen di `<details>` |
 | Kartu feed awal | 24 kartu | **10 kartu** ("Tampilkan 24 lagi" tetap) |
 
@@ -2477,7 +2477,8 @@ penjaganya tes kontrak (`tests/radius-scale-css`, `tests/token-bayangan`,
 | Kartu | `--radius` | 12 px |
 | Dock/panel melayang | `--radius-dock` | 14 px |
 | Kontrol besar (input, select, modal) | `--radius-control` | 10 px |
-| Kontrol kecil, tombol, item rail | `--radius-control-sm` | 8 px |
+| Kontrol kecil, item rail | `--radius-control-sm` | 8 px |
+| **Tombol (semua varian)** | literal | **999 px** — sejak 27 Okt 2026 permintaan pemilik: tombol kotak → oval. `.button` di `globals.css` + daftar kelas di `tombol-pil.css`; kartu/baris yang seluruhnya bisa diklik (`.link-button`, `.map-row-btn`, `.sa-row-btn`, `.queue-item-action`, `.today-tile`) SENGAJA tidak dipil |
 | Chip, lencana, penanda peta | `--radius-chip` | 4 px |
 | Pil / bulat | literal | 999px / 50% |
 
@@ -2706,6 +2707,31 @@ kelas pada elemen tujuan, bukan daftar id — sebelumnya daftar lima id ditulis 
   tujuan punya sasaran `jump-target`.
 - `tests/evidence-dossier.test.tsx` — nav memakai `.section-jump` di `globals.css`
   (`position: sticky`, `top: 72px`, `--accent-soft`) dan `.jump-target` 132 px.
+
+**Urutan bagian Keamanan Pangan (27 Okt 2026).** Permintaan pemilik: "atur urutan dari tiap
+bagian". Halaman ini kini mengalir **keadaan → bukti → tenggat → tindakan → rujukan → konteks →
+jejak audit**:
+
+| # | Bagian | Peran dalam alur |
+|---|---|---|
+| 1 | Ringkasan pengawasan | keadaan + penghalang |
+| 2 | Bukti suhu | dasar bukti untuk status di atasnya |
+| 3 | Batch perlu segera dipakai | tenggat ≤ 48 jam |
+| 4 | Penerimaan barang | tindakan tulis: uji barang datang |
+| 5 | Menunggu persetujuan | tindakan tulis: setujui/tolak |
+| 6 | Status keamanan per batch | rujukan panjang (± 1.200 px) + filter |
+| 7 | Pasokan masuk | konteks kiriman menuju lokasi |
+| 8 | Keputusan keamanan lokasi ini | jejak audit |
+
+Perubahan yang diambil: kartu **"Pasokan masuk"** (± 680 px, tanpa aksi) dulu duduk di antara
+kartu tenggat dan dua kartu bertindak, sehingga memutus urutan tindakan; sekarang ia sesudah
+tabel, dan kedua kartu bertindak (Penerimaan, Menunggu persetujuan) jadi berdampingan. Nav
+memegang **lima** tujuan sesuai batas §24 dan tetap urut dengan halaman: Ringkasan, Bukti suhu,
+Penerimaan, Status per batch, Keputusan — "Segera dipakai" tidak lagi memakan jatah karena hanya
+satu kartu di bawah panel bukti, sedangkan "Menunggu persetujuan" dan "Pasokan masuk" tetap punya
+jangkar (`safety-persetujuan`, `safety-pasokan`) supaya bisa ditautkan langsung. Dikunci oleh
+`tests/safety-section-order.test.ts` (urutan jangkar di komponen vs urutan nav) dan
+`tests/section-jump.test.tsx`.
 
 ## 25. Panel "Bukti integrasi per komponen" dicabut dari Agent Log (21 Okt 2026)
 
