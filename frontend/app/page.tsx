@@ -170,7 +170,6 @@ import DecisionDrawer from "../components/DecisionDrawer";
 import Popup from "../components/Popup";
 import SupplyDemandPanel from "../components/SupplyDemandPanel";
 import FoodSafetyBoard from "../components/FoodSafetyBoard";
-import SurplusBoard from "../components/SurplusBoard";
 import SupplierBoard from "../components/SupplierBoard";
 import { runOf, type QualityRun } from "../lib/agent-quality";
 import {
@@ -202,7 +201,6 @@ const QUEUE_SHOWN = 4;
 // diam-diam dipotong. Halaman Surplus & Limbah ikut aturan acuan: hanya
 // peran SPPG yang melihatnya.
 const EVALUATED_LIMIT = 8;
-const SURPLUS_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
 
 // Panel provider dihitung dari trace aktual (VERIFY/PREDICT/SUPERVISE);
 // tanpa karangan — agen tanpa langkah model tampil "tidak tersedia".
@@ -1791,7 +1789,11 @@ export default function Home() {
                 di Overview. Isi kiriman masih terbaca di tab Pemasok
                 (ShipmentBoard) dan jalur persetujuan di Decision & Evidence. */}
             <div className="jump-target" id="ov-harga">
-              <PriceMonitor token={token} activeLocation={activeLocation} />
+              <PriceMonitor
+                token={token}
+                activeLocation={activeLocation}
+                lokasiSendiri={me?.location_name ?? null}
+              />
             </div>
           </div>
         )}
@@ -1825,7 +1827,7 @@ export default function Home() {
             <section className="feed-section">
               <PageHeader
                 title="Recommendation Feed"
-                description="Satu kartu satu keputusan agent. Yang menunggu tindakan Anda selalu di paling atas, lalu isu keamanan, ketidakseimbangan, terakhir anomali harga."
+                description="Satu kartu satu keputusan agen. Yang bisa ditindaklanjuti sekarang ditaruh paling atas, setelah itu yang sudah lewat tenggat, lalu keputusan lain menurut jenis: gangguan keamanan, ketidakseimbangan, anomali harga. Urutannya bisa diganti lewat pemilih Urutkan."
                 meta={
                   <>
                     <span className="commodity-pill">
@@ -1869,9 +1871,10 @@ export default function Home() {
                   {/* Petunjuk ditaruh SEBELUM daftar: dulu ada di bawah 24 kartu,
                       jadi pembaca baru menemukannya setelah menggulung jauh. */}
                   <p className="feed-hint">
-                    Klik kartu untuk membuka{" "}
-                    <strong>Decision &amp; Evidence</strong> beserta seluruh bukti
-                    keputusan itu.
+                    Tekan <strong>Tinjau</strong> pada kartu untuk membuka rincian
+                    keputusan, bukti, dan panel persetujuan dalam satu jendela.
+                    Halaman <strong>Decision &amp; Evidence</strong> tetap memuat
+                    versi lengkapnya.
                   </p>
 
                   {/* Cari + urutkan: sebelumnya tidak ada sama sekali, jadi 126
@@ -2130,6 +2133,10 @@ export default function Home() {
             detailLoading={supplyDemand.loading}
             detailError={supplyDemand.error}
             snapshot={mapSnapshotNote}
+            plan={planQuery.data}
+            planLoading={planQuery.loading}
+            planError={planQuery.error}
+            waste={wasteQuery.data}
             commodities={COMMODITIES}
             onCommodityChange={setMapCommodity}
             heading={role === "sppg_nutritionist" ? "Pasokan & Kebutuhan" : "Location Network"}
@@ -2139,32 +2146,11 @@ export default function Home() {
                 : "Siapa kekurangan, siapa berlebih, dan isi catatan tiap lokasi."
             }
           />
-          {/* Surplus & Limbah dilebur ke halaman ini (arah pemilik 29 Okt 2026):
-              "siapa kekurangan, siapa berlebih, apa yang dialihkan, apa yang
-              terbuang" adalah satu pertanyaan, jadi satu halaman — bukan dua tab
-              yang menampilkan angka neraca yang sama. Dinamai "Bagian" supaya
-              pembaca tahu ini modul yang dulu punya tab sendiri. */}
-          {role && SURPLUS_ROLES.has(role) ? (
-            <section className="merged-surplus" aria-label="Surplus & Limbah">
-              <SurplusBoard
-                locations={mapData?.locations ?? null}
-                commodity={mapData?.commodity ?? mapCommodity}
-                commodities={COMMODITIES}
-                onChangeCommodity={setMapCommodity}
-                loading={!mapData && !mapError}
-                error={mapError}
-                onRetry={() => void mapQuery.refetch()}
-                onOpenLocation={(location) => {
-                  setActiveLocation(location);
-                  setTab("overview");
-                }}
-                waste={wasteQuery.data}
-                plan={planQuery.data}
-                planLoading={planQuery.loading}
-                planError={planQuery.error}
-              />
-            </section>
-          ) : null}
+          {/* Surplus & Limbah sudah menjadi blok di dalam board itu sendiri
+              (rencana 29 Okt 2026, docs/plans/location-network-page-plan.md):
+              satu kepala, satu filter, lalu Lokasi → Rincian → Rencana alih →
+              Limbah. Merender <SurplusBoard/> utuh di sini akan mengembalikan
+              dua kepala dan dua filter di satu tab. */}
           </>
         )}
 

@@ -131,6 +131,14 @@ export default function RecommendationCard({
   tampilPersetujuan?: boolean;
 }) {
   const typeLabel = DECISION_TYPE_LABELS[decision.decision_type] ?? "Rekomendasi baru";
+  // Komoditas ("barang apa yang direkomendasikan") ADA di payload /decisions
+  // sebagai `commodity_name`, tetapi dulu tidak pernah dicetak: kartu hanya
+  // menampilkan kg dan rupiah, sehingga pembaca harus membuka popup untuk tahu
+  // barangnya. Bila field tidak ada, label tidak muncul (tidak dikarang "—").
+  const komoditas =
+    typeof decision.commodity_name === "string" && decision.commodity_name.trim()
+      ? decision.commodity_name.trim()
+      : null;
   const edge = cardEdge(decision);
   // Narasi kartu feed = alasan penolakan saja. `verifier_note` TIDAK dipakai:
   // isinya verdict mentah backend ("consistent", "flagged") yang muncul sebagai
@@ -170,6 +178,12 @@ export default function RecommendationCard({
           keduanya (pemilik 28 Okt 2026: "hapus space-nya supaya lebih compact"). */}
       <div className="rec-foot">
         <p className="rec-meta-line">
+          {komoditas && (
+            <>
+              <span className="rec-komoditas">{komoditas}</span>
+              <span className="rec-sep" aria-hidden="true">·</span>
+            </>
+          )}
           <span className="rec-qty">{formatKg(decision.quantity_kg)}</span>
           <span className="rec-sep" aria-hidden="true">·</span>
           <span>SDC {formatIDR(decision.safe_delivered_cost)}</span>

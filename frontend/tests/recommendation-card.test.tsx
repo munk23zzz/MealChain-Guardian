@@ -19,6 +19,25 @@ const BASE = {
   iteration: 3,
 };
 
+describe("RecommendationCard — label komoditas", () => {
+  it("menulis nama barang yang direkomendasikan sebelum jumlahnya", () => {
+    // Keluhan pemilik 29 Okt 2026: kartu tidak menyebut barang apa yang
+    // direkomendasikan — hanya kg dan rupiah, jadi pembaca harus membuka popup.
+    const html = renderToStaticMarkup(
+      <RecommendationCard decision={{ ...BASE, commodity_name: "telur" } as any} />
+    );
+    expect(html).toContain("rec-komoditas");
+    expect(html).toContain("telur");
+    // Label muncul SEBELUM jumlah kg di baris meta yang sama.
+    expect(html.indexOf("telur")).toBeLessThan(html.indexOf("rec-qty"));
+  });
+
+  it("tidak mengarang label saat komoditas tidak ada", () => {
+    const html = renderToStaticMarkup(<RecommendationCard decision={BASE as any} />);
+    expect(html).not.toContain("rec-komoditas");
+  });
+});
+
 describe("RecommendationCard — narasi", () => {
   it("alasan penolakan dicetak apa adanya", () => {
     const html = renderToStaticMarkup(

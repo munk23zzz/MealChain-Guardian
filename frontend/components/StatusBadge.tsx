@@ -11,7 +11,9 @@ const COLORS: Record<string, string> = {
   NEEDS_VERIFICATION: "status-warning",
   PROPOSED: "status-neutral",
   VERIFIER_FLAGGED: "status-warning",
-  PENDING_APPROVAL: "status-warning",
+  // Abu netral, bukan amber: lihat catatan di lib/recommendations.ts
+  // (permintaan pemilik 29 Okt 2026).
+  PENDING_APPROVAL: "status-neutral",
   APPROVED: "status-safe",
   REJECTED: "status-danger",
   EXECUTED: "status-safe",

@@ -7,7 +7,9 @@ import { cardEdge } from "../lib/recommendations";
 // memakai warna "perhatikan saya" (biru/amber) supaya yang masih hidup menonjol.
 describe("cardEdge", () => {
   it("status menunggu tindakan → tepi peringatan", () => {
-    expect(cardEdge({ status: "PENDING_APPROVAL" })).toBe("edge-warning");
+    // 29 Okt 2026: "menunggu persetujuan" adalah keadaan paling umum, jadi
+    // tepinya abu netral — amber dikembalikan untuk yang memang perlu diperiksa.
+    expect(cardEdge({ status: "PENDING_APPROVAL" })).toBe("edge-neutral");
     expect(cardEdge({ status: "VERIFIER_FLAGGED" })).toBe("edge-warning");
     expect(cardEdge({ status: "NEEDS_VERIFICATION" })).toBe("edge-warning");
     expect(cardEdge({ status: "needs_verification" })).toBe("edge-warning"); // huruf kecil

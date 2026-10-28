@@ -28,7 +28,9 @@ describe("StatusBadge", () => {
   it("nilai mentah tetap tersimpan di data-status (kontrak CSS)", () => {
     const html = renderToStaticMarkup(<StatusBadge status="pending_approval" />);
     expect(html).toContain('data-status="PENDING_APPROVAL"');
-    expect(html).toContain("status-warning");
+    // 29 Okt 2026: "menunggu persetujuan" memakai abu netral (permintaan
+    // pemilik), bukan amber — amber kini hanya untuk yang perlu diperiksa.
+    expect(html).toContain("status-neutral");
   });
 
   it("status tak dikenal tampil apa adanya (tanpa garis bawah), bukan dikarang", () => {

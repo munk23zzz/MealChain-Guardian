@@ -453,6 +453,16 @@ dl dd,
   color: var(--ink-inverse);
 }
 
+/* Angka (`.legend-count`) di dalam pil punya warnanya sendiri (abu), jadi saat
+   pil dipilih ia tetap abu di atas latar biru. Pemilik 29 Okt 2026: angkanya
+   harus putih saat pil dipilih. */
+/* Selektivitas 3 kelas: `.filter-chip .legend-count` (2 kelas, di bawah) dulu
+   menang karena urutan, sehingga angka tetap abu di atas latar biru. */
+.filter-chip.filter-chip-active .legend-count,
+.filter-chip.filter-chip-active:hover .legend-count {
+  color: var(--ink-inverse);
+}
+
 .filter-chip .legend-count {
   font-size: var(--fs-1);
   /* Fase 7: dulu `opacity: .75` — hasil kompositnya #75808f di atas putih,
@@ -915,8 +925,17 @@ a:focus-visible {
    dibedakan dari lencana status yang berwarna. */
 .badge-expired {
   background: var(--neutral-bg);
-  border-color: var(--neutral-border);
-  color: var(--neutral-ink);
+  border-color: var(--ink-muted);
+  color: var(--ink);
+}
+
+/* "Ditandai verifikator" = orange, bukan amber pucat: satu-satunya status
+   yang menuntut pemeriksaan manusia selain yang ditolak. */
+.badge[data-status="VERIFIER_FLAGGED"] {
+  background: color-mix(in srgb, var(--status-warning) 22%, var(--surface));
+  border-color: var(--status-warning);
+  color: var(--warn-ink);
+  font-weight: 600;
 }
 
 .badge-neutral {
@@ -1244,6 +1263,15 @@ a:focus-visible {
   margin: 0;
   font-size: var(--fs-2);
   color: var(--ink-muted);
+}
+
+/* Label komoditas di kartu ("beras", "telur", …). Huruf awal dikapitalkan
+   karena backend mengirim nama dalam huruf kecil; bobot 600 supaya terbaca
+   sebagai subjek kalimat, bukan angka pendamping. */
+.rec-komoditas {
+  font-weight: 600;
+  color: var(--ink);
+  text-transform: capitalize;
 }
 
 .rec-qty { font-weight: 600; color: var(--ink); }
@@ -4172,10 +4200,18 @@ a:focus-visible {
   width: 4px;
   background: var(--accent-strong);
 }
-.rec-edge.edge-warning::before { background: var(--warn-ink); }
+/* "Perlu diperiksa"/"ditandai verifikator": ORANGE (--status-warning), bukan
+   coklat tua --warn-ink — pemilik 29 Okt 2026 minta nadanya orange jelas. */
+.rec-edge.edge-warning::before { background: var(--status-warning); }
 .rec-edge.edge-danger::before { background: var(--status-danger); }
 /* Kartu kedaluwarsa: tepi netral — tidak lagi memakai warna "lihat saya". */
-.rec-edge.edge-expired::before { background: var(--line-input); }
+/* "Lewat tenggat" memakai abu LEBIH TUA dari --line-input: kartu yang tidak
+   bisa ditindak lagi harus tetap terbaca sebagai keadaan, bukan nyaris hilang
+   (pemilik 29 Okt 2026: "abu abu rada tua"). Tetap lebih muda dari teks ink. */
+.rec-edge.edge-expired::before { background: var(--ink-muted); }
+/* Netral: dipakai "menunggu persetujuan" — keadaan paling umum, jadi tidak
+   boleh menarik mata seperti amber/merah (pemilik 29 Okt 2026: "abu abu saja"). */
+.rec-edge.edge-neutral::before { background: var(--line-strong); }
 
 /* Header kartu dengan garis pemisah ala Stitch card header */
 .rec-edge .card-header,

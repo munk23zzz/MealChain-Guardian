@@ -5,11 +5,20 @@
 // isyarat "lihat saya" terkuat, jadi warna itu hanya boleh dipakai untuk kartu
 // yang memang menuntut tindakan. Kartu kedaluwarsa diberi tepi netral.
 
-export type CardEdge = "edge-primary" | "edge-warning" | "edge-danger" | "edge-expired";
+export type CardEdge =
+  | "edge-primary"
+  | "edge-warning"
+  | "edge-danger"
+  | "edge-expired"
+  | "edge-neutral";
 
 /** Status yang butuh perhatian manusia atau sudah gagal → warnanya lebih kuat. */
 const EDGE_BY_STATUS: Record<string, CardEdge> = {
-  PENDING_APPROVAL: "edge-warning",
+  // "Menunggu persetujuan" adalah keadaan PALING UMUM di feed (14 dari 16
+  // kartu pada demo 29 Okt 2026). Tepi amber di hampir semua kartu berhenti
+  // menjadi isyarat — pemilik meminta warnanya abu netral saja, sehingga amber
+  // kembali berarti "perlu diperiksa".
+  PENDING_APPROVAL: "edge-neutral",
   VERIFIER_FLAGGED: "edge-warning",
   NEEDS_VERIFICATION: "edge-warning",
   REJECTED: "edge-danger",
