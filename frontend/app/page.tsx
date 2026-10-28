@@ -56,6 +56,7 @@ import type { KpiScope } from "../lib/kpi-provenance";
 import { useMe } from "../lib/hooks/useMe";
 import { useQualitySample } from "../lib/hooks/useQualitySample";
 import { useSuppliers } from "../lib/hooks/useSuppliers";
+import { useReceiptHistory } from "../lib/hooks/useReceiptHistory";
 import { useSupplierRoutes } from "../lib/hooks/useSupplierRoutes";
 // Fase 7b: ambang jangkauan peran (SPPG 150 km, monitor tanpa ambang) — satu
 // tempat aturannya, dipakai peta + halaman Pemasok.
@@ -667,6 +668,9 @@ export default function Home() {
     mapData?.commodity ?? null
   );
   const suppliersQuery = useSuppliers(token, identityScope, tab);
+  // Riwayat penerimaan per pemasok (Dok 05 §8.5): dimuat hanya saat tab Pemasok
+  // aktif, sama seperti daftar pemasok — layar lain tidak membayar permintaan ini.
+  const receiptHistoryQuery = useReceiptHistory(token, identityScope, tab);
   // Jalur kiriman (Fase 10): garis jalan pemasok → tujuan. Peta memakai yang
   // sekomoditas dengan tampilan; halaman Pemasok memakai daftar penuh supaya
   // tabel bisa menyebut jalur untuk semua kiriman aktif.
@@ -2243,6 +2247,9 @@ export default function Home() {
             }}
             onExclusionCreated={() => void decisionsQuery.refetch()}
             supplierRoutes={supplierRoutesQuery.data}
+            receiptHistory={receiptHistoryQuery.data}
+            receiptLoading={receiptHistoryQuery.loading}
+            receiptError={receiptHistoryQuery.error}
           />
         )}
 

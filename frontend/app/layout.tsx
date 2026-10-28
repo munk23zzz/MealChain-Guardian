@@ -23,6 +23,9 @@ import "./agent-activity.css";
 // Tombol pil/oval di seluruh halaman (27 Okt 2026, permintaan pemilik).
 // Diimpor terakhir dengan alasan yang sama: menang urutan tanpa !important.
 import "./tombol-pil.css";
+// Riwayat penerimaan barang di halaman Pemasok (Dok 05 §8.5, 29 Okt 2026).
+// Berkas terpisah supaya lapisan ini tidak menambah hunk di globals.css.
+import "./supplier-receipts.css";
 
 import Providers from "./providers";
 

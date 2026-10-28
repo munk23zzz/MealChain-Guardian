@@ -460,6 +460,221 @@ async def _semai_penerimaan(db: AsyncSession, now: datetime) -> dict:
 
 
 
+async def _semai_riwayat_penerimaan(db: AsyncSession, now: datetime) -> dict:
+    """Riwayat penerimaan Jakarta: satu disetujui, satu ditolak, satu menunggu.
+
+    Kenapa langkah ini ada (Dok 05 §8.5, halaman Pemasok revisi 29 Okt 2026):
+    sampai sekarang SELURUH penerimaan demo berstatus `menunggu` dan tidak satu
+    pun batch-nya terikat ke PO, sehingga layar riwayat hanya bisa menulis
+    "tidak tercatat" — kolom nilai dan kalimat asal harga kosong tepat di layar
+    yang dipakai menjawab "berapa yang benar-benar diterima dan berapa nilainya".
+
+    Yang dibuat (semuanya deterministik lewat `_uid`, jadi membangun ulang
+    menghasilkan baris yang sama):
+
+    - satu keputusan pengadaan `executed` + PO + bukti `allocation_binding`
+      untuk TIGA batch Jakarta — jalur atribusi harga yang sama dengan yang
+      ditulis `persist_supplier_binding` saat eksekusi nyata;
+    - tiga catatan penerimaan: `disetujui` (kg masuk stok + nilai pembukuan),
+      `ditolak` (alasan wajib terisi), `menunggu` (nilai masih perkiraan).
+
+    Yang SENGAJA tidak dilakukan: menulis baris `supply_records`. Persetujuan
+    ini peristiwa HISTORIS (dua hari lalu) dan deret stok di repo ini dibangun
+    dari data kanonik, bukan dari catatan penerimaan — menambah baris stok di
+    sini akan menghitung barangnya dua kali dan menggeser angka Overview yang
+    sudah dipakai di dokumen demo. Karena itu `supply_record_id` dibiarkan
+    kosong: tidak ada balapan `approve` yang bisa menggandakan stok, karena
+    indeks unik `uq_batch_receipts_satu_disetujui` sudah menutup batch ini.
+    """
+    from app.models import DecisionEvidence
+
+    jakarta = await _lokasi(db, "Jakarta")
+    kepala = await _user(db, "sppg.head@demo.local")
+    if jakarta is None or kepala is None:
+        return {"dilewati": "Jakarta / akun kepala tidak ada"}
+
+    # Tiga batch `pass` Jakarta yang berbeda pemasoknya — supaya tabel riwayat
+    # memperlihatkan lebih dari satu pemasok, dan supaya nilai rupiahnya tidak
+    # terlihat seperti satu baris yang diulang.
+    kandidat = list(
+        (
+            await db.execute(
+                select(Batch)
+                .where(
+                    Batch.location_id == jakarta.id,
+                    Batch.safety_status == "pass",
+                    Batch.quarantine_status == "none",
+                )
+                .order_by(Batch.id)
+            )
+        ).scalars()
+    )
+    # Batch yang SUDAH punya catatan penerimaan dilewati. Tanpa saringan ini
+    # riwayat menampilkan satu batch dengan dua baris yang saling meniadakan
+    # (satu `disetujui` dua hari lalu DAN satu `menunggu` kemarin), dan pembaca
+    # tidak bisa tahu mana yang berlaku.
+    sudah_ada = set(
+        (
+            await db.execute(
+                select(BatchReceipt.batch_id).where(
+                    BatchReceipt.batch_id.in_([b.id for b in kandidat])
+                )
+            )
+        ).scalars()
+    )
+    terpilih: list[Batch] = []
+    pemasok_terpakai: set[uuid.UUID] = set()
+    for b in kandidat:
+        if b.id in sudah_ada:
+            continue
+        if b.supplier_id in pemasok_terpakai:
+            continue
+        terpilih.append(b)
+        pemasok_terpakai.add(b.supplier_id)
+        if len(terpilih) == 3:
+            break
+    if len(terpilih) < 2:
+        return {"dilewati": "batch pass Jakarta kurang dari dua"}
+
+    utama = terpilih[0]
+    kuantitas_total = sum((Decimal(str(b.quantity_kg)) for b in terpilih), Decimal("0"))
+    # Harga satuan demo per komoditas: angka bulat yang mudah dibaca di layar
+    # ("250 kg × Rp 32.500 per kg"). Bukan harga pasar — dokumen demo menyebut
+    # angka ini sintetis, dan `safe_delivered_cost` keputusan disetel sama
+    # supaya invarian "satu keputusan, satu angka biaya" tetap benar.
+    nama_komoditas = (
+        await db.execute(select(Commodity.name).where(Commodity.id == utama.commodity_id))
+    ).scalar_one_or_none()
+    HARGA_DEMO = {
+        "telur": Decimal("28842.08"),
+        "ayam": Decimal("32500.00"),
+        "wortel": Decimal("11500.00"),
+        "beras": Decimal("15000.00"),
+        "sayur": Decimal("9500.00"),
+        "buah": Decimal("18000.00"),
+        "ikan": Decimal("38000.00"),
+        "daging": Decimal("120000.00"),
+    }
+    harga = HARGA_DEMO.get(str(nama_komoditas or "").lower(), Decimal("20000.00"))
+    dua_hari = now - timedelta(days=2)
+
+    kunci_putusan = _uid("riwayat-terima", str(utama.id))
+    putusan = await db.get(Decision, kunci_putusan)
+    nilai = {
+        "decision_type": "supplier_procurement",
+        "status": "executed",
+        "proposed_by": "supervisor_agent",
+        "verified_by": "verifier_agent",
+        # `verifier_note` dibaca read model sebagai verdict — kalimat bebas di
+        # sini membuat verdict jatuh ke "unavailable" (lihat demo_activity.py).
+        "verifier_note": "consistent",
+        "iteration": 1,
+        "source_location_id": jakarta.id,
+        "target_location_id": jakarta.id,
+        "commodity_id": utama.commodity_id,
+        "quantity_kg": kuantitas_total,
+        "safe_delivered_cost": harga * kuantitas_total,
+        "supplier_id": utama.supplier_id,
+        "expires_at": now + timedelta(days=30),
+        "origin": "demo",
+        "generated_at": now,
+        "created_at": dua_hari,
+    }
+    if putusan is None:
+        putusan = Decision(id=kunci_putusan, **nilai)
+        db.add(putusan)
+    else:
+        for k, v in nilai.items():
+            setattr(putusan, k, v)
+
+    kunci_bukti = _uid("riwayat-terima", "binding")
+    if await db.get(DecisionEvidence, kunci_bukti) is None:
+        db.add(
+            DecisionEvidence(
+                id=kunci_bukti,
+                decision_id=kunci_putusan,
+                evidence_type="human_inspection",
+                payload={
+                    "allocation_binding": True,
+                    "supplier_id": str(utama.supplier_id),
+                    "batch_ids": [str(b.id) for b in terpilih],
+                    "demo": True,
+                },
+                is_consistent=True,
+                recorded_at=dua_hari + timedelta(minutes=9),
+            )
+        )
+
+    kunci_po = _uid("riwayat-terima", "po")
+    nomor = nomor_po(kunci_putusan)
+    sudah_po = (
+        await db.execute(
+            select(SapMockPurchaseOrder.id).where(SapMockPurchaseOrder.po_number == nomor)
+        )
+    ).scalar_one_or_none()
+    if sudah_po is None and await db.get(SapMockPurchaseOrder, kunci_po) is None:
+        db.add(
+            SapMockPurchaseOrder(
+                id=kunci_po,
+                po_number=nomor,
+                supplier_id=utama.supplier_id,
+                material_number=f"MAT-{(nama_komoditas or 'UMUM').upper()}",
+                ordered_quantity=kuantitas_total,
+                price=harga,
+                decision_id=kunci_putusan,
+                status="confirmed",
+                origin="demo",
+                created_at=dua_hari + timedelta(minutes=2),
+            )
+        )
+
+    # Tiga catatan penerimaan: disetujui · ditolak · menunggu.
+    rencana = [
+        (terpilih[0], "disetujui", dua_hari + timedelta(hours=5), None),
+        (
+            terpilih[1],
+            "ditolak",
+            dua_hari + timedelta(hours=4),
+            "Kemasan bocor dan suhu di atas batas saat tiba.",
+        ),
+        (
+            terpilih[2] if len(terpilih) > 2 else terpilih[0],
+            "menunggu",
+            now - timedelta(minutes=50),
+            None,
+        ),
+    ]
+    dibuat: list[str] = []
+    for batch, status, kapan, catatan in rencana:
+        kunci = _uid("riwayat-terima", "catatan", str(batch.id), status)
+        if await db.get(BatchReceipt, kunci) is not None:
+            dibuat.append(str(kunci))
+            continue
+        db.add(
+            BatchReceipt(
+                id=kunci,
+                batch_id=batch.id,
+                checked={"suhu": True, "kemasan": True, "jumlah": True, "label": True},
+                other_note=catatan,
+                recorded_by=kepala.id,
+                recorded_at=kapan,
+                status=status,
+                reviewed_by=kepala.id if status != "menunggu" else None,
+                reviewed_at=kapan + timedelta(minutes=25) if status != "menunggu" else None,
+                review_note=catatan if status == "ditolak" else None,
+            )
+        )
+        dibuat.append(str(kunci))
+    await db.flush()
+    return {
+        "keputusan": str(kunci_putusan),
+        "po": nomor,
+        "harga": str(harga),
+        "batch": [str(b.id) for b in terpilih],
+        "catatan": dibuat,
+    }
+
+
 async def _semai_stok_mendekati_batas(db: AsyncSession, now: datetime) -> dict:
     """Sisakan satu batch per target di jendela ≤48 jam (lihat STOK_MENDEKATI_BATAS).
 
@@ -2544,6 +2759,10 @@ async def build_into(db: AsyncSession, *, purge: bool = True, freeze: bool = Tru
     # yang sudah dihapus langkah-langkah di atas. Jaring terakhir, bukan
     # pengganti perbaikan per-langkah.
     laporan["cakupan_ledger"] = await _rapikan_cakupan_ledger(db)
+    # Riwayat penerimaan ber-PO (Dok 05 §8.5) — ditaruh paling akhir supaya
+    # langkah-langkah yang memangkas/menggeser batch Jakarta tidak memindahkan
+    # baris yang baru saja dibuat.
+    laporan["riwayat_penerimaan"] = await _semai_riwayat_penerimaan(db, now)
     await db.commit()
     if freeze:
         laporan["beku"] = await _bekukan(db)

@@ -22,6 +22,7 @@ import PageHeader from "./PageHeader";
 import FactList from "./FactList";
 import Pager from "./Pager";
 import ShipmentBoard from "./ShipmentBoard";
+import SupplierReceipts from "./SupplierReceipts";
 import { SupplierExclusionView } from "./SupplierExclusionPanel";
 import {
   directoryMetrics,
@@ -80,6 +81,9 @@ export default function SupplierBoard({
   onExclusionCreated,
   reachKm = null,
   supplierRoutes = null,
+  receiptHistory = null,
+  receiptLoading = false,
+  receiptError = null,
 }: {
   /** Payload `GET /suppliers` (amplop atau array). `null` = belum dimuat. */
   suppliers: unknown;
@@ -100,6 +104,13 @@ export default function SupplierBoard({
    * dimuat (ditulis "…"), BUKAN "tidak punya jalur" — dua keadaan itu berbeda.
    */
   supplierRoutes?: unknown;
+  /**
+   * Amplop `GET /receipts/riwayat` untuk kartu "Riwayat penerimaan"
+   * (Dok 05 §8.5). `null` = belum dimuat.
+   */
+  receiptHistory?: unknown;
+  receiptLoading?: boolean;
+  receiptError?: string | null;
 }) {
   const directoryDimuat = suppliers !== null && suppliers !== undefined;
   const rows = supplierDirectory(suppliers);
@@ -504,6 +515,18 @@ export default function SupplierBoard({
           </>
         )}
       </article>
+
+      {/* Riwayat penerimaan (Dok 05 §8.5): pertanyaan audit "berapa yang benar-
+          benar diterima dari pemasok ini, dan berapa nilainya" — jawabannya
+          data yang sudah tersimpan di `batch_receipts`, bukan kalimat. Ditaruh
+          sesudah daftar pemasok dan sebelum register eksklusi: dua register
+          itu dibaca berurutan (apa yang datang · siapa yang tidak boleh
+          dipakai lagi). */}
+      <SupplierReceipts
+        riwayat={receiptHistory}
+        loading={receiptLoading}
+        error={receiptError}
+      />
 
       <article className="card">
         <h2>Register eksklusi</h2>

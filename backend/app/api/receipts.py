@@ -41,7 +41,15 @@ from app.api.demo_session import butuh_sesi_aktif
 from app.api.dependencies import get_db
 from app.core.batch_eligibility import USABLE
 from app.core.scope import assert_in_scope
-from app.models import Batch, BatchReceipt, Commodity, Location, SupplyRecord, User
+from app.models import (
+    Batch,
+    BatchReceipt,
+    Commodity,
+    Location,
+    Supplier,
+    SupplyRecord,
+    User,
+)
 from app.services import receipt_value, settlement
 from app.services.batch_eligibility_service import (
     BOLEH_DICATAT,
@@ -549,3 +557,157 @@ async def list_receipts(
             for receipt, nama, nama_pemeriksa, kg in baris
         ]
     }
+
+
+#: Batas kewarasan riwayat penerimaan: cukup untuk layar audit satu tahun demo,
+#: cukup kecil untuk dihitung ulang seluruhnya di server (ringkasan dihitung
+#: dari SELURUH baris dalam cakupan, bukan hanya halaman yang dikirim).
+RIWAYAT_MAKS = 500
+
+
+@router.get("/receipts/riwayat")
+async def list_receipts_riwayat(
+    supplier_id: uuid.UUID | None = Query(default=None),
+    status: str | None = Query(default=None, pattern="^(menunggu|disetujui|ditolak)$"),
+    limit: int = Query(default=25, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Riwayat penerimaan barang per pemasok (Dok 05 §8.5, layar Pemasok).
+
+    Kenapa endpoint ini ada: `GET /receipts` hanya menjawab per BATCH, dan
+    `GET /receipts/menunggu` hanya memuat catatan yang belum diputuskan. Layar
+    audit pemasok butuh ketiganya sekaligus — yang sudah disetujui, yang
+    ditolak, dan yang menunggu — dalam satu tabel berurut waktu.
+
+    Yang dijanjikan bentuk balasannya:
+
+    - satu baris per catatan penerimaan, terbaru dulu;
+    - kg DIPESAN (`ordered_kg`, kuantitas batch) dan kg DITERIMA
+      (`received_kg`, hanya terisi bila disetujui) dua kolom terpisah — klien
+      tidak pernah mengurangkannya sendiri;
+    - nilai rupiah dari `receipt_value` (harga satuan invoice PO), dan `None`
+      untuk batch tanpa ikatan PO ("tidak tercatat", bukan Rp 0);
+    - `ringkasan` dihitung server dari SELURUH baris dalam cakupan, supaya
+      angka di kepala tabel tidak berubah saat pengguna memindah halaman.
+
+    Cakupannya sama dengan antrean `menunggu`: pengguna yang punya lokasi hanya
+    melihat penerimaan lokasinya; pemantau tanpa lokasi melihat seluruh jaringan.
+    """
+    pemeriksa = aliased(User)
+    batas = []
+    if user.location_id is not None:
+        batas.append(Batch.location_id == user.location_id)
+    if supplier_id is not None:
+        batas.append(Batch.supplier_id == supplier_id)
+    if status is not None:
+        batas.append(BatchReceipt.status == status)
+
+    baris = (
+        await db.execute(
+            select(
+                BatchReceipt,
+                User.name,
+                pemeriksa.name,
+                Batch.quantity_kg,
+                Batch.id,
+                Commodity.name,
+                Supplier.id,
+                Supplier.name,
+                Location.name,
+            )
+            .join(User, User.id == BatchReceipt.recorded_by)
+            .join(Batch, Batch.id == BatchReceipt.batch_id)
+            .join(Commodity, Commodity.id == Batch.commodity_id)
+            .join(Supplier, Supplier.id == Batch.supplier_id)
+            .join(Location, Location.id == Batch.location_id)
+            .outerjoin(pemeriksa, pemeriksa.id == BatchReceipt.reviewed_by)
+            .where(*batas)
+            .order_by(BatchReceipt.recorded_at.desc(), BatchReceipt.id.desc())
+            .limit(RIWAYAT_MAKS)
+        )
+    ).all()
+
+    # Satu kueri harga untuk semua batch di halaman ini — bukan satu per baris.
+    peta = await receipt_value.peta_po_dan_harga(
+        db, {str(r[4]) for r in baris}
+    )
+
+    items: list[dict] = []
+    for (
+        receipt,
+        nama,
+        nama_pemeriksa,
+        kg,
+        batch_id,
+        komoditas,
+        supplier_uuid,
+        supplier_nama,
+        lokasi,
+    ) in baris:
+        kg_float = float(kg) if kg is not None else None
+        po_number, harga_satuan = peta.get(str(batch_id), (None, None))
+        row = _row(
+            receipt,
+            nama=nama,
+            pemeriksa=nama_pemeriksa,
+            kg=kg_float,
+            nilai=receipt_value.nilai_dari(kg_float, harga_satuan),
+            po_number=po_number,
+            unit_price=float(harga_satuan) if harga_satuan is not None else None,
+        )
+        row.update(
+            {
+                "batch_ref": str(batch_id)[:8],
+                "commodity": komoditas,
+                "supplier_id": str(supplier_uuid),
+                "supplier": supplier_nama,
+                "location": lokasi,
+                # Dok 05 §8.2: dua angka kg berdiri sendiri. `received_kg`
+                # kosong selama catatan belum disetujui — barang yang belum
+                # masuk stok tidak boleh terbaca sebagai sudah diterima.
+                "ordered_kg": kg_float,
+                "received_kg": kg_float if receipt.status == "disetujui" else None,
+            }
+        )
+        items.append(row)
+
+    ringkasan = {
+        "total": len(items),
+        "menunggu": 0,
+        "disetujui": 0,
+        "ditolak": 0,
+        "kg_dipesan": 0.0,
+        "kg_diterima": 0.0,
+        #: Nilai pembukuan dari penerimaan yang SUDAH disetujui.
+        "nilai_diterima_idr": 0.0,
+        #: Perkiraan nilai (kg × harga satuan) yang masih menunggu keputusan.
+        "nilai_menunggu_idr": 0.0,
+        #: Baris yang harganya tidak bisa ditentukan (tanpa ikatan PO).
+        "tanpa_harga": 0,
+        "supplier": len({row["supplier_id"] for row in items}),
+    }
+    for row in items:
+        kunci = row["status"]
+        if kunci in ("menunggu", "disetujui", "ditolak"):
+            ringkasan[kunci] += 1
+        if row["ordered_kg"] is not None:
+            ringkasan["kg_dipesan"] += row["ordered_kg"]
+        if row["received_kg"] is not None:
+            ringkasan["kg_diterima"] += row["received_kg"]
+        if row["accepted_value_idr"] is not None:
+            ringkasan["nilai_diterima_idr"] += row["accepted_value_idr"]
+        elif row["status"] == "menunggu" and row["estimated_value_idr"] is not None:
+            # Hanya baris yang MASIH menunggu keputusan. Catatan yang ditolak
+            # juga tidak punya nilai pembukuan, tetapi ia bukan "menunggu" —
+            # memasukkan perkiraannya ke sini membuat angka "nilai menunggu"
+            # memuat barang yang sudah jelas tidak diterima.
+            ringkasan["nilai_menunggu_idr"] += row["estimated_value_idr"]
+        if row["unit_price_idr"] is None:
+            ringkasan["tanpa_harga"] += 1
+    for nama_angka in ("kg_dipesan", "kg_diterima"):
+        ringkasan[nama_angka] = round(ringkasan[nama_angka], 2)
+    for nama_angka in ("nilai_diterima_idr", "nilai_menunggu_idr"):
+        ringkasan[nama_angka] = round(ringkasan[nama_angka], 2)
+
+    return {"items": items[:limit], "ringkasan": ringkasan}

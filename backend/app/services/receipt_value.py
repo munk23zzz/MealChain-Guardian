@@ -59,6 +59,48 @@ async def po_dan_harga(
     return baris[0], baris[1]
 
 
+async def peta_po_dan_harga(
+    db: AsyncSession, batch_ids: set[str]
+) -> dict[str, tuple[str, Decimal | None]]:
+    """Nomor PO + harga satuan untuk BANYAK batch dalam SATU kueri.
+
+    Dipakai layar riwayat penerimaan (halaman Pemasok, Dok 05 §8.5): satu
+    halaman bisa memuat puluhan baris, dan `po_dan_harga()` per baris berarti
+    puluhan kueri. Aturan atribusinya identik — bukti `human_inspection`
+    terbaru menang — jadi angka yang tampil tidak bisa berbeda dari
+    `harga_invoice_po()`. Batch tanpa ikatan tidak masuk peta: pemanggil
+    membacanya sebagai "tidak tercatat", bukan nol.
+    """
+    if not batch_ids:
+        return {}
+    dicari = {str(b) for b in batch_ids}
+    baris = (
+        await db.execute(
+            select(
+                SapMockPurchaseOrder.po_number,
+                SapMockPurchaseOrder.price,
+                DecisionEvidence.payload,
+            )
+            .join(Decision, Decision.id == SapMockPurchaseOrder.decision_id)
+            .join(DecisionEvidence, DecisionEvidence.decision_id == Decision.id)
+            .where(DecisionEvidence.evidence_type == "human_inspection")
+            .order_by(
+                Decision.created_at.desc(), SapMockPurchaseOrder.created_at.desc()
+            )
+        )
+    ).all()
+    peta: dict[str, tuple[str, Decimal | None]] = {}
+    for po_number, harga, payload in baris:
+        for bid in (payload or {}).get("batch_ids") or []:
+            kunci = str(bid)
+            # Urutan kueri = terbaru dulu, jadi kemunculan PERTAMA yang dipakai.
+            if kunci in dicari and kunci not in peta:
+                peta[kunci] = (po_number, harga)
+        if len(peta) >= len(dicari):
+            break
+    return peta
+
+
 async def harga_invoice_po(db: AsyncSession, batch_id: uuid.UUID) -> Decimal | None:
     """Harga satuan invoice PO yang mendanai `batch_id`, atau None.
 

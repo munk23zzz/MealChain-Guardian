@@ -59,6 +59,9 @@ export const queryKeys = {
     ["suppliers", scope, reachKm ?? "all", commodity ?? "all"] as const,
   supplierRoutes: (scope: string, commodity?: string | null, location?: string | null) =>
     ["supplier-routes", scope, commodity ?? "all", location ?? "all"] as const,
+  // Riwayat penerimaan per pemasok (Dok 05 §8.5, halaman Pemasok 29 Okt 2026).
+  receiptHistory: (scope: string, supplierId?: string | null, status?: string | null) =>
+    ["receipt-history", scope, supplierId ?? "semua", status ?? "semua"] as const,
   // Monitor harga pasar (28 Okt 2026): kunci memuat wilayah + jendela hari + komoditas.
   priceMonitor: (region: string | null, days: number, commodity: string | null) =>
     ["price-monitor", region ?? "nasional", days, commodity ?? "proyek"] as const,

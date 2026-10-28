@@ -521,6 +521,32 @@ export async function fetchPendingReceipts(
   });
 }
 
+export type ReceiptHistoryPayload = {
+  items: Record<string, any>[];
+  ringkasan: Record<string, number>;
+};
+
+/**
+ * Riwayat penerimaan barang per pemasok (Dok 05 §8.5) — layar Pemasok.
+ *
+ * Berbeda dari `fetchReceipts` (per batch) dan `fetchPendingReceipts` (hanya
+ * yang belum diputuskan): balasan ini memuat ketiga putusan sekaligus, plus
+ * `ringkasan` yang dihitung server dari SELURUH baris dalam cakupan.
+ */
+export async function fetchReceiptHistory(
+  token: string,
+  opsi: { supplierId?: string | null; status?: string | null; limit?: number } = {}
+): Promise<ReceiptHistoryPayload> {
+  const q = new URLSearchParams();
+  if (opsi.supplierId) q.set("supplier_id", opsi.supplierId);
+  if (opsi.status) q.set("status", opsi.status);
+  if (opsi.limit) q.set("limit", String(opsi.limit));
+  const ekor = q.toString();
+  return request(`/receipts/riwayat${ekor ? `?${ekor}` : ""}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 /** Kepala SPPG menyetujui penerimaan → barang masuk stok (idempoten di server). */
 export async function approveReceipt(
   receiptId: string,
