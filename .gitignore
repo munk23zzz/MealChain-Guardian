@@ -125,3 +125,10 @@ sap-joule/_qa/
 
 # Folder build frontend khusus stack rehearsi Fase 10 (docker-compose.p10.yml)
 frontend/.next-p10/
+
+# Artefak dump/build yang tidak perlu masuk riwayat (28 Okt 2026)
+frontend/.next-f9-verify/
+qa_*.json
+_qa/f12/layout-*.css
+_qa/f12/*.out
+_qa/f12/*.err
