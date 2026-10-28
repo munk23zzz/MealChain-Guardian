@@ -836,6 +836,7 @@ async def _insert_events(
     end: datetime,
     now: datetime,
     commodities_by_location: dict,
+    demo_session_id: uuid.UUID | None = None,
 ) -> None:
     """Tulis kiriman + limbah demo untuk rencana 8 Okt..ujung rencana.
 
@@ -915,16 +916,20 @@ async def _insert_events(
     ]
     limbah = plan_disposal_rows(rencana, commodities_by_location)
 
+    # Fase 2 MG: baris kejadian membawa PEMILIK-nya. Insert di sini Core, jadi
+    # penjaga `before_flush` tidak pernah melihatnya — tanpa stempel eksplisit
+    # kiriman lahir tanpa pemilik dan selamat dari reset sesi.
+    stempel = {"demo_session_id": demo_session_id} if demo_session_id else {}
     if kiriman:
         await session.execute(
             pg_insert(DeliveryEvent)
-            .values([{**row, "generated_at": now} for row in kiriman])
+            .values([{**row, "generated_at": now, **stempel} for row in kiriman])
             .on_conflict_do_nothing(index_elements=["id"])
         )
     if limbah:
         await session.execute(
             pg_insert(DisposalEvent)
-            .values([{**row, "generated_at": now} for row in limbah])
+            .values([{**row, "generated_at": now, **stempel} for row in limbah])
             .on_conflict_do_nothing(index_elements=["id"])
         )
 
@@ -948,10 +953,16 @@ async def generate_timeseries(
     ref: datetime = ACTUAL_REF,
     database_url: str | None = None,
     menu_start: datetime | None = None,
+    demo_session_id: uuid.UUID | None = None,
 ) -> dict:
     """Tulis baris demo untuk rentang `[start, end]`. Idempoten.
 
     Kembalian: ringkasan siap dipakai API (`range`, `counts`, `skipped`).
+
+    `demo_session_id` (Fase 2 MG) = PEMILIK baris KEJADIAN (kiriman/limbah).
+    Wajib eksplisit: insert di modul ini memakai Core `pg_insert`, yang tidak
+    melewati penjaga `before_flush`, sehingga tanpa parameter ini kiriman lahir
+    tanpa pemilik dan tidak ikut terhapus saat sesi direset.
     """
     plan = None
     engine = create_engine(database_url or _database_url())
@@ -987,7 +998,13 @@ async def generate_timeseries(
             await _insert_menu_plans(session, plan["menu_plans"], now)
             await session.commit()
             # Kiriman & limbah menunjuk `menu_plan_id` → ditulis SETELAH menu ada.
-            await _insert_events(session, end, now, _komoditas_per_lokasi(baselines))
+            await _insert_events(
+                session,
+                end,
+                now,
+                _komoditas_per_lokasi(baselines),
+                demo_session_id=demo_session_id,
+            )
             await session.commit()
             after = {
                 "supply": await _count_origin(session, SupplyRecord, "demo"),

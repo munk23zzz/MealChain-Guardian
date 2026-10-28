@@ -320,10 +320,13 @@ async def seed_batches(session: AsyncSession, now: datetime) -> dict:
         sisa_hari = max(0.0, float(sisa_hari))
         usable = now + timedelta(days=sisa_hari)
         suhu = [
-            {"at": panen.isoformat(), "temperature_c": 3.8 + (indeks % 3)},
-            {"at": (panen + timedelta(hours=3)).isoformat(), "temperature_c": 4.2},
+            # Kunci WAJIB `timestamp` (bukan `at`): `parse_samples` hanya
+            # membaca `timestamp`; entri ber-`at` dianggap malformed sehingga
+            # bukti suhu batch ini kosong dan keputusan tertahan.
+            {"timestamp": panen.isoformat(), "temperature_c": 3.8 + (indeks % 3)},
+            {"timestamp": (panen + timedelta(hours=3)).isoformat(), "temperature_c": 4.2},
             {
-                "at": (panen + timedelta(hours=6)).isoformat(),
+                "timestamp": (panen + timedelta(hours=6)).isoformat(),
                 # Satu batch ayam sengaja menyimpang (> 8 °C) — kasus merah narasi.
                 "temperature_c": 12.5 if (indeks == 5 and nama_komoditas == "ayam") else 4.6,
             },

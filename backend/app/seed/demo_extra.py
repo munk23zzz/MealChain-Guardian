@@ -462,8 +462,11 @@ async def build_demo_extra(session, now: datetime | None = None) -> dict[str, in
                 quantity_kg=Decimal("180.00") + Decimal(urut * 40),
                 harvested_at=now - timedelta(days=1, hours=urut),
                 temperature_log=[
-                    {"at": (now - timedelta(hours=6)).isoformat(), "celsius": 4.5},
-                    {"at": (now - timedelta(hours=3)).isoformat(), "celsius": 11.0},
+                    # Kunci WAJIB `timestamp`/`temperature_c`: parser bukti
+                    # (`core/temperature.parse_samples`) menolak kunci lain dan
+                    # menandainya "malformed entry" → batch terbaca tanpa bukti.
+                    {"timestamp": (now - timedelta(hours=6)).isoformat(), "temperature_c": 4.5},
+                    {"timestamp": (now - timedelta(hours=3)).isoformat(), "temperature_c": 11.0},
                 ],
                 certification_status=("haccp", "hygiene", "none")[urut % 3],
                 freshness_score=fresh,

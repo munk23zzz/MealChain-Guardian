@@ -1994,9 +1994,43 @@ async def _pastikan_stok_siap_dibeli(db: AsyncSession, now: datetime) -> dict:
             and str(b.id) not in terikat
         )
 
+    # `_aman` saja tidak cukup: pengadaan hanya menerima batch yang kesegarannya
+    # `pass` menurut profil komoditas. Tanpa pemeriksaan yang SAMA di sini,
+    # seeder menganggap pasangan ini "sudah punya stok siap dibeli" padahal
+    # mesin pengadaan menolaknya (needs_verification) → tombol Jalan kan agent 409
+    # dan tes pengadaan gagal (terukur 28 Okt 2026: batch telur efd43f0a skor
+    # 0,6368 = needs_verification).
+    from app.core.freshness import evaluate_freshness
+    from app.core.policy_store import profil_untuk_komoditas
+
+    profil_cache: dict[uuid.UUID, object] = {}
+
+    async def _lolos(b: Batch) -> bool:
+        if not _aman(b) or b.commodity_id is None or b.harvested_at is None:
+            return False
+        pol = profil_cache.get(b.commodity_id)
+        if pol is None:
+            pol, _asal = await profil_untuk_komoditas(db, b.commodity_id)
+            profil_cache[b.commodity_id] = pol
+        try:
+            hasil = evaluate_freshness(
+                harvested_at=b.harvested_at,
+                as_of=now,
+                policy=pol,
+                temperature_log=b.temperature_log or [],
+            )
+        except ValueError:
+            return False
+        return hasil.status == "pass"
+
     dibuka: list[str] = []
     for daftar in grup.values():
-        if any(b.dispatched_at is None and _aman(b) for b in daftar):
+        ada_siap = False
+        for b in daftar:
+            if b.dispatched_at is None and await _lolos(b):
+                ada_siap = True
+                break
+        if ada_siap:
             continue
         berjalan = [b for b in daftar if b.dispatched_at is not None]
         if not berjalan:
@@ -2005,11 +2039,8 @@ async def _pastikan_stok_siap_dibeli(db: AsyncSession, now: datetime) -> dict:
         # bergerak" lebih penting daripada satu garis tambahan di peta. Kalau
         # pasangan ini tetap tanpa stok siap dibeli, tombol "Jalankan agent"
         # berakhir 409 dan fitur tampak rusak (terukur 28 Okt 2026).
-        calon = sorted(
-            (b for b in berjalan if _aman(b)),
-            key=lambda b: (b.freshness_score or 0.0),
-            reverse=True,
-        )
+        calon = [b for b in berjalan if await _lolos(b)]
+        calon.sort(key=lambda b: (b.freshness_score or 0.0), reverse=True)
         if calon:
             calon[0].dispatched_at = None
             dibuka.append(str(calon[0].id))
@@ -2026,7 +2057,6 @@ async def _pastikan_stok_siap_dibeli(db: AsyncSession, now: datetime) -> dict:
         # 26,0 C, sehingga batch ayam rantai dingin lahir "pass" dengan log
         # 7 x 26 C — mustahil secara domain dan membuat verifier menandai
         # keputusan yang memakainya (terukur 28 Okt 2026 pada batch 00d39840).
-        from app.core.policy_store import profil_untuk_komoditas
 
         profil_contoh, _asal_contoh = await profil_untuk_komoditas(
             db, contoh.commodity_id
@@ -2059,10 +2089,15 @@ async def _pastikan_stok_siap_dibeli(db: AsyncSession, now: datetime) -> dict:
             freshness_score=Decimal("0.95"),
             temperature_log=[
                 {
-                    "timestamp": (now - timedelta(hours=6 - jam)).isoformat(),
+                    "timestamp": (
+                        now
+                        - timedelta(
+                            minutes=int(360 * (jumlah_sampel - 1 - i) / max(1, jumlah_sampel - 1))
+                        )
+                    ).isoformat(),
                     "temperature_c": suhu_contoh,
                 }
-                for jam in range(jumlah_sampel)
+                for i in range(jumlah_sampel)
             ],
         )
         db.add(segar)

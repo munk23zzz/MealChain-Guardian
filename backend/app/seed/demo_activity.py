@@ -67,7 +67,7 @@ SUHU_AMAN_C = 4.0
 SUHU_EXCURSION_C = 12.0
 
 
-def _log_suhu(batch_id, panen: datetime, status: str) -> list[dict]:
+def _log_suhu(batch_id, panen: datetime, status: str, sampai: datetime | None = None) -> list[dict]:
     """Pembacaan suhu yang KONSISTEN dengan status batch.
 
     Kontrak mesin (`core/temperature.py`): menit-di-luar dihitung dari jarak
@@ -77,6 +77,15 @@ def _log_suhu(batch_id, panen: datetime, status: str) -> list[dict]:
         kemudian: 10 menit di luar, di bawah ambang FAIL 30 menit.
     Status `pending` tidak dipakai untuk batch demo: tanpa evaluasi, log-nya
     akan berbunyi "pass" dan status tersimpan jadi bertentangan.
+
+    `sampai` (27 Okt 2026): batas atas pembacaan. Dulu log selalu berhenti di
+    panen+5 jam, sehingga batch yang dipanen 26 jam lalu punya pembacaan
+    terakhir 21 jam sebelum "sekarang" — lebih tua dari `max_observation_age_minutes`
+    (6 jam untuk komoditas rantai dingin). Akibatnya seluruh kandidat Event 1
+    ditahan `temperature_evidence_incomplete` pada evaluasi jam dinding
+    (terukur: 40 dari 50 kegagalan suite gerbang). Bila `sampai` diisi, log
+    diperpanjang per jam sampai batas itu — bukti menutup seluruh perjalanan,
+    bukan hanya lima jam pertama. `None` = perilaku lama dipertahankan.
     """
     benih = abs(hash(str(batch_id))) % 100
     dasar = round(SUHU_AMAN_C + (benih % 5) / 10, 1)  # 4,0–4,4 °C
@@ -87,16 +96,24 @@ def _log_suhu(batch_id, panen: datetime, status: str) -> list[dict]:
             "temperature_c": suhu,
         }
 
+    def jam_terakhir(minimum: int) -> int:
+        """Jumlah jam pengamatan; minimal `minimum`, diperpanjang sampai `sampai`."""
+        if sampai is None:
+            return minimum
+        jarak = (sampai - panen).total_seconds() / 3600.0
+        return max(minimum, int(jarak) + 1)
+
     if status == "fail":
         log = [titik(60 * h, dasar) for h in range(3)]
         log += [titik(180, SUHU_EXCURSION_C), titik(240, SUHU_EXCURSION_C)]
-        log += [titik(300, dasar)]
+        log += [titik(60 * h, dasar) for h in range(5, jam_terakhir(5))]
         return log
     if status == "needs_verification":
         log = [titik(60 * h, dasar) for h in range(3)]
         log += [titik(180, SUHU_EXCURSION_C), titik(190, dasar), titik(240, dasar)]
+        log += [titik(60 * h, dasar) for h in range(5, jam_terakhir(5))]
         return log
-    return [titik(60 * h, dasar) for h in range(6)]
+    return [titik(60 * h, dasar) for h in range(jam_terakhir(6))]
 
 #: Harga PO demo per komoditas (Rp/kg). Satu angka untuk semua komoditas membuat
 #: beras tercatat Rp25.132/kg — 89% di atas pasar — dan itu terbaca sebagai
@@ -234,7 +251,9 @@ async def seed_demo_activity(session: AsyncSession, now: datetime) -> dict:
                 ),
                 "quantity_kg": Decimal(200 + ((i * 7 + j * 13) % 9) * 100),
                 "harvested_at": panen,
-                "temperature_log": _log_suhu(id_batch, panen, MUTU[(i + j) % len(MUTU)]),
+                "temperature_log": _log_suhu(
+                    id_batch, panen, MUTU[(i + j) % len(MUTU)], sampai=now
+                ),
                 "certification_status": SERTIFIKASI[(i + j) % len(SERTIFIKASI)],
                 "freshness_score": Decimal("0.82"),
                 "safety_status": MUTU[(i + j) % len(MUTU)],
@@ -422,7 +441,7 @@ def _nilai_batch_sumber(
         "freshness_score": Decimal("0.92"),
         "origin": "demo",
         "generated_at": now,
-        "temperature_log": _log_suhu(batch_id, panen, "pass"),
+        "temperature_log": _log_suhu(batch_id, panen, "pass", sampai=now),
     }
 
 
