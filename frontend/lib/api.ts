@@ -684,7 +684,8 @@ export async function endDemoSession(token: string) {
 }
 
 /**
- * `POST /demo/template/rebuild` — bangun ulang SELURUH data demo (terukur 41 detik).
+ * `POST /demo/template/rebuild` — bangun ulang SELURUH data demo (durasi terukur
+ * dikembalikan server sebagai `durasi_detik`; panel tidak mengarang perkiraan).
  *
  * Beda dari `startDemoSession`: jendela waktu sesi tidak disentuh, dan panggilan
  * ini memang menghapus baris operasional lalu menyemai ulang template. Dipakai

@@ -23,11 +23,13 @@ describe("DemoRebuild — aksi destruktif yang jujur", () => {
     expect(html).toBe("");
   });
 
-  it("menyebut biaya waktu sebenarnya dan efeknya", () => {
+  it("tidak mengarang perkiraan waktu, tapi menyebut efek dan sumber ukurannya", () => {
     const html = render();
     expect(html).toContain("Bangun ulang data");
-    expect(html).toContain("Terukur 41 detik");
-    expect(html).toContain("sekitar 1 menit");
+    // Larangan produk: jangan paku angka detik yang tidak bisa direproduksi.
+    expect(html).not.toContain("41 detik");
+    expect(html).toContain("mengambil ulang rute jalan");
+    expect(html).toContain("dilaporkan setelah selesai");
     expect(html).toContain("tanpa menutup sesi");
   });
 
@@ -68,11 +70,12 @@ describe("rebuildLine — angka dari server, bukan dari parameter", () => {
 });
 
 describe("rebuildWarning — menyebut yang hilang dan yang tidak", () => {
-  it("menyebut yang diganti, yang tidak disentuh, dan waktu", () => {
+  it("menyebut yang diganti, yang tidak disentuh, dan sumber angka", () => {
     const teks = rebuildWarning();
     expect(teks).toContain("diganti dari template");
     expect(teks).toContain("tidak");
-    expect(teks).toContain("terukur 41 detik");
-    expect(teks).toContain("sekitar 1 menit");
+    // Angka terukur tidak dipaku di teks; hanya sumbernya yang disebut.
+    expect(teks).not.toContain("41 detik");
+    expect(teks).toContain("durasi terukurnya dilaporkan");
   });
 });

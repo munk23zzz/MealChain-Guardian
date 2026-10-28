@@ -253,8 +253,9 @@ export function DemoRebuild({
   return (
     <div className="dc-rebuild" data-keadaan={sibuk ? "jalan" : konfirmasi ? "konfirmasi" : "diam"}>
       <p className="dc-rebuild-sub">
-        Mengembalikan angka ke keadaan awal tanpa menutup sesi. Terukur 41 detik di mesin
-        demo ini; sediakan sekitar 1 menit di laptop yang lebih lambat.
+        Mengembalikan angka ke keadaan awal tanpa menutup sesi. Langkah terberatnya
+        mengambil ulang rute jalan; panel ini tidak menampilkan perkiraan — hitungan detik
+        berjalan selama proses dan durasi akhir dilaporkan setelah selesai.
       </p>
       {sibuk ? (
         <p className="dc-rebuild-line" role="status" aria-live="polite">
