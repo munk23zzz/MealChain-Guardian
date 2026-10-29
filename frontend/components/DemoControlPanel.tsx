@@ -34,7 +34,11 @@ import {
   refreshDemoToToday,
   runDemoAgent,
   startDemoSession,
+  streamDemoAgent,
 } from "../lib/api";
+import { catatanAliranPutus } from "../lib/agent-stream-note";
+import type { LangkahAgent } from "../lib/agent-stream";
+import AgentRunTerminal from "./AgentRunTerminal";
 import { batchGateView, type BatchGateView } from "../lib/safety-gate";
 import {
   formatSisa,
@@ -81,15 +85,35 @@ const ROLE_LIHAT = ["sppg_head", "sppg_nutritionist"];
  * Dipisah dari panel supaya bisa dirender & diuji tanpa jaringan/efek: yang
  * diuji adalah kontrak tampilannya, bukan perilaku fetch.
  */
+/** Token kanal kemajuan — cukup unik, tidak perlu rahasia (bukan kredensial). */
+function buatTokenJalankan(): string {
+  const kripto = globalThis.crypto;
+  if (kripto && typeof kripto.randomUUID === "function") return kripto.randomUUID();
+  return `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** Galat kanal → satu kalimat. Alasan server dipakai bila ada. */
+function pesanAliran(e: unknown): string {
+  if (e instanceof ApiError && e.detail) return e.detail;
+  const pesan = (e as { message?: unknown })?.message;
+  return typeof pesan === "string" && pesan.trim() ? pesan : "kanal log terputus";
+}
+
 export function DemoProof({
   run,
   running = false,
+  langkahHidup = [],
+  galatAliran = null,
   onOpenDecision,
   onOpenAgentLog,
   onRefresh,
 }: {
   run: AgentRun;
   running?: boolean;
+  /** Langkah yang sedang disiarkan server selama putaran berjalan. */
+  langkahHidup?: LangkahAgent[];
+  /** Galat kanal kemajuan; `null` = kanal sehat. */
+  galatAliran?: string | null;
   onOpenDecision?: (decisionId: string) => void;
   onOpenAgentLog?: () => void;
   onRefresh?: () => void;
@@ -99,6 +123,7 @@ export function DemoProof({
   const narasi = run.supervisor?.summary ?? null;
   const kartu = demoAgentCards(run, running);
   const adaAgen = kartu.some((k) => k.state !== "idle");
+  const adaLog = langkahHidup.length > 0 || galatAliran !== null;
 
   return (
     <>
@@ -124,49 +149,78 @@ export function DemoProof({
       </dl>
 
 
-      {kartu.length > 0 && (
-        <>
-          <div className="dc-agents" role="list" aria-label="Sembilan agen review">
-            {kartu.map((agen) => (
-              <article
-                className="dc-agent"
-                data-state={agen.state}
-                data-agent={agen.key}
-                role="listitem"
-                key={agen.key}
-              >
-                <div className="dc-agent-head">
-                  <span className="dc-agent-dot" aria-hidden="true" />
-                  <h3>{agen.label}</h3>
-                </div>
-                <span className="dc-agent-status">{agen.statusLabel}</span>
-                <dl className="dc-agent-meta">
-                  {/* Baris fakta datang dari lib/demo-agent: worker memakai
-                      Durasi/Peringatan, supervisor memakai Provider — supaya
-                      kartu supervisor tidak memalsukan durasi yang tidak ada. */}
-                  {agen.meta.map((f) => (
-                    <div key={f.label}>
-                      <dt>{f.label}</dt>
-                      <dd>{f.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-                {agen.note && (
-                  <p className="dc-agent-note" title={agen.note}>
-                    {agen.note}
-                  </p>
-                )}
-              </article>
-            ))}
+      {/* Selama putaran berjalan, bagian ini adalah LOG PENGAMBILAN DATA —
+          bukan sembilan kartu. Kartu dibaca dari baris review yang ditulis
+          SEKALI di akhir putaran: selama putaran ia hanya berisi "Berjalan",
+          dan sebelum baris baru ditulis ia masih memuat hasil putaran
+          SEBELUMNYA ("Selesai · Durasi 5,3 dtk"). Pemilik 29 Okt 2026 meminta
+          bagian ini berubah menjadi log realtime saat "Jalankan agent". */}
+      {running ? (
+        <section className="dc-log-live" aria-labelledby="dc-live-judul">
+          <div className="dc-log-live-head">
+            <h3 id="dc-live-judul">Log proses pengambilan data</h3>
+            <p className="dc-log-live-note">
+              Kartu sembilan agen muncul lagi setelah putaran ditutup.
+            </p>
           </div>
-          <p className="dc-line dc-line--muted">
-            {running
-              ? "Putaran baru sedang berjalan — kesembilan kartu menyala sampai review menutup putaran."
-              : run.agents_run_id
+          <AgentRunTerminal langkah={langkahHidup} aktif galat={galatAliran} />
+        </section>
+      ) : (
+        kartu.length > 0 && (
+          <>
+            <div className="dc-agents" role="list" aria-label="Sembilan agen review">
+              {kartu.map((agen) => (
+                <article
+                  className="dc-agent"
+                  data-state={agen.state}
+                  data-agent={agen.key}
+                  role="listitem"
+                  key={agen.key}
+                >
+                  <div className="dc-agent-head">
+                    <span className="dc-agent-dot" aria-hidden="true" />
+                    <h3>{agen.label}</h3>
+                  </div>
+                  <span className="dc-agent-status">{agen.statusLabel}</span>
+                  <dl className="dc-agent-meta">
+                    {/* Baris fakta datang dari lib/demo-agent: worker memakai
+                        Durasi/Peringatan, supervisor memakai Provider — supaya
+                        kartu supervisor tidak memalsukan durasi yang tidak ada. */}
+                    {agen.meta.map((f) => (
+                      <div key={f.label}>
+                        <dt>{f.label}</dt>
+                        <dd>{f.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {agen.note && (
+                    <p className="dc-agent-note" title={agen.note}>
+                      {agen.note}
+                    </p>
+                  )}
+                </article>
+              ))}
+            </div>
+            <p className="dc-line dc-line--muted">
+              {run.agents_run_id
                 ? "Status dibaca dari baris review tersimpan."
                 : "Review sembilan agen belum tercatat."}
-          </p>
-        </>
+            </p>
+          </>
+        )
+      )}
+
+      {/* Log putaran yang barusan ditutup: dilipat supaya tidak memakan tinggi
+          blok, tapi isinya tetap di DOM untuk dibaca ulang tanpa membuka Agent
+          Log. Muncul hanya bila ada langkah — kotak kosong tidak ditampilkan. */}
+      {!running && adaLog && (
+        <details className="dc-log-fold">
+          <summary>
+            Log proses pengambilan data
+            <span className="dc-fold-count">{langkahHidup.length}</span>
+          </summary>
+          <AgentRunTerminal langkah={langkahHidup} aktif={false} galat={galatAliran} />
+        </details>
       )}
 
       {/* Daftar langkah dilipat: dibaca sesekali, tapi memakan ~1/4 tinggi blok.
@@ -320,6 +374,11 @@ export default function DemoControlPanel({
   const [hasilData, setHasilData] = useState<string | null>(null);
   const [peringatanData, setPeringatanData] = useState<string | null>(null);
   const [pesan, setPesan] = useState<string | null>(null);
+  // Log langsung (29 Okt 2026): baris yang SUDAH disiarkan server untuk putaran
+  // yang sedang berjalan. Dikosongkan di awal setiap putaran supaya log lama
+  // tidak menyamar sebagai log baru.
+  const [langkahHidup, setLangkahHidup] = useState<LangkahAgent[]>([]);
+  const [galatAliran, setGalatAliran] = useState<string | null>(null);
   // Sesi demo (024/025): status dari SERVER + hitungan mundur lokal yang
   // diselaraskan ulang tiap 20 detik. Tidak ada timer yang "menebak" waktu.
   const [sesi, setSesi] = useState<StatusSesiDemo | null>(null);
@@ -600,6 +659,50 @@ export default function DemoControlPanel({
     setBusy("agent");
     setPesan(null);
     setHasilAgent(null);
+    setLangkahHidup([]);
+    setGalatAliran(null);
+
+    // Kanal kemajuan dibuka SEBELUM POST (29 Okt 2026). Urutannya penting:
+    // kanal harus ada saat pipeline mulai menyiarkan langkah pertama. Server
+    // mengirim `: siap` begitu kanal terbuka, jadi kita menunggu penanda itu —
+    // dengan batas 2 detik supaya proxy yang memblokir streaming tidak
+    // menahan tombol yang seharusnya tetap berfungsi seperti dulu.
+    const runToken = buatTokenJalankan();
+    const kendali = new AbortController();
+    // Penjaga diam: kalau server tidak menjawab dalam 3 menit (mis. proses
+    // di-restart di tengah putaran), tombol tidak boleh tertinggal "berjalan"
+    // selamanya — operator harus tahu ia boleh mencoba lagi.
+    const penjaga = setTimeout(() => {
+      kendali.abort();
+      setGalatAliran("tidak ada jawaban dalam 3 menit — putaran dihentikan dari peramban");
+      setPesan("Putaran tidak menjawab dalam 3 menit. Periksa Agent Log sebelum mencoba lagi.");
+      setBusy(null);
+    }, 180_000);
+    let galatTercatat = false;
+    const siap = new Promise<void>((selesai) => {
+      void streamDemoAgent(token, runToken, {
+        signal: kendali.signal,
+        onSiap: () => selesai(),
+        onLangkah: (langkah) => setLangkahHidup((sebelum) => [...sebelum, langkah]),
+      })
+        .catch((e: unknown) => {
+          galatTercatat = true;
+          if (!kendali.signal.aborted) setGalatAliran(pesanAliran(e));
+        })
+        .finally(() => {
+          selesai();
+          // Kanal yang tertutup SEBELUM kita menutupnya = server berhenti
+          // menyiarkan sementara POST masih berjalan. Tanpa satu baris pun,
+          // terminal membeku dan operator mengira putaran masih berjalan.
+          const catatan = catatanAliranPutus({
+            dibatalkan: kendali.signal.aborted,
+            galatTercatat,
+          });
+          if (catatan) setGalatAliran(catatan);
+        });
+    });
+    await Promise.race([siap, new Promise<void>((selesai) => setTimeout(selesai, 2000))]);
+
     try {
       // Sesi WAJIB hidup sebelum agent dijalankan: server menolak 409 dan
       // keputusan harus terikat sesi. Sebelum ini panel membiarkan operator
@@ -639,6 +742,10 @@ export default function DemoControlPanel({
         // dan modenya ikut dikirim supaya server bisa menolak bila berbeda.
         demoSession: sesiId ?? undefined,
         mode: modeSesi(sesi) ?? "realtime",
+        // Token yang sama dengan kanal di atas: server menyiarkan langkah ke
+        // kanal ini sementara POST berjalan. Tanpa token, putaran berjalan
+        // persis seperti sebelumnya (tanpa siaran).
+        runToken,
       });
       // Ringkasan dibaca dari payload server (created/skipped). Backend lama
       // belum mengirim kedua kunci itu; tanpa cadangan, putaran yang BERHASIL
@@ -655,6 +762,10 @@ export default function DemoControlPanel({
       const detail = e instanceof ApiError && e.detail ? e.detail : null;
       setPesan(detail ?? String(e?.message ?? e));
     } finally {
+      // Kanal ditutup setelah putaran selesai; tanpa ini koneksi menggantung
+      // sampai batas 5 menit di server.
+      clearTimeout(penjaga);
+      kendali.abort();
       setBusy(null);
     }
   }
@@ -848,7 +959,9 @@ export default function DemoControlPanel({
         {busy === "agent" && (
           <p className="dc-progress" role="status" aria-live="polite">
             {elapsedLine(detik)}
-            <span className="dc-progress-note">Langkah ditulis sekaligus saat putaran selesai.</span>
+            <span className="dc-progress-note">
+              Langkah disiarkan langsung di blok Bukti agent.
+            </span>
           </p>
         )}
         {pesan && (
@@ -865,10 +978,37 @@ export default function DemoControlPanel({
             3
           </span>
           <h2 className="dc-title">Bukti agent</h2>
-          <span className={`badge ${adaBukti ? "status-safe" : "status-neutral"}`}>
-            {adaBukti ? `${stepNames(bukti).length} langkah tercatat` : "belum ada jejak"}
+          <span
+            className={`badge ${
+              busy === "agent" ? "status-warning" : adaBukti ? "status-safe" : "status-neutral"
+            }`}
+          >
+            {/* Saat putaran berjalan, hitungan jejak TERSIMPAN bukan angka yang
+                sedang tumbuh di terminal — menampilkan keduanya berdampingan
+                membuat operator membaca dua angka berbeda untuk hal yang
+                dikiranya sama. */}
+            {busy === "agent"
+              ? "putaran berjalan"
+              : adaBukti
+                ? `${stepNames(bukti).length} langkah tercatat`
+                : "belum ada jejak"}
           </span>
         </div>
+
+        {/* Log proses pengambilan data (29 Okt 2026).
+            Pemiliknya adalah `DemoProof` (bagian yang sama dengan sembilan
+            kartu), supaya saat "Jalankan agent" bagian itu BERGANTI menjadi
+            log — bukan log kecil di atas kartu-kartu basi. Salinan di sini
+            hanya untuk keadaan yang tidak punya bukti untuk dirender sama
+            sekali (belum pernah ada putaran / bukti masih dimuat / gagal
+            dibaca): tanpa ini log hilang justru pada putaran PERTAMA. */}
+        {(busy === "agent" || galatAliran) && !adaBukti && (
+          <AgentRunTerminal
+            langkah={langkahHidup}
+            aktif={busy === "agent"}
+            galat={galatAliran}
+          />
+        )}
 
         {buktiError ? (
           <p className="dc-error" role="alert">
@@ -921,6 +1061,8 @@ export default function DemoControlPanel({
             <DemoProof
               run={bukti as AgentRun}
               running={busy === "agent"}
+              langkahHidup={langkahHidup}
+              galatAliran={galatAliran}
               onOpenDecision={onOpenDecision}
               onOpenAgentLog={onOpenAgentLog}
               onRefresh={() => void muatBukti()}

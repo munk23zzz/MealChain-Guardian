@@ -3,6 +3,7 @@
 
 import { metodeMenulis, segarkanSetelahTulis } from "./refresh";
 import { balancePath } from "./balance-url";
+import { bacaSse, langkahDari, type LangkahAgent } from "./agent-stream";
 
 // Basis URL backend. `??`, BUKAN `||`: nilai kosong ("") adalah konfigurasi
 // yang SENGAJA dipakai `docker-compose.override.yml` untuk mode proxy —
@@ -1211,11 +1212,14 @@ export async function runDemoAgent(
     ttlMinutes,
     demoSession,
     mode,
+    runToken,
   }: {
     commodity?: string;
     ttlMinutes?: number;
     demoSession?: string;
     mode?: DemoSessionMode;
+    /** 29 Okt 2026: token kanal kemajuan; server menyiarkan tiap langkah. */
+    runToken?: string;
   } = {}
 ) {
   const payload: Record<string, unknown> = {};
@@ -1229,11 +1233,83 @@ export async function runDemoAgent(
   // dengan mode sesi pemilik dan menolak 422 bila bertentangan — lebih baik
   // analisis berhenti daripada menulis baris ke sesi bermode lain.
   if (mode) payload.mode = mode;
+  if (runToken) payload.run_token = runToken;
   return request("/demo/agent/run", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders(token) },
     body: JSON.stringify(payload),
  });
+}
+
+/** `GET /demo/agent/stream` — kanal kemajuan putaran agent (text/event-stream).
+ *
+ *  29 Okt 2026: dipakai log "Proses pengambilan data" di Demo Control supaya
+ *  langkah muncul saat terjadi. Endpoint ini TIDAK menjalankan pipeline; ia
+ *  hanya mendengar kanal yang diisi oleh `POST /demo/agent/run` dengan
+ *  `run_token` yang sama. Satu klik tetap satu putaran.
+ *
+ *  `onSiap` dipanggil saat server mengirim `: siap` — pemanggil menunggu
+ *  penanda itu SEBELUM memulai POST, kalau tidak langkah awal bisa terlewat
+ *  (kanal belum ada saat pipeline mulai menyiarkan).
+ *
+ *  Selesai tanpa galat = koneksi ditutup server (putaran selesai/kedaluwarsa).
+ *  `AbortError` saat pemanggil membatalkan sengaja tidak dilempar.
+ */
+export async function streamDemoAgent(
+  token: string,
+  runToken: string,
+  opsi: {
+    signal?: AbortSignal;
+    onSiap?: () => void;
+    onLangkah?: (langkah: LangkahAgent) => void;
+  } = {},
+): Promise<void> {
+  const path = `/demo/agent/stream?run_token=${encodeURIComponent(runToken)}`;
+  let resp: Response;
+  try {
+    resp = await fetch(`${API_URL}${path}`, {
+      headers: { Accept: "text/event-stream", ...authHeaders(token) },
+      signal: opsi.signal,
+      cache: "no-store",
+    });
+  } catch (e) {
+    if ((e as { name?: string })?.name === "AbortError") return;
+    throw e;
+  }
+  if (!resp.ok || !resp.body) {
+    // Alasan server dibawa apa adanya bila ada; tanpa body, status yang jujur.
+    let detail: string | null = null;
+    try {
+      detail = pesanDetail(JSON.parse(await resp.text()));
+    } catch {
+      detail = null;
+    }
+    throw new ApiError(resp.status, path, detail);
+  }
+
+  const pembaca = resp.body.getReader();
+  const dekoder = new TextDecoder();
+  let buffer = "";
+  try {
+    for (;;) {
+      const { value, done } = await pembaca.read();
+      if (done) break;
+      buffer += dekoder.decode(value, { stream: true });
+      const { peristiwa, sisa } = bacaSse(buffer);
+      buffer = sisa;
+      for (const ev of peristiwa) {
+        if (ev.nama === "komentar" && ev.data.trim() === "siap") {
+          opsi.onSiap?.();
+          continue;
+        }
+        const langkah = langkahDari(ev);
+        if (langkah) opsi.onLangkah?.(langkah);
+      }
+    }
+  } catch (e) {
+    if ((e as { name?: string })?.name === "AbortError") return;
+    throw e;
+  }
 }
 
 /** `GET /demo/agent/commodities` — pilihan dropdown: nama yang ADA di database. */
