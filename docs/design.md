@@ -62,7 +62,7 @@ Detail muncul dengan evidence → Approve → status di peta berubah
 | — | *(acuan app)* **Keamanan Pangan** | Tab **Keamanan Pangan** (Langkah 5, permintaan Roy 2026-10-11) — halaman `/compliance` di acuan: ringkasan pengawasan batch (aman/gagal uji/perlu verifikasi), blokir batch gagal, daftar batch perlu segera dipakai, tabel status per batch (status, kesegaran, sisa masa layak) ✓ | Tambahan demo |
 | — | *(acuan app)* **Surplus & Limbah** | Tab **Surplus & Limbah** (Langkah 5) — halaman `/surplus` di acuan: neraca surplus/kekurangan komoditas aktif, rencana alokasi surplus→kekurangan (greedy, jarak dari koordinat; sejak 20 Okt 2026 dihitung server lintas lokasi lewat `GET /surplus/allocations` + kolom biaya tetap), keadaan pencatatan limbah ✓ (hanya peran SPPG, seperti acuan) | Tambahan demo |
 | — | *(acuan app)* **Pemasok** | Tab **Pemasok** (Langkah 5) — halaman `/suppliers` di acuan: daftar pemasok + keandalan dari keputusan terakhir, register eksklusi, form usul eksklusi ✓ | Tambahan demo |
-| 5 | Agent Activity Log (`/agent-log`) | Tab **Agent Log** — trace console + provider panel, pilih decision via dropdown ✓ | Wajib |
+| 5 | Agent Activity Log (`/agent-log`) | Tab **Agent Log** — trace console + provider panel; pemilih keputusan = **tabel Daftar keputusan** (10 baris/halaman, dropdown di kepala halaman dihapus 29 Okt 2026) ✓ | Wajib |
 | 6 | Approval Modal/Flow | Di dalam Decision Detail ✓ | Wajib |
 | 7 | KPI Dashboard (`/kpi`) + *(acuan app)* Kualitas Agen (`/quality`) | Tab **KPI & Kualitas Agen** — **digabung 2026-10-15 atas keputusan pemilik** (dua tab lama "KPI" + "Kualitas Agen" jadi satu, urutan KPI dulu lalu mutu agen). Bagian 1: 7 KPI live jujur dari `/kpi` (strip **Target KPI Demo Day** dihapus hari yang sama). Bagian 2: skor agregat mutu agen (langkah/run, kesesuaian verifikator, tingkat fallback, keputusan diubah manusia, rata-rata durasi) + rincian per run dari jejak agen nyata ✓. Komposisi ada di `components/KpiQualityBoard.tsx`; isi kedua bagian tidak diubah | Wajib |
 | 8 | Demo Control Panel (`/demo-control`) | Tab **Demo Control** (approver-only) — **sejak 2026-10-19 tiga blok sederhana** (1) siapkan data demo, (2) jalankan agent: satu tombol, komoditas dari dropdown (nama yang ADA di DB) + SPPG akun sendiri sebagai tujuan; yang dinilai adalah PEMASOK yang sudah memasok SPPG itu (stok batch di SPPG, penawaran harga untuk SPPG, jarak pemasok → SPPG), bukan surplus SPPG lain, (3) bukti agent dibaca ulang dari DB: langkah yang tercatat beserta alatnya, provider yang menjawab, status keputusan, narasi supervisor terlipat. OpsConsole/ChaosPanel (Event 1/2/3) tidak lagi dipasang di tab ini; komponennya tetap ada di repo. ✓ | Wajib (demo) |
@@ -271,7 +271,11 @@ Detail muncul dengan evidence → Approve → status di peta berubah
 - Tiap step: tool yang dipanggil (ditulis dengan sebutan manusia), output ringkas
   (`output_summary`) apa adanya, fakta turunan (nomor PO, model penyedia), timestamp, durasi.
 - Data ditarik dari AgentCore Observability trace (bukan log buatan sendiri)
-- Bisa filter per decision_id
+- Pemilih keputusan = tabel **Daftar keputusan** di dalam panel (10 baris per
+  halaman, bentuk tabel sama dengan daftar Pemasok/Kiriman). Dropdown pemilih di
+  kepala halaman dihapus 29 Okt 2026 atas permintaan pemilik; halaman otomatis
+  pindah ke halaman tabel yang memuat keputusan terpilih.
+- Pencarian/penyaring berlaku pada DAFTAR KEPUTUSAN, bukan pada langkah trace.
 - Ini screen yang PALING PENTING untuk demo juri — harus terlihat jelas dan real-time
 
 ### 3.5 Approval Modal
@@ -3413,3 +3417,90 @@ lama — sampai dideploy ulang, jejak yang ditulis runtime itu masih
 `completed` + `duration_ms 0` (perbaikan ini ada di repo, bukan di deployment).
 Kartu verifier juga masih bisa menampilkan "Terbatas" dengan alasan jujur bila
 model verifier tidak dikonfigurasi di runtime (`audit_verdict: unavailable`).
+
+## 37. Log langsung "Proses pengambilan data" di Bukti agent (29 Okt 2026)
+
+Permintaan pemilik: *"pada bagian Bukti agent dibuat real time untuk log Proses
+Pengambilan Data kayak di terminal"*. Sebelumnya tombol **Jalankan agent** hanya
+menampilkan "tunggu…" lalu seluruh langkah muncul sekaligus saat putaran selesai.
+
+### 37.1 Anatomi
+- **Kepala** — lampu keadaan 7 px, nama berkas `proses-pengambilan-data.log` dalam
+  mono `--font-data`, jumlah baris (tabular), pil keadaan (`live` / `selesai` /
+  `siap` / `galat`), tombol **Ikuti** yang hanya muncul saat gulir otomatis mati.
+- **Badan** — permukaan `--surface-sunken`, mono 12 px (`--fs-1`), tinggi maksimum
+  232 px dengan gulir DI DALAM kotak (halaman tidak memanjang setiap baris baru),
+  `scrollbar-gutter: stable` supaya lebar tidak melompat saat baris pertama masuk.
+- **Baris** — grid `58px / 78–auto / 1fr`: jam WIB (`06.56.56`), nama langkah
+  (600, mono), ringkasan `k=v · k=v`. Di bawah 640 px grid menjadi `52px 1fr`;
+  ringkasan turun ke kolom kedua dan boleh pecah (`overflow-wrap: anywhere`).
+- **Baris tunggu** — `menunggu langkah pertama…` (belum ada baris) atau
+  `langkah berikutnya…` dengan kursor `▍` berkedip. Ia hilang begitu putaran
+  selesai: yang tersisa hanya langkah yang benar-benar tercatat.
+- **Baris galat** — tinta `--danger-ink`, mis. kanal terputus; log yang sudah ada
+  tidak dihapus.
+
+### 37.2 Aturan yang dipegang
+1. **Tidak ada langkah karangan.** Satu baris = satu `_TraceStep` yang benar-benar
+   dihitung pipeline. Kanal hanya menyiarkan; ia tidak menjalankan putaran, tidak
+   menambah langkah dekoratif, dan tidak menyentuh keputusan.
+2. **Satu klik tetap satu putaran.** `POST /demo/agent/run` tetap satu-satunya
+   penulis; `GET /demo/agent/stream` hanya mendengar kanal bertoken.
+3. **Telemetri tidak boleh menggagalkan putaran.** Siaran yang gagal (antrean
+   penuh, tab ditutup) ditelan; putaran tetap menulis keputusan.
+4. **Kanal dibuka sebelum POST.** Server mengirim `: siap`; panel menunggu penanda
+   itu (batas 2 detik) sebelum memanggil POST — tanpa itu langkah pertama bisa
+   hilang karena kanal belum ada.
+5. **Ikuti, bukan paksa.** Menggulir ke atas mematikan gulir otomatis; tombol
+   **Ikuti** mengembalikannya. Log yang bergerak sendiri saat dibaca balik
+   menghilangkan baris yang sedang dibaca.
+6. **Diam pun jujur.** Bila server tidak menjawab dalam 3 menit, putaran
+   dihentikan dari peramban dengan kalimat yang menyebut sebabnya — tombol tidak
+   boleh tertinggal "berjalan" selamanya.
+7. **Warna tetap token terang.** Yang diambil dari bahasa terminal hanya mono,
+   jam, dan baris yang mengalir. Chrome jendela gelap dan titik merah/kuning/hijau
+   sudah ditolak di §"agent-console" (acuan tidak memuatnya).
+
+### 37.3 Batas pengukuran (29 Okt 2026)
+| Ukuran | 1247 px | 390 px |
+| --- | --- | --- |
+| Baris datang bertahap | 2 → 4 → 7 → 8 baris pada 0,4 / 4,4 / 8,9 / 13,4 dtk | — |
+| Kotak terminal | 947 × … (selebar kartu) | 316 px |
+| Badan log | gulir dalam kotak | `clientHeight` 260 / `scrollHeight` 352 |
+| Kolom baris | `58px …` | `52px 232px` |
+| Gulir mendatar halaman | tidak ada | `scrollWidth 390 = clientWidth 390` |
+
+### 37.4 Log MENGGANTIKAN sembilan kartu selama putaran berjalan (29 Okt 2026)
+
+Permintaan pemilik: *"bagian ini (Supply Selesai Durasi 5,3 dtk · Peringatan 0
+peringatan … Supervisor … Verifier) ubah ke Log Proses Pengambilan Data realtime
+ketika menjalankan 'Jalankan agent'"*.
+
+Sebab: sembilan kartu dibaca dari baris review yang ditulis **sekaligus di akhir**
+putaran. Selama putaran berjalan isinya hanya "Berjalan" tanpa satu pun fakta; dan
+sebelum baris baru ditulis kartu masih memuat hasil putaran **sebelumnya** —
+"Selesai · Durasi 5,3 dtk" milik putaran lama, yang dibaca operator sebagai hasil
+putaran yang sedang ia jalankan.
+
+Aturannya sekarang:
+1. **Putaran berjalan** (`running`) → blok itu berisi **hanya** log
+   (`h3 "Log proses pengambilan data"` + catatan *"Kartu sembilan agen muncul lagi
+   setelah putaran ditutup."* + terminal). Sembilan kartu **tidak dicetak** sama
+   sekali (`.dc-agent` = 0 di DOM).
+2. **Putaran ditutup** → sembilan kartu kembali (dibaca dari baris review baru),
+   dan log putaran yang barusan berjalan **dilipat** di bawahnya
+   (`<details class="dc-log-fold"> … "Log proses pengambilan data" N`) supaya
+   halaman tidak memanjang.
+3. **Putaran pertama** (belum ada bukti sama sekali / bukti masih dimuat) → log
+   tetap muncul lewat salinan di blok; tanpa ini log hilang justru pada putaran
+   pertama. Dua tempat itu saling meniadakan: `(busy || galat) && !adaBukti`.
+4. **Sumber data per baris** — `tool_called` dari server dipecah pada `+` menjadi
+   chip mono kecil (`supply.get`, `demand.get`, `supplier.get`, `verifier.rest`).
+   Nama tidak diterjemahkan: harus sama dengan yang tercatat di Agent Log. Chip
+   duduk di kolom isi (bukan kolom sendiri) supaya tepi kiri ringkasan lurus —
+   diukur `getBoundingClientRect().x` = **460 px untuk keenam baris pertama**.
+
+Terukur (Kepala Bandung, 1247 px, putaran beras 29 Okt 2026 pukul 07.40 WIB):
+kartu **9 → 0** saat tombol ditekan, terminal **1**, baris **2 → 4 → 6 → 8**
+selama 13 detik, pil `LIVE`; setelah putaran ditutup kartu **9** kembali dan log
+turun ke `<details>` dengan **7 langkah**.

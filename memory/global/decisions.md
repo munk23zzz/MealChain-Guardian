@@ -1223,3 +1223,47 @@ lebar kolom (15/24/13/17/31 %) menguncinya; gulir horizontal hanya diizinkan ≤
 penerimaan lewat fixture. Setelah suite backend, jalankan
 `python -m app.seed.demo_template` sebelum mengukur atau demo — kalau tidak, angka yang dilaporkan
 berasal dari data tes, bukan data demo.
+## Ronde 59 — 2026-10-29: Demo Control — log "Proses pengambilan data" real time
+
+**Permintaan pemilik.** *"Pada bagian Bukti agent dibuat real time untuk log
+Proses Pengambilan Data kayak di terminal."* Sebelumnya blok itu hanya menulis
+"tunggu…" lalu semua langkah muncul sekaligus saat putaran selesai.
+
+**Bentuk yang dipilih — pub/sub bertoken, bukan streaming yang menjalankan ulang.**
+- `POST /demo/agent/run` menerima `run_token` opsional. Tanpa token, perilakunya
+  persis seperti sebelumnya (nol biaya siaran).
+- `_run_supplier_procurement` menerima `on_step`; satu helper `_tambah()` yang
+  dipakai ketujuh titik `traces.append(...)` menyimpan langkah DAN menyiarkannya.
+- `GET /demo/agent/stream?run_token=…` (SSE) hanya mendengar kanal
+  (`app/services/agent_progress.py`, `queue.Queue` karena pipeline berjalan di
+  threadpool, bukan event loop FastAPI).
+- Ditolak: endpoint SSE yang menjalankan pipeline sendiri — satu klik bisa
+  melahirkan dua keputusan, dan logika run akan tergandakan.
+
+**Kontrak kecil yang dijaga.**
+- `: siap` dikirim pertama; panel menunggu penanda itu (maks 2 dtk) SEBELUM POST.
+- Komentar `: tunggu` tiap 15 dtk supaya proxy tidak memutus koneksi diam.
+- Kanal ditutup di `finally`; batas umur 300 dtk; antrean penuh = siaran ditelan.
+- `ringkas` hanya mencetak skalar (maks 4 kunci, 60 karakter per nilai); struktur
+  bersarang dibiarkan ke tab Agent Log, bukan diratakan jadi JSON panjang.
+
+**Klien.**
+- `lib/agent-stream.ts` (murni): `bacaSse` + `langkahDari` — potongan jaringan
+  sembarang, termasuk `data:` terbelah dua dan CRLF dari proxy.
+- `streamDemoAgent` di `lib/api.ts`: `fetch` + `ReadableStream`, bukan
+  `EventSource`, karena `EventSource` tidak bisa mengirim header `Authorization`.
+- `components/AgentRunTerminal.tsx`: mono, jam WIB, pil live/selesai/siap/galat,
+  gulir otomatis yang mati saat operator menggulir ke atas (tombol **Ikuti**).
+- `DemoControlPanel`: kanal dibuka sebelum POST, ditutup di `finally`; penjaga
+  3 menit supaya tombol tidak tertinggal "berjalan" bila server tidak menjawab;
+  badge blok Bukti agent menulis "putaran berjalan" selama siaran (dua angka
+  berbeda berdampingan membingungkan).
+
+**Bukti terukur.** Baris datang bertahap: 2 → 4 → 7 → 8 pada 0,4 / 4,4 / 8,9 /
+13,4 dtk, lalu SUPERVISE ±45 dtk; akhir "selesai" 7 baris, badge berpindah ke
+"16 langkah tercatat". 390 px: terminal 316 px, badan `clientHeight` 260 /
+`scrollHeight` 352, kolom baris `52px 232px`, `scrollWidth 390 = clientWidth 390`.
+Uji: 19 tes frontend (parser + terminal), 9 tes backend (bus + endpoint SSE).
+
+**Ditolak / belum.** Terminal gelap (acuan menolak chrome jendela; yang diambil
+hanya mono + jam + baris mengalir). Warna tetap token terang yang sudah ada.
