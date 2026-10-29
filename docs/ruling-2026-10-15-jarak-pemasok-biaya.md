@@ -7,6 +7,14 @@ tersendiri **7d** di §7.4b)
 **Pelaksana:** Hermes
 **Bukti angka & tes:** `docs/verification/fase-7d.md`
 
+> **Diamendemen 29 Okt 2026 (`sdc-2026.10.29b`).** Keputusan "jarak pemasok ikut
+> masuk biaya" TETAP berlaku, tetapi **tarifnya** tidak lagi 300 Rp/km/ton:
+> angkut sekarang per trip (`jumlah_trip × (250.000 + 4.000 × jarak total)`,
+> `app/core/trip_cost.py`), dan kedua kaki dijumlah karena dikerjakan satu truk.
+> Rujukan: `docs/ruling-2026-10-29b-tarif-trip-laju-susut.md`. Angka pada §4–§6
+> di bawah adalah keadaan 15 Okt 2026 dan tidak boleh dipakai sebagai angka
+> sekarang.
+
 ## 1. Keputusan
 
 Biaya angkut satu kandidat balancing sekarang **DUA KAKI**, bukan satu:

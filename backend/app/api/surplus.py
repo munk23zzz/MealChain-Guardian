@@ -34,6 +34,7 @@ from app.api.auth import get_current_user
 from app.api.dependencies import get_db
 from app.core.allocation import Node, build_allocations
 from app.core.gaps import calculate_supply_gap
+from app.core.trip_cost import biaya_angkut_trip
 from app.models import (
     Commodity,
     DemandRecord,
@@ -42,7 +43,7 @@ from app.models import (
     SupplyRecord,
     User,
 )
-from app.services.recommendation_service import HANDLING_FLAT, TRANSPORT_RATE
+from app.services.recommendation_service import HANDLING_FLAT
 
 router = APIRouter(prefix="", tags=["surplus"])
 
@@ -400,7 +401,8 @@ async def surplus_allocations(
     # ke Makassar tetap muncul karena kekurangannya memang 6 kg. Tapi angka itu
     # tidak boleh dibaca sebagai pengiriman yang wajar, jadi biaya tetapnya
     # ditulis: penanganan Rp150.000 per pengiriman SELALU kena, berapa pun kg-nya
-    # (`recommendation_service.HANDLING_FLAT`, tarif angkut `TRANSPORT_RATE`).
+    # (`recommendation_service.HANDLING_FLAT`; tarif angkut per trip 2026-10-29b
+    # di `core/trip_cost.py`).
     price_row = (
         await db.execute(
             select(PriceSignal)
@@ -425,7 +427,9 @@ async def surplus_allocations(
             continue
         kg = Decimal(str(pair["kg"]))
         nilai = kg * harga
-        biaya = HANDLING_FLAT + (TRANSPORT_RATE * Decimal(jarak) * kg / Decimal(1000))
+        # Angkut PER TRIP (revisi 2026-10-29b), bukan per ton-km.
+        angkut, _ = biaya_angkut_trip(Decimal(str(jarak)), kg)
+        biaya = HANDLING_FLAT + angkut
         pair.update(
             {
                 "price_per_kg": float(harga),

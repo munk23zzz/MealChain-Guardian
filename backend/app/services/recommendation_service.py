@@ -7,7 +7,11 @@ Ruling Task 9 (ledger progress.md):
 1. fetch_facts() callable tanpa argumen, mengembalikan 6-tuple
    (supply, demand, refs, quotes, batches, reliability); pemilihan
    latest-record ada di fetcher produksi (recorded_at DESC, id DESC).
-2. transport 300 Rp/km/ton x distance_km x ton; handling flat 150.000.
+2. transport PER TRIP (revisi 2026-10-29b): jumlah_trip × (tarif tetap +
+   tarif/km × jarak total), lihat `core/trip_cost.py`. Tarif lama 300 Rp/km/ton
+   dihentikan — ia menagih pengiriman 150 kg seharga Rp 5.400 untuk jarak
+   Jakarta, sementara satu truk berangkat tetap ratusan ribu. Handling flat
+   150.000 tetap.
 3. supplier_reliability dari DB (Task 4); fallback 0.80 bila quote
    tanpa supplier dikenal.
 4. purchase_cost = supplier_quote bila ada, else pihps reference.
@@ -16,7 +20,8 @@ Fase 7d (keputusan pemilik 2026-10-15, plan §7.4 #4 + §7.4b) MENAMBAH satu
 komponen biaya angkut TANPA mengubah kontrak di atas:
 - transport = kaki pertama (pemasok → SPPG sumber, dari koordinat:
   `app/core/supplier_leg.py`) + linehaul (SPPG sumber → SPPG tujuan, matriks
-  `logistics.py`, tarif tetap 300 Rp/km/ton).
+  `logistics.py`). Jarak kedua kaki dijumlah lalu dihargai PER TRIP
+  (`core/trip_cost.py`) karena satu truk mengerjakan seluruh rute.
 - fetch_facts BOLEH mengembalikan elemen ke-7 = peta jarak pemasok
   {(supplier_id, nama lokasi) -> km}. 6-tuple lama tetap sah: tanpa peta itu
   kaki pertama ditandai "tidak diketahui" dan bernilai 0 — tidak ditebak.
@@ -56,12 +61,14 @@ from app.core.safe_delivered_cost import (
     calculate_safe_delivered_cost,
 )
 from app.core.scoring import CandidateScoreFactors, calculate_candidate_score
+from app.core.storage_window import storage_days_for
 from app.core.supplier_leg import (
     LEG_REFERENCE_COORDINATES,
     LEG_REFERENCE_MISSING,
     LEG_REFERENCE_NO_SUPPLIER,
     supplier_leg_map,
 )
+from app.core.trip_cost import biaya_angkut_trip
 from app.models import (
     Batch,
     Commodity,
@@ -80,7 +87,9 @@ from app.services.decision_time import evaluation_clock
 
 __all__ = ["build_recommendations", "fetch_operational_facts"]
 
-TRANSPORT_RATE = Decimal("300")  # Rp per km per ton
+#: Tarif per ton-km DIHENTIKAN 2026-10-29b (revisi pemilik): angkut sekarang
+#: dihitung per trip di `core/trip_cost.py`. Jangan menghidupkan kembali angka
+#: 300 Rp/km/ton — pemanggil harus memakai `biaya_angkut_trip(jarak_total, kg)`.
 HANDLING_FLAT = Decimal("150000")
 DEFAULT_RELIABILITY = Decimal("0.80")
 
@@ -569,26 +578,45 @@ async def build_recommendations(
             )
         )
         unit = cand.price.supplier_quote or cand.price.reference_price
-        # Fase 7d: biaya angkut = kaki pertama (pemasok → SPPG sumber) +
-        # linehaul (SPPG sumber → SPPG tujuan); satu tarif 300 Rp/km/ton.
-        linehaul_cost = _money(
-            TRANSPORT_RATE * cand.logistics_distance_km * cand.quantity_kg / 1000
-        )
+        # Revisi 2026-10-29b: angkut PER TRIP, bukan per ton-km. Rute pemasok →
+        # SPPG sumber → SPPG tujuan dikerjakan satu truk, jadi jaraknya dijumlah
+        # dan tarif tetap dibayar sekali. Alokasi rupiah ke dua kaki hanya untuk
+        # keterbacaan panel bukti (proporsional km); jumlah keduanya tetap = transport.
         leg_km, leg_reference = _resolve_supplier_leg(
             supplier_legs, sid, cand.source_location
         )
-        leg_cost = (
-            _money(TRANSPORT_RATE * leg_km * cand.quantity_kg / 1000)
-            if leg_km is not None
-            else Decimal("0.00")
+        linehaul_km = Decimal(str(cand.logistics_distance_km))
+        total_km = linehaul_km + (leg_km if leg_km is not None else Decimal("0"))
+        transport_total, trip_info = biaya_angkut_trip(total_km, cand.quantity_kg)
+        if leg_km is not None and total_km > 0:
+            leg_cost = _money(transport_total * leg_km / total_km)
+        else:
+            leg_cost = Decimal("0.00")
+        # Sisa pembulatan masuk linehaul supaya kaki + linehaul = transport persis.
+        linehaul_cost = transport_total - leg_cost
+        # Susut gudang = fungsi WAKTU, bukan kesegaran (konsep Performance &
+        # Audit, 29 Okt 2026). `hari_simpan` = selang waktu tiba → barang
+        # dibutuhkan menurut jendela kirim; bila tanggal kebutuhan tidak
+        # diketahui, `storage_window` memakai asumsi siklus harian dan
+        # melaporkan basisnya — bukan nol diam-diam.
+        jendela_cand, tiba_cand = jendela_per_kunci.get(
+            (cand.source_location, cand.destination_location, cand.commodity),
+            (None, None),
+        )
+        hari_simpan, basis_simpan = storage_days_for(
+            needed_by=getattr(jendela_cand, "needed_by", None),
+            arrival_at=tiba_cand,
         )
         sdc = calculate_safe_delivered_cost(
             SafeDeliveredCostInputs(
                 purchase_cost=_money(cand.quantity_kg * unit),
-                transport_cost=linehaul_cost + leg_cost,
+                transport_cost=transport_total,
                 handling_cost=HANDLING_FLAT,
                 freshness_score=cand.freshness_score,
                 safety_status=cand.safety_status,
+                commodity=cand.commodity,
+                storage_days=hari_simpan,
+                storage_basis=basis_simpan,
             )
         )
         breakdown = {
@@ -599,10 +627,27 @@ async def build_recommendations(
             "logistics": str(sdc.transport_cost),
             "transport_linehaul": str(linehaul_cost),
             "transport_supplier_leg": str(leg_cost),
+            # Dasar tarif per trip: jarak total, jumlah trip, dan basisnya.
+            # Tanpa ini pembaca tidak bisa menjelaskan kenapa 150 kg dan 1 ton
+            # ke tujuan yang sama berbiaya sama.
+            "transport_total_km": str(total_km),
+            "transport_trips": trip_info["trips"],
+            "transport_basis": trip_info["basis"],
+            "transport_allocation": "proporsional_km",
             "supplier_leg_km": str(leg_km) if leg_km is not None else None,
             "supplier_leg_reference": leg_reference,
             "handling": str(sdc.handling_cost),
             "expected_loss": str(sdc.expected_loss),
+            # Jejak susut gudang: angka, umur simpan, asal angka, versi rumus.
+            "loss_in_storage": str(sdc.loss_in_storage),
+            "storage_days": str(sdc.storage_days),
+            "shelf_life_days": str(sdc.shelf_life_days),
+            "storage_basis": sdc.storage_basis,
+            # Laju susut yang BENAR-BENAR dipakai + asalnya (tabel komoditas
+            # atau cadangan 20%). Tanpa ini pembaca harus menebak dari angka.
+            "shrinkage_rate": str(sdc.shrinkage_rate),
+            "shrinkage_rate_source": sdc.shrinkage_rate_source,
+            "formula_version": sdc.formula_version,
             "freshness_risk": str(sdc.freshness_risk_penalty),
             "safety_penalty": str(sdc.safety_risk_penalty),
         }
@@ -617,6 +662,9 @@ async def build_recommendations(
                 eligible=result.eligible,
                 review_required=result.review_required,
                 safe_delivered_cost=sdc.total,
+                # Lapis 5 hierarki: susut ikut ke ranking sebagai tie-break
+                # setelah SDC (bukan sebelumnya).
+                expected_loss=sdc.expected_loss,
             )
         )
         breakdowns[

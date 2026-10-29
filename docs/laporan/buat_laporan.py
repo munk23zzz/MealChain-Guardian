@@ -443,8 +443,10 @@ def bagian_diagnosis():
            p("Tabel 9 - Empat mesin diagnosis.", CAP),
            Spacer(1, 7), p("<b>Safe Delivered Cost: rumus yang tidak boleh diperdebatkan model</b>", H2),
            callout("<b>total = purchase + transport + handling + expected_loss + freshness_risk + safety_risk</b><br/>"
-                   "expected_loss = purchase x 0,2 x (1 - freshness)<br/>"
-                   "freshness_risk = purchase x 0,50 bila freshness &lt; 0,60, selain itu 0<br/>"
+                   "expected_loss (susut gudang) = purchase x laju_komoditas x (hari simpan / umur simpan); "
+                   "laju per umur simpan: beras 0,8%, telur 4%, wortel 15%, ayam 12%<br/>"
+                   "freshness_risk = purchase x 0,50 x (0,60 - freshness) / 0,60 bila freshness &lt; 0,60 "
+                   "(kurva linear, bukan cliff), selain itu 0<br/>"
                    "safety_risk = purchase x 0,10 bila safety needs_verification, selain itu 0<br/>"
                    "Status fail tidak pernah dihitung: ia melempar ValueError sebelum masuk perankingan.<br/>"
                    "Pembulatan HALF_UP 2 desimal per komponen, total = jumlah komponen terbulatkan (breakdown selalu menjumlah persis).",
@@ -452,7 +454,9 @@ def bagian_diagnosis():
            Spacer(1, 6), p(
                "Rumus ini sengaja kaku. Kalau biaya aman bisa &quot;disesuaikan&quot; oleh model, seluruh argumen anti-fraud "
                "runtuh; karena itu ia fungsi murni dengan tes, dan alasan penolakan ikut tercatat. Tarif angkut yang dipakai "
-               "demo: Rp300 per km per ton, penanganan tetap Rp150.000, harga acuan wortel Rp24.900 per kg.", BODY),
+               "demo: Rp250.000 tetap + Rp4.000 per km untuk satu trip truk 1 ton (rute pemasok dan antar-SPPG "
+               "dijumlah, tarif berangkat dibayar sekali), penanganan tetap Rp150.000, harga acuan wortel "
+               "Rp24.900 per kg.", BODY),
            Spacer(1, 5), p("<b>Dari kandidat ke kartu rekomendasi</b>", H2),
            p("Mesin mengumpulkan kandidat pemasok per komoditas, menghitung SDC, lalu mengurutkan berdasarkan skor yang "
              "menggabungkan biaya, kesegaran, keandalan pemasok, dan risiko. Setiap kartu membawa angka pendukung, "

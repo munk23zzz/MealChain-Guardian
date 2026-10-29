@@ -8,6 +8,13 @@ Kontrak plan Task 7:
   tidak pernah diranking, tidak pernah mendapat rank.
 - review_required dipertahankan; rank 1..N berurutan; input sama →
   output identik (Decimal eksak, tanpa floating point).
+
+Lapis 5 hierarki (proposal ¶15: … → biaya → pengurangan limbah), 29 Okt 2026:
+`expected_loss` (susut yang diharapkan, komponen SDC) menjadi tie-break SESUDAH
+SDC — bukan sebelum. Aturannya sengaja sempit supaya lapis 4 tidak dikalahkan:
+biaya lebih murah tetap menang walau susutnya lebih besar; limbah hanya
+menengahi ketika score dan SDC benar-benar seri. Susut yang tidak diketahui
+(None) diurutkan SETELAH yang diketahui — "tidak tahu" bukan nol.
 """
 
 from dataclasses import dataclass
@@ -26,6 +33,9 @@ class ScoredCandidate:
     eligible: bool
     review_required: bool
     safe_delivered_cost: Decimal
+    #: Susut yang diharapkan (Rp) — komponen `expected_loss` dari Safe Delivered
+    #: Cost. `None` = belum dihitung; diurutkan setelah nilai yang diketahui.
+    expected_loss: Decimal | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.candidate, BalancingCandidate):
@@ -36,6 +46,11 @@ class ScoredCandidate:
             object.__setattr__(
                 self, name, Decimal(str(getattr(self, name)))
             )
+        if self.expected_loss is not None:
+            nilai = Decimal(str(self.expected_loss))
+            if nilai < 0:
+                raise ValueError("expected_loss tidak boleh negatif")
+            object.__setattr__(self, "expected_loss", nilai)
         if not isinstance(self.eligible, bool) or not isinstance(
             self.review_required, bool
         ):
@@ -45,6 +60,9 @@ class ScoredCandidate:
         return (
             -self.score,
             self.safe_delivered_cost,
+            # Lapis 5: hanya berlaku saat score & SDC seri. `None` (tidak
+            # diketahui) sengaja di belakang, bukan dianggap nol.
+            (self.expected_loss is None, self.expected_loss or Decimal("0")),
             self.candidate.source_location,
             self.candidate.destination_location,
             self.candidate.commodity,
@@ -59,6 +77,9 @@ class ScoredCandidate:
             "eligible": self.eligible,
             "review_required": self.review_required,
             "safe_delivered_cost": str(self.safe_delivered_cost),
+            "expected_loss": (
+                str(self.expected_loss) if self.expected_loss is not None else None
+            ),
             "candidate": self.candidate.to_dict(),
         }
 
@@ -85,6 +106,7 @@ def rank_candidates(candidates) -> list:
             eligible=c.eligible,
             review_required=c.review_required,
             safe_delivered_cost=c.safe_delivered_cost,
+            expected_loss=c.expected_loss,
             rank=index + 1,
         )
         for index, c in enumerate(ordered)

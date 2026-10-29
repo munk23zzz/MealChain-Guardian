@@ -73,6 +73,12 @@ def client(auth_headers):
 
 
 def test_safe_delivered_locked_example_freshness_090(client):
+    """Contoh terkunci: susut = purchase × (laju komoditas ÷ umur) × hari simpan.
+
+    15.720.000 × 0,04 (telur) × (7 ÷ 28) = 157.200. Kesegaran 0,90 TIDAK lagi
+    mengalikan susut (konsep Performance & Audit, 29 Okt 2026); ia hanya
+    menambah risiko — dan pada 0,90 penalti risikonya nol.
+    """
     resp = client.post(
         "/cost/safe-delivered",
         json={
@@ -81,14 +87,60 @@ def test_safe_delivered_locked_example_freshness_090(client):
             "handling_cost": "150000",
             "freshness_score": "0.90",
             "safety_status": "pass",
+            "commodity": "telur",
+            "storage_days": "7",
         },
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body["expected_loss"] == "314400.00"
+    assert body["expected_loss"] == "157200.00"
+    assert body["loss_in_storage"] == body["expected_loss"]
     assert body["freshness_risk_penalty"] == "0.00"
     assert body["safety_risk_penalty"] == "0.00"
-    assert body["total"] == "16206000.00"
+    assert body["total"] == "16048800.00"
+    assert body["storage_days"] == "7.00"
+    assert body["shelf_life_days"] == "28.00"
+    assert body["storage_basis"] == "dikirim_pemanggil"
+    # Laju yang dipakai harus terbaca dari respons, bukan disimpulkan klien.
+    assert body["shrinkage_rate"] == "0.040"
+    assert body["shrinkage_rate_source"] == "tabel_laju_susut_komoditas"
+    assert body["formula_version"] == "sdc-2026.10.29b"
+
+
+def test_safe_delivered_kesegaran_tidak_mengubah_susut(client):
+    """Dua kesegaran berbeda, hari simpan sama → susut SAMA, risiko berbeda."""
+    dasar = {
+        "purchase_cost": "15720000",
+        "transport_cost": "21600",
+        "handling_cost": "150000",
+        "safety_status": "pass",
+        "commodity": "telur",
+        "storage_days": "7",
+    }
+    segar = client.post(
+        "/cost/safe-delivered", json={**dasar, "freshness_score": "0.95"}
+    )
+    layu = client.post(
+        "/cost/safe-delivered", json={**dasar, "freshness_score": "0.40"}
+    )
+    assert segar.status_code == 200, segar.text
+    assert layu.status_code == 200, layu.text
+    assert segar.json()["expected_loss"] == layu.json()["expected_loss"]
+    assert layu.json()["freshness_risk_penalty"] != segar.json()["freshness_risk_penalty"]
+
+
+def test_safe_delivered_tanpa_umur_simpan_ditolak_422(client):
+    """Susut tidak boleh diam-diam nol: tanpa komoditas/umur simpan → 422."""
+    resp = client.post(
+        "/cost/safe-delivered",
+        json={
+            "purchase_cost": "15720000",
+            "freshness_score": "0.90",
+            "safety_status": "pass",
+        },
+    )
+    assert resp.status_code == 422
+    assert "shelf_life_days" in resp.json()["detail"]
 
 
 def test_safe_delivered_safety_fail_rejected_422(client):

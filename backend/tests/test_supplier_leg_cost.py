@@ -142,13 +142,20 @@ def test_leg_map_only_complete_pairs():
 
 
 def test_transport_includes_supplier_leg():
+    """Angkut PER TRIP: jarak dua kaki dijumlah, tarif berangkat dibayar sekali.
+
+    184 km (64 kaki pemasok + 120 linehaul), 600 kg → 1 trip:
+    250.000 + 4.000 × 184 = 986.000. Alokasi ke kaki pemasok proporsional km:
+    986.000 × 64/184 = 342.956,52 dan sisanya 643.043,48 di linehaul.
+    """
     top = _top(_facts())
     bd = top["cost_breakdown"]
-    leg = Decimal("300") * LEG_KM * Decimal("0.6")  # 11.520,00
-    linehaul = Decimal("300") * Decimal("120") * Decimal("0.6")  # 21.600,00
-    assert Decimal(bd["transport_supplier_leg"]) == leg
-    assert Decimal(bd["transport_linehaul"]) == linehaul
-    assert Decimal(bd["transport"]) == leg + linehaul
+    assert Decimal(bd["transport"]) == Decimal("986000.00")
+    assert Decimal(bd["transport_supplier_leg"]) == Decimal("342956.52")
+    assert Decimal(bd["transport_linehaul"]) == Decimal("643043.48")
+    assert Decimal(bd["transport_total_km"]) == LEG_KM + Decimal("120")
+    assert bd["transport_trips"] == 1
+    assert bd["transport_basis"] == "tarif_per_trip_asumsi"
     # breakdown tetap menjumlah persis ke total SDC
     components = (
         "purchase", "transport", "handling", "expected_loss",
@@ -163,7 +170,7 @@ def test_supplier_leg_reported_with_source():
     payload = _top(_facts())["supplier_leg"]
     assert payload["reference"] == LEG_REFERENCE_COORDINATES
     assert Decimal(payload["km"]) == LEG_KM
-    assert Decimal(payload["cost"]) == Decimal("11520.00")
+    assert Decimal(payload["cost"]) == Decimal("342956.52")
     assert payload["source_location"] == "Cianjur"
 
 
@@ -183,7 +190,8 @@ def test_legacy_six_tuple_keeps_locked_arithmetic():
     """Kontrak Task 9 (6-tuple) tetap sah: biaya angkut lama + label jujur."""
     top = _top(_facts_legacy())
     bd = top["cost_breakdown"]
-    assert Decimal(bd["transport"]) == Decimal("300") * Decimal("120") * Decimal("0.6")
+    # 120 km, 600 kg, 1 trip: 250.000 + 4.000 × 120 = 730.000 (tanpa kaki).
+    assert Decimal(bd["transport"]) == Decimal("730000.00")
     assert Decimal(bd["transport_supplier_leg"]) == Decimal("0")
     # Identitas pemasok ADA (dari quote) tetapi tidak ada peta jarak → label
     # "koordinat tidak diketahui", bukan 0 km yang menyamar sebagai data.

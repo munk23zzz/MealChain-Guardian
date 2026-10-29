@@ -28,7 +28,9 @@ from app.core.safe_delivered_cost import (
     SafeDeliveredCostInputs,
     calculate_safe_delivered_cost,
 )
+from app.core.trip_cost import biaya_angkut_trip
 from app.models.batches import Batch
+from app.models.commodities import Commodity
 from app.models.decisions import Decision
 from app.models.locations import Location
 from app.models.price_signals import PriceSignal
@@ -37,7 +39,7 @@ from app.models.suppliers import Supplier
 __all__ = ["hitung_biaya_demo"]
 
 # Sama dengan recommendation_service — satu angka untuk seluruh aplikasi.
-TRANSPORT_RATE = Decimal("300")  # Rp per km per ton
+# Angkut per trip (`core/trip_cost.py`); tarif 300 Rp/km/ton dihentikan 2026-10-29b.
 HANDLING_FLAT = Decimal("150000")
 
 _TWO_DP = Decimal("0.01")
@@ -195,13 +197,18 @@ async def hitung_biaya_demo(
 
     qty = Decimal(str(decision.quantity_kg))
     purchase = _money(qty * harga)
-    linehaul_cost = _money(TRANSPORT_RATE * linehaul_km * qty / 1000)
+    # Angkut PER TRIP (revisi 2026-10-29b): satu truk mengerjakan seluruh rute,
+    # jadi jarak dua kaki dijumlah dan tarif tetap dibayar sekali.
+    total_km = linehaul_km + (leg_km if leg_km is not None else Decimal("0"))
+    transport, trip_info = biaya_angkut_trip(total_km, qty)
+    # Alokasi rupiah ke kaki pemasok hanya untuk keterbacaan (proporsional km);
+    # sisanya masuk linehaul supaya kedua baris = transport persis.
     leg_cost = (
-        _money(TRANSPORT_RATE * leg_km * qty / 1000)
-        if leg_km is not None
+        _money(transport * leg_km / total_km)
+        if leg_km is not None and total_km > 0
         else _money(Decimal("0"))
     )
-    transport = linehaul_cost + leg_cost
+    linehaul_cost = transport - leg_cost
 
     # Kesegaran & keamanan datang dari batch yang benar-benar terikat. Tanpa
     # batch, keduanya tidak diketahui — mesin memperlakukan safety "pending"
@@ -214,6 +221,17 @@ async def hitung_biaya_demo(
             freshness = Decimal(str(batch.freshness_score))
         safety_status = batch.safety_status or "pending"
 
+    # Umur simpan diambil dari tabel profil komoditas (`commodity_policy`).
+    # Jalur ini tidak punya jendela kirim/tanggal kebutuhan, jadi `storage_days`
+    # TIDAK dikirim: mesin memakai asumsi siklus harian dan basisnya ikut
+    # dilaporkan di `cost_breakdown` — bukan susut nol yang diam-diam.
+    nama_komoditas = (
+        await db.scalar(
+            select(Commodity.name).where(Commodity.id == decision.commodity_id)
+        )
+        if decision.commodity_id is not None
+        else None
+    )
     hasil = calculate_safe_delivered_cost(
         SafeDeliveredCostInputs(
             purchase_cost=purchase,
@@ -221,6 +239,7 @@ async def hitung_biaya_demo(
             handling_cost=HANDLING_FLAT,
             freshness_score=freshness,
             safety_status=safety_status,
+            commodity=nama_komoditas,
         )
     )
 
@@ -230,10 +249,22 @@ async def hitung_biaya_demo(
         "logistics": str(hasil.transport_cost),
         "transport_linehaul": str(linehaul_cost),
         "transport_supplier_leg": str(leg_cost),
+        "transport_total_km": str(total_km),
+        "transport_trips": trip_info["trips"],
+        "transport_basis": trip_info["basis"],
+        "transport_allocation": "proporsional_km",
         "supplier_leg_km": str(leg_km) if leg_km is not None else None,
         "supplier_leg_reference": leg_reference,
         "handling": str(hasil.handling_cost),
         "expected_loss": str(hasil.expected_loss),
+        # Jejak susut gudang: angka, umur simpan, asal angka, versi rumus.
+        "loss_in_storage": str(hasil.loss_in_storage),
+        "storage_days": str(hasil.storage_days),
+        "shelf_life_days": str(hasil.shelf_life_days),
+        "storage_basis": hasil.storage_basis,
+        "shrinkage_rate": str(hasil.shrinkage_rate),
+        "shrinkage_rate_source": hasil.shrinkage_rate_source,
+        "formula_version": hasil.formula_version,
         "freshness_risk": str(hasil.freshness_risk_penalty),
         "safety_penalty": str(hasil.safety_risk_penalty),
         "basis": (

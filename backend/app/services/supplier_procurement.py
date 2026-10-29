@@ -39,6 +39,7 @@ from app.core.safe_delivered_cost import (
 )
 from app.core.scoring import CandidateScoreFactors, calculate_candidate_score
 from app.core.supplier_leg import supplier_leg_km
+from app.core.trip_cost import biaya_angkut_trip
 from app.models import (
     Batch,
     Commodity,
@@ -58,8 +59,7 @@ __all__ = [
     "persist_supplier_binding",
 ]
 
-#: Tarif angkut yang sama dengan pipeline rekomendasi (Rp per km per ton).
-TRANSPORT_RATE = Decimal("300")
+#: Tarif per ton-km DIHENTIKAN 2026-10-29b: angkut per trip di core/trip_cost.py.
 #: Biaya handling tetap yang sama dengan pipeline rekomendasi.
 HANDLING_FLAT = Decimal("150000")
 
@@ -382,11 +382,14 @@ async def evaluate_suppliers(
             layak = hasil.eligible
             if not layak:
                 alasan.append("skor kandidat menandai perlu eliminasi keras")
-            angkut = (
-                _money(TRANSPORT_RATE * leg * quantity / 1000)
-                if leg is not None
-                else Decimal("0.00")
-            )
+            # Angkut PER TRIP (revisi 2026-10-29b): jalur pengadaan hanya punya
+            # satu kaki (pemasok → SPPG), jadi jarak kaki itu = jarak total.
+            if leg is not None:
+                angkut, trip_info = biaya_angkut_trip(leg, quantity)
+            else:
+                # Jarak tidak diketahui → jangan mengarang tarif berangkat.
+                angkut = Decimal("0.00")
+                trip_info = {"basis": "jarak_tidak_diketahui", "trips": None}
             sdc = calculate_safe_delivered_cost(
                 SafeDeliveredCostInputs(
                     purchase_cost=_money(quantity * Decimal(str(quote))),
@@ -394,6 +397,10 @@ async def evaluate_suppliers(
                     handling_cost=HANDLING_FLAT,
                     freshness_score=freshness_score,
                     safety_status=safety_status,
+                    # Susut = fungsi waktu. Jalur pengadaan tidak membawa
+                    # tanggal kebutuhan, jadi mesin memakai asumsi siklus
+                    # harian dan basisnya ikut dilaporkan.
+                    commodity=commodity,
                 )
             )
             sdc_total = sdc.total
@@ -401,9 +408,20 @@ async def evaluate_suppliers(
                 "purchase": str(sdc.purchase_cost),
                 "transport": str(sdc.transport_cost),
                 "transport_supplier_leg": str(angkut),
+                "transport_total_km": _str_or_none(leg),
+                "transport_trips": trip_info["trips"],
+                "transport_basis": trip_info["basis"],
                 "supplier_leg_km": _str_or_none(leg),
                 "handling": str(sdc.handling_cost),
                 "expected_loss": str(sdc.expected_loss),
+                # Jejak susut gudang (konsep Performance & Audit, 29 Okt 2026).
+                "loss_in_storage": str(sdc.loss_in_storage),
+                "storage_days": str(sdc.storage_days),
+                "shelf_life_days": str(sdc.shelf_life_days),
+                "storage_basis": sdc.storage_basis,
+                "shrinkage_rate": str(sdc.shrinkage_rate),
+                "shrinkage_rate_source": sdc.shrinkage_rate_source,
+                "formula_version": sdc.formula_version,
                 "freshness_risk": str(sdc.freshness_risk_penalty),
                 "safety_penalty": str(sdc.safety_risk_penalty),
             }

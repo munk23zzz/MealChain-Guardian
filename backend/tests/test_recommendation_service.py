@@ -2,7 +2,8 @@
 
 Kontrak: fetch_facts() tanpa argumen → 6-tuple facts;
 build_recommendations(fetch_facts, as_of=..., logistics_by_pair=...).
-Emisi: transport 300 Rp/km/ton; handling flat 150.000.
+Emisi: transport PER TRIP (250.000 + 4.000/km per trip, core/trip_cost.py);
+handling flat 150.000.
 """
 
 import json
@@ -65,16 +66,56 @@ def test_cianjur_to_jakarta_telur_ranked():
 
 
 def test_sdc_arithmetic_locked():
+    """SDC = purchase + transport + handling + SUSUT GUDANG (fungsi waktu).
+
+    Sejak konsep Performance & Audit (29 Okt 2026) susut bukan lagi
+    `purchase × 0,2 × (1 − kesegaran)`. Yang diuji: (a) jumlah komponen = total,
+    (b) susut benar-benar purchase × laju × (hari simpan ÷ umur simpan) memakai
+    angka hari/umur yang dilaporkan sendiri oleh breakdown-nya (jejak audit),
+    bukan angka yang dikarang di tes.
+    """
     out = _run(rs.build_recommendations(
         _facts, as_of=AS_OF, logistics_by_pair=LOGI
     ))
     top = out["recommendations"][0]
     sdc = Decimal(top["safe_delivered_cost"])
+    bd = top["cost_breakdown"]
     purchase = Decimal("600") * Decimal("26200")
-    transport = Decimal("300") * Decimal("120") * Decimal("0.6")
-    expected = purchase + transport + Decimal("150000") \
-        + Decimal("0.2") * Decimal("0.10") * purchase
-    assert sdc == expected
+    # 120 km, 600 kg, 1 trip: 250.000 + 4.000 × 120 = 730.000
+    transport = Decimal("730000.00")
+
+    # (a) enam komponen menjumlah tepat ke total
+    total_komponen = sum(
+        Decimal(bd[k])
+        for k in (
+            "purchase",
+            "transport",
+            "handling",
+            "loss_in_storage",
+            "freshness_risk",
+            "safety_penalty",
+        )
+    )
+    assert total_komponen == sdc
+    assert Decimal(bd["purchase"]) == purchase
+    assert Decimal(bd["transport"]) == transport
+    assert Decimal(bd["handling"]) == Decimal("150000")
+
+    # (b) susut bisa dihitung ulang dari laju, hari simpan & umur simpan yang
+    # dilaporkan breakdown itu sendiri (jejak audit), bukan angka karangan tes.
+    hari = Decimal(bd["storage_days"])
+    umur = Decimal(bd["shelf_life_days"])
+    laju = Decimal(bd["shrinkage_rate"])
+    assert hari > 0 and umur > 0
+    assert laju == Decimal("0.040")  # telur, tabel laju per komoditas
+    assert bd["shrinkage_rate_source"] == "tabel_laju_susut_komoditas"
+    assert Decimal(bd["loss_in_storage"]) == (
+        purchase * laju * hari / umur
+    ).quantize(Decimal("0.01"))
+    # Kesegaran 0,90 tidak menambah penalti susut; ia komponen risiko sendiri.
+    assert Decimal(bd["freshness_risk"]) == Decimal("0.00")
+    assert bd["storage_basis"]
+    assert bd["formula_version"]
 
 
 def test_deterministic_repeat():
