@@ -988,8 +988,8 @@ export default function Home() {
           <p className="brand-eyebrow">Badan Gizi Nasional · Program SPPG</p>
           <h1 className="brand-title">MealChain Guardian</h1>
           <p className="brand-tagline">
-            Agentic AI untuk cross-regional food supply balancing — memantau
-            kesegaran, stok, dan keputusan distribusi antar SPPG.
+            Agentic AI for Indonesia’s Digital Public Infrastructure for Food
+            Supply Balancing, Safety & Swasembada Pangan
           </p>
         </section>
 
