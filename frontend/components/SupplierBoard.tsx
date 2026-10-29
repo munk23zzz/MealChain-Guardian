@@ -19,7 +19,7 @@
 import { useState } from "react";
 
 import PageHeader from "./PageHeader";
-import FactList from "./FactList";
+import SupplierSummary from "./SupplierSummary";
 import Pager from "./Pager";
 import ShipmentBoard from "./ShipmentBoard";
 import SupplierReceipts from "./SupplierReceipts";
@@ -29,7 +29,6 @@ import {
   directoryReachLabel,
   directoryReachSummary,
   directoryReachTagLabel,
-  exclusionCounts,
   exclusionRows,
   exclusionStatusLabel,
   filterDirectoryByReach,
@@ -37,7 +36,6 @@ import {
   supplierMetaLine,
 } from "../lib/suppliers-board";
 import {
-  LOW_RELIABILITY,
   shippingMetaLine,
   shippingTagLabel,
   supplierDistanceReference,
@@ -46,7 +44,6 @@ import {
 import {
   routeCellLabel,
   routeCellTitle,
-  routeLayerSummary,
   supplierRouteSummaries,
 } from "../lib/supplier-routes";
 
@@ -116,13 +113,22 @@ export default function SupplierBoard({
   const rows = supplierDirectory(suppliers);
   const reference = supplierDistanceReference(suppliers);
   const metrics = directoryMetrics(rows, reachKm);
+  // Penyaring tabel (29 Okt 2026): hanya SATU — "Hanya dalam jangkauan" di atas
+  // kolom cari. Kartu Ringkasan sengaja hanya dibaca (keputusan pemilik: bentuk
+  // tile/chip/kalimat yang bisa diklik semuanya dinilai sulit dipahami), jadi
+  // angkanya dihitung dari daftar PENUH dan tidak pernah menyusut.
   const [hanyaJangkauan, setHanyaJangkauan] = useState(false);
-  const penyaringAktif = hanyaJangkauan && reachKm !== null;
-  const shownRows = penyaringAktif ? filterDirectoryByReach(rows, reachKm) : rows;
+  const shownRows = hanyaJangkauan ? filterDirectoryByReach(rows, reachKm) : rows;
   // Halaman tabel pemasok: nomor halaman dijepit oleh `paginate`, jadi data yang
   // menyusut (penyaring/segarkan) berakhir di halaman terakhir yang terisi —
   // bukan tabel kosong. Penyaring mengembalikan pembaca ke halaman 1.
   const [halamanPemasok, setHalamanPemasok] = useState(1);
+  // Mengubah penyaring berarti isi tabel berubah → pembaca selalu kembali ke
+  // halaman 1 (halaman terakhir yang terisi akan terasa seperti "data hilang").
+  const ubahJangkauan = (next: boolean) => {
+    setHanyaJangkauan(next);
+    setHalamanPemasok(1);
+  };
   // Pencarian "Daftar pemasok" (19 Okt 2026) menyaring daftar yang SUDAH dimuat,
   // setelah penyaring jangkauan dan SEBELUM paginasi — angka di kartu Ringkasan
   // tetap dihitung dari daftar penuh, jadi mencari tidak mengubah ringkasan.
@@ -142,12 +148,10 @@ export default function SupplierBoard({
       ? (exclusions as { items?: unknown }).items
       : exclusions
   );
-  const lowThreshold = `${Math.round(LOW_RELIABILITY * 100)}%`;
   // Kolom "Jalur kirim": ringkasan per PEMASOK dari data jalur server. Baris
   // pemasok tanpa kiriman aktif tidak punya jalur — selnya "—", bukan "0 km".
   const jalurDimuat = supplierRoutes !== null && supplierRoutes !== undefined;
   const jalurPerPemasok = supplierRouteSummaries(supplierRoutes);
-  const jalurRingkas = routeLayerSummary(supplierRoutes);
 
   return (
     <section className="board-page" aria-busy={loading || undefined}>
@@ -177,78 +181,15 @@ export default function SupplierBoard({
         </article>
       ) : null}
 
-      {/* Fase 12c (16 Okt 2026): kartu Ringkasan TIDAK lagi separuh halaman.
-          Sebelumnya ia duduk di grid 2 kolom tanpa tetangga (terukur 466 px dari
-          947 px) sehingga 7 baris fakta memanjang ke bawah; sekarang selebar
-          halaman dengan fakta disusun beberapa kolom (lihat CSS `.supplier-summary`). */}
+      {/* Ringkasan hanya dibaca (keputusan pemilik 29 Okt 2026): satu baris
+          angka besar, tanpa tombol. Penyaring tetap satu — tombol "Hanya dalam
+          jangkauan" di atas kolom cari, dekat tabel yang ia saring. */}
       <div className="board-grid">
-        <article className="card supplier-summary">
-          <h2>Ringkasan</h2>
-          <FactList
-            rows={[
-              {
-                label: "Pemasok terdaftar",
-                value: !directoryDimuat && loading ? "…" : String(metrics.suppliers),
-              },
-              {
-                label: "Rata-rata keandalan",
-                value: metrics.avgReliabilityLabel,
-                tone: metrics.avgReliability === null ? "plain" : metrics.avgReliability >= 0.8 ? "ok" : "warn",
-              },
-              {
-                label: `Keandalan rendah (< ${lowThreshold})`,
-                value: String(metrics.lowReliability),
-                tone: metrics.lowReliability ? "warn" : "plain",
-              },
-              {
-                label: "Punya titik peta",
-                value: `${metrics.withCoordinates} dari ${metrics.suppliers}`,
-              },
-              // Keputusan pemilik 2026-10-16: kiriman berjalan = batch masih
-              // layak hari ini. Angkanya dari `shipping` server, bukan hitungan UI.
-              {
-                label: "Pemasok dengan stok layak",
-                value: `${metrics.shipping} dari ${metrics.suppliers}`,
-                tone: metrics.shipping ? ("ok" as const) : ("plain" as const),
-              },
-              ...(reachKm === null
-                ? []
-                : [
-                    {
-                      label: `Di luar jangkauan ${reachKm} km`,
-                      value: `${metrics.outOfReach} dari ${metrics.suppliers}`,
-                      tone: metrics.outOfReach ? ("warn" as const) : ("plain" as const),
-                    },
-                  ]),
-              ...(jalurDimuat
-                ? [
-                    {
-                      label: "Jalur kiriman (jalan)",
-                      value: `${jalurRingkas.withRoad} dari ${jalurRingkas.routes}`,
-                      tone:
-                        jalurRingkas.routes && jalurRingkas.withRoad < jalurRingkas.routes
-                          ? ("warn" as const)
-                          : ("plain" as const),
-                    },
-                  ]
-                : []),
-              {
-                label: "Pemasok dieksklusi",
-                // Audit 26 Okt 2026: `register.length` mencampur entri `active`
-                // dan `proposed`, sehingga "2" terbaca dua pemasok sudah
-                // dikecualikan. Sekarang dipisah sesuai statusnya.
-                value: `${exclusionCounts(register).active} aktif · ${
-                  exclusionCounts(register).proposed
-                } menunggu`,
-                tone: exclusionCounts(register).active ? "danger" : "plain",
-              },
-            ]}
-          />
-          <p className="evidence-note">
-            Eksklusi bukan pelabelan hiasan: pemasok yang dikecualikan tidak dipilih lagi saat
-            sistem menyusun pesanan pembelian.
-          </p>
-        </article>
+        <SupplierSummary
+          metrics={metrics}
+          reachKm={reachKm}
+          loading={!directoryDimuat && loading}
+        />
       </div>
 
       {/* Papan kiriman (Arah B riset 16 Okt 2026): satu baris per KIRIMAN —
@@ -305,20 +246,24 @@ export default function SupplierBoard({
             {reachKm !== null && metrics.outOfReach > 0 ? (
               <p className="reach-filter">
                 <span className="reach-filter-note">
-                  Menyembunyikan {metrics.outOfReach} pemasok yang jaraknya di atas {reachKm} km
-                  {reference ? ` dari ${kodeWilayah(reference.location)}` : ""}. Baris yang disembunyikan bukan
-                  dihapus — matikan penyaring untuk melihatnya lagi.
+                  {/* Kalimat ini mengikuti keadaan: tombolnya dulu menulis
+                      "Menyembunyikan …" bahkan saat penyaring MATI, sehingga
+                      tabel penuh terbaca seperti sudah disaring. */}
+                  {hanyaJangkauan
+                    ? `${metrics.suppliers - metrics.outOfReach} pemasok dalam ${reachKm} km${
+                        reference ? ` dari ${kodeWilayah(reference.location)}` : ""
+                      }; ${metrics.outOfReach} di luarnya disembunyikan, bukan dihapus.`
+                    : `${metrics.outOfReach} dari ${metrics.suppliers} pemasok berjarak di atas ${reachKm} km${
+                        reference ? ` dari ${kodeWilayah(reference.location)}` : ""
+                      }.`}
                 </span>
                 <button
                   type="button"
                   className="button button-secondary"
-                  aria-pressed={penyaringAktif}
-                  onClick={() => {
-                    setHanyaJangkauan((value) => !value);
-                    setHalamanPemasok(1);
-                  }}
+                  aria-pressed={hanyaJangkauan}
+                  onClick={() => ubahJangkauan(!hanyaJangkauan)}
                 >
-                  {penyaringAktif
+                  {hanyaJangkauan
                     ? "Tampilkan semua pemasok"
                     : `Hanya dalam jangkauan (${metrics.suppliers - metrics.outOfReach})`}
                 </button>
@@ -380,15 +325,13 @@ export default function SupplierBoard({
                 ) : (
                   <>
                     <p className="evidence-note">
-                      Semua pemasok dalam daftar ini disembunyikan penyaring jangkauan.
+                      Tidak ada pemasok dalam jangkauan {reachKm} km
+                      {reference ? ` dari ${kodeWilayah(reference.location)}` : ""}.
                     </p>
                     <button
                       type="button"
                       className="button button-secondary"
-                      onClick={() => {
-                        setHanyaJangkauan(false);
-                        setHalamanPemasok(1);
-                      }}
+                      onClick={() => ubahJangkauan(false)}
                     >
                       Tampilkan semua pemasok
                     </button>

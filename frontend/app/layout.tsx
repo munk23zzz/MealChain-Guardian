@@ -26,6 +26,8 @@ import "./tombol-pil.css";
 // Riwayat penerimaan barang di halaman Pemasok (Dok 05 §8.5, 29 Okt 2026).
 // Berkas terpisah supaya lapisan ini tidak menambah hunk di globals.css.
 import "./supplier-receipts.css";
+// Ringkasan Pemasok: satu baris KPI (29 Okt 2026) — juga berkas sendiri.
+import "./supplier-summary.css";
 
 import Providers from "./providers";
 

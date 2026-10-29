@@ -87,12 +87,13 @@ describe("SupplierBoard", () => {
   it("judul + ringkasan pemasok dari daftar (bukan sampel keputusan)", () => {
     const html = render();
     expect(html).toContain("Pemasok");
-    expect(html).toContain("Pemasok terdaftar");
-    expect(html).toContain("Rata-rata keandalan");
-    expect(html).toContain("70%"); // (0,93 + 0,38 + 0,80) / 3
-    expect(html).toContain("Keandalan rendah (&lt; 60%)");
-    expect(html).toContain("Punya titik peta");
-    expect(html).toContain("3 dari 3");
+    // Ringkasan (29 Okt 2026) = satu baris angka besar, hanya dibaca:
+    // angka + label kecil, tanpa tombol. Rata-rata (0,93 + 0,38 + 0,80) / 3 = 70%.
+    expect(html).toContain('class="summary-kpi-value">3</b><span class="summary-kpi-label">Pemasok<');
+    expect(html).toContain('class="summary-kpi-value">70%</b>');
+    expect(html).toContain("Keandalan di bawah 60%");
+    expect(html).toContain("Tanpa stok layak hari ini");
+    expect(html).not.toContain("<button class=\"summary-lihat\"");
     // Tidak ada lagi kolom turunan sampel keputusan.
     expect(html).not.toContain("Keputusan terpindai");
   });
@@ -221,7 +222,7 @@ describe("SupplierBoard — kolom \"Jalur kirim\" (lanjutan Fase 10)", () => {
     expect(html).toContain("Jalur kirim");
     expect(html).toContain("\u2026");
     // Ringkasan jalur hanya muncul kalau datanya memang dimuat.
-    expect(html).not.toContain("Jalur kiriman (jalan)");
+    expect(html).not.toContain("Jalur jalan");
   });
 
   it("pemasok yang mengirim ditulis tujuan + jarak JALAN, baris lain '\u2014'", () => {
@@ -229,8 +230,9 @@ describe("SupplierBoard — kolom \"Jalur kirim\" (lanjutan Fase 10)", () => {
     expect(html).toContain("\u2192 Jakarta \u00b7 110,4 km");
     expect(html).toContain('title="Jakarta 110,4 km (jarak jalan dari OSRM)"');
     expect(html).toContain("\u2014");
-    expect(html).toContain("Jalur kiriman (jalan)");
-    expect(html).toContain("1 dari 1");
+    // Dulu "Jalur jalan 1 dari 1" berdiri di kartu Ringkasan; kartu itu kini
+    // hanya angka KPI, jadi ringkasan jalur dibaca dari sel tabel (title) saja.
+    expect(html).not.toContain("Jalur jalan 1 dari 1");
   });
 
   it("jarak LURUS tidak diduplikasi di kolom jalur (itu urusan kolom Jarak)", () => {

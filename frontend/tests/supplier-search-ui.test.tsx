@@ -146,7 +146,8 @@ describe("pencarian daftar pemasok", () => {
     const { wadah, root } = pasang();
     ketik(cariInput(wadah)!, "zzzz");
     const ringkasan = wadah.querySelector(".supplier-summary")?.textContent ?? "";
-    expect(ringkasan).toContain("Pemasok terdaftar");
+    // Bentuk Ringkasan 29 Okt 2026: strip KPI (angka + label), bukan kalimat.
+    expect(ringkasan).toContain("Pemasok");
     expect(ringkasan).toContain("25");
     act(() => root.unmount());
   });

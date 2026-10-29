@@ -1,0 +1,80 @@
+/* Kartu Ringkasan halaman Pemasok — satu baris KPI (29 Okt 2026).
+ *
+ * Kartu ini hanya dibaca: tidak ada tombol, sorotan, atau status di dalamnya.
+ * Bentuk yang dijaga: angka besar + label kecil, berjajar, dengan garis pemisah
+ * tipis di antara kolom — bukan kotak-kotak, bukan chip, bukan daftar kalimat.
+ *
+ * Berkas sendiri, bukan tambahan globals.css: aturannya hanya untuk satu kartu.
+ * Semua warna/ukuran memakai token; radius hanya token (tes `radius-scale-css`).
+ */
+
+.supplier-summary .summary-head {
+  align-items: center;
+}
+
+.supplier-summary .summary-kpi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.supplier-summary .summary-kpi-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 140px;
+  min-width: 0;
+  padding: 2px 16px;
+  border-left: 1px solid var(--line);
+}
+
+/* Garis pemisah hanya ANTAR kolom: tanpa ini, kolom pertama di baris kedua
+ * akan tampak menggantung dengan garis di kiri. */
+.supplier-summary .summary-kpi-item:first-child,
+.supplier-summary .summary-kpi-item[data-awal-baris] {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.supplier-summary .summary-kpi-value {
+  font-size: var(--fs-7);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.supplier-summary .summary-kpi-item[data-tone="warn"] .summary-kpi-value {
+  color: var(--warn-ink);
+}
+
+.supplier-summary .summary-kpi-item[data-tone="danger"] .summary-kpi-value {
+  color: var(--danger-ink);
+}
+
+.supplier-summary .summary-kpi-label {
+  font-size: var(--fs-1);
+  line-height: 1.3;
+  color: var(--ink-muted);
+}
+
+@media (max-width: 720px) {
+  /* Dua kolom di layar sempit: label tidak lagi muat sebaris dengan angka. */
+  .supplier-summary .summary-kpi-item {
+    flex: 1 1 calc(50% - 1px);
+    padding: 6px 12px;
+  }
+
+  .supplier-summary .summary-kpi-item:nth-child(odd) {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .supplier-summary .summary-kpi-item:nth-child(n + 3) {
+    border-top: 1px solid var(--line);
+    padding-top: 10px;
+  }
+}
