@@ -502,3 +502,27 @@ Parameter `max_distance_km` + cakupan jarak di UI dijadikan fase tersendiri sete
 - Data demo terakhir (setelah seed): 5 catatan penerimaan — 3 `menunggu`, 1 `disetujui`
   (beras 540 kg, Rp 8.100.000, PO `MC-38D418FCB776`), 1 `ditolak` (beras 360 kg, alasan kemasan
   bocor). Dua catatan `menunggu` tanpa PO → kolom nilai "tidak tercatat" (contoh jujur, sengaja).
+
+### Diperbarui 29 Okt 2026 (lanjutan) — Ringkasan versi kalimat
+
+- `SupplierSummary` sekarang: kalimat fakta + sebaran kata + daftar "Perlu dilihat" (4 baris di
+  data demo) + pernyataan baik + meta jalur/register.
+- Kartu **328 px** (sebelumnya 358 px versi tile, 242 px versi FactList), luapan horizontal 0.
+- Terverifikasi di browser: Lihat → 4 baris tabel + status "Menampilkan 4 dari 60 pemasok —
+  keandalan di bawah 60%.", klik ulang → 60 baris.
+- Tes: 62 tes di 4 berkas terkait lulus; `tsc --noEmit` bersih.
+
+### Diperbarui 29 Okt 2026 (revisi kedua) — Ringkasan satu pola interaksi
+
+- Sebaran keandalan jadi teks; 4 tombol "Lihat" saja di kartu (sebelumnya 9 kontrol).
+- Kartu **321 px**, luapan 0; "Perlu dilihat" 4 baris pada data demo.
+- `tsc` bersih; 71 tes di 5 berkas terkait lulus (sebelum suite penuh dijalankan).
+
+### Diperbarui 29 Okt 2026 (revisi ketiga, final) — Ringkasan = KPI strip
+
+- Kartu Ringkasan: **99 px**, lima angka, nol tombol; `sorotan`/`Sorotan` dicabut dari
+  `SupplierBoard` (kini `hanyaJangkauan` boolean).
+- Angka live: 61 pemasok · 82% · 4 di bawah 60% · 6 tanpa stok · 30 di luar jangkauan 150 km
+  (ditelusuri ke `GET /suppliers?limit=200`).
+- Tombol "Hanya dalam jangkauan (31)" masih bekerja: pressed=true, catatan berubah, tabel menyusut,
+  KPI tidak berubah.

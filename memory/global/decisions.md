@@ -1267,3 +1267,146 @@ Uji: 19 tes frontend (parser + terminal), 9 tes backend (bus + endpoint SSE).
 
 **Ditolak / belum.** Terminal gelap (acuan menolak chrome jendela; yang diambil
 hanya mono + jam + baris mengalir). Warna tetap token terang yang sudah ada.
+
+## Ronde 56 — 2026-10-29: Ringkasan Pemasok menjadi papan sorotan
+
+**Keputusan.** Kartu Ringkasan tidak lagi delapan baris fakta; ia menjadi satu-satunya tempat
+menyorot daftar pemasok. Alasan: angka yang tidak bisa ditindaklanjuti hanya memakan ruang, dan
+halaman ini sudah punya penyaring jangkauan yang berdiri jauh dari angkanya — dua tempat untuk satu
+maksud. Sekarang satu state `sorotan` menjadi sumbu tunggal untuk jangkauan, keandalan, stok,
+eksklusi, dan titik peta.
+
+**Angka tile dihitung dari populasi, bukan dari hasil sorotan.** Kalau tile mengikuti sorotan aktif,
+menekan "Keandalan rendah" akan membuat tile lain ikut menyusut dan pembaca kehilangan konteks
+(60 → 4 di semua tile). Populasi tetap; yang berubah hanya isi tabel dan satu baris status yang
+menyebut berapa yang tampil.
+
+**Tile nol tetap tampil tetapi mati.** "Tanpa titik peta 0" muncul dengan `disabled`, bukan
+disembunyikan: angka nol adalah kabar baik yang perlu dibaca, tetapi menekannya tidak boleh
+menghasilkan tabel kosong tanpa penjelasan.
+
+**Bar distribusi dekoratif, chip yang menekan.** Segmen bar 6–8 px tidak mungkin jadi target sentuh
+yang jujur; chip 26 px (di atas minimum 24 px WCAG 2.2 AA) yang memegang kendali, dan bar diberi
+`aria-hidden`. Lebar segmen memakai `flex-grow` dari jumlah, jadi proporsinya data, bukan selera.
+
+**Dua kebohongan kecil yang ikut diperbaiki.** (1) Tombol penyaring jangkauan menulis
+"Menyembunyikan 30 pemasok …" bahkan saat penyaringnya mati; sekarang kalimatnya mengikuti keadaan.
+(2) Empty state tabel menyebut "Semua pemasok dalam daftar ini disembunyikan penyaring jangkauan"
+untuk sebab apa pun; sekarang "Tidak ada pemasok yang lolos sorotan ini."
+
+**Biaya ruang.** Kartu 242 → 261 px (+19) saat diam; 304 px saat sorotan aktif karena baris status.
+Ini pertukaran yang diterima: +19 px untuk satu lapisan interaksi penuh, bukan +19 px untuk hiasan.
+
+**Tes.** 36 tes baru (20 logika murni, 10 markup, 6 kontrak CSS). Yang dikunci: bucket tanpa celah
+& tanpa tumpang tindih, skor `null` tidak pernah "keandalan rendah", angka tile = jumlah baris hasil
+sorotan, tile nol `disabled`, `aria-pressed`/`role="status"` ada, dan aturan CSS tidak lepas dari
+scope `.supplier-summary`.
+
+## Ronde 57 — 2026-10-29: Ringkasan jadi kalimat, bukan tile
+
+**Keputusan.** Bentuk papan sorotan (dua statistik besar + bar distribusi + chip persen + lima
+tile) diganti daftar kalimat + satu tombol `Lihat` per baris, setelah pemilik menilai versi itu
+"masih sulit dipahami". Alasan: pembaca harus menerjemahkan sendiri "4 · Keandalan rendah
+(< 60%)"; kalimat lengkap menghapus penerjemahan itu, dan satu tombol per baris menghapus
+tebakan "apakah kotak ini bisa ditekan".
+
+**Aturan yang menyertainya.**
+1. Baris berjumlah 0 tidak dirender; pemeriksaan yang lolos muncul sebagai pernyataan positif
+   (`kabarBaik`) supaya "tidak ada masalah" tetap terbaca sebagai jawaban.
+2. Sebaran keandalan memakai kata (Sangat baik/Baik/Cukup/Rendah); rentang persen jadi
+   `aria-label`/tooltip, bukan teks utama.
+3. Angka di kalimat selalu dari daftar penuh — sorotan hanya mengubah tabel + baris status.
+4. Fakta kepala dan sebaran berbagi satu baris; menumpuknya sebagai dua blok menambah 30 px
+   tanpa menambah arti.
+5. `filterTiles`/`RingkasanTile` dicabut karena 0 pemakai setelah perubahan bentuk.
+
+**Batas.** "Tanpa titik peta" dan "stok tidak layak" tidak naik menjadi `danger`: keduanya
+kekurangan data layak, bukan pelanggaran tata kelola seperti eksklusi.
+
+## 29 Okt 2026 — Lembar PO: template korporat, SDC & dasar persetujuan dicabut
+
+**Keputusan pemilik.** PDF purchase order memakai template PO korporat. Rincian pesanan memuat
+bahan, transportasi, dan penanganan sekaligus; blok "Safe Delivered Cost (analitis, bukan
+tagihan)" dan blok "Dasar persetujuan" dihapus.
+
+**Alasan.** Dokumen itu dibaca bagian keuangan dan vendor: yang mereka perlukan adalah komponen
+yang ditagihkan, siapa yang mengesahkan, dan kapan — bukan estimasi risiko internal atau rincian
+versi/jendela keputusan. Estimasi risiko yang dicetak di samping angka tagihan mudah terbaca
+sebagai biaya yang harus dibayar vendor.
+
+**Yang dijaga.** (1) Angka penalti tidak dicetak sama sekali, tetapi satu butir syarat & ketentuan
+menyatakan estimasi risiko internal TIDAK ditagihkan — aturan "penalti tidak pernah masuk tagihan"
+tetap terlihat pembaca. (2) Komponen yang tidak tercatat tidak dicetak sebagai Rp 0. (3) Bila
+total rincian berbeda dengan harga satuan × jumlah, keduanya dicetak + kalimat selisih (tidak ada
+pembulatan diam-diam). (4) Harga satuan bahan dinotasikan TURUNAN; kolom Nilai tetap angka tercatat.
+(5) Jejak keputusan tetap ada sebagai "Ref. keputusan" di meta, jadi dokumen masih bisa ditelusuri.
+
+## Ronde 58 — 2026-10-29: Ringkasan Pemasok, satu pola interaksi
+
+**Keputusan.** Chip sebaran keandalan yang bisa ditekan dilepas; sebaran menjadi teks, dan
+satu-satunya kontrol di kartu adalah tombol "Lihat" pada baris "Perlu dilihat".
+
+**Alasan.** Chip "Rendah 4" dan baris "4 pemasok keandalannya di bawah 60%" menunjuk himpunan
+yang sama — dua kontrol berbeda untuk satu hal, dan pembaca tidak punya cara menebak mana yang
+"resmi". Ringkasan yang punya sembilan kontrol (4 chip + 5 tile) bukan ringkasan.
+
+**Batas.** Sebaran tetap ditampilkan (informasi berguna), hanya tidak lagi interaktif; rentang
+persen dipindah ke atribut `title` supaya tidak menjadi derau visual.
+
+**Ikutan.** `keandalan-90/80/60` dan `Bucket.sorotan` dicabut (0 pemakai). `dalam-jangkauan`
+dipertahankan karena tombol "Hanya dalam jangkauan" di SupplierBoard memakainya — `tsc`
+menangkapnya saat pemangkasan pertama, bukan tes.
+
+## Ronde 60 — 2026-10-29: KPI — kartu diklik membuka satu panel penjelasan
+
+**Permintaan pemilik.** *"Ketika KPI di klik muncul penjelasan detail di bawah sub
+sub KPI, ada 1 shape informasi dari salah satu KPI yang diklik."*
+
+**Bentuk.** Nama metrik jadi `button.kpi-card-open` (44 px area ketuk);
+`KpiDetailPanel` dirender **di bawah grid** (`id="kpi-detail"`), satu metrik pada
+satu waktu, ditutup lewat X bulat atau klik ulang kartu yang sama. Fokus kembali
+ke tombol kartu setelah ditutup.
+
+**Ditolak: lipatan `details` per kartu sebagai satu-satunya tempat detail.**
+Sudah ada (`kpi-more`, "Rincian angka"), tetapi pemilik meminta satu wadah tetap
+di bawah grid. Keduanya dibiarkan hidup: lipatan per kartu untuk membaca cepat
+satu metrik, panel untuk membaca panjang tanpa menggeser grid. Isi panel memakai
+helper yang sama dengan kartu, jadi angkanya tidak bisa berbeda.
+
+**Kendala yang ditemukan.** Tes lama
+(`kpi-dashboard.test.tsx` → "memakai istilah kanonik Inggris") melarang label
+Indonesia muncul di HTML kartu. `title` tombol sempat memakai label Indonesia dan
+membuat tes merah — bukan tesnya yang dilonggarkan, melainkan `title` diganti
+"Buka penjelasan metrik" dan `aria-label` memakai nama kanonik. Label Indonesia
+hanya hidup di panel.
+
+**Bukti terukur.** 1247 px: panel 947×404, tombol nama 89×44, enam ubin fakta
+96×52, tombol tutup 32×32, tanpa gulir mendatar, tinggi halaman 3.669 px.
+390 px: panel 346×810, ubin 156×53 (dua per baris), baris asal-usul satu kolom
+(`320px`), tombol tutup 44×44, `scrollWidth 390 = clientWidth 390`, tinggi
+6.412 px. Interaksi live: klik `Procurement Price Deviation` → 1 panel, enam
+kartu lain `aria-expanded=false`; klik `Meal Continuity Rate` → isi berpindah,
+panel tetap 1; X → panel hilang, fokus kembali ke tombol `Meal Continuity Rate`.
+
+**Uji.** `tests/kpi-detail-panel.test.tsx` (7 tes, MERAH dulu) + 67 tes KPI lama
+tetap hijau; `next lint` 0; build `2c6kMsBISGsT-u7Wk9-xg`.
+
+## Ronde 61 — 2026-10-29: Ringkasan Pemasok jadi satu baris KPI (final)
+
+**Keputusan.** Kartu Ringkasan hanya menampilkan lima angka dalam satu baris — Pemasok,
+Rata-rata keandalan, Keandalan di bawah 60%, Tanpa stok layak hari ini, Di luar jangkauan N km —
+tanpa tombol dan tanpa penyaringan. Pemilik memilih bentuk ini secara eksplisit setelah tiga
+bentuk sebelumnya ditolak (daftar fakta, papan sorotan tile/bar/chip, versi kalimat).
+
+**Alasan.** Ringkasan adalah konteks, bukan alat kerja. Tiga percobaan sebelumnya semuanya
+menambah cara bertindak pada kartu yang tugasnya menjelaskan; chip "Rendah 4" bahkan menyalin
+baris "4 pemasok keandalannya di bawah 60%". Penyaringan tetap satu: tombol "Hanya dalam
+jangkauan (N)" milik tabel, tepat di atas kolom cari.
+
+**Ikutan.** `reliabilityBuckets`, `sorotRows`, `sorotLabel`, `sorotanBaris`, `kabarBaik`,
+`ringkasanStats` dicabut (0 pemakai). `SupplierBoard`: `sorotan: Sorotan` → `hanyaJangkauan:
+boolean` + `filterDirectoryByReach`. `SupplierSummary` jadi komponen tanpa state (props
+`metrics`, `reachKm`, `loading`), tinggi kartu 321 → **99 px**, tombol 4 → **0**.
+
+**Batas.** Angka 0 tetap ditampilkan dan bernada `plain`: pada strip KPI nol adalah jawaban,
+bukan data yang gagal dimuat. "Tanpa stok layak" = pemasok − yang sedang kirim, dijepit ≥ 0.

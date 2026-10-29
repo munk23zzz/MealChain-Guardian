@@ -1313,3 +1313,57 @@ me-reset data penerimaan (fixture). Setelah suite backend, jalankan
 Catatan gerbang: suite penuh **2.541/2.543**; dua kegagalan ada di
 `tests/evidence-dossier.test.tsx` (stepper) yang **sedang ditulis sesi lain** (berkas
 berubah 24 detik sebelum pemeriksaan).
+
+### Fase 34 — Ringkasan Pemasok: lima angka, nol tombol (29 Okt 2026)
+
+Permintaan pemilik: kartu "Ringkasan" di halaman Pemasok **"masih sulit untuk di pahami
+designnya"**, lalu **"jangan bentuk seperti itu"** setelah versi berikutnya. Tiga bentuk dicoba
+dan ditolak sebelum bentuk final:
+
+| percobaan | bentuk | tinggi | kenapa ditolak |
+|---|---|---|---|
+| 1 | delapan baris fakta datar (`FactList`) | 242 px | angka tidak bisa dibaca sebagai kalimat |
+| 2 | papan sorotan: 2 statistik besar + bar segmen + 4 chip persen + 5 tile | 358 px | terlalu banyak kontrol; chip "Rendah 4" menyalin baris "4 pemasok keandalannya di bawah 60%" |
+| 3 | daftar kalimat + tombol "Lihat" per baris | 321 px | "jangan bentuk seperti itu" |
+| **4** | **satu baris lima angka (KPI strip), tanpa tombol** | **99 px** | — dipakai |
+
+Bentuk final:
+
+    61 Pemasok | 82% Rata-rata keandalan | 4 Keandalan di bawah 60% | 6 Tanpa stok layak hari ini | 30 Di luar jangkauan 150 km
+
+Keputusan desain yang menyertainya:
+
+1. **Ringkasan hanya dibaca.** Tidak ada tombol, `aria-pressed`, status, atau empty state di
+   dalam kartu. Penyaringan tetap satu: tombol "Hanya dalam jangkauan (N)" di atas kolom cari,
+   dekat tabel yang ia saring.
+2. **Angka dari daftar penuh.** KPI dihitung dari `directoryMetrics(rows, reachKm)`, tidak
+   pernah menyusut saat penyaring/tabel berubah.
+3. **Nol tetap tampil** dan bernada `plain` — pada strip angka, nol adalah jawaban, bukan data
+   gagal dimuat. Angka yang perlu dilihat (di bawah 60%, tanpa stok, di luar jangkauan) bernada
+   `warn`.
+4. **Baris jangkauan kondisional.** `Di luar jangkauan N km` hanya muncul bila peran punya
+   ambang; peran pengawas (`bgn_monitor`) tidak punya, jadi kartunya empat angka.
+5. **Tidak ada angka karangan.** `Tanpa stok layak` = `pemasok − yang sedang kirim`, dijepit
+   `Math.max(0, …)`; ribuan memakai `toLocaleString("id-ID")`.
+
+Berkas: `lib/supplier-summary.ts` (`kpiRingkasan`), `components/SupplierSummary.tsx` (komponen
+tanpa state: `metrics`, `reachKm`, `loading`), `app/supplier-summary.css` (berkas sendiri, semua
+selektor di-scope `.supplier-summary`).
+
+Dicabut karena 0 pemakai: `reliabilityBuckets`, `sorotRows`, `sorotLabel`, `sorotanBaris`,
+`kabarBaik`, `ringkasanStats`, tipe `Sorotan`/`Bucket`/`RingkasanBaris`; di `SupplierBoard`
+`LOW_RELIABILITY`, `routeLayerSummary`, `exclusionCounts`, `jalurRingkas`, dan state
+`sorotan` (diganti `hanyaJangkauan: boolean`).
+
+Verifikasi di halaman hidup (1262×568, `sppg.head@demo.local`): lima angka sebaris (183 px per
+kolom), kartu **99 px**, tanpa tombol, luapan horizontal 0; tombol "Hanya dalam jangkauan (31)"
+tetap `aria-pressed`, catatan berubah jadi "31 pemasok dalam 150 km dari JKT; 30 di luarnya
+disembunyikan", tabel menyusut, dan angka KPI tidak berubah. Angka "6 tanpa stok" ditelusuri ke
+`GET /suppliers?limit=200` (61 pemasok, 55 sedang kirim, 6 tanpa kiriman).
+
+Tes: `supplier-summary.test.ts` 9 (kontrak `kpiRingkasan`), `supplier-summary-ui.test.tsx` 6
+(tanpa `<button>`, nol tetap dirender), `supplier-summary-css.test.ts` 6 (scope, tanpa sisa gaya
+tombol, radius hanya token); `supplier-board.test.tsx` (21) dan `supplier-search-ui.test.tsx` (7)
+disesuaikan ke strip. `tsc --noEmit` bersih. Suite penuh saat commit: 2.639/2.660 — sisa
+kegagalan ada di `tests/demo-proof-live.test.tsx` (berkas baru sesi lain) dan
+`tests/radius-scale-css.test.ts` (`theme-ext.css` sesi lain).
