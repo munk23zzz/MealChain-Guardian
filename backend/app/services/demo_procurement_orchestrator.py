@@ -19,6 +19,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from typing import Callable
 
 from sqlalchemy import select
 
@@ -93,10 +94,25 @@ async def _run_supplier_procurement(
     verifier_bedrock,
     ttl_minutes: int,
     demo_session_id: uuid.UUID | None = None,
+    on_step: Callable[[_TraceStep], None] | None = None,
 ) -> dict:
     engine = create_engine(settings.database_url)
     maker = create_session_maker(engine)
     traces: list[_TraceStep] = []
+
+    def _tambah(langkah: _TraceStep) -> None:
+        """Simpan langkah DAN siarkan ke kanal kemajuan (29 Okt 2026).
+
+        Langkah tetap dikumpulkan seperti sebelumnya; siaran hanya tambahan
+        untuk log langsung di Demo Control. Kegagalan siaran tidak pernah
+        menggagalkan putaran.
+        """
+        traces.append(langkah)
+        if on_step is not None:
+            try:
+                on_step(langkah)
+            except Exception:  # noqa: BLE001 — telemetri, bukan jalur data
+                pass
 
     async with maker() as session:
         target = (
@@ -140,7 +156,7 @@ async def _run_supplier_procurement(
             "suppliers_eligible": len(penilaian["ranked"]),
             "suppliers_rejected": _ringkas_tolak(kandidat),
         }
-        traces.append(
+        _tambah(
             _TraceStep(
                 "DETECT",
                 "supply.get+demand.get+supplier.get",
@@ -183,7 +199,7 @@ async def _run_supplier_procurement(
             "fallback_used": verifier_result.fallback_used,
             "attempts": _attempt_dicts(verifier_result.attempts),
         }
-        traces.append(
+        _tambah(
             _TraceStep(
                 "VERIFY",
                 "verifier.rest",
@@ -256,7 +272,7 @@ async def _run_supplier_procurement(
             batch_ids=chosen["batch_ids"],
         )
 
-        traces.append(
+        _tambah(
             _TraceStep(
                 "TRACE",
                 None,
@@ -303,7 +319,7 @@ async def _run_supplier_procurement(
                 "attempts": [],
                 "note": "histori demand kosong; tanpa panggilan model",
             }
-        traces.append(
+        _tambah(
             _TraceStep(
                 "PREDICT",
                 "forecast.provider",
@@ -316,7 +332,7 @@ async def _run_supplier_procurement(
         )
 
         # OPTIMIZE (rekaman pemeringkatan pemasok deterministik) -----------
-        traces.append(
+        _tambah(
             _TraceStep(
                 "OPTIMIZE",
                 "supplier.evaluate",
@@ -347,7 +363,7 @@ async def _run_supplier_procurement(
         )
 
         # DECIDE (rekaman persist) -----------------------------------------
-        traces.append(
+        _tambah(
             _TraceStep(
                 "DECIDE",
                 "POST /decisions",
@@ -383,7 +399,7 @@ async def _run_supplier_procurement(
             "attempts": _attempt_dicts(supervise_out.attempts),
         }
         if supervise_out.status == "narrated":
-            traces.append(
+            _tambah(
                 _TraceStep(
                     "SUPERVISE",
                     "supervisor.narration",
@@ -435,6 +451,7 @@ def run_supplier_procurement(
     verifier_bedrock=None,
     ttl_minutes: int = DEFAULT_TTL_MINUTES,
     demo_session_id: uuid.UUID | None = None,
+    on_step: Callable[[_TraceStep], None] | None = None,
 ) -> dict:
     """Jalankan pengadaan pemasok penuh; sync wrapper di atas sesi async.
 
@@ -447,5 +464,6 @@ def run_supplier_procurement(
             verifier_bedrock=verifier_bedrock,
             ttl_minutes=ttl_minutes,
             demo_session_id=demo_session_id,
+            on_step=on_step,
         )
     )

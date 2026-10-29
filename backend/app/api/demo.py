@@ -25,14 +25,19 @@ Semua angka konsisten dengan seed sintetis (telur, SDC Rp16,2 jt,
 freshness 0,90). Tidak ada auto-approve — loop manusia tetap wajib.
 """
 
+import asyncio
+import json
+import queue
+import time
 import uuid
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,7 +71,7 @@ from app.seed.timeseries import (
     purge_demo_rows,
     validate_range,
 )
-from app.services import agent_review_local
+from app.services import agent_progress, agent_review_local
 from app.services.agent_review_client import AgentReviewResult, review_decision
 from app.services.demo_cost import hitung_biaya_demo
 from app.services.demo_procurement_orchestrator import (
@@ -1957,6 +1962,9 @@ class AgentRunRequest(BaseModel):
     #: Fase 2 MG butir 8: mode yang diyakini klien sedang berjalan. Divalidasi
     #: terhadap mode sesi pemilik; bertentangan = 422, bukan diam-diam dipakai.
     mode: Literal["replay", "realtime"] | None = None
+    #: 29 Okt 2026: token kanal kemajuan (`GET /demo/agent/stream`). Opsional —
+    #: tanpa token, putaran berjalan persis seperti sebelumnya tanpa biaya siaran.
+    run_token: str | None = Field(default=None, max_length=64)
 
 
 async def _lokasi_akun(db: AsyncSession, user: User) -> Location:
@@ -2048,8 +2056,14 @@ async def run_demo_agent(
     else:
         daftar = [diminta]
 
+    #: Kanal kemajuan (29 Okt 2026). Tanpa `run_token` hasilnya `None` dan
+    #: pipeline berjalan tanpa siaran sama sekali.
+    _siar = agent_progress.penerbit(isi.run_token)
+
     def _jalankan_pengadaan(nama_komoditas: str) -> dict:
         opsi: dict = {"ttl_minutes": isi.ttl_minutes}
+        if _siar is not None:
+            opsi["on_step"] = _siar
         # Fase 2 MG: keputusan putaran ini milik sesi yang diminta klien.
         if pemilik is not None:
             opsi["demo_session_id"] = pemilik.id
@@ -2235,6 +2249,65 @@ def _baris_review(
         if len(semua) > len(terbaik):
             terbaik = semua
     return terbaik, (str(run_review) if run_review is not None else None)
+
+
+@router.get("/demo/agent/stream")
+async def stream_demo_agent(
+    request: Request,
+    run_token: str = Query(min_length=8, max_length=64),
+    user: User = Depends(require_roles("sppg_head")),
+) -> StreamingResponse:
+    """Siarkan langkah putaran agent saat langkah itu terjadi (text/event-stream).
+
+    Dipakai Demo Control agar log "Proses Pengambilan Data" bergerak seperti
+    terminal, bukan muncul sekaligus setelah putaran selesai.
+
+    Kontrak penting:
+
+    - Endpoint ini TIDAK menjalankan pipeline. Yang menjalankan tetap
+      `POST /demo/agent/run` dengan `run_token` yang sama; endpoint ini hanya
+      membaca kanal kemajuan. Satu klik tetap = satu putaran = satu keputusan.
+    - `: siap` dikirim segera setelah kanal terbuka, sehingga klien tahu
+      kapan aman memulai POST (tanpa itu, langkah awal bisa terlewat).
+    - Kanal ditutup di blok `finally`, termasuk saat peramban memutus koneksi.
+    - Bila tidak ada langkah baru, komentar `: tunggu` dikirim tiap 15 detik
+      supaya proxy tidak memutus koneksi yang diam.
+    """
+    _ = user  # peran sudah divalidasi; nilainya tidak dipakai di sini
+    antrean = agent_progress.buka(run_token)
+    batas = agent_progress.UMUR_MAKS_DETIK
+
+    async def acara():
+        mulai = terakhir = time.monotonic()
+        try:
+            yield ": siap\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    langkah = antrean.get_nowait()
+                except queue.Empty:
+                    if time.monotonic() - mulai > batas:
+                        break
+                    if time.monotonic() - terakhir > 15:
+                        terakhir = time.monotonic()
+                        yield ": tunggu\n\n"
+                    await asyncio.sleep(0.15)
+                    continue
+                terakhir = time.monotonic()
+                yield f"event: langkah\ndata: {json.dumps(langkah, ensure_ascii=False)}\n\n"
+        finally:
+            agent_progress.tutup(run_token)
+
+    return StreamingResponse(
+        acara(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.get("/demo/agent/commodities")
